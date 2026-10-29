@@ -46,8 +46,23 @@ use super::esp_partition_table::{
 pub const SPI0_BASE: u64 = 0x6000_2000;
 /// SPI1 (MSPI) — `esp32c6.svd` `SPI1` @ `0x6000_3000`.
 pub const SPI1_BASE: u64 = 0x6000_3000;
-/// Register window size the C3/S3 SPI_MEM twin is wired with.
-const SPI_MEM_WINDOW: u64 = 0x100;
+/// Full MSPI SPI_MEM register block (SVD ~1KB). Was 0x100; yaml `spi0`/`spi1`
+/// stubs are also 1KB — name-only replace left those stubs in place and a
+/// too-narrow layered window left high offsets on the stub.
+const SPI_MEM_WINDOW: u64 = 0x1000;
+
+/// End of IDF `sram_seg` (exclusive). App stack must stay below this; HP SRAM
+/// from here to `0x4088_0000` is reserved for mask-ROM `.data` / `.bss` /
+/// interface pointers (`memory.ld`: `len = 0x4086E610 - 0x40800000`).
+pub const APP_SRAM_END: u32 = 0x4086_E610;
+
+/// Fast-boot SP for C6 Arduino ELFs — 16-byte aligned top of app SRAM.
+/// Using the full 512 KiB RAM top (`0x4088_0000`) smashes `rom_cache_internal_table_ptr`
+/// and friends at `0x4087_ffc8`.
+pub fn app_stack_top() -> u32 {
+    APP_SRAM_END & !0xF
+}
+
 
 /// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
 pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
@@ -99,14 +114,17 @@ pub fn install_arduino_flash(
     seed_flash_partitions(&mut img, partitions);
     let flash = Arc::new(Mutex::new(img));
 
-    bus.replace_or_add_peripheral(
+    // Match by base so yaml `spi0`/`spi1` stubs at these addresses are
+    // replaced (name-only replace_or_add left the stubs and layered a twin;
+    // IDF partition reads then hit the stub → 0xFF → "No MD5 found").
+    bus.replace_or_add_peripheral_at(
         "spimem0_flash",
         SPI0_BASE,
         SPI_MEM_WINDOW,
         None,
         Box::new(SpiMemFlash::new(flash.clone())),
     );
-    bus.replace_or_add_peripheral(
+    bus.replace_or_add_peripheral_at(
         "spimem1_flash",
         SPI1_BASE,
         SPI_MEM_WINDOW,
@@ -120,12 +138,70 @@ pub fn install_arduino_flash(
     flash
 }
 
+
+/// C6 mask-ROM `.data` the fast-boot path must seed because it skips the ROM
+/// `unpackloop` (12-byte `{dst_start,dst_end,src}` records at `_data_table_start`).
+/// Without this, `rom_cache_internal_table_ptr` @ `0x4087_ffc8` stays null and
+/// Arduino `cache_hal_init` dispatches ROM `Cache_*` helpers through a null
+/// table → panic_abort. Values taken from Espressif `esp32c6_rev0_rom.elf`
+/// PROGBITS (interface pointers + cache/spi_flash/.data_ets).
+fn c6_rom_data_init_writes() -> &'static [(u32, &'static [u8])] {
+    &[
+        // rom_cache_internal_table_ptr → rom_default_cache_internal_table
+        (0x4087_ffc8, &[0x10, 0xdb, 0x04, 0x40]),
+        // heap_tlsf_table_ptr
+        (0x4087_ffd8, &[0xd0, 0xd0, 0x04, 0x40]),
+        // spi_flash chip table ptrs
+        (0x4087_ffdc, &[0x80, 0xd9, 0x04, 0x40, 0x40, 0xd9, 0x04, 0x40]),
+        // esp_flash ops ptr
+        (0x4087_ffe4, &[0xcc, 0xd8, 0x04, 0x40]),
+        // spiflash_legacy ptrs (DRAM targets — OK if unused early)
+        (0x4087_ffec, &[0x08, 0xfa, 0x87, 0x40, 0x24, 0xfa, 0x87, 0x40]),
+        // ets_ops_table_ptr
+        (0x4087_fff8, &[0x80, 0xa6, 0x04, 0x40]),
+        // .data_ets / .data_uart flags
+        (0x4087_e610, &[0x01, 0x00, 0x00, 0x00]),
+        (0x4087_f564, &[0x01, 0x00, 0x00, 0x00]),
+        // .data_cache
+        (0x4087_fa84, &[0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00]),
+        // .data_ets_delay
+        (0x4087_faa0, &[0x28, 0x00, 0x00, 0x00]),
+        // .data_c: __global_locale_ptr → ROM locale object (newlib
+        // __get_locale_string / assert paths load *ptr+0xF0 as a C string).
+        (0x4087_faac, &[0xd0, 0x95, 0x04, 0x40]),
+    ]
+}
+
+/// Write ROM `.data` interface pointers into HP SRAM (fast-boot only).
+pub fn seed_rom_data(bus: &mut SystemBus) {
+    use crate::Bus;
+    for (dst, bytes) in c6_rom_data_init_writes() {
+        for (i, b) in bytes.iter().enumerate() {
+            let addr = *dst as u64 + i as u64;
+            if let Err(e) = bus.write_u8(addr, *b) {
+                eprintln!("seed_rom_data write fail @ {addr:#x}: {e:?}");
+            }
+        }
+    }
+    // Prove the heap_tlsf_table_ptr seed stuck (ROM multi_heap_register_impl
+    // loads this before calling into the tlsf dispatch table).
+    let mut v = [0u8; 4];
+    for i in 0..4 {
+        v[i] = bus.read_u8(0x4087_ffd8 + i as u64).unwrap_or(0xEE);
+    }
+    let ptr = u32::from_le_bytes(v);
+    eprintln!("seed_rom_data: heap_tlsf_table_ptr @ 0x4087ffd8 = {ptr:#010x}");
+}
+
 /// Install the C6 Arduino flash substrate when `chip` is a C6; no-op otherwise.
 ///
 /// One call site for the RISC-V builder and world-node ELF path.
 pub fn maybe_install_arduino_flash(bus: &mut SystemBus, chip: &ChipDescriptor) {
     if is_esp32c6(chip) {
         let _ = install_arduino_flash(bus, None);
+        // Fast-boot skips mask-ROM unpackloop — seed the ROM `.data` tables
+        // Arduino cache_hal / Preferences dispatch through.
+        seed_rom_data(bus);
     }
 }
 
@@ -188,7 +264,35 @@ mod tests {
         out
     }
 
+
     #[test]
+    fn app_stack_top_below_rom_reserve() {
+        let sp = app_stack_top();
+        assert_eq!(sp, 0x4086_E610);
+        assert!(sp < 0x4087_ffc8, "must not smash rom_cache_internal_table_ptr");
+        assert_eq!(sp & 0xF, 0, "16-byte aligned");
+    }
+
+    #[test]
+    fn seed_rom_data_writes_heap_tlsf_ptr() {
+        let mut bus = c6_bus();
+        seed_rom_data(&mut bus);
+        let mut b = [0u8; 4];
+        for i in 0..4 {
+            b[i] = bus.read_u8(0x4087_ffd8 + i as u64).expect("read");
+        }
+        assert_eq!(u32::from_le_bytes(b), 0x4004_d0d0, "heap_tlsf_table_ptr");
+        // And the table entry ROM serves at +52
+        let mut e = [0u8; 4];
+        for i in 0..4 {
+            e[i] = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
+        }
+        // Without ROM image this may be 0; with LABWIRED_ESP32C6_ROM it should be 0x400210b2
+        let v = u32::from_le_bytes(e);
+        eprintln!("tlsf table +52 = {v:#x}");
+    }
+
+        #[test]
     fn is_esp32c6_matches_chip_name() {
         let mut chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
             .expect("load esp32c6.yaml");

@@ -717,6 +717,9 @@ impl RiscV {
                 return self.triggers.read_csr(csr)
             }
             0x300 => self.mstatus,
+            // medeleg / mideleg — M-mode only emulator; esp_intr_alloc on C6
+            // does `csrrc mideleg` when binding CPU ints. Accept as RAZ/WI.
+            0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
             0x304 => self.mie,
             0x344 => self.mip,
             0x305 => self.mtvec,
@@ -726,6 +729,10 @@ impl RiscV {
             0x343 => self.mtval,
             // Physical Memory Protection (PMP) configuration and address registers (stubs)
             0x3A0..=0x3A3 | 0x3B0..=0x3BF => 0,
+            // Espressif Physical Memory Attributes (PMA) — CSR_PMACFG0=0xBC0,
+            // CSR_PMAADDR0=0xBD0 (riscv/csr.h). esp_cpu_configure_invalid_regions
+            // on C6 writes these during early init; side effects are not modelled.
+            0xBC0..=0xBCF | 0xBD0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
@@ -761,6 +768,8 @@ impl RiscV {
                 return self.triggers.write_csr(csr, val)
             }
             0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
+            // See read_csr: medeleg/mideleg RAZ/WI on Esp32C3 profile.
+            0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x304 => self.mie = val,
             0x344 => self.mip = val,
             0x305 => self.mtvec = val,
@@ -770,6 +779,8 @@ impl RiscV {
             0x343 => self.mtval = val,
             // Physical Memory Protection (PMP) configuration and address registers (stubs)
             0x3A0..=0x3A3 | 0x3B0..=0x3BF => {}
+            // See read_csr: accept PMA cfg/addr writes as no-ops.
+            0xBC0..=0xBCF | 0xBD0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             _ => return false,
         }

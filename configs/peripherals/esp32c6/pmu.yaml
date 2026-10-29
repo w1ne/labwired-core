@@ -1,0 +1,2773 @@
+peripheral: PMU
+version: 0.1.0
+registers:
+- id: HP_ACTIVE_DIG_POWER
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_VDD_SPI_PD_EN
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: HP_ACTIVE_HP_MEM_DSLP
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: HP_ACTIVE_PD_HP_MEM_PD_EN
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_ACTIVE_PD_HP_WIFI_PD_EN
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_ACTIVE_PD_HP_CPU_PD_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_ACTIVE_PD_HP_AON_PD_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_ACTIVE_PD_TOP_PD_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_ICG_HP_FUNC
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HP_ACTIVE_DIG_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_ICG_HP_APB
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HP_ACTIVE_DIG_ICG_APB_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_ICG_MODEM
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_DIG_ICG_MODEM_CODE
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_HP_SYS_CNTL
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_UART_WAKEUP_EN
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: HP_ACTIVE_LP_PAD_HOLD_ALL
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: HP_ACTIVE_HP_PAD_HOLD_ALL
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_ACTIVE_DIG_PAD_SLP_SEL
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_ACTIVE_DIG_PAUSE_WDT
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_ACTIVE_DIG_CPU_STALL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_HP_CK_POWER
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_I2C_ISO_EN
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_ACTIVE_I2C_RETENTION
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_ACTIVE_XPD_BB_I2C
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_ACTIVE_XPD_BBPLL_I2C
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_ACTIVE_XPD_BBPLL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_BIAS
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_XPD_BIAS
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: HP_ACTIVE_DBG_ATTEN
+    bit_range:
+    - 29
+    - 26
+    description: need_des
+  - name: HP_ACTIVE_PD_CUR
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SLEEP
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_BACKUP
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP2ACTIVE_BACKUP_MODEM_CLK_CODE
+    bit_range:
+    - 5
+    - 4
+    description: need_des
+  - name: HP_MODEM2ACTIVE_BACKUP_MODEM_CLK_CODE
+    bit_range:
+    - 7
+    - 6
+    description: need_des
+  - name: HP_ACTIVE_RETENTION_MODE
+    bit_range:
+    - 10
+    - 10
+    description: need_des
+  - name: HP_SLEEP2ACTIVE_RETENTION_EN
+    bit_range:
+    - 11
+    - 11
+    description: need_des
+  - name: HP_MODEM2ACTIVE_RETENTION_EN
+    bit_range:
+    - 12
+    - 12
+    description: need_des
+  - name: HP_SLEEP2ACTIVE_BACKUP_CLK_SEL
+    bit_range:
+    - 15
+    - 14
+    description: need_des
+  - name: HP_MODEM2ACTIVE_BACKUP_CLK_SEL
+    bit_range:
+    - 17
+    - 16
+    description: need_des
+  - name: HP_SLEEP2ACTIVE_BACKUP_MODE
+    bit_range:
+    - 22
+    - 20
+    description: need_des
+  - name: HP_MODEM2ACTIVE_BACKUP_MODE
+    bit_range:
+    - 25
+    - 23
+    description: need_des
+  - name: HP_SLEEP2ACTIVE_BACKUP_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_MODEM2ACTIVE_BACKUP_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_BACKUP_CLK
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_BACKUP_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_SYSCLK
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_DIG_SYS_CLK_NO_DIV
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_ACTIVE_ICG_SYS_CLOCK_EN
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_ACTIVE_SYS_CLK_SLP_SEL
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_ACTIVE_ICG_SLP_SEL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_ACTIVE_DIG_SYS_CLK_SEL
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_HP_REGULATOR0
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 3328668032
+  fields:
+  - name: LP_DBIAS_VOL
+    bit_range:
+    - 8
+    - 4
+    description: need_des
+  - name: HP_DBIAS_VOL
+    bit_range:
+    - 13
+    - 9
+    description: need_des
+  - name: DIG_REGULATOR0_DBIAS_SEL
+    bit_range:
+    - 14
+    - 14
+    description: need_des
+  - name: DIG_DBIAS_INIT
+    bit_range:
+    - 15
+    - 15
+    description: need_des
+  - name: HP_ACTIVE_HP_REGULATOR_SLP_MEM_XPD
+    bit_range:
+    - 16
+    - 16
+    description: need_des
+  - name: HP_ACTIVE_HP_REGULATOR_SLP_LOGIC_XPD
+    bit_range:
+    - 17
+    - 17
+    description: need_des
+  - name: HP_ACTIVE_HP_REGULATOR_XPD
+    bit_range:
+    - 18
+    - 18
+    description: need_des
+  - name: HP_ACTIVE_HP_REGULATOR_SLP_MEM_DBIAS
+    bit_range:
+    - 22
+    - 19
+    description: need_des
+  - name: HP_ACTIVE_HP_REGULATOR_SLP_LOGIC_DBIAS
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_ACTIVE_HP_REGULATOR_DBIAS
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_HP_REGULATOR1
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_ACTIVE_HP_REGULATOR_DRV_B
+    bit_range:
+    - 31
+    - 8
+    description: need_des
+  side_effects: null
+- id: HP_ACTIVE_XTAL
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: HP_ACTIVE_XPD_XTAL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_DIG_POWER
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_VDD_SPI_PD_EN
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: HP_MODEM_HP_MEM_DSLP
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: HP_MODEM_PD_HP_MEM_PD_EN
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_MODEM_PD_HP_WIFI_PD_EN
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_MODEM_PD_HP_CPU_PD_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_MODEM_PD_HP_AON_PD_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_MODEM_PD_TOP_PD_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_ICG_HP_FUNC
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HP_MODEM_DIG_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_ICG_HP_APB
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HP_MODEM_DIG_ICG_APB_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_ICG_MODEM
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_DIG_ICG_MODEM_CODE
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_HP_SYS_CNTL
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_UART_WAKEUP_EN
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: HP_MODEM_LP_PAD_HOLD_ALL
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: HP_MODEM_HP_PAD_HOLD_ALL
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_MODEM_DIG_PAD_SLP_SEL
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_MODEM_DIG_PAUSE_WDT
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_MODEM_DIG_CPU_STALL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_HP_CK_POWER
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_I2C_ISO_EN
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_MODEM_I2C_RETENTION
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_MODEM_XPD_BB_I2C
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_MODEM_XPD_BBPLL_I2C
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_MODEM_XPD_BBPLL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_BIAS
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_XPD_BIAS
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: HP_MODEM_DBG_ATTEN
+    bit_range:
+    - 29
+    - 26
+    description: need_des
+  - name: HP_MODEM_PD_CUR
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SLEEP
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_BACKUP
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP2MODEM_BACKUP_MODEM_CLK_CODE
+    bit_range:
+    - 5
+    - 4
+    description: need_des
+  - name: HP_MODEM_RETENTION_MODE
+    bit_range:
+    - 10
+    - 10
+    description: need_des
+  - name: HP_SLEEP2MODEM_RETENTION_EN
+    bit_range:
+    - 11
+    - 11
+    description: need_des
+  - name: HP_SLEEP2MODEM_BACKUP_CLK_SEL
+    bit_range:
+    - 15
+    - 14
+    description: need_des
+  - name: HP_SLEEP2MODEM_BACKUP_MODE
+    bit_range:
+    - 22
+    - 20
+    description: need_des
+  - name: HP_SLEEP2MODEM_BACKUP_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_BACKUP_CLK
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_BACKUP_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_SYSCLK
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_DIG_SYS_CLK_NO_DIV
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_MODEM_ICG_SYS_CLOCK_EN
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_MODEM_SYS_CLK_SLP_SEL
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_MODEM_ICG_SLP_SEL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_MODEM_DIG_SYS_CLK_SEL
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_HP_REGULATOR0
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 3328638976
+  fields:
+  - name: HP_MODEM_HP_REGULATOR_SLP_MEM_XPD
+    bit_range:
+    - 16
+    - 16
+    description: need_des
+  - name: HP_MODEM_HP_REGULATOR_SLP_LOGIC_XPD
+    bit_range:
+    - 17
+    - 17
+    description: need_des
+  - name: HP_MODEM_HP_REGULATOR_XPD
+    bit_range:
+    - 18
+    - 18
+    description: need_des
+  - name: HP_MODEM_HP_REGULATOR_SLP_MEM_DBIAS
+    bit_range:
+    - 22
+    - 19
+    description: need_des
+  - name: HP_MODEM_HP_REGULATOR_SLP_LOGIC_DBIAS
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_MODEM_HP_REGULATOR_DBIAS
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_HP_REGULATOR1
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM_HP_REGULATOR_DRV_B
+    bit_range:
+    - 31
+    - 8
+    description: need_des
+  side_effects: null
+- id: HP_MODEM_XTAL
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: HP_MODEM_XPD_XTAL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_DIG_POWER
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_VDD_SPI_PD_EN
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: HP_SLEEP_HP_MEM_DSLP
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: HP_SLEEP_PD_HP_MEM_PD_EN
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_SLEEP_PD_HP_WIFI_PD_EN
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_SLEEP_PD_HP_CPU_PD_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_SLEEP_PD_HP_AON_PD_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SLEEP_PD_TOP_PD_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_ICG_HP_FUNC
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HP_SLEEP_DIG_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_ICG_HP_APB
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HP_SLEEP_DIG_ICG_APB_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_ICG_MODEM
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_DIG_ICG_MODEM_CODE
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_HP_SYS_CNTL
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_UART_WAKEUP_EN
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: HP_SLEEP_LP_PAD_HOLD_ALL
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: HP_SLEEP_HP_PAD_HOLD_ALL
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_SLEEP_DIG_PAD_SLP_SEL
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_SLEEP_DIG_PAUSE_WDT
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_SLEEP_DIG_CPU_STALL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_HP_CK_POWER
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_I2C_ISO_EN
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_SLEEP_I2C_RETENTION
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_SLEEP_XPD_BB_I2C
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_SLEEP_XPD_BBPLL_I2C
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_SLEEP_XPD_BBPLL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_BIAS
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_XPD_BIAS
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: HP_SLEEP_DBG_ATTEN
+    bit_range:
+    - 29
+    - 26
+    description: need_des
+  - name: HP_SLEEP_PD_CUR
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SLEEP
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_BACKUP
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_MODEM2SLEEP_BACKUP_MODEM_CLK_CODE
+    bit_range:
+    - 7
+    - 6
+    description: need_des
+  - name: HP_ACTIVE2SLEEP_BACKUP_MODEM_CLK_CODE
+    bit_range:
+    - 9
+    - 8
+    description: need_des
+  - name: HP_SLEEP_RETENTION_MODE
+    bit_range:
+    - 10
+    - 10
+    description: need_des
+  - name: HP_MODEM2SLEEP_RETENTION_EN
+    bit_range:
+    - 12
+    - 12
+    description: need_des
+  - name: HP_ACTIVE2SLEEP_RETENTION_EN
+    bit_range:
+    - 13
+    - 13
+    description: need_des
+  - name: HP_MODEM2SLEEP_BACKUP_CLK_SEL
+    bit_range:
+    - 17
+    - 16
+    description: need_des
+  - name: HP_ACTIVE2SLEEP_BACKUP_CLK_SEL
+    bit_range:
+    - 19
+    - 18
+    description: need_des
+  - name: HP_MODEM2SLEEP_BACKUP_MODE
+    bit_range:
+    - 25
+    - 23
+    description: need_des
+  - name: HP_ACTIVE2SLEEP_BACKUP_MODE
+    bit_range:
+    - 28
+    - 26
+    description: need_des
+  - name: HP_MODEM2SLEEP_BACKUP_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_ACTIVE2SLEEP_BACKUP_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_BACKUP_CLK
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_BACKUP_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_SYSCLK
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_DIG_SYS_CLK_NO_DIV
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: HP_SLEEP_ICG_SYS_CLOCK_EN
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: HP_SLEEP_SYS_CLK_SLP_SEL
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_SLEEP_ICG_SLP_SEL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_SLEEP_DIG_SYS_CLK_SEL
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_HP_REGULATOR0
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 3328638976
+  fields:
+  - name: HP_SLEEP_HP_REGULATOR_SLP_MEM_XPD
+    bit_range:
+    - 16
+    - 16
+    description: need_des
+  - name: HP_SLEEP_HP_REGULATOR_SLP_LOGIC_XPD
+    bit_range:
+    - 17
+    - 17
+    description: need_des
+  - name: HP_SLEEP_HP_REGULATOR_XPD
+    bit_range:
+    - 18
+    - 18
+    description: need_des
+  - name: HP_SLEEP_HP_REGULATOR_SLP_MEM_DBIAS
+    bit_range:
+    - 22
+    - 19
+    description: need_des
+  - name: HP_SLEEP_HP_REGULATOR_SLP_LOGIC_DBIAS
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_SLEEP_HP_REGULATOR_DBIAS
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_HP_REGULATOR1
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_HP_REGULATOR_DRV_B
+    bit_range:
+    - 31
+    - 8
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_XTAL
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: HP_SLEEP_XPD_XTAL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_LP_REGULATOR0
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 3328180224
+  fields:
+  - name: HP_SLEEP_LP_REGULATOR_SLP_XPD
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: HP_SLEEP_LP_REGULATOR_XPD
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: HP_SLEEP_LP_REGULATOR_SLP_DBIAS
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: HP_SLEEP_LP_REGULATOR_DBIAS
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_LP_REGULATOR1
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_LP_REGULATOR_DRV_B
+    bit_range:
+    - 31
+    - 28
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_LP_DCDC_RESERVE
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_LP_DCDC_RESERVE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_LP_DIG_POWER
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_SLEEP_LP_MEM_DSLP
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SLEEP_PD_LP_PERI_PD_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_SLEEP_LP_CK_POWER
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073741824
+  fields:
+  - name: HP_SLEEP_XPD_XTAL32K
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: HP_SLEEP_XPD_RC32K
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: HP_SLEEP_XPD_FOSC_CLK
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SLEEP_PD_OSC_CLK
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_LP_BIAS_RESERVE
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_SLEEP_LP_BIAS_RESERVE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_LP_REGULATOR0
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 3328180224
+  fields:
+  - name: LP_SLEEP_LP_REGULATOR_SLP_XPD
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: LP_SLEEP_LP_REGULATOR_XPD
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: LP_SLEEP_LP_REGULATOR_SLP_DBIAS
+    bit_range:
+    - 26
+    - 23
+    description: need_des
+  - name: LP_SLEEP_LP_REGULATOR_DBIAS
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_LP_REGULATOR1
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_SLEEP_LP_REGULATOR_DRV_B
+    bit_range:
+    - 31
+    - 28
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_XTAL
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: LP_SLEEP_XPD_XTAL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_LP_DIG_POWER
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_SLEEP_LP_MEM_DSLP
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: LP_SLEEP_PD_LP_PERI_PD_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_LP_CK_POWER
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073741824
+  fields:
+  - name: LP_SLEEP_XPD_XTAL32K
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: LP_SLEEP_XPD_RC32K
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: LP_SLEEP_XPD_FOSC_CLK
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: LP_SLEEP_PD_OSC_CLK
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_SLEEP_BIAS
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_SLEEP_XPD_BIAS
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: LP_SLEEP_DBG_ATTEN
+    bit_range:
+    - 29
+    - 26
+    description: need_des
+  - name: LP_SLEEP_PD_CUR
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SLEEP
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_HP_CK_POWER
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIE_LOW_GLOBAL_BBPLL_ICG
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: TIE_LOW_GLOBAL_XTAL_ICG
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: TIE_LOW_I2C_RETENTION
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: TIE_LOW_XPD_BB_I2C
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: TIE_LOW_XPD_BBPLL_I2C
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: TIE_LOW_XPD_BBPLL
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: TIE_LOW_XPD_XTAL
+    bit_range:
+    - 6
+    - 6
+    description: need_des
+  - name: TIE_HIGH_GLOBAL_BBPLL_ICG
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: TIE_HIGH_GLOBAL_XTAL_ICG
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: TIE_HIGH_I2C_RETENTION
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: TIE_HIGH_XPD_BB_I2C
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: TIE_HIGH_XPD_BBPLL_I2C
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: TIE_HIGH_XPD_BBPLL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: TIE_HIGH_XPD_XTAL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_SLEEP_SYSCLK
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UPDATE_DIG_ICG_SWITCH
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: TIE_LOW_ICG_SLP_SEL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: TIE_HIGH_ICG_SLP_SEL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: UPDATE_DIG_SYS_CLK_SEL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_HP_FUNC_ICG
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UPDATE_DIG_ICG_FUNC_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_HP_APB_ICG
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UPDATE_DIG_ICG_APB_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_MODEM_ICG
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UPDATE_DIG_ICG_MODEM_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_LP_ICG
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIE_LOW_LP_ROOTCLK_SEL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: TIE_HIGH_LP_ROOTCLK_SEL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_PAD_HOLD_ALL
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIE_HIGH_LP_PAD_HOLD_ALL
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: TIE_LOW_LP_PAD_HOLD_ALL
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: TIE_HIGH_HP_PAD_HOLD_ALL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: TIE_LOW_HP_PAD_HOLD_ALL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: IMM_I2C_ISO
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIE_HIGH_I2C_ISO_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: TIE_LOW_I2C_ISO_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: POWER_WAIT_TIMER0
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 2143281120
+  fields:
+  - name: DG_HP_POWERDOWN_TIMER
+    bit_range:
+    - 13
+    - 5
+    description: need_des
+  - name: DG_HP_POWERUP_TIMER
+    bit_range:
+    - 22
+    - 14
+    description: need_des
+  - name: DG_HP_WAIT_TIMER
+    bit_range:
+    - 31
+    - 23
+    description: need_des
+  side_effects: null
+- id: POWER_WAIT_TIMER1
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483136
+  fields:
+  - name: DG_LP_POWERDOWN_TIMER
+    bit_range:
+    - 15
+    - 9
+    description: need_des
+  - name: DG_LP_POWERUP_TIMER
+    bit_range:
+    - 22
+    - 16
+    description: need_des
+  - name: DG_LP_WAIT_TIMER
+    bit_range:
+    - 31
+    - 23
+    description: need_des
+  side_effects: null
+- id: POWER_PD_TOP_CNTL
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 28
+  fields:
+  - name: FORCE_TOP_RESET
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: FORCE_TOP_ISO
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: FORCE_TOP_PU
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: FORCE_TOP_NO_RESET
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: FORCE_TOP_NO_ISO
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: FORCE_TOP_PD
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: PD_TOP_MASK
+    bit_range:
+    - 10
+    - 6
+    description: need_des
+  - name: PD_TOP_PD_MASK
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: POWER_PD_HPAON_CNTL
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 28
+  fields:
+  - name: FORCE_HP_AON_RESET
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: FORCE_HP_AON_ISO
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: FORCE_HP_AON_PU
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: FORCE_HP_AON_NO_RESET
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: FORCE_HP_AON_NO_ISO
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: FORCE_HP_AON_PD
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: PD_HP_AON_MASK
+    bit_range:
+    - 10
+    - 6
+    description: need_des
+  - name: PD_HP_AON_PD_MASK
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: POWER_PD_HPCPU_CNTL
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 28
+  fields:
+  - name: FORCE_HP_CPU_RESET
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: FORCE_HP_CPU_ISO
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: FORCE_HP_CPU_PU
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: FORCE_HP_CPU_NO_RESET
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: FORCE_HP_CPU_NO_ISO
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: FORCE_HP_CPU_PD
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: PD_HP_CPU_MASK
+    bit_range:
+    - 10
+    - 6
+    description: need_des
+  - name: PD_HP_CPU_PD_MASK
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: POWER_PD_HPPERI_RESERVE
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HP_PERI_RESERVE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: POWER_PD_HPWIFI_CNTL
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 28
+  fields:
+  - name: FORCE_HP_WIFI_RESET
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: FORCE_HP_WIFI_ISO
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: FORCE_HP_WIFI_PU
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: FORCE_HP_WIFI_NO_RESET
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: FORCE_HP_WIFI_NO_ISO
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: FORCE_HP_WIFI_PD
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: PD_HP_WIFI_MASK
+    bit_range:
+    - 10
+    - 6
+    description: need_des
+  - name: PD_HP_WIFI_PD_MASK
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: POWER_PD_LPPERI_CNTL
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 28
+  fields:
+  - name: FORCE_LP_PERI_RESET
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: FORCE_LP_PERI_ISO
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: FORCE_LP_PERI_PU
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: FORCE_LP_PERI_NO_RESET
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: FORCE_LP_PERI_NO_ISO
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: FORCE_LP_PERI_PD
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  side_effects: null
+- id: POWER_PD_MEM_CNTL
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 4278190080
+  fields:
+  - name: FORCE_HP_MEM_ISO
+    bit_range:
+    - 3
+    - 0
+    description: need_des
+  - name: FORCE_HP_MEM_PD
+    bit_range:
+    - 7
+    - 4
+    description: need_des
+  - name: FORCE_HP_MEM_NO_ISO
+    bit_range:
+    - 27
+    - 24
+    description: need_des
+  - name: FORCE_HP_MEM_PU
+    bit_range:
+    - 31
+    - 28
+    description: need_des
+  side_effects: null
+- id: POWER_PD_MEM_MASK
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD_HP_MEM2_PD_MASK
+    bit_range:
+    - 4
+    - 0
+    description: need_des
+  - name: PD_HP_MEM1_PD_MASK
+    bit_range:
+    - 9
+    - 5
+    description: need_des
+  - name: PD_HP_MEM0_PD_MASK
+    bit_range:
+    - 14
+    - 10
+    description: need_des
+  - name: PD_HP_MEM2_MASK
+    bit_range:
+    - 21
+    - 17
+    description: need_des
+  - name: PD_HP_MEM1_MASK
+    bit_range:
+    - 26
+    - 22
+    description: need_des
+  - name: PD_HP_MEM0_MASK
+    bit_range:
+    - 31
+    - 27
+    description: need_des
+  side_effects: null
+- id: POWER_HP_PAD
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FORCE_HP_PAD_NO_ISO_ALL
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: FORCE_HP_PAD_ISO_ALL
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  side_effects: null
+- id: POWER_VDD_SPI_CNTL
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 1677459456
+  fields:
+  - name: VDD_SPI_PWR_WAIT
+    bit_range:
+    - 28
+    - 18
+    description: need_des
+  - name: VDD_SPI_PWR_SW
+    bit_range:
+    - 30
+    - 29
+    description: need_des
+  - name: VDD_SPI_PWR_SEL_SW
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: POWER_CK_WAIT_CNTL
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 16777472
+  fields:
+  - name: WAIT_XTL_STABLE
+    bit_range:
+    - 15
+    - 0
+    description: need_des
+  - name: WAIT_PLL_STABLE
+    bit_range:
+    - 31
+    - 16
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL0
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLEEP_REQ
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL1
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLEEP_REJECT_ENA
+    bit_range:
+    - 30
+    - 0
+    description: need_des
+  - name: SLP_REJECT_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL2
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WAKEUP_ENA
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL3
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_MIN_SLP_VAL
+    bit_range:
+    - 7
+    - 0
+    description: need_des
+  - name: HP_MIN_SLP_VAL
+    bit_range:
+    - 15
+    - 8
+    description: need_des
+  - name: SLEEP_PRT_SEL
+    bit_range:
+    - 17
+    - 16
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL4
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLP_REJECT_CAUSE_CLR
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL5
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 16777344
+  fields:
+  - name: MODEM_WAIT_TARGET
+    bit_range:
+    - 19
+    - 0
+    description: need_des
+  - name: LP_ANA_WAIT_TARGET
+    bit_range:
+    - 31
+    - 24
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL6
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: SOC_WAKEUP_WAIT
+    bit_range:
+    - 19
+    - 0
+    description: need_des
+  - name: SOC_WAKEUP_WAIT_CFG
+    bit_range:
+    - 31
+    - 30
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_CNTL7
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: ANA_WAIT_TARGET
+    bit_range:
+    - 31
+    - 16
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_STATUS0
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WAKEUP_CAUSE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: SLP_WAKEUP_STATUS1
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REJECT_CAUSE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_CK_POWERON
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 50
+  fields:
+  - name: I2C_POR_WAIT_TARGET
+    bit_range:
+    - 7
+    - 0
+    description: need_des
+  side_effects: null
+- id: HP_CK_CNTL
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 2570
+  fields:
+  - name: MODIFY_ICG_CNTL_WAIT
+    bit_range:
+    - 7
+    - 0
+    description: need_des
+  - name: SWITCH_ICG_CNTL_WAIT
+    bit_range:
+    - 15
+    - 8
+    description: need_des
+  side_effects: null
+- id: POR_STATUS
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: POR_DONE
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: RF_PWC
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 134217728
+  fields:
+  - name: PERIF_I2C_RSTB
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: XPD_PERIF_I2C
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: XPD_TXRF_I2C
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: XPD_RFRX_PBUS
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: XPD_CKGEN_I2C
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: XPD_PLL_I2C
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: BACKUP_CFG
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: BACKUP_SYS_CLK_NO_DIV
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: INT_RAW
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_EXC_INT_RAW
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SDIO_IDLE_INT_RAW
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: SW_INT_RAW
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: SOC_SLEEP_REJECT_INT_RAW
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SOC_WAKEUP_INT_RAW
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_INT_ST
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_EXC_INT_ST
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SDIO_IDLE_INT_ST
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: SW_INT_ST
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: SOC_SLEEP_REJECT_INT_ST
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SOC_WAKEUP_INT_ST
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_INT_ENA
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_EXC_INT_ENA
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SDIO_IDLE_INT_ENA
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: SW_INT_ENA
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: SOC_SLEEP_REJECT_INT_ENA
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SOC_WAKEUP_INT_ENA
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_INT_CLR
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_EXC_INT_CLR
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SDIO_IDLE_INT_CLR
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: SW_INT_CLR
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: SOC_SLEEP_REJECT_INT_CLR
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: SOC_WAKEUP_INT_CLR
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_INT_RAW
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_WAKEUP_INT_RAW
+    bit_range:
+    - 20
+    - 20
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_END_INT_RAW
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_END_INT_RAW
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_END_INT_RAW
+    bit_range:
+    - 23
+    - 23
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_END_INT_RAW
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_END_INT_RAW
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_START_INT_RAW
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_START_INT_RAW
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_START_INT_RAW
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_START_INT_RAW
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_START_INT_RAW
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SW_TRIGGER_INT_RAW
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_INT_ST
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_WAKEUP_INT_ST
+    bit_range:
+    - 20
+    - 20
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_END_INT_ST
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_END_INT_ST
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_END_INT_ST
+    bit_range:
+    - 23
+    - 23
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_END_INT_ST
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_END_INT_ST
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_START_INT_ST
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_START_INT_ST
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_START_INT_ST
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_START_INT_ST
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_START_INT_ST
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SW_TRIGGER_INT_ST
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_INT_ENA
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_WAKEUP_INT_ENA
+    bit_range:
+    - 20
+    - 20
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_END_INT_ENA
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_END_INT_ENA
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_END_INT_ENA
+    bit_range:
+    - 23
+    - 23
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_END_INT_ENA
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_END_INT_ENA
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_START_INT_ENA
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_START_INT_ENA
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_START_INT_ENA
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_START_INT_ENA
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_START_INT_ENA
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SW_TRIGGER_INT_ENA
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_INT_CLR
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_WAKEUP_INT_CLR
+    bit_range:
+    - 20
+    - 20
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_END_INT_CLR
+    bit_range:
+    - 21
+    - 21
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_END_INT_CLR
+    bit_range:
+    - 22
+    - 22
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_END_INT_CLR
+    bit_range:
+    - 23
+    - 23
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_END_INT_CLR
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_END_INT_CLR
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: MODEM_SWITCH_ACTIVE_START_INT_CLR
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: SLEEP_SWITCH_ACTIVE_START_INT_CLR
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: SLEEP_SWITCH_MODEM_START_INT_CLR
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: MODEM_SWITCH_SLEEP_START_INT_CLR
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: ACTIVE_SWITCH_SLEEP_START_INT_CLR
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_SW_TRIGGER_INT_CLR
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_CPU_PWR0
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 535822336
+  fields:
+  - name: LP_CPU_WAITI_RDY
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: LP_CPU_STALL_RDY
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: LP_CPU_FORCE_STALL
+    bit_range:
+    - 18
+    - 18
+    description: need_des
+  - name: LP_CPU_SLP_WAITI_FLAG_EN
+    bit_range:
+    - 19
+    - 19
+    description: need_des
+  - name: LP_CPU_SLP_STALL_FLAG_EN
+    bit_range:
+    - 20
+    - 20
+    description: need_des
+  - name: LP_CPU_SLP_STALL_WAIT
+    bit_range:
+    - 28
+    - 21
+    description: need_des
+  - name: LP_CPU_SLP_STALL_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: LP_CPU_SLP_RESET_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: LP_CPU_SLP_BYPASS_INTR_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_CPU_PWR1
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_CPU_WAKEUP_EN
+    bit_range:
+    - 15
+    - 0
+    description: need_des
+  - name: LP_CPU_SLEEP_REQ
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_LP_CPU_COMM
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_TRIGGER_HP
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: HP_TRIGGER_LP
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: HP_REGULATOR_CFG
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIG_REGULATOR_EN_CAL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: MAIN_STATE
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 135268352
+  fields:
+  - name: MAIN_LAST_ST_STATE
+    bit_range:
+    - 17
+    - 11
+    description: need_des
+  - name: MAIN_TAR_ST_STATE
+    bit_range:
+    - 24
+    - 18
+    description: need_des
+  - name: MAIN_CUR_ST_STATE
+    bit_range:
+    - 31
+    - 25
+    description: need_des
+  side_effects: null
+- id: PWR_STATE
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 8396800
+  fields:
+  - name: BACKUP_ST_STATE
+    bit_range:
+    - 17
+    - 13
+    description: need_des
+  - name: LP_PWR_ST_STATE
+    bit_range:
+    - 22
+    - 18
+    description: need_des
+  - name: HP_PWR_ST_STATE
+    bit_range:
+    - 31
+    - 23
+    description: need_des
+  side_effects: null
+- id: CLK_STATE0
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: STABLE_XPD_BBPLL_STATE
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: STABLE_XPD_XTAL_STATE
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: SYS_CLK_SLP_SEL_STATE
+    bit_range:
+    - 15
+    - 15
+    description: need_des
+  - name: SYS_CLK_SEL_STATE
+    bit_range:
+    - 17
+    - 16
+    description: need_des
+  - name: SYS_CLK_NO_DIV_STATE
+    bit_range:
+    - 18
+    - 18
+    description: need_des
+  - name: ICG_SYS_CLK_EN_STATE
+    bit_range:
+    - 19
+    - 19
+    description: need_des
+  - name: ICG_MODEM_SWITCH_STATE
+    bit_range:
+    - 20
+    - 20
+    description: need_des
+  - name: ICG_MODEM_CODE_STATE
+    bit_range:
+    - 22
+    - 21
+    description: need_des
+  - name: ICG_SLP_SEL_STATE
+    bit_range:
+    - 23
+    - 23
+    description: need_des
+  - name: ICG_GLOBAL_XTAL_STATE
+    bit_range:
+    - 24
+    - 24
+    description: need_des
+  - name: ICG_GLOBAL_PLL_STATE
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: ANA_I2C_ISO_EN_STATE
+    bit_range:
+    - 26
+    - 26
+    description: need_des
+  - name: ANA_I2C_RETENTION_STATE
+    bit_range:
+    - 27
+    - 27
+    description: need_des
+  - name: ANA_XPD_BB_I2C_STATE
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: ANA_XPD_BBPLL_I2C_STATE
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: ANA_XPD_BBPLL_STATE
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: ANA_XPD_XTAL_STATE
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: CLK_STATE1
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ICG_FUNC_EN_STATE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: CLK_STATE2
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ICG_APB_EN_STATE
+    bit_range:
+    - 31
+    - 0
+    description: need_des
+  side_effects: null
+- id: VDD_SPI_STATUS
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STABLE_VDD_SPI_PWR_DRV
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 35676752
+  fields:
+  - name: PMU_DATE
+    bit_range:
+    - 30
+    - 0
+    description: need_des
+  - name: CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+interrupts:
+  PMU: 13
+timing: null

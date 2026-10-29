@@ -1,0 +1,311 @@
+peripheral: LP_CLKRST
+version: 0.1.0
+registers:
+- id: LP_CLK_CONF
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: SLOW_CLK_SEL
+    bit_range:
+    - 1
+    - 0
+    description: need_des
+  - name: FAST_CLK_SEL
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: LP_PERI_DIV_NUM
+    bit_range:
+    - 10
+    - 3
+    description: need_des
+  side_effects: null
+- id: LP_CLK_PO_EN
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 2047
+  fields:
+  - name: AON_SLOW_OEN
+    bit_range:
+    - 0
+    - 0
+    description: need_des
+  - name: AON_FAST_OEN
+    bit_range:
+    - 1
+    - 1
+    description: need_des
+  - name: SOSC_OEN
+    bit_range:
+    - 2
+    - 2
+    description: need_des
+  - name: FOSC_OEN
+    bit_range:
+    - 3
+    - 3
+    description: need_des
+  - name: OSC32K_OEN
+    bit_range:
+    - 4
+    - 4
+    description: need_des
+  - name: XTAL32K_OEN
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: CORE_EFUSE_OEN
+    bit_range:
+    - 6
+    - 6
+    description: need_des
+  - name: SLOW_OEN
+    bit_range:
+    - 7
+    - 7
+    description: need_des
+  - name: FAST_OEN
+    bit_range:
+    - 8
+    - 8
+    description: need_des
+  - name: RNG_OEN
+    bit_range:
+    - 9
+    - 9
+    description: need_des
+  - name: LPBUS_OEN
+    bit_range:
+    - 10
+    - 10
+    description: need_des
+  side_effects: null
+- id: LP_CLK_EN
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FAST_ORI_GATE
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LP_RST_EN
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AON_EFUSE_CORE_RESET_EN
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: LP_TIMER_RESET_EN
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: WDT_RESET_EN
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: ANA_PERI_RESET_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: RESET_CAUSE
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: RESET_CAUSE
+    bit_range:
+    - 4
+    - 0
+    description: need_des
+  - name: CORE0_RESET_FLAG
+    bit_range:
+    - 5
+    - 5
+    description: need_des
+  - name: CORE0_RESET_CAUSE_CLR
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: CORE0_RESET_FLAG_SET
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: CORE0_RESET_FLAG_CLR
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: CPU_RESET
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 71303168
+  fields:
+  - name: RTC_WDT_CPU_RESET_LENGTH
+    bit_range:
+    - 24
+    - 22
+    description: need_des
+  - name: RTC_WDT_CPU_RESET_EN
+    bit_range:
+    - 25
+    - 25
+    description: need_des
+  - name: CPU_STALL_WAIT
+    bit_range:
+    - 30
+    - 26
+    description: need_des
+  - name: CPU_STALL_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: FOSC_CNTL
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 721420288
+  fields:
+  - name: FOSC_DFREQ
+    bit_range:
+    - 31
+    - 22
+    description: need_des
+  side_effects: null
+- id: RC32K_CNTL
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 721420288
+  fields:
+  - name: RC32K_DFREQ
+    bit_range:
+    - 31
+    - 22
+    description: need_des
+  side_effects: null
+- id: CLK_TO_HP
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 4026531840
+  fields:
+  - name: ICG_HP_XTAL32K
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: ICG_HP_SOSC
+    bit_range:
+    - 29
+    - 29
+    description: need_des
+  - name: ICG_HP_OSC32K
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: ICG_HP_FOSC
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LPMEM_FORCE
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPMEM_CLK_FORCE_ON
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: LPPERI
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_I2C_CLK_SEL
+    bit_range:
+    - 30
+    - 30
+    description: need_des
+  - name: LP_UART_CLK_SEL
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+- id: XTAL32K
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 1723858944
+  fields:
+  - name: DRES_XTAL32K
+    bit_range:
+    - 24
+    - 22
+    description: need_des
+  - name: DGM_XTAL32K
+    bit_range:
+    - 27
+    - 25
+    description: need_des
+  - name: DBUF_XTAL32K
+    bit_range:
+    - 28
+    - 28
+    description: need_des
+  - name: DAC_XTAL32K
+    bit_range:
+    - 31
+    - 29
+    description: need_des
+  side_effects: null
+- id: DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 35676304
+  fields:
+  - name: CLKRST_DATE
+    bit_range:
+    - 30
+    - 0
+    description: need_des
+  - name: CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: need_des
+  side_effects: null
+interrupts: null
+timing: null

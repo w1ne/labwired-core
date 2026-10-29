@@ -216,6 +216,224 @@ peripherals:
   # TIME_UPDATE@0x0C). No `clock:` gate — the LP clock domain is not part of
   # the HP PCR model. The `irq:` is documentation: the model's INT_* block is
   # register-backed storage and no source is ever asserted.
+  # LP always-on / clock-reset / PMU — required by Arduino/ROM
+  # rtc_get_reset_reason (reads LP_CLKRST.RESET_CAUSE @ +0x10). Ingested from
+  # esp32c6.svd as declarative stubs; RESET_CAUSE reset seeded to POWERON (1)
+  # with CORE0_RESET_FLAG so app boot does not treat cause 0 as fatal.
+  # CPU subsystem interrupt controllers (RISC-V PLIC + CLINT). Not in
+  # esp32c6.svd; bases from reg_base.h. Stub storage so Arduino interrupt
+  # init (esprv_intc_*) can configure priorities/enables without faulting.
+  # Local-prove stubs: SVD peripherals Arduino C6 boot touches that are not yet modeled.
+  - id: "spi0"
+    type: "stub"
+    base_address: 0x60002000
+    size: "1KB"
+  - id: "spi1"
+    type: "stub"
+    base_address: 0x60003000
+    size: "1KB"
+  - id: "rmt"
+    type: "stub"
+    base_address: 0x60006000
+    size: "1KB"
+  # Native esp_systimer (same IP as C3/S3; UNIT_OP bit29 = update-done). Stub
+  # returned 0 forever → systimer_hal_get_counter_value spun at 0x40020876.
+  # Matrix source 57 = ETS_SYSTIMER_TARGET0_INTR_SOURCE (esp32c6 interrupts.h).
+  - id: "systimer"
+    type: "esp32c6_systimer"
+    irq: 57
+    base_address: 0x6000a000
+    config:
+      path: "../peripherals/esp32c3/systimer.yaml"
+      debug_schema: "../peripherals/esp32c3/systimer.yaml"
+  - id: "twai0"
+    type: "stub"
+    base_address: 0x6000b000
+    size: "1KB"
+  - id: "i2s0"
+    type: "stub"
+    base_address: 0x6000c000
+    size: "1KB"
+  - id: "twai1"
+    type: "stub"
+    base_address: 0x6000d000
+    size: "1KB"
+  - id: "atomic"
+    type: "stub"
+    base_address: 0x60011000
+    size: "1KB"
+  - id: "pcnt"
+    type: "stub"
+    base_address: 0x60012000
+    size: "1KB"
+  - id: "soc_etm"
+    type: "stub"
+    base_address: 0x60013000
+    size: "1KB"
+  - id: "mcpwm0"
+    type: "stub"
+    base_address: 0x60014000
+    size: "1KB"
+  - id: "parl_io"
+    type: "stub"
+    base_address: 0x60015000
+    size: "1KB"
+  - id: "hinf"
+    type: "stub"
+    base_address: 0x60016000
+    size: "1KB"
+  - id: "slchost"
+    type: "stub"
+    base_address: 0x60017000
+    size: "1KB"
+  - id: "aes"
+    type: "stub"
+    base_address: 0x60088000
+    size: "1KB"
+  - id: "sha"
+    type: "stub"
+    base_address: 0x60089000
+    size: "1KB"
+  - id: "rsa"
+    type: "stub"
+    base_address: 0x6008a000
+    size: "1KB"
+  - id: "ecc"
+    type: "stub"
+    base_address: 0x6008b000
+    size: "1KB"
+  - id: "ds"
+    type: "stub"
+    base_address: 0x6008c000
+    size: "4KB"
+  - id: "hmac"
+    type: "stub"
+    base_address: 0x6008d000
+    size: "1KB"
+  - id: "gpio_sd"
+    type: "stub"
+    base_address: 0x60091f00
+    size: "1KB"
+  - id: "mem_monitor"
+    type: "stub"
+    base_address: 0x60092000
+    size: "1KB"
+  - id: "pau"
+    type: "stub"
+    base_address: 0x60093000
+    size: "1KB"
+  - id: "tee"
+    type: "stub"
+    base_address: 0x60098000
+    size: "1KB"
+  - id: "hp_apm"
+    type: "stub"
+    base_address: 0x60099000
+    size: "1KB"
+  - id: "lp_apm0"
+    type: "stub"
+    base_address: 0x60099800
+    size: "1KB"
+  - id: "ieee802154"
+    type: "stub"
+    base_address: 0x600a3000
+    size: "1KB"
+  - id: "modem_syscon"
+    type: "stub"
+    base_address: 0x600a9800
+    size: "1KB"
+  - id: "modem_lpcon"
+    # Sticky register bank (not a zero stub): Arduino regi2c_enable_block
+    # asserts clk_i2c_mst_en, which mask ROM leaves on and fast-boot must seed.
+    # 2KB covers coex_hw_clear_reg window at base+0x400 (before I2C_ANA_MST).
+    type: "esp32c6_modem_lpcon"
+    base_address: 0x600af000
+    size: "2KB"
+  - id: "i2c_ana_mst"
+    # DR_REG_I2C_ANA_MST_BASE — regi2c RMW of ANA_CONF* + BUSY/cal polls.
+    type: "esp32c6_i2c_ana_mst"
+    base_address: 0x600af800
+    size: "1KB"
+  - id: "efuse"
+    type: "stub"
+    base_address: 0x600b0800
+    size: "1KB"
+  - id: "lp_uart"
+    type: "stub"
+    base_address: 0x600b1400
+    size: "1KB"
+  - id: "lp_i2c0"
+    type: "stub"
+    base_address: 0x600b1800
+    size: "1KB"
+  - id: "lp_io"
+    type: "stub"
+    base_address: 0x600b2000
+    size: "1KB"
+  - id: "lp_i2c_ana_mst"
+    type: "stub"
+    base_address: 0x600b2400
+    size: "1KB"
+  - id: "lp_peri"
+    type: "stub"
+    base_address: 0x600b2800
+    size: "1KB"
+  - id: "lp_ana"
+    type: "stub"
+    base_address: 0x600b2c00
+    size: "1KB"
+  - id: "lp_tee"
+    type: "stub"
+    base_address: 0x600b3400
+    size: "1KB"
+  - id: "lp_apm"
+    type: "stub"
+    base_address: 0x600b3800
+    size: "1KB"
+  - id: "otp_debug"
+    type: "stub"
+    base_address: 0x600b3c00
+    size: "1KB"
+  - id: "plic_mx"
+    type: "stub"
+    base_address: 0x20001000
+    size: "1KB"
+  - id: "plic_ux"
+    type: "stub"
+    base_address: 0x20001400
+    size: "1KB"
+  - id: "clint_m"
+    type: "stub"
+    base_address: 0x20001800
+    size: "1KB"
+  - id: "clint_u"
+    type: "stub"
+    base_address: 0x20001C00
+    size: "1KB"
+  - id: "pmu"
+    type: "declarative"
+    base_address: 0x600B0000
+    size: "1KB"
+    config:
+      path: "../peripherals/esp32c6/pmu.yaml"
+  - id: "lp_clkrst"
+    type: "declarative"
+    base_address: 0x600B0400
+    size: "1KB"
+    config:
+      path: "../peripherals/esp32c6/lp_clkrst.yaml"
+  - id: "lp_wdt"
+    type: "declarative"
+    base_address: 0x600B1C00
+    size: "1KB"
+    config:
+      path: "../peripherals/esp32c6/lp_wdt.yaml"
+  - id: "lp_aon"
+    type: "declarative"
+    base_address: 0x600B1000
+    size: "1KB"
+    config:
+      path: "../peripherals/esp32c6/lp_aon.yaml"
   - id: "lp_timer"
     type: "esp32c6_lp_rtc"
     irq: 15 # ETS_LP_RTC_TIMER_INTR_SOURCE (esp32c6.svd LP_TIMER)
@@ -284,6 +502,31 @@ peripherals:
     size: "4KB"
     config:
       path: "../peripherals/esp32c6/intpri.yaml"
+  # ASSIST_DEBUG — Debug Assist (stack monitor / last-PC). Arduino ESP32
+  # core reads C0RE_0_DEBUG_MODE @ +0x74 early in bring-up; without this
+  # window the first accesses fault. SVD-derived register file only — no
+  # behavioural monitor side effects.
+  # EXTMEM / TRACE — Arduino cache init touches L1_CACHE_* @ EXTMEM+0x134.
+  # Declarative stubs only (plain-memory XIP window already serves flash reads;
+  # no MMU translation). Cache SYNC/LOCK DONE bits are storage — may need
+  # side-effects if firmware polls them.
+  - id: "trace"
+    type: "declarative"
+    base_address: 0x600C0000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/trace.yaml"
+  - id: "extmem"
+    type: "esp32c6_extmem"
+    base_address: 0x600C8000
+    size: "4KB"
+  - id: "assist_debug"
+    type: "declarative"
+    base_address: 0x600C2000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/assist_debug.yaml"
+
   # USB Serial/JTAG (USB_DEVICE). Same EP1/INT_* IP as C3/S3; behavioural model
   # is `UsbSerialJtag::new_esp32c6` (matrix source 48, 160 MHz). Base and irq
   # from vendored esp32c6.svd peripheral USB_DEVICE. The DevKitC-1's *primary*

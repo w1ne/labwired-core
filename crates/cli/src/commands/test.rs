@@ -1863,6 +1863,22 @@ pub(crate) fn run_test(
                 std::path::Path::new(&firmware_path),
             );
         }
+        // ESP32-C6: SPI_MEM + partition seed + ROM .data pointers (CLI RISC-V
+        // path does not go through builder/riscv.rs).
+        if let Some(sys_path) = system_path.as_ref() {
+            if let Ok(manifest) = labwired_config::SystemManifest::from_file(sys_path) {
+                let chip_dir = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                if let Ok(chip) = labwired_config::ChipDescriptor::resolve_with(
+                    &manifest.chip,
+                    chip_dir,
+                    &crate::plugin_chip_yaml(plugins),
+                ) {
+                    labwired_core::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, &chip);
+                }
+            }
+        }
     }
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
@@ -2094,6 +2110,26 @@ pub(crate) fn run_test(
             // does not — seed SP at the top of chip RAM (16B aligned) and force
             // PC to the ELF entry so we don't start at SP=0 → fault @ 0xfffffffc.
             if matches!(program.arch, labwired_core::Arch::RiscV) {
+                // C6: re-seed ROM interface pointers after ELF load. Mask-ROM
+                // unpack never ran; without this multi_heap_register_impl
+                // jalrs through garbage at heap_tlsf_table_ptr. No-op on
+                // non-C6 (writes are to C6 HP-SRAM interface addresses).
+                if let Some(sys_path) = system_path.as_ref() {
+                    if let Ok(manifest) = labwired_config::SystemManifest::from_file(sys_path) {
+                        let chip_dir = sys_path
+                            .parent()
+                            .unwrap_or_else(|| std::path::Path::new("."));
+                        if let Ok(chip) = labwired_config::ChipDescriptor::resolve_with(
+                            &manifest.chip,
+                            chip_dir,
+                            &crate::plugin_chip_yaml(plugins),
+                        ) {
+                            if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
+                                labwired_core::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
+                            }
+                        }
+                    }
+                }
                 // Fast-boot skips mask-ROM reset's `.data` unpack into high
                 // DRAM (`ets_ops_table_ptr` / `rom_spiflash_legacy_*` /
                 // `g_flash_guard_ops` @ 0x3FCD_FFxx). Without that copy, ROM
@@ -2137,6 +2173,12 @@ pub(crate) fn run_test(
                                 if chip.name == "esp32c3" {
                                     const C3_BOOT_STACK_TOP: u32 = 0x3FCD_C000;
                                     sp_top = C3_BOOT_STACK_TOP;
+                                }
+                                // C6: stay below ROM-reserved HP SRAM so the
+                                // boot stack cannot smash heap_tlsf_table_ptr
+                                // @ 0x4087_ffd8 (and friends).
+                                if chip.name.to_ascii_lowercase().contains("esp32c6") {
+                                    sp_top = labwired_core::boot::esp32c6_rom::app_stack_top();
                                 }
                                 machine.cpu.set_sp(sp_top & !0xF);
                             }

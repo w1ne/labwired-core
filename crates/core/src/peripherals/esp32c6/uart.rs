@@ -57,7 +57,7 @@ pub fn default_source_id(base: u64) -> u32 {
 /// `echo_stdout` routes shifted-out TX to the host console (UART0's default,
 /// the DevKitC-1's USB-to-UART bridge); UART1 stays capture-only.
 pub fn new(echo_stdout: bool, source_id: u32) -> EspUart {
-    EspUart::new_with_cpu_clock(echo_stdout, source_id, CPU_CLOCK_HZ)
+    EspUart::new_with_cpu_clock(echo_stdout, source_id, CPU_CLOCK_HZ).with_c6_reg_map()
 }
 
 #[cfg(test)]
@@ -116,5 +116,14 @@ mod tests {
             3,
             "STATUS.TXFIFO_CNT tracks occupancy"
         );
+    }
+
+
+    #[test]
+    fn fsm_status_idle_at_0x70_for_rom_tx_wait() {
+        // C6 UART_FSM_STATUS_REG @ 0x70; ST_UTX_OUT[7:4] must read 0 or the
+        // mask-ROM uart_tx_wait_idle spins forever (C3 POSPULSE was 0xFFF here).
+        let u = new(false, UART0_INTR_SOURCE_ID);
+        assert_eq!(u.read_u32(0x70).unwrap() & 0xF0, 0);
     }
 }

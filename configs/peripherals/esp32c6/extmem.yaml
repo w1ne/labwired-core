@@ -1,0 +1,4964 @@
+peripheral: EXTMEM
+version: 0.1.0
+registers:
+- id: L1_ICACHE_CTRL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE_SHUT_IBUS0
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to disable core0 ibus access L1-ICache, 0: enable, 1: disable'
+  - name: L1_ICACHE_SHUT_IBUS1
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to disable core1 ibus access L1-ICache, 0: enable, 1: disable'
+  - name: L1_ICACHE_SHUT_IBUS2
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE_SHUT_IBUS3
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_ICACHE_UNDEF_OP
+    bit_range:
+    - 7
+    - 4
+    description: Reserved
+  side_effects: null
+- id: L1_CACHE_CTRL
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_SHUT_BUS0
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to disable core0 dbus access L1-Cache, 0: enable, 1: disable'
+  - name: L1_CACHE_SHUT_BUS1
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to disable core1 dbus access L1-Cache, 0: enable, 1: disable'
+  - name: L1_CACHE_SHUT_DBUS2
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_CACHE_SHUT_DBUS3
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_SHUT_DMA
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to disable DMA access L1-Cache, 0: enable, 1: disable'
+  - name: L1_CACHE_UNDEF_OP
+    bit_range:
+    - 11
+    - 8
+    description: Reserved
+  side_effects: null
+- id: L1_BYPASS_CACHE_CONF
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BYPASS_L1_ICACHE0_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable bypass L1-ICache0. 0: disable bypass, 1: enable bypass.'
+  - name: BYPASS_L1_ICACHE1_EN
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to enable bypass L1-ICache1. 0: disable bypass, 1: enable bypass.'
+  - name: BYPASS_L1_ICACHE2_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: BYPASS_L1_ICACHE3_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: BYPASS_L1_DCACHE_EN
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to enable bypass L1-DCache. 0: disable bypass, 1: enable bypass.'
+  side_effects: null
+- id: L1_CACHE_ATOMIC_CONF
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_ATOMIC_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable atomic feature on L1-Cache when multiple cores access L1-Cache.  1: disable, 1: enable.'
+  side_effects: null
+- id: L1_ICACHE_CACHESIZE_CONF
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE_CACHESIZE_1K
+    bit_range:
+    - 0
+    - 0
+    description: The field is used to configure cachesize of L1-ICache as 1k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_2K
+    bit_range:
+    - 1
+    - 1
+    description: The field is used to configure cachesize of L1-ICache as 2k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_4K
+    bit_range:
+    - 2
+    - 2
+    description: The field is used to configure cachesize of L1-ICache as 4k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_8K
+    bit_range:
+    - 3
+    - 3
+    description: The field is used to configure cachesize of L1-ICache as 8k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_16K
+    bit_range:
+    - 4
+    - 4
+    description: The field is used to configure cachesize of L1-ICache as 16k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_32K
+    bit_range:
+    - 5
+    - 5
+    description: The field is used to configure cachesize of L1-ICache as 32k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_64K
+    bit_range:
+    - 6
+    - 6
+    description: The field is used to configure cachesize of L1-ICache as 64k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_128K
+    bit_range:
+    - 7
+    - 7
+    description: The field is used to configure cachesize of L1-ICache as 128k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_256K
+    bit_range:
+    - 8
+    - 8
+    description: The field is used to configure cachesize of L1-ICache as 256k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_512K
+    bit_range:
+    - 9
+    - 9
+    description: The field is used to configure cachesize of L1-ICache as 512k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_1024K
+    bit_range:
+    - 10
+    - 10
+    description: The field is used to configure cachesize of L1-ICache as 1024k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_2048K
+    bit_range:
+    - 11
+    - 11
+    description: The field is used to configure cachesize of L1-ICache as 2048k bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_CACHESIZE_4096K
+    bit_range:
+    - 12
+    - 12
+    description: The field is used to configure cachesize of L1-ICache as 4096k bytes. This field and all other fields within this register is onehot.
+  side_effects: null
+- id: L1_ICACHE_BLOCKSIZE_CONF
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE_BLOCKSIZE_8
+    bit_range:
+    - 0
+    - 0
+    description: The field is used to configureblocksize of L1-ICache as 8 bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_BLOCKSIZE_16
+    bit_range:
+    - 1
+    - 1
+    description: The field is used to configureblocksize of L1-ICache as 16 bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_BLOCKSIZE_32
+    bit_range:
+    - 2
+    - 2
+    description: The field is used to configureblocksize of L1-ICache as 32 bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_BLOCKSIZE_64
+    bit_range:
+    - 3
+    - 3
+    description: The field is used to configureblocksize of L1-ICache as 64 bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_BLOCKSIZE_128
+    bit_range:
+    - 4
+    - 4
+    description: The field is used to configureblocksize of L1-ICache as 128 bytes. This field and all other fields within this register is onehot.
+  - name: L1_ICACHE_BLOCKSIZE_256
+    bit_range:
+    - 5
+    - 5
+    description: The field is used to configureblocksize of L1-ICache as 256 bytes. This field and all other fields within this register is onehot.
+  side_effects: null
+- id: L1_CACHE_CACHESIZE_CONF
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 32
+  fields:
+  - name: L1_CACHE_CACHESIZE_1K
+    bit_range:
+    - 0
+    - 0
+    description: The field is used to configure cachesize of L1-Cache as 1k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_2K
+    bit_range:
+    - 1
+    - 1
+    description: The field is used to configure cachesize of L1-Cache as 2k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_4K
+    bit_range:
+    - 2
+    - 2
+    description: The field is used to configure cachesize of L1-Cache as 4k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_8K
+    bit_range:
+    - 3
+    - 3
+    description: The field is used to configure cachesize of L1-Cache as 8k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_16K
+    bit_range:
+    - 4
+    - 4
+    description: The field is used to configure cachesize of L1-Cache as 16k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_32K
+    bit_range:
+    - 5
+    - 5
+    description: The field is used to configure cachesize of L1-Cache as 32k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_64K
+    bit_range:
+    - 6
+    - 6
+    description: The field is used to configure cachesize of L1-Cache as 64k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_128K
+    bit_range:
+    - 7
+    - 7
+    description: The field is used to configure cachesize of L1-Cache as 128k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_256K
+    bit_range:
+    - 8
+    - 8
+    description: The field is used to configure cachesize of L1-Cache as 256k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_512K
+    bit_range:
+    - 9
+    - 9
+    description: The field is used to configure cachesize of L1-Cache as 512k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_1024K
+    bit_range:
+    - 10
+    - 10
+    description: The field is used to configure cachesize of L1-Cache as 1024k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_2048K
+    bit_range:
+    - 11
+    - 11
+    description: The field is used to configure cachesize of L1-Cache as 2048k bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_CACHESIZE_4096K
+    bit_range:
+    - 12
+    - 12
+    description: The field is used to configure cachesize of L1-Cache as 4096k bytes. This field and all other fields within this register is onehot.
+  side_effects: null
+- id: L1_CACHE_BLOCKSIZE_CONF
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: L1_CACHE_BLOCKSIZE_8
+    bit_range:
+    - 0
+    - 0
+    description: The field is used to configureblocksize of L1-DCache as 8 bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_BLOCKSIZE_16
+    bit_range:
+    - 1
+    - 1
+    description: The field is used to configureblocksize of L1-DCache as 16 bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_BLOCKSIZE_32
+    bit_range:
+    - 2
+    - 2
+    description: The field is used to configureblocksize of L1-DCache as 32 bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_BLOCKSIZE_64
+    bit_range:
+    - 3
+    - 3
+    description: The field is used to configureblocksize of L1-DCache as 64 bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_BLOCKSIZE_128
+    bit_range:
+    - 4
+    - 4
+    description: The field is used to configureblocksize of L1-DCache as 128 bytes. This field and all other fields within this register is onehot.
+  - name: L1_CACHE_BLOCKSIZE_256
+    bit_range:
+    - 5
+    - 5
+    description: The field is used to configureblocksize of L1-DCache as 256 bytes. This field and all other fields within this register is onehot.
+  side_effects: null
+- id: L1_CACHE_WRAP_AROUND_CTRL
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_WRAP
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit as 1 to enable L1-ICache0 wrap around mode.
+  - name: L1_ICACHE1_WRAP
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit as 1 to enable L1-ICache1 wrap around mode.
+  - name: L1_ICACHE2_WRAP
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_WRAP
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_WRAP
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit as 1 to enable L1-DCache wrap around mode.
+  side_effects: null
+- id: L1_CACHE_TAG_MEM_POWER_CTRL
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 349525
+  fields:
+  - name: L1_ICACHE0_TAG_MEM_FORCE_ON
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to close clock gating of  L1-ICache0 tag memory. 1: close gating, 0: open clock gating.'
+  - name: L1_ICACHE0_TAG_MEM_FORCE_PD
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to power L1-ICache0 tag memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L1_ICACHE0_TAG_MEM_FORCE_PU
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to power L1-ICache0 tag memory up. 0: follow rtc_lslp, 1: power up'
+  - name: L1_ICACHE1_TAG_MEM_FORCE_ON
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to close clock gating of  L1-ICache1 tag memory. 1: close gating, 0: open clock gating.'
+  - name: L1_ICACHE1_TAG_MEM_FORCE_PD
+    bit_range:
+    - 5
+    - 5
+    description: 'The bit is used to power L1-ICache1 tag memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L1_ICACHE1_TAG_MEM_FORCE_PU
+    bit_range:
+    - 6
+    - 6
+    description: 'The bit is used to power L1-ICache1 tag memory up. 0: follow rtc_lslp, 1: power up'
+  - name: L1_ICACHE2_TAG_MEM_FORCE_ON
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: L1_ICACHE2_TAG_MEM_FORCE_PD
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE2_TAG_MEM_FORCE_PU
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_ICACHE3_TAG_MEM_FORCE_ON
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: L1_ICACHE3_TAG_MEM_FORCE_PD
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: L1_ICACHE3_TAG_MEM_FORCE_PU
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L1_CACHE_TAG_MEM_FORCE_ON
+    bit_range:
+    - 16
+    - 16
+    description: 'The bit is used to close clock gating of  L1-Cache tag memory. 1: close gating, 0: open clock gating.'
+  - name: L1_CACHE_TAG_MEM_FORCE_PD
+    bit_range:
+    - 17
+    - 17
+    description: 'The bit is used to power L1-Cache tag memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L1_CACHE_TAG_MEM_FORCE_PU
+    bit_range:
+    - 18
+    - 18
+    description: 'The bit is used to power L1-Cache tag memory up. 0: follow rtc_lslp, 1: power up'
+  side_effects: null
+- id: L1_CACHE_DATA_MEM_POWER_CTRL
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 349525
+  fields:
+  - name: L1_ICACHE0_DATA_MEM_FORCE_ON
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to close clock gating of  L1-ICache0 data memory. 1: close gating, 0: open clock gating.'
+  - name: L1_ICACHE0_DATA_MEM_FORCE_PD
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to power L1-ICache0 data memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L1_ICACHE0_DATA_MEM_FORCE_PU
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to power L1-ICache0 data memory up. 0: follow rtc_lslp, 1: power up'
+  - name: L1_ICACHE1_DATA_MEM_FORCE_ON
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to close clock gating of  L1-ICache1 data memory. 1: close gating, 0: open clock gating.'
+  - name: L1_ICACHE1_DATA_MEM_FORCE_PD
+    bit_range:
+    - 5
+    - 5
+    description: 'The bit is used to power L1-ICache1 data memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L1_ICACHE1_DATA_MEM_FORCE_PU
+    bit_range:
+    - 6
+    - 6
+    description: 'The bit is used to power L1-ICache1 data memory up. 0: follow rtc_lslp, 1: power up'
+  - name: L1_ICACHE2_DATA_MEM_FORCE_ON
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: L1_ICACHE2_DATA_MEM_FORCE_PD
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE2_DATA_MEM_FORCE_PU
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_ICACHE3_DATA_MEM_FORCE_ON
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: L1_ICACHE3_DATA_MEM_FORCE_PD
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: L1_ICACHE3_DATA_MEM_FORCE_PU
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L1_CACHE_DATA_MEM_FORCE_ON
+    bit_range:
+    - 16
+    - 16
+    description: 'The bit is used to close clock gating of  L1-Cache data memory. 1: close gating, 0: open clock gating.'
+  - name: L1_CACHE_DATA_MEM_FORCE_PD
+    bit_range:
+    - 17
+    - 17
+    description: 'The bit is used to power L1-Cache data memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L1_CACHE_DATA_MEM_FORCE_PU
+    bit_range:
+    - 18
+    - 18
+    description: 'The bit is used to power L1-Cache data memory up. 0: follow rtc_lslp, 1: power up'
+  side_effects: null
+- id: L1_CACHE_FREEZE_CTRL
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FREEZE_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable freeze operation on L1-ICache0. It can be cleared by software.
+  - name: L1_ICACHE0_FREEZE_MODE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to configure mode of freeze operation L1-ICache0. 0: a miss-access will not stuck. 1: a miss-access will stuck.'
+  - name: L1_ICACHE0_FREEZE_DONE
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to indicate whether freeze operation on L1-ICache0 is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE1_FREEZE_EN
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to enable freeze operation on L1-ICache1. It can be cleared by software.
+  - name: L1_ICACHE1_FREEZE_MODE
+    bit_range:
+    - 5
+    - 5
+    description: 'The bit is used to configure mode of freeze operation L1-ICache1. 0: a miss-access will not stuck. 1: a miss-access will stuck.'
+  - name: L1_ICACHE1_FREEZE_DONE
+    bit_range:
+    - 6
+    - 6
+    description: 'The bit is used to indicate whether freeze operation on L1-ICache1 is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE2_FREEZE_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: L1_ICACHE2_FREEZE_MODE
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE2_FREEZE_DONE
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_ICACHE3_FREEZE_EN
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: L1_ICACHE3_FREEZE_MODE
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: L1_ICACHE3_FREEZE_DONE
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L1_CACHE_FREEZE_EN
+    bit_range:
+    - 16
+    - 16
+    description: The bit is used to enable freeze operation on L1-Cache. It can be cleared by software.
+  - name: L1_CACHE_FREEZE_MODE
+    bit_range:
+    - 17
+    - 17
+    description: 'The bit is used to configure mode of freeze operation L1-Cache. 0: a miss-access will not stuck. 1: a miss-access will stuck.'
+  - name: L1_CACHE_FREEZE_DONE
+    bit_range:
+    - 18
+    - 18
+    description: 'The bit is used to indicate whether freeze operation on L1-Cache is finished or not. 0: not finished. 1: finished.'
+  side_effects: null
+- id: L1_CACHE_DATA_MEM_ACS_CONF
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 209715
+  fields:
+  - name: L1_ICACHE0_DATA_MEM_RD_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable config-bus read L1-ICache0 data memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE0_DATA_MEM_WR_EN
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to enable config-bus write L1-ICache0 data memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE1_DATA_MEM_RD_EN
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to enable config-bus read L1-ICache1 data memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE1_DATA_MEM_WR_EN
+    bit_range:
+    - 5
+    - 5
+    description: 'The bit is used to enable config-bus write L1-ICache1 data memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE2_DATA_MEM_RD_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: L1_ICACHE2_DATA_MEM_WR_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE3_DATA_MEM_RD_EN
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: L1_ICACHE3_DATA_MEM_WR_EN
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: L1_CACHE_DATA_MEM_RD_EN
+    bit_range:
+    - 16
+    - 16
+    description: 'The bit is used to enable config-bus read L1-Cache data memoryory. 0: disable, 1: enable.'
+  - name: L1_CACHE_DATA_MEM_WR_EN
+    bit_range:
+    - 17
+    - 17
+    description: 'The bit is used to enable config-bus write L1-Cache data memoryory. 0: disable, 1: enable.'
+  side_effects: null
+- id: L1_CACHE_TAG_MEM_ACS_CONF
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 209715
+  fields:
+  - name: L1_ICACHE0_TAG_MEM_RD_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable config-bus read L1-ICache0 tag memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE0_TAG_MEM_WR_EN
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to enable config-bus write L1-ICache0 tag memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE1_TAG_MEM_RD_EN
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to enable config-bus read L1-ICache1 tag memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE1_TAG_MEM_WR_EN
+    bit_range:
+    - 5
+    - 5
+    description: 'The bit is used to enable config-bus write L1-ICache1 tag memoryory. 0: disable, 1: enable.'
+  - name: L1_ICACHE2_TAG_MEM_RD_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: L1_ICACHE2_TAG_MEM_WR_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE3_TAG_MEM_RD_EN
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: L1_ICACHE3_TAG_MEM_WR_EN
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: L1_CACHE_TAG_MEM_RD_EN
+    bit_range:
+    - 16
+    - 16
+    description: 'The bit is used to enable config-bus read L1-Cache tag memoryory. 0: disable, 1: enable.'
+  - name: L1_CACHE_TAG_MEM_WR_EN
+    bit_range:
+    - 17
+    - 17
+    description: 'The bit is used to enable config-bus write L1-Cache tag memoryory. 0: disable, 1: enable.'
+  side_effects: null
+- id: L1_ICACHE0_PRELOCK_CONF
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PRELOCK_SCT0_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable the first section of prelock function on L1-ICache0.
+  - name: L1_ICACHE0_PRELOCK_SCT1_EN
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable the second section of prelock function on L1-ICache0.
+  - name: L1_ICACHE0_PRELOCK_RGID
+    bit_range:
+    - 5
+    - 2
+    description: The bit is used to set  the gid of l1 icache0 prelock.
+  side_effects: null
+- id: L1_ICACHE0_PRELOCK_SCT0_ADDR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PRELOCK_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section of prelock on L1-ICache0, which should be used together with L1_ICACHE0_PRELOCK_SCT0_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE0_PRELOCK_SCT1_ADDR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PRELOCK_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section of prelock on L1-ICache0, which should be used together with L1_ICACHE0_PRELOCK_SCT1_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE0_PRELOCK_SCT_SIZE
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073692671
+  fields:
+  - name: L1_ICACHE0_PRELOCK_SCT0_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache0, which should be used together with L1_ICACHE0_PRELOCK_SCT0_ADDR_REG
+  - name: L1_ICACHE0_PRELOCK_SCT1_SIZE
+    bit_range:
+    - 29
+    - 16
+    description: Those bits are used to configure the size of the second section of prelock on L1-ICache0, which should be used together with L1_ICACHE0_PRELOCK_SCT1_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE1_PRELOCK_CONF
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_PRELOCK_SCT0_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable the first section of prelock function on L1-ICache1.
+  - name: L1_ICACHE1_PRELOCK_SCT1_EN
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable the second section of prelock function on L1-ICache1.
+  - name: L1_ICACHE1_PRELOCK_RGID
+    bit_range:
+    - 5
+    - 2
+    description: The bit is used to set  the gid of l1 icache1 prelock.
+  side_effects: null
+- id: L1_ICACHE1_PRELOCK_SCT0_ADDR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_PRELOCK_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section of prelock on L1-ICache1, which should be used together with L1_ICACHE1_PRELOCK_SCT0_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE1_PRELOCK_SCT1_ADDR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_PRELOCK_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section of prelock on L1-ICache1, which should be used together with L1_ICACHE1_PRELOCK_SCT1_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE1_PRELOCK_SCT_SIZE
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073692671
+  fields:
+  - name: L1_ICACHE1_PRELOCK_SCT0_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache1, which should be used together with L1_ICACHE1_PRELOCK_SCT0_ADDR_REG
+  - name: L1_ICACHE1_PRELOCK_SCT1_SIZE
+    bit_range:
+    - 29
+    - 16
+    description: Those bits are used to configure the size of the second section of prelock on L1-ICache1, which should be used together with L1_ICACHE1_PRELOCK_SCT1_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE2_PRELOCK_CONF
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_PRELOCK_SCT0_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable the first section of prelock function on L1-ICache2.
+  - name: L1_ICACHE2_PRELOCK_SCT1_EN
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable the second section of prelock function on L1-ICache2.
+  - name: L1_ICACHE2_PRELOCK_RGID
+    bit_range:
+    - 5
+    - 2
+    description: The bit is used to set  the gid of l1 icache2 prelock.
+  side_effects: null
+- id: L1_ICACHE2_PRELOCK_SCT0_ADDR
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_PRELOCK_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section of prelock on L1-ICache2, which should be used together with L1_ICACHE2_PRELOCK_SCT0_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE2_PRELOCK_SCT1_ADDR
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_PRELOCK_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section of prelock on L1-ICache2, which should be used together with L1_ICACHE2_PRELOCK_SCT1_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE2_PRELOCK_SCT_SIZE
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073692671
+  fields:
+  - name: L1_ICACHE2_PRELOCK_SCT0_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache2, which should be used together with L1_ICACHE2_PRELOCK_SCT0_ADDR_REG
+  - name: L1_ICACHE2_PRELOCK_SCT1_SIZE
+    bit_range:
+    - 29
+    - 16
+    description: Those bits are used to configure the size of the second section of prelock on L1-ICache2, which should be used together with L1_ICACHE2_PRELOCK_SCT1_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE3_PRELOCK_CONF
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_PRELOCK_SCT0_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable the first section of prelock function on L1-ICache3.
+  - name: L1_ICACHE3_PRELOCK_SCT1_EN
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable the second section of prelock function on L1-ICache3.
+  - name: L1_ICACHE3_PRELOCK_RGID
+    bit_range:
+    - 5
+    - 2
+    description: The bit is used to set  the gid of l1 icache3 prelock.
+  side_effects: null
+- id: L1_ICACHE3_PRELOCK_SCT0_ADDR
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_PRELOCK_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section of prelock on L1-ICache3, which should be used together with L1_ICACHE3_PRELOCK_SCT0_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE3_PRELOCK_SCT1_ADDR
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_PRELOCK_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section of prelock on L1-ICache3, which should be used together with L1_ICACHE3_PRELOCK_SCT1_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE3_PRELOCK_SCT_SIZE
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073692671
+  fields:
+  - name: L1_ICACHE3_PRELOCK_SCT0_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache3, which should be used together with L1_ICACHE3_PRELOCK_SCT0_ADDR_REG
+  - name: L1_ICACHE3_PRELOCK_SCT1_SIZE
+    bit_range:
+    - 29
+    - 16
+    description: Those bits are used to configure the size of the second section of prelock on L1-ICache3, which should be used together with L1_ICACHE3_PRELOCK_SCT1_ADDR_REG
+  side_effects: null
+- id: L1_CACHE_PRELOCK_CONF
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_PRELOCK_SCT0_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable the first section of prelock function on L1-Cache.
+  - name: L1_CACHE_PRELOCK_SCT1_EN
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable the second section of prelock function on L1-Cache.
+  - name: L1_CACHE_PRELOCK_RGID
+    bit_range:
+    - 5
+    - 2
+    description: The bit is used to set  the gid of l1 cache prelock.
+  side_effects: null
+- id: L1_CACHE_PRELOCK_SCT0_ADDR
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_PRELOCK_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section of prelock on L1-Cache, which should be used together with L1_CACHE_PRELOCK_SCT0_SIZE_REG
+  side_effects: null
+- id: L1_DCACHE_PRELOCK_SCT1_ADDR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_PRELOCK_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section of prelock on L1-Cache, which should be used together with L1_CACHE_PRELOCK_SCT1_SIZE_REG
+  side_effects: null
+- id: L1_DCACHE_PRELOCK_SCT_SIZE
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073692671
+  fields:
+  - name: L1_CACHE_PRELOCK_SCT0_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-Cache, which should be used together with L1_CACHE_PRELOCK_SCT0_ADDR_REG
+  - name: L1_CACHE_PRELOCK_SCT1_SIZE
+    bit_range:
+    - 29
+    - 16
+    description: Those bits are used to configure the size of the second section of prelock on L1-Cache, which should be used together with L1_CACHE_PRELOCK_SCT1_ADDR_REG
+  side_effects: null
+- id: CACHE_LOCK_CTRL
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: CACHE_LOCK_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable lock operation. It will be cleared by hardware after lock operation done
+  - name: CACHE_UNLOCK_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable unlock operation. It will be cleared by hardware after unlock operation done
+  - name: CACHE_LOCK_DONE
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to indicate whether unlock/lock operation is finished or not. 0: not finished. 1: finished.'
+  - name: CACHE_LOCK_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of cache lock/unlock.
+  side_effects: null
+- id: CACHE_LOCK_MAP
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_LOCK_MAP
+    bit_range:
+    - 5
+    - 0
+    description: 'Those bits are used to indicate which caches in the two-level cache structure will apply this lock/unlock operation. [4]: L1-Cache'
+  side_effects: null
+- id: CACHE_LOCK_ADDR
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_LOCK_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the lock/unlock operation, which should be used together with CACHE_LOCK_SIZE_REG
+  side_effects: null
+- id: CACHE_LOCK_SIZE
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_LOCK_SIZE
+    bit_range:
+    - 15
+    - 0
+    description: Those bits are used to configure the size of the lock/unlock operation, which should be used together with CACHE_LOCK_ADDR_REG
+  side_effects: null
+- id: CACHE_SYNC_CTRL
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CACHE_INVALIDATE_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable invalidate operation. It will be cleared by hardware after invalidate operation done. Note that this bit and the other sync-bits (clean_ena, writeback_ena, writeback_invalidate_ena) are mutually exclusive, that is, those bits can not be set to 1 at the same time.
+  - name: CACHE_CLEAN_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable clean operation. It will be cleared by hardware after clean operation done. Note that this bit and the other sync-bits (invalidate_ena, writeback_ena, writeback_invalidate_ena) are mutually exclusive, that is, those bits can not be set to 1 at the same time.
+  - name: CACHE_WRITEBACK_ENA
+    bit_range:
+    - 2
+    - 2
+    description: The bit is used to enable writeback operation. It will be cleared by hardware after writeback operation done. Note that this bit and the other sync-bits (invalidate_ena, clean_ena, writeback_invalidate_ena) are mutually exclusive, that is, those bits can not be set to 1 at the same time.
+  - name: CACHE_WRITEBACK_INVALIDATE_ENA
+    bit_range:
+    - 3
+    - 3
+    description: The bit is used to enable writeback-invalidate operation. It will be cleared by hardware after writeback-invalidate operation done. Note that this bit and the other sync-bits (invalidate_ena, clean_ena, writeback_ena) are mutually exclusive, that is, those bits can not be set to 1 at the same time.
+  - name: CACHE_SYNC_DONE
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to indicate whether sync operation (invalidate, clean, writeback, writeback_invalidate) is finished or not. 0: not finished. 1: finished.'
+  - name: CACHE_SYNC_RGID
+    bit_range:
+    - 8
+    - 5
+    description: The bit is used to set  the gid of cache sync operation (invalidate, clean, writeback, writeback_invalidate)
+  side_effects: null
+- id: CACHE_SYNC_MAP
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: CACHE_SYNC_MAP
+    bit_range:
+    - 5
+    - 0
+    description: 'Those bits are used to indicate which caches in the two-level cache structure will apply the sync operation.  [4]: L1-Cache'
+  side_effects: null
+- id: CACHE_SYNC_ADDR
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_SYNC_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the sync operation, which should be used together with CACHE_SYNC_SIZE_REG
+  side_effects: null
+- id: CACHE_SYNC_SIZE
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_SYNC_SIZE
+    bit_range:
+    - 23
+    - 0
+    description: Those bits are used to configure the size of the sync operation, which should be used together with CACHE_SYNC_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE0_PRELOAD_CTRL
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE0_PRELOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable preload operation on L1-ICache0. It will be cleared by hardware automatically after preload operation is done.
+  - name: L1_ICACHE0_PRELOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether preload operation is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE0_PRELOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of preload operation. 0: ascending, 1: descending.'
+  - name: L1_ICACHE0_PRELOAD_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of l1 icache0 preload.
+  side_effects: null
+- id: L1_ICACHE0_PRELOAD_ADDR
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PRELOAD_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of preload on L1-ICache0, which should be used together with L1_ICACHE0_PRELOAD_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE0_PRELOAD_SIZE
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PRELOAD_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache0, which should be used together with L1_ICACHE0_PRELOAD_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE1_PRELOAD_CTRL
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE1_PRELOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable preload operation on L1-ICache1. It will be cleared by hardware automatically after preload operation is done.
+  - name: L1_ICACHE1_PRELOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether preload operation is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE1_PRELOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of preload operation. 0: ascending, 1: descending.'
+  - name: L1_ICACHE1_PRELOAD_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of l1 icache1 preload.
+  side_effects: null
+- id: L1_ICACHE1_PRELOAD_ADDR
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_PRELOAD_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of preload on L1-ICache1, which should be used together with L1_ICACHE1_PRELOAD_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE1_PRELOAD_SIZE
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_PRELOAD_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache1, which should be used together with L1_ICACHE1_PRELOAD_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE2_PRELOAD_CTRL
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE2_PRELOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable preload operation on L1-ICache2. It will be cleared by hardware automatically after preload operation is done.
+  - name: L1_ICACHE2_PRELOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether preload operation is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE2_PRELOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of preload operation. 0: ascending, 1: descending.'
+  - name: L1_ICACHE2_PRELOAD_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of l1 icache2 preload.
+  side_effects: null
+- id: L1_ICACHE2_PRELOAD_ADDR
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_PRELOAD_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of preload on L1-ICache2, which should be used together with L1_ICACHE2_PRELOAD_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE2_PRELOAD_SIZE
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_PRELOAD_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache2, which should be used together with L1_ICACHE2_PRELOAD_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE3_PRELOAD_CTRL
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE3_PRELOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable preload operation on L1-ICache3. It will be cleared by hardware automatically after preload operation is done.
+  - name: L1_ICACHE3_PRELOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether preload operation is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE3_PRELOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of preload operation. 0: ascending, 1: descending.'
+  - name: L1_ICACHE3_PRELOAD_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of l1 icache3 preload.
+  side_effects: null
+- id: L1_ICACHE3_PRELOAD_ADDR
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_PRELOAD_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of preload on L1-ICache3, which should be used together with L1_ICACHE3_PRELOAD_SIZE_REG
+  side_effects: null
+- id: L1_ICACHE3_PRELOAD_SIZE
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_PRELOAD_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-ICache3, which should be used together with L1_ICACHE3_PRELOAD_ADDR_REG
+  side_effects: null
+- id: L1_CACHE_PRELOAD_CTRL
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_CACHE_PRELOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable preload operation on L1-Cache. It will be cleared by hardware automatically after preload operation is done.
+  - name: L1_CACHE_PRELOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether preload operation is finished or not. 0: not finished. 1: finished.'
+  - name: L1_CACHE_PRELOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of preload operation. 0: ascending, 1: descending.'
+  - name: L1_CACHE_PRELOAD_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of l1 cache preload.
+  side_effects: null
+- id: L1_DCACHE_PRELOAD_ADDR
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_PRELOAD_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of preload on L1-Cache, which should be used together with L1_CACHE_PRELOAD_SIZE_REG
+  side_effects: null
+- id: L1_DCACHE_PRELOAD_SIZE
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_PRELOAD_SIZE
+    bit_range:
+    - 13
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L1-Cache, which should be used together with L1_CACHE_PRELOAD_ADDR_REG
+  side_effects: null
+- id: L1_ICACHE0_AUTOLOAD_CTRL
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE0_AUTOLOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable and disable autoload operation on L1-ICache0.  1: enable, 0: disable.'
+  - name: L1_ICACHE0_AUTOLOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether autoload operation on L1-ICache0 is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE0_AUTOLOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of autoload operation on L1-ICache0. 0: ascending. 1: descending.'
+  - name: L1_ICACHE0_AUTOLOAD_TRIGGER_MODE
+    bit_range:
+    - 4
+    - 3
+    description: 'The field is used to configure trigger mode of autoload operation on L1-ICache0. 0/3: miss-trigger, 1: hit-trigger, 2: miss-hit-trigger.'
+  - name: L1_ICACHE0_AUTOLOAD_SCT0_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable the first section for autoload operation on L1-ICache0.
+  - name: L1_ICACHE0_AUTOLOAD_SCT1_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable the second section for autoload operation on L1-ICache0.
+  - name: L1_ICACHE0_AUTOLOAD_RGID
+    bit_range:
+    - 13
+    - 10
+    description: The bit is used to set  the gid of l1 icache0 autoload.
+  side_effects: null
+- id: L1_ICACHE0_AUTOLOAD_SCT0_ADDR
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_AUTOLOAD_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section for autoload operation on L1-ICache0. Note that it should be used together with L1_ICACHE0_AUTOLOAD_SCT0_SIZE and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE0_AUTOLOAD_SCT0_SIZE
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_AUTOLOAD_SCT0_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the first section for autoload operation on L1-ICache0. Note that it should be used together with L1_ICACHE0_AUTOLOAD_SCT0_ADDR and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE0_AUTOLOAD_SCT1_ADDR
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_AUTOLOAD_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section for autoload operation on L1-ICache0. Note that it should be used together with L1_ICACHE0_AUTOLOAD_SCT1_SIZE and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE0_AUTOLOAD_SCT1_SIZE
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_AUTOLOAD_SCT1_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the second section for autoload operation on L1-ICache0. Note that it should be used together with L1_ICACHE0_AUTOLOAD_SCT1_ADDR and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE1_AUTOLOAD_CTRL
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE1_AUTOLOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable and disable autoload operation on L1-ICache1.  1: enable, 0: disable.'
+  - name: L1_ICACHE1_AUTOLOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether autoload operation on L1-ICache1 is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE1_AUTOLOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of autoload operation on L1-ICache1. 0: ascending. 1: descending.'
+  - name: L1_ICACHE1_AUTOLOAD_TRIGGER_MODE
+    bit_range:
+    - 4
+    - 3
+    description: 'The field is used to configure trigger mode of autoload operation on L1-ICache1. 0/3: miss-trigger, 1: hit-trigger, 2: miss-hit-trigger.'
+  - name: L1_ICACHE1_AUTOLOAD_SCT0_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable the first section for autoload operation on L1-ICache1.
+  - name: L1_ICACHE1_AUTOLOAD_SCT1_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable the second section for autoload operation on L1-ICache1.
+  - name: L1_ICACHE1_AUTOLOAD_RGID
+    bit_range:
+    - 13
+    - 10
+    description: The bit is used to set  the gid of l1 icache1 autoload.
+  side_effects: null
+- id: L1_ICACHE1_AUTOLOAD_SCT0_ADDR
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_AUTOLOAD_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section for autoload operation on L1-ICache1. Note that it should be used together with L1_ICACHE1_AUTOLOAD_SCT0_SIZE and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE1_AUTOLOAD_SCT0_SIZE
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_AUTOLOAD_SCT0_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the first section for autoload operation on L1-ICache1. Note that it should be used together with L1_ICACHE1_AUTOLOAD_SCT0_ADDR and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE1_AUTOLOAD_SCT1_ADDR
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_AUTOLOAD_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section for autoload operation on L1-ICache1. Note that it should be used together with L1_ICACHE1_AUTOLOAD_SCT1_SIZE and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE1_AUTOLOAD_SCT1_SIZE
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_AUTOLOAD_SCT1_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the second section for autoload operation on L1-ICache1. Note that it should be used together with L1_ICACHE1_AUTOLOAD_SCT1_ADDR and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE2_AUTOLOAD_CTRL
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE2_AUTOLOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable and disable autoload operation on L1-ICache2.  1: enable, 0: disable.'
+  - name: L1_ICACHE2_AUTOLOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether autoload operation on L1-ICache2 is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE2_AUTOLOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of autoload operation on L1-ICache2. 0: ascending. 1: descending.'
+  - name: L1_ICACHE2_AUTOLOAD_TRIGGER_MODE
+    bit_range:
+    - 4
+    - 3
+    description: 'The field is used to configure trigger mode of autoload operation on L1-ICache2. 0/3: miss-trigger, 1: hit-trigger, 2: miss-hit-trigger.'
+  - name: L1_ICACHE2_AUTOLOAD_SCT0_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable the first section for autoload operation on L1-ICache2.
+  - name: L1_ICACHE2_AUTOLOAD_SCT1_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable the second section for autoload operation on L1-ICache2.
+  - name: L1_ICACHE2_AUTOLOAD_RGID
+    bit_range:
+    - 13
+    - 10
+    description: The bit is used to set  the gid of l1 icache2 autoload.
+  side_effects: null
+- id: L1_ICACHE2_AUTOLOAD_SCT0_ADDR
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_AUTOLOAD_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section for autoload operation on L1-ICache2. Note that it should be used together with L1_ICACHE2_AUTOLOAD_SCT0_SIZE and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE2_AUTOLOAD_SCT0_SIZE
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_AUTOLOAD_SCT0_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the first section for autoload operation on L1-ICache2. Note that it should be used together with L1_ICACHE2_AUTOLOAD_SCT0_ADDR and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE2_AUTOLOAD_SCT1_ADDR
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_AUTOLOAD_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section for autoload operation on L1-ICache2. Note that it should be used together with L1_ICACHE2_AUTOLOAD_SCT1_SIZE and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE2_AUTOLOAD_SCT1_SIZE
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_AUTOLOAD_SCT1_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the second section for autoload operation on L1-ICache2. Note that it should be used together with L1_ICACHE2_AUTOLOAD_SCT1_ADDR and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE3_AUTOLOAD_CTRL
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_ICACHE3_AUTOLOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable and disable autoload operation on L1-ICache3.  1: enable, 0: disable.'
+  - name: L1_ICACHE3_AUTOLOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether autoload operation on L1-ICache3 is finished or not. 0: not finished. 1: finished.'
+  - name: L1_ICACHE3_AUTOLOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of autoload operation on L1-ICache3. 0: ascending. 1: descending.'
+  - name: L1_ICACHE3_AUTOLOAD_TRIGGER_MODE
+    bit_range:
+    - 4
+    - 3
+    description: 'The field is used to configure trigger mode of autoload operation on L1-ICache3. 0/3: miss-trigger, 1: hit-trigger, 2: miss-hit-trigger.'
+  - name: L1_ICACHE3_AUTOLOAD_SCT0_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable the first section for autoload operation on L1-ICache3.
+  - name: L1_ICACHE3_AUTOLOAD_SCT1_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable the second section for autoload operation on L1-ICache3.
+  - name: L1_ICACHE3_AUTOLOAD_RGID
+    bit_range:
+    - 13
+    - 10
+    description: The bit is used to set  the gid of l1 icache3 autoload.
+  side_effects: null
+- id: L1_ICACHE3_AUTOLOAD_SCT0_ADDR
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_AUTOLOAD_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section for autoload operation on L1-ICache3. Note that it should be used together with L1_ICACHE3_AUTOLOAD_SCT0_SIZE and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE3_AUTOLOAD_SCT0_SIZE
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_AUTOLOAD_SCT0_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the first section for autoload operation on L1-ICache3. Note that it should be used together with L1_ICACHE3_AUTOLOAD_SCT0_ADDR and L1_ICACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_ICACHE3_AUTOLOAD_SCT1_ADDR
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_AUTOLOAD_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section for autoload operation on L1-ICache3. Note that it should be used together with L1_ICACHE3_AUTOLOAD_SCT1_SIZE and L1_ICACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_ICACHE3_AUTOLOAD_SCT1_SIZE
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_AUTOLOAD_SCT1_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Reserved
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_CTRL
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L1_CACHE_AUTOLOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable and disable autoload operation on L1-Cache.  1: enable, 0: disable.'
+  - name: L1_CACHE_AUTOLOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether autoload operation on L1-Cache is finished or not. 0: not finished. 1: finished.'
+  - name: L1_CACHE_AUTOLOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of autoload operation on L1-Cache. 0: ascending. 1: descending.'
+  - name: L1_CACHE_AUTOLOAD_TRIGGER_MODE
+    bit_range:
+    - 4
+    - 3
+    description: 'The field is used to configure trigger mode of autoload operation on L1-Cache. 0/3: miss-trigger, 1: hit-trigger, 2: miss-hit-trigger.'
+  - name: L1_CACHE_AUTOLOAD_SCT0_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable the first section for autoload operation on L1-Cache.
+  - name: L1_CACHE_AUTOLOAD_SCT1_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable the second section for autoload operation on L1-Cache.
+  - name: L1_CACHE_AUTOLOAD_SCT2_ENA
+    bit_range:
+    - 10
+    - 10
+    description: The bit is used to enable the third section for autoload operation on L1-Cache.
+  - name: L1_CACHE_AUTOLOAD_SCT3_ENA
+    bit_range:
+    - 11
+    - 11
+    description: The bit is used to enable the fourth section for autoload operation on L1-Cache.
+  - name: L1_CACHE_AUTOLOAD_RGID
+    bit_range:
+    - 15
+    - 12
+    description: The bit is used to set  the gid of l1 cache autoload.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT0_ADDR
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT0_SIZE and L1_CACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT0_SIZE
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT0_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the first section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT0_ADDR and L1_CACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT1_ADDR
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT1_SIZE and L1_CACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT1_SIZE
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT1_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the second section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT1_ADDR and L1_CACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT2_ADDR
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT2_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the third section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT2_SIZE and L1_CACHE_AUTOLOAD_SCT2_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT2_SIZE
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT2_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the third section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT2_ADDR and L1_CACHE_AUTOLOAD_SCT2_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT3_ADDR
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT3_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the fourth section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT3_SIZE and L1_CACHE_AUTOLOAD_SCT3_ENA.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_SCT3_SIZE
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_AUTOLOAD_SCT3_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the fourth section for autoload operation on L1-Cache. Note that it should be used together with L1_CACHE_AUTOLOAD_SCT3_ADDR and L1_CACHE_AUTOLOAD_SCT3_ENA.
+  side_effects: null
+- id: L1_CACHE_ACS_CNT_INT_ENA
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_OVF_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L1-ICache0 due to bus0 accesses L1-ICache0.
+  - name: L1_IBUS1_OVF_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L1-ICache1 due to bus1 accesses L1-ICache1.
+  - name: L1_IBUS2_OVF_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_IBUS3_OVF_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_BUS0_OVF_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L1-DCache due to bus0 accesses L1-DCache.
+  - name: L1_BUS1_OVF_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L1-DCache due to bus1 accesses L1-DCache.
+  - name: L1_DBUS2_OVF_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: L1_DBUS3_OVF_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  side_effects: null
+- id: L1_CACHE_ACS_CNT_INT_CLR
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_OVF_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to clear counters overflow interrupt and counters in L1-ICache0 due to bus0 accesses L1-ICache0.
+  - name: L1_IBUS1_OVF_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to clear counters overflow interrupt and counters in L1-ICache1 due to bus1 accesses L1-ICache1.
+  - name: L1_IBUS2_OVF_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_IBUS3_OVF_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_BUS0_OVF_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to clear counters overflow interrupt and counters in L1-DCache due to bus0 accesses L1-DCache.
+  - name: L1_BUS1_OVF_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to clear counters overflow interrupt and counters in L1-DCache due to bus1 accesses L1-DCache.
+  - name: L1_DBUS2_OVF_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: L1_DBUS3_OVF_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  side_effects: null
+- id: L1_CACHE_ACS_CNT_INT_RAW
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_OVF_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-ICache0 due to bus0 accesses L1-ICache0.
+  - name: L1_IBUS1_OVF_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-ICache1 due to bus1 accesses L1-ICache1.
+  - name: L1_IBUS2_OVF_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-ICache2 due to bus2 accesses L1-ICache2.
+  - name: L1_IBUS3_OVF_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-ICache3 due to bus3 accesses L1-ICache3.
+  - name: L1_BUS0_OVF_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-DCache due to bus0 accesses L1-DCache.
+  - name: L1_BUS1_OVF_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-DCache due to bus1 accesses L1-DCache.
+  - name: L1_DBUS2_OVF_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-DCache due to bus2 accesses L1-DCache.
+  - name: L1_DBUS3_OVF_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L1-DCache due to bus3 accesses L1-DCache.
+  side_effects: null
+- id: L1_CACHE_ACS_CNT_INT_ST
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_OVF_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L1-ICache0 due to bus0 accesses L1-ICache0.
+  - name: L1_IBUS1_OVF_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L1-ICache1 due to bus1 accesses L1-ICache1.
+  - name: L1_IBUS2_OVF_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_IBUS3_OVF_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_BUS0_OVF_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L1-DCache due to bus0 accesses L1-DCache.
+  - name: L1_BUS1_OVF_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L1-DCache due to bus1 accesses L1-DCache.
+  - name: L1_DBUS2_OVF_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: L1_DBUS3_OVF_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  side_effects: null
+- id: L1_CACHE_ACS_FAIL_INT_ENA
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FAIL_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable interrupt of access fail that occurs in L1-ICache0 due to cpu accesses L1-ICache0.
+  - name: L1_ICACHE1_FAIL_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable interrupt of access fail that occurs in L1-ICache1 due to cpu accesses L1-ICache1.
+  - name: L1_ICACHE2_FAIL_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_FAIL_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_FAIL_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to enable interrupt of access fail that occurs in L1-DCache due to cpu accesses L1-DCache.
+  side_effects: null
+- id: L1_CACHE_ACS_FAIL_INT_CLR
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FAIL_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to clear interrupt of access fail that occurs in L1-ICache0 due to cpu accesses L1-ICache0.
+  - name: L1_ICACHE1_FAIL_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to clear interrupt of access fail that occurs in L1-ICache1 due to cpu accesses L1-ICache1.
+  - name: L1_ICACHE2_FAIL_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_FAIL_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_FAIL_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to clear interrupt of access fail that occurs in L1-DCache due to cpu accesses L1-DCache.
+  side_effects: null
+- id: L1_CACHE_ACS_FAIL_INT_RAW
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FAIL_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw bit of the interrupt of access fail that occurs in L1-ICache0.
+  - name: L1_ICACHE1_FAIL_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw bit of the interrupt of access fail that occurs in L1-ICache1.
+  - name: L1_ICACHE2_FAIL_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: The raw bit of the interrupt of access fail that occurs in L1-ICache2.
+  - name: L1_ICACHE3_FAIL_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: The raw bit of the interrupt of access fail that occurs in L1-ICache3.
+  - name: L1_CACHE_FAIL_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: The raw bit of the interrupt of access fail that occurs in L1-DCache.
+  side_effects: null
+- id: L1_CACHE_ACS_FAIL_INT_ST
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FAIL_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The bit indicates the interrupt status of access fail that occurs in L1-ICache0 due to cpu accesses L1-ICache.
+  - name: L1_ICACHE1_FAIL_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The bit indicates the interrupt status of access fail that occurs in L1-ICache1 due to cpu accesses L1-ICache.
+  - name: L1_ICACHE2_FAIL_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_FAIL_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_FAIL_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: The bit indicates the interrupt status of access fail that occurs in L1-DCache due to cpu accesses L1-DCache.
+  side_effects: null
+- id: L1_CACHE_ACS_CNT_CTRL
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_CNT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable ibus0 counter in L1-ICache0.
+  - name: L1_IBUS1_CNT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable ibus1 counter in L1-ICache1.
+  - name: L1_IBUS2_CNT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_IBUS3_CNT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_BUS0_CNT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to enable dbus0 counter in L1-DCache.
+  - name: L1_BUS1_CNT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to enable dbus1 counter in L1-DCache.
+  - name: L1_DBUS2_CNT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: L1_DBUS3_CNT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: L1_IBUS0_CNT_CLR
+    bit_range:
+    - 16
+    - 16
+    description: The bit is used to clear ibus0 counter in L1-ICache0.
+  - name: L1_IBUS1_CNT_CLR
+    bit_range:
+    - 17
+    - 17
+    description: The bit is used to clear ibus1 counter in L1-ICache1.
+  - name: L1_IBUS2_CNT_CLR
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: L1_IBUS3_CNT_CLR
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: L1_BUS0_CNT_CLR
+    bit_range:
+    - 20
+    - 20
+    description: The bit is used to clear dbus0 counter in L1-DCache.
+  - name: L1_BUS1_CNT_CLR
+    bit_range:
+    - 21
+    - 21
+    description: The bit is used to clear dbus1 counter in L1-DCache.
+  - name: L1_DBUS2_CNT_CLR
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: L1_DBUS3_CNT_CLR
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  side_effects: null
+- id: L1_IBUS0_ACS_HIT_CNT
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus0 accesses L1-ICache0.
+  side_effects: null
+- id: L1_IBUS0_ACS_MISS_CNT
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus0 accesses L1-ICache0.
+  side_effects: null
+- id: L1_IBUS0_ACS_CONFLICT_CNT
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus0 accesses L1-ICache0.
+  side_effects: null
+- id: L1_IBUS0_ACS_NXTLVL_CNT
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS0_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-ICache accesses L2-Cache due to bus0 accessing L1-ICache0.
+  side_effects: null
+- id: L1_IBUS1_ACS_HIT_CNT
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS1_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus1 accesses L1-ICache1.
+  side_effects: null
+- id: L1_IBUS1_ACS_MISS_CNT
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS1_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus1 accesses L1-ICache1.
+  side_effects: null
+- id: L1_IBUS1_ACS_CONFLICT_CNT
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS1_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus1 accesses L1-ICache1.
+  side_effects: null
+- id: L1_IBUS1_ACS_NXTLVL_CNT
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS1_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-ICache accesses L2-Cache due to bus1 accessing L1-ICache1.
+  side_effects: null
+- id: L1_IBUS2_ACS_HIT_CNT
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS2_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus2 accesses L1-ICache2.
+  side_effects: null
+- id: L1_IBUS2_ACS_MISS_CNT
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS2_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus2 accesses L1-ICache2.
+  side_effects: null
+- id: L1_IBUS2_ACS_CONFLICT_CNT
+  address_offset: 420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS2_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus2 accesses L1-ICache2.
+  side_effects: null
+- id: L1_IBUS2_ACS_NXTLVL_CNT
+  address_offset: 424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS2_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-ICache accesses L2-Cache due to bus2 accessing L1-ICache2.
+  side_effects: null
+- id: L1_IBUS3_ACS_HIT_CNT
+  address_offset: 428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS3_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus3 accesses L1-ICache3.
+  side_effects: null
+- id: L1_IBUS3_ACS_MISS_CNT
+  address_offset: 432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS3_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus3 accesses L1-ICache3.
+  side_effects: null
+- id: L1_IBUS3_ACS_CONFLICT_CNT
+  address_offset: 436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS3_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus3 accesses L1-ICache3.
+  side_effects: null
+- id: L1_IBUS3_ACS_NXTLVL_CNT
+  address_offset: 440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_IBUS3_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-ICache accesses L2-Cache due to bus3 accessing L1-ICache3.
+  side_effects: null
+- id: L1_BUS0_ACS_HIT_CNT
+  address_offset: 444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS0_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus0 accesses L1-Cache.
+  side_effects: null
+- id: L1_BUS0_ACS_MISS_CNT
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS0_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus0 accesses L1-Cache.
+  side_effects: null
+- id: L1_BUS0_ACS_CONFLICT_CNT
+  address_offset: 452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS0_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus0 accesses L1-Cache.
+  side_effects: null
+- id: L1_BUS0_ACS_NXTLVL_CNT
+  address_offset: 456
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS0_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-Cache accesses L2-Cache due to bus0 accessing L1-Cache.
+  side_effects: null
+- id: L1_BUS1_ACS_HIT_CNT
+  address_offset: 460
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS1_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus1 accesses L1-Cache.
+  side_effects: null
+- id: L1_BUS1_ACS_MISS_CNT
+  address_offset: 464
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS1_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus1 accesses L1-Cache.
+  side_effects: null
+- id: L1_BUS1_ACS_CONFLICT_CNT
+  address_offset: 468
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS1_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus1 accesses L1-Cache.
+  side_effects: null
+- id: L1_BUS1_ACS_NXTLVL_CNT
+  address_offset: 472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_BUS1_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-Cache accesses L2-Cache due to bus1 accessing L1-Cache.
+  side_effects: null
+- id: L1_DBUS2_ACS_HIT_CNT
+  address_offset: 476
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS2_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus2 accesses L1-DCache.
+  side_effects: null
+- id: L1_DBUS2_ACS_MISS_CNT
+  address_offset: 480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS2_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus2 accesses L1-DCache.
+  side_effects: null
+- id: L1_DBUS2_ACS_CONFLICT_CNT
+  address_offset: 484
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS2_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus2 accesses L1-DCache.
+  side_effects: null
+- id: L1_DBUS2_ACS_NXTLVL_CNT
+  address_offset: 488
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS2_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-DCache accesses L2-Cache due to bus2 accessing L1-DCache.
+  side_effects: null
+- id: L1_DBUS3_ACS_HIT_CNT
+  address_offset: 492
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS3_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when bus3 accesses L1-DCache.
+  side_effects: null
+- id: L1_DBUS3_ACS_MISS_CNT
+  address_offset: 496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS3_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when bus3 accesses L1-DCache.
+  side_effects: null
+- id: L1_DBUS3_ACS_CONFLICT_CNT
+  address_offset: 500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS3_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when bus3 accesses L1-DCache.
+  side_effects: null
+- id: L1_DBUS3_ACS_NXTLVL_CNT
+  address_offset: 504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_DBUS3_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L1-DCache accesses L2-Cache due to bus3 accessing L1-DCache.
+  side_effects: null
+- id: L1_ICACHE0_ACS_FAIL_ID_ATTR
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FAIL_ID
+    bit_range:
+    - 15
+    - 0
+    description: The register records the ID of fail-access when cache0 accesses L1-ICache.
+  - name: L1_ICACHE0_FAIL_ATTR
+    bit_range:
+    - 31
+    - 16
+    description: The register records the attribution of fail-access when cache0 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE0_ACS_FAIL_ADDR
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_FAIL_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: The register records the address of fail-access when cache0 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE1_ACS_FAIL_ID_ATTR
+  address_offset: 516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_FAIL_ID
+    bit_range:
+    - 15
+    - 0
+    description: The register records the ID of fail-access when cache1 accesses L1-ICache.
+  - name: L1_ICACHE1_FAIL_ATTR
+    bit_range:
+    - 31
+    - 16
+    description: The register records the attribution of fail-access when cache1 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE1_ACS_FAIL_ADDR
+  address_offset: 520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE1_FAIL_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: The register records the address of fail-access when cache1 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE2_ACS_FAIL_ID_ATTR
+  address_offset: 524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_FAIL_ID
+    bit_range:
+    - 15
+    - 0
+    description: The register records the ID of fail-access when cache2 accesses L1-ICache.
+  - name: L1_ICACHE2_FAIL_ATTR
+    bit_range:
+    - 31
+    - 16
+    description: The register records the attribution of fail-access when cache2 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE2_ACS_FAIL_ADDR
+  address_offset: 528
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE2_FAIL_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: The register records the address of fail-access when cache2 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE3_ACS_FAIL_ID_ATTR
+  address_offset: 532
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_FAIL_ID
+    bit_range:
+    - 15
+    - 0
+    description: The register records the ID of fail-access when cache3 accesses L1-ICache.
+  - name: L1_ICACHE3_FAIL_ATTR
+    bit_range:
+    - 31
+    - 16
+    description: The register records the attribution of fail-access when cache3 accesses L1-ICache.
+  side_effects: null
+- id: L1_ICACHE3_ACS_FAIL_ADDR
+  address_offset: 536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE3_FAIL_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: The register records the address of fail-access when cache3 accesses L1-ICache.
+  side_effects: null
+- id: L1_CACHE_ACS_FAIL_ID_ATTR
+  address_offset: 540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_FAIL_ID
+    bit_range:
+    - 15
+    - 0
+    description: The register records the ID of fail-access when cache accesses L1-Cache.
+  - name: L1_CACHE_FAIL_ATTR
+    bit_range:
+    - 31
+    - 16
+    description: The register records the attribution of fail-access when cache accesses L1-Cache.
+  side_effects: null
+- id: L1_DCACHE_ACS_FAIL_ADDR
+  address_offset: 544
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_FAIL_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: The register records the address of fail-access when cache accesses L1-Cache.
+  side_effects: null
+- id: L1_CACHE_SYNC_PRELOAD_INT_ENA
+  address_offset: 548
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PLD_DONE_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable interrupt of L1-ICache0 preload-operation. If preload operation is done, interrupt occurs.
+  - name: L1_ICACHE1_PLD_DONE_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable interrupt of L1-ICache1 preload-operation. If preload operation is done, interrupt occurs.
+  - name: L1_ICACHE2_PLD_DONE_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_PLD_DONE_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_PLD_DONE_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to enable interrupt of L1-Cache preload-operation. If preload operation is done, interrupt occurs.
+  - name: CACHE_SYNC_DONE_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: The bit is used to enable interrupt of Cache sync-operation done.
+  - name: L1_ICACHE0_PLD_ERR_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: The bit is used to enable interrupt of L1-ICache0 preload-operation error.
+  - name: L1_ICACHE1_PLD_ERR_INT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable interrupt of L1-ICache1 preload-operation error.
+  - name: L1_ICACHE2_PLD_ERR_INT_ENA
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE3_PLD_ERR_INT_ENA
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_CACHE_PLD_ERR_INT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: The bit is used to enable interrupt of L1-Cache preload-operation error.
+  - name: CACHE_SYNC_ERR_INT_ENA
+    bit_range:
+    - 13
+    - 13
+    description: The bit is used to enable interrupt of Cache sync-operation error.
+  side_effects: null
+- id: L1_CACHE_SYNC_PRELOAD_INT_CLR
+  address_offset: 552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PLD_DONE_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to clear interrupt that occurs only when L1-ICache0 preload-operation is done.
+  - name: L1_ICACHE1_PLD_DONE_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to clear interrupt that occurs only when L1-ICache1 preload-operation is done.
+  - name: L1_ICACHE2_PLD_DONE_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_PLD_DONE_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_PLD_DONE_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to clear interrupt that occurs only when L1-Cache preload-operation is done.
+  - name: CACHE_SYNC_DONE_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: The bit is used to clear interrupt that occurs only when Cache sync-operation is done.
+  - name: L1_ICACHE0_PLD_ERR_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: The bit is used to clear interrupt of L1-ICache0 preload-operation error.
+  - name: L1_ICACHE1_PLD_ERR_INT_CLR
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to clear interrupt of L1-ICache1 preload-operation error.
+  - name: L1_ICACHE2_PLD_ERR_INT_CLR
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE3_PLD_ERR_INT_CLR
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_CACHE_PLD_ERR_INT_CLR
+    bit_range:
+    - 11
+    - 11
+    description: The bit is used to clear interrupt of L1-Cache preload-operation error.
+  - name: CACHE_SYNC_ERR_INT_CLR
+    bit_range:
+    - 13
+    - 13
+    description: The bit is used to clear interrupt of Cache sync-operation error.
+  side_effects: null
+- id: L1_CACHE_SYNC_PRELOAD_INT_RAW
+  address_offset: 556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PLD_DONE_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw bit of the interrupt that occurs only when L1-ICache0 preload-operation is done.
+  - name: L1_ICACHE1_PLD_DONE_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw bit of the interrupt that occurs only when L1-ICache1 preload-operation is done.
+  - name: L1_ICACHE2_PLD_DONE_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_PLD_DONE_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_PLD_DONE_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: The raw bit of the interrupt that occurs only when L1-Cache preload-operation is done.
+  - name: CACHE_SYNC_DONE_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: The raw bit of the interrupt that occurs only when Cache sync-operation is done.
+  - name: L1_ICACHE0_PLD_ERR_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: The raw bit of the interrupt that occurs only when L1-ICache0 preload-operation error occurs.
+  - name: L1_ICACHE1_PLD_ERR_INT_RAW
+    bit_range:
+    - 8
+    - 8
+    description: The raw bit of the interrupt that occurs only when L1-ICache1 preload-operation error occurs.
+  - name: L1_ICACHE2_PLD_ERR_INT_RAW
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE3_PLD_ERR_INT_RAW
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_CACHE_PLD_ERR_INT_RAW
+    bit_range:
+    - 11
+    - 11
+    description: The raw bit of the interrupt that occurs only when L1-Cache preload-operation error occurs.
+  - name: CACHE_SYNC_ERR_INT_RAW
+    bit_range:
+    - 13
+    - 13
+    description: The raw bit of the interrupt that occurs only when Cache sync-operation error occurs.
+  side_effects: null
+- id: L1_CACHE_SYNC_PRELOAD_INT_ST
+  address_offset: 560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PLD_DONE_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The bit indicates the status of the interrupt that occurs only when L1-ICache0 preload-operation is done.
+  - name: L1_ICACHE1_PLD_DONE_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The bit indicates the status of the interrupt that occurs only when L1-ICache1 preload-operation is done.
+  - name: L1_ICACHE2_PLD_DONE_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_PLD_DONE_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_PLD_DONE_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: The bit indicates the status of the interrupt that occurs only when L1-Cache preload-operation is done.
+  - name: CACHE_SYNC_DONE_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: The bit indicates the status of the interrupt that occurs only when Cache sync-operation is done.
+  - name: L1_ICACHE0_PLD_ERR_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: The bit indicates the status of the interrupt of L1-ICache0 preload-operation error.
+  - name: L1_ICACHE1_PLD_ERR_INT_ST
+    bit_range:
+    - 8
+    - 8
+    description: The bit indicates the status of the interrupt of L1-ICache1 preload-operation error.
+  - name: L1_ICACHE2_PLD_ERR_INT_ST
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_ICACHE3_PLD_ERR_INT_ST
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L1_CACHE_PLD_ERR_INT_ST
+    bit_range:
+    - 11
+    - 11
+    description: The bit indicates the status of the interrupt of L1-Cache preload-operation error.
+  - name: CACHE_SYNC_ERR_INT_ST
+    bit_range:
+    - 13
+    - 13
+    description: The bit indicates the status of the interrupt of Cache sync-operation error.
+  side_effects: null
+- id: L1_CACHE_SYNC_PRELOAD_EXCEPTION
+  address_offset: 564
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PLD_ERR_CODE
+    bit_range:
+    - 1
+    - 0
+    description: The value 2 is Only available which means preload size is error in L1-ICache0.
+  - name: L1_ICACHE1_PLD_ERR_CODE
+    bit_range:
+    - 3
+    - 2
+    description: The value 2 is Only available which means preload size is error in L1-ICache1.
+  - name: L1_ICACHE2_PLD_ERR_CODE
+    bit_range:
+    - 5
+    - 4
+    description: Reserved
+  - name: L1_ICACHE3_PLD_ERR_CODE
+    bit_range:
+    - 7
+    - 6
+    description: Reserved
+  - name: L1_CACHE_PLD_ERR_CODE
+    bit_range:
+    - 9
+    - 8
+    description: The value 2 is Only available which means preload size is error in L1-Cache.
+  - name: CACHE_SYNC_ERR_CODE
+    bit_range:
+    - 13
+    - 12
+    description: The values 0-2 are available which means sync map, command conflict and size are error in Cache System.
+  side_effects: null
+- id: L1_CACHE_SYNC_RST_CTRL
+  address_offset: 568
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_SYNC_RST
+    bit_range:
+    - 0
+    - 0
+    description: set this bit to reset sync-logic inside L1-ICache0. Recommend that this should only be used to initialize sync-logic when some fatal error of sync-logic occurs.
+  - name: L1_ICACHE1_SYNC_RST
+    bit_range:
+    - 1
+    - 1
+    description: set this bit to reset sync-logic inside L1-ICache1. Recommend that this should only be used to initialize sync-logic when some fatal error of sync-logic occurs.
+  - name: L1_ICACHE2_SYNC_RST
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_SYNC_RST
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_SYNC_RST
+    bit_range:
+    - 4
+    - 4
+    description: set this bit to reset sync-logic inside L1-Cache. Recommend that this should only be used to initialize sync-logic when some fatal error of sync-logic occurs.
+  side_effects: null
+- id: L1_CACHE_PRELOAD_RST_CTRL
+  address_offset: 572
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_PLD_RST
+    bit_range:
+    - 0
+    - 0
+    description: set this bit to reset preload-logic inside L1-ICache0. Recommend that this should only be used to initialize preload-logic when some fatal error of preload-logic occurs.
+  - name: L1_ICACHE1_PLD_RST
+    bit_range:
+    - 1
+    - 1
+    description: set this bit to reset preload-logic inside L1-ICache1. Recommend that this should only be used to initialize preload-logic when some fatal error of preload-logic occurs.
+  - name: L1_ICACHE2_PLD_RST
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_PLD_RST
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_PLD_RST
+    bit_range:
+    - 4
+    - 4
+    description: set this bit to reset preload-logic inside L1-Cache. Recommend that this should only be used to initialize preload-logic when some fatal error of preload-logic occurs.
+  side_effects: null
+- id: L1_CACHE_AUTOLOAD_BUF_CLR_CTRL
+  address_offset: 576
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_ALD_BUF_CLR
+    bit_range:
+    - 0
+    - 0
+    description: set this bit to clear autoload-buffer inside L1-ICache0. If this bit is active, autoload will not work in L1-ICache0. This bit should not be active when autoload works in L1-ICache0.
+  - name: L1_ICACHE1_ALD_BUF_CLR
+    bit_range:
+    - 1
+    - 1
+    description: set this bit to clear autoload-buffer inside L1-ICache1. If this bit is active, autoload will not work in L1-ICache1. This bit should not be active when autoload works in L1-ICache1.
+  - name: L1_ICACHE2_ALD_BUF_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_ALD_BUF_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_ALD_BUF_CLR
+    bit_range:
+    - 4
+    - 4
+    description: set this bit to clear autoload-buffer inside L1-Cache. If this bit is active, autoload will not work in L1-Cache. This bit should not be active when autoload works in L1-Cache.
+  side_effects: null
+- id: L1_UNALLOCATE_BUFFER_CLEAR
+  address_offset: 580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_UNALLOC_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to clear the unallocate request buffer of l1 icache0 where the unallocate request is responsed but not completed.
+  - name: L1_ICACHE1_UNALLOC_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to clear the unallocate request buffer of l1 icache1 where the unallocate request is responsed but not completed.
+  - name: L1_ICACHE2_UNALLOC_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_UNALLOC_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_UNALLOC_CLR
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to clear the unallocate request buffer of l1 cache where the unallocate request is responsed but not completed.
+  side_effects: null
+- id: L1_CACHE_OBJECT_CTRL
+  address_offset: 584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_ICACHE0_TAG_OBJECT
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to set L1-ICache0 tag memory as object. This bit should be onehot with the others fields inside this register.
+  - name: L1_ICACHE1_TAG_OBJECT
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to set L1-ICache1 tag memory as object. This bit should be onehot with the others fields inside this register.
+  - name: L1_ICACHE2_TAG_OBJECT
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: L1_ICACHE3_TAG_OBJECT
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: L1_CACHE_TAG_OBJECT
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to set L1-Cache tag memory as object. This bit should be onehot with the others fields inside this register.
+  - name: L1_ICACHE0_MEM_OBJECT
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to set L1-ICache0 data memory as object. This bit should be onehot with the others fields inside this register.
+  - name: L1_ICACHE1_MEM_OBJECT
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to set L1-ICache1 data memory as object. This bit should be onehot with the others fields inside this register.
+  - name: L1_ICACHE2_MEM_OBJECT
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: L1_ICACHE3_MEM_OBJECT
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: L1_CACHE_MEM_OBJECT
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to set L1-Cache data memory as object. This bit should be onehot with the others fields inside this register.
+  side_effects: null
+- id: L1_CACHE_WAY_OBJECT
+  address_offset: 588
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L1_CACHE_WAY_OBJECT
+    bit_range:
+    - 2
+    - 0
+    description: 'Set this bits to select which way of the tag-object will be accessed. 0: way0, 1: way1, 2: way2, 3: way3, ?, 7: way7.'
+  side_effects: null
+- id: L1_CACHE_VADDR
+  address_offset: 592
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073741824
+  fields:
+  - name: L1_CACHE_VADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits stores the virtual address which will decide where inside the specified tag memory object will be accessed.
+  side_effects: null
+- id: L1_CACHE_DEBUG_BUS
+  address_offset: 596
+  size: 32
+  access: READ_WRITE
+  reset_value: 596
+  fields:
+  - name: L1_CACHE_DEBUG_BUS
+    bit_range:
+    - 31
+    - 0
+    description: This is a constant place where we can write data to or read data from the tag/data memory on the specified cache.
+  side_effects: null
+- id: LEVEL_SPLIT0
+  address_offset: 600
+  size: 32
+  access: READ_WRITE
+  reset_value: 600
+  fields:
+  - name: LEVEL_SPLIT0
+    bit_range:
+    - 31
+    - 0
+    description: Reserved
+  side_effects: null
+- id: L2_CACHE_CTRL
+  address_offset: 604
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_SHUT_DMA
+    bit_range:
+    - 4
+    - 4
+    description: 'The bit is used to disable DMA access L2-Cache, 0: enable, 1: disable'
+  - name: L2_CACHE_UNDEF_OP
+    bit_range:
+    - 8
+    - 5
+    description: Reserved
+  side_effects: null
+- id: L2_BYPASS_CACHE_CONF
+  address_offset: 608
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BYPASS_L2_CACHE_EN
+    bit_range:
+    - 5
+    - 5
+    description: 'The bit is used to enable bypass L2-Cache. 0: disable bypass, 1: enable bypass.'
+  side_effects: null
+- id: L2_CACHE_CACHESIZE_CONF
+  address_offset: 612
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_CACHESIZE_1K
+    bit_range:
+    - 0
+    - 0
+    description: The field is used to configure cachesize of L2-Cache as 1k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_2K
+    bit_range:
+    - 1
+    - 1
+    description: The field is used to configure cachesize of L2-Cache as 2k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_4K
+    bit_range:
+    - 2
+    - 2
+    description: The field is used to configure cachesize of L2-Cache as 4k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_8K
+    bit_range:
+    - 3
+    - 3
+    description: The field is used to configure cachesize of L2-Cache as 8k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_16K
+    bit_range:
+    - 4
+    - 4
+    description: The field is used to configure cachesize of L2-Cache as 16k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_32K
+    bit_range:
+    - 5
+    - 5
+    description: The field is used to configure cachesize of L2-Cache as 32k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_64K
+    bit_range:
+    - 6
+    - 6
+    description: The field is used to configure cachesize of L2-Cache as 64k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_128K
+    bit_range:
+    - 7
+    - 7
+    description: The field is used to configure cachesize of L2-Cache as 128k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_256K
+    bit_range:
+    - 8
+    - 8
+    description: The field is used to configure cachesize of L2-Cache as 256k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_512K
+    bit_range:
+    - 9
+    - 9
+    description: The field is used to configure cachesize of L2-Cache as 512k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_1024K
+    bit_range:
+    - 10
+    - 10
+    description: The field is used to configure cachesize of L2-Cache as 1024k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_2048K
+    bit_range:
+    - 11
+    - 11
+    description: The field is used to configure cachesize of L2-Cache as 2048k bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_CACHESIZE_4096K
+    bit_range:
+    - 12
+    - 12
+    description: The field is used to configure cachesize of L2-Cache as 4096k bytes. This field and all other fields within this register is onehot.
+  side_effects: null
+- id: L2_CACHE_BLOCKSIZE_CONF
+  address_offset: 616
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_BLOCKSIZE_8
+    bit_range:
+    - 0
+    - 0
+    description: The field is used to configureblocksize of L2-Cache as 8 bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_BLOCKSIZE_16
+    bit_range:
+    - 1
+    - 1
+    description: The field is used to configureblocksize of L2-Cache as 16 bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_BLOCKSIZE_32
+    bit_range:
+    - 2
+    - 2
+    description: The field is used to configureblocksize of L2-Cache as 32 bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_BLOCKSIZE_64
+    bit_range:
+    - 3
+    - 3
+    description: The field is used to configureblocksize of L2-Cache as 64 bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_BLOCKSIZE_128
+    bit_range:
+    - 4
+    - 4
+    description: The field is used to configureblocksize of L2-Cache as 128 bytes. This field and all other fields within this register is onehot.
+  - name: L2_CACHE_BLOCKSIZE_256
+    bit_range:
+    - 5
+    - 5
+    description: The field is used to configureblocksize of L2-Cache as 256 bytes. This field and all other fields within this register is onehot.
+  side_effects: null
+- id: L2_CACHE_WRAP_AROUND_CTRL
+  address_offset: 620
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_WRAP
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit as 1 to enable L2-Cache wrap around mode.
+  side_effects: null
+- id: L2_CACHE_TAG_MEM_POWER_CTRL
+  address_offset: 624
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_TAG_MEM_FORCE_ON
+    bit_range:
+    - 20
+    - 20
+    description: 'The bit is used to close clock gating of  L2-Cache tag memory. 1: close gating, 0: open clock gating.'
+  - name: L2_CACHE_TAG_MEM_FORCE_PD
+    bit_range:
+    - 21
+    - 21
+    description: 'The bit is used to power L2-Cache tag memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L2_CACHE_TAG_MEM_FORCE_PU
+    bit_range:
+    - 22
+    - 22
+    description: 'The bit is used to power L2-Cache tag memory up. 0: follow rtc_lslp, 1: power up'
+  side_effects: null
+- id: L2_CACHE_DATA_MEM_POWER_CTRL
+  address_offset: 628
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_DATA_MEM_FORCE_ON
+    bit_range:
+    - 20
+    - 20
+    description: 'The bit is used to close clock gating of  L2-Cache data memory. 1: close gating, 0: open clock gating.'
+  - name: L2_CACHE_DATA_MEM_FORCE_PD
+    bit_range:
+    - 21
+    - 21
+    description: 'The bit is used to power L2-Cache data memory down. 0: follow rtc_lslp, 1: power down'
+  - name: L2_CACHE_DATA_MEM_FORCE_PU
+    bit_range:
+    - 22
+    - 22
+    description: 'The bit is used to power L2-Cache data memory up. 0: follow rtc_lslp, 1: power up'
+  side_effects: null
+- id: L2_CACHE_FREEZE_CTRL
+  address_offset: 632
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FREEZE_EN
+    bit_range:
+    - 20
+    - 20
+    description: The bit is used to enable freeze operation on L2-Cache. It can be cleared by software.
+  - name: L2_CACHE_FREEZE_MODE
+    bit_range:
+    - 21
+    - 21
+    description: 'The bit is used to configure mode of freeze operation L2-Cache. 0: a miss-access will not stuck. 1: a miss-access will stuck.'
+  - name: L2_CACHE_FREEZE_DONE
+    bit_range:
+    - 22
+    - 22
+    description: 'The bit is used to indicate whether freeze operation on L2-Cache is finished or not. 0: not finished. 1: finished.'
+  side_effects: null
+- id: L2_CACHE_DATA_MEM_ACS_CONF
+  address_offset: 636
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_DATA_MEM_RD_EN
+    bit_range:
+    - 20
+    - 20
+    description: 'The bit is used to enable config-bus read L2-Cache data memoryory. 0: disable, 1: enable.'
+  - name: L2_CACHE_DATA_MEM_WR_EN
+    bit_range:
+    - 21
+    - 21
+    description: 'The bit is used to enable config-bus write L2-Cache data memoryory. 0: disable, 1: enable.'
+  side_effects: null
+- id: L2_CACHE_TAG_MEM_ACS_CONF
+  address_offset: 640
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_TAG_MEM_RD_EN
+    bit_range:
+    - 20
+    - 20
+    description: 'The bit is used to enable config-bus read L2-Cache tag memoryory. 0: disable, 1: enable.'
+  - name: L2_CACHE_TAG_MEM_WR_EN
+    bit_range:
+    - 21
+    - 21
+    description: 'The bit is used to enable config-bus write L2-Cache tag memoryory. 0: disable, 1: enable.'
+  side_effects: null
+- id: L2_CACHE_PRELOCK_CONF
+  address_offset: 644
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PRELOCK_SCT0_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable the first section of prelock function on L2-Cache.
+  - name: L2_CACHE_PRELOCK_SCT1_EN
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable the second section of prelock function on L2-Cache.
+  - name: L2_CACHE_PRELOCK_RGID
+    bit_range:
+    - 5
+    - 2
+    description: The bit is used to set  the gid of l2 cache prelock.
+  side_effects: null
+- id: L2_CACHE_PRELOCK_SCT0_ADDR
+  address_offset: 648
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PRELOCK_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section of prelock on L2-Cache, which should be used together with L2_CACHE_PRELOCK_SCT0_SIZE_REG
+  side_effects: null
+- id: L2_CACHE_PRELOCK_SCT1_ADDR
+  address_offset: 652
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PRELOCK_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section of prelock on L2-Cache, which should be used together with L2_CACHE_PRELOCK_SCT1_SIZE_REG
+  side_effects: null
+- id: L2_CACHE_PRELOCK_SCT_SIZE
+  address_offset: 656
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: L2_CACHE_PRELOCK_SCT0_SIZE
+    bit_range:
+    - 15
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L2-Cache, which should be used together with L2_CACHE_PRELOCK_SCT0_ADDR_REG
+  - name: L2_CACHE_PRELOCK_SCT1_SIZE
+    bit_range:
+    - 31
+    - 16
+    description: Those bits are used to configure the size of the second section of prelock on L2-Cache, which should be used together with L2_CACHE_PRELOCK_SCT1_ADDR_REG
+  side_effects: null
+- id: L2_CACHE_PRELOAD_CTRL
+  address_offset: 660
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L2_CACHE_PRELOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable preload operation on L2-Cache. It will be cleared by hardware automatically after preload operation is done.
+  - name: L2_CACHE_PRELOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether preload operation is finished or not. 0: not finished. 1: finished.'
+  - name: L2_CACHE_PRELOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of preload operation. 0: ascending, 1: descending.'
+  - name: L2_CACHE_PRELOAD_RGID
+    bit_range:
+    - 6
+    - 3
+    description: The bit is used to set  the gid of l2 cache preload.
+  side_effects: null
+- id: L2_CACHE_PRELOAD_ADDR
+  address_offset: 664
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PRELOAD_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of preload on L2-Cache, which should be used together with L2_CACHE_PRELOAD_SIZE_REG
+  side_effects: null
+- id: L2_CACHE_PRELOAD_SIZE
+  address_offset: 668
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PRELOAD_SIZE
+    bit_range:
+    - 15
+    - 0
+    description: Those bits are used to configure the size of the first section of prelock on L2-Cache, which should be used together with L2_CACHE_PRELOAD_ADDR_REG
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_CTRL
+  address_offset: 672
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: L2_CACHE_AUTOLOAD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'The bit is used to enable and disable autoload operation on L2-Cache.  1: enable, 0: disable.'
+  - name: L2_CACHE_AUTOLOAD_DONE
+    bit_range:
+    - 1
+    - 1
+    description: 'The bit is used to indicate whether autoload operation on L2-Cache is finished or not. 0: not finished. 1: finished.'
+  - name: L2_CACHE_AUTOLOAD_ORDER
+    bit_range:
+    - 2
+    - 2
+    description: 'The bit is used to configure the direction of autoload operation on L2-Cache. 0: ascending. 1: descending.'
+  - name: L2_CACHE_AUTOLOAD_TRIGGER_MODE
+    bit_range:
+    - 4
+    - 3
+    description: 'The field is used to configure trigger mode of autoload operation on L2-Cache. 0/3: miss-trigger, 1: hit-trigger, 2: miss-hit-trigger.'
+  - name: L2_CACHE_AUTOLOAD_SCT0_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable the first section for autoload operation on L2-Cache.
+  - name: L2_CACHE_AUTOLOAD_SCT1_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable the second section for autoload operation on L2-Cache.
+  - name: L2_CACHE_AUTOLOAD_SCT2_ENA
+    bit_range:
+    - 10
+    - 10
+    description: The bit is used to enable the third section for autoload operation on L2-Cache.
+  - name: L2_CACHE_AUTOLOAD_SCT3_ENA
+    bit_range:
+    - 11
+    - 11
+    description: The bit is used to enable the fourth section for autoload operation on L2-Cache.
+  - name: L2_CACHE_AUTOLOAD_RGID
+    bit_range:
+    - 15
+    - 12
+    description: The bit is used to set  the gid of l2 cache autoload.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT0_ADDR
+  address_offset: 676
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT0_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the first section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT0_SIZE and L2_CACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT0_SIZE
+  address_offset: 680
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT0_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the first section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT0_ADDR and L2_CACHE_AUTOLOAD_SCT0_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT1_ADDR
+  address_offset: 684
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT1_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the second section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT1_SIZE and L2_CACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT1_SIZE
+  address_offset: 688
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT1_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the second section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT1_ADDR and L2_CACHE_AUTOLOAD_SCT1_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT2_ADDR
+  address_offset: 692
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT2_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the third section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT2_SIZE and L2_CACHE_AUTOLOAD_SCT2_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT2_SIZE
+  address_offset: 696
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT2_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the third section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT2_ADDR and L2_CACHE_AUTOLOAD_SCT2_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT3_ADDR
+  address_offset: 700
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT3_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are used to configure the start virtual address of the fourth section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT3_SIZE and L2_CACHE_AUTOLOAD_SCT3_ENA.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_SCT3_SIZE
+  address_offset: 704
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_AUTOLOAD_SCT3_SIZE
+    bit_range:
+    - 27
+    - 0
+    description: Those bits are used to configure the size of the fourth section for autoload operation on L2-Cache. Note that it should be used together with L2_CACHE_AUTOLOAD_SCT3_ADDR and L2_CACHE_AUTOLOAD_SCT3_ENA.
+  side_effects: null
+- id: L2_CACHE_ACS_CNT_INT_ENA
+  address_offset: 708
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_OVF_INT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L2-Cache due to bus0 accesses L2-Cache.
+  - name: L2_IBUS1_OVF_INT_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L2-Cache due to bus1 accesses L2-Cache.
+  - name: L2_IBUS2_OVF_INT_ENA
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L2_IBUS3_OVF_INT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: L2_DBUS0_OVF_INT_ENA
+    bit_range:
+    - 12
+    - 12
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L2-Cache due to bus0 accesses L2-Cache.
+  - name: L2_DBUS1_OVF_INT_ENA
+    bit_range:
+    - 13
+    - 13
+    description: The bit is used to enable interrupt of one of counters overflow that occurs in L2-Cache due to bus1 accesses L2-Cache.
+  - name: L2_DBUS2_OVF_INT_ENA
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L2_DBUS3_OVF_INT_ENA
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  side_effects: null
+- id: L2_CACHE_ACS_CNT_INT_CLR
+  address_offset: 712
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_OVF_INT_CLR
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to clear counters overflow interrupt and counters in L2-Cache due to bus0 accesses L2-Cache.
+  - name: L2_IBUS1_OVF_INT_CLR
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to clear counters overflow interrupt and counters in L2-Cache due to bus1 accesses L2-Cache.
+  - name: L2_IBUS2_OVF_INT_CLR
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L2_IBUS3_OVF_INT_CLR
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: L2_DBUS0_OVF_INT_CLR
+    bit_range:
+    - 12
+    - 12
+    description: The bit is used to clear counters overflow interrupt and counters in L2-Cache due to bus0 accesses L2-Cache.
+  - name: L2_DBUS1_OVF_INT_CLR
+    bit_range:
+    - 13
+    - 13
+    description: The bit is used to clear counters overflow interrupt and counters in L2-Cache due to bus1 accesses L2-Cache.
+  - name: L2_DBUS2_OVF_INT_CLR
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L2_DBUS3_OVF_INT_CLR
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  side_effects: null
+- id: L2_CACHE_ACS_CNT_INT_RAW
+  address_offset: 716
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_OVF_INT_RAW
+    bit_range:
+    - 8
+    - 8
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus0 accesses L2-ICache0.
+  - name: L2_IBUS1_OVF_INT_RAW
+    bit_range:
+    - 9
+    - 9
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus1 accesses L2-ICache1.
+  - name: L2_IBUS2_OVF_INT_RAW
+    bit_range:
+    - 10
+    - 10
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus2 accesses L2-ICache2.
+  - name: L2_IBUS3_OVF_INT_RAW
+    bit_range:
+    - 11
+    - 11
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus3 accesses L2-ICache3.
+  - name: L2_DBUS0_OVF_INT_RAW
+    bit_range:
+    - 12
+    - 12
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus0 accesses L2-DCache.
+  - name: L2_DBUS1_OVF_INT_RAW
+    bit_range:
+    - 13
+    - 13
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus1 accesses L2-DCache.
+  - name: L2_DBUS2_OVF_INT_RAW
+    bit_range:
+    - 14
+    - 14
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus2 accesses L2-DCache.
+  - name: L2_DBUS3_OVF_INT_RAW
+    bit_range:
+    - 15
+    - 15
+    description: The raw bit of the interrupt of one of counters overflow that occurs in L2-Cache due to bus3 accesses L2-DCache.
+  side_effects: null
+- id: L2_CACHE_ACS_CNT_INT_ST
+  address_offset: 720
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_OVF_INT_ST
+    bit_range:
+    - 8
+    - 8
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L2-Cache due to bus0 accesses L2-Cache.
+  - name: L2_IBUS1_OVF_INT_ST
+    bit_range:
+    - 9
+    - 9
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L2-Cache due to bus1 accesses L2-Cache.
+  - name: L2_IBUS2_OVF_INT_ST
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L2_IBUS3_OVF_INT_ST
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: L2_DBUS0_OVF_INT_ST
+    bit_range:
+    - 12
+    - 12
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L2-Cache due to bus0 accesses L2-Cache.
+  - name: L2_DBUS1_OVF_INT_ST
+    bit_range:
+    - 13
+    - 13
+    description: The bit indicates the interrupt status of one of counters overflow that occurs in L2-Cache due to bus1 accesses L2-Cache.
+  - name: L2_DBUS2_OVF_INT_ST
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L2_DBUS3_OVF_INT_ST
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  side_effects: null
+- id: L2_CACHE_ACS_FAIL_INT_ENA
+  address_offset: 724
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FAIL_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to enable interrupt of access fail that occurs in L2-Cache due to l1 cache accesses L2-Cache.
+  side_effects: null
+- id: L2_CACHE_ACS_FAIL_INT_CLR
+  address_offset: 728
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FAIL_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to clear interrupt of access fail that occurs in L2-Cache due to l1 cache accesses L2-Cache.
+  side_effects: null
+- id: L2_CACHE_ACS_FAIL_INT_RAW
+  address_offset: 732
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FAIL_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: The raw bit of the interrupt of access fail that occurs in L2-Cache.
+  side_effects: null
+- id: L2_CACHE_ACS_FAIL_INT_ST
+  address_offset: 736
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FAIL_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: The bit indicates the interrupt status of access fail that occurs in L2-Cache due to l1 cache accesses L2-Cache.
+  side_effects: null
+- id: L2_CACHE_ACS_CNT_CTRL
+  address_offset: 740
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_CNT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The bit is used to enable ibus0 counter in L2-Cache.
+  - name: L2_IBUS1_CNT_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The bit is used to enable ibus1 counter in L2-Cache.
+  - name: L2_IBUS2_CNT_ENA
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: L2_IBUS3_CNT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: L2_DBUS0_CNT_ENA
+    bit_range:
+    - 12
+    - 12
+    description: The bit is used to enable dbus0 counter in L2-Cache.
+  - name: L2_DBUS1_CNT_ENA
+    bit_range:
+    - 13
+    - 13
+    description: The bit is used to enable dbus1 counter in L2-Cache.
+  - name: L2_DBUS2_CNT_ENA
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: L2_DBUS3_CNT_ENA
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: L2_IBUS0_CNT_CLR
+    bit_range:
+    - 24
+    - 24
+    description: The bit is used to clear ibus0 counter in L2-Cache.
+  - name: L2_IBUS1_CNT_CLR
+    bit_range:
+    - 25
+    - 25
+    description: The bit is used to clear ibus1 counter in L2-Cache.
+  - name: L2_IBUS2_CNT_CLR
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: L2_IBUS3_CNT_CLR
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: L2_DBUS0_CNT_CLR
+    bit_range:
+    - 28
+    - 28
+    description: The bit is used to clear dbus0 counter in L2-Cache.
+  - name: L2_DBUS1_CNT_CLR
+    bit_range:
+    - 29
+    - 29
+    description: The bit is used to clear dbus1 counter in L2-Cache.
+  - name: L2_DBUS2_CNT_CLR
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: L2_DBUS3_CNT_CLR
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: L2_IBUS0_ACS_HIT_CNT
+  address_offset: 744
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-ICache0 accesses L2-Cache due to bus0 accessing L1-ICache0.
+  side_effects: null
+- id: L2_IBUS0_ACS_MISS_CNT
+  address_offset: 748
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-ICache0 accesses L2-Cache due to bus0 accessing L1-ICache0.
+  side_effects: null
+- id: L2_IBUS0_ACS_CONFLICT_CNT
+  address_offset: 752
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-ICache0 accesses L2-Cache due to bus0 accessing L1-ICache0.
+  side_effects: null
+- id: L2_IBUS0_ACS_NXTLVL_CNT
+  address_offset: 756
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS0_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-ICache0 accessing L2-Cache due to bus0 accessing L1-ICache0.
+  side_effects: null
+- id: L2_IBUS1_ACS_HIT_CNT
+  address_offset: 760
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS1_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-ICache1 accesses L2-Cache due to bus1 accessing L1-ICache1.
+  side_effects: null
+- id: L2_IBUS1_ACS_MISS_CNT
+  address_offset: 764
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS1_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-ICache1 accesses L2-Cache due to bus1 accessing L1-ICache1.
+  side_effects: null
+- id: L2_IBUS1_ACS_CONFLICT_CNT
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS1_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-ICache1 accesses L2-Cache due to bus1 accessing L1-ICache1.
+  side_effects: null
+- id: L2_IBUS1_ACS_NXTLVL_CNT
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS1_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-ICache1 accessing L2-Cache due to bus1 accessing L1-ICache1.
+  side_effects: null
+- id: L2_IBUS2_ACS_HIT_CNT
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS2_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-ICache2 accesses L2-Cache due to bus2 accessing L1-ICache2.
+  side_effects: null
+- id: L2_IBUS2_ACS_MISS_CNT
+  address_offset: 780
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS2_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-ICache2 accesses L2-Cache due to bus2 accessing L1-ICache2.
+  side_effects: null
+- id: L2_IBUS2_ACS_CONFLICT_CNT
+  address_offset: 784
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS2_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-ICache2 accesses L2-Cache due to bus2 accessing L1-ICache2.
+  side_effects: null
+- id: L2_IBUS2_ACS_NXTLVL_CNT
+  address_offset: 788
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS2_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-ICache2 accessing L2-Cache due to bus2 accessing L1-ICache2.
+  side_effects: null
+- id: L2_IBUS3_ACS_HIT_CNT
+  address_offset: 792
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS3_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-ICache3 accesses L2-Cache due to bus3 accessing L1-ICache3.
+  side_effects: null
+- id: L2_IBUS3_ACS_MISS_CNT
+  address_offset: 796
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS3_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-ICache3 accesses L2-Cache due to bus3 accessing L1-ICache3.
+  side_effects: null
+- id: L2_IBUS3_ACS_CONFLICT_CNT
+  address_offset: 800
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS3_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-ICache3 accesses L2-Cache due to bus3 accessing L1-ICache3.
+  side_effects: null
+- id: L2_IBUS3_ACS_NXTLVL_CNT
+  address_offset: 804
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_IBUS3_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-ICache3 accessing L2-Cache due to bus3 accessing L1-ICache3.
+  side_effects: null
+- id: L2_DBUS0_ACS_HIT_CNT
+  address_offset: 808
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS0_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-DCache accesses L2-Cache due to bus0 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS0_ACS_MISS_CNT
+  address_offset: 812
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS0_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-DCache accesses L2-Cache due to bus0 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS0_ACS_CONFLICT_CNT
+  address_offset: 816
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS0_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-DCache accesses L2-Cache due to bus0 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS0_ACS_NXTLVL_CNT
+  address_offset: 820
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS0_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-DCache accessing L2-Cache due to bus0 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS1_ACS_HIT_CNT
+  address_offset: 824
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS1_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-DCache accesses L2-Cache due to bus1 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS1_ACS_MISS_CNT
+  address_offset: 828
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS1_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-DCache accesses L2-Cache due to bus1 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS1_ACS_CONFLICT_CNT
+  address_offset: 832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS1_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-DCache accesses L2-Cache due to bus1 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS1_ACS_NXTLVL_CNT
+  address_offset: 836
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS1_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-DCache accessing L2-Cache due to bus1 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS2_ACS_HIT_CNT
+  address_offset: 840
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS2_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-DCache accesses L2-Cache due to bus2 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS2_ACS_MISS_CNT
+  address_offset: 844
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS2_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-DCache accesses L2-Cache due to bus2 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS2_ACS_CONFLICT_CNT
+  address_offset: 848
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS2_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-DCache accesses L2-Cache due to bus2 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS2_ACS_NXTLVL_CNT
+  address_offset: 852
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS2_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-DCache accessing L2-Cache due to bus2 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS3_ACS_HIT_CNT
+  address_offset: 856
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS3_HIT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of hits when L1-DCache accesses L2-Cache due to bus3 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS3_ACS_MISS_CNT
+  address_offset: 860
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS3_MISS_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of missing when L1-DCache accesses L2-Cache due to bus3 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS3_ACS_CONFLICT_CNT
+  address_offset: 864
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS3_CONFLICT_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of access-conflicts when L1-DCache accesses L2-Cache due to bus3 accessing L1-DCache.
+  side_effects: null
+- id: L2_DBUS3_ACS_NXTLVL_CNT
+  address_offset: 868
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_DBUS3_NXTLVL_CNT
+    bit_range:
+    - 31
+    - 0
+    description: The register records the number of times that L2-Cache accesses external memory due to L1-DCache accessing L2-Cache due to bus3 accessing L1-DCache.
+  side_effects: null
+- id: L2_CACHE_ACS_FAIL_ID_ATTR
+  address_offset: 872
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FAIL_ID
+    bit_range:
+    - 15
+    - 0
+    description: The register records the ID of fail-access when L1-Cache accesses L2-Cache.
+  - name: L2_CACHE_FAIL_ATTR
+    bit_range:
+    - 31
+    - 16
+    description: The register records the attribution of fail-access when L1-Cache accesses L2-Cache due to cache accessing L1-Cache.
+  side_effects: null
+- id: L2_CACHE_ACS_FAIL_ADDR
+  address_offset: 876
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_FAIL_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: The register records the address of fail-access when L1-Cache accesses L2-Cache.
+  side_effects: null
+- id: L2_CACHE_SYNC_PRELOAD_INT_ENA
+  address_offset: 880
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PLD_DONE_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to enable interrupt of L2-Cache preload-operation done.
+  - name: L2_CACHE_PLD_ERR_INT_ENA
+    bit_range:
+    - 12
+    - 12
+    description: The bit is used to enable interrupt of L2-Cache preload-operation error.
+  side_effects: null
+- id: L2_CACHE_SYNC_PRELOAD_INT_CLR
+  address_offset: 884
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PLD_DONE_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to clear interrupt that occurs only when L2-Cache preload-operation is done.
+  - name: L2_CACHE_PLD_ERR_INT_CLR
+    bit_range:
+    - 12
+    - 12
+    description: The bit is used to clear interrupt of L2-Cache preload-operation error.
+  side_effects: null
+- id: L2_CACHE_SYNC_PRELOAD_INT_RAW
+  address_offset: 888
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PLD_DONE_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: The raw bit of the interrupt that occurs only when L2-Cache preload-operation is done.
+  - name: L2_CACHE_PLD_ERR_INT_RAW
+    bit_range:
+    - 12
+    - 12
+    description: The raw bit of the interrupt that occurs only when L2-Cache preload-operation error occurs.
+  side_effects: null
+- id: L2_CACHE_SYNC_PRELOAD_INT_ST
+  address_offset: 892
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PLD_DONE_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: The bit indicates the status of the interrupt that occurs only when L2-Cache preload-operation is done.
+  - name: L2_CACHE_PLD_ERR_INT_ST
+    bit_range:
+    - 12
+    - 12
+    description: The bit indicates the status of the interrupt of L2-Cache preload-operation error.
+  side_effects: null
+- id: L2_CACHE_SYNC_PRELOAD_EXCEPTION
+  address_offset: 896
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PLD_ERR_CODE
+    bit_range:
+    - 11
+    - 10
+    description: The value 2 is Only available which means preload size is error in L2-Cache.
+  side_effects: null
+- id: L2_CACHE_SYNC_RST_CTRL
+  address_offset: 900
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_SYNC_RST
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to reset sync-logic inside L2-Cache. Recommend that this should only be used to initialize sync-logic when some fatal error of sync-logic occurs.
+  side_effects: null
+- id: L2_CACHE_PRELOAD_RST_CTRL
+  address_offset: 904
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_PLD_RST
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to reset preload-logic inside L2-Cache. Recommend that this should only be used to initialize preload-logic when some fatal error of preload-logic occurs.
+  side_effects: null
+- id: L2_CACHE_AUTOLOAD_BUF_CLR_CTRL
+  address_offset: 908
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_ALD_BUF_CLR
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to clear autoload-buffer inside L2-Cache. If this bit is active, autoload will not work in L2-Cache. This bit should not be active when autoload works in L2-Cache.
+  side_effects: null
+- id: L2_UNALLOCATE_BUFFER_CLEAR
+  address_offset: 912
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_UNALLOC_CLR
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to clear the unallocate request buffer of l2 icache where the unallocate request is responsed but not completed.
+  side_effects: null
+- id: L2_CACHE_ACCESS_ATTR_CTRL
+  address_offset: 916
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: L2_CACHE_ACCESS_FORCE_CC
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to force the request to l2 cache with cacheable attribute, otherwise, the attribute is propagated from L1 cache or CPU, it could be one of cacheable and non-cacheable.
+  - name: L2_CACHE_ACCESS_FORCE_WB
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to force the request to l2 cache with write-back attribute, otherwise, the attribute is propagated from L1 cache or CPU, it could be one of write-back and write-through.
+  - name: L2_CACHE_ACCESS_FORCE_WMA
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to force the request to l2 cache with write-miss-allocate attribute, otherwise, the attribute is propagated from L1 cache or CPU, it could be one of write-miss-allocate and write-miss-no-allocate.
+  - name: L2_CACHE_ACCESS_FORCE_RMA
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to force the request to l2 cache with read-miss-allocate attribute, otherwise, the attribute is propagated from L1 cache or CPU, it could be one of read-miss-allocate and read-miss-no-allocate.
+  side_effects: null
+- id: L2_CACHE_OBJECT_CTRL
+  address_offset: 920
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_TAG_OBJECT
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to set L2-Cache tag memory as object. This bit should be onehot with the others fields inside this register.
+  - name: L2_CACHE_MEM_OBJECT
+    bit_range:
+    - 11
+    - 11
+    description: Set this bit to set L2-Cache data memory as object. This bit should be onehot with the others fields inside this register.
+  side_effects: null
+- id: L2_CACHE_WAY_OBJECT
+  address_offset: 924
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: L2_CACHE_WAY_OBJECT
+    bit_range:
+    - 2
+    - 0
+    description: 'Set this bits to select which way of the tag-object will be accessed. 0: way0, 1: way1, 2: way2, 3: way3, ?, 7: way7.'
+  side_effects: null
+- id: L2_CACHE_VADDR
+  address_offset: 928
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073741824
+  fields:
+  - name: L2_CACHE_VADDR
+    bit_range:
+    - 31
+    - 0
+    description: Those bits stores the virtual address which will decide where inside the specified tag memory object will be accessed.
+  side_effects: null
+- id: L2_CACHE_DEBUG_BUS
+  address_offset: 932
+  size: 32
+  access: READ_WRITE
+  reset_value: 932
+  fields:
+  - name: L2_CACHE_DEBUG_BUS
+    bit_range:
+    - 31
+    - 0
+    description: This is a constant place where we can write data to or read data from the tag/data memory on the specified cache.
+  side_effects: null
+- id: LEVEL_SPLIT1
+  address_offset: 936
+  size: 32
+  access: READ_WRITE
+  reset_value: 936
+  fields:
+  - name: LEVEL_SPLIT1
+    bit_range:
+    - 31
+    - 0
+    description: Reserved
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 940
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable clock gate when access all registers in this module.
+  side_effects: null
+- id: REDUNDANCY_SIG0
+  address_offset: 944
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_REDCY_SIG0
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are prepared for ECO.
+  side_effects: null
+- id: REDUNDANCY_SIG1
+  address_offset: 948
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_REDCY_SIG1
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are prepared for ECO.
+  side_effects: null
+- id: REDUNDANCY_SIG2
+  address_offset: 952
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_REDCY_SIG2
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are prepared for ECO.
+  side_effects: null
+- id: REDUNDANCY_SIG3
+  address_offset: 956
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_REDCY_SIG3
+    bit_range:
+    - 31
+    - 0
+    description: Those bits are prepared for ECO.
+  side_effects: null
+- id: REDUNDANCY_SIG4
+  address_offset: 960
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_REDCY_SIG4
+    bit_range:
+    - 3
+    - 0
+    description: Those bits are prepared for ECO.
+  side_effects: null
+- id: DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 35659904
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: version control register. Note that this default value stored is the latest date when the hardware logic was updated.
+  side_effects: null
+interrupts: null
+timing: null

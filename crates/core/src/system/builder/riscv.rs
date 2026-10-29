@@ -146,7 +146,19 @@ fn build_program_image(
         .load_firmware(program_image)
         .map_err(|e| anyhow!("Simulation Error: {e}"))?;
 
-    let sp_top = (chip.ram.base + chip.ram.size) as u32;
+    // C6 fast-boot: re-seed ROM .data after ELF load/reset so a segment or
+    // reset path cannot leave interface pointers (heap_tlsf_table_ptr etc.)
+    // stale — mask-ROM unpackloop never ran.
+    if esp32c6_rom::is_esp32c6(chip) {
+        esp32c6_rom::seed_rom_data(&mut machine.bus);
+    }
+
+    // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).
+    let sp_top = if esp32c6_rom::is_esp32c6(chip) {
+        esp32c6_rom::app_stack_top()
+    } else {
+        (chip.ram.base + chip.ram.size) as u32
+    };
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(program_image.entry_point as u32);
 

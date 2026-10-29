@@ -45,6 +45,21 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
         // what is and is not enforced.
         "esp32c6_pcr" => Box::new(super::pcr::Esp32c6Pcr::new()),
+        // EXTMEM / L1 cache — launch/done handshakes for Arduino cache_hal.
+        "esp32c6_extmem" => Box::new(super::extmem::Esp32c6Extmem::new()),
+        // SYSTIMER — same IP as C3/S3. TARGET0 matrix source 57 on C6.
+        "esp32c6_systimer" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(160_000_000) as u32;
+            let source = p_cfg.irq.unwrap_or(57);
+            Box::new(crate::peripherals::esp_systimer::Systimer::new_with_source(
+                cpu_clock_hz,
+                source,
+            ))
+        }
         // GDMA — the C6's 3-channel general DMA. `irq:` carries the
         // interrupt-matrix source of IN channel 0 (66 on the C6; the descriptor
         // declares it). Source ids derive contiguously: IN_CHn = base + n,
@@ -82,6 +97,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // shape is C6-only (see `lp_timer`), so it is a dedicated model rather
         // than a reuse of the C3 RTC_CNTL timer.
         "esp32c6_lp_rtc" => Box::new(super::lp_timer::Esp32c6LpTimer::new()),
+        // MODEM_LPCON — sticky regs; seed clk_i2c_mst_en for fast-boot.
+        "esp32c6_modem_lpcon" => Box::new(super::modem_lpcon::Esp32c6ModemLpcon::new()),
+        // Analog I2C master — sticky + instant-complete BUSY/cal bits.
+        "esp32c6_i2c_ana_mst" => Box::new(super::i2c_ana_mst::Esp32c6I2cAnaMst::new()),
         // USB Serial/JTAG — same EP1/INT_* IP as C3/S3 (`UsbSerialJtag`), with
         // the C6 matrix source (48) and 160 MHz clock. Base is owned by the
         // chip yaml (`0x6000_F000`); see the model module docs.
@@ -97,8 +116,12 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
     "esp32c6_pcr",
+    "esp32c6_extmem",
+    "esp32c6_systimer",
     "esp32c6_gdma",
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    "esp32c6_modem_lpcon",
+    "esp32c6_i2c_ana_mst",
     "esp32c6_usb_serial_jtag",
 ];

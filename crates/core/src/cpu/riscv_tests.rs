@@ -125,6 +125,31 @@ fn esp32c3_accepts_exact_rom_init_csrs_before_mtvec_initialization() {
 }
 
 #[test]
+
+#[test]
+fn esp32c6_accepts_pma_csrs_used_by_region_protect() {
+    // esp_cpu_configure_invalid_regions writes CSR_PMAADDR0 (0xBD0) /
+    // CSR_PMACFG0 (0xBC0). Without stubs those CSRRWs trap as illegal
+    // instruction and the C6 IDF early-init path never returns.
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
+    for csr in [0xBC0u16, 0xBCF, 0xBD0, 0xBDF] {
+        assert_eq!(cpu.read_csr(csr), Some(0), "csr={csr:#x}");
+        assert!(cpu.write_csr(csr, 0xDEAD_BEEF), "csr={csr:#x}");
+        assert_eq!(cpu.read_csr(csr), Some(0), "csr={csr:#x} sticky-discard");
+    }
+}
+
+#[test]
+fn esp32c6_accepts_mideleg_used_by_intr_alloc() {
+    // esp_intr_alloc_intrstatus_bind does `csrrc mideleg` (CSR 0x303).
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
+    for csr in [0x302u16, 0x303] {
+        assert_eq!(cpu.read_csr(csr), Some(0), "csr={csr:#x}");
+        assert!(cpu.write_csr(csr, 0xFFFF), "csr={csr:#x}");
+        assert_eq!(cpu.read_csr(csr), Some(0), "csr={csr:#x} raz");
+    }
+}
+
 fn c3_rom_init_csrs_do_not_widen_custom_csr_acceptance() {
     let cases = [
         (RiscVCoreProfile::Esp32C3, 0x7ff2_9073, 0x7ff),
