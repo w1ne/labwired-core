@@ -52,8 +52,13 @@ The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:
 - **LP core** (RV32IMC) and the LP/LP_IO/LP_AON periphery; deep sleep, retention
   and wake-up. LP SRAM is mapped as plain memory so RTC/LP code does not fault.
 - **ROM boot path / bootloader**: the 320 KB mask ROM region is optional
-  (`LABWIRED_ESP32C6_ROM`) and is not the reset path of the tier-1 ELF. No
-  flash-controller model, partition parsing, secure boot, or flash encryption.
+  (`LABWIRED_ESP32C6_ROM`) and is not the reset path of the tier-1 ELF. Full
+  mask-ROM flash-image boot (bootloader + secure boot + flash encryption) is
+  still out of scope. The Arduino-ELF fast-boot path **does** install MSPI
+  SPI_MEM twins (SPI0 @ `0x6000_2000`, SPI1 @ `0x6000_3000`) against a shared
+  flash backing and seeds the default Arduino partition table at flash offset
+  `0x8000` so `Preferences` / NVS can find and program an NVS partition — see
+  `boot::esp32c6_rom`.
 - **Radios**: Wi-Fi 6 (MAC/PHY), Bluetooth 5 LE, IEEE 802.15.4, and the
   coexistence block. No MAC, no PHY, no packet path.
 - **USB Serial/JTAG** (`USB_DEVICE` window): unmapped (accesses fault loudly).
