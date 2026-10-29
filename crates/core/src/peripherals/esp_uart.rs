@@ -1512,6 +1512,7 @@ mod tests {
             INT_RXFIFO_TOUT,
             "mut ingest must latch RXFIFO_TOUT"
         );
+        // Prefer as_deref(): clippy option_as_ref_deref under -D warnings.
         assert_eq!(
             result.explicit_irqs.as_deref(),
             Some([27u32].as_slice()),
