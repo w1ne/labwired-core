@@ -2397,7 +2397,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: fb611a6ea7aaadcf812f987a1e37676abbdb5ca7dc1f8ec09135c4a45c85fb73
+    drift_ack_digest: cc7a758b7f7402987d99dc53c0b8fed6eb99224ad36833b4d30d54a55f9efc08
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3201,6 +3201,11 @@ boards:
     # LEDC channel outputs drive the GPIO output matrix (signals 45..50), and
     # DUTY_START now latches DUTY into DUTY_R. No register map or reset value
     # change; the reset-state oracle is untouched. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched esp_xtensa_common/
+    # rom_thunks.rs. Adds rom_strcmp/strncmp/strcpy/strncpy thunks (S3 ROM
+    # slots 0x40001230/123c/1218/1224). Shared thunk bank also listed on C3;
+    # C3 register map and reset-oracle set are unchanged (C3 does not wire
+    # these S3 slots). ACK, NOT A CAPTURE.
     # 2026-10-29 (#1536 feat/esp-uart-rx-inject-sched): watched esp_uart.rs.
     # EspUart wakes the event-scheduler when uart_injections deliver RX bytes,
     # and latches INT_RXFIFO_TOUT via an int_raw_sticky Cell so &self ingest
@@ -7854,12 +7859,17 @@ boards:
     # at the register map. No register map or reset value in the nine captured
     # windows changed. Ran: peripherals::esp32s3::spi_mem_flash (10),
     # boot::esp32c6_rom (5). No S3 board attached. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched rom_thunks.rs +
+    # system/xtensa/esp32s3.rs. Registers ROM strcmp/strncmp/strcpy/strncpy
+    # at the newlib export addresses so Arduino String/C string ops stop
+    # hitting nop_return_zero. No peripheral register map or the nine
+    # captured reset-state windows change. ACK, NOT A CAPTURE.
     # 2026-10-29 (#1536 feat/esp-uart-rx-inject-sched): watched esp_uart.rs.
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
-    drift_ack_digest: 5d9a198ea963d8e9340df3118119bdaa1b88e583983181d712afddf7a0eb466a
+    drift_ack_digest: 9e0a39bce1e7f70a3c92dc25a80954cb89c90e16025d11b085f757dfd7097dca
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
