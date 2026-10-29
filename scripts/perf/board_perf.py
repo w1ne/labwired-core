@@ -414,13 +414,6 @@ WAIVED: dict[str, str] = {
         "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
         "is made for this board (docs/boards/sam4s-xplained.md)."
     ),
-    "stm32l552": (
-        "L1 smoke, SIM-DERIVED: Cortex-M33 + flash/SRAM + LPUART1 and the "
-        "GPIO LED/button path only, with no silicon capture and no "
-        "executing-fidelity differential. No perf fixture is built for the "
-        "L5 map (flash 0x08000000, RAM 0x20000000), and no throughput claim "
-        "is made for this board (docs/boards/nucleo-l552ze-q.md)."
-    ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
         "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "
