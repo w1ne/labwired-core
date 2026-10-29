@@ -9136,6 +9136,9 @@ boards:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/esp_uart.rs
+      # 2026-10-29 (#1526): USB Serial/JTAG now registered on C6 via shared
+      # UsbSerialJtag::new_esp32c6. SIM-DERIVED board — no silicon ack implied.
+      - crates/core/src/peripherals/esp32s3/usb_serial_jtag.rs
       - crates/core/src/peripherals/esp32/timg.rs
       - crates/core/src/peripherals/esp32c3/apb_saradc.rs
       - crates/core/src/peripherals/esp32c3/gpio.rs
