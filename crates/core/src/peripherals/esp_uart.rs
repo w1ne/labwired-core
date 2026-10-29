@@ -1513,7 +1513,7 @@ mod tests {
             "mut ingest must latch RXFIFO_TOUT"
         );
         assert_eq!(
-            result.explicit_irqs.as_ref().map(|v| v.as_slice()),
+            result.explicit_irqs.as_deref(),
             Some([27u32].as_slice()),
             "enabled TOUT must export the matrix source"
         );
