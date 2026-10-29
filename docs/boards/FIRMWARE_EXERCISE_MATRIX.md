@@ -203,6 +203,38 @@ _Drives 10 rubric classes via its tier-1 fixture, and the nightly J1939 monitor 
 - `bkp` (configs/chips/stm32f103.yaml:222 (type: stub)) — CLOSABLE: author-declared stub with no schema wired in the descriptor — the backup-domain registers (RTC backup data and calibration) are not modelled; no gated firmware touches the window.
 - `WWDG` (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32f103.yaml:185)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires. No behavioural test and no gated firmware drives it; reset values are pinned by the bench-F103 probe in stm32f1_mmio_diff.
 
+### `stm32f103c4`
+
+_Exact low-density x4/x6 geometry slice for stm32f103c4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103c6`
+
+_Exact low-density x4/x6 geometry slice for stm32f103c6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r4`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r4h`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r4h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r6`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r6h`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r6h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103t4`
+
+_Exact low-density x4/x6 geometry slice for stm32f103t4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103t6`
+
+_Exact low-density x4/x6 geometry slice for stm32f103t6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
 ### `stm32f401`
 
 _All 12 declared rubric classes are driven by its tier-1 fixture — including a byte-exact memory-to-memory transfer on DMA2 plus the EXTI→NVIC and TIM1-PWM checks — while PWR_CR.VOS is programmed by the PR-gated Arduino startup and DBGMCU_CR by the Zephyr SoC-debug init; TIM2 input capture is driven by two register-level firmwares (HC-SR04 echo width through the CC2 interrupt, and PWM-input period/duty in slave reset mode); that leaves the other stream controller, DMA1, as the chip's one beyond-rubric gap._
@@ -212,6 +244,54 @@ _All 12 declared rubric classes are driven by its tier-1 fixture — including a
 - TIM2 PWM-input mode (TS=TI1FP1, SMS=reset) — CCR1 period and CCR2 high time equal to the injected edge cycles exactly — `timer-capture/freq-meter` · timer_input_capture.rs:pwm_input_mode_measures_period_and_duty_exactly (ungated)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `DMA1`
+
+### `stm32f401cb`
+
+_Exact orderable geometry slice for stm32f401cb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401cc`
+
+_Exact orderable geometry slice for stm32f401cc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401cd`
+
+_Exact orderable geometry slice for stm32f401cd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401ce`
+
+_Exact orderable geometry slice for stm32f401ce on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401rb`
+
+_Exact orderable geometry slice for stm32f401rb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401rc`
+
+_Exact orderable geometry slice for stm32f401rc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401rd`
+
+_Exact orderable geometry slice for stm32f401rd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401re`
+
+_Exact orderable geometry slice for stm32f401re on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401vb`
+
+_Exact orderable geometry slice for stm32f401vb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401vc`
+
+_Exact orderable geometry slice for stm32f401vc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401vd`
+
+_Exact orderable geometry slice for stm32f401vd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401ve`
+
+_Exact orderable geometry slice for stm32f401ve on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
 
 ### `stm32f405`
 
@@ -226,6 +306,30 @@ _No tier-1 target (absent from tier1-matrix.json), so this entry carries the who
 _Its 9-class tier-1 fixture leaves dma/irq/pwm unrecorded, and the DMA gap is real: no firmware drives either stream controller (only the descriptor-level differential does); the PR-gated smoke reads DBGMCU IDCODE, the Arduino startup programs PWR_CR.VOS then reads REV_ID back, and the `arduino-matrix-gate` L8_can loopback sketch drives bxCAN1 to self-reception (ID 0x123, data 0xA5), so debug, power and CAN are firmware-exercised; the AHT20+BMP280 e2e drives two real I²C device twins but decodes no physical value._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `DMA1`, `DMA2`
+
+### `stm32f407ie`
+
+_Exact orderable geometry slice for stm32f407ie on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407ig`
+
+_Exact orderable geometry slice for stm32f407ig on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407ve`
+
+_Exact orderable geometry slice for stm32f407ve on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407vg`
+
+_Exact orderable geometry slice for stm32f407vg on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407ze`
+
+_Exact orderable geometry slice for stm32f407ze on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407zg`
+
+_Exact orderable geometry slice for stm32f407zg on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
 
 ### `stm32f401cdu6`
 
@@ -331,21 +435,21 @@ _Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-rat
 
 ### `stm32u575`
 
-_SIM-DERIVED first U5 part with NO tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json), so this entry carries the whole story. Firmware that runs: the two PR-gated `firmware_survival` boots — the stock Zephyr 3.7.2 hello (U5 RCC PLL1/ready pairs, PWR, DBGMCU_CR, ICACHE, USART1 VCP console) and the Arduino L0 serial (HAL_PWREx_ControlVoltageScaling SVMSR/VOSR poll, HAL_CRC_Init CRC_POL/INIT/CR, HAL_RCCEx_CRSConfig, HAL_ICACHE_Enable) — plus `crates/firmware-stm32u575-demo`, whose RCC-APB2ENR-gate + USART1 io-smoke is built and run by `strict_onboarding` (cross-build-excluded from the PR shards, run by the nightly core-full job) and the nightly `core-onboarding-smoke` cell (core-onboarding-smoke.yml:51-55, not PR), and the un-gated CubeU5 HAL smoke (examples/nucleo-u575zi/VALIDATION.md §B: HAL_Init → ICACHE → PLL1/VOS → USART1; no CI gate, and its only beyond-rubric touches are the already-recorded PWR and ICACHE windows). The Arduino matrix L0–L8 runs on its push-to-main/nightly lane (core-arduino-matrix-smoke.yml:15, NOT PR) and drives the rubric classes (INA219 on I2C1, MAX31855 on SPI1, ADC/PWM/timer, FDCAN1 internal loopback). Beyond the rubric, GPDMA1 is the one modeled-but-firmware-untouched block (22 gpdma.rs unit tests; neither survival ELF contains its 0x40020000 base), RNG is exercised only by the L073 kernel-clock unit tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254 — no U575 behavioral test drives it; register_coverage.rs:128,169-179 only pokes the window), and ICACHE is a hardcoded StubPeripheral. PWR/CRC/CRS/DBGMCU are all firmware-driven — the CRC polynomial engine (crc.rs:66) is still driven by no firmware (its always-run coverage is the H563 bench oracle, h563_conformance.rs:144, plus the F103 sim-only thumb oracle, stm32f1_exec_oracle.rs:300, and IDR-width masking, crc.rs:204 — no U5 test asserts a computed value) and CRS has no SYNC source or trim loop, but the HAL never polls one._
+_SIM-DERIVED STM32U575 target with NO tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json), so this entry carries the whole story. Firmware that runs: the two PR-gated `firmware_survival` boots — the stock Zephyr 3.7.2 hello (U5 RCC PLL1/ready pairs, PWR, DBGMCU_CR, ICACHE, USART1 VCP console) and the Arduino L0 serial (HAL_PWREx_ControlVoltageScaling SVMSR/VOSR poll, HAL_CRC_Init CRC_POL/INIT/CR, HAL_RCCEx_CRSConfig, HAL_ICACHE_Enable) — plus `crates/firmware-stm32u575-demo`'s Rust `io-smoke` and Star Catcher OLED game: `io-smoke` is built and run by `strict_onboarding` (cross-build-excluded from the PR shards, run by the nightly core-full job), while the six-check Star Catcher simulator is included in the `core-onboarding-smoke.yml` matrix on main pushes, nightly schedule, and manual dispatch (not PR). The local smoke checks PC13 input/B1, nonblank SSD1306 output, and USART1 TX routing; see `examples/nucleo-u575zi/VALIDATION.md` for current evidence. Also the un-gated CubeU5 HAL smoke (examples/nucleo-u575zi/VALIDATION.md §B: HAL_Init → ICACHE → PLL1/VOS → USART1; no CI gate, and its only beyond-rubric touches are the already-recorded PWR and ICACHE windows). The Arduino matrix L0–L8 runs on its push-to-main/nightly lane (core-arduino-matrix-smoke.yml:15, NOT PR) and drives the rubric classes (INA219 on I2C1, MAX31855 on SPI1, ADC/PWM/timer, FDCAN1 internal loopback). Beyond the rubric, three external 60North reference firmware cases exercise GPDMA1 in the LabWired simulator: hal-spi-dma, hal-uart-dma, and st-dma-flash-to-ram. core-onboarding-smoke runs them on main pushes, nightly schedule, and manual dispatch (not PR); this is firmware-model acceptance, not a silicon capture or Renode differential. The normal firmware_survival ELFs do not access the GPDMA base; 22 gpdma.rs unit tests also cover the model. RNG is exercised only by the L073 kernel-clock unit tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254 — no U575 behavioral test drives it; register_coverage.rs:128,169-179 only pokes the window), and the U5 ICACHE profile uses a limited register-contract model: CACHEINV self-clears to BSYENDF, WAYSEL locks while enabled, FCR clears status, and BSYENDIE gates the IRQ; flat memory means cache contents and line effects are not simulated. PWR/CRC/CRS/DBGMCU are all firmware-driven — the CRC polynomial engine (crc.rs:66) is still driven by no firmware (its always-run coverage is the H563 bench oracle, h563_conformance.rs:144, plus the F103 sim-only thumb oracle, stm32f1_exec_oracle.rs:300, and IDR-width masking, crc.rs:204 — no U5 test asserts a computed value) and CRS has no SYNC source or trim loop, but the HAL never polls one._
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPDMA1`, `RNG`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `RNG`
 
-**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `ICACHE` (configs/chips/stm32u575.yaml:447 (type: icache; crates/core/src/peripherals/generic_factory.rs:734)) — CLOSABLE: hardcoded StubPeripheral::new(0x00) — read 0, writes dropped. The PR-gated Arduino startup's HAL_ICACHE_Enable/ConfigAssociativityMode and the Zephyr boot's ICACHE enable writes are accepted but never latch, and neither polls a status bit, so the no-op cannot be detected (docs/boards/stm32u575.md:65 calls the window a stub declared so HAL_ICACHE_Enable cannot bus-fault).
+### `stm32u5a5zj`
+
+_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` drives the U5A5 SystemBus registers and checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector; SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 too, but no AES-256 vector currently tests it. The source-built `examples/nucleo-u5a5zj/io-smoke.yaml` checks basic UART only; no firmware test currently exercises U5A5 HASH/SAES/PKA. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `HASH`, `SAES`, `PKA`
 
 ### `stm32u545`
 
-_SIM-DERIVED STM32U545RE (NUCLEO-U545RE-Q), a U575-family derivative whose peripheral entries are drift-guarded byte-identical to stm32u575.yaml (`u545_u575_drift_guard`), so the U575 entry's beyond-rubric accounting applies unchanged. Firmware that runs: the PR-gated `firmware_survival` blinky (RCC AHB2ENR1/APB2ENR gates, PA9/PA10 AF7, USART1 VCP banner, PA5 loop) and the `nucleo_u545re` machine-run pin tests (LD2 PA5 edges, B1 PC13 press/release via the VCP, USART1 RX echo, 256 KiB-bank flash erase); the ignored-by-default Cube HAL run (MSI->PLL1 160 MHz, SMPS, ICACHE, HAL_GPIO_ReadPin PC13) is evidence in examples/nucleo-u545re/VALIDATION.md, not a PR gate._
+_SIM-DERIVED STM32U545RE (NUCLEO-U545RE-Q), a U575-family derivative checked by `u545_u575_drift_guard`, with explicit DBGMCU IDCODE and system-memory flash-size peripheral-field exceptions; the U575 firmware evidence does not automatically transfer to U545. Firmware that runs: the PR-gated `firmware_survival` blinky (RCC AHB2ENR1/APB2ENR gates, PA9/PA10 AF7, USART1 VCP banner, PA5 loop) and the `nucleo_u545re` machine-run pin tests (LD2 PA5 edges, B1 PC13 press/release via the VCP, USART1 RX queue-injected echo (PA10 pad input is not routed), 256 KiB-bank flash erase); the ignored-by-default Cube HAL run (MSI->PLL1 160 MHz, SMPS, ICACHE, HAL_GPIO_ReadPin PC13) is evidence in examples/nucleo-u545re/VALIDATION.md, not a PR gate. Its ICACHE peripheral uses the shared limited U5 register-contract model (cache contents are not simulated); GPDMA1 remains unit-tested-only for this U545 profile._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `GPDMA1`, `RNG`
-
-**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `ICACHE` (configs/chips/stm32u545.yaml (type: icache; crates/core/src/peripherals/generic_factory.rs)) — CLOSABLE: hardcoded StubPeripheral::new(0x00) shared with the U575 — read 0, writes dropped; HAL_ICACHE_Enable in the Cube HAL run is accepted but never latches and nothing polls it.
 
 ### `stm32wb55`
 
@@ -366,6 +470,14 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 
 _No tier-1 target. Firmware that runs: the PR-gated `avr_mega2560_io` integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (`avr_gpio` ports A..L, `avr_adc` with 16 channels, the parking `spi`/`i2c` controllers and the `usart0` peer host), so nothing beyond the rubric is declared and the lists below are empty._
 
+### `atmega1281`
+
+_No tier-1 target. The PR-gated avr_atmega1281_firmware integration test boots the AVR-GCC image built from examples/atmega1281-io/src/main.c and asserts 1281 OK on USART0 plus PB5 high; examples/atmega1281-io/io-smoke.yaml runs the same ELF through labwired test. The exact descriptor exposes 54 GPIO pads on ports A..G and eight ADC inputs. EEPROM, USART1, Timer3 and PWM are present on silicon but not modeled or declared. No beyond-rubric behavior or physical acceptance is claimed._
+
+### `atmega2561`
+
+_64-pin sibling of the ATmega2560, so no tier-1 target. The PR-gated `avr_atmega2561` test boots the committed 3-byte-PC image tests/fixtures/avr/atmega2561-io.elf and asserts `2561 OK` on the USART0 sink plus PB5 driven high; examples/atmega2561-io/io-smoke.yaml runs the same fixture through `labwired test` and is the board entry in configs/ci/boards.yml. The descriptor deliberately narrows the shared public core to this SKU: 54 GPIO on ports A..G (PG0..PG5 only), USART0 only and eight ADC inputs. EEPROM (4 KB on silicon), USART1 and Timer3 are on silicon but are not modelled/declared in this slice; ports H..L, ADC8..ADC15 and Timer4/5 are 100-pin ATmega2560 features absent from the 64-pin part; Table 2-1 lists twelve 16-bit-resolution PWM channels for the 2560 and six for the 2561. There is no beyond-rubric content and the lists below are empty._
+
 ### `atsamd21`
 
 _No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::test_atsamd21_nano33_smoke_survival` (step core-ci.yml:779; case firmware_survival.rs:1323): the committed Nano 33 IoT smoke ELF (tests/fixtures/atsamd21-nano33-smoke.elf, built from crates/firmware-atsamd21-demo) writes PM.APBCMASK + GCLK SERCOM5_CORE and prints `OK` on Serial1 (crates/firmware-atsamd21-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/nano-33-iot/io-smoke.yaml) and the nightly coverage-matrix cell `nano-33-iot` (core-coverage-matrix-smoke.yml:75-81, examples/nano-33-iot/uart-smoke.yaml). Beyond the rubric the descriptor declares one block, the USB window, as a zero stub that no firmware opens._
@@ -380,6 +492,50 @@ _No tier-1 target. The firmware that runs is the SAM D21 bring-up smoke built fr
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCTRL` (configs/chips/atsamd21g18a.yaml:144 (type: declarative; configs/peripherals/atsamd21g18a/sysctrl.yaml)) — CLOSABLE: declarative register file with no engine — the smoke's OSC8MRDY poll (crates/firmware-samd21-demo/src/main.rs:151-155) is bounded (`for _ in 0..10_000`) and passes even with PCLKSR reset to 0, so it does not depend on the hand-set value; that value (0x1_8ADF, configs/peripherals/atsamd21g18a/sysctrl.yaml:250-272, value at :264) is what unbounded driver spins like the Arduino SAMD core's DFLLRDY wait need, and the pin is the estate test (atsamd21_peripheral_estate.rs:116-139), the chip's `chip_conformance` behavior gate (chip_conformance.rs:86-93). No oscillator/DFLL state is modelled, and regenerating the file from the SVD drops the value. ⚠️ examples/samd21-smoke/io-smoke.yaml:17-19 and crates/firmware-samd21-demo/src/main.rs:149-150 still claim a PCLKSR=0 model hangs / never returns — those comments are STALE (the poll is bounded); do not 'correct' this note back from them.
 - `NVMCTRL` (configs/chips/atsamd21g18a.yaml:172 (type: declarative; configs/peripherals/atsamd21g18a/nvmctrl.yaml)) — CLOSABLE: declarative register file — the smoke's CTRLB.RWS wait-state write (crates/firmware-samd21-demo/src/main.rs:147) is stored, never read back or polled, and no flash-controller behaviour follows (no programming, erase or ready timing).
+
+### `atsamd21e15a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21e16a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21e17a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21e18a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21g15a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21g16a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21g17a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j15a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j16a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j17a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j18a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
 
 ### `atsamd51`
 
@@ -466,6 +622,30 @@ _M0 + M1a + M1b + M1c + M2 + M3 bring-up: boot (PC 0 -> reset GOTO) with UART1 T
 ### `dspic33fj32mc202`
 
 _M0 + M1 + M2 + M3 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> reset GOTO) and UART1 TX; the 28-pin GPIO package (RA0-RA4, RB0-RB15, no PORTC; TRIS/LAT/ODC masks derived from the descriptor's pic24_gpio pads); the shared T1 timer, Motor Control PWM 1 (complementary pair with dead time on RB14/RB15) and QEI1 (x4 index reset, QEA/QEB/INDX on RB0/RB1/RB2) on 202 package pins; and the shared ADC1/SPI1/I2C1 models on the 202's AN0-AN5 analog set (AN0=RA0, AN1=RA1, AN2=RB0..AN5=RB3; AN6-AN8 are RC0-RC2 and absent on the 28-pin package), SPI1 loopback and I2C1 TMP102 at 0x48. Four real XC16 v1.70 firmwares: xc16-uart-smoke.c prints `HI` and toggles LATB0 (crates/core/tests/pic24_xc16_202_smoke.rs); xc16-m1-gpio.c prints `G1`, makes PORTA/PORTB outputs and toggles RA0/RB0 (crates/core/tests/pic24_xc16_202_m1.rs), including the reset masks and pad levels; xc16-m2-pwm-qei.c waits on T1IF and configures PWM1+QEI1 (crates/core/tests/pic24_xc16_202_m2.rs), with injected quadrature edges, PWM pad checks and the direction-aware index reset; xc16-m3-adc-spi-i2c.c samples AN4 (RB2), shifts 0xA5 through SPI1, reads the TMP102 at 0x48 and prints `M3 OK` (crates/core/tests/pic24_xc16_202_m3.rs), with the 0xBEEF completion marker. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set. The 202 track now covers M0-M3 with nothing left in that range; there is no silicon capture, so the results are simulation-derived only._
+
+### `pic24f04ka200`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA200 descriptor (DS30009937C): 14-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xC310 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka200/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f04ka201`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA201 descriptor (DS30009937C): 20-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka201/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f08ka101`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA101 descriptor (DS39927C): 20-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f08ka102`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA102 descriptor (DS39927C): 28-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f16ka101`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA101 descriptor (DS39927C): 20-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f16ka102`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA102 descriptor (DS39927C): 28-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `litex-vexriscv`
 

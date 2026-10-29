@@ -135,6 +135,11 @@ const CHIPS: &[ChipEntry] = &[
         Some("tests/fixtures/real_world/stm32u575.svd"),
     ),
     (
+        "stm32u5a5zj",
+        "configs/chips/stm32u5a5zj.yaml",
+        None, // U5A5 CMSIS header is available; no independent public SVD fixture is vendored yet.
+    ),
+    (
         "stm32wb55",
         "configs/chips/stm32wb55.yaml",
         Some("tests/fixtures/real_world/stm32wb55.svd"),

@@ -17,3 +17,9 @@ name = "firmware-stm32u575-demo"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "nucleo-u575-star-catcher"
+path = "src/star_catcher.rs"
+test = false
+bench = false

@@ -260,6 +260,11 @@ const SIG_U2TXD: u32 = 18;
 const I2C_LINE_SCL: usize = super::i2c::LINE_SCL;
 const I2C_LINE_SDA: usize = super::i2c::LINE_SDA;
 
+/// GPIO-matrix OUTPUT index of LEDC channel 0 — esp-idf
+/// `soc/esp32s3/include/soc/gpio_sig_map.h` `LEDC_LS_SIG_OUT0_IDX`; the eight
+/// channel outputs are contiguous (73..80).
+const SIG_LEDC_LS_OUT0: u32 = 73;
+
 pub const RMT_SIG_OUT0: u32 = 81;
 pub const RMT_SIG_OUT1: u32 = 82;
 pub const RMT_SIG_OUT2: u32 = 83;
@@ -278,6 +283,9 @@ fn s3_out_signal_name(idx: u32) -> Option<&'static str> {
         SIG_SPI3_Q => "SPI3_Q",
         SIG_SPI3_D => "SPI3_D",
         SIG_SPI3_CS0 => "SPI3_CS0",
+        SIG_LEDC_LS_OUT0..=80 => {
+            crate::peripherals::esp32s3::ledc::LEDC_LINES[(idx - SIG_LEDC_LS_OUT0) as usize]
+        }
         RMT_SIG_OUT0 => "RMT_SIG_OUT0",
         RMT_SIG_OUT1 => "RMT_SIG_OUT1",
         RMT_SIG_OUT2 => "RMT_SIG_OUT2",
@@ -949,6 +957,24 @@ impl Esp32s3Gpio {
             &mut edges,
         );
         self.wire_edges.extend(edges);
+    }
+
+    /// Bind the LEDC controller's eight channel outputs to every pad the output
+    /// matrix can route them to (`LEDC_LS_SIG_OUT0..7`, 73..80) — what
+    /// `ledc_channel_config` / `ledcAttach` programs into `FUNCn_OUT_SEL_CFG`.
+    /// Which pad is live at any moment is then decided by that register,
+    /// through the shared routing seam, as for SPI and UART.
+    pub(crate) fn bind_ledc_lines(
+        &mut self,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        let names = crate::peripherals::esp32s3::ledc::LEDC_LINES;
+        for pin in 0..PAD_COUNT {
+            for (line, func) in names.iter().enumerate() {
+                self.pad_routes
+                    .bind(lines, pin, Some(SIG_LEDC_LS_OUT0 + line as u32), line, func);
+            }
+        }
     }
 
     /// Bind one UART's TX wire to every pad the output matrix can route it to.

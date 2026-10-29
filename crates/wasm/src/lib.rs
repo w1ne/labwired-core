@@ -20,6 +20,9 @@ mod inspect;
 mod install;
 mod jit_browser;
 mod lab_tools;
+mod ngspice;
+#[cfg(test)]
+mod pic24_wasm_tests;
 #[cfg(test)]
 mod playground_repro;
 #[cfg(test)]
@@ -431,6 +434,54 @@ impl WasmSimulator {
             blobs: parse_named_blobs(&blobs),
         }))
     }
+
+    /// Construct a browser simulator with a host-owned persistent ngspice solver.
+    #[wasm_bindgen]
+    pub fn new_from_config_with_ngspice_callback(
+        system_yaml: &str,
+        chip_yaml: &str,
+        firmware: &[u8],
+        blobs: JsValue,
+        callback: JsValue,
+    ) -> Result<WasmSimulator, JsValue> {
+        use wasm_bindgen::JsCast;
+        let callback = callback
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str("ngspice callback must be a function"))?;
+        let inputs = std::rc::Rc::new(lab_tools::CtorInputs {
+            system_yaml: system_yaml.to_string(),
+            chip_yaml: chip_yaml.to_string(),
+            firmware: firmware.to_vec(),
+            blobs: parse_named_blobs(&blobs),
+        });
+        let mut sim = Self::build_from_config(
+            &inputs.system_yaml,
+            &inputs.chip_yaml,
+            &inputs.firmware,
+            &inputs.blobs,
+            Some(&callback),
+        )?;
+        sim.tools.get_mut().ctor = Some(inputs);
+        sim.untracked("connected to an external ngspice solver");
+        Ok(sim)
+    }
+}
+
+/// PIC24 UART1 is implemented inside the CPU, so it cannot be attached as a
+/// named `SystemBus` UART. Keep the browser constructor's console contract
+/// explicit rather than asking the generic bus resolver to find it.
+fn validate_pic24_console(console: &HostConsole) -> Result<(), String> {
+    match console {
+        HostConsole::Undeclared => Ok(()),
+        HostConsole::Uart(name) if name.eq_ignore_ascii_case("uart1") => Ok(()),
+        HostConsole::Uart(name) => Err(format!(
+            "PIC24 browser support only models CPU-internal UART1, not bus UART '{name}'; declare `debug_uart: uart1`"
+        )),
+        HostConsole::UsbSerialJtag => Err(
+            "PIC24 browser support does not model USB-Serial-JTAG; declare `debug_uart: uart1` for the CPU-internal UART1 console"
+                .to_string(),
+        ),
+    }
 }
 
 impl WasmSimulator {
@@ -445,6 +496,7 @@ impl WasmSimulator {
             &inputs.chip_yaml,
             &inputs.firmware,
             &inputs.blobs,
+            None,
         )?;
         sim.tools.get_mut().ctor = Some(inputs);
         Ok(sim)
@@ -455,6 +507,7 @@ impl WasmSimulator {
         chip_yaml: &str,
         firmware: &[u8],
         blob_map: &std::collections::HashMap<String, Vec<u8>>,
+        ngspice_callback: Option<&js_sys::Function>,
     ) -> Result<WasmSimulator, JsValue> {
         // Same reason as `new()`: the fidelity log is thread-local and outlives
         // the machine, so scope it to this one.
@@ -515,17 +568,14 @@ impl WasmSimulator {
             MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
             MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
-            // PIC24/PIC18 M0 have no browser constructor yet.
-            MachineFamily::Pic24 => Err(JsValue::from_str(
-                "PIC24 (M0) is not available in the browser build yet",
-            )),
+            MachineFamily::Pic24 => Self::new_from_config_pic24(&chip, &manifest, firmware),
             MachineFamily::Pic18 => Err(JsValue::from_str(
                 "PIC18 (M0) is not available in the browser build yet",
             )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.
-        sim.attach_cosim(&manifest)
+        sim.attach_cosim_with_ngspice(&manifest, ngspice_callback)
             .map_err(|e| JsValue::from_str(&e))?;
         Ok(sim)
     }
@@ -617,13 +667,9 @@ impl WasmSimulator {
         // hears the Nano if the CPU writes UDR0 bytes into the same sink
         // (the CLI does the same with its capture buffer).
         cpu.set_serial_sink(uart_sink.clone());
-        // SPI/I2C kits park on bus controllers; SPDR/TWCR clock them from
-        // the CPU model (same as build_avr_node / CLI).
-        for name in ["spi", "spi0", "spi1"] {
-            for dev in bus.take_spi_devices(name) {
-                cpu.push_spi_device(dev);
-            }
-        }
+        // SPI kits stay on the bus parking controller (SPDR clocks via
+        // SystemBus::clock_parking_spi) so inspect can see the panel.
+        // I²C slaves still move onto the CPU TWI model.
         for name in ["i2c", "i2c0", "twi"] {
             for dev in bus.take_i2c_slaves(name) {
                 cpu.push_i2c_slave(dev);
@@ -641,6 +687,67 @@ impl WasmSimulator {
             console,
             uart_rx_bufs,
             arch: MachineFamily::Avr,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+            cosim: None,
+            tools: Default::default(),
+        })
+    }
+
+    /// PIC24 M0 (ELF boot, CPU UART1 TX, and the declared GPIO pad models).
+    ///
+    /// Like the core's PIC24 builder, the UART is part of the CPU rather than
+    /// a bus UART, so it writes directly to the same sink the Serial pane
+    /// drains. M0 browser support deliberately rejects external devices: the
+    /// PIC24 I2C1/SPI1 controllers are CPU-internal and need the later M3
+    /// attachment path, while the current browser constructor only promises
+    /// firmware boot, UART1, and GPIO.
+    fn new_from_config_pic24(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        if !manifest.external_devices.is_empty() {
+            return Err(JsValue::from_str(
+                "PIC24 browser support currently accepts no external devices (M0: CPU UART1 and GPIO only)",
+            ));
+        }
+
+        let bus = SystemBus::from_config(chip, manifest)
+            .map_err(|e| JsValue::from_str(&format!("Bus config error: {e:#}")))?;
+
+        let console = ConsoleCapture::for_manifest(manifest);
+        validate_pic24_console(console.tapped()).map_err(|e| JsValue::from_str(&e))?;
+        let uart_sink = console.heard_sink();
+        // PIC24 UART1 is CPU-internal and writes directly to this sink below.
+        // There is no bus UART or USB-Serial-JTAG console to attach here.
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        let program_image = load_elf_bytes(firmware)
+            .map_err(|e| JsValue::from_str(&format!("Loader Error: {e}")))?;
+        if program_image.arch != CoreArch::Pic24 {
+            return Err(JsValue::from_str(&format!(
+                "firmware architecture {:?} is incompatible with PIC24 chip '{}'",
+                program_image.arch, chip.name
+            )));
+        }
+
+        let mut cpu = labwired_core::cpu::Pic24::new();
+        cpu.set_port_masks(labwired_core::system::builder::pic24_port_masks(chip));
+        cpu.load_program_image(&program_image);
+        cpu.set_serial_sink(uart_sink.clone());
+
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let machine = Machine::new(boxed, bus);
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io: manifest.board_io.clone(),
+            uart_sink,
+            console,
+            uart_rx_bufs,
+            arch: MachineFamily::Pic24,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -2091,6 +2198,8 @@ impl WasmSimulator {
     /// and permanently disabled idle FF for the classic-aids playground path.
     #[wasm_bindgen]
     pub fn step_with_esp32_aids(&mut self, cycles: u32) -> Result<(), JsValue> {
+        self.ensure_cosim_healthy()
+            .map_err(AdvanceFailure::into_js)?;
         self.record(lab_tools::Op::StepEsp32Aids(cycles));
         // Real dual-core: a genuine APP_CPU is attached, so the handshake
         // keep-alive and the FROM_CPU IPI bridge below are unnecessary — the
@@ -2181,7 +2290,7 @@ impl WasmSimulator {
             // regular step picks up at the post-block callx8.
             // CCOUNT advance happens inside the JIT helper to keep
             // CCOMPARE0 edge detection honest.
-            if self.jit_browser_enabled {
+            if self.jit_browser_enabled && self.cosim.is_none() {
                 let machine = self.machine.as_mut().unwrap();
                 if self.jit_browser_cache.is_none() {
                     self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));

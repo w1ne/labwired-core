@@ -1,0 +1,13 @@
+name: atmega2561
+chip: ../chips/atmega2561.yaml
+# Generic ATmega2561 standalone target at the part's 16 MHz maximum
+# (DS40002211A §31.1: 0-16 MHz at 4.5-5.5 V). There is no board in this
+# example, so the only board-level binding is a status LED on PB5.
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5
+    signal: "output"
+    active_high: true

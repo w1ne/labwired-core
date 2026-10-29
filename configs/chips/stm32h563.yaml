@@ -68,6 +68,7 @@ peripherals:
       profile: "stm32v2"
       # PA13/PA14 SWD pins + PA15 JTDI keep port A off the all-analog default.
       reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0x0C000000
       reset_pupdr: 0x64000000
   - id: "gpiob"
@@ -79,6 +80,7 @@ peripherals:
       profile: "stm32v2"
       # PB3 JTDO/SWO and PB4 NJTRST debug defaults.
       reset_moder: 0xFFFFFEBF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0x000000C0
       reset_pupdr: 0x00000100
   - id: "gpioc"
@@ -89,6 +91,7 @@ peripherals:
       debug_schema: "../peripherals/stm32h563/gpioc.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
   - id: "gpiod"
     type: "gpio"
     base_address: 0x42020C00
@@ -97,6 +100,7 @@ peripherals:
       debug_schema: "../peripherals/stm32h563/gpiod.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
   - id: "gpioe"
     type: "gpio"
     base_address: 0x42021000
@@ -105,6 +109,7 @@ peripherals:
       debug_schema: "../peripherals/stm32h563/gpioe.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
   - id: "gpiof"
     type: "gpio"
     base_address: 0x42021400
@@ -113,6 +118,7 @@ peripherals:
       debug_schema: "../peripherals/stm32h563/gpiof.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
   - id: "gpiog"
     type: "gpio"
     base_address: 0x42021800
@@ -121,6 +127,7 @@ peripherals:
       debug_schema: "../peripherals/stm32h563/gpiog.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

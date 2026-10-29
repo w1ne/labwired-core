@@ -467,6 +467,38 @@ fn cortex_m4_qadd16_and_usat_encode_clamped_coolant_byte() {
 }
 
 #[test]
+fn cortex_m4_ssat_saturates_signed_values_and_sets_q() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+
+    // ssat r0, #7, r3 saturates to 7 signed bits, range -64..63.
+    cpu.pc = 0x2200;
+    cpu.r3 = 40;
+    run_test_instr(&mut cpu, &mut bus, 0xF3030006, true);
+    assert_eq!(cpu.r0, 40);
+    assert_eq!(cpu.xpsr & (1 << 27), 0, "no saturation means Q stays clear");
+
+    // 100 clamps to 63 and sets Q.
+    cpu.pc = 0x2204;
+    cpu.r3 = 100;
+    run_test_instr(&mut cpu, &mut bus, 0xF3030006, true);
+    assert_eq!(cpu.r0, 63);
+    assert_ne!(cpu.xpsr & (1 << 27), 0, "clamping sets Q");
+
+    // -200 clamps to -64.
+    cpu.pc = 0x2208;
+    cpu.r3 = (-200i32) as u32;
+    run_test_instr(&mut cpu, &mut bus, 0xF3030006, true);
+    assert_eq!(cpu.r0 as i32, -64);
+
+    // LSL #4 then saturate: 100 << 4 = 1600 -> 63 in r1 (h2 bits 14-12 = 1).
+    cpu.pc = 0x220C;
+    cpu.r3 = 100;
+    run_test_instr(&mut cpu, &mut bus, 0xF3031106, true);
+    assert_eq!(cpu.r1, 63);
+}
+
+#[test]
 fn cps_faultmask_set_clear_and_mask() {
     // CPSID f (0xB671) sets FAULTMASK; CPSIE f (0xB661) clears it. Zephyr's
     // fault handler toggles FAULTMASK; an unmodelled CPS-f decoded as Unknown
@@ -3817,4 +3849,33 @@ fn jit_gate_refuses_an_armed_debug_watch() {
         !cpu.jit_gate_allows(&bus, &[]),
         "a compiled block writes raw RAM and must not bypass a watch"
     );
+}
+
+#[test]
+fn test_exec_wide_strh_strb_imm() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x2000;
+    cpu.r12 = 0x3000;
+    cpu.r3 = 0x0000_1234;
+    run_test_instr(&mut cpu, &mut bus, 0xF8AC_306A, true); // strh.w r3,[r12,#106]
+    assert_eq!(bus.read_u16(0x3000 + 106).unwrap(), 0x1234);
+    cpu.r2 = 0x3000;
+    cpu.r3 = 0x0000_00AB;
+    run_test_instr(&mut cpu, &mut bus, 0xF882_3020, true); // strb.w r3,[r2,#32]
+    assert_eq!(bus.read_u8(0x3000 + 32).unwrap(), 0xAB);
+}
+
+#[test]
+fn test_exec_wide_ldrh_ldrb_imm() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x2000;
+    bus.write_u16(0x3050, 0xBEEF).unwrap();
+    cpu.r2 = 0x3000;
+    run_test_instr(&mut cpu, &mut bus, 0xF8B2_3050, true); // ldrh.w r3,[r2,#80]
+    assert_eq!(cpu.r3, 0xBEEF);
+    bus.write_u8(0x3070, 0x5A).unwrap();
+    run_test_instr(&mut cpu, &mut bus, 0xF892_3070, true); // ldrb.w r3,[r2,#112]
+    assert_eq!(cpu.r3, 0x5A);
 }

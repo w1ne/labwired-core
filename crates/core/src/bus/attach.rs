@@ -354,10 +354,55 @@ impl SystemBus {
     pub(crate) fn wire_esp32_ledc_pads(&mut self) {
         use crate::peripherals::esp32::gpio::Esp32Gpio;
         use crate::peripherals::esp32::ledc::Ledc;
+        self.wire_esp_ledc_pads(
+            |_: &Esp32Gpio| true,
+            Ledc::pad_lines_arc,
+            Esp32Gpio::bind_ledc_lines,
+        );
+    }
 
-        // By NAME, as `wire_esp32_spi_pads` resolves `spi3`: both classic
-        // builders register these two as `gpio` and `ledc`
-        // (`ESP32_PERIPHERALS`, `configs/chips/esp32.yaml`).
+    /// The ESP32-C3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the six
+    /// LEDC channel outputs to the C3 output matrix (`LEDC_LS_SIG_OUT0..5` =
+    /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
+    /// `ledc_channel_config` routed.
+    ///
+    /// ⚠️ The C6 reuses both the C3 LEDC and the C3 GPIO model, but its matrix
+    /// numbers 45/46 as I²C, so a C6 GPIO layout declines the binding and no
+    /// wire cell is created.
+    pub(crate) fn wire_esp32c3_ledc_pads(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
+        self.wire_esp_ledc_pads(
+            Esp32c3Gpio::has_ledc_signals,
+            Esp32c3Ledc::pad_lines_arc,
+            Esp32c3Gpio::bind_ledc_lines,
+        );
+    }
+
+    /// The ESP32-S3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the
+    /// eight LEDC channel outputs to the S3 output matrix
+    /// (`LEDC_LS_SIG_OUT0..7` = 73..80).
+    pub(crate) fn wire_esp32s3_ledc_pads(&mut self) {
+        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::ledc::Esp32s3Ledc;
+        self.wire_esp_ledc_pads(
+            |_: &Esp32s3Gpio| true,
+            Esp32s3Ledc::pad_lines_arc,
+            Esp32s3Gpio::bind_ledc_lines,
+        );
+    }
+
+    /// The shared body of the three ESP LEDC pad-wiring passes. Resolves both
+    /// models by NAME, as `wire_esp32_spi_pads` resolves `spi3`: every ESP
+    /// builder registers them as `gpio` and `ledc`. One generic body serves
+    /// all three chips for one extra `downcast_mut` over the classic pass
+    /// alone (see `tests::downcast_ratchet`).
+    fn wire_esp_ledc_pads<G: 'static, L: 'static>(
+        &mut self,
+        gpio_accepts: fn(&G) -> bool,
+        lines_of: fn(&mut L) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        bind: fn(&mut G, &std::sync::Arc<crate::peripherals::pad_lines::PadLines>),
+    ) {
         let (Some(ledc_idx), Some(gpio_idx)) = (
             self.find_peripheral_index_by_name("ledc"),
             self.find_peripheral_index_by_name("gpio"),
@@ -367,27 +412,28 @@ impl SystemBus {
         // Resolve BOTH types before touching either: `pad_lines_arc` CREATES
         // the wire cell, and a controller owning a cell no route reaches
         // publishes edges nothing reads.
-        let gpio_is_classic = self.peripherals[gpio_idx]
+        let gpio_takes_it = self.peripherals[gpio_idx]
             .dev
             .as_any_mut()
-            .is_some_and(|a| a.is::<Esp32Gpio>());
-        if !gpio_is_classic {
+            .and_then(|a| a.downcast_mut::<G>())
+            .is_some_and(|g| gpio_accepts(g));
+        if !gpio_takes_it {
             return;
         }
         let Some(lines) = self.peripherals[ledc_idx]
             .dev
             .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Ledc>())
-            .map(Ledc::pad_lines_arc)
+            .and_then(|a| a.downcast_mut::<L>())
+            .map(lines_of)
         else {
             return;
         };
         if let Some(gpio) = self.peripherals[gpio_idx]
             .dev
             .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32Gpio>())
+            .and_then(|a| a.downcast_mut::<G>())
         {
-            gpio.bind_ledc_lines(&lines);
+            bind(gpio, &lines);
         }
     }
 
@@ -2575,6 +2621,79 @@ impl SystemBus {
         }
     }
 
+    /// Route each opt-in SAMD51 TC's waveform outputs (WO0, WO1) onto the
+    /// pads that carry them on PMUX function E, so a pad handed to the TC reads
+    /// the PWM it generates. Pads from the ATSAMD51J19A ATDF (Microchip SAMD51
+    /// DFP 3.9.276, Apache-2.0). Only `samd51_tc` instances are wired; the
+    /// route is live only while the pad's PINCFG.PMUXEN selects function E.
+    pub(crate) fn wire_samd51_tc_output_pads(&mut self) {
+        // (TC, WO, port, pin)
+        const PADS: &[(u8, usize, char, u8)] = &[
+            (0, 0, 'a', 4),
+            (0, 0, 'a', 8),
+            (0, 0, 'b', 30),
+            (0, 1, 'a', 5),
+            (0, 1, 'a', 9),
+            (0, 1, 'b', 31),
+            (1, 0, 'a', 6),
+            (1, 0, 'a', 10),
+            (1, 1, 'a', 7),
+            (1, 1, 'a', 11),
+            (2, 0, 'a', 0),
+            (2, 0, 'a', 12),
+            (2, 0, 'a', 16),
+            (2, 1, 'a', 1),
+            (2, 1, 'a', 13),
+            (2, 1, 'a', 17),
+            (3, 0, 'a', 14),
+            (3, 0, 'a', 18),
+            (3, 1, 'a', 15),
+            (3, 1, 'a', 19),
+            (4, 0, 'a', 22),
+            (4, 0, 'b', 8),
+            (4, 0, 'b', 12),
+            (4, 1, 'a', 23),
+            (4, 1, 'b', 9),
+            (4, 1, 'b', 13),
+            (5, 0, 'a', 24),
+            (5, 0, 'b', 10),
+            (5, 0, 'b', 14),
+            (5, 1, 'a', 25),
+            (5, 1, 'b', 11),
+            (5, 1, 'b', 15),
+        ];
+        const FUNCS: [[&str; 2]; 6] = [
+            ["TC0_WO0", "TC0_WO1"],
+            ["TC1_WO0", "TC1_WO1"],
+            ["TC2_WO0", "TC2_WO1"],
+            ["TC3_WO0", "TC3_WO1"],
+            ["TC4_WO0", "TC4_WO1"],
+            ["TC5_WO0", "TC5_WO1"],
+        ];
+        for &(tc, wo, port, pin) in PADS {
+            let Some(t_idx) = self.find_peripheral_index_by_name(&format!("tc{tc}")) else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("samd51_tc") {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("port{port}")) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
+                &lines,
+                pin,
+                wo,
+                FUNCS[usize::from(tc)][wo],
+            ) {
+                self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+    }
+
     /// Bind every nRF52 bus controller's wire to every pad its `PSEL` can name,
     /// so a probe shows the bus instead of the GPIO output latch.
     ///
@@ -3436,12 +3555,49 @@ impl SystemBus {
         Ok(())
     }
 
+    /// Clock one SPI byte through every parking SPI controller that still
+    /// holds attached kits, latching each device's D/C line first.
+    ///
+    /// AVR hardware SPI lives in the CPU data-space model (SPCR/SPSR/SPDR),
+    /// not as bus MMIO. Kits therefore stay on the bus parking `spi`
+    /// peripheral so [`SystemBus::inspect_devices`] / [`SystemBus::display_artifact`]
+    /// can see them; the AVR SPDR write path calls this to move bytes.
+    /// Same D/C semantics as [`Self::maybe_latch_dc`] — generic for any SPI
+    /// device that declares a `dc_source`, not panel-specific.
+    pub fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
+        let indices: Vec<usize> = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry
+                    .dev
+                    .spi_attached_devices()
+                    .is_some_and(|devs| !devs.is_empty())
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let mut miso = 0u8;
+        for idx in indices {
+            self.maybe_latch_dc(idx);
+            if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
+                for device in devs {
+                    let resp = device.transfer(mosi);
+                    if resp != 0 {
+                        miso = resp;
+                    }
+                }
+            }
+        }
+        miso
+    }
+
     /// Take every slave off a SPI controller (by peripheral id).
     ///
-    /// Used by the AVR path: kits attach onto a bus parking `spi` peripheral
-    /// during `from_config`, then the interpreter owns the devices because
-    /// hardware SPI lives in the CPU data-space model (SPCR/SPSR/SPDR), not
-    /// as bus MMIO.
+    /// Historically used by the AVR path. Prefer leaving kits on the parking
+    /// controller and clocking them via [`Self::clock_parking_spi`] so inspect
+    /// / display readout still see the panel. Kept for callers that still move
+    /// devices onto a CPU-owned list.
     pub fn take_spi_devices(
         &mut self,
         controller: &str,

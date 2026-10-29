@@ -102,6 +102,9 @@ impl SystemBus {
             peripheral_accesses: std::cell::Cell::new(0),
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
+            legacy_walk_pinned_on: false,
+            legacy_tick_candidate_mask: Vec::new(),
+            legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
@@ -209,6 +212,9 @@ impl SystemBus {
             peripheral_accesses: std::cell::Cell::new(0),
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
+            legacy_walk_pinned_on: false,
+            legacy_tick_candidate_mask: Vec::new(),
+            legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
@@ -305,6 +311,7 @@ impl SystemBus {
             clock_gate: None,
         });
         self.rebuild_peripheral_ranges();
+        self.restore_legacy_walk_if_active();
     }
 
     /// Replace the first peripheral with `name`, or append if missing.
@@ -394,6 +401,7 @@ impl SystemBus {
         // set the MMIO router, tick walk and scheduler indices were derived
         // from.
         self.rebuild_peripheral_ranges();
+        self.restore_legacy_walk_if_active();
     }
 
     /// Look up a registered ROM thunk by absolute PC.
@@ -1178,6 +1186,15 @@ impl SystemBus {
     /// (enabled on Arm) so pre-existing third-party configs that rely on
     /// bit-band keep working; all in-tree Arm chip configs declare `core`.
     pub(crate) fn chip_has_bit_band(chip: &ChipDescriptor) -> bool {
+        // Bit-banding is optional on M3/M4, and the SAMD51 (Cortex-M4F) does
+        // not implement it: its APB-C/D bridges map real peripherals in the
+        // would-be alias window (TC4/TC5, SERCOM4..7, DAC, QSPI at
+        // 0x4200_0000..0x4400_0000, DS60001507F §9.2), so translating there
+        // would redirect those registers onto PAC/OSCCTRL at 0x4000_xxxx.
+        // Matched by part name so no other M3/M4 chip changes behaviour.
+        if chip.name.to_ascii_lowercase().starts_with("atsamd51") {
+            return false;
+        }
         match chip.core.as_deref() {
             Some(core) => {
                 let c = core.trim().to_ascii_lowercase();

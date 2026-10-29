@@ -60,6 +60,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "strict_ir_internal",
     "pwr",
     "flash",
+    // STM32U5 system memory (OTP / package / UID / factory flash size).
+    "stm32u5_sysmem",
+    "stm32u5_hash",
+    "stm32u5_saes",
+    "stm32u5_pka",
     "rng",
     "simctl",
     "crc",
@@ -139,6 +144,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // bins. Listed for the same reason as every other family type.
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
+    // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
+    "esp32c6_usb_serial_jtag",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -162,8 +170,22 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_sercom_spi",
     "samd51_nvmctrl_manual_storage",
     "samd51_cmcc_control",
+    // Opt-in SAMD51 board models (`build_samd51_board_model`): fixed
+    // instance addresses, wired by the SAMD51 chip descriptors.
+    "samd51_oscctrl",
+    "samd51_gclk",
+    "samd51_tc",
+    "samd51_tcc",
+    "samd51_eic",
+    "samd51_dac",
+    "samd51_adc",
+    "samd51_pac",
+    "samd51_sercom_i2cm",
+    "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
+    "samd51_dmac_board",
+    "samd51_usb_device_banks",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -364,6 +386,144 @@ fn dma_request_table(p_cfg: &PeripheralConfig) -> Vec<(String, serde_yaml::Value
     out
 }
 
+// Opt-in SAMD51 USB device banks: the fixed instance, IRQ and clock gates.
+#[cold]
+#[inline(never)]
+fn build_samd51_usb_device_banks(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    if p_cfg.base_address != 0x41000000 || p_cfg.irq != Some(80) || !p_cfg.config.is_empty() {
+        anyhow::bail!("SAMD51 USB banks require base 0x41000000, IRQ80 and no config overrides");
+    }
+    if !p_cfg.clock.as_ref().is_some_and(|clocks| {
+        let gates = clocks.as_slice();
+        gates.len() == 2
+            && [("AHBMASK", 10), ("APBBMASK", 0)]
+                .into_iter()
+                .all(|(reg, bit)| {
+                    gates
+                        .iter()
+                        .any(|gate| gate.controller == "mclk" && gate.reg == reg && gate.bit == bit)
+                })
+    }) {
+        anyhow::bail!(
+            "SAMD51 USB banks require exactly the mclk AHBMASK bit10 and APBBMASK bit0 gates"
+        );
+    }
+    Ok(Box::new(
+        crate::peripherals::sam::usb_device::Samd51UsbDeviceBanks::new(),
+    ))
+}
+
+// Opt-in SAMD51 board models: fixed instance addresses, no config overrides.
+// Cold construction keeps them out of the shared dispatcher's hot path.
+#[cold]
+#[inline(never)]
+fn build_samd51_board_model(
+    kind: &str,
+    p_cfg: &PeripheralConfig,
+) -> anyhow::Result<Box<dyn Peripheral>> {
+    // The DAC's only options are the board's reference levels; the I2C
+    // master's is the board's SCL rise time.
+    let admitted = |key: &String| match kind {
+        "samd51_dac" => key == "vrefa_mv" || key == "vddana_mv",
+        "samd51_sercom_i2cm" => key == "scl_rise_ns",
+        _ => false,
+    };
+    if !p_cfg.config.keys().all(admitted) {
+        anyhow::bail!("{kind} admits no config overrides");
+    }
+    Ok(match kind {
+        "samd51_oscctrl" => {
+            if p_cfg.base_address != 0x40001000 || p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 OSCCTRL requires base 0x40001000 and no IRQ");
+            }
+            Box::new(crate::peripherals::sam::oscctrl::Samd51Oscctrl::new())
+        }
+        "samd51_adc" => {
+            use crate::peripherals::sam::adc::{Samd51Adc, ADC_INSTANCES};
+            let Some(instance) = ADC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("SAMD51 ADC base must be ADC0 or ADC1");
+            };
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 ADC interrupts are not modelled");
+            }
+            Box::new(Samd51Adc::new(*instance))
+        }
+        "samd51_tcc" => {
+            use crate::peripherals::sam::tcc::{Samd51Tcc, TCC_INSTANCES};
+            let Some(instance) = TCC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("SAMD51 TCC base must be one of TCC0..TCC4");
+            };
+            // Line 0 plus one line per channel are reported by the model itself.
+            if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
+                anyhow::bail!("SAMD51 TCC IRQ must be its first line {}", instance.irq);
+            }
+            Box::new(Samd51Tcc::new(*instance))
+        }
+        "samd51_dac" | "samd51_pac" => {
+            let base = if kind == "samd51_dac" {
+                0x43002400
+            } else {
+                0x40000000
+            };
+            if p_cfg.base_address != base || p_cfg.irq.is_some() {
+                anyhow::bail!("{kind} requires base {base:#x} and no IRQ");
+            }
+            if kind == "samd51_dac" {
+                let mv = |key: &str| p_cfg.config.get(key).and_then(|v| v.as_f64());
+                Box::new(
+                    crate::peripherals::sam::dac::Samd51Dac::new()
+                        .with_references(mv("vrefa_mv"), mv("vddana_mv")),
+                )
+            } else {
+                Box::new(crate::peripherals::sam::pac::Samd51Pac::new())
+            }
+        }
+        "samd51_sercom_i2cm" => {
+            use crate::peripherals::sam::sercom_i2cm::{Samd51SercomI2cm, SERCOM_INSTANCES};
+            let Some(instance) = SERCOM_INSTANCES
+                .iter()
+                .find(|i| i.base == p_cfg.base_address)
+            else {
+                anyhow::bail!("SAMD51 SERCOM base must be one of SERCOM0..SERCOM5");
+            };
+            // Four lines (first_irq..first_irq+3) are reported by the model itself.
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 SERCOM I2C master takes no single IRQ");
+            }
+            let rise = p_cfg.config.get("scl_rise_ns").and_then(|v| v.as_u64());
+            Box::new(Samd51SercomI2cm::new(*instance).with_scl_rise_ns(rise.unwrap_or(0)))
+        }
+        "samd51_eic" => {
+            // Sixteen channel lines (IRQ 12..27) are reported by the model itself.
+            if p_cfg.base_address != 0x40002800 || p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 EIC requires base 0x40002800 and no single IRQ");
+            }
+            Box::new(crate::peripherals::sam::eic::Samd51Eic::new())
+        }
+        "samd51_gclk" => {
+            if p_cfg.base_address != 0x40001c00 || p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 GCLK requires base 0x40001C00 and no IRQ");
+            }
+            Box::new(crate::peripherals::sam_clock::SamGclk::samd51())
+        }
+        "samd51_tc" => {
+            use crate::peripherals::sam::tc::{Samd51Tc, TC_INSTANCES};
+            let Some(instance) = TC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("SAMD51 TC base must be one of TC0..TC5");
+            };
+            if p_cfg.irq != Some(instance.irq) {
+                anyhow::bail!(
+                    "SAMD51 TC at {:#x} requires IRQ {}",
+                    instance.base,
+                    instance.irq
+                );
+            }
+            Box::new(Samd51Tc::new(*instance))
+        }
+        _ => anyhow::bail!("unknown SAMD51 board model {kind}"),
+    })
+}
+
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
 /// a generic type (so `from_config` falls through to the descriptor loaders).
 pub fn try_build(
@@ -480,6 +640,11 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // HSE is a board component. U5 reference platforms have none
+            // fitted unless the chip yaml says `hse: true`.
+            if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
+                rcc.set_hse_present(present);
+            }
             Box::new(rcc)
         }
         "dbgmcu" => {
@@ -611,6 +776,44 @@ pub fn try_build(
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }
+        "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
+        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
+            build_samd51_board_model(canonical_type, p_cfg)?
+        }
+        "samd51_sercom_usart" => {
+            use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
+            let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let usart = SamSercomUsart::new_samd51();
+            // Optional pads: all of tx/rx port and bit, pad_mux, txpo, rxpo.
+            match (
+                key("tx_port_base"),
+                key("tx_bit"),
+                key("rx_port_base"),
+                key("rx_bit"),
+                key("pad_mux"),
+                key("txpo"),
+                key("rxpo"),
+            ) {
+                (Some(tp), Some(tb), Some(rp), Some(rb), Some(mux), Some(txpo), Some(rxpo))
+                    if tb < 32 && rb < 32 && mux < 16 && txpo < 4 && rxpo < 4 =>
+                {
+                    let usart = usart.with_pads(UsartPads {
+                        tx: (tp, tb as u8),
+                        rx: (rp, rb as u8),
+                        mux: mux as u8,
+                        txpo: txpo as u8,
+                        rxpo: rxpo as u8,
+                    });
+                    // Optional: the core clock channel paces bytes at the baud.
+                    match key("gclk_id") {
+                        Some(channel) => Box::new(usart.with_pacing(channel)),
+                        None => Box::new(usart),
+                    }
+                }
+                (None, None, None, None, None, None, None) => Box::new(usart),
+                _ => anyhow::bail!("SAMD51 USART '{}' needs all pad keys or none", p_cfg.id),
+            }
+        }
         "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
             let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
                 0x4100_4000
@@ -639,6 +842,27 @@ pub fn try_build(
                 p_cfg.base_address,
             ))
         }
+        "samd51_dmac_board" => {
+            if p_cfg.irq != Some(31) || p_cfg.base_address != 0x4100a000 {
+                anyhow::bail!("SAMD51 DMAC board profile requires base 0x4100a000 and IRQ31");
+            }
+            if !p_cfg.clock.as_ref().is_some_and(|clocks| {
+                clocks
+                    .as_slice()
+                    .iter()
+                    .any(|gate| gate.controller == "mclk" && gate.reg == "AHBMASK" && gate.bit == 9)
+            }) {
+                anyhow::bail!(
+                    "SAMD51 DMAC board profile requires explicit mclk AHBMASK bit9 binding"
+                );
+            }
+            Box::new(
+                crate::peripherals::sam::dmac_byte::SamDmacByte::new_samd51_board(
+                    p_cfg.base_address,
+                ),
+            )
+        }
+        "samd51_usb_device_banks" => build_samd51_usb_device_banks(p_cfg)?,
         "sam_dmac_sercom4_tx_byte" => {
             if p_cfg.irq != Some(31) || p_cfg.base_address != 0x4100a000 {
                 anyhow::bail!("SERCOM4 TX byte profile requires SAMD51 base 0x4100a000 and IRQ31");
@@ -674,6 +898,16 @@ pub fn try_build(
             if sck >= 32 || mosi >= 32 || mux >= 16 || dopo >= 4 {
                 anyhow::bail!("SAM SPI '{}' has invalid pad configuration", p_cfg.id);
             }
+            // Optional: the SERCOM's DMAC trigger sources (both or neither).
+            let optional = |key: &str| p_cfg.config.get(key).and_then(|v| v.as_u64());
+            let dma = match (optional("dma_tx_trigger"), optional("dma_rx_trigger")) {
+                (Some(tx), Some(rx)) => Some((tx as u32, rx as u32)),
+                (None, None) => None,
+                _ => anyhow::bail!(
+                    "SAM SPI '{}' declares one DMA trigger without the other",
+                    p_cfg.id
+                ),
+            };
             Box::new(crate::peripherals::sam::sercom_spi::SamSercomSpi::new(
                 crate::peripherals::sam::sercom_spi::SamSpiPads {
                     port_base: number("port_base")?,
@@ -681,6 +915,10 @@ pub fn try_build(
                     mosi: mosi as u8,
                     mux: mux as u8,
                     dopo: dopo as u8,
+                    // Optional: the SERCOM core clock channel times bytes on
+                    // the live clock tree.
+                    core_gclk: p_cfg.config.get("gclk_id").and_then(|v| v.as_u64()),
+                    dma,
                 },
             ))
         }
@@ -699,7 +937,15 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map(|n| n as u32)
                 .unwrap_or(0x0000_00E7);
+            let limited = p_cfg
+                .config
+                .get("limited_features")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let mut spi = crate::peripherals::spi::Spi::new_with_layout_cr2(layout, cr2_mask);
+            if limited {
+                spi = spi.as_limited();
+            }
             // Classic-SPI CR1 writable mask, also a per-part delta: F407 silicon
             // does not latch CR1 bit 12 (CRCNEXT) → 0xEFFF; F1/L0/L4 leave it
             // fully writable (the default). YAML: `config: { cr1_mask: 0xEFFF }`.
@@ -959,13 +1205,32 @@ pub fn try_build(
         }
         "gpdma" => {
             // `config: { irq_base: N }` routes channel n to NVIC
-            // line N + n (H563 GPDMA1: 27..34). Without it the
+            // line N + n (H563 GPDMA1: 27..34); `irq_high_base: M` routes the
+            // U5's channels 8..15 to M + (n - 8) (80..87). Without either the
             // block's single `irq:` line serves every channel.
-            let g = crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
-            match p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
-                Some(base) => Box::new(g.with_irq_base(base as u32)),
-                None => Box::new(g),
+            // `config: { requests: { usart1_rx: 24, ... } }` maps the
+            // `<peripheral id>_tx` / `_rx` request names the bus routes to the
+            // numeric CxTR2.REQSEL values.
+            let mut g =
+                crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
+            if let Some(base) = p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
+                g = g.with_irq_base(base as u32);
             }
+            if let Some(base) = p_cfg.config.get("irq_high_base").and_then(|v| v.as_u64()) {
+                g = g.with_irq_high_base(base as u32);
+            }
+            let mut requests = std::collections::BTreeMap::new();
+            if let Some(table) = p_cfg.config.get("requests").and_then(|v| v.as_mapping()) {
+                for (k, v) in table {
+                    if let (Some(name), Some(id)) = (k.as_str(), v.as_u64()) {
+                        requests.insert(name.to_string(), id as u32);
+                    }
+                }
+            }
+            if !requests.is_empty() {
+                g = g.with_request_table(requests);
+            }
+            Box::new(g)
         }
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
@@ -998,11 +1263,24 @@ pub fn try_build(
                 ),
             )
         }
-        // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
-        // enables the cache via ICACHE_CR.EN and never polls a completion flag,
-        // so a read-as-zero stub keeps the enable sequence from bus-faulting.
-        // No cache behaviour is modelled — the simulator has flat memory.
+        // U5 gets its limited register-contract model below; other chip
+        // profiles use the read-as-zero stub. Cache contents and line effects
+        // are not simulated because the simulator has flat memory.
+        "icache" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32u5") => {
+            Box::new(crate::peripherals::icache::Icache::new())
+        }
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        "stm32u5_sysmem" => {
+            let kb = p_cfg
+                .config
+                .get("flash_size_kb")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2048) as u16;
+            Box::new(crate::peripherals::stm32u5_sysmem::Stm32u5Sysmem::new(kb))
+        }
+        "stm32u5_hash" => Box::new(crate::peripherals::stm32u5_hash::Stm32u5Hash::new()),
+        "stm32u5_saes" => Box::new(crate::peripherals::stm32u5_saes::Stm32u5Saes::new()),
+        "stm32u5_pka" => Box::new(crate::peripherals::stm32u5_pka::Stm32u5Pka::new()),
         // SYSCFG on STM32F4 (`profile: stm32f4`): a real register file,
         // because its EXTICR is the EXTI line-source mux external GPIO edges
         // go through.

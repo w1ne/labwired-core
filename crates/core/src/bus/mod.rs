@@ -34,6 +34,7 @@ pub(crate) mod embedded_descriptors;
 pub(crate) mod external_devices;
 mod faults;
 mod from_config;
+pub use from_config::merged_peripheral_configs;
 pub mod interrupt_fabric;
 pub mod known_stubs;
 mod memory_policy;
@@ -63,6 +64,7 @@ pub use interrupt_fabric::{
     InterruptFabric,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
+pub(crate) use motors::CircuitMotorLookup;
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
@@ -100,11 +102,20 @@ impl SystemBus {
     }
 
     #[inline]
-    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
-        if cfg!(feature = "event-scheduler") && p.dev.uses_scheduler() {
-            return false;
+    fn legacy_tick_index_eligible(p: &PeripheralEntry) -> bool {
+        let uses_scheduler = p.dev.uses_scheduler();
+        if cfg!(feature = "event-scheduler") {
+            !uses_scheduler && p.dev.needs_legacy_walk()
+        } else {
+            // Scheduler-capable peripherals still use their legacy tick
+            // fallback here (for example, RP2040 USB host polling).
+            uses_scheduler || p.dev.needs_legacy_walk()
         }
-        p.dev.legacy_tick_active()
+    }
+
+    #[inline]
+    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
+        Self::legacy_tick_index_eligible(p) && p.dev.legacy_tick_active()
     }
 
     /// True when CPU idle fast-forward can skip the legacy peripheral walk for
@@ -676,6 +687,16 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
+    /// `walk_deleted: false` from the system manifest is a hard opt-out from
+    /// automatic walk deletion, retained across dynamic activity changes.
+    pub(crate) legacy_walk_pinned_on: bool,
+    /// Peripherals eligible for the legacy index at range rebuild, including
+    /// scheduler fallbacks when the feature is off. Indexed by slot to reject
+    /// unrelated MMIO writes before calling activity predicates.
+    legacy_tick_candidate_mask: Vec<bool>,
+    /// Dynamic legacy-tick observers whose activity can change after a write
+    /// to a different peripheral's MMIO window.
+    legacy_tick_peer_write_indices: Vec<usize>,
     /// Differential audit of the walk-free ESP32-S3 interrupt path, installed
     /// only by [`Self::install_esp32s3_irq_audit`]. `None` in every production
     /// build and every other test, where the cost is one null check per

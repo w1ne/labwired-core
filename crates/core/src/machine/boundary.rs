@@ -691,6 +691,7 @@ impl<C: Cpu> Machine<C> {
             self.reset_core_system_state();
             self.reset()?;
             self.record_peripheral_reset_cause(crate::PeripheralResetCause::System);
+            self.system_reset_peripherals();
             // An emulated SoftDevice restarts with the chip (crate::sd_hle).
             if let Some(slot) = self.sd_hle.as_mut() {
                 slot.sd.reset();
@@ -710,6 +711,7 @@ impl<C: Cpu> Machine<C> {
                 for cause in requests.into_iter().flatten() {
                     self.record_peripheral_reset_cause(cause);
                 }
+                self.system_reset_peripherals();
                 if let Some(slot) = self.sd_hle.as_mut() {
                     slot.sd.reset();
                 }
@@ -778,11 +780,13 @@ impl<C: Cpu> Machine<C> {
         // boundary. Absent controllers pay one predictable None check.
         self.bus.service_samd51_storage_boundary()?;
 
-        // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
-        // watch set is installed. Observed after the instruction + peripheral
-        // effects of this cycle have landed, so pad levels are the committed
-        // state at `total_cycles`.
-        self.logic_observe(logic_boundary);
+        // Logic-analyzer edge capture. The caller checks `is_active` inline so
+        // an unflagged run pays one bool rather than a cross-module call.
+        // Observed after the instruction + peripheral effects of this cycle
+        // have landed, so pad levels are the committed state at `total_cycles`.
+        if self.logic_capture.is_active() {
+            self.logic_observe(logic_boundary);
+        }
 
         Ok(())
     }

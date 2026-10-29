@@ -561,6 +561,10 @@ pub struct Machine<C: Cpu> {
     /// advancing (mirrors the nRF54L TWIM `last_us` seeding). A backward jump
     /// (SYSTIMER LOAD) re-anchors rather than advancing by a negative delta.
     last_i2c_time_us: u64,
+    /// First cycle at which the derived µs clock can next change. Avoids the
+    /// expensive u128 divide (and fan-out) on every instruction when the
+    /// attached devices only need one update per simulated microsecond.
+    next_i2c_time_cycle: u64,
     /// Has this machine already told the fidelity census that its device time
     /// is DERIVED from `cpu_hz` rather than read off a modelled µs counter?
     ///
@@ -896,9 +900,19 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Run-long change-point series of every analog channel (`result.json`'s
-    /// `analog_series`); `None` when no co-simulation runner is attached.
+    /// `analog_series`): the co-simulated netlist's channels, then each
+    /// motor's `motor.<id>.speed_rpm` and `motor.<id>.current_a`. `None` when
+    /// there is neither a co-simulation runner nor a motor.
     pub fn analog_series(&self) -> Option<crate::analog::AnalogSeries> {
-        self.analog_trace.as_ref().map(|registry| registry.series())
+        let netlist = self.analog_trace.as_ref().map(|registry| registry.series());
+        let (motor_channels, motor_end_ns) = self.bus.motor_series();
+        if motor_channels.is_empty() {
+            return netlist;
+        }
+        let mut series = netlist.unwrap_or_default();
+        series.end_time_ns = series.end_time_ns.max(motor_end_ns);
+        series.channels.extend(motor_channels);
+        Some(series)
     }
 
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
@@ -1228,6 +1242,7 @@ impl<C: Cpu> Machine<C> {
             i2c_time_source_index,
             i2c_time_controller_indices,
             last_i2c_time_us: u64::MAX,
+            next_i2c_time_cycle: 0,
             derived_device_time_noted: false,
             unpowered_rail_noted: false,
             net_drive_stop_from: u64::MAX,
@@ -1275,6 +1290,30 @@ impl<C: Cpu> Machine<C> {
                 let hz = self.bus.cpu_hz;
                 if hz == 0 {
                     // No declared core clock ⇒ nothing honest to derive from.
+                    return;
+                }
+                // The derived µs clock only changes at a µs boundary. Skip the
+                // u128 divide and the device fan-out on the cycles in between.
+                if self.total_cycles < self.next_i2c_time_cycle {
+                    return;
+                }
+                let cycles_per_us = (hz / 1_000_000).max(1);
+                // Round up to the next absolute µs boundary, not "one µs from
+                // whenever this call happened": a run can end exactly on a
+                // boundary and must still flush that last µs to the device.
+                self.next_i2c_time_cycle = self
+                    .total_cycles
+                    .saturating_div(cycles_per_us)
+                    .saturating_add(1)
+                    .saturating_mul(cycles_per_us);
+                // No attached device needs a clock: skip the divide and the
+                // controller fan-out. Re-scanned at the next µs boundary, so a
+                // device attached later is picked up without re-construction.
+                if !self
+                    .i2c_time_controller_indices
+                    .iter()
+                    .any(|&idx| self.bus.peripherals[idx].dev.has_attached_time_devices())
+                {
                     return;
                 }
                 // u128 so a long run cannot wrap: `total_cycles * 1_000_000`
@@ -2149,6 +2188,19 @@ impl<C: Cpu> Machine<C> {
                         "FLASH EraseSector bank={bank} sector={sector} offset={offset:#010x}"
                     );
                 }
+                FlashOp::EraseBank { bank } => {
+                    let bank_size = self.bus.flash.data.len() as u64 / 2;
+                    let offset = u64::from(bank) * bank_size;
+                    self.bus.flash.fill(offset, bank_size, 0xFF);
+                    tracing::debug!(
+                        "FLASH EraseBank bank={bank} offset={offset:#010x} size={bank_size:#x}"
+                    );
+                }
+                FlashOp::EraseBothBanks => {
+                    let flash_size = self.bus.flash.data.len() as u64;
+                    self.bus.flash.fill(0, flash_size, 0xFF);
+                    tracing::debug!("FLASH EraseBothBanks size={flash_size:#x}");
+                }
                 FlashOp::SwapAndReset => {
                     // Swap the two architectural 1 MiB (0x100000) banks. The
                     // H563 flash buffer is sized to exactly 2 * BANK_SIZE by the
@@ -2469,6 +2521,15 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
+    /// Return every peripheral that opts in through
+    /// [`Peripheral::on_system_reset`] to its power-on register state, after
+    /// a system reset rebooted the core.
+    fn system_reset_peripherals(&mut self) {
+        for peripheral in &mut self.bus.peripherals {
+            peripheral.dev.on_system_reset();
+        }
+    }
+
     /// Returns true (and clears the latch) if the registered SCB peripheral
     /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY and
     /// the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). The
@@ -2639,8 +2700,11 @@ impl<C: Cpu> Machine<C> {
         // Device binding lives on the bus, which is the one thing that holds
         // BOTH the live models (inside controllers and directly on itself) and
         // the manifest declarations they are named from. See
-        // `crate::bus::attached_devices`.
-        let devices = self.bus.inspect_devices(filter, opts);
+        // `crate::bus::attached_devices`. CPU-held SPI/I²C (AVR take_*) are
+        // folded in via the extra walk so inspect still sees them.
+        let devices = self.bus.inspect_devices_with_extra(filter, opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        });
         crate::inspect::MachineInspect {
             peripherals,
             devices,

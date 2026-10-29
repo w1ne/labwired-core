@@ -896,6 +896,43 @@ pub(super) fn decode_ldst_single(h1: u16, h2: u16) -> Option<Instruction> {
         let imm12 = h2 & 0xFFF;
         return Some(Instruction::StrImm32 { rt, rn, imm12 });
     }
+    // LDRB.W / STRB.W / LDRH.W / STRH.W (immediate, T3): F89x / F88x / F8Bx /
+    // F8Ax + imm12. The U5 HAL uses these for the 8- and 16-bit SPI/UART data
+    // registers and for halfword fields in its handles; the wide forms were
+    // missing, so a STRH.W to a handle counter silently did nothing.
+    if (h1 & 0xFFF0) == 0xF890 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm = h2 & 0xFFF;
+        // Rt==PC is the architecturally allocated PLD hint encoding. It must
+        // not execute as an LDRB into PC (newlib uses this in optimized libc).
+        if rt == 15 {
+            return Some(Instruction::Nop);
+        }
+        return Some(Instruction::LdrbImm { rt, rn, imm });
+    }
+    if (h1 & 0xFFF0) == 0xF880 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm = h2 & 0xFFF;
+        return Some(Instruction::StrbImm { rt, rn, imm });
+    }
+    if (h1 & 0xFFF0) == 0xF8B0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm = h2 & 0xFFF;
+        // Rt==PC is PLDW in this halfword-load encoding, also a hint/NOP.
+        if rt == 15 {
+            return Some(Instruction::Nop);
+        }
+        return Some(Instruction::LdrhImm { rt, rn, imm });
+    }
+    if (h1 & 0xFFF0) == 0xF8A0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm = h2 & 0xFFF;
+        return Some(Instruction::StrhImm { rt, rn, imm });
+    }
 
     None
 }

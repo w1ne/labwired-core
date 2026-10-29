@@ -34,6 +34,8 @@ pub mod esp32;
 pub mod esp32c3_i2c_waveform;
 #[cfg(test)]
 pub mod esp32c3_rtc_delay_loop;
+#[cfg(test)]
+pub mod esp32c6_i2c_waveform;
 
 /// The `event-scheduler` conditional-compilation surface may not grow.
 #[cfg(test)]
@@ -59,6 +61,7 @@ pub mod riscv_cycle_counter_pulse_in;
 pub mod bench_spi_engine;
 pub mod esp32_i2c_waveform;
 pub mod esp32_ledc_waveform;
+pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
 pub mod esp32s3_i2c_waveform;
 pub mod esp_spi_uart_waveform;
@@ -95,6 +98,7 @@ pub mod rp2040_spi_carries_a_byte;
 pub mod rp2040_spi_waveform;
 #[cfg(test)]
 pub mod rp2040_uart_waveform;
+pub mod samd51_board_models;
 #[cfg(test)]
 pub mod scb_reset;
 #[cfg(test)]

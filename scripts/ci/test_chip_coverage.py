@@ -6,9 +6,9 @@ of today's tree: they would go green for the wrong reason the moment someone
 edited a workflow, and they could never express "a chip with no gate must
 fail", because the real tree is (by design) not in that state.
 
-The one case that does read the real repo is the last one, and it asserts the
-committed ledger and the committed workflows agree — which is the gate's own
-claim, not a restatement of it.
+The cases that read the real repo assert that committed workflows, coverage
+ledgers, and the exact-system smoke contract agree — claims of the gate itself,
+not restatements of synthetic cases.
 """
 
 import subprocess
@@ -258,6 +258,233 @@ def test_a_script_no_workflow_runs_is_not_coverage(tmp_path):
     assert "nrf54l15" in out and "NO CI gate executes firmware" in out
 
 
+def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path):
+    chips = ["stm32f103c4", "stm32f401cb"]
+    build_tree(
+        tmp_path,
+        chips=chips,
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+    )
+
+    script_rel = "examples/ci/arm-spin-smoke.yaml"
+    script = tmp_path / script_rel
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        'inputs:\n  firmware: "./fw.elf"\n  system: "./unused-system.yaml"\n'
+    )
+
+    systems = [f"configs/systems/stm32-catalog/{chip}.yaml" for chip in chips]
+    for chip, system_rel in zip(chips, systems, strict=True):
+        system = tmp_path / system_rel
+        system.parent.mkdir(parents=True, exist_ok=True)
+        system.write_text(f'chip: "../../chips/{chip}.yaml"\n')
+
+    workflow = tmp_path / ".github/workflows/core-coverage-matrix-smoke.yml"
+    workflow.write_text(
+        textwrap.dedent(
+            f'''\
+            jobs:
+              coverage-matrix-smoke:
+                strategy:
+                  matrix:
+                    include:
+                      - id: exact-stm32-catalog
+                        script: {script_rel}
+                        exact_systems:
+            '''
+        )
+        + "".join(f"              - {system}\n" for system in systems)
+        + '''    steps:
+      - name: Run exact variants
+        if: matrix.id == 'exact-stm32-catalog'
+        env:
+          EXACT_SYSTEMS: "${{ join(matrix.exact_systems, ' ') }}"
+        run: |
+          for system in $EXACT_SYSTEMS; do
+                ./target/release/labwired test --script "${{ matrix.script }}" --system "$system" --output-dir "$out" --no-uart-stdout
+          done
+'''
+    )
+
+    valid_workflow = workflow.read_text()
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
+
+    disabled_job = valid_workflow.replace(
+        "  coverage-matrix-smoke:\n",
+        "  coverage-matrix-smoke:\n    if: false\n",
+        1,
+    )
+    workflow.write_text(disabled_job)
+    parsed_workflow = cc.load_yaml(workflow)
+    assert parsed_workflow["jobs"]["coverage-matrix-smoke"]["if"] is False
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    job_may_ignore_failure = valid_workflow.replace(
+        "  coverage-matrix-smoke:\n",
+        "  coverage-matrix-smoke:\n    continue-on-error: true\n",
+        1,
+    )
+    workflow.write_text(job_may_ignore_failure)
+    parsed_workflow = cc.load_yaml(workflow)
+    assert parsed_workflow["jobs"]["coverage-matrix-smoke"]["continue-on-error"] is True
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    run_line = next(
+        line for line in valid_workflow.splitlines() if line.strip() == "run: |"
+    )
+    run_indent = len(run_line) - len(run_line.lstrip())
+    step_may_ignore_failure = valid_workflow.replace(
+        run_line,
+        f"{' ' * run_indent}continue-on-error: true\n{run_line}",
+        1,
+    )
+    workflow.write_text(step_may_ignore_failure)
+    parsed_workflow = cc.load_yaml(workflow)
+    assert (
+        parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["continue-on-error"]
+        is True
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    help_workflow = valid_workflow.replace(
+        "--no-uart-stdout", "--no-uart-stdout --help"
+    )
+    workflow.write_text(help_workflow)
+    parsed_workflow = cc.load_yaml(workflow)
+    help_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert "--help" in help_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    # Keep the loop and its arguments in place, but make the apparent CLI call
+    # inert. Argument text in an echo or a comment is not evidence that any
+    # firmware ran against these exact systems.
+    for inert_prefix in ("echo ", "# "):
+        workflow.write_text(
+            valid_workflow.replace(
+                "./target/release/labwired test --script",
+                f"{inert_prefix}./target/release/labwired test --script",
+            )
+        )
+        code, out = run_gate(tmp_path)
+        assert code == 1, out
+        assert all(chip in out for chip in chips)
+        assert "NO CI gate executes firmware" in out
+
+    # `--system` inside another option's quoted value is not a system override.
+    quoted_argument = valid_workflow.replace(
+        ' --system "$system"',
+        " --output-dir '--system \"$system\"'",
+    )
+    workflow.write_text(quoted_argument)
+    parsed_workflow = cc.load_yaml(workflow)
+    quoted_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert "--output-dir '--system \"$system\"'" in quoted_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    wrapper_workflow = valid_workflow.replace(
+        "./target/release/labwired", "./tmp/bin/labwired"
+    )
+    workflow.write_text(wrapper_workflow)
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    # A matching invocation inside a filter can skip exact systems. Credit only
+    # a straight-line loop body that invokes the CLI on every iteration.
+    command_line = next(
+        line for line in valid_workflow.splitlines() if "labwired test --script" in line
+    )
+    command_indent = command_line[: len(command_line) - len(command_line.lstrip())]
+    filtered_workflow = valid_workflow.replace(
+        command_line.strip(),
+        f'if [ "$system" = "never" ]; then\n{command_indent}  {command_line.strip()}',
+    )
+    loop_close = filtered_workflow.rfind("done")
+    loop_close_line = filtered_workflow.rfind("\n", 0, loop_close) + 1
+    filtered_workflow = (
+        filtered_workflow[:loop_close_line]
+        + f"{command_indent}fi\n"
+        + filtered_workflow[loop_close_line:]
+    )
+    workflow.write_text(filtered_workflow)
+    parsed_workflow = cc.load_yaml(workflow)
+    filtered_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert 'if [ "$system" = "never" ]' in filtered_run
+    assert "labwired test --script" in filtered_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    # Compound shell filters can skip an iteration without using a multiline
+    # `if` block, so they must also be rejected.
+    compound_guarded = valid_workflow.replace(
+        "./target/release/labwired test --script",
+        '[[ "$system" != "never" ]] && continue\n'
+        '            ./target/release/labwired test --script',
+    )
+    workflow.write_text(compound_guarded)
+    parsed_workflow = cc.load_yaml(workflow)
+    compound_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert '[[ "$system" != "never" ]] && continue' in compound_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    # `exec` replaces the shell successfully, preventing the later CLI line
+    # from running even though it is present in the loop text.
+    exec_workflow = valid_workflow.replace(
+        "./target/release/labwired test --script",
+        "exec true\n            ./target/release/labwired test --script",
+    )
+    workflow.write_text(exec_workflow)
+    parsed_workflow = cc.load_yaml(workflow)
+    exec_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert "exec true" in exec_run
+    assert "labwired test --script" in exec_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    workflow.write_text(valid_workflow.replace(' --system "$system"', ""))
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    workflow.write_text(
+        valid_workflow.replace(
+            "matrix.id == 'exact-stm32-catalog'",
+            "matrix.id == 'different-matrix-cell'",
+        )
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+
 def test_a_declared_gap_passes_with_a_reason(tmp_path):
     build_tree(
         tmp_path,
@@ -351,12 +578,20 @@ def test_ci_fixture_descriptors_are_not_graded(tmp_path):
     assert code == 0, out
 
 
-def test_committed_debt_only_waives_the_declared_rv1103_prototype():
-    """CPU-only smoke coverage must not claim an RV1103 firmware CI gate."""
+def test_committed_debt_records_samd21_geometry_and_rv1103_gaps():
+    """Exact SAMD21 alternates stay pending until each gets a firmware smoke."""
     cc.set_root(REPO_ROOT)
     entries, ceiling = cc.load_ledger()
-    assert ceiling == 1
-    assert set(entries) == {"rv1103"}
+    samd21_alternates = {
+        "atsamd21e15a", "atsamd21e16a", "atsamd21e17a", "atsamd21e18a",
+        "atsamd21g15a", "atsamd21g16a", "atsamd21g17a",
+        "atsamd21j15a", "atsamd21j16a", "atsamd21j17a", "atsamd21j18a",
+    }
+    assert ceiling == len(samd21_alternates) + 1
+    assert set(entries) == samd21_alternates | {"rv1103"}
+    for chip in samd21_alternates:
+        assert entries[chip]["kind"] == "pending"
+        assert "no CLI firmware smoke boots this exact chip" in entries[chip]["reason"]
     assert entries["rv1103"]["kind"] == "waived"
     reason = entries["rv1103"]["reason"]
     assert "No CI gate qualifies full RV1103 platform coverage" in reason
@@ -384,3 +619,17 @@ def test_the_committed_tree_passes_its_own_gate():
             "nothing is uncovered — delete configs/ci/chip-coverage.yaml rather "
             "than keeping an empty one"
         )
+
+
+def test_stm32_exact_catalog_skips_the_fixture_smoke():
+    """The exact row must reach its per-system override without the generic fixture run."""
+    workflow = (REPO_ROOT / ".github/workflows/core-coverage-matrix-smoke.yml").read_text()
+    generic_step = workflow.split("      - name: Run matrix smoke\n", 1)[1].split(
+        "      - name:", 1
+    )[0]
+    exact_step = workflow.split(
+        "      - name: Run exact STM32 catalog variants\n", 1
+    )[1].split("      - name:", 1)[0]
+
+    assert "if: matrix.id != 'stm32-exact-catalog'" in generic_step
+    assert "if: matrix.id == 'stm32-exact-catalog'" in exact_step

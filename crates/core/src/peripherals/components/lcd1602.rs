@@ -58,6 +58,8 @@
 //! left pending and DDRAM, the address counter and the display flags are all
 //! untouched — the sequence cannot corrupt state.
 
+use std::collections::VecDeque;
+
 use crate::peripherals::i2c::I2cDevice;
 use std::any::Any;
 
@@ -135,6 +137,15 @@ pub struct Lcd1602 {
     blink_on: bool,
     /// Function set `N`: true = 2-line mode.
     two_line: bool,
+    /// Every distinct non-blank panel text seen during the run, newest last.
+    ///
+    /// Survives a clear-display (0x01): DDRAM goes blank but prior paints stay
+    /// in this ring so a DisplayClause `contains` can still prove a mid-run
+    /// Status:ALARM after a later overwrite. Capped at 32 so a spinning sketch
+    /// cannot grow the inspect payload without bound; DisplayClause searches
+    /// this ring as well as the current `text`.
+    #[serde(skip)]
+    texts_seen: VecDeque<String>,
 }
 
 impl Default for Lcd1602 {
@@ -162,6 +173,7 @@ impl Lcd1602 {
             cursor_on: false,
             blink_on: false,
             two_line: false,
+            texts_seen: VecDeque::new(),
         }
     }
 
@@ -286,6 +298,7 @@ impl Lcd1602 {
                 self.display_on = cmd & 0x04 != 0;
                 self.cursor_on = cmd & 0x02 != 0;
                 self.blink_on = cmd & 0x01 != 0;
+                self.record_text_if_changed();
             }
             // Cursor/display shift. Shifting the *display* only moves which
             // DDRAM window the panel shows; the readback presents the unshifted
@@ -324,6 +337,9 @@ impl Lcd1602 {
             self.ddram[idx] = byte;
         }
         self.step_address(self.entry_increment);
+        if !self.cgram_mode {
+            self.record_text_if_changed();
+        }
     }
 
     /// Move the address counter one step, wrapping within its own address space
@@ -335,6 +351,28 @@ impl Lcd1602 {
         } else {
             (self.addr + modulus - 1) % modulus
         };
+    }
+
+    const TEXTS_SEEN_CAP: usize = 32;
+
+    /// Record the current visible text when it changes and is non-blank.
+    /// Entries accumulate for the whole run (a clear does not wipe them) and
+    /// the ring is capped at [`Self::TEXTS_SEEN_CAP`] (32).
+    fn record_text_if_changed(&mut self) {
+        if !self.display_on {
+            return;
+        }
+        let text = self.text();
+        if text.chars().all(|c| c.is_whitespace()) {
+            return;
+        }
+        if self.texts_seen.back().map(|s| s.as_str()) == Some(text.as_str()) {
+            return;
+        }
+        if self.texts_seen.len() >= Self::TEXTS_SEEN_CAP {
+            self.texts_seen.pop_front();
+        }
+        self.texts_seen.push_back(text);
     }
 }
 
@@ -358,6 +396,7 @@ impl I2cDevice for Lcd1602 {
                 "format": crate::inspect::artifact_format::HD44780_DDRAM,
                 "generation": crate::inspect::artifact_generation(&ddram),
                 "text": text,
+                "texts_seen": self.texts_seen.iter().cloned().collect::<Vec<_>>(),
                 "printable_chars": text.chars().filter(|c| !c.is_whitespace()).count(),
                 "display_on": self.display_on(),
                 "backlight": self.backlight(),
@@ -533,6 +572,36 @@ mod tests {
         assert_eq!(text.len(), 32, "panel is a flat 2×16 with no separator");
         assert!(text.starts_with("Hi"), "got {text:?}");
         assert_eq!(&text[..16], "Hi              ");
+    }
+
+    #[test]
+    fn texts_seen_records_distinct_panels() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        data(&mut dev, b'H');
+        data(&mut dev, b'i');
+        assert!(
+            dev.texts_seen.iter().any(|s| s.starts_with("Hi")),
+            "first paint must land in texts_seen: {:?}",
+            dev.texts_seen
+        );
+        command(&mut dev, 0x02); // return home
+        data(&mut dev, b'Y');
+        data(&mut dev, b'o');
+        let seen: Vec<_> = dev.texts_seen.iter().cloned().collect();
+        assert!(
+            seen.iter().any(|s| s.starts_with("Hi")) && seen.iter().any(|s| s.starts_with("Yo")),
+            "both paints must remain: {seen:?}"
+        );
+        let art = I2cDevice::artifacts(&dev, "DS1", &Default::default());
+        let texts = art[0]
+            .meta
+            .get("texts_seen")
+            .and_then(|v| v.as_array())
+            .expect("texts_seen in artifact meta");
+        assert!(texts
+            .iter()
+            .any(|v| v.as_str().unwrap_or("").starts_with("Yo")));
     }
 
     #[test]

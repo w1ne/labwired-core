@@ -247,6 +247,10 @@ impl SystemBus {
             if pending {
                 self.collect_scheduled_events(sink);
             }
+            // A sink may defer the edge to `tick_with_bus` (the SAMD51 EIC
+            // checks clocks and the pad mux there). An edge is not an MMIO
+            // write, so nothing else would add it to the bus-tick set.
+            self.refresh_bus_tick_index(sink);
         }
     }
 

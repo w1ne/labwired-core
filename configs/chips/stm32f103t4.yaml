@@ -1,0 +1,413 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+# SOURCE OF TRUTH for geometry, package and ordering data:
+#   ST DS5792 Rev 7 / DocID15060, "STM32F103x4 STM32F103x6" low-density
+#   datasheet:
+#     - Table 2 (device features and peripheral counts)
+#     - Table 5 (pin definitions / package bond-out)
+#     - Table 58 (ordering information scheme)
+#   https://www.st.com/resource/en/datasheet/stm32f103c6.pdf
+#
+# SOURCE OF TRUTH for peripheral bases/IRQs:
+#   configs/chips/stm32f103.yaml (STM32F103C8 medium-density public engine),
+#   itself bound to RM0008 and the CMSIS STM32F10x map.
+#
+# REUSE BOUNDARY AND KNOWN LOW-DENSITY LIMITATION, STATED PLAINLY:
+#   The `peripherals:` block below is the public STM32F103 medium-density
+#   reference map, reused verbatim. It is NOT a low-density peripheral-instance
+#   claim. Low-density x4/x6 silicon has one SPI (SPI1), one I2C (I2C1), two
+#   USARTs (USART1/USART2), TIM1-TIM3, two ADCs and a 7-channel DMA1; the
+#   reused map also exposes medium-density-only SPI2, I2C2, USART3 and TIM4
+#   windows. Those extra windows may answer where low-density silicon has no
+#   instance. This is the known low-density F103 peripheral-map limitation.
+#   Memory, package, GPIO/ADC channel counts and ordering suffixes below are
+#   exact for this orderable part. The register behaviour is the medium-density
+#   engine's; no separate low-density silicon capture exists.
+
+# EXACT ORDERABLE GEOMETRY for STM32F103T4 (STM32F103 low-density x4).
+#
+#   Flash 16 KB at 0x0800_0000 · SRAM 6 KB at 0x2000_0000
+#   36-pin VFQFPN36 · 26 GPIOs · 10 regular ADC channels
+#
+# Ordering suffixes (package + temperature 6/7 + optional internal code A + carrier):
+#   U6, U6TR, U6A, U6ATR, U7, U7TR, U7A, U7ATR
+#   Programmed-part options (xxx) are not enumerated.
+
+name: "stm32f103t4"
+arch: "arm"
+core: "cortex-m3"
+registers_count: 125
+# STM32F103 maximum core clock, 72 MHz (DS5792 section 5.3).
+cpu_hz: 72_000_000
+# DS5792 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
+# VIL max 0.35·VDD, VIH min 0.65·VDD (same electrical family as DS5319).
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
+# Descriptive ordering data. The engine ignores these keys; the focused
+# `stm32_variant_geometry` gate parses and checks them against DS5792.
+package: "VFQFPN36"
+pin_count: 36
+gpio_pin_count: 26
+adc_channels: 10
+variant: "x4"
+orderable_suffixes: ["U6", "U6TR", "U6A", "U6ATR", "U7", "U7TR", "U7A", "U7ATR"]
+
+flash:
+  base: 0x08000000
+  size: "16KB"
+ram:
+  base: 0x20000000
+  size: "6KB"
+
+# Family-wide P<port><bit> label map for the ports the reference engine
+# declares. Package bond-out is a board fact; this map only says which GPIO
+# register/bit a label names when that pad is bonded.
+pins:
+  PA0: { gpio: "gpioa", bit: 0 }
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA4: { gpio: "gpioa", bit: 4 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PA6: { gpio: "gpioa", bit: 6 }
+  PA7: { gpio: "gpioa", bit: 7 }
+  PA8: { gpio: "gpioa", bit: 8 }
+  PA9: { gpio: "gpioa", bit: 9 }
+  PA10: { gpio: "gpioa", bit: 10 }
+  PA11: { gpio: "gpioa", bit: 11 }
+  PA12: { gpio: "gpioa", bit: 12 }
+  PA13: { gpio: "gpioa", bit: 13 }
+  PA14: { gpio: "gpioa", bit: 14 }
+  PA15: { gpio: "gpioa", bit: 15 }
+  PB0: { gpio: "gpiob", bit: 0 }
+  PB1: { gpio: "gpiob", bit: 1 }
+  PB2: { gpio: "gpiob", bit: 2 }
+  PB3: { gpio: "gpiob", bit: 3 }
+  PB4: { gpio: "gpiob", bit: 4 }
+  PB5: { gpio: "gpiob", bit: 5 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PB7: { gpio: "gpiob", bit: 7 }
+  PB8: { gpio: "gpiob", bit: 8 }
+  PB9: { gpio: "gpiob", bit: 9 }
+  PB10: { gpio: "gpiob", bit: 10 }
+  PB11: { gpio: "gpiob", bit: 11 }
+  PB12: { gpio: "gpiob", bit: 12 }
+  PB13: { gpio: "gpiob", bit: 13 }
+  PB14: { gpio: "gpiob", bit: 14 }
+  PB15: { gpio: "gpiob", bit: 15 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PC8: { gpio: "gpioc", bit: 8 }
+  PC9: { gpio: "gpioc", bit: 9 }
+  PC10: { gpio: "gpioc", bit: 10 }
+  PC11: { gpio: "gpioc", bit: 11 }
+  PC12: { gpio: "gpioc", bit: 12 }
+  PC13: { gpio: "gpioc", bit: 13 }
+  PC14: { gpio: "gpioc", bit: 14 }
+  PC15: { gpio: "gpioc", bit: 15 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/rcc.yaml"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    # GPIOA is clocked from RCC_APB2ENR.IOPAEN (bit 2). Unclocked out of reset:
+    # firmware that forgets to enable it has its register writes dropped on real
+    # silicon — modelled here so the sim fails the same way (RM0008 §7.3.7).
+    clock: { reg: "apb2enr", bit: 2 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpioa.yaml"
+      profile: "stm32f1"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+    # RCC_APB2ENR.IOPBEN (bit 3), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 3 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpiob.yaml"
+      profile: "stm32f1"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    # RCC_APB2ENR.IOPCEN (bit 4), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 4 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpioc.yaml"
+      profile: "stm32f1"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+    # USART1 is clocked from RCC_APB2ENR.USART1EN (bit 14). Unclocked out of
+    # reset, so SR.TXE never asserts until firmware enables the clock — the exact
+    # real-hardware behaviour the differential test proved the sim was missing.
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f103/usart1.yaml"
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    # RCC_APB1ENR.USART2EN (bit 17), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 17 }
+    config:
+      debug_schema: "../peripherals/stm32f103/usart2.yaml"
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    # I2C1 is clocked from RCC_APB1ENR.I2C1EN (bit 21). Unclocked out of reset,
+    # so its registers read 0 / drop writes until firmware enables the clock
+    # (RM0008 §7.3.8) — the tier-1 fixture proves the dead-while-gated state.
+    clock: { reg: "apb1enr", bit: 21 }
+    # I2C1 has TWO NVIC lines: EV (below) and ER = 32. AF/BERR/ARLO/OVR raise
+    # ER under CR2.ITERREN, and an interrupt-mode HAL (STM32duino 3.x uses
+    # HAL_I2C_Master_Transmit_IT) only learns an address was NACKed there.
+    config:
+      debug_schema: "../peripherals/stm32f103/i2c1.yaml"
+      irq_error: 32
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    # RCC_APB1ENR.I2C2EN (bit 22), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 22 }
+    config:
+      debug_schema: "../peripherals/stm32f103/i2c2.yaml"
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    # SPI1 is clocked from RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset
+    # (RM0008 §7.3.7) — SR.TXE never asserts until the clock is enabled.
+    clock: { reg: "apb2enr", bit: 12 }
+    config:
+      debug_schema: "../peripherals/stm32f103/spi1.yaml"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    # RCC_APB1ENR.SPI2EN (bit 14), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f103/spi2.yaml"
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+    # AFIO is clocked from RCC_APB2ENR.AFIOEN (bit 0). Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32f103/afio.yaml"
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    # F103 implements 19 EXTI lines (0-18): 16 GPIO + PVD + RTC alarm + USB
+    # wakeup. Silicon-confirmed writable mask 0x0007FFFF on the bench F103.
+    config:
+      debug_schema: "../peripherals/stm32f103/exti.yaml"
+      lines: 19
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    # DMA1 is clocked from RCC_AHBENR.DMA1EN (bit 0). Unclocked out of reset
+    # (RM0008 §7.3.6) — channel registers read 0 / drop writes until enabled.
+    clock: { reg: "ahbenr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32f103/dma1.yaml"
+      # Hard-wired peripheral requests (RM0008 Table 78, DMA1 request
+      # mapping): SPI1_RX ch2, SPI1_TX ch3, SPI2_RX ch4, SPI2_TX ch5.
+      requests:
+        spi1_rx: 2
+        spi1_tx: 3
+        spi2_rx: 4
+        spi2_tx: 5
+  # ─── STM32F1-family peripherals, reset values verified against ─────────
+  # ─── STM32F103C8 silicon (Blue Pill, ST-LINK V2, 2026-06-04). ──────────
+  # Each `profile` selects the chip-family layout in the peripheral model
+  # so adding F1 entries here cannot regress L4/F4/V2 deployments.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/flash.yaml"
+      profile: "stm32f1"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/dbg.yaml"
+      idcode: "0x20036410"  # STM32F103C8 — silicon-verified
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/pwr.yaml"
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/iwdg.yaml"
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/wwdg.yaml"
+  - id: "rtc"
+    type: "rtc_f1"
+    base_address: 0x40002800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/rtc.yaml"
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/crc.yaml"
+      idr_width: 8  # STM32F1 CRC_IDR is 8-bit (RM0008 §6.4.2)
+  # bxCAN + USB share SRAM @ 0x4000_6000; bxCAN registers at 0x6400.
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    # bxCAN1 is clocked from RCC_APB1ENR.CAN1EN (bit 25). Unclocked out of reset,
+    # so MSR.INAK never asserts (the chip never enters init mode) until firmware
+    # enables the clock — matching real silicon (RM0008 §7.3.8).
+    clock: { reg: "apb1enr", bit: 25 }
+    config:
+      debug_schema: "../peripherals/stm32f103/can.yaml"
+  - id: "usb_dev"
+    type: "stub"
+    base_address: 0x40005C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/usb.yaml"
+  - id: "bkp"
+    type: "stub"
+    base_address: 0x40006C00
+    size: "1KB"
+  # Timers & ADC — modelled (the timer model is width-configurable, 16-bit =
+  # F1 general-purpose layout; the ADC model defaults to its Stm32F1 layout).
+  # Reset values silicon-confirmed on STM32F103 over SWD: TIM2 ARR=0xFFFF,
+  # TIMx_CR1=0, ADCx CR1/CR2=0. Addresses + IRQs per RM0008 / CMSIS.
+  # TIM1 is the advanced-control timer (BDTR/RCR/dead-time).
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 25
+    # RCC_APB2ENR.TIM1EN (bit 11), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 11 }
+    config:
+      debug_schema: "../peripherals/stm32f103/tim1.yaml"
+      advanced: true
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    # TIM2 is clocked from RCC_APB1ENR.TIM2EN (bit 0). Unclocked out of reset
+    # (RM0008 §7.3.8) — ARR reads its 0xFFFF reset only once the clock is on.
+    clock: { reg: "apb1enr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32f103/tim2.yaml"
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    # RCC_APB1ENR.TIM3EN (bit 1), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 1 }
+    config:
+      debug_schema: "../peripherals/stm32f103/tim3.yaml"
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    # RCC_APB1ENR.TIM4EN (bit 2), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 2 }
+    config:
+      debug_schema: "../peripherals/stm32f103/tim4.yaml"
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 18
+    # ADC1 is clocked from RCC_APB2ENR.ADC1EN (bit 9). Unclocked out of reset
+    # (RM0008 §7.3.7) — the converter is dead until the clock is enabled.
+    clock: { reg: "apb2enr", bit: 9 }
+    config:
+      debug_schema: "../peripherals/stm32f103/adc1.yaml"
+      profile: "stm32f1"
+  - id: "adc2"
+    type: "adc"
+    base_address: 0x40012800
+    size: "1KB"
+    # RCC_APB2ENR.ADC2EN (bit 10), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 10 }
+    config:
+      debug_schema: "../peripherals/stm32f103/adc2.yaml"
+      profile: "stm32f1"
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    # RCC_APB1ENR.USART3EN (bit 18), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 18 }
+    config:
+      debug_schema: "../peripherals/stm32f103/usart3.yaml"
+
+# Regular ADC inputs by pad on the VFQFPN36 package: ADC12_IN0..IN9.
+# The family allocation is PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on
+# the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5792 Table 2/5).
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }

@@ -108,3 +108,41 @@ def test_a_declared_only_waiver_is_reported_not_refused(monkeypatch, tmp_path, c
     assert "1 waived chip(s) not measured" in out
     import json
     assert json.loads(status.read_text())["not_measured"] == {"d": "no platform"}
+
+
+def test_boards_argument_limits_coverage_and_measurement(monkeypatch, tmp_path):
+    cli = tmp_path / "labwired"
+    cli.write_text("")
+    chips = {
+        "keep": {**DECLARED, "cpu_hz": 48_000_000},
+        "drop": {**DECLARED, "cpu_hz": 48_000_000},
+    }
+    seen_coverage = []
+    seen_measurements = []
+
+    monkeypatch.setattr(br.bp, "discover_chips", lambda: chips)
+
+    def plan_coverage(selected):
+        seen_coverage.append(set(selected))
+        return {"keep": "cortex-m"}, {}
+
+    monkeypatch.setattr(br.bp, "plan_coverage", plan_coverage)
+    monkeypatch.setattr(
+        br.bp,
+        "build_fixtures",
+        lambda fixtures: ({fixture: tmp_path / f"{fixture}.elf" for fixture in fixtures}, {}),
+    )
+
+    def run_once(_cli, board, _firmware, _steps):
+        seen_measurements.append(board)
+        return 0.25, 1024.0
+
+    monkeypatch.setattr(br, "run_once", run_once)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["board_rtx.py", "--cli", str(cli), "--boards", "keep"],
+    )
+
+    assert br.main() == 0
+    assert seen_coverage == [{"keep"}]
+    assert seen_measurements == ["keep"] * 3

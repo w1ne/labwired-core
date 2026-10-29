@@ -168,6 +168,20 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "USART0 registers live on the AVR CPU and are forwarded to the bus-side host; \
          this harness drives bus MMIO, not the CPU, so no bring-up exists here",
     ),
+    // ATmega2561: the 64-pin sibling uses the same CPU-owned USART0 and the
+    // same generic AVR SPI/I2C parking controllers as the 2560.
+    (
+        "atmega2561",
+        BusKind::Uart,
+        "USART0 registers live on the AVR CPU and are forwarded to the bus-side host; \
+         this harness drives bus MMIO, not the CPU, so no bring-up exists here",
+    ),
+    (
+        "atmega1281",
+        BusKind::Uart,
+        "USART0 registers live on the AVR CPU and are forwarded to the bus-side host; \
+         this harness drives bus MMIO, not the CPU, so no bring-up exists here",
+    ),
     // from_config address-map stubs: no real peripheral bank for the three
     // buses (see the board header). Edges cannot be produced on this path.
     (
@@ -324,6 +338,26 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
     ),
     (
         "atmega2560",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
+        "atmega2561",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega2561",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
+        "atmega1281",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega1281",
         BusKind::Spi,
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),

@@ -118,6 +118,7 @@ impl SystemBus {
         self.sync_esp32c3_pms_write(idx, mmio_addr - base);
         self.peripherals[idx].ticks_remaining = 0;
         self.refresh_legacy_tick_index(idx);
+        self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
@@ -289,6 +290,31 @@ impl SystemBus {
                 observer.on_memory_write(addr + i as u64, 0, byte);
             }
         }
+    }
+
+    /// Fast path for a CPU store into plain RAM while every optional store
+    /// gate is inactive. The per-step perf fixture spends most of its stores
+    /// here; the gate chain is only paid on buses that actually enable one.
+    #[inline(always)]
+    fn try_plain_ram_store(&mut self, addr: u64, width: u8, value: u32) -> bool {
+        if self.ram.read_u8(addr).is_none()
+            || !self.debug_watches.is_empty()
+            || self.memory_policy.active()
+            || self.esp32c3_pms_armed
+            || !self.observers.is_empty()
+        {
+            return false;
+        }
+        let wrote = match width {
+            1 => self.ram.write_u8(addr, value as u8),
+            2 => self.ram.write_u16(addr, value as u16),
+            4 => self.ram.write_u32(addr, value),
+            _ => false,
+        };
+        if wrote {
+            self.note_memory_write();
+        }
+        wrote
     }
 
     /// Exact committed RAM bytes, unlike peripheral callbacks' unknown old value.
@@ -701,6 +727,9 @@ impl crate::Bus for SystemBus {
         // latch if the step faults (see `Machine::advance`).
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
+        }
+        if self.try_plain_ram_store(addr, 1, value as u32) {
+            return Ok(());
         }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
@@ -1164,6 +1193,9 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
         }
+        if self.try_plain_ram_store(addr, 2, value as u32) {
+            return Ok(());
+        }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
         }
@@ -1279,6 +1311,7 @@ impl crate::Bus for SystemBus {
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
+                self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
@@ -1300,6 +1333,9 @@ impl crate::Bus for SystemBus {
         // latch if the step faults (see `Machine::advance`).
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
+        }
+        if self.try_plain_ram_store(addr, 4, value) {
+            return Ok(());
         }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
@@ -1474,6 +1510,7 @@ impl crate::Bus for SystemBus {
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
+                self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
@@ -1565,6 +1602,7 @@ impl crate::Bus for SystemBus {
         };
         f(&mut *self.peripherals[idx].dev);
         self.refresh_legacy_tick_index(idx);
+        self.refresh_legacy_tick_peer_write_observers(idx);
         self.collect_scheduled_events(idx);
         true
     }
@@ -1629,6 +1667,10 @@ impl crate::Bus for SystemBus {
         Some(self)
     }
 
+    fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
+        Self::clock_parking_spi(self, mosi)
+    }
+
     fn device_write_bypass(&self) -> bool {
         Self::device_write_bypass(self)
     }
@@ -1650,6 +1692,26 @@ impl crate::Bus for SystemBus {
 
     fn has_mmio_window(&self, addr: u64) -> bool {
         self.find_peripheral_index(addr).is_some()
+    }
+
+    fn dma_rx_request(&self, addr: u64) -> Option<bool> {
+        let idx = self.dma_tx_endpoint_index(addr)?;
+        let p = &self.peripherals[idx];
+        p.dev
+            .dma_rx_request(addr - p.base)
+            .map(|ready| self.is_peripheral_clocked(idx) && ready)
+    }
+
+    fn dma_triggers_at(&self, addr: u64) -> Option<(u32, u32)> {
+        let idx = self.dma_tx_endpoint_index(addr)?;
+        self.peripherals[idx].dev.dma_triggers()
+    }
+
+    fn take_dma_trigger(&mut self, source: u32) -> Option<bool> {
+        // Trigger sources are unique per chip: the first peripheral raising it answers.
+        self.peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.take_dma_trigger(source))
     }
 
     fn dma_tx_request(&self, addr: u64) -> Option<bool> {

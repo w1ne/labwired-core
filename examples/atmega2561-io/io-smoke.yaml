@@ -1,0 +1,13 @@
+# LabWired — ATmega2561 I/O smoke test
+#
+# The committed fixture is a tiny AVR image that sets SP=0x21FF, prints
+# "2561 OK\n" through USART0 and drives PB5 high. It runs on the shared
+# public mega2560 interpreter selected by the chip name.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega2561-io.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000
+assertions:
+  - uart_contains: "2561 OK"

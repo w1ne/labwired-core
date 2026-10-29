@@ -28,7 +28,7 @@ const DEFAULT_RAM_ORIGIN: &str = "0x20000000";
 // stack pointer sits at the end of the claimed RAM, so claiming more than a
 // board models faults before main() on that board.
 const FLASH_LENGTH: &str = "32K";
-const RAM_LENGTH: &str = "8K";
+const RAM_LENGTH: &str = "4K";
 
 fn main() {
     let flash =

@@ -107,8 +107,13 @@ impl FromStr for FlashRegisterLayout {
 pub enum FlashOp {
     /// Non-secure sector erase (`NSCR.SER + STRT`).
     EraseSector { bank: u8, sector: u32 },
+    /// U5 mass erase of one bank (`NSCR.MER1`/`MER2 + STRT`): the whole
+    /// selected bank returns to 0xFF.
+    EraseBank { bank: u8 },
     /// Bank-swap + option-byte reload (`OPTSR_PRG.SWAP_BANK + OPTCR.OPTSTRT`).
     SwapAndReset,
+    /// U5 mass erase with both MER1 and MER2 selected.
+    EraseBothBanks,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -142,6 +147,11 @@ pub struct Flash {
     // Internal: tracks unlock sequence on KEYR (write 0x45670123 then 0xCDEF89AB).
     key_state: KeyUnlockState,
     optkey_state: KeyUnlockState,
+    /// U5: a wrong NSKEYR value blocks later key writes for this peripheral
+    /// instance (RM0456 §7.3.5). Machine::reset preserves peripheral state, so
+    /// system-reset recovery from this lockout is not modeled yet.
+    #[serde(default)]
+    key_locked_out: bool,
 
     // OPT-IN fidelity gate (H5 only). When true, a flash-region write is fed
     // through the silicon-true write-buffer state machine (see
@@ -309,6 +319,7 @@ impl Flash {
             pending_op: std::cell::Cell::new(None),
             key_state: KeyUnlockState::Locked,
             optkey_state: KeyUnlockState::Locked,
+            key_locked_out: false,
             error_flags: false,
             h5_wbuf: None,
             u5_wbuf: None,
@@ -494,9 +505,10 @@ impl Flash {
 
     /// U5 non-secure control register (NSCR) write semantics (RM0456 §7.9):
     /// LOCK/OPTLOCK are set-only, a locked register ignores configuration
-    /// writes, PER+STRT records a pending 8 KiB page erase (STRT self-clears,
-    /// EOP is set — BSY is never left set), and STRT with no operation bit
-    /// raises PGSERR. Mass erase (MER1/MER2) is deliberately not modeled.
+    /// writes, PER+STRT records a pending 8 KiB page erase, and MER1/MER2+STRT
+    /// records a pending erase for the selected bank (STRT self-clears, EOP is
+    /// set when EOPIE is enabled, and BSY is never left set). STRT with no
+    /// operation bit raises PGSERR.
     fn u5_write_nscr(&mut self, value: u32) {
         if value & u5::NSCR_LOCK != 0 {
             self.cr |= u5::NSCR_LOCK;
@@ -532,15 +544,29 @@ impl Flash {
                 let page = (self.cr & u5::NSCR_PNB_MASK) >> u5::NSCR_PNB_SHIFT;
                 self.pending_op
                     .set(Some(FlashOp::EraseSector { bank, sector: page }));
-                self.sr |= u5::NSSR_EOP;
+                if self.cr & u5::NSCR_EOPIE != 0 {
+                    self.sr |= u5::NSSR_EOP;
+                }
+            } else {
+                let banks = self.cr & (u5::NSCR_MER1 | u5::NSCR_MER2);
+                let op = match banks {
+                    bits if bits == (u5::NSCR_MER1 | u5::NSCR_MER2) => FlashOp::EraseBothBanks,
+                    bits if bits == u5::NSCR_MER1 => FlashOp::EraseBank { bank: 0 },
+                    _ => FlashOp::EraseBank { bank: 1 },
+                };
+                self.pending_op.set(Some(op));
+                if self.cr & u5::NSCR_EOPIE != 0 {
+                    self.sr |= u5::NSSR_EOP;
+                }
             }
-            // MER1/MER2 mass erase: recorded as no-op (documented gap).
         }
 
         if self.cr & u5::NSCR_OPTSTRT != 0 {
             self.cr &= !u5::NSCR_OPTSTRT;
             if self.cr & u5::NSCR_OPTLOCK == 0 {
-                self.sr |= u5::NSSR_EOP;
+                if self.cr & u5::NSCR_EOPIE != 0 {
+                    self.sr |= u5::NSSR_EOP;
+                }
             } else {
                 self.sr |= u5::NSSR_OPTWERR;
             }
@@ -612,7 +638,10 @@ impl Flash {
             let bytes = buf.bytes;
             let commit_base = buf.base;
             self.u5_wbuf = None;
-            self.sr = (self.sr & !u5::NSSR_WDW) | u5::NSSR_EOP;
+            self.sr &= !u5::NSSR_WDW;
+            if self.cr & u5::NSCR_EOPIE != 0 {
+                self.sr |= u5::NSSR_EOP;
+            }
             U5ProgAction::Commit {
                 base: commit_base,
                 bytes,
@@ -650,6 +679,7 @@ impl Flash {
             pending_op: std::cell::Cell::new(None),
             key_state: KeyUnlockState::Locked,
             optkey_state: KeyUnlockState::Locked,
+            key_locked_out: false,
             error_flags: false,
             h5_wbuf: None,
             u5_wbuf: None,
@@ -930,6 +960,9 @@ impl Flash {
                 0x00 => self.acr = value & u5::ACR_WRITABLE_MASK,
                 // NSKEYR — walks the KEY1/KEY2 sequence and clears NSCR.LOCK.
                 u5::NSKEYR_OFF => {
+                    if self.key_locked_out {
+                        return;
+                    }
                     self.keyr = value;
                     self.key_state = match (self.key_state, value) {
                         (KeyUnlockState::Locked, FLASH_KEY1) => KeyUnlockState::HalfUnlocked,
@@ -937,11 +970,21 @@ impl Flash {
                             self.cr &= !u5::NSCR_LOCK;
                             KeyUnlockState::Unlocked
                         }
-                        _ => KeyUnlockState::Locked,
+                        _ => {
+                            // A wrong key blocks later writes for this
+                            // peripheral instance; reset recovery is not modeled.
+                            self.key_locked_out = true;
+                            KeyUnlockState::Locked
+                        }
                     };
                 }
                 // OPTKEYR — separate OPTKEY1/OPTKEY2 domain; clears OPTLOCK.
                 u5::OPTKEYR_OFF => {
+                    // Option bytes can only be unlocked after the control
+                    // register itself is unlocked (RM0456 §7.3.6).
+                    if self.cr & u5::NSCR_LOCK != 0 {
+                        return;
+                    }
                     self.optkeyr = value;
                     self.optkey_state = match (self.optkey_state, value) {
                         (KeyUnlockState::Locked, OPTKEY1) => KeyUnlockState::HalfUnlocked,
@@ -1408,14 +1451,10 @@ mod u5_controller_tests {
     }
 
     #[test]
-    fn reset_locks_and_key_sequences_clear_them() {
+    fn clean_key_sequences_clear_their_locks() {
         let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32U5);
         assert_eq!(nscr(&f), u5::NSCR_RESET);
-        // Wrong first key does not unlock; second write restarts.
-        f.write_u32(u5::NSKEYR_OFF, 0xDEAD_BEEF).unwrap();
-        f.write_u32(u5::NSKEYR_OFF, 0xCDEF_89AB).unwrap();
-        assert_eq!(nscr(&f) & u5::NSCR_LOCK, u5::NSCR_LOCK);
-        // KEY1+KEY2 clears LOCK only.
+        // A clean KEY1+KEY2 sequence clears LOCK only.
         f.write_u32(u5::NSKEYR_OFF, 0x4567_0123).unwrap();
         f.write_u32(u5::NSKEYR_OFF, 0xCDEF_89AB).unwrap();
         assert_eq!(nscr(&f) & u5::NSCR_LOCK, 0);
@@ -1436,7 +1475,7 @@ mod u5_controller_tests {
         let mut f = unlocked_u5();
         f.write_u32(
             u5::NSCR_OFF,
-            u5::NSCR_PER | (7 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+            u5::NSCR_PER | (7 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT | u5::NSCR_EOPIE,
         )
         .unwrap();
         assert_eq!(
@@ -1481,7 +1520,7 @@ mod u5_controller_tests {
         let mut f = unlocked_u5();
         f.write_u32(
             u5::NSCR_OFF,
-            u5::NSCR_PER | (1 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+            u5::NSCR_PER | (1 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT | u5::NSCR_EOPIE,
         )
         .unwrap();
         assert_ne!(nssr(&f) & u5::NSSR_EOP, 0);
@@ -1515,7 +1554,8 @@ mod u5_controller_tests {
     #[test]
     fn program_store_buffers_four_words_and_commits() {
         let mut f = unlocked_u5();
-        f.write_u32(u5::NSCR_OFF, u5::NSCR_PG).unwrap();
+        f.write_u32(u5::NSCR_OFF, u5::NSCR_PG | u5::NSCR_EOPIE)
+            .unwrap();
         assert_eq!(
             f.u5_program_store(0x1000, 4, 0x1111_1111),
             U5ProgAction::Buffered
@@ -1583,7 +1623,26 @@ mod u5_controller_tests {
         f.write_u32(u5::OPTKEYR_OFF, 0x4C5D_6E7F).unwrap();
         f.write_u32(u5::OPTR_OFF, 0x1234).unwrap();
         assert_eq!(f.read_u32(u5::OPTR_OFF).unwrap(), 0x1234, "OPTR readback");
-        f.write_u32(u5::NSCR_OFF, u5::NSCR_OPTSTRT).unwrap();
+        f.write_u32(u5::NSCR_OFF, u5::NSCR_OPTSTRT | u5::NSCR_EOPIE)
+            .unwrap();
         assert_ne!(nssr(&f) & u5::NSSR_EOP, 0);
+    }
+}
+
+#[cfg(test)]
+mod u5_wrong_key_tests {
+    use super::{Flash, FlashRegisterLayout};
+    use crate::Peripheral;
+    #[test]
+    fn wrong_key_blocks_later_key_writes() {
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32U5);
+        f.write_u32(0x08, 0x1234_5678).unwrap();
+        f.write_u32(0x08, 0x4567_0123).unwrap();
+        f.write_u32(0x08, 0xCDEF_89AB).unwrap();
+        assert_ne!(
+            f.read_u32(0x28).unwrap() & 0x8000_0000,
+            0,
+            "later key writes are ignored on this peripheral instance"
+        );
     }
 }

@@ -63,7 +63,27 @@
         "lane": "none"
       }
     },
-    "atmega328p": {
+    "atmega2561": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_atmega2561.rs",
+        "test": "atmega2561_boots_and_prints",
+        "signal": "the committed 3-byte-PC image tests/fixtures/avr/atmega2561-io.elf prints `2561 OK` through USART0 UDR0 and the test asserts the console sink receives it; examples/atmega2561-io/io-smoke.yaml asserts the same line under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test avr_atmega2561; configs/ci/boards.yml atmega2561-io (sim-validate, gate)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model on the AVR part; the descriptor carries only the generic parking controller used to attach kits to the CPU-owned SPCR/SPDR.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No TWI controller model on the AVR part; the descriptor carries only the generic parking controller used to attach kits to the CPU-owned TWI registers.",
+        "lane": "none"
+      }
+    },
+    "atmega328p":{
       "in_boards": true,
       "uart": {
         "state": "none",
@@ -78,6 +98,26 @@
       "i2c": {
         "state": "none",
         "gap": "No TWI model on ATmega328P P0.",
+        "lane": "none"
+      }
+    },
+    "atmega1281": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_atmega1281_firmware.rs",
+        "test": "atmega1281_compiled_firmware_prints_and_drives_pb5",
+        "signal": "the committed AVR-GCC atmega1281 ELF prints `1281 OK` through USART0 and the test asserts the captured serial sink plus PB5 package output; no silicon or wire-waveform claim is made",
+        "lane": "Core Board CI / atmega1281-io and pr-workspace-tests: cargo test -p labwired-core --test avr_atmega1281_firmware"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No AVR-native SPI controller model is present; the descriptor's generic parking controller does not execute SPCR/SPDR transfers.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No AVR-native TWI controller model is present; the descriptor's generic parking controller does not execute TWI transfers.",
         "lane": "none"
       }
     },
@@ -521,6 +561,162 @@
         "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
       }
     },
+    "stm32f103c4": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103c6": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r4": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r4h": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r6": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r6h": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103t4": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103t6": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401cb": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401cc": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401cd": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401ce": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401rb": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401rc": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401rd": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401re": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401vb": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401vc": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401vd": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401ve": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ie": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ig": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ve": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407vg": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ze": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407zg": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
     "stm32f411ceu6": {
       "in_boards": false,
       "uart": {
@@ -685,6 +881,26 @@
         "signal": "real PlatformIO-compiled Arduino firmware drives an INA219 model attached at 0x40 on i2c1 through the Wire (stm32l4 engine) path; the device ACKs and the LW_L3_OK verdict returns as real bytes on the modelled USART1, matched by a uart_contains oracle.",
         "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
         "note": "the lane's oracle is `uart_contains LW_L3_OK`, which the sketch ALSO prints for its ACK-only PARTIAL tier, so the lane asserts address+data out and the ACK back, not the exact register readback. The exact tier (config 0x399F + bus 0x19CA, no LW_L3_PARTIAL_NO_RX) was observed in the local 2026-09-18 run (validation/arduino-matrix/out/stm32u575/L3_i2c_sensor/run/uart.log) but is NOT asserted by the lane. The Zephyr matrix L3 cell (same INA219 kit, stock Zephyr i2c driver, LW_Z3_OK) is a second ACK-level proof."
+      }
+    },
+    "stm32u5a5zj": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/nucleo-u5a5zj/io-smoke.yaml",
+        "test": "uart_contains: \"OK\"",
+        "gap": "The smoke runs a U575-built shared demo ELF against the U5A5 Nucleo mapping. It observes USART1 output, but does not use U5A5-targeted firmware or exercise a U5A5-specific peripheral operation; no U5A5 firmware lane is configured yet.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No U5A5 SPI firmware/device smoke is recorded in the Core validation lanes.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No U5A5 I2C firmware/device smoke is recorded in the Core validation lanes.",
+        "lane": "none"
       }
     },
     "stm32u545": {
@@ -857,6 +1073,72 @@
         "gap": "Same block, same gap as SPI: SERCOM I2CM/I2CS modes are not modelled.",
         "lane": "none"
       }
+    },
+    "atsamd21e15a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21e16a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21e17a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21e18a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21g15a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21g16a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21g17a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j15a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j16a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j17a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j18a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
     },
     "atsamd21": {
       "in_boards": true,
@@ -1120,6 +1402,126 @@
       "i2c": {
         "state": "none",
         "gap": "TWI0/TWI1 are declared `type: stub` (the SAM4S TWI block is not modelled).",
+        "lane": "none"
+      }
+    },
+    "pic24f04ka200": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f04ka200_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f04ka200 and writes 'HI' through U1TXREG (0x0224); examples/pic24f04ka200/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f04ka200/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f04ka201": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f04ka201_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f04ka201 and writes 'HI' through U1TXREG (0x0224); examples/pic24f04ka201/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f04ka201/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f08ka101": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f08ka101_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f08ka101 and writes 'HI' through U1TXREG (0x0224); examples/pic24f08ka101/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f08ka101/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f08ka102": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f08ka102_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f08ka102 and writes 'HI' through U1TXREG (0x0224); examples/pic24f08ka102/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f08ka102/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f16ka101": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f16ka101_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f16ka101 and writes 'HI' through U1TXREG (0x0224); examples/pic24f16ka101/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f16ka101/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f16ka102": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f16ka102_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f16ka102 and writes 'HI' through U1TXREG (0x0224); examples/pic24f16ka102/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f16ka102/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
         "lane": "none"
       }
     }

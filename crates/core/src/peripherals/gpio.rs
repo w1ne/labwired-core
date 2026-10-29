@@ -266,6 +266,16 @@ pub struct V2Gpio {
     lckr: u32,    // 0x1C
     afrl: u32,    // 0x20
     afrh: u32,    // 0x24
+    /// U5/U5-like HSLVR (0x2C) high-speed/low-voltage pin select.
+    hslvr: u32,
+    /// U5/U5-like SECCFGR (0x30) security attribution (reset 0xFFFF).
+    seccfgr: u32,
+    /// LCKR lock sequence state: 0 idle, 1 LCKK=1 seen, 2 LCKK=0 seen.
+    #[serde(default)]
+    lckr_seq: u8,
+    /// Pins whose configuration is locked by the LCKR sequence.
+    #[serde(default)]
+    locked_pins: u32,
     /// Pins the outside world is holding. A pull applies only where this bit
     /// is clear, so a button on the pad wins over the weak resistor. Not a
     /// register: snapshots stay the register file they were.
@@ -294,13 +304,20 @@ impl V2Gpio {
     /// OTYPER bit set = open-drain: the pin is only driven while ODR is 0;
     /// a 1 releases it. An undriven pin with nothing else holding it takes
     /// its level from PUPDR (01 pull-up, 10 pull-down). An external driver
-    /// recorded by `set_external_input` wins over that weak pull.
+    /// recorded by `set_external_input` wins over that weak pull. Analog MODER
+    /// mode disables the digital input and forces the IDR bit low.
     fn effective_idr(&self) -> u32 {
         let out = self.output_mask();
         let open_drain = out & self.otyper;
         let push_pull = out & !self.otyper;
         let od_driven_low = open_drain & !self.odr;
         let driven = push_pull | od_driven_low;
+        let mut analog = 0u32;
+        for pin in 0..16u32 {
+            if (self.moder >> (pin * 2)) & 0x3 == 0b11 {
+                analog |= 1 << pin;
+            }
+        }
         let undriven = !driven & 0xFFFF;
         let mut pull_level = 0u32;
         let mut pull_apply = 0u32;
@@ -316,7 +333,9 @@ impl V2Gpio {
         }
         let from_pull = undriven & pull_apply & !self.external;
         let from_latch = undriven & !from_pull;
-        ((self.odr & push_pull) | (pull_level & from_pull) | (self.idr & from_latch)) & 0xFFFF
+        ((self.odr & push_pull) | (pull_level & from_pull) | (self.idr & from_latch))
+            & 0xFFFF
+            & !analog
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -327,9 +346,11 @@ impl V2Gpio {
             0x0C => self.pupdr,
             0x10 => self.effective_idr(),
             0x14 => self.odr,
-            0x1C => self.lckr,
+            0x1C => self.lckr | u32::from(self.locked_pins != 0) << 16,
             0x20 => self.afrl,
             0x24 => self.afrh,
+            0x2C => self.hslvr,
+            0x30 => self.seccfgr,
             _ => {
                 crate::census_reg!("gpio:V2Gpio", offset, "read");
                 0
@@ -337,11 +358,26 @@ impl V2Gpio {
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
+        // Expand each locked pin bit to its 2-bit MODER/OSPEEDR/PUPDR field.
+        let mut locked2 = 0u32;
+        let mut locked4_low = 0u32;
+        let mut locked4_high = 0u32;
+        for pin in 0..16 {
+            if self.locked_pins & (1 << pin) != 0 {
+                locked2 |= 0b11 << (pin * 2);
+                if pin < 8 {
+                    locked4_low |= 0xF << (pin * 4);
+                } else {
+                    locked4_high |= 0xF << ((pin - 8) * 4);
+                }
+            }
+        }
+        let merge = |old: u32, new: u32, lock: u32| (old & lock) | (new & !lock);
         match offset {
-            0x00 => self.moder = value,
-            0x04 => self.otyper = value & 0xFFFF,
-            0x08 => self.ospeedr = value,
-            0x0C => self.pupdr = value,
+            0x00 => self.moder = merge(self.moder, value, locked2),
+            0x04 => self.otyper = merge(self.otyper, value & 0xFFFF, self.locked_pins),
+            0x08 => self.ospeedr = merge(self.ospeedr, value, locked2),
+            0x0C => self.pupdr = merge(self.pupdr, value, locked2),
             0x10 => self.idr = value & 0xFFFF,
             0x14 => self.odr = value & 0xFFFF,
             0x18 => {
@@ -351,9 +387,53 @@ impl V2Gpio {
                 self.odr &= !reset;
                 self.odr |= set;
             }
-            0x1C => self.lckr = value,
-            0x20 => self.afrl = value,
-            0x24 => self.afrh = value,
+            0x1C => {
+                // LCKR: LCKK must be written 1-0-1 with the same pin mask
+                // before the configuration is locked (RM0456 §13.4.8). Once
+                // LCKK reads as 1, the key and pin mask stay latched until
+                // reset; later writes cannot lock additional pins.
+                const LCKK: u32 = 1 << 16;
+                if self.lckr & LCKK != 0 {
+                    return;
+                }
+                let pins = value & 0xFFFF;
+                let lckk = value & LCKK != 0;
+                if lckk {
+                    match self.lckr_seq {
+                        0 | 1 => {
+                            // A fresh key write can start (or restart) the
+                            // sequence, but it cannot complete an earlier one.
+                            self.lckr_seq = 1;
+                            self.lckr = pins;
+                        }
+                        2 if pins == self.lckr => {
+                            self.locked_pins = pins;
+                            self.lckr_seq = 0;
+                            self.lckr = pins | LCKK;
+                        }
+                        2 => {
+                            // LCK[15:0] must remain constant throughout 1-0-1.
+                            self.lckr_seq = 0;
+                            self.lckr = pins;
+                        }
+                        _ => {
+                            self.lckr_seq = 0;
+                            self.lckr = pins;
+                        }
+                    }
+                } else {
+                    self.lckr_seq = if self.lckr_seq == 1 && pins == self.lckr {
+                        2
+                    } else {
+                        0
+                    };
+                    self.lckr = pins;
+                }
+            }
+            0x20 => self.afrl = merge(self.afrl, value, locked4_low),
+            0x24 => self.afrh = merge(self.afrh, value, locked4_high),
+            0x2C => self.hslvr = merge(self.hslvr, value, self.locked_pins),
+            0x30 => self.seccfgr = merge(self.seccfgr, value & 0xFFFF, self.locked_pins),
             0x28 => {
                 // BRR: reset selected ODR bits.
                 self.odr &= !(value & 0xFFFF);
@@ -1946,12 +2026,27 @@ impl GpioPort {
     /// values. On real silicon these are per-port (debug pins keep port A off
     /// the all-analog default; B carries the JTDO pull config; C..G reset to
     /// 0xFFFFFFFF analog). The chip yaml supplies them via
-    /// `config: { reset_moder / reset_ospeedr / reset_pupdr }`.
+    /// `config: { reset_moder / reset_ospeedr / reset_pupdr }`. The generic
+    /// constructor leaves U5/H5-only SECCFGR at zero; use
+    /// [`Self::new_stm32v2_with_resets_and_seccfgr`] when the chip declares it.
     pub fn new_stm32v2_with_resets(moder: u32, ospeedr: u32, pupdr: u32) -> Self {
+        Self::new_stm32v2_with_resets_and_seccfgr(moder, ospeedr, pupdr, 0)
+    }
+
+    /// Build a V2-layout GPIO port with silicon resets including SECCFGR.
+    /// U5/H5 chip descriptions opt in with `reset_seccfgr: 0xFFFF`; other
+    /// STM32 V2 parts leave the reserved 0x30 word at zero.
+    pub fn new_stm32v2_with_resets_and_seccfgr(
+        moder: u32,
+        ospeedr: u32,
+        pupdr: u32,
+        seccfgr: u32,
+    ) -> Self {
         Self::from_family(GpioFamily::Stm32V2(V2Gpio {
             moder,
             ospeedr,
             pupdr,
+            seccfgr,
             ..Default::default()
         }))
     }
@@ -2185,6 +2280,9 @@ impl GpioPort {
                 let cnf = (cr >> (shift + 2)) & 0b11;
                 (mode != 0 && cnf >= 0b10).then_some(0)
             }
+            // SAM PORT: PINCFG.PMUXEN hands the pad to the PMUX function
+            // (A = 0 .. N = 13); only pads with a bound route ever ask.
+            GpioFamily::SamPort(g) => g.pmux_of(pin).map(u32::from),
             _ => None,
         }
     }
@@ -2314,6 +2412,13 @@ impl GpioPort {
 }
 
 impl crate::pins::PinPort for GpioPort {
+    fn port_name_prefix(&self) -> &'static str {
+        match self.family {
+            GpioFamily::SamPort(_) => "port",
+            _ => "gpio",
+        }
+    }
+
     fn pin_count(&self) -> u8 {
         match &self.family {
             GpioFamily::Stm32F1(_)
@@ -2462,6 +2567,16 @@ impl crate::pins::PinPort for GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn on_system_reset(&mut self) {
+        // SAM PORT only: registers to power-on, the outside world's levels kept.
+        if let GpioFamily::SamPort(g) = &mut self.family {
+            let (external, in_latch) = (g.external, g.in_latch);
+            *g = SamGpio::default();
+            g.external = external;
+            g.in_latch = in_latch;
+            self.sync_pin_cells();
+        }
+    }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
     /// default `PeripheralTickResult`. Skipping it removes dispatch, never an
@@ -2675,12 +2790,19 @@ impl crate::Peripheral for GpioPort {
         line: usize,
         func: &'static str,
     ) -> bool {
-        let fits = matches!(self.family, GpioFamily::Stm32F1(_)) && pin < 16;
-        if fits {
-            self.pad_routes
-                .bind_when_driving(cell, pin, None, line, func);
+        match self.family {
+            GpioFamily::Stm32F1(_) if pin < 16 => {
+                self.pad_routes
+                    .bind_when_driving(cell, pin, None, line, func);
+                true
+            }
+            // SAM TC waveform outputs are PMUX function E (DS60001507F 6.1).
+            GpioFamily::SamPort(_) if pin < 32 => {
+                self.pad_routes.bind(cell, pin, Some(4), line, func);
+                true
+            }
+            _ => false,
         }
-        fits
     }
 
     fn take_timer_input_edges(&mut self) -> Vec<TimerInputEdge> {
@@ -3131,6 +3253,15 @@ mod tests {
     }
 
     #[test]
+    fn test_gpio_v2_security_reset_is_opt_in() {
+        let gpio = GpioPort::new_stm32v2_with_resets(0, 0, 0);
+        assert_eq!(rd32(&gpio, 0x30), 0);
+
+        let u5 = GpioPort::new_stm32v2_with_resets_and_seccfgr(0, 0, 0, 0xFFFF);
+        assert_eq!(rd32(&u5, 0x30), 0xFFFF);
+    }
+
+    #[test]
     fn test_gpio_v2_bsrr_and_brr() {
         let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
         // BSRR @ 0x18 (set pin 0, reset pin 1)
@@ -3228,6 +3359,20 @@ mod idr_pin_level_tests {
             0,
             "input pin must not take its level from ODR"
         );
+    }
+
+    #[test]
+    fn v2_analog_mode_forces_idr_low_until_pin_becomes_digital_input() {
+        let mut gpio = GpioPort::new_stm32v2_with_resets(0b11, 0, 0);
+        assert!(gpio.set_gpio_input(0, true));
+        assert_eq!(
+            rd32(&gpio, 0x10) & 1,
+            0,
+            "analog mode disables the digital input path"
+        );
+
+        gpio.write_u32(0x00, 0).unwrap();
+        assert_eq!(rd32(&gpio, 0x10) & 1, 1, "input mode exposes the pad level");
     }
 
     /// Nothing is wired to an input, so the pin is the pull. PUPDR is two bits

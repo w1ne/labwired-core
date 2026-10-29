@@ -179,6 +179,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
 
+    /// Byte RX DMA request: `Some(true)` while a received byte waits in the
+    /// register at `offset` (a DMA read of it consumes the byte). `None`
+    /// refuses this endpoint; `Some(false)` is a supported endpoint with no
+    /// byte waiting.
+    fn dma_rx_request(&self, _offset: u64) -> Option<bool> {
+        None
+    }
+
+    /// The DMAC trigger sources (TX, RX) this peripheral raises, as its chip
+    /// description declares them. `None`: it declares none.
+    fn dma_triggers(&self) -> Option<(u32, u32)> {
+        None
+    }
+
+    /// Peripheral side of [`crate::Bus::take_dma_trigger`]: consume one
+    /// pending request of DMAC trigger source `source` if this peripheral
+    /// raises it. Default `None`: it raises none.
+    fn take_dma_trigger(&mut self, _source: u32) -> Option<bool> {
+        None
+    }
+
     /// Controller-local byte TX DMA request. `None` refuses this endpoint;
     /// `Some(false)` is a supported endpoint that is not ready. This does not
     /// grant bus access: the bus must separately enforce clocks and routing.
@@ -265,6 +286,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `cause` here. Called after the requesting peripheral has cleared its
     /// own latch. Default: ignore.
     fn on_peripheral_reset(&mut self, _cause: PeripheralResetCause) {}
+
+    /// A system reset (Cortex-M `AIRCR.SYSRESETREQ`, or a peripheral-requested
+    /// reboot such as a watchdog time-out) just restarted the core: return the
+    /// registers to their power-on values, as silicon does. Keep what is not
+    /// chip state: attached devices, wires, the cycle clock and non-volatile
+    /// contents. Called after [`Self::on_peripheral_reset`].
+    ///
+    /// Default: nothing, which keeps the historical behaviour for every model
+    /// that has not opted in.
+    fn on_system_reset(&mut self) {}
 
     /// `true` if this peripheral can ever return `true` from
     /// [`Self::take_reset_request`]. The machine caches the bus indices of
@@ -413,6 +444,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// rather than a silently ungated peripheral).
     fn clock_gate_reg_offset(&self, _name: &str) -> Option<u64> {
         None
+    }
+
+    /// Bind a power controller's backup-domain write-enable signal to its
+    /// clock controller. Models without that protection ignore the signal.
+    fn bind_backup_domain_write_enable(
+        &mut self,
+        _enabled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
     }
 
     /// Camera-slave capability: bind a DVP sensor's pixel output to this
@@ -691,6 +730,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Family of the waveform outputs behind [`Self::timer_output_lines`], for
+    /// bus wiring passes that bind them to a chip family's pad table (the
+    /// SAMD51 TC pass binds only `samd51_tc`). `None` by default.
+    fn timer_output_family(&self) -> Option<&'static str> {
+        None
+    }
+
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
     /// channel-output wire `cell` — live while the pad is an alternate-function
     /// output and the timer drives that line (STM32 F1 fixed mapping). A port
@@ -868,6 +914,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn legacy_tick_dynamic(&self) -> bool {
         false
     }
+    /// True if this peripheral's dynamic legacy-tick activity can change when
+    /// another peripheral is written through MMIO. The bus refreshes these
+    /// observers after successful MMIO stores so shared fabrics (for example,
+    /// INPUTMUX/IOCON state consumed by PINT) can wake an idle model without
+    /// a per-cycle scan. Default false.
+    fn legacy_tick_observes_peer_mmio(&self) -> bool {
+        false
+    }
     /// True if this peripheral's participation in the legacy per-cycle walk is
     /// behaviorally significant for SOME reachable firmware state — i.e.
     /// deleting the walk (`SystemBus::derive_walk_deletable`) could change
@@ -877,8 +931,8 @@ pub trait Peripheral: std::fmt::Debug + Send {
     ///
     /// The conservative default is `true`: unless a model *proves* its
     /// `tick()`/`tick_elapsed()` can never mutate observable state, it keeps the
-    /// walk on. Override to `false` ONLY when BOTH hold for every reachable
-    /// state:
+    /// walk on. For a peripheral that does not use the scheduler, override to
+    /// `false` ONLY when BOTH hold for every reachable state:
     ///
     /// - the peripheral's `tick()`/`tick_elapsed()` is a genuine no-op
     ///   (a pure register bank / stub, or a purely lazy model that advances its
@@ -887,11 +941,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
     ///   the walk.
     ///
     /// Scheduler-driven peripherals need NOT override this (they are handled by
-    /// `uses_scheduler()` in the derivation); overriding is only for models that
-    /// stay on the legacy path but do nothing there. Getting this wrong (a
-    /// `false` on a model that actually does walk work) silently starves the
-    /// peripheral of ticks once the bus derives walk-deletion — so the honest
-    /// direction under any doubt is to leave it `true`.
+    /// `uses_scheduler()` in the derivation). In builds without
+    /// `event-scheduler`, their active legacy fallback remains indexed even if
+    /// this returns `false`. Getting this wrong on a non-scheduler model (a
+    /// `false` when it actually does walk work) silently starves the peripheral
+    /// of ticks once the bus derives walk-deletion — so the honest direction
+    /// under any doubt is to leave it `true`.
     fn needs_legacy_walk(&self) -> bool {
         true
     }
@@ -1061,6 +1116,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// SPI controllers override THIS method.
     fn drives_central_device_time(&self) -> bool {
         self.drives_central_i2c_time()
+    }
+
+    /// True when this controller currently has at least one attached device
+    /// whose free-running clock the central drive would advance. Controllers
+    /// without an attached-device list keep the historical `true`.
+    fn has_attached_time_devices(&self) -> bool {
+        true
     }
 
     /// Advance every attached off-chip device's free-running clock by `us`

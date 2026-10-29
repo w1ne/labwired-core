@@ -12,7 +12,15 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 
 * **arty-litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the arty-litex-vexriscv survival smoke
+* **atmega1281**
+  * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
 * **atmega2560**
+  * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+* **atmega2561**
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
@@ -77,10 +85,23 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
 | arty-litex-vexriscv | — | — | — |
+| atmega1281 | — | — | — |
 | atmega2560 | — | — | — |
+| atmega2561 | — | — | — |
 | atmega328p | — | — | — |
 | atsamd21 | — | — | — |
+| atsamd21e15a | — | — | — |
+| atsamd21e16a | — | — | — |
+| atsamd21e17a | — | — | — |
+| atsamd21e18a | — | — | — |
+| atsamd21g15a | — | — | — |
+| atsamd21g16a | — | — | — |
+| atsamd21g17a | — | — | — |
 | atsamd21g18a | — | — | — |
+| atsamd21j15a | — | — | — |
+| atsamd21j16a | — | — | — |
+| atsamd21j17a | — | — | — |
+| atsamd21j18a | — | — | — |
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
 | dspic33fj32mc202 | — | — | — |
@@ -101,6 +122,12 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | nrf5340 | — | — | — |
 | nrf54l15 | — | — | — |
 | nrf54lm20a | — | — | — |
+| pic24f04ka200 | — | — | — |
+| pic24f04ka201 | — | — | — |
+| pic24f08ka101 | — | — | — |
+| pic24f08ka102 | — | — | — |
+| pic24f16ka101 | — | — | — |
+| pic24f16ka102 | — | — | — |
 | ra4m1 | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
@@ -108,10 +135,36 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | sam4s16c | — | — | — |
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
+| stm32f103c4 | ✓ | ✓ | ✓ |
+| stm32f103c6 | ✓ | ✓ | ✓ |
+| stm32f103r4 | ✓ | ✓ | ✓ |
+| stm32f103r4h | ✓ | ✓ | ✓ |
+| stm32f103r6 | ✓ | ✓ | ✓ |
+| stm32f103r6h | ✓ | ✓ | ✓ |
+| stm32f103t4 | ✓ | ✓ | ✓ |
+| stm32f103t6 | ✓ | ✓ | ✓ |
 | stm32f401 | ✓ | ✓ | ✓ |
+| stm32f401cb | ✓ | ✓ | ✓ |
+| stm32f401cc | ✓ | ✓ | ✓ |
+| stm32f401cd | ✓ | ✓ | ✓ |
 | stm32f401cdu6 | ✓ | ✓ | ✓ |
+| stm32f401ce | ✓ | ✓ | ✓ |
+| stm32f401rb | ✓ | ✓ | ✓ |
+| stm32f401rc | ✓ | ✓ | ✓ |
+| stm32f401rd | ✓ | ✓ | ✓ |
+| stm32f401re | ✓ | ✓ | ✓ |
+| stm32f401vb | ✓ | ✓ | ✓ |
+| stm32f401vc | ✓ | ✓ | ✓ |
+| stm32f401vd | ✓ | ✓ | ✓ |
+| stm32f401ve | ✓ | ✓ | ✓ |
 | stm32f405 | ✓ | ✓ | ✓ |
 | stm32f407 | ✓ | ✓ | ✓ |
+| stm32f407ie | ✓ | ✓ | ✓ |
+| stm32f407ig | ✓ | ✓ | ✓ |
+| stm32f407ve | ✓ | ✓ | ✓ |
+| stm32f407vg | ✓ | ✓ | ✓ |
+| stm32f407ze | ✓ | ✓ | ✓ |
+| stm32f407zg | ✓ | ✓ | ✓ |
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
@@ -124,6 +177,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32l476 | ✓ | ✓ | ✓ |
 | stm32u545 | ✓ | ✓ | ✓ |
 | stm32u575 | ✓ | ✓ | ✓ |
+| stm32u5a5zj | ✓ | ✓ | ✓ |
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |
 | vegaboard-ri5cy | — | — | — |

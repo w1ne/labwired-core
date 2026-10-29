@@ -21,37 +21,49 @@
 #if defined(CHIP_F1)
 /* RM0008: AFIO_EXTICR1 reset = port A; EXTI0 is IRQ 6. */
 #define EXTI 0x40010400u
+#define GPIOA 0x40010800u
 #define EXTI_IRQ 6
 static void clocks(void) { REG(0x40021018u) |= (1u << 0) | (1u << 2); } /* AFIO, IOPA */
+static void configure_pa0_input(void) {
+    REG(GPIOA + 0x00u) = (REG(GPIOA + 0x00u) & ~0xFu) | 0x4u; /* floating input */
+}
 #elif defined(CHIP_F4)
 /* RM0368: SYSCFG_EXTICR1 reset = port A; EXTI0 is IRQ 6. */
 #define EXTI 0x40013C00u
+#define GPIOA 0x40020000u
 #define EXTI_IRQ 6
 static void clocks(void) {
     REG(0x40023830u) |= 1u << 0;  /* AHB1ENR.GPIOAEN */
     REG(0x40023844u) |= 1u << 14; /* APB2ENR.SYSCFGEN */
 }
+static void configure_pa0_input(void) { REG(GPIOA + 0x00u) &= ~0x3u; }
 #elif defined(CHIP_G0)
 /* RM0444: EXTI_EXTICR1 reset = port A; EXTI0_1 is IRQ 5. */
 #define EXTI 0x40021800u
+#define GPIOA 0x50000000u
 #define EXTI_IRQ 5
 #define SPLIT_PENDING 1
 static void clocks(void) { REG(0x40021034u) |= 1u << 0; } /* IOPENR.GPIOAEN */
+static void configure_pa0_input(void) { REG(GPIOA + 0x00u) &= ~0x3u; }
 #elif defined(CHIP_L0)
 /* RM0367: SYSCFG_EXTICR1 reset = port A; EXTI0_1 is IRQ 5. The register
  * file is the F1 one (PR at 0x14), the vectors the Cortex-M0+ groups. */
 #define EXTI 0x40010400u
+#define GPIOA 0x50000000u
 #define EXTI_IRQ 5
 static void clocks(void) {
     REG(0x4002102Cu) |= 1u << 0; /* IOPENR.IOPAEN */
     REG(0x40021034u) |= 1u << 0; /* APB2ENR.SYSCFGEN */
 }
+static void configure_pa0_input(void) { REG(GPIOA + 0x00u) &= ~0x3u; }
 #elif defined(CHIP_U5)
 /* RM0456: EXTI_EXTICR1 reset = port A; EXTI0 is IRQ 11. */
 #define EXTI 0x46022000u
+#define GPIOA 0x42020000u
 #define EXTI_IRQ 11
 #define SPLIT_PENDING 1
 static void clocks(void) { REG(0x46020C8Cu) |= 1u << 0; } /* AHB2ENR1.GPIOAEN */
+static void configure_pa0_input(void) { REG(GPIOA + 0x00u) &= ~0x3u; }
 #else
 #error "build with -DCHIP_F1, -DCHIP_F4, -DCHIP_G0, -DCHIP_L0 or -DCHIP_U5"
 #endif
@@ -89,6 +101,9 @@ const uintptr_t vectors[16 + 16] = {
 
 void reset(void) {
     clocks();
+    /* L0/G0/U5 power PA0 up in analog mode. Select digital input explicitly
+     * so this fixture tests EXTI delivery rather than a reset-state pad gate. */
+    configure_pa0_input();
     RESULT[0] = 0;
     EXTI_RTSR = 1u;
     EXTI_FTSR = 1u;

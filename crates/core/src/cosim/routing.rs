@@ -159,6 +159,17 @@ impl InputThresholds {
 /// | `board.analog.<pad>_volts` | model → machine | `F64` |
 /// | `adc.<peripheral>.<channel>_volts` | model → machine | `F64` |
 /// | `board.power.vdd_volts` | model → machine | `F64` |
+/// | `board.motor.<id>.back_emf_v` | machine → model | `F64` volts |
+/// | `board.motor.<id>.current_a` | model → machine | `F64` amps |
+/// | `board.motor.<id>.supply_v` | model → machine | `F64` volts |
+///
+/// The two `board.motor.` paths close the loop of an `armature: circuit` DC
+/// motor: the netlist solves the winding current (its R, L, switch, flyback
+/// diode and rail are netlist elements) and routes it in; the motor publishes
+/// the back-EMF the netlist's series source must carry. Both refuse, at bind
+/// time, a motor id the bus does not have or a motor that is not circuit-driven.
+/// The optional `supply_v` carries the rail the winding's switch connects it
+/// to, as the netlist solved it; the motor reports it as its bus voltage.
 ///
 /// `board.power.vdd_volts` is the MCU's supply: the chip's supply supervisor
 /// ([`crate::power`]) holds the core in reset below its power-on threshold and
@@ -210,6 +221,15 @@ pub enum SignalPath {
     /// `board.power.<rail>_volts` — a supply rail of the chip. Only `vdd`
     /// exists today.
     SupplyRail { rail: String },
+    /// `board.motor.<id>.back_emf_v` — the back-EMF an `armature: circuit` DC
+    /// motor presents to its netlist.
+    MotorBackEmf { motor: String },
+    /// `board.motor.<id>.current_a` — the winding current the netlist solved
+    /// for an `armature: circuit` DC motor.
+    MotorCurrent { motor: String },
+    /// `board.motor.<id>.supply_v` — the supply rail feeding an
+    /// `armature: circuit` DC motor's winding, as the netlist solved it.
+    MotorSupply { motor: String },
 }
 
 impl SignalPath {
@@ -239,6 +259,22 @@ impl SignalPath {
         if let Some(pad) = path.strip_prefix("board.gpio.") {
             return (!pad.is_empty()).then(|| Self::GpioOutput {
                 pad: pad.to_string(),
+            });
+        }
+        if let Some(rest) = path.strip_prefix("board.motor.") {
+            if let Some(motor) = rest.strip_suffix(".back_emf_v") {
+                return (!motor.is_empty()).then(|| Self::MotorBackEmf {
+                    motor: motor.to_string(),
+                });
+            }
+            if let Some(motor) = rest.strip_suffix(".supply_v") {
+                return (!motor.is_empty()).then(|| Self::MotorSupply {
+                    motor: motor.to_string(),
+                });
+            }
+            let motor = rest.strip_suffix(".current_a")?;
+            return (!motor.is_empty()).then(|| Self::MotorCurrent {
+                motor: motor.to_string(),
             });
         }
         if let Some(rest) = path.strip_prefix("board.power.") {
@@ -277,6 +313,7 @@ impl SignalPath {
                 | Self::GpioInput { .. }
                 | Self::GpioPad { .. }
                 | Self::GpioDriven { .. }
+                | Self::MotorBackEmf { .. }
         )
     }
 
@@ -288,6 +325,8 @@ impl SignalPath {
                 | Self::AnalogPad { .. }
                 | Self::AdcChannel { .. }
                 | Self::SupplyRail { .. }
+                | Self::MotorCurrent { .. }
+                | Self::MotorSupply { .. }
         )
     }
 }
@@ -349,6 +388,11 @@ pub enum RoutingError {
     /// VDD is routed, but the chip descriptor has no `supply_monitor:`, so no
     /// voltage can hold the core in reset.
     NoSupplyMonitor { path: String },
+    /// `board.motor.<id>.…` names a motor the bus does not have.
+    UnknownMotor { path: String, motor: String },
+    /// `board.motor.<id>.…` names a motor whose winding is not
+    /// `armature: circuit`, so no netlist may drive or read it.
+    NotCircuitMotor { path: String, motor: String },
     /// The store held a value of the wrong shape for this path.
     TypeMismatch {
         path: String,
@@ -456,6 +500,15 @@ impl std::fmt::Display for RoutingError {
                  `supply_monitor:` (POR/PDR/BOR thresholds), so a voltage cannot hold the core in \
                  reset; add them from the datasheet"
             ),
+            Self::UnknownMotor { path, motor } => write!(
+                f,
+                "co-sim path '{path}': there is no motor '{motor}' in motor_models"
+            ),
+            Self::NotCircuitMotor { path, motor } => write!(
+                f,
+                "co-sim path '{path}': motor '{motor}' is bridge-driven; only an \
+                 `armature: circuit` motor takes its winding current from a netlist"
+            ),
             Self::TypeMismatch { path, value } => write!(
                 f,
                 "co-sim path '{path}': cannot route signal value {value:?} (expected a number \
@@ -484,6 +537,8 @@ enum ReadBinding {
     /// `pins::own_drive` says the MCU's own output stage drives the pad (a GPIO
     /// output or an alternate-function peripheral line).
     Driven { peripheral: usize, pad: u8 },
+    /// Index of an `armature: circuit` motor; its back-EMF in volts.
+    MotorBackEmf { motor: usize },
 }
 
 /// A resolved store → machine sink.
@@ -499,6 +554,10 @@ enum WriteBinding {
     AdcChannel { connection: String, channel: u8 },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
+    /// Index of an `armature: circuit` motor; its winding current in amps.
+    MotorCurrent { motor: usize },
+    /// Index of an `armature: circuit` motor; its supply rail in volts.
+    MotorSupply { motor: usize },
 }
 
 /// Routes manifest signal paths between a running machine and the co-sim
@@ -645,10 +704,15 @@ impl SignalRouter {
                     pad: pad_number,
                 })
             }
+            SignalPath::MotorBackEmf { motor } => Ok(ReadBinding::MotorBackEmf {
+                motor: circuit_motor(bus, motor, path)?,
+            }),
             // `is_readable` already rejected the analog and supply forms.
             SignalPath::AnalogPad { .. }
             | SignalPath::AdcChannel { .. }
-            | SignalPath::SupplyRail { .. } => Err(RoutingError::NotReadable {
+            | SignalPath::SupplyRail { .. }
+            | SignalPath::MotorCurrent { .. }
+            | SignalPath::MotorSupply { .. } => Err(RoutingError::NotReadable {
                 path: path.to_string(),
             }),
         }
@@ -716,10 +780,17 @@ impl SignalRouter {
                 }
                 Ok(WriteBinding::SupplyVdd)
             }
+            SignalPath::MotorCurrent { motor } => Ok(WriteBinding::MotorCurrent {
+                motor: circuit_motor(bus, motor, path)?,
+            }),
+            SignalPath::MotorSupply { motor } => Ok(WriteBinding::MotorSupply {
+                motor: circuit_motor(bus, motor, path)?,
+            }),
             SignalPath::GpioOutput { .. }
             | SignalPath::GpioDirection { .. }
             | SignalPath::GpioPad { .. }
-            | SignalPath::GpioDriven { .. } => Err(RoutingError::NotWritable {
+            | SignalPath::GpioDriven { .. }
+            | SignalPath::MotorBackEmf { .. } => Err(RoutingError::NotWritable {
                 path: path.to_string(),
             }),
         }
@@ -751,6 +822,13 @@ impl SignalRouter {
     /// the model keeps whatever it had, instead of being told the pin is low.
     pub fn sample(&self, bus: &SystemBus, signals: &mut CosimSignals) {
         for (path, binding) in &self.reads {
+            if let ReadBinding::MotorBackEmf { motor } = *binding {
+                // Absent, not 0 V, if the motor cannot answer.
+                if let Some(volts) = bus.circuit_motor_back_emf_v(motor) {
+                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                }
+                continue;
+            }
             let level = match *binding {
                 ReadBinding::Output { peripheral, bit } => bus
                     .peripherals
@@ -774,6 +852,7 @@ impl SignalRouter {
                     .and_then(|p| p.dev.pins())
                     .and_then(|port| crate::pins::own_drive(port, pad))
                     .map(|drive| matches!(drive, crate::logic_capture::PadDrive::Driven)),
+                ReadBinding::MotorBackEmf { .. } => None,
             };
             if let Some(level) = level {
                 signals.insert(path.clone(), CosimSignalValue::Bool(level));
@@ -857,10 +936,45 @@ impl SignalRouter {
                     };
                     bus.supply.set_vdd(volts);
                 }
+                WriteBinding::MotorCurrent { motor } => {
+                    let accepted = signal_as_f64(value)
+                        .is_some_and(|amps| bus.set_circuit_motor_current(*motor, amps));
+                    if !accepted {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
+                WriteBinding::MotorSupply { motor } => {
+                    let accepted = signal_as_f64(value)
+                        .is_some_and(|volts| bus.set_circuit_motor_supply(*motor, volts));
+                    if !accepted {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
             }
         }
         errors
     }
+}
+
+/// Resolve `board.motor.<id>.…` to an `armature: circuit` motor's index.
+fn circuit_motor(bus: &SystemBus, motor: &str, path: &str) -> Result<usize, RoutingError> {
+    use crate::bus::CircuitMotorLookup;
+    bus.circuit_motor_index(motor).map_err(|why| match why {
+        CircuitMotorLookup::Unknown => RoutingError::UnknownMotor {
+            path: path.to_string(),
+            motor: motor.to_string(),
+        },
+        CircuitMotorLookup::NotCircuit => RoutingError::NotCircuitMotor {
+            path: path.to_string(),
+            motor: motor.to_string(),
+        },
+    })
 }
 
 /// Refuse an ADC route the converter cannot take: a peripheral the bus does
@@ -943,7 +1057,9 @@ fn output_carries_volts(config: &CosimModelConfig, model_signal: &str) -> bool {
             Some(serde_yaml::Value::Number(number))
                 if number.as_i64().is_none() && number.as_f64().is_some()
         ),
-        ManifestCosimAdapter::ExternalProcess | ManifestCosimAdapter::Fmi => false,
+        ManifestCosimAdapter::ExternalProcess
+        | ManifestCosimAdapter::Fmi
+        | ManifestCosimAdapter::Ngspice => false,
     }
 }
 
@@ -1093,6 +1209,7 @@ pub struct CosimSession {
     configs: Vec<CosimModelConfig>,
     epoch_cycles: u64,
     last_global_cycles: u64,
+    failure: Option<String>,
 }
 
 /// What one lockstep advance did: the machine's report, and what happened at
@@ -1216,10 +1333,32 @@ impl CosimSession {
         base_dir: &Path,
         bus: &SystemBus,
     ) -> SimResult<Option<Self>> {
+        Self::new_with_factory(configs, bus, |config| {
+            crate::cosim::build_cosim_adapter_with_base(config, base_dir)
+        })
+    }
+
+    /// Build a session using adapters supplied by the host, while retaining the
+    /// same scheduler, routing, and trace setup as the native constructor.
+    pub fn new_with_factory<F>(
+        configs: &[CosimModelConfig],
+        bus: &SystemBus,
+        mut factory: F,
+    ) -> SimResult<Option<Self>>
+    where
+        F: FnMut(&CosimModelConfig) -> SimResult<Box<dyn crate::cosim::CosimAdapter>>,
+    {
         if configs.is_empty() {
             return Ok(None);
         }
-        let runner = CosimRunner::from_configs_with_base(configs, base_dir)?;
+        let mut models = Vec::with_capacity(configs.len());
+        for config in configs {
+            models.push(crate::cosim::CosimRunnerModel::new(
+                config.clone(),
+                factory(config)?,
+            ));
+        }
+        let runner = CosimRunner::new(models);
         let (router, binding_errors) = SignalRouter::bind(configs, bus);
         let fallback_clock = bus.cpu_hz == 0;
         let cpu_hz = if fallback_clock {
@@ -1262,7 +1401,20 @@ impl CosimSession {
             configs: configs.to_vec(),
             epoch_cycles: 0,
             last_global_cycles: 0,
+            failure: None,
         }))
+    }
+
+    /// Return the first model failure latched by the host.
+    pub fn failure(&self) -> Option<&str> {
+        self.failure.as_deref()
+    }
+
+    /// Preserve the first model failure so a host cannot resume after it.
+    pub fn latch_failure(&mut self, message: String) {
+        if self.failure.is_none() {
+            self.failure = Some(message);
+        }
     }
 
     /// Every manifest path that did not resolve against the machine's bus.
@@ -1273,6 +1425,13 @@ impl CosimSession {
     /// How many models this session steps.
     pub fn model_count(&self) -> usize {
         self.runner.model_count()
+    }
+
+    /// Whether this session relies on an externally hosted ngspice solver.
+    pub fn has_ngspice(&self) -> bool {
+        self.configs
+            .iter()
+            .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
     }
 
     /// The runner's analog waveform ring. Every `adapter: analog` model writes
@@ -1454,6 +1613,24 @@ impl CosimSession {
         let (routed, errors) = self
             .advance_to(machine.total_cycles, &mut machine.bus)
             .map_err(|error| CosimAdvanceError::Model { report, error })?;
+        // A failed ngspice output must stop at this boundary. Continuing to
+        // spend the batch would let firmware run against a disconnected circuit.
+        if !errors.is_empty()
+            && self
+                .configs
+                .iter()
+                .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
+        {
+            let message = errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(CosimAdvanceError::Model {
+                report,
+                error: SimulationError::Other(format!("co-sim routing failed: {message}")),
+            });
+        }
         let new_routing_errors = errors
             .into_iter()
             .filter(|err| self.reported_errors.insert(err.to_string()))
@@ -1619,6 +1796,46 @@ mod tests {
                 channel: 3
             })
         );
+    }
+
+    #[test]
+    fn parses_the_motor_winding_paths_one_way_each() {
+        let emf = SignalPath::parse("board.motor.M1.back_emf_v").unwrap();
+        assert_eq!(
+            emf,
+            SignalPath::MotorBackEmf {
+                motor: "M1".to_string()
+            }
+        );
+        assert!(emf.is_readable());
+        assert!(!emf.is_writable());
+        let current = SignalPath::parse("board.motor.fan.left.current_a").unwrap();
+        assert_eq!(
+            current,
+            SignalPath::MotorCurrent {
+                motor: "fan.left".to_string()
+            }
+        );
+        assert!(current.is_writable());
+        assert!(!current.is_readable());
+        let supply = SignalPath::parse("board.motor.M1.supply_v").unwrap();
+        assert_eq!(
+            supply,
+            SignalPath::MotorSupply {
+                motor: "M1".to_string()
+            }
+        );
+        assert!(supply.is_writable());
+        assert!(!supply.is_readable());
+        for bad in [
+            "board.motor.",
+            "board.motor.M1",
+            "board.motor..current_a",
+            "board.motor..supply_v",
+            "board.motor.M1.speed_rpm",
+        ] {
+            assert_eq!(SignalPath::parse(bad), None, "{bad}");
+        }
     }
 
     #[test]
@@ -2062,6 +2279,33 @@ mod tests {
                 path: "ui.touch.pressed".to_string()
             }]
         );
+    }
+
+    #[test]
+    fn host_adapter_is_stepped_at_the_session_boundary() {
+        use crate::cosim::{CosimAdapter as RuntimeAdapter, CosimStep, CosimStepResult};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        struct HostAdapter(Arc<AtomicUsize>);
+        impl RuntimeAdapter for HostAdapter {
+            fn step(&mut self, _: CosimStep) -> SimResult<CosimStepResult> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(CosimStepResult::default())
+            }
+        }
+        let mut bus = crate::bus::SystemBus::new();
+        let mut model = mock_model("host", 1000, &[], &[], &[]);
+        model.adapter = CosimAdapter::Ngspice;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut session = CosimSession::new_with_factory(&[model], &bus, |_| {
+            Ok(Box::new(HostAdapter(calls.clone())))
+        })
+        .unwrap()
+        .unwrap();
+        session.advance_to(1000, &mut bus).unwrap();
+        assert!(calls.load(Ordering::SeqCst) > 0);
     }
 
     #[test]

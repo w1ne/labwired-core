@@ -1598,11 +1598,8 @@ fn run_firmware_avr(
     };
     let mut cpu = labwired_core::cpu::Avr::new();
     cpu.load_program_image(&image);
-    for name in ["spi", "spi0", "spi1"] {
-        for dev in bus.take_spi_devices(name) {
-            cpu.push_spi_device(dev);
-        }
-    }
+    // SPI kits stay on the parking controller; SPDR clocks via
+    // SystemBus::clock_parking_spi. I²C slaves move onto the CPU TWI model.
     for name in ["i2c", "i2c0", "twi"] {
         for dev in bus.take_i2c_slaves(name) {
             cpu.push_i2c_slave(dev);

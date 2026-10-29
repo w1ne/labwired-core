@@ -177,3 +177,11 @@ def test_real_manifest_still_selects_boards_on_a_pull_request():
     entries = bm.load_manifest(str(REPO_ROOT / "configs/ci/boards.yml"))
     for event in sorted(bm.GATE_EVENTS):
         assert bm.select(entries, event), f"{event} selects no boards"
+
+
+
+def test_validate_requires_ci_scripts_for_sim_validate():
+    bad = _entry(kind="sim-validate", path="examples/does-not-exist")
+    errors = bm.validate([bad], str(REPO_ROOT))
+    assert any("ci/build.sh" in error for error in errors)
+    assert any("ci/test.sh" in error for error in errors)

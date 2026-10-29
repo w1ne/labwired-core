@@ -47,7 +47,7 @@
 //! which door the part uses, and the attach path routes it accordingly.
 
 use std::any::Any;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{bail, Context, Result};
 use labwired_config::{
@@ -237,6 +237,11 @@ pub struct GenericDisplay {
     screen: Vec<u8>,
     /// How many `refresh` actions have run. Never reset by anything.
     refresh_generation: u32,
+    /// Distinct framebuffer generation hashes observed after each closed RAM
+    /// stream (capped). An oracle can prove the glass content changed across
+    /// steps from one end-of-run inspect, without mid-run samples.
+    generation_history: VecDeque<u64>,
+    last_logged_generation: Option<u64>,
 
     // ── protocol state ──────────────────────────────────────────────────
     framing: Framing,
@@ -1045,6 +1050,8 @@ impl GenericDisplay {
             gpio_backlight: None,
             screen,
             refresh_generation: 0,
+            generation_history: VecDeque::new(),
+            last_logged_generation: None,
             framing: Framing::Idle,
             pending_cmd: 0,
             pending_idx: None,
@@ -1549,6 +1556,7 @@ impl GenericDisplay {
             if action.refresh {
                 self.screen.copy_from_slice(&self.ram);
                 self.refresh_generation = self.refresh_generation.wrapping_add(1);
+                self.note_fb_generation();
             }
         }
     }
@@ -1567,6 +1575,9 @@ impl GenericDisplay {
 
     /// One command byte off the wire.
     fn command_byte(&mut self, byte: u8) {
+        if self.framing == Framing::Ram {
+            self.note_fb_generation();
+        }
         // Parameters of a command opened on the COMMAND stream (I²C control-byte
         // framing) arrive here, ahead of any opcode decode — the controller is
         // counting bytes, not looking at their values.
@@ -1717,6 +1728,7 @@ impl GenericDisplay {
             if *left == 0 {
                 self.ram_remaining = None;
                 self.framing = Framing::Idle;
+                self.note_fb_generation();
             }
         }
     }
@@ -1860,6 +1872,22 @@ impl GenericDisplay {
         Some(known)
     }
 
+    /// Record the current framebuffer hash when a RAMWR (or equivalent) stream
+    /// has closed and the picture differs from the last logged one.
+    fn note_fb_generation(&mut self) {
+        let fb = self.oriented_framebuffer();
+        let gen = crate::inspect::artifact_generation(&fb);
+        if self.last_logged_generation == Some(gen) {
+            return;
+        }
+        self.last_logged_generation = Some(gen);
+        const CAP: usize = 16;
+        if self.generation_history.len() >= CAP {
+            self.generation_history.pop_front();
+        }
+        self.generation_history.push_back(gen);
+    }
+
     fn build_artifacts(
         &self,
         id: &str,
@@ -1890,6 +1918,13 @@ impl GenericDisplay {
             crate::inspect::artifact_generation(&fb)
         };
         meta.insert("generation".into(), serde_json::json!(generation));
+        // Distinct hashes across closed RAM streams (plus this inspect's hash
+        // when it is new): enough for a prove that the arm moved between steps.
+        let mut history: Vec<u64> = self.generation_history.iter().copied().collect();
+        if history.last().copied() != Some(generation) {
+            history.push(generation);
+        }
+        meta.insert("generation_history".into(), serde_json::json!(history));
         // Which panel this is. Two panels can hold the same picture (three
         // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
         // that tells evidence apart by its contents would merge them into one.

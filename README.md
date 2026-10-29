@@ -48,6 +48,7 @@ This repository is the engine behind [labwired.com](https://labwired.com/). The 
 browser [Playground](https://app.labwired.com/) and the hosted MCP connector run the same
 models. To look before installing anything, open a lab:
 [SSD1306 hello](https://app.labwired.com/?lab=ssd1306-hello-lab),
+[U575 Star Catcher](https://app.labwired.com/?lab=nucleo-u575-star-catcher&run=1),
 [BME280 weather](https://app.labwired.com/?lab=bme280-weather-lab), or
 [IO-Link DI/DO](https://app.labwired.com/?lab=iolink-dido).
 

@@ -28,7 +28,10 @@ use crate::system::node::parse_avr_elf_image;
 use crate::{Cpu, Machine};
 use anyhow::anyhow;
 
-pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+pub(super) fn build(
+    req: BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     let firmware = match (&req.firmware, req.boot) {
         (FirmwareSource::Elf(elf), BootMode::FastBoot) => *elf,
         _ => {
@@ -41,8 +44,8 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     };
     let (chip, manifest) = (req.chip, req.system);
 
-    let mut bus =
-        SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();
@@ -60,13 +63,9 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     cpu.load_program_image(&program_image);
     // USART TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());
-    // SPI/I2C kits park on bus controllers; SPDR/TWCR clock them from the CPU
-    // model (same as build_avr_node / CLI).
-    for name in ["spi", "spi0", "spi1"] {
-        for dev in bus.take_spi_devices(name) {
-            cpu.push_spi_device(dev);
-        }
-    }
+    // SPI kits stay on the bus parking controller so inspect / display
+    // readout can see them; SPDR clocks them via SystemBus::clock_parking_spi.
+    // I²C slaves still move onto the CPU TWI model (TWCR/TWDR).
     for name in ["i2c", "i2c0", "twi"] {
         for dev in bus.take_i2c_slaves(name) {
             cpu.push_i2c_slave(dev);

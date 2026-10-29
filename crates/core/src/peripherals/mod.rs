@@ -48,6 +48,9 @@ pub mod fmc;
 pub mod generic_factory;
 pub mod gpdma;
 pub mod gpio;
+pub mod stm32u5_hash;
+pub mod stm32u5_pka;
+pub mod stm32u5_saes;
 // Historical timing oracle, including its former hook state; production uses GPIO schedules.
 #[cfg(test)]
 #[allow(dead_code)]
@@ -58,6 +61,7 @@ pub(crate) mod i2c_bitbus;
 pub mod i2c_matrix;
 pub mod i2c_temp_sensor;
 pub mod i2c_waveform;
+pub mod icache;
 pub mod imx_ccm;
 pub mod imx_iomuxc;
 pub mod imxrt;
@@ -108,6 +112,7 @@ pub(crate) mod spi_bitbus;
 pub mod spi_loopback;
 pub mod spi_waveform;
 pub mod stm32f4_dma;
+pub mod stm32u5_sysmem;
 pub mod stub;
 pub mod syscfg;
 pub mod systick;
