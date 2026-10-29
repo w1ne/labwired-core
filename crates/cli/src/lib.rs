@@ -1757,7 +1757,9 @@ pub(crate) fn evaluate_display_region(
     machine: &labwired_core::Machine<impl labwired_core::Cpu>,
     d: &labwired_config::DisplayRegionDetails,
 ) -> Result<(), String> {
-    use labwired_core::inspect::{artifact_region_ink, InspectOpts, PixelRegion};
+    use labwired_core::inspect::{
+        artifact_region_colour_count, artifact_region_ink, InspectOpts, PixelRegion,
+    };
 
     let artifact = machine
         .bus
@@ -1849,6 +1851,27 @@ pub(crate) fn evaluate_display_region(
             d.min_ink * 100.0,
             max * 100.0,
         ));
+    }
+
+    if let Some(ref colour_s) = d.colour {
+        let colour = labwired_config::parse_rgb565(colour_s).ok_or_else(|| {
+            format!(
+                "display_region '{}': colour {colour_s:?} is not a valid RGB565 hex value",
+                d.id
+            )
+        })?;
+        let count = artifact_region_colour_count(format, &artifact.meta, bytes, region, colour)
+            .map_err(|e| format!("display_region '{}': {e}", d.id))?;
+        let min_c = d
+            .min_colour_pixels
+            .unwrap_or(if d.max_colour_pixels.is_none() { 1 } else { 0 });
+        let max_c = d.max_colour_pixels.unwrap_or(usize::MAX);
+        if count < min_c || count > max_c {
+            return Err(format!(
+                "display_region '{}': region ({},{}) {}x{} has {count} pixels of colour                  0x{colour:04X}, outside the required {min_c}..={max_c}",
+                d.id, region.x, region.y, region.w, region.h,
+            ));
+        }
     }
     Ok(())
 }
@@ -2258,7 +2281,7 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::DisplayRegion(a) => {
             let d = &a.display_region;
             let dim = |v: Option<usize>| v.map(|n| n.to_string()).unwrap_or_else(|| "*".into());
-            format!(
+            let mut s = format!(
                 "display_region: {} ({},{}) {}x{} ink {:.2}..={:.2}",
                 d.id,
                 d.x,
@@ -2267,7 +2290,17 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
                 dim(d.h),
                 d.min_ink,
                 d.max_ink.unwrap_or(1.0)
-            )
+            );
+            if let Some(ref c) = d.colour {
+                s.push_str(&format!(" colour {c}"));
+                if let Some(n) = d.min_colour_pixels {
+                    s.push_str(&format!(" min_colour_pixels={n}"));
+                }
+                if let Some(n) = d.max_colour_pixels {
+                    s.push_str(&format!(" max_colour_pixels={n}"));
+                }
+            }
+            s
         }
         TestAssertion::FidelityClean(a) => format!("fidelity_clean: {}", a.fidelity_clean),
         TestAssertion::CanBridge(a) => {
@@ -2746,6 +2779,9 @@ mod tests {
                     min_ink: 1.0,
                     max_ink: None,
                     lit: None,
+                    colour: None,
+                    min_colour_pixels: None,
+                    max_colour_pixels: None,
                 },
             },
         )];
