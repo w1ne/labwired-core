@@ -2397,7 +2397,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 2571590a02a7935ea91960945b8174bc7e2a3a65eb1f7278cd015df2e3ff46f8
+    drift_ack_digest: 1bea3abf94dcd2d8822f3415ac8cfab5a76eb687cf513b465bf7787da4a52371
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3214,6 +3214,12 @@ boards:
     # slots 0x40001230/123c/1218/1224). Shared thunk bank also listed on C3;
     # C3 register map and reset-oracle set are unchanged (C3 does not wire
     # these S3 slots). ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1536 feat/esp-uart-rx-inject-sched): watched esp_uart.rs.
+    # EspUart wakes the event-scheduler when uart_injections deliver RX bytes,
+    # and latches INT_RXFIFO_TOUT via an int_raw_sticky Cell so &self ingest
+    # (shared RX source path) cannot drop the timeout bit. Register map and
+    # reset values are unchanged; C3 UART is not in the asserted reset-oracle
+    # set. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
 
   - id: nucleo-l476rg
@@ -7871,8 +7877,12 @@ boards:
     # at the newlib export addresses so Arduino String/C string ops stop
     # hitting nop_return_zero. No peripheral register map or the nine
     # captured reset-state windows change. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1536 feat/esp-uart-rx-inject-sched): watched esp_uart.rs.
+    # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
+    # UART0 is outside the nine captured reset-state windows; no register map
+    # or reset value change. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
-    drift_ack_digest: 84c53ae3c90fb74306899d5b2a3c901a6788799f3c70a435aef35ce396ac0a88
+    drift_ack_digest: 9bf67e33982a546e9231f535016f4c705266f71a0c1faf768262bea62394b98b
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
