@@ -1456,7 +1456,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             // much ink, what was required), so it is logged rather than
             // reduced to a bare `false`.
             TestAssertion::DisplayRegion(a) => {
-                let passed = match evaluate_display_region(&ctx.machine.bus, &a.display_region) {
+                let passed = match evaluate_display_region(ctx.machine, &a.display_region) {
                     Ok(()) => true,
                     Err(msg) => {
                         error!("Assertion failed: {}", msg);
