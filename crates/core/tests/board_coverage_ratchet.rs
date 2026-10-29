@@ -549,6 +549,7 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",
         "stm32f401cb",
