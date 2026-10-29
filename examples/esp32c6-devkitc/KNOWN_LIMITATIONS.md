@@ -46,6 +46,7 @@ The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:
 | GDMA (`esp32c6_gdma`) | 3 channels, C6 register map (SVD), M2M descriptor walk with owner/CHECK_OWNER/OUT_AUTO_WRBACK semantics, RAW/ST/ENA/CLR interrupts, EOF-descriptor addresses. | **No peripheral-coupled pumps** (SPI2/UHCI0/I2S/AES/SHA/ADC/PARLIO): a START with a real peripheral bound stalls visibly (no EOF, `needs_bus_tick` stays true) rather than moving bytes. FIFO data ports (`IN_POP`/`OUT_PUSH`) are stubs; `*FIFO_STATUS` always reports empty. No priority arbitration, ETM, burst tuning, `IN_RST`/`OUT_RST`. Descriptor address reconstruction assumes the 20-bit LINK field prefixes `0x4080_0000` (HP SRAM) — see the model docs for the TRM inference. No fixture has routed the DMA matrix sources (66–71) through the fabric. |
 | Interrupt fabric (`interrupt_core0` + `intpri`) | Matrix MAP words are real; asserted sources route through enable/priority/threshold into the RISC-V core; the software doorbells (`CPU_INTR_FROM_CPU_n`) and the UART0 peripheral source (43, via the shared twin's `matrix_irq_sources_into`) deliver real traps. | **Peripheral coverage beyond UART0 is unproven**: UART1 (44), TIMG (51–56), GDMA (66–71) source ids are declared, but no in-tree fixture drives one. C6 GPIO does not emit source 30. A scheduler-driven peripheral's routed level is re-derived at the peripheral tick (≤ one tick interval), not at its MMIO write, so a level ISR sees a re-entry window the fixture masks around. No CLIC/`CPU_INT_TYPE` edge-vs-level programming, no `CPU_INT_CLEAR` write path, no U-mode/privilege handling. |
 | INTPRI register block | `CPU_INT_ENABLE`, `CPU_INT_PRI_n`, `CPU_INT_THRESH`, `CPU_INTR_FROM_CPU_n` are functional (the fixture proves level delivery + masking). | Remaining SVD registers in the window (`CPU_INT_TYPE`, `CPU_INT_CLEAR`, `CLOCK_GATE`, `DATE`) are declarative storage only. |
+| USB Serial/JTAG (`esp32c6_usb_serial_jtag`) | Shared `UsbSerialJtag` behavioural model at `0x6000_F000` (irq 48): EP1 TX reaches the console tap; SOF/INT_ENA match the C3/S3 contract; `attach_usb_serial_jtag_sink` succeeds. | DevKitC-1 system yaml still defaults `debug_uart` to `uart0` (USB-UART bridge on GPIO16/17). Arduino `HWCDC` / CDC-on-boot as the *primary* console, and a hosted C6 Arduino compile/boot path, are separate gaps. |
 
 ## Not modelled
 
@@ -56,7 +57,6 @@ The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:
   flash-controller model, partition parsing, secure boot, or flash encryption.
 - **Radios**: Wi-Fi 6 (MAC/PHY), Bluetooth 5 LE, IEEE 802.15.4, and the
   coexistence block. No MAC, no PHY, no packet path.
-- **USB Serial/JTAG** (`USB_DEVICE` window): unmapped (accesses fault loudly).
 - **SYSTIMER, RMT, SPI0/SPI1, I2S, TWAI, PCNT, ETM, PARL_IO, TSENS,
   AES/SHA/RSA/ECC/HMAC/DS, eFuse, PMU, LP_WDT, LP_I2C0, LP_UART0, trace** — not
   declared; accesses to these windows fault loudly rather than pretending to
