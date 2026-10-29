@@ -9201,6 +9201,15 @@ boards:
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/esp32c6/gdma.rs
       - crates/core/src/peripherals/esp32c6/pcr.rs
+      # 2026-10-29 (#1534), model_paths_drift_gate: remaining registered C6
+      # models the YAML-only round-2 watch still omitted (extmem / I2C_ANA_MST /
+      # MODEM_LPCON / shared EspSystimer / StubDevice). SIM-DERIVED — no
+      # silicon ack implied.
+      - crates/core/src/peripherals/esp32c6/extmem.rs
+      - crates/core/src/peripherals/esp32c6/i2c_ana_mst.rs
+      - crates/core/src/peripherals/esp32c6/modem_lpcon.rs
+      - crates/core/src/peripherals/esp_systimer.rs
+      - crates/core/src/peripherals/stub.rs
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity
