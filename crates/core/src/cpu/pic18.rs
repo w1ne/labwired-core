@@ -84,6 +84,47 @@ pub const SFR_TOSL: u16 = 0xFFD;
 pub const SFR_TOSH: u16 = 0xFFE;
 pub const SFR_TOSU: u16 = 0xFFF;
 
+// Interrupt / reset control SFRs, classic PIC18F4520 map (DS39631 Table 5-1).
+// The gate logic is generic; a per-device map can override the vector/aliases
+// later without changing the CPU core.
+pub const SFR_INTCON: u16 = 0xFF2;
+pub const SFR_INTCON2: u16 = 0xFF1;
+pub const SFR_INTCON3: u16 = 0xFF0;
+pub const SFR_PIR1: u16 = 0xF9E;
+pub const SFR_PIR2: u16 = 0xFA1;
+pub const SFR_PIE1: u16 = 0xF9D;
+pub const SFR_PIE2: u16 = 0xFA0;
+pub const SFR_IPR1: u16 = 0xF9C;
+pub const SFR_IPR2: u16 = 0xFA2;
+pub const SFR_RCON: u16 = 0xFD0;
+
+/// PIC18 high-priority interrupt vector (byte address).
+pub const PIC18_HIGH_VECTOR: u32 = 0x0008;
+/// PIC18 low-priority interrupt vector (byte address).
+pub const PIC18_LOW_VECTOR: u32 = 0x0018;
+
+// INTCON bits.
+const INTCON_GIE_GIEH: u8 = 1 << 7;
+const INTCON_GIEL: u8 = 1 << 6;
+const INTCON_TMR0IE: u8 = 1 << 5;
+const INTCON_INT0IE: u8 = 1 << 4;
+const INTCON_RBIE: u8 = 1 << 3;
+const INTCON_TMR0IF: u8 = 1 << 2;
+const INTCON_INT0IF: u8 = 1 << 1;
+const INTCON_RBIF: u8 = 1 << 0;
+// INTCON2 priority bits.
+const INTCON2_TMR0IP: u8 = 1 << 2;
+const INTCON2_RBIP: u8 = 1 << 0;
+// INTCON3 bits.
+const INTCON3_INT2IE: u8 = 1 << 7;
+const INTCON3_INT1IE: u8 = 1 << 6;
+const INTCON3_INT2IF: u8 = 1 << 5;
+const INTCON3_INT1IF: u8 = 1 << 4;
+const INTCON3_INT2IP: u8 = 1 << 1;
+const INTCON3_INT1IP: u8 = 1 << 0;
+// RCON.IPEN.
+const RCON_IPEN: u8 = 1 << 7;
+
 pub const STATUS_C: u8 = 1 << 0;
 pub const STATUS_DC: u8 = 1 << 1;
 pub const STATUS_Z: u8 = 1 << 2;
@@ -311,6 +352,130 @@ impl Pic18 {
                 }
             }
         }
+    }
+
+    /// Pick the highest-priority enabled pending interrupt.
+    ///
+    /// Sources modelled: the INTCON TMR0/INT0/RB flags, INTCON3 INT1/INT2, and
+    /// the PIR1/PIR2 peripheral flags with their PIE/IPR enable and priority
+    /// bits. Sticky flags are plain SFR bytes, so firmware clears them in its
+    /// ISR exactly as on silicon. Returns `Some(true)` for a high-priority
+    /// source and `Some(false)` for a low-priority one.
+    ///
+    /// With `RCON.IPEN = 0` every source vectors to `0x0008` and `INTCON.GIE`
+    /// gates it. With `IPEN = 1`, `GIEH`/`GIEL` gate the two vectors (a
+    /// high-priority source may nest inside a low-priority ISR).
+    fn interrupt_request(&self) -> Option<bool> {
+        let intcon = self.read_data(SFR_INTCON);
+        let intcon2 = self.read_data(SFR_INTCON2);
+        let intcon3 = self.read_data(SFR_INTCON3);
+        let ipen = self.read_data(SFR_RCON) & RCON_IPEN != 0;
+
+        let high_enabled = intcon & INTCON_GIE_GIEH != 0;
+        let low_enabled = if ipen {
+            intcon & INTCON_GIEL != 0
+        } else {
+            intcon & INTCON_GIE_GIEH != 0
+        };
+        if !high_enabled && !low_enabled {
+            return None;
+        }
+        let eligible = |high: bool| if high { high_enabled } else { low_enabled };
+
+        // INT0 is always a high-priority source with priority enabled; with
+        // IPEN=0 it shares the single 0x0008 vector.
+        if intcon & INTCON_INT0IF != 0 && intcon & INTCON_INT0IE != 0 && eligible(true) {
+            return Some(true);
+        }
+
+        if intcon & INTCON_TMR0IF != 0 && intcon & INTCON_TMR0IE != 0 {
+            let high = if ipen {
+                intcon2 & INTCON2_TMR0IP != 0
+            } else {
+                true
+            };
+            if eligible(high) {
+                return Some(high);
+            }
+        }
+
+        if intcon & INTCON_RBIF != 0 && intcon & INTCON_RBIE != 0 {
+            let high = if ipen {
+                intcon2 & INTCON2_RBIP != 0
+            } else {
+                true
+            };
+            if eligible(high) {
+                return Some(high);
+            }
+        }
+
+        if intcon3 & INTCON3_INT1IF != 0 && intcon3 & INTCON3_INT1IE != 0 {
+            let high = if ipen {
+                intcon3 & INTCON3_INT1IP != 0
+            } else {
+                true
+            };
+            if eligible(high) {
+                return Some(high);
+            }
+        }
+
+        if intcon3 & INTCON3_INT2IF != 0 && intcon3 & INTCON3_INT2IE != 0 {
+            let high = if ipen {
+                intcon3 & INTCON3_INT2IP != 0
+            } else {
+                true
+            };
+            if eligible(high) {
+                return Some(high);
+            }
+        }
+
+        // Peripheral flags: PIR1/PIE1/IPR1 and PIR2/PIE2/IPR2, bit for bit.
+        for (pir, pie, ipr) in [
+            (SFR_PIR1, SFR_PIE1, SFR_IPR1),
+            (SFR_PIR2, SFR_PIE2, SFR_IPR2),
+        ] {
+            let pending = self.read_data(pir);
+            let enabled = self.read_data(pie);
+            let priority = self.read_data(ipr);
+            for bit in 0..8 {
+                let mask = 1 << bit;
+                if pending & mask != 0 && enabled & mask != 0 {
+                    let high = if ipen { priority & mask != 0 } else { true };
+                    if eligible(high) {
+                        return Some(high);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Enter the interrupt vector for `high` priority, pushing the next
+    /// instruction as the return address and clearing the matching global
+    /// enable exactly as the hardware does.
+    fn take_interrupt(&mut self, high: bool) {
+        self.push(self.pc);
+        let intcon = self.read_data(SFR_INTCON);
+        let ipen = self.read_data(SFR_RCON) & RCON_IPEN != 0;
+        let next = if ipen {
+            if high {
+                intcon & !INTCON_GIE_GIEH
+            } else {
+                intcon & !INTCON_GIEL
+            }
+        } else {
+            intcon & !INTCON_GIE_GIEH
+        };
+        self.write_data(SFR_INTCON, next);
+        self.pc = if high {
+            PIC18_HIGH_VECTOR
+        } else {
+            PIC18_LOW_VECTOR
+        };
     }
 
     fn indirect_mode(addr: u16) -> Option<(usize, IndirectMode)> {
@@ -687,6 +852,29 @@ impl Pic18 {
             return Ok(1);
         }
 
+        if word & 0xFFFE == 0x0010 {
+            let restore = word & 1 != 0;
+            self.pc = Self::align_pc(self.pop());
+            let intcon = self.read_data(SFR_INTCON);
+            let ipen = self.read_data(SFR_RCON) & RCON_IPEN != 0;
+            self.write_data(
+                SFR_INTCON,
+                if ipen {
+                    intcon | INTCON_GIE_GIEH | INTCON_GIEL
+                } else {
+                    intcon | INTCON_GIE_GIEH
+                },
+            );
+            if restore {
+                if let Some((wreg, status, bsr)) = self.shadow {
+                    self.wreg = wreg;
+                    self.status = status & STATUS_FLAG_MASK;
+                    self.bsr = bsr;
+                }
+            }
+            return Ok(2);
+        }
+
         if word & 0xFFFE == 0x0012 {
             let restore = word & 1 != 0;
             self.pc = Self::align_pc(self.pop());
@@ -948,6 +1136,13 @@ impl Cpu for Pic18 {
         let cycles = self.execute(word, pc)?;
         self.cycles += u64::from(cycles);
         crate::advance_batch_cycle(bus, u64::from(cycles));
+
+        // Interrupts are sampled between instructions: the instruction that
+        // just retired completes, then a pending enabled source vectors and
+        // pushes the next instruction as the return address.
+        if let Some(high) = self.interrupt_request() {
+            self.take_interrupt(high);
+        }
 
         if observed {
             let registers = self.register_view();
@@ -1683,5 +1878,173 @@ mod tests {
         assert_eq!(restored.get_pc(), cpu.get_pc());
         assert_eq!(restored.stack_pointer(), 1);
         assert_eq!(restored.top_of_stack(), 0x0004);
+    }
+
+    #[test]
+    fn interrupt_without_ipen_vectors_high_and_retfie_restores_gie() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]); // NOP at 0
+        cpu.load_flash(PIC18_HIGH_VECTOR, &0x0010u16.to_le_bytes()); // RETFIE
+
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH);
+        cpu.write_data(SFR_PIE1, 0x01);
+        cpu.write_data(SFR_PIR1, 0x01);
+
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
+        assert_eq!(cpu.stack_pointer(), 1);
+        assert_eq!(cpu.top_of_stack(), 0x0002);
+        assert_eq!(
+            cpu.read_data(SFR_INTCON) & INTCON_GIE_GIEH,
+            0,
+            "GIE clears on entry"
+        );
+
+        cpu.write_data(SFR_PIR1, 0); // ISR acknowledges the source
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x0002);
+        assert_ne!(
+            cpu.read_data(SFR_INTCON) & INTCON_GIE_GIEH,
+            0,
+            "RETFIE re-enables GIE"
+        );
+        assert_eq!(cpu.stack_pointer(), 0);
+    }
+
+    #[test]
+    fn interrupt_priority_selects_low_and_high_vectors() {
+        // Low-priority PIR1 bit 0 (IPR1 bit 0 clear): vector 0x0018, GIEL clears
+        // and GIEH stays set.
+        let mut low = Pic18::new();
+        low.load_words(&[0x0000]);
+        low.write_data(SFR_RCON, RCON_IPEN);
+        low.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        low.write_data(SFR_PIE1, 0x01);
+        low.write_data(SFR_PIR1, 0x01);
+        low.write_data(SFR_IPR1, 0x00);
+        run(&mut low, 1);
+        assert_eq!(low.get_pc(), PIC18_LOW_VECTOR);
+        assert_eq!(
+            low.read_data(SFR_INTCON) & INTCON_GIE_GIEH,
+            INTCON_GIE_GIEH,
+            "GIEH survives a low-priority entry"
+        );
+        assert_eq!(
+            low.read_data(SFR_INTCON) & INTCON_GIEL,
+            0,
+            "GIEL clears on low-priority entry"
+        );
+
+        // High-priority PIR1 bit 0 (IPR1 bit 0 set): vector 0x0008, GIEH clears
+        // and GIEL stays set.
+        let mut high = Pic18::new();
+        high.load_words(&[0x0000]);
+        high.write_data(SFR_RCON, RCON_IPEN);
+        high.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        high.write_data(SFR_PIE1, 0x01);
+        high.write_data(SFR_PIR1, 0x01);
+        high.write_data(SFR_IPR1, 0x01);
+        run(&mut high, 1);
+        assert_eq!(high.get_pc(), PIC18_HIGH_VECTOR);
+        assert_eq!(
+            high.read_data(SFR_INTCON) & INTCON_GIE_GIEH,
+            0,
+            "GIEH clears on high-priority entry"
+        );
+        assert_eq!(
+            high.read_data(SFR_INTCON) & INTCON_GIEL,
+            INTCON_GIEL,
+            "GIEL survives a high-priority entry"
+        );
+    }
+
+    #[test]
+    fn interrupt_high_priority_is_gated_by_gieh() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]);
+        cpu.write_data(SFR_RCON, RCON_IPEN);
+        // Only the low-priority enable is set.
+        cpu.write_data(SFR_INTCON, INTCON_GIEL);
+        cpu.write_data(SFR_PIE1, 0x01);
+        cpu.write_data(SFR_PIR1, 0x01);
+        cpu.write_data(SFR_IPR1, 0x01); // high-priority source
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x0002, "GIEH=0 masks a high source");
+    }
+
+    #[test]
+    fn interrupt_intcon_and_intcon3_sources_are_recognised() {
+        // TMR0: INTCON TMR0IF/TMR0IE, low priority on INTCON2.TMR0IP=0.
+        let mut tmr0 = Pic18::new();
+        tmr0.load_words(&[0x0000]);
+        tmr0.write_data(SFR_RCON, RCON_IPEN);
+        tmr0.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        tmr0.write_data(SFR_INTCON2, 0);
+        tmr0.write_data(
+            SFR_INTCON,
+            INTCON_GIE_GIEH | INTCON_GIEL | INTCON_TMR0IE | INTCON_TMR0IF,
+        );
+        run(&mut tmr0, 1);
+        assert_eq!(tmr0.get_pc(), PIC18_LOW_VECTOR);
+
+        // INT1: INTCON3 INT1IF/INT1IE, high priority on INTCON3.INT1IP=1.
+        let mut int1 = Pic18::new();
+        int1.load_words(&[0x0000]);
+        int1.write_data(SFR_RCON, RCON_IPEN);
+        int1.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        int1.write_data(
+            SFR_INTCON3,
+            INTCON3_INT1IE | INTCON3_INT1IF | INTCON3_INT1IP,
+        );
+        run(&mut int1, 1);
+        assert_eq!(int1.get_pc(), PIC18_HIGH_VECTOR);
+    }
+
+    #[test]
+    fn interrupt_int0_is_always_high_priority() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]);
+        cpu.write_data(SFR_RCON, RCON_IPEN);
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        cpu.write_data(
+            SFR_INTCON,
+            INTCON_GIE_GIEH | INTCON_GIEL | INTCON_INT0IE | INTCON_INT0IF,
+        );
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
+    }
+
+    #[test]
+    fn interrupt_is_masked_when_global_enable_is_clear() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]);
+        cpu.write_data(SFR_INTCON, 0); // GIE clear
+        cpu.write_data(SFR_PIE1, 0xFF);
+        cpu.write_data(SFR_PIR1, 0xFF);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x0002);
+        assert_eq!(cpu.stack_pointer(), 0);
+    }
+
+    #[test]
+    fn retfie_fast_restores_the_shadow_registers() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]);
+        cpu.load_flash(PIC18_HIGH_VECTOR, &0x0011u16.to_le_bytes()); // RETFIE FAST
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH);
+        cpu.write_data(SFR_PIE1, 0x01);
+        cpu.write_data(SFR_PIR1, 0x01);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
+
+        // The fast context would have been saved by CALL FAST/entry; seed the
+        // shadow the same way and require RETFIE FAST to restore it.
+        cpu.shadow = Some((0x34, STATUS_Z, 0x02));
+        cpu.write_data(SFR_PIR1, 0);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.wreg(), 0x34);
+        assert_eq!(cpu.status(), STATUS_Z);
+        assert_eq!(cpu.bsr(), 0x02);
+        assert_eq!(cpu.get_pc(), 0x0002);
     }
 }

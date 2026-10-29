@@ -40,6 +40,7 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
 | Relative | `BRA`, `RCALL`, `BZ`, `BNZ`, `BC`, `BNC`, `BOV`, `BNOV`, `BN`, `BNN` | signed offsets in instruction words |
 | Absolute | two-word `GOTO`, two-word `CALL` | 20-bit literal is a **word** address (`k -> PC<20:1>`) |
 | Stack | `RETURN`/`RETURN FAST` | `CALL FAST` saves WREG/STATUS/BSR for the matching fast return |
+| Interrupts | `RETFIE`/`RETFIE FAST` | vectors at `0x0008`/`0x0018`, `INTCON`/`INTCON2`/`INTCON3`, `PIR1`/`PIR2`/`PIE1`/`PIE2`/`IPR1`/`IPR2`, `RCON.IPEN`, `GIE`/`GIEH`/`GIEL`; fast restores the shadow registers |
 | FSR literal | `LFSR` | 12-bit literal loaded into FSR0/FSR1/FSR2 |
 | Indirect | `INDF0/1/2`, `POSTINC0/1/2`, `POSTDEC0/1/2`, `PREINC0/1/2`, `PLUSW0/1/2` | Virtual Access Bank registers used by byte/bit file operations; full 12-bit FSR address, independent of BSR and `a` |
 
@@ -58,7 +59,26 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
 * Instructions that affect flags do not write their result into `STATUS`; they
   update only the flag bits, matching the datasheet destination rule.
 
-### Data memory
+### Interrupts
+
+The core samples enabled interrupt sources between instructions (after the
+current instruction retires) and pushes the next instruction as the return
+address. Sticky flags live in the SFR file and are cleared by the ISR.
+
+* `RCON.IPEN = 0`: every source vectors to `0x0008`; `INTCON.GIE` (bit 7) is
+  the global enable and is cleared on entry. `RETFIE` sets it again.
+* `RCON.IPEN = 1`: high-priority sources vector to `0x0008` through `GIEH`
+  (bit 7), low-priority sources to `0x0018` through `GIEL` (bit 6). Entry
+  clears only the matching global bit, so a high-priority source may nest
+  inside a low-priority ISR. `RETFIE` sets both `GIEH` and `GIEL`.
+* Sources: `INTCON` TMR0/INT0/RB, `INTCON3` INT1/INT2, and the eight bits of
+  `PIR1`/`PIE1`/`IPR1` and `PIR2`/`PIE2`/`IPR2`. INT0 is always high priority
+  when `IPEN = 1`; the other source priorities come from `INTCON2`,
+  `INTCON3` or the matching IPR bit.
+* `RETFIE FAST` restores WREG/STATUS/BSR from the same one-level shadow that
+  `CALL FAST`/`RETURN FAST` use. A full interrupt fast-register stack (and
+  per-device vector remapping) is not modelled yet.
+
 
 * Default model: 16 banks x 256 bytes (`0x000..0xFFF`) and a 64 KiB flash.
   A per-device geometry can be supplied with `Pic18::with_geometry`.
@@ -121,8 +141,8 @@ Commands run from this worktree:
 
 | Command | Result |
 | :--- | :--- |
-| `cargo test -p labwired-core pic18` | PASS: 30 PIC18 unit tests; other test binaries filtered to 0 |
-| `cargo test -p labwired-core --lib cpu::pic18` | PASS: 30 passed; 0 failed |
+| `cargo test -p labwired-core pic18` | PASS: 37 PIC18 unit tests; other test binaries filtered to 0 |
+| `cargo test -p labwired-core --lib cpu::pic18` | PASS: 37 passed; 0 failed |
 | `cargo fmt --all -- --check` | PASS |
 | XC8 local check (`command -v xc8-cc` / `xc8`, repository fixture search) | No XC8 compiler on PATH and no PIC18 ELF/HEX fixture in the worktree; no real firmware smoke is claimed |
 | `cargo test -p labwired-core one_arch_policy` | PASS: 8 passed; 0 failed |
@@ -148,7 +168,10 @@ addressing, two-word `GOTO`/`CALL`/`RETURN`, `LFSR`, conditional branches,
 overflow/underflow, PCL latch writes, `MOVFF` to `PCL`, `ADDWF PCL` computed
 jumps with and without low-byte carry, unknown-opcode `DecodeError`, snapshot
 round-trip, program image loading, and a hand-assembled add/store/GOTO program.
-No catalogue part is onboarded or claimed.
+The interrupt tests cover GIE masking, the high/low vectors and
+`GIEH`/`GIEL` gating, `INTCON` TMR0/INT0 and `INTCON3` INT1 sources,
+`PIR1`/`PIE1`/`IPR1` priority, `RETFIE` re-enabling and `RETFIE FAST` shadow
+restore. No catalogue part is onboarded or claimed.
 
 Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 
@@ -164,9 +187,12 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
    still need verification against a pinned compiler. The current ELF path
    treats `PT_LOAD` `p_paddr` as a byte address; a real XC8 ELF/HEX/COFF path,
    section handling, and a committed fixture are the next loader work.
-2. **Interrupts.** Code vectors at `0x0008` (high) and `0x0018` (low),
-   `INTCON`/`INTCON2`/`INTCON3`, `PIR`/`PIE`/`IPR`, priority via `RCON.IPEN`,
-   `GIE/GIEH/GIEL`, `RETFIE`, and fast-register-stack context restore.
+2. **Interrupts.** The basic controller is in: vectors `0x0008`/`0x0018`,
+   `INTCON`/`INTCON2`/`INTCON3`, `PIR1`/`PIR2`/`PIE1`/`PIE2`/`IPR1`/`IPR2`,
+   `RCON.IPEN`, `GIE/GIEH/GIEL`, `RETFIE`/`RETFIE FAST`, and the one-level
+   fast shadow restore. Still missing: a full interrupt fast-register stack,
+   per-device vector remapping, interrupt latency/cycle accounting, and the
+   `RCON` reset-source/`STVREN` behavior tied to the vector path.
 3. **Peripherals.** GPIO (`TRIS`/`LAT`/`PORT`, pad masks, analog/PPS), oscillator
    and `CONFIG`, TMR0/1/2/3, CCP/ECCP, MSSP, EUSART, ADC, comparators, WDT,
    sleep/idle, and reset sources/`RCON`.
