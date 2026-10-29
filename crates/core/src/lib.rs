@@ -2698,8 +2698,11 @@ impl<C: Cpu> Machine<C> {
         // Device binding lives on the bus, which is the one thing that holds
         // BOTH the live models (inside controllers and directly on itself) and
         // the manifest declarations they are named from. See
-        // `crate::bus::attached_devices`.
-        let devices = self.bus.inspect_devices(filter, opts);
+        // `crate::bus::attached_devices`. CPU-held SPI/I²C (AVR take_*) are
+        // folded in via the extra walk so inspect still sees them.
+        let devices = self.bus.inspect_devices_with_extra(filter, opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        });
         crate::inspect::MachineInspect {
             peripherals,
             devices,
