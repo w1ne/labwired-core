@@ -63,13 +63,9 @@ pub(super) fn build(
     cpu.load_program_image(&program_image);
     // USART TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());
-    // SPI/I2C kits park on bus controllers; SPDR/TWCR clock them from the CPU
-    // model (same as build_avr_node / CLI).
-    for name in ["spi", "spi0", "spi1"] {
-        for dev in bus.take_spi_devices(name) {
-            cpu.push_spi_device(dev);
-        }
-    }
+    // SPI kits stay on the bus parking controller so inspect / display
+    // readout can see them; SPDR clocks them via SystemBus::clock_parking_spi.
+    // I²C slaves still move onto the CPU TWI model (TWCR/TWDR).
     for name in ["i2c", "i2c0", "twi"] {
         for dev in bus.take_i2c_slaves(name) {
             cpu.push_i2c_slave(dev);

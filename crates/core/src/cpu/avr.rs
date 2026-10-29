@@ -224,11 +224,11 @@ pub struct Avr {
     pub spcr: u8,
     pub spsr: u8,
     pub spdr: u8,
-    /// SPI slaves (e.g. matrix MAX31855) attached for L4.
+    /// SPI slaves attached directly to the CPU (unit tests / legacy take).
     ///
-    /// Not `Clone`/`Debug`: trait objects. Kits land here after
-    /// [`crate::bus::SystemBus::take_spi_devices`] moves them off the bus
-    /// parking SPI controller (AVR has no MMIO SPI model).
+    /// Not `Clone`/`Debug`: trait objects. Production kits stay on the bus
+    /// parking SPI controller and are clocked from SPDR via
+    /// [`crate::bus::SystemBus::clock_parking_spi`] so inspect can see them.
     pub spi_devices: Vec<Box<dyn SpiDevice>>,
     /// TWI (I²C) — TWBR/TWSR/TWAR/TWDR/TWCR (data-space 0xB8..0xBC).
     pub twbr: u8,
@@ -905,13 +905,38 @@ impl Avr {
             }
             0x004E => {
                 // SPI data: master clocks one byte through attached slaves.
+                // Sample D/C for every device that declares a `dc_source`
+                // (same semantics as SystemBus::maybe_latch_dc) — generic for
+                // any SPI panel with a DC line, not device-specific.
                 let mosi = value;
                 let mut miso = 0u8;
+                {
+                    let sources: Vec<(usize, u64, u8)> = self
+                        .spi_devices
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, d)| d.dc_source().map(|(a, b)| (i, a, b)))
+                        .collect();
+                    for (i, addr, bit) in sources {
+                        let level = bus
+                            .read_u32(addr)
+                            .map(|v| (v >> bit) & 1 != 0)
+                            .unwrap_or(false);
+                        self.spi_devices[i].set_dc_level(level);
+                    }
+                }
                 for dev in &mut self.spi_devices {
                     let resp = dev.transfer(mosi);
                     if resp != 0 {
                         miso = resp;
                     }
+                }
+                // Kits left on the parking SPI controller (not taken): latch
+                // D/C and clock them so inspect / display_artifact still see
+                // the panel. Bus::clock_parking_spi — no SystemBus downcast.
+                let bus_miso = bus.clock_parking_spi(mosi);
+                if bus_miso != 0 {
+                    miso = bus_miso;
                 }
                 self.spdr = miso;
                 self.spsr |= 1 << 7; // SPIF
@@ -1741,6 +1766,18 @@ impl Cpu for Avr {
             5
         } else {
             4
+        }
+    }
+
+    fn for_each_attached_device(
+        &self,
+        f: &mut dyn FnMut(Option<&str>, crate::inspect::AttachedDeviceRef<'_>),
+    ) {
+        for device in &self.spi_devices {
+            crate::inspect::visit_spi_device(&**device, &mut |d| f(Some("spi"), d));
+        }
+        for slave in &self.i2c_slaves {
+            crate::inspect::visit_i2c_device(&**slave, &mut |d| f(Some("i2c"), d));
         }
     }
 
@@ -3161,5 +3198,155 @@ mod tests {
         for (v328, v2560) in table {
             assert_eq!(mega2560_vector(v328), v2560, "328P vector {v328}");
         }
+    }
+
+    /// Recording SPI slave: captures (dc_level, mosi) at each transfer so the
+    /// SPDR path's D/C sample can be asserted without a full panel model.
+    struct DcProbe {
+        src: Option<(u64, u8)>,
+        level: bool,
+        frames: std::sync::Arc<std::sync::Mutex<Vec<(bool, u8)>>>,
+    }
+
+    impl SpiDevice for DcProbe {
+        fn transfer(&mut self, mosi_byte: u8) -> u8 {
+            self.frames.lock().unwrap().push((self.level, mosi_byte));
+            0
+        }
+        fn cs_pin(&self) -> &str {
+            "PB2"
+        }
+        fn set_dc_level(&mut self, level: bool) {
+            self.level = level;
+        }
+        fn dc_source(&self) -> Option<(u64, u8)> {
+            self.src
+        }
+        fn set_dc_source(&mut self, odr_addr: u64, bit: u8) {
+            self.src = Some((odr_addr, bit));
+        }
+        fn as_any(&self) -> Option<&dyn std::any::Any> {
+            Some(self)
+        }
+    }
+
+    #[test]
+    fn spdr_write_samples_dc_pin_per_byte() {
+        let mut cpu = Avr::new();
+        let frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut probe = DcProbe {
+            src: None,
+            level: false,
+            frames: frames.clone(),
+        };
+        // Fake PORT latch at 0x1000 bit 3 — whatever the kit's dc_source is.
+        const ODR: u64 = 0x1000;
+        const BIT: u8 = 3;
+        probe.set_dc_source(ODR, BIT);
+        cpu.push_spi_device(Box::new(probe));
+
+        let mut bus = MockBus::new();
+        // Assert the sampled D/C level rides with the GPIO latch per byte.
+        bus.write_u8(ODR, 1 << BIT).unwrap();
+        cpu.data_write(0x4E, 0xAA, &mut bus).unwrap();
+        bus.write_u8(ODR, 0).unwrap();
+        cpu.data_write(0x4E, 0x55, &mut bus).unwrap();
+        bus.write_u8(ODR, 1 << BIT).unwrap();
+        cpu.data_write(0x4E, 0xFF, &mut bus).unwrap();
+
+        let got = frames.lock().unwrap().clone();
+        assert_eq!(
+            got,
+            vec![(true, 0xAA), (false, 0x55), (true, 0xFF)],
+            "SPDR must sample D/C per byte, in order"
+        );
+    }
+
+    /// End to end: SPDR writes from the CPU clock a parking (not taken)
+    /// ST7789 on a real SystemBus, with D/C from PORTB.1, and the panel paints.
+    #[test]
+    fn spdr_writes_paint_parking_st7789() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, ExternalDevice, SystemManifest};
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328p.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
+        let mut cfg = std::collections::HashMap::new();
+        cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
+        cfg.insert("dc_pin".into(), serde_yaml::Value::String("PB1".into()));
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "spdr-e2e".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: vec![ExternalDevice {
+                id: "DS1".to_string(),
+                r#type: "st7789-170x320".to_string(),
+                connection: "spi".to_string(),
+                channel: None,
+                route: Default::default(),
+                config: cfg,
+            }],
+            board_io: vec![],
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: vec![],
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+        if let Some(idx) = bus.find_peripheral_index_by_name("spi") {
+            if let Some(devs) = bus.peripherals[idx].dev.spi_attached_devices_mut() {
+                for d in devs.iter_mut() {
+                    d.cs_select();
+                }
+            }
+        }
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        let portb = 0x0001_0023u64;
+        bus.write_u8(portb + 1, 1 << 1).unwrap(); // DDRB.1 output
+        let frames: &[(bool, u8)] = &[
+            (false, 0x01),
+            (false, 0x11),
+            (false, 0x3A),
+            (true, 0x55),
+            (false, 0x29),
+            (false, 0x2A),
+            (true, 0),
+            (true, 0),
+            (true, 0),
+            (true, 1),
+            (false, 0x2B),
+            (true, 0),
+            (true, 0),
+            (true, 0),
+            (true, 1),
+            (false, 0x2C),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+        ];
+        for &(dc, b) in frames {
+            bus.write_u8(portb + 2, if dc { 1 << 1 } else { 0 })
+                .unwrap();
+            cpu.data_write(0x4E, b, &mut bus).unwrap();
+        }
+        let art = bus
+            .display_artifact("DS1", &crate::inspect::InspectOpts::default())
+            .expect("DS1 artifact");
+        let painted = art.meta["painted_bytes"].as_u64().unwrap_or(0);
+        assert!(
+            painted > 0,
+            "SPDR-driven parking ST7789 must paint; meta={:?}",
+            art.meta
+        );
     }
 }

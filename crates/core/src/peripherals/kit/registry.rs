@@ -250,6 +250,9 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // the catalog keeps them apart for the BODY (an 88mm fader is not a 9.53mm
     // trimmer), not for the electrical model.
     ("slide-potentiometer", "potentiometer"),
+    // 240x240 glass on the same ST7789 kit as the 170x320 catalog module;
+    // crop comes from twin config (col_offset/row_offset/cols/rows).
+    ("st7789-240x240", "st7789-170x320"),
     // Unipolar stepper.
     ("stepper-28byj48", "uln2003"),
     // CAN diagnostic one-shot injector alias.
