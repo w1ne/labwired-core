@@ -144,6 +144,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // bins. Listed for the same reason as every other family type.
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
+    // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
+    "esp32c6_usb_serial_jtag",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
