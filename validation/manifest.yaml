@@ -1656,6 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
+    # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
     drift_ack_digest: a51f550ed9bf9a2d31eda2fb490e7d11dbb32b0a5ab302e91fd6b2b874f7cae9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
@@ -3635,6 +3636,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
+    # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
     drift_ack_digest: 9db306e5b96832f9940469035b096bf754145d1ff7ba78be56f683c307d66ea7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
@@ -4591,6 +4593,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
+    # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
     drift_ack_digest: 60909ad7287737e27f6b2d2a0fd6af08b84917041e0e42c0c49a96c30a0fe012
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
@@ -5538,6 +5541,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
+    # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
     drift_ack_digest: c15053362dd7f9e2fc29b43c1f253c83f8e114080d3828dfd205215b4341de89
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
@@ -6518,6 +6522,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
+    # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
     drift_ack_digest: f3232b453b913ac8cd219ca3d2a9092f9c932037f9c7e94cdceabe9a3f98b4bc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
