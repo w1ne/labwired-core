@@ -75,6 +75,21 @@ pub struct DisplayRegionDetails {
     /// every other way of not-measuring here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lit: Option<bool>,
+    /// Exact RGB565 colour (e.g. `"0x7BD4"` or `"7BD4"`) that must appear in
+    /// the region. Counts raw packed pixels — not "top colour" by majority —
+    /// so a lilac face on a mostly-black panel is still provable.
+    ///
+    /// Requires at least one of `min_colour_pixels` / `max_colour_pixels`, or
+    /// defaults `min_colour_pixels` to 1 when both are absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<String>,
+    /// Lower bound on how many pixels in the region equal `colour`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_colour_pixels: Option<usize>,
+    /// Upper bound on how many pixels in the region equal `colour`
+    /// (`0` proves the colour is absent — e.g. "no blue face pixels").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_colour_pixels: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -110,13 +125,44 @@ pub(crate) fn validate_display_region(index: usize, d: &DisplayRegionDetails) ->
             );
         }
     }
-    if d.min_ink == 0.0 && d.max_ink.is_none() {
+    if d.min_ink == 0.0 && d.max_ink.is_none() && d.colour.is_none() {
         anyhow::bail!(
             "assertions[{index}]: display_region with min_ink 0.0 and no max_ink accepts every \
              possible framebuffer, including one the firmware never wrote. Give it a floor \
-             (min_ink) to prove the region was painted, or a ceiling (max_ink) to prove it was \
-             left clear."
+             (min_ink) to prove the region was painted, a ceiling (max_ink) to prove it was \
+             left clear, or a colour bound."
+        );
+    }
+    if let Some(ref colour) = d.colour {
+        if parse_rgb565(colour).is_none() {
+            anyhow::bail!(
+                "assertions[{index}]: display_region.colour must be an RGB565 hex value \
+                 like \"0x7BD4\" (got {colour:?})"
+            );
+        }
+        let min_c = d.min_colour_pixels.unwrap_or(if d.max_colour_pixels.is_none() { 1 } else { 0 });
+        if let Some(max_c) = d.max_colour_pixels {
+            if max_c < min_c {
+                anyhow::bail!(
+                    "assertions[{index}]: display_region.max_colour_pixels ({max_c}) is below \
+                     min_colour_pixels ({min_c})"
+                );
+            }
+        }
+    } else if d.min_colour_pixels.is_some() || d.max_colour_pixels.is_some() {
+        anyhow::bail!(
+            "assertions[{index}]: display_region min_colour_pixels/max_colour_pixels require colour"
         );
     }
     Ok(())
+}
+
+/// Parse `"0x7BD4"` / `"7BD4"` / `0x7bd4` into a packed RGB565 value.
+pub fn parse_rgb565(s: &str) -> Option<u16> {
+    let t = s.trim();
+    let hex = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    if hex.is_empty() || hex.len() > 4 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    u16::from_str_radix(hex, 16).ok()
 }
