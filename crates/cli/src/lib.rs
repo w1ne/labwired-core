@@ -1665,7 +1665,7 @@ fn assertion_currently_passes(
             evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester).is_ok()
         }
         TestAssertion::DisplayRegion(a) => {
-            evaluate_display_region(&machine.bus, &a.display_region).is_ok()
+            evaluate_display_region(machine, &a.display_region).is_ok()
         }
         // Post-run only (footprint / stack paint). Terminal like FirmwareExit:
         // does not block `stop_when_assertions_pass` early-stop of live checks.
@@ -1744,7 +1744,7 @@ fn evaluate_resource_budget(
 
 /// Measure one `display_region` assertion against the live panel.
 ///
-/// Reads the display through `SystemBus::display_artifact` — the same single
+/// Reads the display through `display_artifact_with_extra` (CPU-held kits too) — the same single
 /// door the browser renderer and `inspect` use — so the assertion sees exactly
 /// the pixels the product shows, for any panel on any transport, keyed only by
 /// its `external_devices:` id.
@@ -1754,18 +1754,20 @@ fn evaluate_resource_budget(
 /// format with no decoder. A panel that genuinely painted nothing is a
 /// measurement, and fails on `min_ink` like anything else.
 pub(crate) fn evaluate_display_region(
-    bus: &labwired_core::bus::SystemBus,
+    machine: &labwired_core::Machine<impl labwired_core::Cpu>,
     d: &labwired_config::DisplayRegionDetails,
 ) -> Result<(), String> {
     use labwired_core::inspect::{artifact_region_ink, InspectOpts, PixelRegion};
 
-    let artifact = bus
-        .display_artifact(
+    let artifact = machine
+        .bus
+        .display_artifact_with_extra(
             &d.id,
             &InspectOpts {
                 include_bytes: true,
                 peripheral: None,
             },
+            &mut |f| labwired_core::Cpu::for_each_attached_device(&machine.cpu, f),
         )
         .ok_or_else(|| {
             format!(
