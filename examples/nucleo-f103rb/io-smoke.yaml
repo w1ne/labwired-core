@@ -1,0 +1,13 @@
+# NUCLEO-F103RB GPIO + USART2 onboarding smoke.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps

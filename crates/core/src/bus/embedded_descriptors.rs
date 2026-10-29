@@ -1098,6 +1098,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/stm32f103/gpioc.yaml"),
     ),
     (
+        "stm32f103/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/gpiod.yaml"),
+    ),
+    (
         "stm32f103/i2c1.yaml",
         include_str!("../../../../configs/peripherals/stm32f103/i2c1.yaml"),
     ),

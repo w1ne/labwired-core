@@ -234,6 +234,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "stm32f103rb",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "stm32f103c4",
     "reg_match": 0
   },

@@ -58,6 +58,13 @@ jobs:
             profile_dir: release
             script: examples/demo-blinky/io-smoke.yaml
             system: examples/demo-blinky/system.yaml
+          - id: nucleo-f103rb
+            target: thumbv7m-none-eabi
+            crate: firmware-nucleo-f103rb-smoke
+            profile: release
+            profile_dir: release
+            script: examples/nucleo-f103rb/io-smoke.yaml
+            system: examples/nucleo-f103rb/system.yaml
           # NTC lab: its io-smoke asserts the ADC CONVERSION (boot reading =
           # divider midpoint, later reading rises after the 80 C stimulus). It
           # ran in no workflow, so the firmware's F2/F4 SWSTART (bit 30) on an

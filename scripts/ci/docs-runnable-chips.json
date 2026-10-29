@@ -96,6 +96,10 @@
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
     },
+    "stm32f103rb": {
+      "how": "needs-build",
+      "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "stm32f103t4": {
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."

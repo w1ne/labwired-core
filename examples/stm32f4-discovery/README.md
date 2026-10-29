@@ -17,15 +17,14 @@ A bare-register smoke firmware (`crates/firmware-f4-discovery-smoke`) that:
   run proves the pad actually changed level.
 
 On this board the on-board ST-LINK VCP is **not wired** to the MCU UART
-(UM1467): the console pins are read from the PA2/PA3 header pins.
+(UM1472): the console pins are read from the PA2/PA3 header pins.
 
 ## Build and run
 
 ```bash
 # from core/
 cargo build -p firmware-f4-discovery-smoke --release --target thumbv7em-none-eabi
-
-./target/release/labwired test \
+cargo run -q -p labwired-cli -- test \
   --script examples/stm32f4-discovery/io-smoke.yaml \
   --output-dir out/f4-discovery-smoke --no-uart-stdout
 ```
@@ -33,7 +32,7 @@ cargo build -p firmware-f4-discovery-smoke --release --target thumbv7em-none-eab
 Interactive run (UART to stdout):
 
 ```bash
-./target/release/labwired \
+cargo run -q -p labwired-cli -- \
   --firmware target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke \
   --system configs/systems/stm32f4-discovery.yaml \
   --max-steps 400000
@@ -54,11 +53,11 @@ hb=3 ld3=off odr=00000000
 
 | Item | Value | Source |
 | :--- | :--- | :--- |
-| MCU | STM32F407VGT6, LQFP100 | UM1467 §2 |
+| MCU | STM32F407VGT6, LQFP100 | UM1472 §2 |
 | Core / clock | Cortex-M4F, 168 MHz max (HSI 16 MHz at boot) | DS8626 §2; RM0090 §6 |
 | Flash / RAM | 1 MB @ 0x08000000 / 128 KB @ 0x20000000 (+64 KB CCM) | DS8626 Table 4 |
-| User LEDs | LD4 PD12, LD3 PD13, LD5 PD14, LD6 PD15, active high | UM1467 §6.4; Zephyr `stm32f4_disco` |
-| USER button | PA0, active low | UM1467 §6.3 |
+| User LEDs | LD4 PD12, LD3 PD13, LD5 PD14, LD6 PD15, active high | UM1472 §6.4; Zephyr `stm32f4_disco` |
+| USER button | PA0, active high when pressed | UM1472 §6.3; MB997 button circuit |
 | Console UART | USART2 PA2 (TX) / PA3 (RX), 115200 8N1 | Zephyr `stm32f4_disco` serial section |
 
 ## Explicitly not claimed
