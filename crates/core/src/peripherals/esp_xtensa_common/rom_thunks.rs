@@ -1390,6 +1390,59 @@ pub fn rom_strncmp(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
+/// `strcpy(dst, src) -> dst` — copy including NUL.
+///
+/// Args: a2 = dst, a3 = src. ESP32-S3 ROM @ `0x4000_1218`.
+/// Unregistered → nop_return_zero leaves dst untouched; ArduinoJson twin
+/// `copyStr` (strncpy) then session id/project stay empty after memset.
+pub fn rom_strcpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let mut i = 0u32;
+    const MAX: u32 = 1 << 20;
+    while i < MAX {
+        let b = bus.read_u8(src.wrapping_add(i) as u64).unwrap_or(0);
+        bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+        if b == 0 {
+            break;
+        }
+        i = i.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, dst);
+    Ok(())
+}
+
+/// `strncpy(dst, src, n) -> dst` — copy up to n bytes; zero-fill remainder
+/// only when src is shorter (POSIX). We match newlib: pad with NULs.
+///
+/// Args: a2 = dst, a3 = src, a4 = n. ROM @ `0x4000_1224`.
+pub fn rom_strncpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let count = cpu.regs.read_logical(n + 4);
+    let mut i = 0u32;
+    let mut hit_nul = false;
+    while i < count {
+        let b = if hit_nul {
+            0u8
+        } else {
+            let v = bus.read_u8(src.wrapping_add(i) as u64).unwrap_or(0);
+            if v == 0 {
+                hit_nul = true;
+            }
+            v
+        };
+        bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+        i = i.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, dst);
+    Ok(())
+}
+
+
+
 /// `memcpy(dst, src, n) -> dst` — byte-wise copy via the bus.
 ///
 /// Args (Xtensa C ABI, post-ENTRY view from caller's frame so we read

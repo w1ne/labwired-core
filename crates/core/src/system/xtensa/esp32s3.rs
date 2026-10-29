@@ -875,6 +875,8 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // nop_return_zero makes every equals() succeed (see rom_strcmp docs).
     bank.register(0x4000_1230, rom_thunks::rom_strcmp);
     bank.register(0x4000_123c, rom_thunks::rom_strncmp);
+    bank.register(0x4000_1218, rom_thunks::rom_strcpy);
+    bank.register(0x4000_1224, rom_thunks::rom_strncpy);
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
     // libgcc 64-bit arithmetic + bit/byte helpers, in ROM. The full ESP-IDF
     // image pulls these from the C runtime (printf, timers, hashing). Each has
