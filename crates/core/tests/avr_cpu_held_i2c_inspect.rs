@@ -11,7 +11,6 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::Avr;
 use labwired_core::inspect::InspectOpts;
-use labwired_core::peripherals::components::lcd1602::Lcd1602;
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::Cpu;
 use labwired_core::Machine;
@@ -63,15 +62,25 @@ external_devices:
     for dev in bus.take_i2c_slaves("i2c") {
         cpu.push_i2c_slave(dev);
     }
-    assert_eq!(cpu.i2c_slaves.len(), 1, "LCD must land on the CPU TWI model");
+    // Specific slave, not an exact-count assertion — other kits may join the
+    // TWI model later without this test inventing a brittle len()==1 gate.
+    let lcd_idx = cpu
+        .i2c_slaves
+        .iter()
+        .position(|s| s.address() == 0x27)
+        .expect("LCD at 0x27 must land on the CPU TWI model");
     {
-        let slave = &mut *cpu.i2c_slaves[0];
+        let slave = &mut *cpu.i2c_slaves[lcd_idx];
         paint_hi(slave);
-        let lcd = slave
-            .as_any()
-            .and_then(|a| a.downcast_ref::<Lcd1602>())
-            .expect("lcd1602");
-        assert!(lcd.text().starts_with("Hi"), "paint must land: {:?}", lcd.text());
+        // Prove paint via the I2cDevice artifact path — no as_any downcast.
+        let arts = I2cDevice::artifacts(slave, "DS1", &InspectOpts::default());
+        let text = arts
+            .iter()
+            .find(|a| a.kind == "text_display")
+            .and_then(|a| a.meta.get("text"))
+            .and_then(|v| v.as_str())
+            .expect("text_display meta.text after paint");
+        assert!(text.starts_with("Hi"), "paint must land: {text:?}");
     }
     (bus, cpu)
 }
@@ -104,7 +113,10 @@ fn machine_inspect_names_cpu_held_lcd_and_reads_its_text() {
         .iter()
         .find(|d| d.id == "DS1")
         .unwrap_or_else(|| panic!("DS1 missing from Machine::inspect; got {devices:?}"));
-    assert!(lcd.declared, "join must match the external_devices declaration");
+    assert!(
+        lcd.declared,
+        "join must match the external_devices declaration"
+    );
     assert_eq!(lcd.device_type.as_deref(), Some("lcd1602"));
     assert_eq!(lcd.attachment.transport, "i2c");
     assert_eq!(lcd.attachment.bus.as_deref(), Some("i2c"));
@@ -120,7 +132,10 @@ fn machine_inspect_names_cpu_held_lcd_and_reads_its_text() {
         .get("text")
         .and_then(|v| v.as_str())
         .expect("meta.text");
-    assert!(text.starts_with("Hi"), "inspect must show painted text, got {text:?}");
+    assert!(
+        text.starts_with("Hi"),
+        "inspect must show painted text, got {text:?}"
+    );
 
     let door = machine
         .bus
@@ -130,5 +145,8 @@ fn machine_inspect_names_cpu_held_lcd_and_reads_its_text() {
         .expect("display_artifact_with_extra must reach the CPU-held LCD");
     assert_eq!(door.kind, "text_display");
     let door_text = door.meta.get("text").and_then(|v| v.as_str()).unwrap();
-    assert!(door_text.starts_with("Hi"), "display_artifact text {door_text:?}");
+    assert!(
+        door_text.starts_with("Hi"),
+        "display_artifact text {door_text:?}"
+    );
 }
