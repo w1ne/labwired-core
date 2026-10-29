@@ -1114,9 +1114,9 @@ impl SystemBus {
             format!("uart_injection: UART peripheral '{name}' not found on the bus")
         })?;
         {
-            let mut guard = rx.lock().map_err(|e| {
-                format!("uart_injection '{name}': RX buffer poisoned: {e}")
-            })?;
+            let mut guard = rx
+                .lock()
+                .map_err(|e| format!("uart_injection '{name}': RX buffer poisoned: {e}"))?;
             guard.extend(bytes.iter().copied());
         }
         self.collect_scheduled_events(index);

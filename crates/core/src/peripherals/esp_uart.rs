@@ -330,7 +330,7 @@ pub struct EspUart {
     /// RX FIFO; a FIFO read pops one byte (read side-effect → interior mut).
     rx_fifo: RefCell<VecDeque<u8>>,
     /// Latched edge interrupt bits (TX_DONE, RXFIFO_OVF, RXFIFO_TOUT …).
-    int_raw_sticky: u32,
+    int_raw_sticky: Cell<u32>,
     /// Sub-byte remainder of the baud-rate drain, in CYCLES rather than tick
     /// calls. Both drive paths feed it real elapsed time — the legacy walk via
     /// `tick_elapsed(interval)`, the scheduler via [`EspUart::advance_to`] —
@@ -420,7 +420,7 @@ impl EspUart {
             regs,
             tx_fifo: VecDeque::new(),
             rx_fifo: RefCell::new(VecDeque::new()),
-            int_raw_sticky: 0,
+            int_raw_sticky: Cell::new(0),
             drain_accum: 0,
             drain_anchor: None,
             tx_active: false,
@@ -579,15 +579,21 @@ impl EspUart {
                 None => break,
             }
         }
+        // Latch RXFIFO_TOUT here (not only on &mut paths): int_raw / STATUS
+        // reads take &self and used to drain without raising the edge, so a
+        // later on_event saw an empty source and the RX timeout IRQ was lost.
+        if moved > 0 {
+            self.int_raw_sticky
+                .set(self.int_raw_sticky.get() | INT_RXFIFO_TOUT);
+        }
         moved
     }
 
     /// `ingest_rx_source` plus the `RXFIFO_TOUT` latch that [`Self::push_rx`]
     /// sets — the tick path can take `&mut self`, so it can raise the edge bit.
     fn ingest_rx_source_mut(&mut self) {
-        if self.ingest_rx_source() > 0 {
-            self.int_raw_sticky |= INT_RXFIFO_TOUT;
-        }
+        // Latch lives inside ingest_rx_source (Cell) so &self / &mut agree.
+        let _ = self.ingest_rx_source();
     }
 
     /// Whether the external RX queue (test-script `uart_injections` / interactive
@@ -658,9 +664,11 @@ impl EspUart {
                     byte,
                 },
             );
-            self.int_raw_sticky |= INT_RXFIFO_TOUT;
+            self.int_raw_sticky
+                .set(self.int_raw_sticky.get() | INT_RXFIFO_TOUT);
         } else {
-            self.int_raw_sticky |= INT_RXFIFO_OVF;
+            self.int_raw_sticky
+                .set(self.int_raw_sticky.get() | INT_RXFIFO_OVF);
         }
     }
 
@@ -715,7 +723,7 @@ impl EspUart {
     /// injected bytes have arrived.
     fn int_raw(&self) -> u32 {
         self.ingest_rx_source();
-        let mut v = self.int_raw_sticky;
+        let mut v = self.int_raw_sticky.get();
         if self.tx_fifo.len() < self.txfifo_empty_thrhd() {
             v |= INT_TXFIFO_EMPTY;
         }
@@ -835,7 +843,8 @@ impl EspUart {
                 }
             }
             if self.tx_fifo.is_empty() && self.tx_active {
-                self.int_raw_sticky |= INT_TX_DONE; // last byte shifted out
+                self.int_raw_sticky
+                    .set(self.int_raw_sticky.get() | INT_TX_DONE); // last byte shifted out
                 self.tx_active = false;
             }
         }
@@ -952,7 +961,9 @@ impl Peripheral for EspUart {
         let word_off = offset & !3;
         match word_off {
             OFF_FIFO if offset & 3 == 0 => self.push_tx(value),
-            OFF_INT_CLR => self.int_raw_sticky &= !((value as u32) << ((offset & 3) * 8)),
+            OFF_INT_CLR => self
+                .int_raw_sticky
+                .set(self.int_raw_sticky.get() & !((value as u32) << ((offset & 3) * 8))),
             // Read-only status registers: ignore writes.
             o if Self::readonly_value(o).is_some() => {}
             // STATUS: ignore writes.
@@ -975,7 +986,7 @@ impl Peripheral for EspUart {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset & !3 {
             OFF_FIFO => self.push_tx((value & 0xFF) as u8),
-            OFF_INT_CLR => self.int_raw_sticky &= !value, // W1C
+            OFF_INT_CLR => self.int_raw_sticky.set(self.int_raw_sticky.get() & !value), // W1C
             // Read-only status registers: ignore writes.
             o if Self::readonly_value(o).is_some() => {}
             // STATUS: ignore writes.
@@ -1472,14 +1483,17 @@ mod tests {
     }
 
     /// Regression: `int_raw` must ingest external RX so STATUS/FIFO see the
-    /// bytes without a prior tick (default RXFIFO_FULL_THRHD is 96, so a short
-    /// inject raises occupancy rather than FULL — TOUT is latched on the
-    /// mut ingest path used by `on_event`).
+    /// bytes without a prior tick, and must latch RXFIFO_TOUT on that &self
+    /// path (default RXFIFO_FULL_THRHD is 96, so a short inject is TOUT-only).
     #[test]
     fn external_rx_inject_visible_in_status_without_tick() {
         let u = EspUart::new(false, 27);
         u.rx_buffer().lock().unwrap().extend(*b"state\n");
-        let _ = u.int_raw(); // ingest side effect
+        assert_eq!(
+            u.int_raw() & INT_RXFIFO_TOUT,
+            INT_RXFIFO_TOUT,
+            "&self ingest must latch RXFIFO_TOUT"
+        );
         let status = u.read_u32(OFF_STATUS).unwrap();
         assert_eq!(status & 0x3FF, 6, "six injected bytes must land in RX FIFO");
         assert_eq!(u.read_u32(OFF_FIFO).unwrap(), u32::from(b's'));
@@ -1508,14 +1522,17 @@ mod tests {
 
     /// Regression: under the event-scheduler, a pending `rx_source` must arm
     /// `take_scheduled_events` so a mid-run injection is harvested without a
-    /// guest UART MMIO write.
-    #[cfg(feature = "event-scheduler")]
+    /// guest UART MMIO write. No `#[cfg]` here — the event-scheduler cfg
+    /// ratchet is full; skip at runtime when the feature is off.
     #[test]
     fn pending_rx_source_arms_scheduled_wake() {
         use crate::cycle_clock::CycleClock;
         use crate::Peripheral;
         let mut u = EspUart::new(false, 27);
         u.attach_cycle_clock(CycleClock::default());
+        if !u.uses_scheduler() {
+            return;
+        }
         assert!(
             u.take_scheduled_events().is_empty(),
             "idle UART schedules nothing"
