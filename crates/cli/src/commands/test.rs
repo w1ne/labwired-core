@@ -2394,6 +2394,10 @@ pub(crate) fn run_test(
                                 if let Some((flash, Some(mmu))) = flash_arc {
                                     {
                                         let mut f = flash.lock().unwrap();
+                                        // Full page copy — unlike C3 (execute
+                                        // stays on bus.flash), C6 FlashXip
+                                        // serves fetches from this backing, so
+                                        // sparse skip-0x00 would corrupt code.
                                         for page in virt_pages.clone() {
                                             let start = page as usize * PAGE;
                                             let end = (start + PAGE).min(irom_len);
@@ -2402,12 +2406,9 @@ pub(crate) fn run_test(
                                                 continue;
                                             }
                                             let n = (end - start).min(f.len() - dst);
-                                            for i in 0..n {
-                                                let b = machine.bus.flash.data[start + i];
-                                                if b != 0 && b != 0xFF {
-                                                    f[dst + i] = b;
-                                                }
-                                            }
+                                            f[dst..dst + n].copy_from_slice(
+                                                &machine.bus.flash.data[start..start + n],
+                                            );
                                         }
                                         if let Some(p) = resolve_esp_partitions_bin(
                                             std::path::Path::new(&firmware_path),
