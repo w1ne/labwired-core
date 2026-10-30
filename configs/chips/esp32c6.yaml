@@ -218,14 +218,11 @@ peripherals:
   # TIME_UPDATE@0x0C). No `clock:` gate — the LP clock domain is not part of
   # the HP PCR model. The `irq:` is documentation: the model's INT_* block is
   # register-backed storage and no source is ever asserted.
-  # LP always-on / clock-reset / PMU — required by Arduino/ROM
-  # rtc_get_reset_reason (reads LP_CLKRST.RESET_CAUSE @ +0x10). Ingested from
-  # esp32c6.svd as declarative stubs; RESET_CAUSE reset seeded to POWERON (1)
-  # with CORE0_RESET_FLAG so app boot does not treat cause 0 as fatal.
-  # CPU subsystem interrupt controllers (RISC-V PLIC + CLINT). Not in
-  # esp32c6.svd; bases from reg_base.h. Stub storage so Arduino interrupt
-  # init (esprv_intc_*) can configure priorities/enables without faulting.
-  # Local-prove stubs: SVD peripherals Arduino C6 boot touches that are not yet modeled.
+  # Local-prove stubs: SVD peripherals Arduino C6 boot touches that are not
+  # yet modeled (RAZ/WI register storage, no behaviour). The CPU-subsystem
+  # interrupt controllers (plic_mx/plic_ux/clint_m/clint_u) and the LP
+  # always-on blocks (pmu/lp_clkrst/lp_aon/lp_wdt) are declared further down;
+  # see the comments there for what is actually wired.
   - id: "spi0"
     type: "stub"
     base_address: 0x60002000
@@ -400,7 +397,11 @@ peripherals:
   # Machine-mode PLIC (DR_REG_PLIC_MX_BASE). IDF/ROM esprv_intc_* writes
   # enable/type/priority/threshold HERE — not INTPRI. INTPRI keeps only the
   # CPU_INTR_FROM_CPU_n doorbells; the bus C6 routing arm reads the gates
-  # from this bank (crates/core/src/bus/routing.rs).
+  # from this bank, merged with the INTPRI SVD copies (enable OR'd,
+  # priority/threshold = max of the two stored banks, recomputed on every
+  # write so they can be lowered) — crates/core/src/bus/routing.rs.
+  # plic_ux and clint_m/clint_u (bases from reg_base.h, not in esp32c6.svd)
+  # are plain `stub` storage: writes are accepted, nothing is routed.
   - id: "plic_mx"
     type: "declarative"
     base_address: 0x20001000
@@ -419,6 +420,9 @@ peripherals:
     type: "stub"
     base_address: 0x20001C00
     size: "1KB"
+  # LP always-on / clock-reset / PMU: plain `stub` storage (RAZ/WI). In
+  # particular LP_CLKRST.RESET_CAUSE (@ +0x10) reads 0, not POWERON — no
+  # reset cause or CORE0_RESET_FLAG is seeded.
   - id: "pmu"
     type: "stub"
     base_address: 0x600B0000
