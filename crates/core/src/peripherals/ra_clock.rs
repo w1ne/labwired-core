@@ -10,12 +10,25 @@
 //! 0 = operating, 1 = stopped), OSCSF @ 0x3C (HOCOSF bit0). Firmware enables
 //! HOCO then spins on OSCSF.HOCOSF; this model settles instantly like
 //! [`crate::peripherals::mcg::Mcg`].
+//!
+//! RA8M1 (`ra8_sysc`, FSP `R7FA8M1AH.h`): HOCOCR/OSCSF at the same offsets,
+//! plus the SCI clock: SCICKDIVCR @ 0x54 (CKDIV[2:0]) and SCICKCR @ 0x55
+//! (SCICKSEL[3:0], CKSREQ bit6, CKSRDY bit7). FSP's
+//! `bsp_peripheral_clock_set` sets CKSREQ, spins until CKSRDY reads 1,
+//! writes the source and divider, then clears CKSREQ and spins until CKSRDY
+//! reads 0. CKSRDY follows CKSREQ at once here. The selected source is
+//! stored only: no peripheral rate is derived from it.
 
 use crate::{Peripheral, SimResult};
 use std::any::Any;
 
 const HOCOCR: u64 = 0x36;
 const OSCSF: u64 = 0x3C;
+
+const SCICKDIVCR: u64 = 0x54;
+const SCICKCR: u64 = 0x55;
+const CKSREQ: u8 = 1 << 6;
+const CKSRDY: u8 = 1 << 7;
 
 const HCSTP: u8 = 1 << 0;
 const HOCOSF: u8 = 1 << 0;
@@ -27,6 +40,9 @@ pub struct RaSysc {
     hococr: u8,
     /// OSCSF: bit0 HOCOSF (1 = HOCO stable). Read-only to firmware.
     oscsf: u8,
+    /// RA8 SCICKDIVCR / SCICKCR (without CKSRDY), or `None` on parts whose
+    /// SYSTEM window has no SCI clock (RA4M1, RA6M5).
+    sci_clock: Option<(u8, u8)>,
 }
 
 impl Default for RaSysc {
@@ -42,9 +58,21 @@ impl RaSysc {
         let mut s = Self {
             hococr: 0,
             oscsf: HOCOSF,
+            sci_clock: None,
         };
         s.recompute_oscsf();
         s
+    }
+
+    /// The RA8 SYSTEM window: adds the SCICKDIVCR/SCICKCR handshake. Both
+    /// reset to 0 here; the HW-manual reset values are not cross-checked.
+    // TODO: take the SCICKCR/SCICKDIVCR reset values from the RA8M1 HW
+    // manual (R01UH0994). SCICKSEL may not reset to 0 on silicon.
+    pub fn new_ra8() -> Self {
+        Self {
+            sci_clock: Some((0, 0)),
+            ..Self::new()
+        }
     }
 
     fn recompute_oscsf(&mut self) {
@@ -65,6 +93,10 @@ impl Peripheral for RaSysc {
         Ok(match offset {
             HOCOCR => self.hococr,
             OSCSF => self.oscsf,
+            SCICKDIVCR => self.sci_clock.map_or(0, |(div, _)| div),
+            SCICKCR => self
+                .sci_clock
+                .map_or(0, |(_, cr)| if cr & CKSREQ != 0 { cr | CKSRDY } else { cr }),
             _ => 0,
         })
     }
@@ -76,6 +108,16 @@ impl Peripheral for RaSysc {
                 self.recompute_oscsf();
             }
             OSCSF => {} // read-only status
+            SCICKDIVCR => {
+                if let Some((div, _)) = &mut self.sci_clock {
+                    *div = value & 0x07;
+                }
+            }
+            SCICKCR => {
+                if let Some((_, cr)) = &mut self.sci_clock {
+                    *cr = value & (CKSREQ | 0x0F);
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -94,6 +136,7 @@ impl Peripheral for RaSysc {
             "peripheral": "ra_sysc",
             "hococr": self.hococr,
             "oscsf": self.oscsf,
+            "sci_clock": self.sci_clock,
         })
     }
 }
@@ -113,6 +156,30 @@ mod tests {
         sys.write(HOCOCR, 0).unwrap();
         assert_eq!(sys.read(HOCOCR).unwrap() & HCSTP, 0);
         assert_eq!(sys.read(OSCSF).unwrap() & HOCOSF, HOCOSF);
+    }
+
+    #[test]
+    fn ra8_sci_clock_switch_completes_the_fsp_handshake() {
+        let mut sys = RaSysc::new_ra8();
+        // bsp_peripheral_clock_set: request the stop, wait for CKSRDY.
+        sys.write(SCICKCR, CKSREQ).unwrap();
+        assert_eq!(sys.read(SCICKCR).unwrap() & CKSRDY, CKSRDY);
+        // Divider /1, source MOCO (1), REQ|RDY written back.
+        sys.write(SCICKDIVCR, 0).unwrap();
+        sys.write(SCICKCR, 1 | CKSREQ | CKSRDY).unwrap();
+        // Release the request; CKSRDY drops and the source reads back.
+        sys.write(SCICKCR, 1).unwrap();
+        assert_eq!(sys.read(SCICKCR).unwrap(), 1);
+        assert_eq!(sys.read(SCICKDIVCR).unwrap(), 0);
+        sys.write(SCICKDIVCR, 0xFF).unwrap();
+        assert_eq!(sys.read(SCICKDIVCR).unwrap(), 0x07, "CKDIV is 3 bits");
+    }
+
+    #[test]
+    fn ra4_and_ra6_sysc_have_no_sci_clock() {
+        let mut sys = RaSysc::new();
+        sys.write(SCICKCR, CKSREQ).unwrap();
+        assert_eq!(sys.read(SCICKCR).unwrap(), 0);
     }
 
     #[test]
