@@ -51,7 +51,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `a7abab0f0e79d433` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `6ebc13db6edad95f` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `c599ace50458990a` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `d747fbb598be1ed2` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `bdf381974a5514a6` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `79ee6abf2396beba` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `d4baa2be637515da` | no silicon capture |
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `27665e0365f17d3e` | no silicon capture |
@@ -434,6 +434,7 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/nucleo-l552ze-q.md`](nucleo-l552ze-q.md)  ·  Chip: `configs/chips/stm32l552.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_nucleo_l552ze_q_smoke_survival
+  - offline (CI): firmware_survival::test_stm32l552_zephyr_survival (stock Zephyr hello)
 - Drift status: **no silicon capture**
 
 ## `cc2538sf53` — 🟡 smoke-manual
