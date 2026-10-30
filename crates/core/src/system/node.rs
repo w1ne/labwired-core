@@ -306,8 +306,9 @@ fn build_pic24_node(
     Ok(Box::new(machine))
 }
 
-/// PIC18 node (M0): ELF in, CPU-local flash. No console or peripheral model
-/// is attached at this milestone.
+/// PIC18 node: ELF in, CPU-local flash sized from the chip
+/// ([`crate::cpu::Pic18::for_chip_name`]). The EUSART is CPU-internal; no
+/// node console is attached (the CLI `test` path wires it).
 fn build_pic18_node(
     id: &str,
     chip: &ChipDescriptor,
@@ -334,7 +335,7 @@ fn build_pic18_node(
         .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
     let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
-    let mut cpu = crate::cpu::Pic18::new();
+    let mut cpu = crate::cpu::Pic18::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))

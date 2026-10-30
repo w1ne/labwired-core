@@ -364,6 +364,8 @@ pub struct Pic18CpuSnapshot {
     pub stk_full: bool,
     #[serde(default)]
     pub stk_unf: bool,
+    #[serde(default)]
+    pub asleep: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

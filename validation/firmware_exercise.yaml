@@ -906,6 +906,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: pic18f4520
+    arch: pic18
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC18 part: exact PIC18F4520 descriptor (DS39631E) with 32 KB flash, a 31-level stack and the 0x80 Access Bank split. Real SDCC 4.4.0 C firmware boots through its C runtime: the FSR1/FSR2 software stack via MOVFF on the indirect aliases, TBLRD string reads and MULLW. It prints a banner on the EUSART TXREG (0xFAD), sets RB0 through LATB, reads it back and toggles it (crates/core/tests/pic18f4520_smoke.rs, examples/pic18f4520/io-smoke.yaml). EUSART RX and baud timing, timers, CCP/ECCP, MSSP, ADC, data EEPROM, WDT, CONFIG decoding and XINST are not modelled."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: pic24f04ka200
     arch: pic24
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA200 descriptor (DS30009937C): 14-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xC310 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka200/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part."

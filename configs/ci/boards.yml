@@ -44,6 +44,13 @@ boards:
     kind: sim-validate
     path: examples/atmega2561-io
     gate: true
+  # PIC18F4520: the first PIC18 part. Committed SDCC 4.4.0 ELF (rebuilding
+  # needs the upstream SDCC pic16 port, so CI checks the HEX->ELF wrap is
+  # byte-identical instead), the EUSART/LED io-smoke and a clean 200k-step run.
+  - id: pic18f4520
+    kind: sim-validate
+    path: examples/pic18f4520
+    gate: true
   # Builds the real target source with avr-gcc and runs its committed ELF.
   - id: atmega1281-io
     kind: sim-validate
