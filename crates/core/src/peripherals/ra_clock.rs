@@ -92,10 +92,9 @@ impl Peripheral for RaSysc {
             HOCOCR => self.hococr,
             OSCSF => self.oscsf,
             SCICKDIVCR => self.sci_clock.map_or(0, |(div, _)| div),
-            SCICKCR => {
-                self.sci_clock
-                    .map_or(0, |(_, cr)| if cr & CKSREQ != 0 { cr | CKSRDY } else { cr })
-            }
+            SCICKCR => self
+                .sci_clock
+                .map_or(0, |(_, cr)| if cr & CKSREQ != 0 { cr | CKSRDY } else { cr }),
             _ => 0,
         })
     }

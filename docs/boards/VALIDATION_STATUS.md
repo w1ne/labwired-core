@@ -45,7 +45,7 @@ The models column is a content digest over everything that board's `models` list
 | `ci-fixture-riscv` | ⚪ structural | — | `b23e44f3c670d414` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `1a1cdf5d9b9af0d2` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `3df7b99aee436024` | no silicon capture |
-| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `f13efa8b1a3d9bbb` | no silicon capture |
+| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `d9d2b00f3b063131` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `29754b96718d77fa` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `7a13006db8deff51` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `7047ed6debc9f320` | no silicon capture |
@@ -54,8 +54,8 @@ The models column is a content digest over everything that board's `models` list
 | `stm32l552` | 🟡 smoke-manual | — | `84fda71e833d8814` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `acfef20e18778b1d` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `1bdcab5d436767ef` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `c79969e93d6ed300` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `72ab8a907eaae28d` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `72fae5108f473237` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `c21936a753c832c0` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `20c16501d8ec7310` | no silicon capture |
 | `mk64f12` | 🟡 smoke-manual | — | `9ef491c6ccbe8eba` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `2e3f23cf62c530f4` | no silicon capture |
