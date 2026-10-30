@@ -611,6 +611,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
         "sam4s16c",
+        // First SAM E70 part (SAM E70 Xplained): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "same70q21b",
         // First TI CC2538 part (CC2538DK): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.

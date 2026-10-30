@@ -1,0 +1,37 @@
+# LabWired - SAM E70 Xplained example system (ATSAME70Q21B)
+#
+# Same board manifest as configs/systems/sam-e70-xplained.yaml, kept beside
+# the example so the package is self-contained.
+#
+# Board facts (Microchip SAM E70 Xplained, ATSAME70Q21B; Zephyr
+# `sam_e70_xplained` sam_e70_xplained-common.dtsi and -pinctrl.dtsi):
+#   LED0 (green, active low): PC8.
+#   SW0 user button (active low, pull-up): PA11.
+#   Console: USART1 RXD1 PA21 (peripheral A) / TXD1 PB4 (peripheral D), the
+#   EDBG virtual COM port.
+#
+# The simulator captures the USART1 stream; the EDBG USB bridge, the Ethernet
+# PHY, the SDRAM, the QSPI flash, the EEPROM and the CAN transceivers are not
+# modelled.
+
+name: "sam-e70-xplained"
+chip: "../../configs/chips/same70q21b.yaml"
+# The SAM E70 resets onto the 12 MHz main RC oscillator. The smoke never
+# starts the crystal or the PLL, so this is the real core rate, not the
+# part's 300 MHz maximum. The browser's RealtimeGovernor paces to this value.
+cpu_hz: 12_000_000
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "pioC"
+    pin: 8
+    signal: "output"
+    active_high: false
+  - id: "sw0"
+    kind: "button"
+    peripheral: "pioA"
+    pin: 11
+    signal: "input"
+    active_high: false
