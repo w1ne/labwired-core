@@ -97,6 +97,22 @@ pub struct NamedMemoryRange {
     /// is the first question any persistence routine asks.
     #[serde(default)]
     pub erased: bool,
+    /// Make this range a MIRROR of the window starting at `alias_of`: it holds
+    /// no bytes of its own, and an access at `base + off` (`off < size`) is the
+    /// access at `alias_of + off` — same backing, same peripheral, same side
+    /// effects. For address-decoder aliases of one physical resource, e.g. the
+    /// i.MX RT500 IDAU secure views (`0x1800_0000` FlexSPI, `0x3000_0000`
+    /// SRAM, `0x5000_0000` peripherals = the non-secure address + bit 28).
+    /// The translation is unconditional inside the window (unlike
+    /// [`ChipDescriptor::ns_alias_offset`], which is a fallback), so a mirror
+    /// must not overlap a window the chip maps for real. `image_env` and
+    /// `erased` do not apply to a mirror.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_opt_u64_lax",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub alias_of: Option<u64>,
 }
 
 /// One clock-enable bit a peripheral's clock depends on.

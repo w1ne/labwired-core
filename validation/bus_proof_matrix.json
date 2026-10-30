@@ -1504,7 +1504,8 @@
         "file": "crates/core/tests/firmware_survival.rs",
         "test": "test_mimxrt595_evk_smoke_survival",
         "signal": "committed ELF fixture tests/fixtures/mimxrt595-evk-smoke.elf boots the Cortex-M33 from the 0x08001000 vector table behind the FlexSPI FCB and the survival gate asserts 'MIMXRT595 EVK SMOKE\\n' on the FLEXCOMM0 USART TX sink; examples/mimxrt595-evk/io-smoke.yaml asserts the full clock/pad/LED/switch/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
-        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/mimxrt595-evk/io-smoke.yaml"
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/mimxrt595-evk/io-smoke.yaml",
+        "note": "a second independent FLEXCOMM0 proof lands in the same file: test_mimxrt595_evk_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/mimxrt595-zephyr-hello.elf, built for mimxrt595_evk/mimxrt595s/cm33, running on the secure aliases) and asserts 'Hello World! mimxrt595_evk/mimxrt595s/cm33'. Evidence captured 2026-10-30."
       },
       "spi": {
         "state": "none",

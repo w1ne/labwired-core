@@ -4,6 +4,12 @@ Boots a bare-register Cortex-M33 smoke on the NXP MIMXRT595-EVK map and
 proves the FLEXCOMM0 USART console, the high-speed GPIO output path on the
 RGB LED and the SW1/SW2 inputs.
 
+It also boots **unmodified Zephyr v3.7.0** (`samples/hello_world` and
+`samples/synchronization`, board `mimxrt595_evk/mimxrt595s/cm33`) on the
+secure address map: `zephyr-hello.yaml` and `zephyr-sync.yaml`, fixtures
+rebuilt by `crates/firmware-mimxrt595-evk-zephyr/build.sh`. See
+`VALIDATION.md` for what that exercises and what it does not.
+
 ## What the firmware does
 
 1. Carries a FlexSPI configuration block header (tag `FCFB`, version 1.4.0)
