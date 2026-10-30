@@ -29,6 +29,8 @@
 #   channel (crates/core/src/peripherals/cc2538/rfcore.rs).
 # - `cc2538_sleep_timer`        — SMWDTHROSC 32-kHz count + compare IRQ
 #   (crates/core/src/peripherals/cc2538/sleep_timer.rs).
+# - `cc2538_flash_ctrl`         — FLASH_CTRL page erase / word write, CCA
+#   lock bits, DIECFG0-2 (crates/core/src/peripherals/cc2538/flash_ctrl.rs).
 #
 # Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
 # GPIO_DATA readback and the five keys' reset pull-up levels — plus stock
@@ -37,9 +39,10 @@
 #
 # NOT modelled in this slice:
 # - TI's ROM itself: 0x0 holds LabWired's clean-room ROM (memory_regions
-#   below) — no serial boot loader, backdoor pin or RAM BIST, and
-#   PageErase/ProgramFlash return -1. An image with valid vectors at the flash
-#   base is still entered there directly by the loader.
+#   below) — no serial boot loader, backdoor pin or RAM BIST. Its
+#   PageErase/ProgramFlash drive the flash-controller model. An image with
+#   valid vectors at the flash base is still entered there directly by the
+#   loader.
 # - SYS_CTRL clock gating: the gates are stored and read back, but no
 #   peripheral is gated by them. No oscillator start-up timing, no PM1-3, no
 #   software reset.
@@ -49,7 +52,9 @@
 # - GPIO interrupts (RIS/MIS never set) and the AFSEL commit lock.
 # - RF reception and RF interrupts (nothing is ever received), the watchdog
 #   and sleep-timer capture.
-# - AES/PKA crypto, flash controller, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
+# - flash controller: no CPU stall while executing from flash during an
+#   operation, no flash DMA trigger, no flash interrupt.
+# - AES/PKA crypto, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
 #   SoC ADC/analog: declared stubs.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
@@ -183,10 +188,17 @@ peripherals:
     type: "stub"
     base_address: 0x400D4000
     size: "4KB"
+  # Flash controller (§8.10, Table 8-10): page erase and the FCTL/FADDR/
+  # FWDATA write sequence with the §8.1 timings, CCA lock bits, DIECFG0-2
+  # (crates/core/src/peripherals/cc2538/flash_ctrl.rs).
   - id: "flash_ctrl"
-    type: "stub"
+    type: "cc2538_flash_ctrl"
     base_address: 0x400D3000
     size: "4KB"
+    config:
+      flash_base: 2097152  # 0x0020_0000
+      flash_size: 524288   # 512 KiB
+      clock_hz: 16000000
   # WDT + sleep timer (SMWDTHROSC, §13/§14): the 32-kHz count and the compare
   # interrupt (SM Timer, IRQ 145 in the regular map, Table 5-2). `clock_hz` is
   # the CPU clock the cycle count runs at (reset SYS clock, 16 MHz).

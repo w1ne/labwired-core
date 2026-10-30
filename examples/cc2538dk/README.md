@@ -51,6 +51,23 @@ banner (RPL Lite, sicslowpan, CSMA, channel 26), the link-layer address
   The compare interrupt is not used by this firmware (the listening radio
   keeps LPM in PM0); `cc2538_sleep_timer_irq` covers it.
 
+### Flash: the flash controller and Contiki-NG CFS/Coffee
+
+The ROM's `PageErase`/`ProgramFlash` drive the FLASH_CTRL model
+(`crates/core/src/peripherals/cc2538/flash_ctrl.rs`): 20-ms page erase, the
+SWRU319C §8.3.1 `FCTL`/`FADDR`/`FWDATA` write sequence (20 µs per word, NOR
+AND rule), CCA page-lock bits and the lock-bit page's `UPPER_PAGE_ACCESS`.
+
+- `contiki-test-cfs.yaml` / `contiki-coffee.yaml`: the **unmodified**
+  Contiki-NG v4.9 `examples/storage/cfs-coffee` `test-cfs` and
+  `example-coffee` (a 256 KiB Coffee file system): `CFS test 1/2 completed
+  with 0 errors`; write, read back, append and list a file.
+- `flash-controller.yaml`: `crates/firmware-cc2538dk-contiki/flash-test`,
+  the steps of Renode's `cc2538_flash_controller.robot` (memset write,
+  pattern write, page erase, two-page erase). It reports `FLASH SIZE:
+  0x80000`, what a CC2538SF53's `DIECFG0` gives; Renode prints `0x10000`
+  because its model returns the instant-of-reset `DIECFG0`.
+
 ## Build and run
 
 ```bash
