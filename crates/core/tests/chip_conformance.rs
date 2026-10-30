@@ -130,17 +130,6 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_nucleo_l552ze_q_smoke_survival"),
     },
     ChipConf {
-        // FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F). SIM-DERIVED: no K64F bench
-        // part. UART-only L1: classic Kinetis UART0-4, Kinetis GPIO A-E and the
-        // behavioural MCG FEI block. SIM clock gating, PORT pad mux, MCG PLL,
-        // ENET/PHY, RNGA, FTFE and the rest are declared stubs — see
-        // examples/frdm-k64f/VALIDATION.md.
-        name: "mk64f12",
-        yaml: "configs/chips/mk64f12.yaml",
-        reset_oracle: None,
-        behavior_gate: Some("firmware_survival::test_frdm_k64f_smoke_survival"),
-    },
-    ChipConf {
         // CC2538DK (CC2538SF53, Cortex-M3). SIM-DERIVED: no CC2538 bench part.
         // Modelled: SYS_CTRL (cc2538_sys_ctrl), the PL061-style GPIO A-D
         // (cc2538_pl061_gpio, address-masked GPIO_DATA) and UART0/1 on the
@@ -151,6 +140,17 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/cc2538sf53.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
+    },
+    ChipConf {
+        // FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F). SIM-DERIVED: no K64F bench
+        // part. UART-only L1: classic Kinetis UART0-4, Kinetis GPIO A-E and the
+        // behavioural MCG FEI block. SIM clock gating, PORT pad mux, MCG PLL,
+        // ENET/PHY, RNGA, FTFE and the rest are declared stubs — see
+        // examples/frdm-k64f/VALIDATION.md.
+        name: "mk64f12",
+        yaml: "configs/chips/mk64f12.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_frdm_k64f_smoke_survival"),
     },
     ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench

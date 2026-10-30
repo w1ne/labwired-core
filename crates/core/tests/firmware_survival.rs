@@ -297,22 +297,6 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NUCLEO-L552ZE-Q SMOKE\n",
     },
     SurvivalCase {
-        // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
-        // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
-        // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the
-        // active-low RGB LED with PDOR readback. UART-only L1: ENET/TCP and the
-        // MCG PLL are deferred. SIM-DERIVED.
-        name: "frdm_k64f_smoke",
-        core: "cortex-m4",
-        family: CpuFamily::CortexM,
-        hal: Hal::Bare,
-        chip: "mk64f12",
-        system: "frdm-k64f",
-        fixture: "frdm-k64f-smoke.elf",
-        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
-        expected_uart_output: b"FRDM-K64F SMOKE\n",
-    },
-    SurvivalCase {
         // CC2538DK: CC2538SF53 (Cortex-M3), 512 KiB flash at 0x00200000 (the
         // ROM, not flash, sits at 0x0), 32 KiB SRAM at 0x20000000. UART0
         // (PA0/PA1 via the IOC) is the console; the smoke reads CLOCK_STA,
@@ -327,6 +311,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "cc2538dk-smoke.elf",
         valid_pc_ranges: &[(0x0020_0000, 0x0027_FFFF), (0x2000_0000, 0x2000_7FFF)],
         expected_uart_output: b"CC2538DK SMOKE\n",
+    },
+    SurvivalCase {
+        // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
+        // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
+        // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the
+        // active-low RGB LED with PDOR readback. UART-only L1: ENET/TCP and the
+        // MCG PLL are deferred. SIM-DERIVED.
+        name: "frdm_k64f_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "mk64f12",
+        system: "frdm-k64f",
+        fixture: "frdm-k64f-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
+        expected_uart_output: b"FRDM-K64F SMOKE\n",
     },
     SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,

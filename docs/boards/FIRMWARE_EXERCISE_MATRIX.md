@@ -189,10 +189,6 @@ _Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the 
 - `rtc_cntl_stub` (crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203; configs/chips/esp32s3-zero.yaml:66)) — CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled.
 - `wifi_thunks` (esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))) — IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. (Same shim as the esp32s3 entry.)
 
-### `mk64f12`
-
-_L1 UART-only smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x00000000, the classic Kinetis UART0 console (PTB16/PTB17 ALT3, 115200 from the 20.97152 MHz FEI reset clock) and the active-low RGB LED walk with PDOR readback are proven by tests/fixtures/frdm-k64f-smoke.elf and examples/frdm-k64f/io-smoke.yaml. SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE are not modelled; ENET+KSZ8081 (TCP deferred), RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are declared stubs (examples/frdm-k64f/VALIDATION.md), so no advanced blocks exist to list._
-
 ### `stm32f103`
 
 _Drives 10 rubric classes via its tier-1 fixture, and the nightly J1939 monitor drives bxCAN1 end to end (per-SA BAM reassembly + engine-speed decode); AFIO and DBGMCU are exercised by the PR-gated Zephyr hello (pinctrl remap, debug-init) and PWR by the Arduino startup; beyond the rubric, the shared CRC engine's always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus IDR-width masking (crc.rs:204), and the F103 polynomial is additionally pinned by the sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and the conformance digest, which CI skips without its prebuilt ELF — while WWDG is an inert shim rather than a dead model, and the USB-device and BKP windows also resolve to zero stubs._
@@ -666,6 +662,10 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x08000000, the new 
 ### `cc2538sf53`
 
 _L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x00200000 flash vector table (CCA image-valid, ROM not modelled), the SYS_CTRL reset clock read from CLOCK_STA (16-MHz HF-RC, SYS_DIV 001) and the RCGCUART gate, the PL011-compatible UART0 console (PA0/PA1 via the IOC, 115200 from IBRD 8 / FBRD 44) and the SmartRF06 LED2-LED4 walk (PC1-PC3) with address-masked GPIO_DATA readback plus the five keys' reset pull-up levels are proven by tests/fixtures/cc2538dk-smoke.elf and examples/cc2538dk/io-smoke.yaml. SYS_CTRL gating has no effect on other blocks, the IOC pin mux/pad overrides and GPIO interrupts are not modelled; the RF core, AES/PKA, flash controller, SSI, I2C, GPTimers, USB, uDMA, WDT/sleep timer and ADC are declared stubs (examples/cc2538dk/VALIDATION.md), so no advanced blocks exist to list._
+
+### `mk64f12`
+
+_L1 UART-only smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x00000000, the classic Kinetis UART0 console (PTB16/PTB17 ALT3, 115200 from the 20.97152 MHz FEI reset clock) and the active-low RGB LED walk with PDOR readback are proven by tests/fixtures/frdm-k64f-smoke.elf and examples/frdm-k64f/io-smoke.yaml. SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE are not modelled; ENET+KSZ8081 (TCP deferred), RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are declared stubs (examples/frdm-k64f/VALIDATION.md), so no advanced blocks exist to list._
 
 ### `sam4s16c`
 

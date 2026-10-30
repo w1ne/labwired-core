@@ -53,6 +53,7 @@ The models column is a content digest over everything that board's `models` list
 | `litex-vexriscv` | 🟡 smoke-manual | — | `384480d343c253d2` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `a53003b6b0998836` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `6f8c6eca42e1ff05` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `6cb3434a4d4bc206` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `3acd2ef645595c4a` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `bd2cc28311c33528` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `712ee74297560f2b` | no silicon capture |
@@ -434,6 +435,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/cc2538dk.md`](cc2538dk.md)  ·  Chip: `configs/chips/cc2538sf53.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_cc2538dk_smoke_survival
+- Drift status: **no silicon capture**
+
+## `mk64f12` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/frdm-k64f.md`](frdm-k64f.md)  ·  Chip: `configs/chips/mk64f12.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_frdm_k64f_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual
