@@ -73,6 +73,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "s32k388",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "sam4s16c",
     "reg_match": 0
   },

@@ -376,6 +376,23 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"SAM E70 XPLAINED SMOKE\n",
     },
     SurvivalCase {
+        // S32K388EVB-Q289: S32K388 (CM7_0, Cortex-M7), 8 MiB program flash
+        // at 0x00400000 (boot header at the base, vector table at
+        // 0x00401000), SRAM_0-2 at 0x20400000. The smoke disables SWT_0,
+        // gates SIUL2/LPUART2 in MC_ME, prints on LPUART2 and walks the six
+        // RGB LED pads through GPDO/PGPDO/MPGPDO with PGPDI readback.
+        // SIM-DERIVED.
+        name: "s32k388_evb_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "s32k388",
+        system: "s32k388-evb",
+        fixture: "s32k388-evb-smoke.elf",
+        valid_pc_ranges: &[(0x0040_1000, 0x00BF_FFFF), (0x2040_0000, 0x204B_FFFF)],
+        expected_uart_output: b"S32K388 EVB SMOKE\n",
+    },
+    SurvivalCase {
         // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
         // 0x08000000, 16 KiB SRAM at 0x20000000. USART1 (PA9/PA10) is the
         // ST-LINK VCP; the smoke walks the four user LEDs with GPIOC ODR
@@ -2191,6 +2208,8 @@ survival_gate!(
     test_sam_e70_xplained_smoke_survival,
     "sam_e70_xplained_smoke"
 );
+
+survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");

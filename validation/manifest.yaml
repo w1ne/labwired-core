@@ -9447,6 +9447,36 @@ boards:
       - configs/chips/mk64f12.yaml
       - configs/systems/frdm-k64f.yaml
 
+  - id: s32k388
+    # 2026-10-30: NXP S32K388EVB-Q289 (S32K388; only CM7_0, a Cortex-M7, is
+    # modelled; 8 MiB program flash at 0x00400000 with the boot header (IVT)
+    # at the base and the vector table at 0x00401000; SRAM_0-2 = 768 KiB at
+    # 0x20400000). First S32K3 part: the new SIUL2 model (s32k3_siul2) and
+    # LPUART0-15 on the i.MX RT LPUART layout (imxrt_lpuart). MC_ME, MC_CGM,
+    # SWT_0, STM_0 and the other clock/system blocks are declared stubs;
+    # FlexCAN, LPSPI, LPI2C, eMIOS, eDMA, GMAC, ADC and the other cores are
+    # not mapped. SIM-DERIVED — no S32K388 bench part. See
+    # docs/boards/s32k388-evb.md and examples/s32k388-evb/VALIDATION.md.
+    doc: docs/boards/s32k388-evb.md
+    chip: configs/chips/s32k388.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_s32k388_evb_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/s32k3_siul2.rs
+      - crates/core/src/peripherals/imxrt/lpuart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-s32k388-evb-smoke
+      - configs/chips/s32k388.yaml
+      - configs/systems/s32k388-evb.yaml
+
   - id: sam4s16c
     # 2026-10-23: SAM4S Xplained (ATSAM4S16C, Cortex-M4; 1 MiB flash at
     # 0x00400000, 128 KiB SRAM at 0x20000000). First SAM4S part: the PMC

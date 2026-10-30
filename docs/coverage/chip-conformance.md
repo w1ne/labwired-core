@@ -16,6 +16,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | amap42kp | **L1** | ✓ | 44 | — | — | firmware_survival::test_apollo4p_evb_smoke_survival |
 | mk64f12 | **L1** | ✓ | 22 | — | — | firmware_survival::test_frdm_k64f_smoke_survival |
 | same70q21b | **L1** | ✓ | 22 | — | — | firmware_survival::test_sam_e70_xplained_smoke_survival |
+| s32k388 | **L1** | ✓ | 38 | — | — | firmware_survival::test_s32k388_evb_smoke_survival |
 | sam4s16c | **L1** | ✓ | 20 | — | — | firmware_survival::test_sam4s_xplained_smoke_survival |
 | stm32f072 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32f072b_disco_smoke_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |

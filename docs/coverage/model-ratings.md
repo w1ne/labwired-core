@@ -19,6 +19,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | amap42kp | open | L1 | 44 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/amap42kp.md) |
 | mk64f12 | open | L1 | 22 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/mk64f12.md) |
 | same70q21b | open | L1 | 22 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/same70q21b.md) |
+| s32k388 | open | L1 | 38 | 907.8 | 1.4 | ≥1× (CI) | [doc](docs/boards/s32k388.md) |
 | sam4s16c | open | L1 | 20 | — | — | ≥1× (CI) | [doc](docs/boards/sam4s16c.md) |
 | stm32f072 | open | L1 | 39 | 937.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f072.md) |
 | nrf54l15 | open | L1 | 29 | 1364.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l15.md) |
