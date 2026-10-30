@@ -71,8 +71,11 @@ const INT_FIRST: u64 = 0x2C0;
 const INT_END: u64 = 0x43C;
 /// `IOM0IRQ..OBSDATA` (0x274-0x298): stored only.
 const MISC_WORDS: usize = 10;
-/// `MCUN0INT0EN..DSP1N1INT3SET`: 4 cores-and-priorities × 4 banks.
-const INT_GROUPS: usize = 16;
+/// `MCUN0INT0EN..DSP1N1INT3SET`: 6 interrupt targets (MCUN0, MCUN1, DSP0N0,
+/// DSP0N1, DSP1N0, DSP1N1) × 4 banks, each an EN/STAT/CLR/SET quad
+/// (`apollo4p.h`).
+const INT_GROUPS: usize = 6 * BANKS;
+const _: () = assert!((INT_END + 4 - INT_FIRST) as usize == INT_GROUPS * 16);
 
 /// `GPIO_PADKEY_PADKEY_Key`.
 pub const PADKEY_KEY: u32 = 0x73;
@@ -212,6 +215,8 @@ impl Apollo4Gpio {
             // Set/clear aliases are write-only strobes.
             0x224..=0x240 => 0,
             0x244..=0x250 => self.en[(offset - EN0) as usize / 4],
+            // ENSn (0x254..) and ENCn (0x264..) both read back ENn, so the
+            // eight words fold onto the four EN banks.
             0x254..=0x270 => self.en[((offset - ENS0) as usize / 4) % BANKS],
             0x274..=0x298 => self.misc[(offset - IOM0IRQ) as usize / 4],
             0x29C..=0x2A8 => {
@@ -561,6 +566,23 @@ mod tests {
         let mut g = Apollo4Gpio::new();
         g.write_u32(PADKEY, PADKEY_KEY).unwrap();
         g
+    }
+
+    #[test]
+    fn every_gpio_interrupt_group_is_addressable() {
+        // 0x3C0..=0x43C are the DSP1N0/DSP1N1 groups, past the first 16.
+        let mut g = Apollo4Gpio::new();
+        for group in 0..INT_GROUPS as u64 {
+            let base = INT_FIRST + group * 16;
+            g.write_u32(base, 0xA5A5_0000 | group as u32).unwrap();
+            g.write_u32(base + 0xC, 1 << group).unwrap();
+            assert_eq!(g.read_u32(base).unwrap(), 0xA5A5_0000 | group as u32);
+            assert_eq!(g.read_u32(base + 4).unwrap(), 1 << group);
+            g.write_u32(base + 8, 1 << group).unwrap();
+            assert_eq!(g.read_u32(base + 4).unwrap(), 0);
+        }
+        g.write_u32(INT_END, 1).unwrap();
+        assert_eq!(g.read_u32(INT_END).unwrap(), 0, "SET reads as 0");
     }
 
     #[test]
