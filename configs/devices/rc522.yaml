@@ -1,15 +1,14 @@
-# NXP MFRC522 (RC522 module) 13.56 MHz reader — declarative SPI register shell.
+# MFRC522 (RC522 module) 13.56 MHz reader — declarative SPI register shell.
 # Datasheet: MFRC522 rev 3.9, §8.1.2 "SPI interface" and §9.2 Table 20.
 #
-# ⚠️ THERE IS NO RF AIR INTERFACE, and there never was. The hand-written model
-# this replaces (`components/rc522.rs`, 158 lines) was a `[u8; 0x40]` behind an
-# address/data phase machine with two seeded values, and this descriptor is
-# that. No ISO/IEC 14443-A anticollision, no card UID, no CRC coprocessor, no
-# MIFARE Crypto1, no FIFO and no IRQ pad. `PCD_Init()` and `PCD_DumpVersion()`
-# from the common MFRC522 library see what they saw before; `PICC_IsNewCardPresent()`
-# finds nothing, because there is nothing in the field to find. That gap is
-# REPORTED, not faked — a tag a model invents is a test that passes against
-# fiction.
+# The LIVE model is the hand-written kit in
+# `crates/core/src/peripherals/components/rc522.rs`: ISO/IEC 14443-A cascade
+# level 1 (REQA/WUPA → ATQA, anticollision CL1 + SELECT → 4-byte UID + BCC +
+# SAK, HLTA), FIFO, ComIrqReg/DivIrqReg, and CRC_A (CalcCRC). MIFARE Crypto1
+# is not modelled. Drive SimInput channels `card_present` and `uid` to place
+# or remove a card. This YAML is retained so the register-shell migration
+# parity transcript still loads through GenericSpiDevice; attach goes through
+# the Rust kit.
 #
 # The wire framing (§8.1.2.3): CS↓, one address byte — bit 7 is the direction
 # (1 = READ), bits [6:1] are the register address, bit 0 is always 0 — then the
@@ -66,10 +65,11 @@ behavior:
 
 metadata:
   label: "RC522 RFID"
-  summary: "MFRC522 SPI RFID reader register shell (no RF)."
+  summary: "MFRC522 SPI RFID reader with ISO/IEC 14443-A CL1 (see Rust kit)."
   detail: >-
-    VersionReg 0x37 returns 0x92. Soft reset via CommandReg is accepted.
-    ISO14443 card UID / crypto is not simulated.
+    Live model: crates/core/src/peripherals/components/rc522.rs. VersionReg
+    0x37 returns 0x92. Soft reset, FIFO, IRQ bits, CRC_A, REQA/WUPA, CL1
+    anticollision/SELECT and HLTA. Crypto1 is not modelled.
   category: spi
   config_keys:
     - { name: cs_pin, ty: str, doc: "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4." }
