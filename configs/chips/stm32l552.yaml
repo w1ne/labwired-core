@@ -377,6 +377,34 @@ peripherals:
     size: "1KB"
     irq: 0
     clock: { reg: "apb1enr1", bit: 11 }
+  # ICACHE (RM0438 §8) is the same 8 KiB ICACHE IP as the U5 (RM0456 §8):
+  # identical CR/SR/IER/FCR/HMONR/MMONR offsets and bits, so the U5 register
+  # contract applies. Base per ST CMSIS `stm32l552xx.h`: ICACHE_BASE_NS =
+  # AHB1PERIPH_BASE_NS + 0x10400 = 0x40030400. Zephyr's soc init enables it
+  # through `LL_ICACHE_Enable` after polling `SR.BUSYF`; unmapped, that poll
+  # bus-faults before `main`. No RCC enable bit exists for it on L5 either.
+  - id: "icache"
+    type: "icache"
+    base_address: 0x40030400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/icache.yaml"
+      profile: "stm32u5"
+  # DBGMCU (RM0438 §52) sits at 0xE0044000 on L5 (as on U5), not the
+  # Cortex-M4 0xE0042000. Its IDCODE/CR/APB1FZR1/APB1FZR2/APB2FZR layout is
+  # the L4 one, hence the L476 schema. Zephyr's soc init clears the
+  # DBG_STOP/STANDBY bits through `LL_DBGMCU_Disable*`, which bus-faults
+  # when the block is unmapped. IDCODE: DEV_ID 0x472 (STM32L55x/L56x), REV_ID
+  # 0x2001 = revision Z, the production silicon (OpenOCD
+  # `stm32l55_l56xx_revs`: 0x1000 A, 0x2000 B, 0x2001 Z). Not
+  # silicon-captured.
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0044000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/dbgmcu.yaml"
+      idcode: 0x20016472
 
   # --- Declared, not modelled (honest L1 boundary) -------------------------
   # The L5 non-secure FLASH controller (NSKEYR/NSSR/NSCR, 2 KiB pages) has a

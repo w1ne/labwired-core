@@ -1,0 +1,21 @@
+# LabWired - NUCLEO-L552ZE-Q stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/hello_world` for board
+# `nucleo_l552ze_q` — the sample Renode's ARMv8M.robot boots on this part.
+# Rebuild: crates/firmware-l552ze-zephyr/build.sh
+#
+# Zephyr's own STM32L5 bring-up runs unpatched: the soc init enables the
+# ICACHE (polling SR.BUSYF) and clears the DBGMCU stop/standby bits, the
+# clock driver switches SYSCLK to PLL (MSI 4 MHz -> 110 MHz) with the
+# PWR voltage-scaling handshake, and the console is LPUART1 on PG7/PG8.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/stm32l552-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Hello World! nucleo_l552ze_q"
+  - expected_stop_reason: max_steps
