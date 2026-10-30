@@ -54,6 +54,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32l552` | 🟡 smoke-manual | — | `0e75b04cf58b91c8` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `8c2c70d7b30f560c` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `6262d3de1fe54cd8` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `96579180a5ce8919` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `c3a050fbdc05db9b` | no silicon capture |
 | `mk64f12` | 🟡 smoke-manual | — | `e7879e4c775681c0` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `4852546a981156ac` | no silicon capture |
@@ -445,6 +446,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/apollo4p-evb.md`](apollo4p-evb.md)  ·  Chip: `configs/chips/amap42kp.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_apollo4p_evb_smoke_survival
+- Drift status: **no silicon capture**
+
+## `r7fa6m5bh` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/ek-ra6m5.md`](ek-ra6m5.md)  ·  Chip: `configs/chips/r7fa6m5bh.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_ek_ra6m5_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `same70q21b` — 🟡 smoke-manual

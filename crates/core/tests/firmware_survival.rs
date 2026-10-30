@@ -313,6 +313,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"CC2538DK SMOKE\n",
     },
     SurvivalCase {
+        // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
+        // SRAM at 0x20000000. SCI0 (P411/P410) is the J-Link OB console; the
+        // smoke runs on the reset MOCO, walks LED1-LED3 (P006-P008) with
+        // PCNTR1 PODR readback and reads S1/S2 through the PFS pull-ups.
+        // SIM-DERIVED.
+        name: "ek_ra6m5_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa6m5bh",
+        system: "ek-ra6m5",
+        fixture: "ek-ra6m5-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output: b"EK-RA6M5 SMOKE\n",
+    },
+    SurvivalCase {
         // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
         // the application vector table at 0x18000 (the secure bootloader owns
         // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
@@ -2246,6 +2262,8 @@ fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
         "reset {reset:#x}"
     );
 }
+
+survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
 
 /// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
 /// in the top 44 bytes of the last flash page and only enters a valid image.

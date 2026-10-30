@@ -623,6 +623,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
         "cc2538sf53",
+        // First RA6M5 part (EK-RA6M5): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "r7fa6m5bh",
         // First Ambiq part (Apollo4 Plus EVB): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
