@@ -241,12 +241,15 @@ pub(crate) struct UartRegMap {
 }
 
 impl UartRegisterLayout {
-    /// RXNEIE bit in CR1. Only the STM32/LPUART layouts have the RXNE
-    /// interrupt; everything else keeps the previous "no RX level IRQ" shape.
+    /// RXNEIE bit in CR1. Only the STM32/LPUART and Kinetis K6x UART layouts
+    /// have the RX-data interrupt; everything else keeps the previous "no RX
+    /// level IRQ" shape.
     fn rxneie_mask(self) -> u32 {
         match self {
             UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => 1 << 5,
             UartRegisterLayout::Lpuart => 1 << 5,
+            // Kinetis K6x UART C2.RIE (bit 5).
+            UartRegisterLayout::KinetisUart => 1 << 5,
             _ => 0,
         }
     }
@@ -666,14 +669,17 @@ impl UartRegisterLayout {
             },
             // NXP Kinetis K6x UART (classic). D@0x07, S1@0x04 (8-bit): TDRE(7)|
             // TC(6) ready, RDRF(5) set on data. Idle 0xC0. width=1 (S2@0x05).
+            // C2@0x03 carries the interrupt enables (K64P144M120SF5RM §52.3.4):
+            // TIE(7) on TDRE, TCIE(6) on TC, RIE(5) on RDRF — what Zephyr's
+            // uart_mcux irq_tx/rx_enable set. TE(3)/RE(2) are stored, not gated.
             UartRegisterLayout::KinetisUart => UartRegMap {
                 status: 0x04,
                 tx: 0x07,
                 rx: 0x07,
                 cr3: 0xF00,
-                cr1: None,
-                txeie_mask: 0,
-                tcie_mask: 0,
+                cr1: Some(0x03),    // C2
+                txeie_mask: 1 << 7, // TIE
+                tcie_mask: 1 << 6,  // TCIE
                 status_width: 1,
                 status_idle: 0xC0,      // TDRE | TC
                 rx_present_set: 1 << 5, // RDRF
@@ -3106,6 +3112,40 @@ mod tests {
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
         uart.write_u32(0x08, 1 << 19).unwrap();
         assert!(!uart.tick().irq, "TE alone must not pend");
+    }
+
+    #[test]
+    fn test_kinetis_uart_c2_interrupt_enables() {
+        // K6x UART C2 (0x03, byte register): TIE = bit 7, TCIE = bit 6,
+        // RIE = bit 5 (K64P144M120SF5RM §52.3.4). TE/RE (bits 3/2) are not
+        // interrupt enables.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C).unwrap(); // TE | RE
+        assert!(!uart.tick().irq, "TE|RE alone must not pend");
+        assert_eq!(uart.read(0x03).unwrap(), 0x0C, "C2 reads back");
+
+        uart.write(0x03, 0x0C | 0x80).unwrap(); // + TIE, TDRE is always set
+        assert!(uart.tick().irq, "TIE must pend on TDRE");
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C | 0x40).unwrap(); // + TCIE
+        assert!(uart.tick().irq, "TCIE must pend on TC");
+
+        // RIE pends only while RDRF is set, and stops once D is drained —
+        // what Zephyr's uart_irq_is_pending() test checks.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C | 0x20).unwrap(); // + RIE
+        assert!(!uart.tick().irq, "RIE with an empty receiver must not pend");
+        uart.rx_buffer().lock().unwrap().push_back(b'Q');
+        assert_eq!(uart.read(0x04).unwrap() & 0x20, 0x20, "S1.RDRF set");
+        assert!(uart.tick().irq, "RIE must pend on RDRF");
+        assert_eq!(uart.read(0x07).unwrap(), b'Q');
+        assert_eq!(
+            uart.read(0x04).unwrap() & 0x20,
+            0,
+            "RDRF clears once drained"
+        );
+        assert!(!uart.tick().irq, "drained receiver must stop pending");
     }
 
     #[test]

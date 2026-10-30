@@ -422,6 +422,18 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/esp32s3/usb_device.yaml"),
     ),
     (
+        "mk64f12/osc.yaml",
+        include_str!("../../../../configs/peripherals/mk64f12/osc.yaml"),
+    ),
+    (
+        "mk64f12/pmc.yaml",
+        include_str!("../../../../configs/peripherals/mk64f12/pmc.yaml"),
+    ),
+    (
+        "mk64f12/sysmpu.yaml",
+        include_str!("../../../../configs/peripherals/mk64f12/sysmpu.yaml"),
+    ),
+    (
         "mkw41z4/gpioa.yaml",
         include_str!("../../../../configs/peripherals/mkw41z4/gpioa.yaml"),
     ),
