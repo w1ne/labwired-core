@@ -853,8 +853,10 @@ impl WasmSimulator {
 
     /// Live actuator state for canvas animation.
     ///
-    /// Returns servo states followed by configured motor-plant states.
+    /// Returns servo states, STEP/DIR steppers, then configured motor-plant states.
     /// - hobby servos (`kind: "servo"`) export shaft `angle` in degrees
+    /// - STEP/DIR steppers (`kind` = YAML type, e.g. `nema17` / `a4988`) export
+    ///   shaft `angle` in degrees plus signed `steps`
     /// - `dc-motor` exports scalar `current_a`
     /// - `bldc-motor` exports DC-bus `current_a`, `phase_currents_a`, and
     ///   `commutation_sector`
@@ -889,7 +891,33 @@ impl WasmSimulator {
                 "pulse_us": servo.pulse_us() as f64,
             }));
         }
-        states.extend(motor_states_json(machine.bus.motor_snapshots()));
+        for stepper in machine
+            .bus
+            .observed_of::<labwired_core::peripherals::components::step_dir_motor::StepDirMotor>(
+        ) {
+            let id = stepper.id();
+            if id.is_empty() {
+                continue;
+            }
+            // `kind` is the raw YAML type so the canvas part id matches
+            // (nema17 / a4988 / drv8825 / tmc2209).
+            states.push(serde_json::json!({
+                "id": id,
+                "kind": stepper.device_type(),
+                "angle": stepper.angle_degrees() as f64,
+                "steps": stepper.steps(),
+                "active": stepper.is_commanded(),
+            }));
+        }
+        // DC/BLDC only — steppers are emitted above (motor_snapshots also
+        // folds them for prove evidence, but their actuator shape is angle/steps).
+        let dc_bldc: Vec<_> = machine
+            .bus
+            .motor_snapshots()
+            .into_iter()
+            .filter(|s| s.kind != "stepper")
+            .collect();
+        states.extend(motor_states_json(dc_bldc));
 
         states
             .serialize(&serde_wasm_bindgen::Serializer::json_compatible())

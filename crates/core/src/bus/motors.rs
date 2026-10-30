@@ -1151,7 +1151,8 @@ impl SystemBus {
     }
 
     pub fn motor_snapshots(&self) -> Vec<MotorSnapshot> {
-        self.motors
+        let mut out: Vec<MotorSnapshot> = self
+            .motors
             .iter()
             .map(|motor| match motor {
                 MotorRuntime::Dc {
@@ -1251,7 +1252,35 @@ impl SystemBus {
                     }
                 }
             })
-            .collect()
+            .collect();
+        // STEP/DIR steppers live as ObservedDevice GPIO observers, not in
+        // `self.motors`. Fold them into the same evidence channel so prove
+        // oracles can assert shaft angle via `position_rad`.
+        for m in self.observed_of::<crate::peripherals::components::step_dir_motor::StepDirMotor>()
+        {
+            let angle_deg = f64::from(m.angle_degrees());
+            out.push(MotorSnapshot {
+                id: m.id().to_string(),
+                kind: "stepper",
+                position_rad: angle_deg.to_radians(),
+                speed_rpm: 0.0,
+                speed_rpm_peak_abs: 0.0,
+                speed_rpm_max: 0.0,
+                speed_rpm_min: 0.0,
+                torque_nm: 0.0,
+                current_a: None,
+                phase_currents_a: None,
+                bus_voltage_v: 0.0,
+                commutation_sector: None,
+                control_state: if m.is_commanded() {
+                    "step".to_owned()
+                } else {
+                    "idle".to_owned()
+                },
+                faults: Vec::new(),
+            });
+        }
+        out
     }
 
     pub fn set_motor_stalled(&mut self, id: &str, stalled: bool) -> Result<(), String> {
