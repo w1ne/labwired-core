@@ -73,7 +73,9 @@ address. Sticky flags live in the SFR file and are cleared by the ISR.
   (bit 7), low-priority sources to `0x0018` through `GIEH` **and** `GIEL`
   (bit 6) — `GIEH = 0` disables all interrupts (DS39631 Register 9-1). Entry
   clears only the matching global bit, so a high-priority source may nest
-  inside a low-priority ISR. `RETFIE` sets both `GIEH` and `GIEL`.
+  inside a low-priority ISR. `RETFIE` sets `GIEH` if it is clear (leaving a
+  high ISR) and `GIEL` otherwise, so a high ISR nested in a low one returns
+  with `GIEL` still clear.
 * Sources: `INTCON` TMR0/INT0/RB, `INTCON3` INT1/INT2, and the eight bits of
   `PIR1`/`PIE1`/`IPR1` and `PIR2`/`PIE2`/`IPR2`. INT0 is always high priority
   when `IPEN = 1`; the other source priorities come from `INTCON2`,

@@ -869,10 +869,13 @@ impl Pic18 {
             self.pc = Self::align_pc(self.pop());
             let intcon = self.read_data(SFR_INTCON);
             let ipen = self.read_data(SFR_RCON) & RCON_IPEN != 0;
+            // With IPEN=1, RETFIE re-enables only the level it is returning
+            // from: GIEH if it is clear (leaving a high ISR, possibly nested
+            // in a low one, whose GIEL must stay clear), else GIEL.
             self.write_data(
                 SFR_INTCON,
-                if ipen {
-                    intcon | INTCON_GIE_GIEH | INTCON_GIEL
+                if ipen && intcon & INTCON_GIE_GIEH != 0 {
+                    intcon | INTCON_GIEL
                 } else {
                     intcon | INTCON_GIE_GIEH
                 },
@@ -2076,6 +2079,44 @@ mod tests {
         assert_eq!(cpu.status(), STATUS_Z);
         assert_eq!(cpu.bsr(), 0x02);
         assert_eq!(cpu.get_pc(), 0x0002);
+    }
+
+    #[test]
+    fn retfie_from_a_high_isr_nested_in_a_low_isr_keeps_giel_clear() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000, 0x0000]);
+        cpu.load_flash(PIC18_HIGH_VECTOR, &0x0010u16.to_le_bytes()); // RETFIE
+        cpu.load_flash(PIC18_LOW_VECTOR, &[0x00; 8]); // NOPs
+        cpu.write_data(SFR_RCON, RCON_IPEN);
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        cpu.write_data(SFR_PIE1, 0x03);
+        cpu.write_data(SFR_IPR1, 0x02); // bit 0 low, bit 1 high
+
+        // A low source enters the low ISR and stays pending.
+        cpu.write_data(SFR_PIR1, 0x01);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_LOW_VECTOR);
+        run(&mut cpu, 1);
+        let in_low_isr = cpu.get_pc();
+
+        // A high source nests after the next low-ISR NOP retires, then its
+        // ISR acknowledges it and RETFIEs.
+        cpu.write_data(SFR_PIR1, 0x03);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
+        assert_eq!(cpu.stack_pointer(), 2);
+        cpu.write_data(SFR_PIR1, 0x01);
+        run(&mut cpu, 1); // RETFIE
+        let in_low_isr = in_low_isr + 2;
+        assert_eq!(cpu.get_pc(), in_low_isr);
+        let intcon = cpu.read_data(SFR_INTCON);
+        assert_eq!(intcon & INTCON_GIE_GIEH, INTCON_GIE_GIEH, "GIEH restored");
+        assert_eq!(intcon & INTCON_GIEL, 0, "GIEL stays clear in the low ISR");
+
+        // The still-pending low source must not re-enter the low ISR.
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), in_low_isr + 2);
+        assert_eq!(cpu.stack_pointer(), 1);
     }
 
     #[test]
