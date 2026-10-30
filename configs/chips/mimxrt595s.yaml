@@ -129,6 +129,11 @@ peripherals:
     base_address: 0x40106000
     size: "4KB"
     irq: 14
+  # Cortex-M33 SysTick in the PPB (Armv8-M ARM, B11.2): every Cortex-M core
+  # has it, and Zephyr/MCUXpresso firmware programs SYST_CSR at boot.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
   - id: "flexspi0"
     type: "stub"
     base_address: 0x40134000
