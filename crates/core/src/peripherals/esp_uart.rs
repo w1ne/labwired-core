@@ -330,7 +330,7 @@ pub struct EspUart {
     /// RX FIFO; a FIFO read pops one byte (read side-effect → interior mut).
     rx_fifo: RefCell<VecDeque<u8>>,
     /// Latched edge interrupt bits (TX_DONE, RXFIFO_OVF, RXFIFO_TOUT …).
-    int_raw_sticky: u32,
+    int_raw_sticky: Cell<u32>,
     /// Sub-byte remainder of the baud-rate drain, in CYCLES rather than tick
     /// calls. Both drive paths feed it real elapsed time — the legacy walk via
     /// `tick_elapsed(interval)`, the scheduler via [`EspUart::advance_to`] —
@@ -350,6 +350,10 @@ pub struct EspUart {
     /// Core clock this instance is paced against (S3 = 240 MHz, C3 = 160 MHz).
     /// 0 only via `Default`, which no bus path uses; `cycles_per_byte` clamps.
     cpu_clock_hz: u64,
+    /// ESP32-C6 UART register tail: `UART_FSM_STATUS` lives at 0x70 (C3 had
+    /// `POSPULSE` there). ROM `uart_tx_wait_idle` polls `ST_UTX_OUT` in bits
+    /// [7:4] and spins forever if the C3 POSPULSE reset (0xFFF) is returned.
+    c6_reg_map: bool,
     /// Externally-fed RX queue, shared with `attach_uart_rx_source[_named]`.
     /// Bytes pushed here are moved into the RX FIFO on the next access — the
     /// same injection mechanism the generic `Uart` exposes, so a declarative
@@ -420,7 +424,7 @@ impl EspUart {
             regs,
             tx_fifo: VecDeque::new(),
             rx_fifo: RefCell::new(VecDeque::new()),
-            int_raw_sticky: 0,
+            int_raw_sticky: Cell::new(0),
             drain_accum: 0,
             drain_anchor: None,
             tx_active: false,
@@ -428,6 +432,7 @@ impl EspUart {
             clock: None,
             scheduled: false,
             cpu_clock_hz,
+            c6_reg_map: false,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
             rx_source_exposed: Cell::new(false),
             lines: None,
@@ -579,15 +584,33 @@ impl EspUart {
                 None => break,
             }
         }
+        // Latch RXFIFO_TOUT here (not only on &mut paths): int_raw / STATUS
+        // reads take &self and used to drain without raising the edge, so a
+        // later on_event saw an empty source and the RX timeout IRQ was lost.
+        if moved > 0 {
+            self.int_raw_sticky
+                .set(self.int_raw_sticky.get() | INT_RXFIFO_TOUT);
+        }
         moved
     }
 
     /// `ingest_rx_source` plus the `RXFIFO_TOUT` latch that [`Self::push_rx`]
     /// sets — the tick path can take `&mut self`, so it can raise the edge bit.
     fn ingest_rx_source_mut(&mut self) {
-        if self.ingest_rx_source() > 0 {
-            self.int_raw_sticky |= INT_RXFIFO_TOUT;
+        // Latch lives inside ingest_rx_source (Cell) so &self / &mut agree.
+        let _ = self.ingest_rx_source();
+    }
+
+    /// Whether the external RX queue (test-script `uart_injections` / interactive
+    /// serial) still holds bytes that have not been moved into the FIFO.
+    fn rx_source_has_pending(&self) -> bool {
+        if !self.rx_source_exposed.get() {
+            return false;
         }
+        self.rx_source
+            .lock()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
     }
 
     /// Give each attached peer `cycles` of simulated time and deliver whatever
@@ -646,9 +669,11 @@ impl EspUart {
                     byte,
                 },
             );
-            self.int_raw_sticky |= INT_RXFIFO_TOUT;
+            self.int_raw_sticky
+                .set(self.int_raw_sticky.get() | INT_RXFIFO_TOUT);
         } else {
-            self.int_raw_sticky |= INT_RXFIFO_OVF;
+            self.int_raw_sticky
+                .set(self.int_raw_sticky.get() | INT_RXFIFO_OVF);
         }
     }
 
@@ -696,8 +721,14 @@ impl EspUart {
     }
 
     /// INT_RAW = latched edge bits OR the live level conditions.
+    ///
+    /// Ingests any pending external RX first: under the event-scheduler an idle
+    /// UART may never tick, and `matrix_irq_sources_into` / status reads are the
+    /// only places an IRQ-driven guest (Arduino HardwareSerial) learns that
+    /// injected bytes have arrived.
     fn int_raw(&self) -> u32 {
-        let mut v = self.int_raw_sticky;
+        self.ingest_rx_source();
+        let mut v = self.int_raw_sticky.get();
         if self.tx_fifo.len() < self.txfifo_empty_thrhd() {
             v |= INT_TXFIFO_EMPTY;
         }
@@ -714,8 +745,20 @@ impl EspUart {
         dynamic | STATUS_IDLE_BITS
     }
 
+    /// ESP32-C6: remap offset 0x70 to idle `UART_FSM_STATUS` (see field docs).
+    pub fn with_c6_reg_map(mut self) -> Self {
+        self.c6_reg_map = true;
+        self
+    }
+
     /// Word value for a non-FIFO register read.
     fn read_reg_word(&self, word_off: u64) -> u32 {
+        // C6: 0x70 is FSM_STATUS (ST_URX_OUT[3:0] | ST_UTX_OUT[7:4]), reset 0.
+        // Mask-ROM uart_tx_wait_idle polls ST_UTX_OUT == 0; the C3 POSPULSE
+        // reset value 0xFFF at this offset wedges that poll forever.
+        if self.c6_reg_map && word_off == OFF_POSPULSE {
+            return 0;
+        }
         match word_off {
             OFF_INT_RAW => self.int_raw(),
             OFF_INT_ST => self.int_raw() & self.reg(OFF_INT_ENA),
@@ -817,7 +860,8 @@ impl EspUart {
                 }
             }
             if self.tx_fifo.is_empty() && self.tx_active {
-                self.int_raw_sticky |= INT_TX_DONE; // last byte shifted out
+                self.int_raw_sticky
+                    .set(self.int_raw_sticky.get() | INT_TX_DONE); // last byte shifted out
                 self.tx_active = false;
             }
         }
@@ -934,7 +978,9 @@ impl Peripheral for EspUart {
         let word_off = offset & !3;
         match word_off {
             OFF_FIFO if offset & 3 == 0 => self.push_tx(value),
-            OFF_INT_CLR => self.int_raw_sticky &= !((value as u32) << ((offset & 3) * 8)),
+            OFF_INT_CLR => self
+                .int_raw_sticky
+                .set(self.int_raw_sticky.get() & !((value as u32) << ((offset & 3) * 8))),
             // Read-only status registers: ignore writes.
             o if Self::readonly_value(o).is_some() => {}
             // STATUS: ignore writes.
@@ -957,7 +1003,7 @@ impl Peripheral for EspUart {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset & !3 {
             OFF_FIFO => self.push_tx((value & 0xFF) as u8),
-            OFF_INT_CLR => self.int_raw_sticky &= !value, // W1C
+            OFF_INT_CLR => self.int_raw_sticky.set(self.int_raw_sticky.get() & !value), // W1C
             // Read-only status registers: ignore writes.
             o if Self::readonly_value(o).is_some() => {}
             // STATUS: ignore writes.
@@ -1040,7 +1086,11 @@ impl Peripheral for EspUart {
         // keeps the scheduler byte-identical to the per-cycle walk.
         let need_tx = !self.tx_fifo.is_empty();
         let need_stream = !self.attached_streams.is_empty();
-        if !(need_tx || need_stream) || self.scheduled {
+        // External RX injections push into `rx_source` with no guest MMIO write,
+        // so the write-side harvest never re-arms us. Wake ASAP when the queue
+        // has pending bytes so `on_event` can ingest + raise RXFIFO_TOUT.
+        let need_rx = self.rx_source_has_pending();
+        if !(need_tx || need_stream || need_rx) || self.scheduled {
             return Vec::new();
         }
         self.scheduled = true;
@@ -1053,7 +1103,11 @@ impl Peripheral for EspUart {
             let done = self.drain_accum + elapsed;
             return vec![(per_byte.saturating_sub(done).max(1), UART_WAKE_TOKEN)];
         }
-        // Stream-only: poll peer at baud-paced intervals.
+        if need_rx && !need_stream {
+            // One-cycle wake: move injected bytes into the FIFO and raise IRQ.
+            return vec![(1, UART_WAKE_TOKEN)];
+        }
+        // Stream-only (or stream+rx): poll peer at baud-paced intervals.
         vec![(per_byte, UART_WAKE_TOKEN)]
     }
 
@@ -1080,7 +1134,9 @@ impl Peripheral for EspUart {
         } else {
             self.drain_cycles(per_byte);
         }
-        let keep = !self.tx_fifo.is_empty() || !self.attached_streams.is_empty();
+        let keep = !self.tx_fifo.is_empty()
+            || !self.attached_streams.is_empty()
+            || self.rx_source_has_pending();
         self.scheduled = keep;
         let mut explicit_irqs = Vec::new();
         if self.int_raw() & self.reg(OFF_INT_ENA) != 0 {
@@ -1441,5 +1497,71 @@ mod tests {
         assert_eq!((status >> 16) & 0x3FF, 1, "TXFIFO_CNT=1");
         // Static idle bits still present.
         assert_eq!(status & STATUS_IDLE_BITS, STATUS_IDLE_BITS);
+    }
+
+    /// Regression: `int_raw` must ingest external RX so STATUS/FIFO see the
+    /// bytes without a prior tick, and must latch RXFIFO_TOUT on that &self
+    /// path (default RXFIFO_FULL_THRHD is 96, so a short inject is TOUT-only).
+    #[test]
+    fn external_rx_inject_visible_in_status_without_tick() {
+        let u = EspUart::new(false, 27);
+        u.rx_buffer().lock().unwrap().extend(*b"state\n");
+        assert_eq!(
+            u.int_raw() & INT_RXFIFO_TOUT,
+            INT_RXFIFO_TOUT,
+            "&self ingest must latch RXFIFO_TOUT"
+        );
+        let status = u.read_u32(OFF_STATUS).unwrap();
+        assert_eq!(status & 0x3FF, 6, "six injected bytes must land in RX FIFO");
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), u32::from(b's'));
+    }
+
+    /// Regression: mut ingest (tick / on_event) latches RXFIFO_TOUT so an
+    /// IRQ-enabled guest is woken for a short inject below FULL threshold.
+    #[test]
+    fn tick_elapsed_latches_tout_for_pending_rx_source() {
+        let mut u = EspUart::new(false, 27);
+        u.write_u32(OFF_INT_ENA, INT_RXFIFO_TOUT).unwrap();
+        u.rx_buffer().lock().unwrap().extend(*b"hi\n");
+        let result = u.tick_elapsed(1);
+        assert_eq!(
+            u.int_raw() & INT_RXFIFO_TOUT,
+            INT_RXFIFO_TOUT,
+            "mut ingest must latch RXFIFO_TOUT"
+        );
+        // Prefer as_deref(): clippy option_as_ref_deref under -D warnings.
+        assert_eq!(
+            result.explicit_irqs.as_deref(),
+            Some([27u32].as_slice()),
+            "enabled TOUT must export the matrix source"
+        );
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), u32::from(b'h'));
+    }
+
+    /// Regression: under the event-scheduler, a pending `rx_source` must arm
+    /// `take_scheduled_events` so a mid-run injection is harvested without a
+    /// guest UART MMIO write. No `#[cfg]` here — the event-scheduler cfg
+    /// ratchet is full; skip at runtime when the feature is off.
+    #[test]
+    fn pending_rx_source_arms_scheduled_wake() {
+        use crate::cycle_clock::CycleClock;
+        use crate::Peripheral;
+        let mut u = EspUart::new(false, 27);
+        u.attach_cycle_clock(CycleClock::default());
+        if !u.uses_scheduler() {
+            return;
+        }
+        assert!(
+            u.take_scheduled_events().is_empty(),
+            "idle UART schedules nothing"
+        );
+        u.rx_buffer().lock().unwrap().extend(*b"hi\n");
+        let ev = u.take_scheduled_events();
+        assert_eq!(ev.len(), 1, "pending rx_source must arm a wake");
+        assert_eq!(ev[0].1, UART_WAKE_TOKEN);
+        assert!(
+            u.take_scheduled_events().is_empty(),
+            "second harvest is a no-op while scheduled"
+        );
     }
 }

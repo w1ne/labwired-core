@@ -1154,10 +1154,11 @@ impl SystemBus {
     /// INTC control registers are decoded into the cache at the rebuild /
     /// write choke, so this body is layout-neutral: C3 `CPU_INT_ENABLE` 0x104,
     /// `CPU_INT_PRI_n` 0x114+n*4, `CPU_INT_THRESH` 0x194 inside
-    /// `interrupt_core0`; C6 the same fields inside `INTPRI` (0x00 / 0x0C+n*4
-    /// / 0x8C). A line fires only while it is enabled AND its priority >=
-    /// threshold — the parts enable/mask via these registers, NOT the RISC-V
-    /// `mie` CSR (FreeRTOS critical sections raise the threshold to mask).
+    /// `interrupt_core0`; C6 the same fields inside the PLIC (`plic_mx`
+    /// 0x00 / 0x10+n*4 / 0x90) with FROM_CPU doorbells in INTPRI. A line
+    /// fires only while it is enabled AND its priority >= threshold — the
+    /// parts enable/mask via these registers, NOT the RISC-V `mie` CSR
+    /// (FreeRTOS critical sections raise the threshold to mask).
     pub(crate) fn recompute_esp32c3_irq_lines(&mut self) {
         // Latched PMS violations assert their matrix source
         // (`ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE`) until firmware pulses

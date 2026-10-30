@@ -466,16 +466,26 @@ fn build_riscv_node(
                     crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
                 }
             }
+            // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
+            crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
             let cpu = crate::system::riscv::configure_riscv(&mut bus);
             let mut machine = Machine::new(cpu, bus);
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+            // Re-seed ROM .data after ELF load (mask-ROM unpack never ran).
+            if crate::boot::esp32c6_rom::is_esp32c6(chip) {
+                crate::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
+            }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
-            // set the stack pointer, so seed it at the top of RAM (16-byte
+            // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            let ram_size = chip.ram.size;
-            let sp_top = (chip.ram.base + ram_size) as u32;
+            // C6: below ROM-reserved HP SRAM (esp32c6_rom::APP_SRAM_END).
+            let sp_top = if crate::boot::esp32c6_rom::is_esp32c6(chip) {
+                crate::boot::esp32c6_rom::app_stack_top()
+            } else {
+                (chip.ram.base + chip.ram.size) as u32
+            };
             machine.cpu.set_sp(sp_top & !0xF);
             machine.cpu.set_pc(image.entry_point as u32);
             Ok(Box::new(machine))

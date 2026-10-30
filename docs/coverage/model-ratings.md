@@ -10,7 +10,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | Model | Visibility | Conformance | Peripherals | Step Ir/step | Batch Ir/step | RTx | Public docs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | esp32c3 | open | L2 | 40 | — | 2.5 | ≥1× (CI) | [doc](docs/boards/esp32c3.md) |
-| esp32c6 | open | L1 | 17 | — | 3.5 | ≥1× (CI) | — |
+| esp32c6 | open | L1 | 68 | — | 3.5 | ≥1× (CI) | — |
 | litex-vexriscv | open | L1 | 5 | — | — | ≥1× (CI) | [doc](docs/boards/litex-vexriscv.md) |
 | arty-litex-vexriscv | open | L1 | 6 | — | — | ≥1× (CI) | [doc](docs/boards/arty-litex-vexriscv.md) |
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |
@@ -42,6 +42,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | nrf5340 | open | L1 | 21 | 1324.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf5340.md) |
 | rp2040 | open | L1 | 22 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
 | stm32f103 | open | L1 | 31 | 937.3 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f103.md) |
+| stm32f103rb | open | L0 | 32 | 935.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103c4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103c6 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103r4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |

@@ -245,8 +245,12 @@ enum XipTarget {
 #[derive(Debug, Clone, Copy)]
 pub struct MmuFmt {
     /// Bit that marks an entry invalid (S3: BIT(14); C3: BIT(8)).
+    /// Ignored when [`Self::valid_bit`] is non-zero (C6 VALID polarity).
     pub invalid_bit: u32,
-    /// Mask of the physical-page-number field (S3: 0x3FFF; C3: 0xFF).
+    /// When non-zero, an entry is valid iff this bit is set (C6: BIT(9)).
+    /// When zero, validity uses the C3/S3 `invalid_bit` polarity instead.
+    pub valid_bit: u32,
+    /// Mask of the physical-page-number field (S3: 0x3FFF; C3: 0xFF; C6: 0x1FF).
     pub valid_val_mask: u32,
     /// Linear virtual-address span mask (entry_num*64KiB - 1).
     pub vaddr_mask: u32,
@@ -259,6 +263,7 @@ pub struct MmuFmt {
 /// ESP32-S3 MMU format: 512 × 64 KiB entries, invalid = BIT(14).
 pub const MMU_FMT_S3: MmuFmt = MmuFmt {
     invalid_bit: 1 << 14,
+    valid_bit: 0,
     valid_val_mask: 0x3FFF,
     vaddr_mask: 0x1FF_FFFF, // 32 MiB
     // The S3 shares one MMU table between flash and PSRAM; this bit picks the
@@ -269,10 +274,34 @@ pub const MMU_FMT_S3: MmuFmt = MmuFmt {
 /// ESP32-C3 MMU format: 128 × 64 KiB entries, invalid = BIT(8), 8 MiB span.
 pub const MMU_FMT_C3: MmuFmt = MmuFmt {
     invalid_bit: 1 << 8,
+    valid_bit: 0,
     valid_val_mask: 0xFF,
     vaddr_mask: 0x7F_FFFF, // 8 MiB
     spiram_bit: 0,         // no PSRAM path on the C3
 };
+
+/// ESP32-C6 MMU format (`soc/esp32c6/ext_mem_defs.h`):
+/// - 256 × 64 KiB entries over the unified IROM/DROM window @ 0x4200_0000
+/// - valid = BIT(9) set; invalid = 0; page field = bits[8:0] (0x1FF)
+/// - programmed through SPI_MEM MMU_ITEM_INDEX/CONTENT, not a flat table
+pub const MMU_FMT_C6: MmuFmt = MmuFmt {
+    invalid_bit: 0, // unused — valid_bit polarity
+    valid_bit: 1 << 9,
+    valid_val_mask: 0x1FF,
+    vaddr_mask: 0xFF_FFFF, // 16 MiB (256 × 64 KiB)
+    spiram_bit: 0,
+};
+
+/// ESP32-C6 flash-cache MMU table length.
+pub const SOC_MMU_ENTRY_NUM_C6: usize = 256;
+
+/// Allocate a C6 MMU table (256 entries, reset = 0 / invalid).
+pub fn new_mmu_table_c6() -> SharedMmuTable {
+    Arc::new(SharedMmu {
+        entries: Mutex::new(vec![0; SOC_MMU_ENTRY_NUM_C6]),
+        generation: AtomicU64::new(1),
+    })
+}
 
 /// ESP32 classic (LX6) MMU format (`soc/esp32/ext_mem_defs.h`):
 /// - invalid = BIT(8), page number in bits[7:0] (`DPORT_MMU_ADDRESS_MASK`)
@@ -280,6 +309,7 @@ pub const MMU_FMT_C3: MmuFmt = MmuFmt {
 ///   (entries 0..63). Full table has 384 entries (IROM/IRAM regions too).
 pub const MMU_FMT_ESP32: MmuFmt = MmuFmt {
     invalid_bit: 1 << 8,
+    valid_bit: 0,
     valid_val_mask: 0xFF,
     vaddr_mask: 0x3F_FFFF,
     spiram_bit: 0,
@@ -439,7 +469,14 @@ impl FlashXipPeripheral {
             //     (vaddr & 0x7F_FFFF) >> 16, which wrongly yields entry 32 for
             //     IROM and breaks cache2phys / OTA partition lookup).
             //   S3: (vaddr & vaddr_mask) >> 16 with a 32 MiB mask.
-            let entry_id = if self.fmt.vaddr_mask == MMU_FMT_S3.vaddr_mask {
+            // entry_id:
+            //   S3: (vaddr & 32MiB_mask) >> 16
+            //   C6: (vaddr & 16MiB_mask) >> 16 — IROM==DROM @ 0x4200_0000
+            //   C3/classic: (vaddr >> 16) & 0x7F (NOT vaddr_mask — IROM/DROM
+            //     share the table; masking 0x4200_0000 would yield entry 32)
+            let entry_id = if self.fmt.vaddr_mask == MMU_FMT_S3.vaddr_mask
+                || self.fmt.vaddr_mask == MMU_FMT_C6.vaddr_mask
+            {
                 (vaddr & self.fmt.vaddr_mask) >> 16
             } else {
                 (vaddr >> 16) & 0x7F
@@ -466,7 +503,12 @@ impl FlashXipPeripheral {
             }
             let table = mmu.entries.lock().unwrap();
             let entry = *table.get(entry_id as usize)?;
-            if entry & self.fmt.invalid_bit != 0 {
+            let invalid = if self.fmt.valid_bit != 0 {
+                entry & self.fmt.valid_bit == 0
+            } else {
+                entry & self.fmt.invalid_bit != 0
+            };
+            if invalid {
                 return None; // unmapped MMU entry
             }
             let phys_page = entry & self.fmt.valid_val_mask;

@@ -294,6 +294,14 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32f103rb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32f103t4"
   },
   {

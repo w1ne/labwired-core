@@ -21,9 +21,11 @@
 //!   +0x28 MISO_DLEN read data bitlen-1
 //!   +0x58 W0..W15   data buffer (MOSI out / MISO in)
 
+use crate::peripherals::esp32s3::flash_xip::SharedMmuTable;
 use crate::peripherals::esp32s3::psram_opi::PsramDevice;
 use crate::{Peripheral, SimResult};
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 const CMD: u64 = 0x00;
@@ -44,6 +46,12 @@ const MISO_DLEN: u64 = 0x28;
 /// which matters: a zero-initialised MISC would read as "PSRAM selected" and
 /// send every flash command to the wrong chip.
 const MISC: u64 = 0x34;
+/// SPI_MEM_MMU_ITEM_CONTENT_REG — write programs SharedMmu[index]; read returns it.
+/// C6 (and C2/H2/C5/C61) expose the flash-cache MMU through these two SPI0 regs
+/// instead of a flat table at 0x600C_5000 (which is INTPRI on C6).
+const MMU_ITEM_CONTENT: u64 = 0x37C;
+/// SPI_MEM_MMU_ITEM_INDEX_REG — selects which MMU entry CONTENT reads/writes.
+const MMU_ITEM_INDEX: u64 = 0x380;
 /// Bit 0 is `CS0_DIS`. It is described above rather than declared: the model
 /// routes on CS1 alone (flash is the default target), so a `CS0_DIS` constant
 /// would be dead code the compiler warns about.
@@ -95,6 +103,10 @@ const CMD_WRDI: u8 = 0x04; // write disable
 const CMD_SFDP: u8 = 0x5A; // read SFDP
 const CMD_RDUID: u8 = 0x4B; // read unique ID (64-bit)
 const CMD_RDID: u8 = 0x9F; // read JEDEC id
+const CMD_PAGE_PROGRAM: u8 = 0x02; // page program (≤256 B)
+const CMD_SECTOR_ERASE: u8 = 0x20; // 4 KiB sector erase
+const CMD_BLOCK_ERASE_32K: u8 = 0x52; // 32 KiB block erase
+const CMD_BLOCK_ERASE_64K: u8 = 0xD8; // 64 KiB block erase
 
 /// The smallest SPI flash part any board this controller serves is fitted with.
 /// Every ESP32 module in the catalog carries at least 4 MB, and the pre-2026-08
@@ -139,6 +151,9 @@ pub struct SpiMemFlash {
     /// module without PSRAM — then a CS1 command finds no device, exactly as it
     /// would on bare silicon.
     psram: Option<Arc<Mutex<PsramDevice>>>,
+    /// Shared flash-cache MMU table, when this controller owns the C6-style
+    /// MMU_ITEM_INDEX/CONTENT window (SPI0). `None` on S3/C3 SPIMEM twins.
+    mmu: Option<SharedMmuTable>,
 }
 
 impl SpiMemFlash {
@@ -154,7 +169,19 @@ impl SpiMemFlash {
             sr2: 0,
             sr3: 0,
             psram: None,
+            mmu: None,
         }
+    }
+
+    /// Attach the flash-cache MMU table this SPI_MEM MMU_ITEM_* window drives.
+    pub fn with_mmu(mut self, mmu: SharedMmuTable) -> Self {
+        self.mmu = Some(mmu);
+        self
+    }
+
+    /// Shared MMU table, if this controller owns MMU_ITEM_INDEX/CONTENT.
+    pub fn mmu_table(&self) -> Option<SharedMmuTable> {
+        self.mmu.clone()
     }
 
     /// Attach the octal PSRAM that lives on chip select 1.
@@ -180,6 +207,45 @@ impl SpiMemFlash {
         self.regs.insert(off, val);
     }
 
+    /// Program `data` into the flash backing at `addr` (NOR: bits only clear).
+    ///
+    /// Page program on silicon ANDs new bytes onto erased (`0xFF`) cells. Doing
+    /// the same here keeps a second program of the same page from resurrecting
+    /// bits Preferences / NVS already cleared.
+    fn program_flash_bytes(&mut self, addr: usize, data: &[u8]) {
+        let mut flash = self.flash.lock().unwrap();
+        for (i, &b) in data.iter().enumerate() {
+            let off = addr + i;
+            if off < flash.len() {
+                flash[off] &= b;
+            }
+        }
+    }
+
+    /// Fill `[addr, addr+len)` with `0xFF` (NOR erase).
+    fn erase_flash_range(&mut self, addr: usize, len: usize) {
+        let mut flash = self.flash.lock().unwrap();
+        let end = (addr + len).min(flash.len());
+        if addr < flash.len() {
+            flash[addr..end].fill(0xFF);
+        }
+    }
+
+    /// Bytes the current MOSI_DLEN describes (0 when the register is unset).
+    fn mosi_bytes(&self) -> usize {
+        ((self.reg(MOSI_DLEN) as usize) + 1) / 8
+    }
+
+    /// Pack W0.. into a byte vector of `nbytes` (little-endian words).
+    fn take_mosi_bytes(&self, nbytes: usize) -> Vec<u8> {
+        let mut out = Vec::with_capacity(nbytes);
+        for i in 0..nbytes {
+            let word = self.reg(W0 + (i as u64 / 4) * 4);
+            out.push(((word >> (8 * (i % 4))) & 0xFF) as u8);
+        }
+        out
+    }
+
     /// Launch whichever command bit is set in CMD. The generic `USR` command
     /// reads its opcode from USER2 and may return data in the W buffer; the
     /// dedicated command bits (RES/WRDI/WREN/DP/…) have no data phase the boot
@@ -199,11 +265,26 @@ impl SpiMemFlash {
         if cmd & FLASH_WRDI != 0 {
             self.flash_status &= !STATUS_WEL;
         }
-        if cmd & (FLASH_PP | FLASH_SE | FLASH_BE | FLASH_WRSR) != 0 {
-            // Program/erase/write-status complete instantly (no write latency);
-            // the write-enable latch is consumed, write-in-progress stays clear.
-            self.flash_status &= !STATUS_WEL;
-            self.flash_status &= !STATUS_WIP;
+        if cmd & FLASH_PP != 0 {
+            // Dedicated page-program: ADDR holds the byte address, W0.. the
+            // payload, MOSI_DLEN the bit length. Without this, Preferences
+            // putBytes completes the poll but never lands in flash.
+            let addr = self.reg(ADDR) as usize;
+            let data = self.take_mosi_bytes(self.mosi_bytes());
+            self.program_flash_bytes(addr, &data);
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+        }
+        if cmd & FLASH_SE != 0 {
+            self.erase_flash_range(self.reg(ADDR) as usize, 4 * 1024);
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+        }
+        if cmd & FLASH_BE != 0 {
+            self.erase_flash_range(self.reg(ADDR) as usize, 64 * 1024);
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+        }
+        if cmd & FLASH_WRSR != 0 {
+            // Write-status completes instantly; latch consumed, WIP clear.
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
         }
         if cmd & FLASH_RDSR != 0 {
             // Capture the status register where the firmware reads it back.
@@ -370,6 +451,23 @@ impl SpiMemFlash {
                 self.sr3 = (self.reg(W0) & 0xFF) as u8;
                 self.flash_status &= !(STATUS_WEL | STATUS_WIP);
             }
+            CMD_PAGE_PROGRAM => {
+                let data = self.take_mosi_bytes(self.mosi_bytes());
+                self.program_flash_bytes(addr, &data);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_SECTOR_ERASE => {
+                self.erase_flash_range(addr, 4 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_BLOCK_ERASE_32K => {
+                self.erase_flash_range(addr, 32 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_BLOCK_ERASE_64K => {
+                self.erase_flash_range(addr, 64 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
             _ => {
                 // Unmodeled command: no data, just complete.
             }
@@ -406,12 +504,32 @@ impl Peripheral for SpiMemFlash {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Ok(self.reg(offset & !3))
+        let off = offset & !3;
+        if off == MMU_ITEM_CONTENT {
+            if let Some(mmu) = &self.mmu {
+                let idx = self.reg(MMU_ITEM_INDEX) as usize;
+                let table = mmu.entries.lock().unwrap();
+                return Ok(table.get(idx).copied().unwrap_or(0));
+            }
+        }
+        Ok(self.reg(off))
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        self.set_reg(offset & !3, value);
-        if (offset & !3) == CMD && (value & CMD_TRIGGER_MASK) != 0 {
+        let off = offset & !3;
+        self.set_reg(off, value);
+        if off == MMU_ITEM_CONTENT {
+            if let Some(mmu) = &self.mmu {
+                let idx = self.reg(MMU_ITEM_INDEX) as usize;
+                let mut table = mmu.entries.lock().unwrap();
+                if idx < table.len() {
+                    table[idx] = value;
+                    mmu.generation.fetch_add(1, Ordering::Release);
+                }
+            }
+            return Ok(());
+        }
+        if off == CMD && (value & CMD_TRIGGER_MASK) != 0 {
             self.launch_command();
         }
         Ok(())
@@ -556,5 +674,56 @@ mod tests {
         c.write_u32(CMD, USR_BIT).unwrap();
         assert_eq!(c.read_u32(W0).unwrap() & 1, 0); // WIP clear
         assert_eq!(c.read_u32(CMD).unwrap(), 0);
+    }
+
+    /// Page program must land bytes in the backing — otherwise NVS/Preferences
+    /// put completes its WIP poll and still reads erased flash forever.
+    #[test]
+    fn page_program_writes_backing() {
+        let mut c = ctrl_with(vec![0xFFu8; 0x200]);
+        c.write_u32(CMD, FLASH_WREN).unwrap();
+        c.write_u32(USER2, CMD_PAGE_PROGRAM as u32).unwrap();
+        c.write_u32(ADDR, 0x100).unwrap();
+        c.write_u32(W0, 0xA1B2_C3D4).unwrap();
+        c.write_u32(MOSI_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(c.read_u32(CMD).unwrap(), 0);
+        // Read back through READ.
+        c.write_u32(USER2, CMD_READ as u32).unwrap();
+        c.write_u32(ADDR, 0x100).unwrap();
+        c.write_u32(MISO_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(c.read_u32(W0).unwrap(), 0xA1B2_C3D4);
+    }
+
+    #[test]
+    fn sector_erase_restores_ones() {
+        let flash = vec![0x00u8; 0x2000];
+        let mut c = ctrl_with(flash);
+        c.write_u32(CMD, FLASH_WREN).unwrap();
+        c.write_u32(USER2, CMD_SECTOR_ERASE as u32).unwrap();
+        c.write_u32(ADDR, 0x1000).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        c.write_u32(USER2, CMD_READ as u32).unwrap();
+        c.write_u32(ADDR, 0x1000).unwrap();
+        c.write_u32(MISO_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(c.read_u32(W0).unwrap(), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn mmu_item_content_programs_shared_table() {
+        use crate::peripherals::esp32s3::flash_xip::new_mmu_table_c6;
+        let flash = Arc::new(Mutex::new(vec![0xFFu8; 4096]));
+        let mmu = new_mmu_table_c6();
+        let mut c = SpiMemFlash::new(flash).with_mmu(mmu.clone());
+        // entry 3 ← phys page 5 | VALID
+        c.write_u32(MMU_ITEM_INDEX, 3).unwrap();
+        c.write_u32(MMU_ITEM_CONTENT, (1 << 9) | 5).unwrap();
+        assert_eq!(c.read_u32(MMU_ITEM_CONTENT).unwrap(), (1 << 9) | 5);
+        assert_eq!(mmu.entries.lock().unwrap()[3], (1 << 9) | 5);
+        // invalidate
+        c.write_u32(MMU_ITEM_CONTENT, 0).unwrap();
+        assert_eq!(mmu.entries.lock().unwrap()[3], 0);
     }
 }

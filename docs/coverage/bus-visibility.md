@@ -141,6 +141,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f103r4h | ✓ | ✓ | ✓ |
 | stm32f103r6 | ✓ | ✓ | ✓ |
 | stm32f103r6h | ✓ | ✓ | ✓ |
+| stm32f103rb | ✓ | ✓ | ✓ |
 | stm32f103t4 | ✓ | ✓ | ✓ |
 | stm32f103t6 | ✓ | ✓ | ✓ |
 | stm32f401 | ✓ | ✓ | ✓ |
