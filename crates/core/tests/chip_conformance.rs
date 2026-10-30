@@ -154,6 +154,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_ek_ra6m5_smoke_survival"),
     },
     ChipConf {
+        // EK-RA8M1 (R7FA8M1AH, Cortex-M85). SIM-DERIVED: no RA8M1 bench part.
+        // Modelled: the RA PORT (ra_port), the RA8 PmnPFS/PWPR/PWPRS
+        // (ra8_pfs), SYSTEM HOCOCR/OSCSF + the SCICKCR handshake (ra8_sysc)
+        // and SCI9 on the new sci_b UART layout. MSTP, ICU and the listed
+        // timers/comms blocks are declared stubs; SCI0-8 and the rest are not
+        // mapped — see examples/ek-ra8m1/VALIDATION.md.
+        name: "r7fa8m1ah",
+        yaml: "configs/chips/r7fa8m1ah.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_ek_ra8m1_smoke_survival"),
+    },
+    ChipConf {
         // Apollo4 Plus EVB (AMAP42KP-KBR, Cortex-M4F). SIM-DERIVED: no Apollo4
         // bench part. Modelled: the 128-pin GPIO block (apollo4_gpio,
         // PADKEY-locked PINCFG + RD/WT/WTS/WTC/EN), PWRCTRL (apollo4_pwrctrl)

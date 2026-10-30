@@ -516,6 +516,10 @@
       "how": "needs-build",
       "why": "The R7FA6M5BH descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/ek-ra6m5-smoke.elf prints 'EK-RA6M5 SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
     },
+    "r7fa8m1ah": {
+      "how": "needs-build",
+      "why": "The R7FA8M1AH descriptor and its sci_b/ra8_pfs/ra8_sysc models are newer than the released CLI this gate installs. The committed smoke tests/fixtures/ek-ra8m1-smoke.elf prints 'EK-RA8M1 SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
+    },
     "stm32l552": {
       "how": "needs-build",
       "why": "The STM32L5 part (and the new stm32l5 RCC profile) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/nucleo-l552ze-q-smoke.elf prints 'NUCLEO-L552ZE-Q SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"

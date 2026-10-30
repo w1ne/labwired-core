@@ -337,8 +337,12 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
+    // Renesas RA8 SYSTEM (adds the SCICKCR handshake).
+    "ra8_sysc",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
+    // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
+    "ra8_pfs",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1342,13 +1346,21 @@ pub fn try_build(
         // clock bring-up (which spins on MCG_S / RSIM_CONTROL status bits)
         // settles instead of hanging. A passive register bank cannot complete
         // these hand-offs. See peripherals/mcg.rs and peripherals/rsim.rs.
-        "nxp_mcg" | "kinetis_mcg" => Box::new(crate::peripherals::mcg::Mcg::new()),
+        // `config: { profile: k6x }` adds PLL0 (C5/C6, S.PLLST/LOCK0) for the
+        // K64F; the default is the PLL-less KW41Z / Kinetis-L block.
+        "nxp_mcg" | "kinetis_mcg" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            Some("k6x") => Box::new(crate::peripherals::mcg::Mcg::new_k6x()),
+            None | Some("kl") => Box::new(crate::peripherals::mcg::Mcg::new()),
+            Some(other) => anyhow::bail!("nxp_mcg: unknown profile '{other}' (expected k6x or kl)"),
+        },
         "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
+        "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new_ra8()),
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
+        "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),
         "imxrt_ccm" => Box::new(crate::peripherals::imxrt::ccm::ImxrtCcm::new()),

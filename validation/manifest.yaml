@@ -1657,7 +1657,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 1b164aa0df4c1427f204d4ec64456193cb15bf77331f3f54ef79d3dc7d53aebf
+    drift_ack_digest: cccc40a71955c8ebc979471f2eff658685864291c014b5eab60d6b9dc5011a65
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2232,7 +2232,18 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -3661,7 +3672,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3de3e5508bfa2990c8e138d894fd6a8edd4bd77bade2fefee8739ef8eda06eb3
+    drift_ack_digest: b3d4f8fbfcee3a28e150fef40e860aae26ce6847183853d2248fd79c3647dbe7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4224,7 +4235,18 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -4623,7 +4645,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: db62b4ac08dced24891354672e6a447076d1a11a32a11ae34dadf928d4313cdf
+    drift_ack_digest: b2a35a227c77304b6f20be335b770358d9cb87b3d1a2ba22815359fe5bdaff19
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5119,7 +5141,18 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -5576,7 +5609,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: a01f76b4a20109caff38db7d16d2ffaa4447b22aaed5add01899b54656e44c2a
+    drift_ack_digest: fd4e8f0ab37916a60c6137a5b22c8bf77670f0a365dcac942788fca5b5d7774c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6142,7 +6175,18 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -6562,7 +6606,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b4427abedf6ad554401900eb8d5b1171966f10479c2e5e50c105527f49e7b059
+    drift_ack_digest: 1e50f79842c3adb2a6853d5111e2ccd31e89cfe9ce4e5527050ea52ec905a87b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7067,7 +7111,18 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -9429,6 +9484,37 @@ boards:
       - crates/firmware-ek-ra6m5-smoke
       - configs/chips/r7fa6m5bh.yaml
       - configs/systems/ek-ra6m5.yaml
+  - id: r7fa8m1ah
+    # 2026-10-30: Renesas EK-RA8M1 (R7FA8M1AH, Cortex-M85; 2 MiB code flash
+    # at 0x02000000, 896 KiB SRAM at 0x22000000). First RA8 part. New: the
+    # SCI_B UART layout (sci_b), the RA8 PFS with PWPR/PWPRS moved (ra8_pfs)
+    # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP, ICU,
+    # DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT,
+    # ADC12, ETHERC, SPI and CANFD are declared stubs; SCI0-8 and the remaining
+    # blocks are not mapped. Helium/MVE, LOB and TrustZone are not modelled.
+    # SIM-DERIVED — no RA8M1 bench part. See docs/boards/ek-ra8m1.md and
+    # examples/ek-ra8m1/VALIDATION.md.
+    doc: docs/boards/ek-ra8m1.md
+    chip: configs/chips/r7fa8m1ah.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_ek_ra8m1_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/ra_pfs.rs
+      - crates/core/src/peripherals/ra_clock.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-ek-ra8m1-smoke
+      - configs/chips/r7fa8m1ah.yaml
+      - configs/systems/ek-ra8m1.yaml
 
   - id: same70q21b
     # 2026-10-30: Microchip SAM E70 Xplained (ATSAME70Q21B, Cortex-M7; 2 MiB
@@ -9468,6 +9554,12 @@ boards:
     # clock. SIM clock gating, PORT pad mux/pulls and MCG PLL/FEE are not
     # modelled; ENET+KSZ8081, RNGA and FTFE are declared stubs; eDMA, PIT/FTM,
     # I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped (access faults).
+    # 2026-10-30: stock Zephyr v3.7.0 boots (crates/firmware-frdm-k64f-zephyr,
+    # byte-identical rebuilds): hello_world, plus tests/drivers/uart/uart_basic_api
+    # (the suite Renode's NXP-K64F.robot runs) passes 7/7 with injected input.
+    # New for this: MCG `k6x` profile (PLL0 PLLST/LOCK0, PEE CLKST=11), the
+    # Kinetis UART C2 TIE/TCIE/RIE interrupts, and SVD register files for
+    # SYSMPU, PMC and OSC (no MPU protection modelled).
     # SIM-DERIVED — no K64F bench part. See
     # docs/boards/frdm-k64f.md and examples/frdm-k64f/VALIDATION.md.
     doc: docs/boards/frdm-k64f.md
@@ -9475,6 +9567,8 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_frdm_k64f_smoke_survival"
+      - "firmware_survival::test_frdm_k64f_zephyr_survival (stock Zephyr hello)"
+      - "mcg::tests (k6x PLL0) + uart::tests::test_kinetis_uart_c2_interrupt_enables"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9487,8 +9581,13 @@ boards:
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
+      - crates/core/src/peripherals/declarative.rs
       - crates/firmware-frdm-k64f-smoke
+      - crates/firmware-frdm-k64f-zephyr
       - configs/chips/mk64f12.yaml
+      - configs/peripherals/mk64f12/sysmpu.yaml
+      - configs/peripherals/mk64f12/pmc.yaml
+      - configs/peripherals/mk64f12/osc.yaml
       - configs/systems/frdm-k64f.yaml
 
   - id: s32k388

@@ -179,6 +179,10 @@ pub(super) struct PwmPhaseCursor {
     prescaler_phase: u32,
 }
 
+/// `MotorSnapshot.kind` for STEP/DIR steppers folded from ObservedDevice.
+/// Keep in sync with the filter in wasm `get_actuator_states`.
+pub const STEPPER_SNAPSHOT_KIND: &str = "stepper";
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct MotorSnapshot {
     pub id: String,
@@ -1151,7 +1155,8 @@ impl SystemBus {
     }
 
     pub fn motor_snapshots(&self) -> Vec<MotorSnapshot> {
-        self.motors
+        let mut out: Vec<MotorSnapshot> = self
+            .motors
             .iter()
             .map(|motor| match motor {
                 MotorRuntime::Dc {
@@ -1251,7 +1256,43 @@ impl SystemBus {
                     }
                 }
             })
-            .collect()
+            .collect();
+        // STEP/DIR steppers live as ObservedDevice GPIO observers, not in
+        // `self.motors`. Fold them so run evidence carries `position_rad`
+        // (shaft angle). LabWired's prove oracle asserts that field; core's
+        // built-in TestAssertion does not yet have a motor_position clause.
+        for m in self.observed_of::<crate::peripherals::components::step_dir_motor::StepDirMotor>()
+        {
+            if m.id().is_empty() {
+                continue;
+            }
+            let angle_deg = m.angle_degrees_f64();
+            out.push(MotorSnapshot {
+                id: m.id().to_string(),
+                kind: STEPPER_SNAPSHOT_KIND,
+                position_rad: angle_deg.to_radians(),
+                // Speed/torque/bus are not modelled for STEP/DIR steppers.
+                speed_rpm: 0.0,
+                speed_rpm_peak_abs: 0.0,
+                speed_rpm_max: 0.0,
+                speed_rpm_min: 0.0,
+                torque_nm: 0.0,
+                current_a: None,
+                phase_currents_a: None,
+                bus_voltage_v: 0.0,
+                commutation_sector: None,
+                // "step" = has stepped since EN last became active; clears
+                // when EN goes inactive. With no EN pin it stays "step"
+                // after the first edge (driver assumed always enabled).
+                control_state: if m.is_commanded() {
+                    "step".to_owned()
+                } else {
+                    "idle".to_owned()
+                },
+                faults: Vec::new(),
+            });
+        }
+        out
     }
 
     pub fn set_motor_stalled(&mut self, id: &str, stalled: bool) -> Result<(), String> {

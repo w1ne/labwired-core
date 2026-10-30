@@ -97,6 +97,12 @@ pub enum UartRegisterLayout {
     Leuart,
     /// Renesas SCI (classic SH/RX and RA-series) — SSR@0x04, byte registers.
     Sci,
+    /// Renesas SCI_B (RA8M1/RA8D1/RA8T1) — the 32-bit rework of the SCI:
+    /// RDR@0x00, TDR@0x04, CCR0-CCR4@0x08-0x18, CESR@0x1C, CSR@0x48 (TDRE
+    /// bit29, TEND bit30, RDRF bit31). Offsets from the FSP CMSIS header
+    /// `R7FA8M1AH.h` (`R_SCI_B0_Type`). TX is gated on CCR0.TE; the control
+    /// registers read back what firmware wrote.
+    SciB,
     /// Gaisler APBUART (LEON/GRLIB) — DATA@0x00, STATUS@0x04.
     Gaisler,
     /// Nuvoton NPCX — UTBUF@0x00, URBUF@0x02, readiness in UICTRL@0x04.
@@ -171,6 +177,7 @@ impl FromStr for UartRegisterLayout {
             "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
             "leuart" => Ok(Self::Leuart),
             "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
+            "sci_b" | "renesas_sci_b" | "ra8_sci" => Ok(Self::SciB),
             "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
             "npcx" | "nuvoton" => Ok(Self::Npcx),
             "max32650" | "maxim" => Ok(Self::Max32650),
@@ -191,7 +198,7 @@ impl FromStr for UartRegisterLayout {
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
                  lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
-                 gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
+                 sci_b, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
                  coreuart, k6xf, pulp, custom",
                 value
             )),
@@ -234,12 +241,15 @@ pub(crate) struct UartRegMap {
 }
 
 impl UartRegisterLayout {
-    /// RXNEIE bit in CR1. Only the STM32/LPUART layouts have the RXNE
-    /// interrupt; everything else keeps the previous "no RX level IRQ" shape.
+    /// RXNEIE bit in CR1. Only the STM32/LPUART and Kinetis K6x UART layouts
+    /// have the RX-data interrupt; everything else keeps the previous "no RX
+    /// level IRQ" shape.
     fn rxneie_mask(self) -> u32 {
         match self {
             UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => 1 << 5,
             UartRegisterLayout::Lpuart => 1 << 5,
+            // Kinetis K6x UART C2.RIE (bit 5).
+            UartRegisterLayout::KinetisUart => 1 << 5,
             _ => 0,
         }
     }
@@ -469,6 +479,22 @@ impl UartRegisterLayout {
                 rx_present_set: 1 << 6, // RDRF
                 rx_present_clear: 0,
             },
+            // Renesas SCI_B (RA8). RDR@0x00, TDR@0x04, CSR@0x48 (32-bit):
+            // TDRE(29)|TEND(30) ready, RDRF(31) set on data. The control
+            // registers are kept in `Uart::sci_b_regs`.
+            UartRegisterLayout::SciB => UartRegMap {
+                status: 0x48,
+                tx: 0x04,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: (1 << 29) | (1 << 30), // TDRE | TEND
+                rx_present_set: 1 << 31,            // RDRF
+                rx_present_clear: 0,
+            },
             // Gaisler APBUART (LEON/GRLIB). DATA@0x00, STATUS@0x04: TS(1)|TE(2)
             // ready, DR(0) set on data. Reset 0x06.
             UartRegisterLayout::Gaisler => UartRegMap {
@@ -643,14 +669,17 @@ impl UartRegisterLayout {
             },
             // NXP Kinetis K6x UART (classic). D@0x07, S1@0x04 (8-bit): TDRE(7)|
             // TC(6) ready, RDRF(5) set on data. Idle 0xC0. width=1 (S2@0x05).
+            // C2@0x03 carries the interrupt enables (K64P144M120SF5RM §52.3.4):
+            // TIE(7) on TDRE, TCIE(6) on TC, RIE(5) on RDRF — what Zephyr's
+            // uart_mcux irq_tx/rx_enable set. TE(3)/RE(2) are stored, not gated.
             UartRegisterLayout::KinetisUart => UartRegMap {
                 status: 0x04,
                 tx: 0x07,
                 rx: 0x07,
                 cr3: 0xF00,
-                cr1: None,
-                txeie_mask: 0,
-                tcie_mask: 0,
+                cr1: Some(0x03),    // C2
+                txeie_mask: 1 << 7, // TIE
+                tcie_mask: 1 << 6,  // TCIE
                 status_width: 1,
                 status_idle: 0xC0,      // TDRE | TC
                 rx_present_set: 1 << 5, // RDRF
@@ -736,6 +765,27 @@ impl UartRegisterLayout {
         }
     }
 }
+
+/// SCI_B control registers stored by [`Uart::sci_b_regs`]: 0x08..0x40.
+const SCI_B_REGS: usize = 14;
+const SCI_B_CTRL_BASE: u64 = 0x08;
+/// CCR0 (index 0): TE bit 4, RE bit 0.
+const SCI_B_CCR0_TE: u32 = 1 << 4;
+const SCI_B_CCR0_RE: u32 = 1 << 0;
+/// CESR (index 5, 0x1C): TIST bit 4 / RIST bit 0 mirror CCR0.TE / CCR0.RE.
+const SCI_B_CESR_INDEX: usize = 5;
+/// FCR (index 7, 0x24): TFRST bit 15 and RFRST bit 23 are write-only.
+const SCI_B_FCR_INDEX: usize = 7;
+const SCI_B_FCR_WO: u32 = (1 << 15) | (1 << 23);
+/// Reset values: CCR2 0xFF00FF04 (MDDR 0xFF, BRR 0xFF, BCP 4) and FCR
+/// 0x1F1F0000, the FSP `r_sci_b_uart.c` `SCI_B_UART_CCR2_DEFAULT_VALUE` /
+/// `SCI_B_UART_FCR_DEFAULT_VALUE`. Every other stored register resets to 0.
+const SCI_B_RESET: [u32; SCI_B_REGS] = {
+    let mut r = [0u32; SCI_B_REGS];
+    r[2] = 0xFF00_FF04;
+    r[SCI_B_FCR_INDEX] = 0x1F1F_0000;
+    r
+};
 
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
@@ -962,6 +1012,10 @@ pub struct Uart {
     /// AVR layout: UBRR0 and whether firmware wrote it.
     avr_ubrr: u16,
     avr_baud_set: bool,
+    /// SCI_B layout: CCR0-CCR4, CESR, ICR, FCR, (reserved), MCR, DCR,
+    /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
+    /// stored; it reads CCR0.TE/RE back as TIST/RIST.
+    sci_b_regs: [u32; SCI_B_REGS],
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
@@ -1049,6 +1103,7 @@ impl Uart {
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
+            sci_b_regs: SCI_B_RESET,
             last_tx_on_bus: false,
         }
     }
@@ -1099,7 +1154,63 @@ impl Uart {
         self.custom_map.unwrap_or_else(|| self.layout.regmap())
     }
 
+    /// SCI_B control-register byte at `offset`, or `None` outside the
+    /// stored window (or on other layouts).
+    fn sci_b_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::SciB) {
+            return None;
+        }
+        let rel = offset.checked_sub(SCI_B_CTRL_BASE)?;
+        let index = (rel / 4) as usize;
+        if index >= SCI_B_REGS {
+            return None;
+        }
+        let word = if index == SCI_B_CESR_INDEX {
+            self.sci_b_regs[0] & (SCI_B_CCR0_TE | SCI_B_CCR0_RE)
+        } else {
+            self.sci_b_regs[index]
+        };
+        Some(((word >> ((rel % 4) * 8)) & 0xFF) as u8)
+    }
+
+    /// Store one byte of an SCI_B control register. Returns false outside
+    /// the window. CESR is read-only; FCR's FIFO-reset bits are write-only
+    /// (an RFRST write empties the RX queue).
+    fn sci_b_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::SciB) {
+            return false;
+        }
+        let Some(rel) = offset.checked_sub(SCI_B_CTRL_BASE) else {
+            return false;
+        };
+        let index = (rel / 4) as usize;
+        if index >= SCI_B_REGS {
+            return false;
+        }
+        if index == SCI_B_CESR_INDEX {
+            return true;
+        }
+        let shift = (rel % 4) * 8;
+        let mut v = u32::from(value) << shift;
+        if index == SCI_B_FCR_INDEX {
+            if v & (1 << 23) != 0 {
+                if let Ok(mut guard) = self.rx_buf.lock() {
+                    guard.clear();
+                }
+            }
+            v &= !SCI_B_FCR_WO;
+        }
+        let reg = &mut self.sci_b_regs[index];
+        *reg = (*reg & !(0xFFu32 << shift)) | v;
+        true
+    }
+
     fn tx_enabled(&self) -> bool {
+        if matches!(self.layout, UartRegisterLayout::SciB)
+            && self.sci_b_regs[0] & SCI_B_CCR0_TE == 0
+        {
+            return false;
+        }
         match self.enable_offset {
             None => true,
             Some(_) => self.enable_value & self.enable_mask == self.enable_mask,
@@ -2054,6 +2165,9 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.baud_register_byte(offset) {
             return Ok(byte);
         }
+        if let Some(byte) = self.sci_b_byte(offset) {
+            return Ok(byte);
+        }
         if matches!(self.layout, UartRegisterLayout::Stm32V2) && offset == 0x2C {
             return Ok(self.presc as u8);
         }
@@ -2160,6 +2274,14 @@ impl crate::Peripheral for Uart {
         let is_legacy_tx_alias =
             matches!(self.layout, UartRegisterLayout::Stm32F1) && offset == 0x00;
 
+        if self.sci_b_write(offset, value) {
+            return Ok(());
+        }
+        if matches!(self.layout, UartRegisterLayout::SciB) && offset != self.tx_offset() {
+            // TDR bytes 1-3 (MPBT/TSYNC), CFCLR and the other flag-clear
+            // registers: accepted, nothing stored.
+            return Ok(());
+        }
         if offset == self.tx_offset() || is_legacy_tx_alias {
             self.push_tx(value);
             // If DMAT bit is set, we might be in a DMA sequence.
@@ -2446,6 +2568,9 @@ impl crate::Peripheral for Uart {
             }
         }
         if let Some(byte) = self.baud_register_byte(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sci_b_byte(offset) {
             return Some(byte);
         }
         if offset == self.cr3_offset() {
@@ -2760,6 +2885,68 @@ mod tests {
         }
     }
 
+    /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while
+    /// CCR0.TE is set, CESR mirrors TE/RE, CSR@0x48 reports TDRE|TEND and
+    /// RDRF on RX data, control registers read back from their FSP reset.
+    #[test]
+    fn test_sci_b_tx_gate_status_and_readback() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut u = Uart::new_with_layout(UartRegisterLayout::SciB);
+        u.set_sink(Some(sink.clone()), false);
+        assert_eq!(u.read_u32(0x10).unwrap(), 0xFF00_FF04, "CCR2 reset");
+        assert_eq!(u.read_u32(0x24).unwrap(), 0x1F1F_0000, "FCR reset");
+        assert_eq!(u.read_u32(0x48).unwrap(), 0x6000_0000, "CSR TDRE|TEND");
+        // TE off: the byte is dropped.
+        u.write_u32(0x04, b'x' as u32).unwrap();
+        assert!(sink.lock().unwrap().is_empty());
+        // CCR2 BRR = 25, CCR3 8-bit LSB-first, then TE|RE.
+        u.write_u32(0x10, 25 << 8).unwrap();
+        u.write_u32(0x14, (2 << 8) | (1 << 12)).unwrap();
+        u.write_u32(0x08, (1 << 4) | 1).unwrap();
+        assert_eq!(u.read_u32(0x10).unwrap(), 25 << 8);
+        assert_eq!(u.read_u32(0x14).unwrap(), 0x1200);
+        assert_eq!(u.read_u32(0x1C).unwrap(), 0x11, "CESR TIST|RIST");
+        // CESR is read-only.
+        u.write_u32(0x1C, 0).unwrap();
+        assert_eq!(u.read_u32(0x1C).unwrap(), 0x11);
+        u.write_u32(0x04, b'o' as u32).unwrap();
+        u.write_u32(0x04, b'k' as u32).unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+        // CFCLR (write-only) stores nothing.
+        u.write_u32(0x68, 0x9D07_0010).unwrap();
+        assert_eq!(u.read_u32(0x68).unwrap(), 0);
+        // RX: RDRF in CSR, RDR pops the byte.
+        u.rx_buffer().lock().unwrap().push_back(b'r');
+        assert_eq!(u.read_u32(0x48).unwrap() >> 31, 1, "RDRF");
+        assert_eq!(u.read(0x00).unwrap(), b'r');
+        assert_eq!(u.read_u32(0x48).unwrap() >> 31, 0);
+        // FCR: TFRST/RFRST are write-only; RFRST empties the RX queue.
+        u.rx_buffer().lock().unwrap().push_back(b'z');
+        u.write_u32(0x24, 0x1F1F_0000 | (1 << 23) | (1 << 15))
+            .unwrap();
+        assert_eq!(u.read_u32(0x24).unwrap(), 0x1F1F_0000);
+        assert!(u.rx_buffer().lock().unwrap().is_empty());
+        // TE off again: TIST drops and TX is gated.
+        u.write_u32(0x08, 1).unwrap();
+        assert_eq!(u.read_u32(0x1C).unwrap(), 0x01);
+        u.write_u32(0x04, b'!' as u32).unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+    }
+
+    #[test]
+    fn test_sci_b_profile_names() {
+        for name in ["sci_b", "renesas_sci_b", "ra8_sci"] {
+            assert_eq!(
+                name.parse::<UartRegisterLayout>().unwrap(),
+                UartRegisterLayout::SciB
+            );
+        }
+        assert_eq!(
+            "sci".parse::<UartRegisterLayout>().unwrap(),
+            UartRegisterLayout::Sci
+        );
+    }
+
     /// YAML `profile: custom`: TX at a declared data-register offset reaches
     /// the UART capture sink; optional enable_mask gates TX until set.
     /// Offsets are synthetic (0x10/0x14/0x18) — not a vendor fingerprint.
@@ -2925,6 +3112,40 @@ mod tests {
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
         uart.write_u32(0x08, 1 << 19).unwrap();
         assert!(!uart.tick().irq, "TE alone must not pend");
+    }
+
+    #[test]
+    fn test_kinetis_uart_c2_interrupt_enables() {
+        // K6x UART C2 (0x03, byte register): TIE = bit 7, TCIE = bit 6,
+        // RIE = bit 5 (K64P144M120SF5RM §52.3.4). TE/RE (bits 3/2) are not
+        // interrupt enables.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C).unwrap(); // TE | RE
+        assert!(!uart.tick().irq, "TE|RE alone must not pend");
+        assert_eq!(uart.read(0x03).unwrap(), 0x0C, "C2 reads back");
+
+        uart.write(0x03, 0x0C | 0x80).unwrap(); // + TIE, TDRE is always set
+        assert!(uart.tick().irq, "TIE must pend on TDRE");
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C | 0x40).unwrap(); // + TCIE
+        assert!(uart.tick().irq, "TCIE must pend on TC");
+
+        // RIE pends only while RDRF is set, and stops once D is drained —
+        // what Zephyr's uart_irq_is_pending() test checks.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C | 0x20).unwrap(); // + RIE
+        assert!(!uart.tick().irq, "RIE with an empty receiver must not pend");
+        uart.rx_buffer().lock().unwrap().push_back(b'Q');
+        assert_eq!(uart.read(0x04).unwrap() & 0x20, 0x20, "S1.RDRF set");
+        assert!(uart.tick().irq, "RIE must pend on RDRF");
+        assert_eq!(uart.read(0x07).unwrap(), b'Q');
+        assert_eq!(
+            uart.read(0x04).unwrap() & 0x20,
+            0,
+            "RDRF clears once drained"
+        );
+        assert!(!uart.tick().irq, "drained receiver must stop pending");
     }
 
     #[test]

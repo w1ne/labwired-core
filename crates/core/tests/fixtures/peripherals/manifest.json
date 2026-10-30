@@ -3128,7 +3128,7 @@
       "device_type": "a4988",
       "label": "STEP/DIR stepper driver",
       "summary": "A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle).",
-      "detail": "Counts rising STEP edges while EN is active; DIR selects direction. Type aliases drv8825 and tmc2209 map here (tmc2209 uses 1/16 microstep cal).",
+      "detail": "Counts rising STEP edges while EN is active (low); DIR selects direction. Type aliases drv8825, tmc2209, and nema17 map here (tmc2209 uses 1/16 microstep cal).",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [

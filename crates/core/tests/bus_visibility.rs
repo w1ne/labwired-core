@@ -151,6 +151,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no SCI0 bring-up in this harness; bytes are proven by the \
          ek-ra6m5 survival smoke",
     ),
+    // EK-RA8M1: no SCI9 (SCI_B) bring-up in this harness; bytes are proven
+    // by the ek-ra8m1 survival smoke.
+    (
+        "r7fa8m1ah",
+        BusKind::Uart,
+        "no SCI9 bring-up in this harness; bytes are proven by the \
+         ek-ra8m1 survival smoke",
+    ),
     // SAM E70 Xplained: no USART1 bring-up in this harness; bytes are proven
     // by the sam-e70-xplained survival smoke.
     (

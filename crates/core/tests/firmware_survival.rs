@@ -357,6 +357,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"EK-RA6M5 SMOKE\n",
     },
     SurvivalCase {
+        // EK-RA8M1: R7FA8M1AH (Cortex-M85), 2 MiB code flash at 0x02000000,
+        // 896 KiB SRAM at 0x22000000. SCI9 (SCI_B, PA14/PA15) is the J-Link
+        // OB console; the smoke switches SCICLK to MOCO, waits for
+        // CESR.TIST/RIST, walks LED1-LED3 (P600/P414/P107) with PCNTR1 PODR
+        // readback and reads S1/S2 through the PFS pull-ups. SIM-DERIVED.
+        name: "ek_ra8m1_smoke",
+        core: "cortex-m85",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa8m1ah",
+        system: "ek-ra8m1",
+        fixture: "ek-ra8m1-smoke.elf",
+        valid_pc_ranges: &[(0x0200_0000, 0x021F_FFFF), (0x2200_0000, 0x220D_FFFF)],
+        expected_uart_output: b"EK-RA8M1 SMOKE\n",
+    },
+    SurvivalCase {
         // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
         // the application vector table at 0x18000 (the secure bootloader owns
         // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
@@ -387,6 +403,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "frdm-k64f-smoke.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
         expected_uart_output: b"FRDM-K64F SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `frdm_k64f` (Zephyr commit
+        // 36940db938a8, crates/firmware-frdm-k64f-zephyr/build.sh). Zephyr's
+        // own K6x bring-up runs unpatched: nxp_mpu programs the SYSMPU,
+        // k6x_init writes PMC_REGSC, CLOCK_InitOsc0 writes OSC_CR and
+        // CLOCK_BootToPeeMode walks the MCG to PEE (PLL0), then UART0 prints.
+        name: "frdm_k64f_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "mk64f12",
+        system: "frdm-k64f",
+        fixture: "mk64f12-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
+        expected_uart_output: b"Hello World! frdm_k64f",
     },
     SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,
@@ -2317,6 +2349,7 @@ fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
 }
 
 survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
+survival_gate!(test_ek_ra8m1_smoke_survival, "ek_ra8m1_smoke");
 
 /// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
 /// in the top 44 bytes of the last flash page and only enters a valid image.
@@ -2347,6 +2380,7 @@ fn test_cc2538dk_smoke_customer_configuration_area_boots() {
 
 survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
 survival_gate!(test_frdm_k64f_smoke_survival, "frdm_k64f_smoke");
+survival_gate!(test_frdm_k64f_zephyr_survival, "frdm_k64f_zephyr");
 
 /// The K64F loads FSEC/FOPT/FPROT from the Flash Configuration Field at
 /// 0x400..0x40F on reset. Code bytes there can secure (or, with MEEN=0b10,

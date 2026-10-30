@@ -337,6 +337,10 @@ impl SystemBus {
         } else if raw == "leuart" {
             // Exact: "leuart" is a substring of unrelated names (e.g. "simpleuart").
             Leuart
+        } else if has("sci_b") || (has("ra8") && has("sci")) {
+            // Renesas SCI_B (RA8 series: renesasra8m1_sci, sci_b). Must
+            // precede the classic `sci` arm.
+            SciB
         } else if has("sci") {
             // Renesas SCI (renesas_sci, renesasraXmY_sci).
             Sci
