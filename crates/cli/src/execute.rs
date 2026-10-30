@@ -1011,6 +1011,31 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             stop_reason = StopReason::Halt;
             break;
         }
+        // Dead sleep: the core is parked and nothing can wake it. On this path
+        // `step` counts retired instructions only, so each further skip moves
+        // device time without moving `step`, and a `loop { wfi() }` firmware
+        // with no interrupt source would spin here forever. With idle
+        // fast-forward off every one of those WFI cycles is a step, so that
+        // arm stops at `max_steps` (or at `max_cycles`, whichever comes first,
+        // one cycle per step). End the run the same way.
+        if report.primary_steps == 0
+            && !ctx.counter_metrics
+            && cosim.is_none()
+            && pending_stimuli.iter().all(|(_, fired)| *fired)
+            && pending_uart_injections.iter().all(|(_, fired)| *fired)
+            && max_cycles.is_none_or(|limit| {
+                limit.saturating_sub(ctx.machine.total_cycles) > max_steps.saturating_sub(step)
+            })
+            && ctx.machine.parked_without_wake_source()
+        {
+            info!(
+                "core parked with no wake source at cycle {}; ending at max_steps",
+                ctx.machine.total_cycles
+            );
+            step = max_steps;
+            steps_executed = step;
+            break;
+        }
 
         // ── Co-simulation boundary ──────────────────────────────────────────
         // What the session did at the boundary it stopped the machine on.
