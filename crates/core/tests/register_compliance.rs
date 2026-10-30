@@ -115,6 +115,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Pic18 => {
+            // M0 PIC18 has no SVD-backed peripheral list yet.
+            println!(
+                "Skipping PIC18 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }
