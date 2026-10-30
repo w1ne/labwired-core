@@ -1507,6 +1507,28 @@ impl<C: Cpu> Machine<C> {
         true
     }
 
+    /// True when the single primary core is parked in an architectural wait
+    /// that nothing inside the machine can ever end: no core-local timer, no
+    /// scheduler event, no CPU-interrupt / motor / resident-device deadline,
+    /// no medium-polled bus tick and no active legacy peripheral tick. These
+    /// are exactly the sources `try_idle_fast_forward` clamps a skip to, so
+    /// when all are absent every further skip is empty time.
+    ///
+    /// A bare `loop { wfi() }` with no interrupt source is the common case.
+    /// Inputs from outside the machine (test stimuli, UART injections,
+    /// co-simulation models) are the caller's to rule out.
+    pub fn parked_without_wake_source(&self) -> bool {
+        self.cpu_secondary.is_none()
+            && self.cpu.idle_fast_forward_budget(&self.bus) == Some(u64::MAX)
+            && self.cpu.parked_wake_deadline_cycles().is_none()
+            && self.sched.next_event_deadline().is_none()
+            && self.bus.next_cpu_interrupt_deadline_cycle().is_none()
+            && self.bus.next_motor_service_deadline_cycle().is_none()
+            && self.bus.next_resident_edge_deadline_cycle().is_none()
+            && !self.bus.idle_poll_bus_tick_active()
+            && self.bus.idle_fast_forward_legacy_safe()
+    }
+
     fn try_idle_fast_forward(&mut self, _max_steps: Option<u64>, _steps: u64) -> u64 {
         // POLLED logic capture disables the skip: a scheduler event inside the
         // skipped window could toggle a watched pad, and the per-cycle poll
