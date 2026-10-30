@@ -1305,6 +1305,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-frdm-k64f-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-h563-demo"
 version = "0.25.0"
 dependencies = [

@@ -9417,6 +9417,37 @@ boards:
       - configs/chips/same70q21b.yaml
       - configs/systems/sam-e70-xplained.yaml
 
+  - id: mk64f12
+    # 2026-10-29: FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F; 1 MiB flash at
+    # 0x00000000, 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at
+    # 0x20000000). UART-only L1 slice: the classic Kinetis UART0-4 block,
+    # Kinetis GPIO A-E (PDOR/PSOR/PCOR/PDIR/PDDR) and the behavioural MCG FEI
+    # clock. SIM clock gating, PORT pad mux/pulls and MCG PLL/FEE are not
+    # modelled; ENET+KSZ8081, RNGA and FTFE are declared stubs; eDMA, PIT/FTM,
+    # I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped (access faults).
+    # SIM-DERIVED — no K64F bench part. See
+    # docs/boards/frdm-k64f.md and examples/frdm-k64f/VALIDATION.md.
+    doc: docs/boards/frdm-k64f.md
+    chip: configs/chips/mk64f12.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_frdm_k64f_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/mcg.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-frdm-k64f-smoke
+      - configs/chips/mk64f12.yaml
+      - configs/systems/frdm-k64f.yaml
+
   - id: sam4s16c
     # 2026-10-23: SAM4S Xplained (ATSAM4S16C, Cortex-M4; 1 MiB flash at
     # 0x00400000, 128 KiB SRAM at 0x20000000). First SAM4S part: the PMC

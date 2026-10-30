@@ -55,6 +55,7 @@ The models column is a content digest over everything that board's `models` list
 | `cc2538sf53` | 🟡 smoke-manual | — | `6f8c6eca42e1ff05` | no silicon capture |
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `f65bde58e5bdc6ea` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `dc4c2f8512968d8a` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `9ed474842e129c14` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `cb955105b892dc5e` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `bd2cc28311c33528` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `712ee74297560f2b` | no silicon capture |
@@ -450,6 +451,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/sam-e70-xplained.md`](sam-e70-xplained.md)  ·  Chip: `configs/chips/same70q21b.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_sam_e70_xplained_smoke_survival
+- Drift status: **no silicon capture**
+
+## `mk64f12` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/frdm-k64f.md`](frdm-k64f.md)  ·  Chip: `configs/chips/mk64f12.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_frdm_k64f_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual
