@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `74c15f2371508cba` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `c06d24d3b4159e40` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `8da53dc66c60f832` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `0f8d721394682f30` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `7454ae20d0187c86` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `e7b8f3e446932107` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `3132bb384f27acab` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `a016530ed7a99aeb` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `c4ff22a3c1de6d34` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `1aab802cf04923b5` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `f065dbab0b52dc63` | no silicon capture |
 | `esp32` | ⚪ structural | — | `3789b1727d91b788` | no silicon capture |
@@ -49,11 +49,11 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `c4588d8d9cdd2dff` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `4c9b3e1ee387534a` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b2225cb7b9fa7f7c` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `7cc5c9e513f48a55` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `69f9b0a51229025f` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `1ad4ec78bb42d51e` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `b0acab786df660d5` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `080484e523c4dd6f` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `0204a92728fb5321` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `6622530fe8fb43d4` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `f3257ea9eb2a0a17` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `ac4588941f1eae37` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `9a1f264c4501305f` | no silicon capture |
