@@ -12,9 +12,10 @@ LED path (with `PDOR` read-back) are proven by a committed smoke fixture and an
 
 !!! warning "Not claimed yet"
     SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE mode are **not
-    modelled**. The Ethernet MAC + KSZ8081 PHY, RNGA, FTFE, eDMA, PIT/FTM,
-    I²C/SPI, ADC/DAC, USB, CAN and SDHC are declared stubs. There is no silicon
-    capture: **SIM-DERIVED**.
+    modelled**. The Ethernet MAC + KSZ8081 PHY, RNGA and FTFE are declared
+    stubs. eDMA, PIT/FTM, I²C/SPI, ADC/DAC, USB, CAN and SDHC are **not
+    mapped**: firmware that touches them faults with a memory violation. There
+    is no silicon capture: **SIM-DERIVED**.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:

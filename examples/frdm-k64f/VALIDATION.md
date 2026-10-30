@@ -18,7 +18,8 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | PORT pad mux/pulls | **not modelled** | PORTx PCR is a stub |
 | MCG PLL/FEE | **not modelled** | the smoke uses the reset FEI clock |
 | ENET + KSZ8081 PHY / TCP | **not modelled** | the Ethernet blocks are stubs; the Zephyr TCP test is deferred |
-| RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN, SDHC | declared stubs | `configs/chips/mk64f12.yaml` |
+| RNGA, FTFE | declared stubs | `configs/chips/mk64f12.yaml` (`type: "stub"`) |
+| eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN, SDHC | **not mapped** | no window in `configs/chips/mk64f12.yaml`; an access faults with a memory violation |
 
 ## Commands and evidence (verified 2026-10-30)
 

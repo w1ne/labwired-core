@@ -16,7 +16,7 @@
 # Profiles:
 # - uart    `k6xf`   — the classic Kinetis 8-bit UART (BDH/BDL/C1..C5/S1/S2/D).
 # - gpio    `kinetis` — PDOR/PSOR/PCOR/PTOR/PDIR/PDDR.
-# - mcq     `nxp_mcg` — the existing behavioural Kinetis MCG (FEI at reset).
+# - mcg     `nxp_mcg` — the existing behavioural Kinetis MCG (FEI at reset).
 #
 # Tier: L1 UART-only smoke — boot, UART0 console, three RGB LEDs with PDOR
 # readback. SIM-DERIVED (no K64F bench part).
@@ -32,9 +32,11 @@
 #   S_LOCK0/PLLST) is NOT modelled.
 # - WDOG: declared stub. Not modelled (no timeout/reset); the firmware
 #   disables it at the top of `main` as silicon requires.
-# - ENET + KSZ8081 PHY, RNGA, FTFE flash controller, eDMA, PIT/FTM, I2C/SPI,
-#   ADC/DAC, USB, CAN, SDHC: declared stubs. The Zephyr TCP test is deferred
-#   until an Ethernet MAC/PHY model exists.
+# - ENET + KSZ8081 PHY, RNGA, FTFE flash controller: declared stubs (reads 0,
+#   writes dropped). The Zephyr TCP test is deferred until an Ethernet MAC/PHY
+#   model exists.
+# - eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN, SDHC: NOT mapped. Firmware that
+#   touches them faults with a memory violation.
 
 name: "mk64f12"
 arch: "arm"

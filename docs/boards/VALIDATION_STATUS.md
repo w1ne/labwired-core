@@ -53,7 +53,7 @@ The models column is a content digest over everything that board's `models` list
 | `litex-vexriscv` | 🟡 smoke-manual | — | `384480d343c253d2` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `a53003b6b0998836` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `6f8c6eca42e1ff05` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `6cb3434a4d4bc206` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `9ed474842e129c14` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `3acd2ef645595c4a` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `bd2cc28311c33528` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `712ee74297560f2b` | no silicon capture |

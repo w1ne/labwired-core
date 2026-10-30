@@ -76,7 +76,9 @@ hb=0 red=0 green=1 blue=1
 - **MCG PLL/FEE** is not modelled. The smoke runs on the reset FEI clock; the
   K64F PLL (C5/C6, `S_LOCK0`/`PLLST`) is the Zephyr `hello_world`/TCP schedule
   risk.
-- **Ethernet MAC + KSZ8081 PHY**, RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC,
-  USB, CAN and SDHC are declared stubs. The Zephyr TCP test is deferred.
+- **Ethernet MAC + KSZ8081 PHY**, RNGA and FTFE are declared stubs (reads
+  return 0, writes are dropped). The Zephyr TCP test is deferred.
+- **eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped.**
+  Firmware that touches them faults with a memory violation.
 
 See `VALIDATION.md` for the tier table.

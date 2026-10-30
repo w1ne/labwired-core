@@ -665,7 +665,7 @@ _L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x00200
 
 ### `mk64f12`
 
-_L1 UART-only smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x00000000, the classic Kinetis UART0 console (PTB16/PTB17 ALT3, 115200 from the 20.97152 MHz FEI reset clock) and the active-low RGB LED walk with PDOR readback are proven by tests/fixtures/frdm-k64f-smoke.elf and examples/frdm-k64f/io-smoke.yaml. SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE are not modelled; ENET+KSZ8081 (TCP deferred), RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are declared stubs (examples/frdm-k64f/VALIDATION.md), so no advanced blocks exist to list._
+_L1 UART-only smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x00000000, the classic Kinetis UART0 console (PTB16/PTB17 ALT3, 115200 from the 20.97152 MHz FEI reset clock) and the active-low RGB LED walk with PDOR readback are proven by tests/fixtures/frdm-k64f-smoke.elf and examples/frdm-k64f/io-smoke.yaml. SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE are not modelled; ENET+KSZ8081 (TCP deferred), RNGA and FTFE are declared stubs and eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped (examples/frdm-k64f/VALIDATION.md), so no advanced blocks exist to list._
 
 ### `sam4s16c`
 
