@@ -239,6 +239,8 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // STEP/DIR driver family.
     ("drv8825", "a4988"),
     ("tmc2209", "a4988"),
+    // Bipolar NEMA17 plant behind an A4988-class driver (same StepDirMotor).
+    ("nema17", "a4988"),
     // H-bridge family.
     ("tb6612", "l298n"),
     ("l293d", "l298n"),
