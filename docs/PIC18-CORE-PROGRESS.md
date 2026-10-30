@@ -106,7 +106,8 @@ address. Sticky flags live in the SFR file and are cleared by the ISR.
 
 
 * Default model: 16 banks x 256 bytes (`0x000..0xFFF`) and a 64 KiB flash.
-  A per-device geometry can be supplied with `Pic18::with_geometry`.
+  A per-device geometry can be supplied with `Pic18::with_geometry`;
+  `Pic18::for_chip_name` looks it up in the `PIC18_DEVICES` table.
 * `a = 1`: `BSR<3:0>:f`.
 * `a = 0`: `f < 0x60` addresses access RAM at `f`; `f >= 0x60` addresses the
   SFR window at `0xF00 + f` (so `0xE8` is WREG at `0xFE8`).
@@ -237,10 +238,19 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
 5. **Data-memory completeness.** Expanded (>4 KiB) data memory and wider FSR
    pointers, direct `FSRnH` field masking (indirect paths already wrap at 12
    bits), unmodeled SFR reset values, indirect-target behavior for
-   `TOSL/H/U`, and `MOVFFL`. The per-device Access Bank split is in
-   (`Pic18::for_chip_name`: `0x80` for the PIC18F4520, `0x60` by default).
+   `TOSL/H/U`, and `MOVFFL`. The per-device Access Bank split and flash
+   size come from the `PIC18_DEVICES` table (`Pic18::for_chip_name`;
+   `0x60` and 64 KiB for an unlisted name).
 6. **Device geometry and integration.** The PIC18F4520 has a chip YAML,
    geometry, console wiring (`labwired test` and the interactive run) and a
-   real end-to-end firmware run. Every other part still needs its own
-   descriptor and datasheet evidence; support must not be inferred from a
-   family label. RAM/bank-count limits and `STVREN` remain unmodelled.
+   real end-to-end firmware run. `PIC18_DEVICES` adds the geometry of 157
+   more parts whose SFR map is identical to the PIC18F4520's for every
+   register and bit the model implements (checked per part against the
+   SDCC 4.4.0 device headers; flash from the gputils linker scripts, split
+   from SDCC `pic16devices.txt`; `scripts/pic18/check_sfr_map.py
+   --check-table` re-verifies every row). A table row is geometry only: a part
+   still needs its own descriptor and a firmware run before it counts as
+   supported, and support must not be inferred from a family label.
+   J11/J13/J50/J53, K40/Q10, K50 and 1220/1230/1320/1330 are left out
+   because their EUSART, IOC or port map differs. RAM/bank-count limits,
+   pins absent from smaller packages, and `STVREN` remain unmodelled.
