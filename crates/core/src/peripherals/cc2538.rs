@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 //! TI CC2538 peripherals: the PL061-style GPIO port and the SYS_CTRL block.
-//! The RF core and the sleep timer live in [`rfcore`] and [`sleep_timer`].
+//! The RF core, the sleep timer and the flash controller live in [`rfcore`],
+//! [`sleep_timer`] and [`flash_ctrl`].
 //!
 //! Source: *CC2538 System-on-Chip Solution for 2.4-GHz IEEE 802.15.4 and
 //! ZigBee/ZigBee IP Applications, User's Guide* (SWRU319C, April 2012, revised
@@ -282,6 +283,7 @@ macro_rules! snapshot_impl {
     };
 }
 
+pub mod flash_ctrl;
 pub mod rfcore;
 pub mod sleep_timer;
 

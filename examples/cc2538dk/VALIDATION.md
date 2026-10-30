@@ -1,7 +1,10 @@
 # Validation — CC2538DK (CC2538SF53)
 
 Claims, evidence, and what is explicitly **not** claimed yet. **SIM-DERIVED**:
-there is no CC2538 bench part, and no Renode parity claim is made.
+there is no CC2538 bench part. `flash-controller.yaml` follows the steps of
+Renode's `cc2538_flash_controller.robot` with an independent firmware (Renode's
+test ELF is a prebuilt binary run against a TI ROM dump); it is not a run of
+Renode's binary, and no wider Renode parity claim is made.
 
 ## Tier status
 
@@ -20,7 +23,14 @@ there is no CC2538 bench part, and no Renode parity claim is made.
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | Stock Contiki-NG v4.9 hello-world boots and runs its etimer | smoke-tested | `contiki-hello.yaml` 2/2 checks, 10,000,000 steps: banner, `Link-layer address: 0012.4b00.0000.0001`, 3 × `Hello, world`; `firmware_survival::test_cc2538dk_contiki_hello_survival` |
 | Clean-room ROM: CCA boot (VTOR, SP, reset ISR) and parking on an invalid CCA | unit-tested on the CPU model | `cc2538_rom::rom_boot_*` |
-| Clean-room ROM utility API at `0x48` (crc32, memset/memcpy/memcmp/memmove, chip id, flash size, erase/program error) | unit-tested on the CPU model | `cc2538_rom` (8 tests; CRC-32 check value `0xCBF43926`) |
+| Clean-room ROM utility API at `0x48` (crc32, memset/memcpy/memcmp/memmove, chip id and flash size from `DIECFG0`) | unit-tested on the CPU model | `cc2538_rom` (CRC-32 check value `0xCBF43926`) |
+| ROM `PageErase`/`ProgramFlash` through FLASH_CTRL: multi-page erase, program + NOR AND rule, `-2` on bad parameters, `-1` on a CCA-locked page or the lock-bit page without `UPPER_PAGE_ACCESS`, 20-ms erase | integration-tested on the CPU model | `cc2538_rom` (12 tests, with and without `event-scheduler`) |
+| FLASH_CTRL registers: `FCTL` busy/full/abort, read-only status, `FADDR` word read-back and roll-over, `FWDATA` acceptance, `DIECFG0-2` of a CC2538SF53 | unit-tested | `cargo test -p labwired-core --lib cc2538::flash_ctrl` (8 tests) |
+| Flash controller, the steps of Renode's `cc2538_flash_controller.robot` | smoke-tested | `flash-controller.yaml` 2/2 checks, 20,000,000 steps: `FLASH SIZE: 0x80000`, memset write, pattern write, one-page erase that keeps the neighbour, two-page erase; `firmware_survival::test_cc2538dk_contiki_flash_test_survival` |
+| Stock Contiki-NG v4.9 CFS/Coffee (`examples/storage/cfs-coffee`) | smoke-tested | `contiki-test-cfs.yaml` 2/2 checks, 60,000,000 steps: `CFS test 1/2 completed with 0 errors`; `contiki-coffee.yaml` 2/2 checks: write, read back, append, directory listing `test (34 bytes)` |
+| Negative control: the old ROM (`PageErase`/`ProgramFlash` returned -1) | fails | `LABWIRED_CC2538_ROM=<old cc2538_rom.bin>`: test-cfs `failed to write at offset 1920` and 3 errors, example-coffee reads `""`, flash test prints `[FAIL]` ×4 |
+| Instruction support for the CFS image | audited | `unsupported_instruction_audit.sh`: 20,000,000 steps, 0 unsupported |
+| Determinism of the flash runs | smoke-tested | two runs of each flash script, identical `uart.log` and `snapshot.json` |
 | SYS_CTRL `CLOCK_STA.SYNC_32K` | exercised | Contiki-NG `sys_ctrl_init` waits for its edge |
 | RF core: strobes, main-FSM timing, RSSI/CCA, RFRND, MTCTRL, TX timing | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::rfcore` (9 tests); Contiki `random_init` + radio init (strobes, RSSI_VALID, RFRND, CCA, MTCTRL) |
 | Sleep timer: 32-kHz count and ST0 latch | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::sleep_timer` (8 tests); Contiki reads the count (5,721 `ST0` latches in the 10M-step run) |
@@ -28,12 +38,13 @@ there is no CC2538 bench part, and no Renode parity claim is made.
 | Instruction support for the Contiki image | audited | `unsupported_instruction_audit.sh`: 10,000,000 steps, 0 unsupported |
 | Determinism of the Contiki run | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | RF reception, RF interrupts, frame filtering, CSP, MAC-timer count | **not modelled** | empty channel; see `crates/core/src/peripherals/cc2538/rfcore.rs` |
-| ROM serial boot loader, flash erase/program | **not modelled** | ROM parks in WFI; erase/program return -1 |
+| ROM serial boot loader | **not modelled** | ROM parks in WFI |
+| Flash: CPU stall while executing from flash during an operation, flash DMA trigger, flash interrupt, the 8-writes-per-word limit, mass erase | **not modelled** | `crates/core/src/peripherals/cc2538/flash_ctrl.rs` |
 | Watchdog, sleep-timer capture | **not modelled** | `WDCTL`/`STCC`/`STCS` are storage |
 | IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
-| AES/PKA, flash ctrl, SSI, I2C, GPTimers, USB, uDMA, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| AES/PKA, SSI, I2C, GPTimers, USB, uDMA, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
 
@@ -63,14 +74,43 @@ cmp out/cc2538dk-run1/uart.log out/cc2538dk-run2/uart.log          # clean
 cmp out/cc2538dk-run1/snapshot.json out/cc2538dk-run2/snapshot.json  # clean
 
 cargo test -p labwired-core --lib cc2538
-#   26 passed (GPIO + SYS_CTRL as before; rfcore 9; sleep_timer 8)
+#   34 passed (GPIO + SYS_CTRL as before; rfcore 9; sleep_timer 8; flash_ctrl 8)
 cargo test -p labwired-core --test cc2538_sleep_timer_irq
 cargo test -p labwired-core --features event-scheduler --test cc2538_sleep_timer_irq
 #   1 passed each (legacy walk / scheduled event)
 cargo test -p labwired-core --test cc2538_rom
-#   8 passed
+cargo test -p labwired-core --features event-scheduler --test cc2538_rom
+#   12 passed each
 cargo test -p labwired-core --test firmware_survival cc2538
-#   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival ok
+#   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival,
+#   test_cc2538dk_contiki_flash_test_survival ok
+
+# Flash controller (2026-10-30)
+./target/release/labwired test --script examples/cc2538dk/flash-controller.yaml \
+  --output-dir out/cc2538dk-flash --no-uart-stdout
+#   PASS  2/2 checks · flash-controller · 20000000 steps
+#   CC2538 FLASH TEST
+#   FLASH SIZE: 0x80000
+#   [OK] Data written with memset successfully
+#   [OK] Data written successfully
+#   [OK] Data erased successfully
+#   [OK] Data erased successfully
+#   FLASH TEST DONE
+./target/release/labwired test --script examples/cc2538dk/contiki-test-cfs.yaml \
+  --output-dir out/cc2538dk-cfs --no-uart-stdout
+#   PASS  2/2 checks · contiki-test-cfs · 60000000 steps
+#   CFS test 1 completed with 0 errors
+#   CFS test 2 completed with 0 errors
+./target/release/labwired test --script examples/cc2538dk/contiki-coffee.yaml \
+  --output-dir out/cc2538dk-coffee --no-uart-stdout
+#   PASS  2/2 checks · contiki-coffee · 20000000 steps
+#   Wrote message "The first test", sequence 1
+#   Read message "The first test", sequence 1
+#   Wrote message "The second test", sequence 2
+#   Read message "The first test", sequence 1
+#   Read message "The second test", sequence 2
+#   Available files
+#   test (34 bytes)
 
 ./target/release/labwired test --script examples/cc2538dk/contiki-hello.yaml \
   --output-dir out/cc2538dk-contiki --no-uart-stdout
