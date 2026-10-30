@@ -73,6 +73,7 @@ pub mod jpeg_baseline;
 pub mod kit;
 pub mod litex_control_status;
 pub mod litex_timer;
+pub mod lpc;
 pub mod lptim;
 pub mod mcg;
 pub mod miv;

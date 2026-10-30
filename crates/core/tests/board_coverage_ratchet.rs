@@ -619,6 +619,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // an io-smoke, a committed fixture and a survival gate; no catalog
         // board, no silicon capture and no executing-fidelity differential.
         "s32k388",
+        // First i.MX RT500 part (MIMXRT595-EVK): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "mimxrt595s",
         // First TI CC2538 part (CC2538DK): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.

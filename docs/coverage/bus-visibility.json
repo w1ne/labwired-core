@@ -143,6 +143,10 @@
   },
   {
     "buses": [],
+    "name": "mimxrt595s"
+  },
+  {
+    "buses": [],
     "name": "mk64f12"
   },
   {

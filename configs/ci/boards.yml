@@ -90,6 +90,14 @@ boards:
     path: examples/s32k388-evb
     rust_targets: [thumbv7em-none-eabi]
     gate: true
+  # MIMXRT595-EVK: the first i.MX RT500 part. Builds the cortex-m-rt smoke
+  # for thumbv8m.main (Cortex-M33) and runs the FLEXCOMM0/GPIO io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: mimxrt595-evk
+    kind: sim-validate
+    path: examples/mimxrt595-evk
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
   # instruction audit through the CLI, so the chip is proven by a gate on

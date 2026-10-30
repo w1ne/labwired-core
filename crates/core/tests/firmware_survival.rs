@@ -409,6 +409,23 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"S32K388 EVB SMOKE\n",
     },
     SurvivalCase {
+        // MIMXRT595-EVK: MIMXRT595S (Cortex-M33), XIP from the FlexSPI0 NOR
+        // window at 0x08000000 (FCB at 0x08000400, vector table at
+        // 0x08001000), data in SRAM at 0x20280000. The smoke sets the clock
+        // gates/resets and pads, prints on FLEXCOMM0 (USART) and walks the RGB
+        // LED through the GPIO SET/B/W/NOT/MPIN/CLR views with PIN readback.
+        // SIM-DERIVED.
+        name: "mimxrt595_evk_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "mimxrt595s",
+        system: "mimxrt595-evk",
+        fixture: "mimxrt595-evk-smoke.elf",
+        valid_pc_ranges: &[(0x0800_1000, 0x087F_FFFF), (0x2000_0000, 0x204F_FFFF)],
+        expected_uart_output: b"MIMXRT595 EVK SMOKE\n",
+    },
+    SurvivalCase {
         // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
         // 0x08000000, 16 KiB SRAM at 0x20000000. USART1 (PA9/PA10) is the
         // ST-LINK VCP; the smoke walks the four user LEDs with GPIOC ODR
@@ -2226,6 +2243,8 @@ survival_gate!(
 );
 
 survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
+
+survival_gate!(test_mimxrt595_evk_smoke_survival, "mimxrt595_evk_smoke");
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
