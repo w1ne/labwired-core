@@ -154,6 +154,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_frdm_k64f_smoke_survival"),
     },
     ChipConf {
+        // SAM E70 Xplained (ATSAME70Q21B, Cortex-M7). SIM-DERIVED: no SAM E70
+        // bench part. Modelled: PMC (sam4s_pmc) and PIOA-E (sam4s_pio), the
+        // SAM4S layouts at the SAM E70 bases, and UART0-4/USART0-2 (sam
+        // layout). EEFC, the system controller and the bus matrix are declared
+        // stubs; GMAC/TRNG/TC/SPI/TWIHS/MCAN/AFEC/USBHS and the rest are not
+        // mapped — see examples/sam-e70-xplained/VALIDATION.md.
+        name: "same70q21b",
+        yaml: "configs/chips/same70q21b.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_sam_e70_xplained_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

@@ -492,6 +492,10 @@
       "how": "needs-build",
       "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     },
+    "same70q21b": {
+      "how": "needs-build",
+      "why": "The ATSAME70Q21B descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/sam-e70-xplained-smoke.elf prints 'SAM E70 XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
+    },
     "cc2538sf53": {
       "how": "needs-build",
       "why": "The CC2538SF53 part (and the cc2538_pl061_gpio/cc2538_sys_ctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/cc2538dk-smoke.elf prints 'CC2538DK SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"

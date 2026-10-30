@@ -9356,6 +9356,36 @@ boards:
       - configs/chips/cc2538sf53.yaml
       - configs/systems/cc2538dk.yaml
 
+  - id: same70q21b
+    # 2026-10-30: Microchip SAM E70 Xplained (ATSAME70Q21B, Cortex-M7; 2 MiB
+    # flash at 0x00400000, 384 KiB SRAM at 0x20400000). First SAM E70 part.
+    # Reuses the SAM4S PMC (sam4s_pmc) and PIO (sam4s_pio) models, whose
+    # register layouts the SAM E70 keeps, at the SAM E70 bases; UART0-4 and
+    # USART0-2 on the `sam` layout. EEFC, the RSTC/SUPC/RTT/WDT/RTC system
+    # controller and the bus matrix are declared stubs; GMAC, TRNG, TC, SPI,
+    # QSPI, TWIHS, MCAN, AFEC, DACC, PWM, HSMCI, SSC, USBHS and XDMAC are not
+    # mapped. SIM-DERIVED — no SAM E70 bench part. See
+    # docs/boards/sam-e70-xplained.md and examples/sam-e70-xplained/VALIDATION.md.
+    doc: docs/boards/sam-e70-xplained.md
+    chip: configs/chips/same70q21b.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_sam_e70_xplained_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/sam4s.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-sam-e70-xplained-smoke
+      - configs/chips/same70q21b.yaml
+      - configs/systems/sam-e70-xplained.yaml
+
   - id: mk64f12
     # 2026-10-29: FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F; 1 MiB flash at
     # 0x00000000, 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at

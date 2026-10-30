@@ -1,0 +1,30 @@
+# LabWired - SAM E70 Xplained USART1+LED IO smoke
+#
+# Build: cargo build -p firmware-sam-e70-xplained-smoke --release --target thumbv7em-none-eabi
+#
+# The firmware disables the WDT (WDT_MR.WDDIS), hands PB4 to the PIO through
+# MATRIX CCFG_SYSIO.SYSIO4, gates PIOA/PIOB/PIOC/USART1 in PMC_PCER0, muxes
+# PA21 (RXD1, peripheral A) and PB4 (TXD1, peripheral D), brings USART1 up at
+# 115384 baud 8N1 on the 12 MHz main RC (CD 6, FP 4), then walks LED0 (PC8,
+# active low) through SODR/CODR and prints the pad level and ODSR it read
+# back, plus the SW0 (PA11) pull-up level.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam-e70-xplained-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "SAM E70 XPLAINED SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m7 uart=usart1"
+      - "clk mainck=12000000 cd=6 fp=4 baud=115384"
+      - "pmc pcsr0=00005c00"
+      - "mux pa21 psr=0 pb4 psr=0 abcd=11"
+      - "led=off pin=1 odsr=00000100"
+      - "led=on pin=0 odsr=00000000"
+      - "led=off pin=1 odsr=00000100"
+      - "sw0=1"
+      - "hb=0 odsr=00000000 sw0=1"
+      - "hb=1 odsr=00000100 sw0=1"
+  - expected_stop_reason: max_steps
