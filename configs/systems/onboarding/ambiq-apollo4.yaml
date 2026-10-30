@@ -3,6 +3,11 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
+#
+# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 / 4 KiB
+# and RAM at 0x20000000 are the Renode bootrom-logger scaffold, not the
+# Apollo4 Plus map). The promoted Apollo4 Plus part is
+# configs/chips/amap42kp.yaml (board: configs/systems/apollo4p-evb.yaml).
 
 name: ambiq-apollo4
 chip: ../../chips/onboarding/ambiq-apollo4.yaml

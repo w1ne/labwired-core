@@ -1397,6 +1397,26 @@
         "lane": "none"
       }
     },
+    "amap42kp": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_apollo4p_evb_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/apollo4p-evb-smoke.elf boots on the Cortex-M4F and the survival gate asserts 'APOLLO4P EVB SMOKE\\n' on the UART0 TX sink; examples/apollo4p-evb/io-smoke.yaml asserts the full power/baud/LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/apollo4p-evb/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "IOM0-7 and MSPI0-2 are declared `type: stub` (the Apollo4 IOM/MSPI blocks are not modelled) and no SPI device is attached on the Apollo4 Plus EVB package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "IOM0-7 (the Apollo4 I2C/SPI masters) are declared `type: stub` and no I2C device is attached on the Apollo4 Plus EVB package.",
+        "lane": "none"
+      }
+    },
     "cc2538sf53": {
       "in_boards": false,
       "uart": {

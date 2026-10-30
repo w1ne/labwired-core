@@ -58,6 +58,14 @@ boards:
     path: examples/cc2538dk
     rust_targets: [thumbv7m-none-eabi]
     gate: true
+  # Apollo4 Plus EVB: the first Ambiq part. Builds the cortex-m-rt smoke for
+  # thumbv7em (the Apollo4 Plus is a Cortex-M4F) and runs the UART0/LED
+  # io-smoke plus the unsupported-instruction audit through the CLI.
+  - id: apollo4p-evb
+    kind: sim-validate
+    path: examples/apollo4p-evb
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
   # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
   # instruction audit through the CLI, so the chip is proven by a gate on

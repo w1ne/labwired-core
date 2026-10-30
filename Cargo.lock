@@ -1151,6 +1151,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-apollo4p-evb-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-arduino-nano-33-ble-smoke"
 version = "0.1.0"
 dependencies = [

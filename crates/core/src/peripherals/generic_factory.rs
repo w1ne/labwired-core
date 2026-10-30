@@ -377,6 +377,12 @@ pub const MODEL_TYPES: &[&str] = &[
     // staged onboarding/cc2538 descriptor, which keeps its placeholder.
     "cc2538_pl061_gpio",
     "cc2538_sys_ctrl",
+    // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
+    // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
+    // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
+    // staged onboarding/ambiq-apollo4 descriptor, which keeps its placeholder.
+    "apollo4_gpio",
+    "apollo4_pwrctrl",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1452,6 +1458,8 @@ pub fn try_build(
             ))
         }
         "cc2538_sys_ctrl" => Box::new(crate::peripherals::cc2538::Cc2538SysCtrl::new()),
+        "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
+        "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

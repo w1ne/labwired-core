@@ -142,6 +142,19 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
     },
     ChipConf {
+        // Apollo4 Plus EVB (AMAP42KP-KBR, Cortex-M4F). SIM-DERIVED: no Apollo4
+        // bench part. Modelled: the 128-pin GPIO block (apollo4_gpio,
+        // PADKEY-locked PINCFG + RD/WT/WTS/WTC/EN), PWRCTRL (apollo4_pwrctrl)
+        // and UART0-3 on the pl011 layout. CLKGEN, MCUCTRL, RSTGEN, IOM,
+        // MSPI, ADC, timers, RTC, WDT, security, crypto, GPU/display, SDIO,
+        // USB and audio are declared stubs — see
+        // examples/apollo4p-evb/VALIDATION.md.
+        name: "amap42kp",
+        yaml: "configs/chips/amap42kp.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_apollo4p_evb_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

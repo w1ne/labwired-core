@@ -1,0 +1,50 @@
+# LabWired - Apollo4 Plus EVB system manifest
+#
+# Board facts (Ambiq Apollo4 Plus EVB, ordering code AMAP4PEVB, with the
+# AMAP42KP-KBR SoC; Zephyr boards/ambiq/apollo4p_evb apollo4p_evb.dts +
+# apollo4p_evb-pinctrl.dtsi):
+#   LEDs (active low): LED0 GPIO30, LED1 GPIO90, LED2 GPIO97.
+#   Buttons (active low, pulled up): BTN0 GPIO18, BTN1 GPIO19.
+#   Console: UART0 TX GPIO60 / RX GPIO47 (FNCSEL 4), wired to the on-board
+#     SEGGER J-Link virtual COM port, 115200 8N1 (zephyr,console = &uart0).
+#
+# The simulator captures the UART0 stream; the J-Link bridge and the EVB
+# extras (audio jack, display connector, MSPI PSRAM/flash) are not modelled.
+
+name: "apollo4p-evb"
+chip: "../chips/amap42kp.yaml"
+# The Apollo4 Plus boots in LP mode (MCUPERFREQ status LP = 96 MHz); the
+# smoke never requests HP (192 MHz).
+cpu_hz: 96_000_000
+external_devices: []
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 30
+    signal: "output"
+    active_high: false
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 90
+    signal: "output"
+    active_high: false
+  - id: "led2"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 97
+    signal: "output"
+    active_high: false
+  - id: "btn0"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 18
+    signal: "input"
+    active_high: false
+  - id: "btn1"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 19
+    signal: "input"
+    active_high: false

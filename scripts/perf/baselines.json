@@ -1,4 +1,8 @@
 {
+  "amap42kp": {
+    "batch": 1.4,
+    "step": 892.0
+  },
   "atmega328p": {
     "batch": 7.6,
     "step": 1044.8
