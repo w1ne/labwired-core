@@ -464,7 +464,7 @@ canonical `type:`; the table below is rendered from that file by
 | `microsd` | SPI | SPI SD card command shell (init + single-block read zeros) |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
-| `rc522` | SPI | MFRC522 SPI RFID reader register shell (no RF) |
+| `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |
 | `sn74hc165` | SPI | 8-bit parallel-in / serial-out shift register over SPI |
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
