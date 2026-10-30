@@ -485,6 +485,17 @@ impl Pic18 {
         self.serial_sink = Some(sink);
     }
 
+    /// First Access Bank offset that maps to the SFR window (`0x80` on
+    /// PIC18F4520, `0x60` on the generic default core).
+    pub fn access_split(&self) -> u8 {
+        self.access_split
+    }
+
+    /// Program memory size in bytes.
+    pub fn flash_bytes(&self) -> usize {
+        self.flash.len()
+    }
+
     /// Whether the core is idling in `SLEEP`.
     pub fn is_asleep(&self) -> bool {
         self.asleep
