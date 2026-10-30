@@ -68,6 +68,7 @@ pub mod nau88l21;
 pub mod ov3660;
 pub mod pca9685;
 pub mod pn532;
+pub mod rc522;
 pub mod rule_machine;
 pub mod sensirion;
 pub mod servo;
