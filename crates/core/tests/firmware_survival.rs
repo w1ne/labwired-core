@@ -51,6 +51,8 @@ enum Hal {
     Zephyr,
     /// Arduino core sketch.
     Arduino,
+    /// Unmodified upstream Contiki-NG build.
+    Contiki,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -311,6 +313,32 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "cc2538dk-smoke.elf",
         valid_pc_ranges: &[(0x0020_0000, 0x0027_FFFF), (0x2000_0000, 0x2000_7FFF)],
         expected_uart_output: b"CC2538DK SMOKE\n",
+    },
+    SurvivalCase {
+        // CC2538DK running REAL, unmodified upstream Contiki-NG v4.9 —
+        // examples/hello-world for TARGET=cc2538dk with the full default
+        // netstack (RPL Lite, 6LoWPAN, CSMA on the cc2538 RF driver), the
+        // binary Renode's cc2538_single-node.robot runs. It boots through the
+        // in-tree clean-room ROM (CCA -> VTOR 0x0020_2000, the 0x48 utility
+        // API for .data/.bss), waits out SYNC_32K, seeds its PRNG from the RF
+        // core (ISRXON, RSSI_VALID, RFRND), brings up the radio, reads its
+        // IEEE address from the info page and prints from its etimer process.
+        // `fade()` in platform_init busy-loops ~0.5 s of 16-MHz cycles first,
+        // hence the wider budget (see `case_cycles`). Rebuild:
+        // crates/firmware-cc2538dk-contiki/build.sh.
+        name: "cc2538dk_contiki_hello",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-hello.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Hello, world",
     },
     SurvivalCase {
         // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
@@ -1896,10 +1924,12 @@ fn run_survival_case(case: &SurvivalCase) {
 /// peripheral/USB setup and the sketch's 200 ms loop delay. The old 2M-cycle
 /// window covered only 16 ms once TIMER runs at its correct 1 MHz rate.
 fn case_cycles(case: &SurvivalCase) -> u32 {
-    if case.name == "rp2040_arduino_serial" {
-        125_000_000 / 2
-    } else {
-        SURVIVAL_CYCLES
+    match case.name {
+        "rp2040_arduino_serial" => 125_000_000 / 2,
+        // Contiki-NG's cc2538dk platform_init runs a busy-loop LED `fade()`
+        // (~8.0M cycles at 16 MHz) before the first "Hello, world".
+        "cc2538dk_contiki_hello" => 10_000_000,
+        _ => SURVIVAL_CYCLES,
     }
 }
 
@@ -2247,6 +2277,10 @@ survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
 survival_gate!(test_mimxrt595_evk_smoke_survival, "mimxrt595_evk_smoke");
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
+survival_gate!(
+    test_cc2538dk_contiki_hello_survival,
+    "cc2538dk_contiki_hello"
+);
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
 
 /// The Apollo4 secure bootloader owns MRAM 0x0-0x17FFF and hands over to the

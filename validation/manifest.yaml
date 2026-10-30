@@ -9328,12 +9328,18 @@ boards:
 
   - id: cc2538sf53
     # 2026-10-30: TI CC2538DK (CC2538SF53, Cortex-M3; 512 KiB flash at
-    # 0x00200000, 32 KiB SRAM at 0x20000000; the ROM at 0x0 is not
-    # modelled). First CC2538 part: SYS_CTRL (cc2538_sys_ctrl, CLOCK_CTRL/
-    # CLOCK_STA + gate banks at their SWRU319C Table 7-3 reset values), the
-    # PL061-style GPIO A-D (cc2538_pl061_gpio, address-masked GPIO_DATA) and
-    # UART0/1 on the pl011 layout. IOC, RF core, AES/PKA, flash controller,
-    # SSI, I2C, GPTimers, USB, uDMA, WDT/sleep timer and ADC are declared
+    # 0x00200000, 32 KiB SRAM at 0x20000000). First CC2538 part: SYS_CTRL
+    # (cc2538_sys_ctrl, CLOCK_CTRL/CLOCK_STA + gate banks at their SWRU319C
+    # Table 7-3 reset values, SYNC_32K from the cycle clock), the PL061-style
+    # GPIO A-D (cc2538_pl061_gpio, address-masked GPIO_DATA) and UART0/1 on
+    # the pl011 layout. Same day, a stock Contiki-NG boot: an in-tree clean-room ROM at 0x0
+    # (crates/core/roms/cc2538, NOT a TI dump: SWRU333A CCA boot + the 0x48
+    # utility API), the RF core alone in an empty channel (cc2538_rfcore:
+    # strobes, timed main FSM, RSSI/CCA, RFRND; no reception), the sleep
+    # timer (cc2538_sleep_timer: 32-kHz count + compare IRQ 145) and the info
+    # page's primary IEEE address, enough for stock Contiki-NG v4.9
+    # hello-world (tests/fixtures/cc2538dk-contiki-hello.elf). IOC, AES/PKA,
+    # flash controller, SSI, I2C, GPTimers, USB, uDMA and ADC are declared
     # stubs. SIM-DERIVED — no CC2538 bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
@@ -9341,10 +9347,15 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_cc2538dk_smoke_survival"
+      - "firmware_survival::test_cc2538dk_contiki_hello_survival"
+      - "cc2538_rom (8 tests: ROM utility API + CCA boot on the CPU model)"
+      - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/cc2538.rs
+      - crates/core/src/peripherals/cc2538/rfcore.rs
+      - crates/core/src/peripherals/cc2538/sleep_timer.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -9352,7 +9363,9 @@ boards:
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
+      - crates/core/roms/cc2538
       - crates/firmware-cc2538dk-smoke
+      - crates/firmware-cc2538dk-contiki
       - configs/chips/cc2538sf53.yaml
       - configs/systems/cc2538dk.yaml
   - id: amap42kp

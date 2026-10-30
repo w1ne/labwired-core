@@ -18,10 +18,22 @@ there is no CC2538 bench part, and no Renode parity claim is made.
 | Key inputs at the reset IOC pull-up | smoke-tested | `keys select=1 left=1 right=1 up=1 down=1` |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
+| Stock Contiki-NG v4.9 hello-world boots and runs its etimer | smoke-tested | `contiki-hello.yaml` 2/2 checks, 10,000,000 steps: banner, `Link-layer address: 0012.4b00.0000.0001`, 3 × `Hello, world`; `firmware_survival::test_cc2538dk_contiki_hello_survival` |
+| Clean-room ROM: CCA boot (VTOR, SP, reset ISR) and parking on an invalid CCA | unit-tested on the CPU model | `cc2538_rom::rom_boot_*` |
+| Clean-room ROM utility API at `0x48` (crc32, memset/memcpy/memcmp/memmove, chip id, flash size, erase/program error) | unit-tested on the CPU model | `cc2538_rom` (8 tests; CRC-32 check value `0xCBF43926`) |
+| SYS_CTRL `CLOCK_STA.SYNC_32K` | exercised | Contiki-NG `sys_ctrl_init` waits for its edge |
+| RF core: strobes, main-FSM timing, RSSI/CCA, RFRND, MTCTRL, TX timing | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::rfcore` (9 tests); Contiki `random_init` + radio init (strobes, RSSI_VALID, RFRND, CCA, MTCTRL) |
+| Sleep timer: 32-kHz count and ST0 latch | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::sleep_timer` (8 tests); Contiki reads the count (5,721 `ST0` latches in the 10M-step run) |
+| Sleep timer compare → SM Timer IRQ 145 → handler | integration-tested | `cc2538_sleep_timer_irq` on the descriptor-built bus, with and without `event-scheduler`. The stock hello-world never arms a compare: CSMA keeps the radio listening, so LPM stays in PM0 |
+| Instruction support for the Contiki image | audited | `unsupported_instruction_audit.sh`: 10,000,000 steps, 0 unsupported |
+| Determinism of the Contiki run | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
+| RF reception, RF interrupts, frame filtering, CSP, MAC-timer count | **not modelled** | empty channel; see `crates/core/src/peripherals/cc2538/rfcore.rs` |
+| ROM serial boot loader, flash erase/program | **not modelled** | ROM parks in WFI; erase/program return -1 |
+| Watchdog, sleep-timer capture | **not modelled** | `WDCTL`/`STCC`/`STCS` are storage |
 | IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
-| Boot ROM, CCA evaluation | **not modelled** | fast boot; the CCA is in the image for silicon and `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes in the fixture |
-| RF core, AES/PKA, flash ctrl, SSI, I2C, GPTimers, USB, uDMA, WDT/sleep timer, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
+| AES/PKA, flash ctrl, SSI, I2C, GPTimers, USB, uDMA, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
 
@@ -51,8 +63,32 @@ cmp out/cc2538dk-run1/uart.log out/cc2538dk-run2/uart.log          # clean
 cmp out/cc2538dk-run1/snapshot.json out/cc2538dk-run2/snapshot.json  # clean
 
 cargo test -p labwired-core --lib cc2538
-#   9 passed (masked read/write, byte store, DIR/pad, AFSEL, external level,
-#   SYS_CTRL reset values, gate fields, CLOCK_STA tracking)
+#   26 passed (GPIO + SYS_CTRL as before; rfcore 9; sleep_timer 8)
+cargo test -p labwired-core --test cc2538_sleep_timer_irq
+cargo test -p labwired-core --features event-scheduler --test cc2538_sleep_timer_irq
+#   1 passed each (legacy walk / scheduled event)
+cargo test -p labwired-core --test cc2538_rom
+#   8 passed
+cargo test -p labwired-core --test firmware_survival cc2538
+#   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival ok
+
+./target/release/labwired test --script examples/cc2538dk/contiki-hello.yaml \
+  --output-dir out/cc2538dk-contiki --no-uart-stdout
+#   PASS  2/2 checks · contiki-hello · 10000000 steps
+#   [INFO: Main      ] Starting Contiki-NG-release/v4.9
+#   [INFO: Main      ] - Routing: RPL Lite
+#   [INFO: Main      ] - Net: sicslowpan
+#   [INFO: Main      ] - MAC: CSMA
+#   [INFO: Main      ] - 802.15.4 PANID: 0xabcd
+#   [INFO: Main      ] - 802.15.4 Default channel: 26
+#   [INFO: Main      ] Node ID: 1
+#   [INFO: Main      ] Link-layer address: 0012.4b00.0000.0001
+#   [INFO: Main      ] Tentative link-local IPv6 address: fe80::212:4b00:0:1
+#   [INFO: CC2538DK  ] TI SmartRF06 + cc2538EM
+#   Hello, world
+#   ...
+# A 20M-step run prints 27 lines over 268.2 simulated s: one at boot, one per
+# 10-s etimer period.
 ```
 
 ## Notes
