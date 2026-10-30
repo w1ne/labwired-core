@@ -313,6 +313,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"CC2538DK SMOKE\n",
     },
     SurvivalCase {
+        // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
+        // SRAM at 0x20000000. SCI0 (P411/P410) is the J-Link OB console; the
+        // smoke runs on the reset MOCO, walks LED1-LED3 (P006-P008) with
+        // PCNTR1 PODR readback and reads S1/S2 through the PFS pull-ups.
+        // SIM-DERIVED.
+        name: "ek_ra6m5_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa6m5bh",
+        system: "ek-ra6m5",
+        fixture: "ek-ra6m5-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output: b"EK-RA6M5 SMOKE\n",
+    },
+    SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,
         // 128 KiB SRAM at 0x20000000. UART0 is the board's virtual COM port;
         // the smoke walks the PIOC LED with ODSR readback and reads the
@@ -2140,6 +2156,8 @@ survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
+
+survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
 
 /// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
 /// in the top 44 bytes of the last flash page and only enters a valid image.

@@ -58,6 +58,14 @@ boards:
     path: examples/cc2538dk
     rust_targets: [thumbv7m-none-eabi]
     gate: true
+  # EK-RA6M5: the first RA6M5 part. Builds the cortex-m-rt smoke for
+  # thumbv8m.main (the RA6M5 is a Cortex-M33) and runs the SCI0/LED io-smoke
+  # plus the unsupported-instruction audit through the CLI.
+  - id: ek-ra6m5
+    kind: sim-validate
+    path: examples/ek-ra6m5
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
   # instruction audit through the CLI, so the chip is proven by a gate on

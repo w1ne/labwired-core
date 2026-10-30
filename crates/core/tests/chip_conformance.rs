@@ -142,6 +142,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
     },
     ChipConf {
+        // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
+        // Modelled: the RA PORT (ra_port), PmnPFS/PWPR (ra_pfs), SYSTEM
+        // HOCOCR/OSCSF (ra_sysc) and SCI0 on the sci layout, all reused from
+        // RA4M1 at the RA6M5 bases. MSTP, ICU and the listed timers/comms
+        // blocks are declared stubs; SCI1-9 and the rest are not mapped — see
+        // examples/ek-ra6m5/VALIDATION.md.
+        name: "r7fa6m5bh",
+        yaml: "configs/chips/r7fa6m5bh.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_ek_ra6m5_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

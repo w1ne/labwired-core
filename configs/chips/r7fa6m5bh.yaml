@@ -1,0 +1,232 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Renesas R7FA6M5BH (RA6M5, Cortex-M33, 2 MiB code flash, 512 KiB SRAM) for
+# the EK-RA6M5 evaluation kit. SIM-DERIVED: no RA6M5 bench part.
+#
+# Sources:
+#   - Renesas FSP CMSIS header R7FA6M5BH.h (peripheral bases and register
+#     offsets: R_SYSTEM 0x4001E000, R_MSTP 0x40084000, R_PORT0 0x40080000,
+#     R_PFS 0x40080800, R_PMISC 0x40080D00, R_SCI0 0x40118000).
+#   - Zephyr dts/arm/renesas/ra/ra6/{ra6-cm33-common,r7fa6m5xh,
+#     r7fa6m5bh3cfc}.dtsi (code flash 2 MiB at 0x0, data flash 8 KiB at
+#     0x08000000, SRAM 512 KiB at 0x20000000, ioport0-b, sci0-9, iic0-2).
+#   - Renode v1.17.0 platforms/cpus/renesas-r7fa6m5b.repl (bus map, used as a
+#     cross-check only; this is not a Renode parity claim).
+#
+# The RA6M5 PORT/PFS/SCI register layouts match the RA4M1 blocks this repo
+# already models (configs/chips/ra4m1.yaml), only the bases moved:
+#   - PORTn at 0x40080000 + 0x20*n: PCNTR1 PDR[15:0]/PODR[31:16], PCNTR2
+#     PIDR, PCNTR3 POSR[15:0]/PORR[31:16].
+#   - PmnPFS at 0x40080800 + 0x40*m + 4*n; PWPR at PFS + 0x503 (0x40080D03).
+#   - SCIn at 0x40118000 + 0x100*n: SMR +0, BRR +1, SCR +2, TDR +3, SSR +4,
+#     RDR +5, SEMR +7 (classic SCI, async, FIFO off).
+#
+# Tier: L1 UART+LED smoke. Boot, the SCI0 console (P411 TXD0 / P410 RXD0,
+# the J-Link OB virtual COM port) and the three user LEDs with PODR readback.
+#
+# NOT modelled in this slice:
+# - Clock generation: the SYSTEM window (ra_sysc) models only HOCOCR/OSCSF.
+#   Every other SYSTEM register, including SCKDIVCR, SCKSCR and PRCR, reads 0
+#   and drops writes. The smoke stays on the reset MOCO (8 MHz) and only sets
+#   SCKDIVCR to /1, which the model accepts and ignores.
+# - Module stop (MSTP): declared stub. MSTPCRB.MSTPB31 is cleared by the
+#   firmware as silicon requires, but SCI0 works whether or not it is.
+# - ICU/IELSR event linking: declared stub. No NVIC line is routed from a
+#   peripheral event, so the smoke is polled.
+# - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
+#   routing in the model.
+# - TrustZone (IDAU/SAU, the CPSCU/PSCU security attribution), flash
+#   programming (FACI), data flash, option-setting memory.
+# - DMAC/DTC, ELC, RTC, IWDT/WDT, AGT0-5, GPT, IIC0-2, SPI0/1, ADC12,
+#   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
+#   writes dropped).
+# - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC and every block
+#   not listed below are NOT mapped. Firmware that touches them faults with a
+#   memory violation.
+
+name: "r7fa6m5bh"
+arch: "arm"
+core: "cortex-m33"
+# Reset clock: MOCO 8 MHz. The EK-RA6M5 smoke never starts HOCO or the PLL.
+cpu_hz: 8_000_000
+flash:
+  base: 0x00000000
+  size: "2MB"
+ram:
+  base: 0x20000000
+  size: "512KB"
+pins:
+  # SCI0 console (Zephyr ek_ra6m5-pinctrl.dtsi sci0_default: tx P411, rx P410).
+  P410: { gpio: port4, bit: 10, functions: [{ type: uart, peripheral: sci0, role: rx }] }
+  P411: { gpio: port4, bit: 11, functions: [{ type: uart, peripheral: sci0, role: tx }] }
+  # User LEDs LED1-LED3 (Zephyr ek_ra6m5.dts).
+  P006: { gpio: port0, bit: 6, functions: [{ type: gpio, peripheral: port0 }] }
+  P007: { gpio: port0, bit: 7, functions: [{ type: gpio, peripheral: port0 }] }
+  P008: { gpio: port0, bit: 8, functions: [{ type: gpio, peripheral: port0 }] }
+  # User switches S1/S2 (Zephyr ek_ra6m5.dts).
+  P005: { gpio: port0, bit: 5, functions: [{ type: gpio, peripheral: port0 }] }
+  P004: { gpio: port0, bit: 4, functions: [{ type: gpio, peripheral: port0 }] }
+peripherals:
+  # R_SYSTEM @ 0x4001E000 (the Renode SYSC tag spans 0x4001E000-0x4001E62B).
+  # Only HOCOCR (+0x36) and OSCSF (+0x3C) are modelled; see the header.
+  - id: "ra_sysc"
+    type: "ra_sysc"
+    base_address: 0x4001E000
+    size: "1584B"
+  # R_MSTP @ 0x40084000: MSTPCRB +0x04 .. MSTPCRE +0x10 (R7FA6M5BH.h).
+  - id: "mstp"
+    type: "stub"
+    base_address: 0x40084000
+    size: "64B"
+  # ICU @ 0x40006000: IRQCRn, NMI, WUPEN, IELSR0-95 at +0x300.
+  - id: "icu"
+    type: "stub"
+    base_address: 0x40006000
+    size: "2KB"
+  # PORT0-B @ 0x40080000 + n*0x20. Ports 0-9 link their pull-ups to PmnPFS.PCR.
+  - id: "port0"
+    type: "gpio"
+    base_address: 0x40080000
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 0 }
+  - id: "port1"
+    type: "gpio"
+    base_address: 0x40080020
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 1 }
+  - id: "port2"
+    type: "gpio"
+    base_address: 0x40080040
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 2 }
+  - id: "port3"
+    type: "gpio"
+    base_address: 0x40080060
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 3 }
+  - id: "port4"
+    type: "gpio"
+    base_address: 0x40080080
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 4 }
+  - id: "port5"
+    type: "gpio"
+    base_address: 0x400800A0
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 5 }
+  - id: "port6"
+    type: "gpio"
+    base_address: 0x400800C0
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 6 }
+  - id: "port7"
+    type: "gpio"
+    base_address: 0x400800E0
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 7 }
+  - id: "port8"
+    type: "gpio"
+    base_address: 0x40080100
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 8 }
+  - id: "port9"
+    type: "gpio"
+    base_address: 0x40080120
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 9 }
+  - id: "porta"
+    type: "gpio"
+    base_address: 0x40080140
+    size: "32B"
+    config: { profile: "ra_port" }
+  - id: "portb"
+    type: "gpio"
+    base_address: 0x40080160
+    size: "32B"
+    config: { profile: "ra_port" }
+  # PFS @ 0x40080800 (PmnPFS for ports 0-9) with PWPR at +0x503 (PMISC).
+  # Ports A/B PmnPFS (0x40080A80+) fall outside the modelled word array.
+  - id: "pfs"
+    type: "ra_pfs"
+    base_address: 0x40080800
+    size: "1536B"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # SCI0 @ 0x40118000: the EK-RA6M5 console (Zephyr `zephyr,console = &uart0`
+  # on sci0). Zephyr links SCI0 RXI/TXI/TEI/ERI to IEL0-3; IELSR routing is
+  # not modelled (the ICU is a stub), so irq 1 (TXI) is nominal and the smoke
+  # polls SSR.TDRE.
+  - id: "sci0"
+    type: "uart"
+    base_address: 0x40118000
+    size: "256B"
+    irq: 1
+    config:
+      profile: "sci"
+  # Declared stubs (bases from R7FA6M5BH.h / Renode tags; reads 0, writes
+  # dropped).
+  - id: "dmac_dtc"
+    type: "stub"
+    base_address: 0x40005000
+    size: "2KB"
+  - id: "elc"
+    type: "stub"
+    base_address: 0x40082000
+    size: "256B"
+  - id: "rtc"
+    type: "stub"
+    base_address: 0x40083000
+    size: "512B"
+  - id: "iwdt"
+    type: "stub"
+    base_address: 0x40083200
+    size: "512B"
+  - id: "wdt"
+    type: "stub"
+    base_address: 0x40083400
+    size: "512B"
+  - id: "usbfs"
+    type: "stub"
+    base_address: 0x40090000
+    size: "8KB"
+  - id: "iic"
+    type: "stub"
+    base_address: 0x4009F000
+    size: "1KB"
+  - id: "canfd"
+    type: "stub"
+    base_address: 0x400B0000
+    size: "96KB"
+  - id: "agt"
+    type: "stub"
+    base_address: 0x400E8000
+    size: "2KB"
+  - id: "usbhs"
+    type: "stub"
+    base_address: 0x40111000
+    size: "8KB"
+  - id: "ether"
+    type: "stub"
+    base_address: 0x40114000
+    size: "1KB"
+  - id: "spi"
+    type: "stub"
+    base_address: 0x4011A000
+    size: "512B"
+  - id: "gpt"
+    type: "stub"
+    base_address: 0x40169000
+    size: "4KB"
+  - id: "adc12"
+    type: "stub"
+    base_address: 0x40170000
+    size: "1KB"
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x407FE000
+    size: "4KB"

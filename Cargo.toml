@@ -80,6 +80,7 @@ members = [
     "crates/firmware-vegaboard-ri5cy-smoke",
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-cc2538dk-smoke",
+    "crates/firmware-ek-ra6m5-smoke",
     "crates/firmware-stm32f072b-disco-smoke",
     "crates/firmware-l552ze-smoke",
     "crates/firmware-arduino-nano-33-ble-smoke",
