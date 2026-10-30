@@ -7,12 +7,16 @@ TI **CC2538SF53** (CC2538DK: CC2538EM on a SmartRF06 EB, Cortex-M3):
 | fixture (`tests/fixtures/`)    | Contiki-NG example     | what it proves |
 |--------------------------------|------------------------|----------------|
 | `cc2538dk-contiki-hello.elf`   | `examples/hello-world` | stock Contiki-NG boots through the CC2538 boot ROM, SYS_CTRL clock switch, RF core bring-up (random seed, CSMA radio init) and the sleep-timer count, then prints `Hello, world` over UART0 every 10 s |
+| `cc2538dk-contiki-test-cfs.elf` | `examples/storage/cfs-coffee` `test-cfs` | a 65 000-byte Coffee file written, read back and appended through ROM `PageErase`/`ProgramFlash` and the flash controller |
+| `cc2538dk-contiki-coffee.elf`  | `examples/storage/cfs-coffee` `example-coffee` | Coffee file write, read, append and directory listing |
+| `cc2538dk-contiki-flash-test.elf` | `flash-test/` (this directory, MIT) | the steps of Renode's `cc2538_flash_controller.robot` on the ROM utility API |
 
 This is the binary the Renode `cc2538_single-node.robot` test runs (Renode
 fetches a prebuilt one and loads a TI ROM dump; LabWired runs its own
 clean-room ROM, `crates/core/roms/cc2538/`).
 
-The firmware is not patched. It exercises:
+The upstream firmware is not patched (`flash-test/` is LabWired's own
+application). hello-world exercises:
 
 - the clean-room ROM: SWRU333A §2.2 CCA boot (VTOR = `0x0020_2000`) and the
   utility API at `0x48` (`.data` copy and `.bss` clear in `reset_handler`);
@@ -28,7 +32,7 @@ The firmware is not patched. It exercises:
 ## Build
 
 ```sh
-./build.sh          # -> tests/fixtures/cc2538dk-contiki-hello.elf
+./build.sh          # -> tests/fixtures/cc2538dk-contiki-{hello,test-cfs,coffee,flash-test}.elf
 ```
 
 Requirements: `arm-none-eabi-gcc` and git. The script clones Contiki-NG

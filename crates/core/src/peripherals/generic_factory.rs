@@ -377,12 +377,13 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam4s_pio",
     "sam4s_pmc",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
-    // SYS_CTRL, the 802.15.4 RF core and the sleep timer. Deliberately not `cc2538_gpio`: that spelling belongs to the
-    // staged onboarding/cc2538 descriptor, which keeps its placeholder.
+    // SYS_CTRL, the 802.15.4 RF core, the sleep timer and the flash controller. Deliberately not `cc2538_gpio`: that
+    // spelling belongs to the staged onboarding/cc2538 descriptor, which keeps its placeholder.
     "cc2538_pl061_gpio",
     "cc2538_sys_ctrl",
     "cc2538_rfcore",
     "cc2538_sleep_timer",
+    "cc2538_flash_ctrl",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1505,6 +1506,17 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(crate::peripherals::cc2538::sleep_timer::DEFAULT_CLOCK_HZ);
             Box::new(crate::peripherals::cc2538::sleep_timer::Cc2538SleepTimer::new(hz))
+        }
+        // `flash_base`/`flash_size`: the main array the controller programs;
+        // `clock_hz`: the clock its erase/write timings run at.
+        "cc2538_flash_ctrl" => {
+            use crate::peripherals::cc2538::flash_ctrl as fc;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(fc::Cc2538FlashCtrl::new(
+                get("flash_base").map_or(fc::DEFAULT_FLASH_BASE, |v| v as u32),
+                get("flash_size").map_or(fc::DEFAULT_FLASH_SIZE, |v| v as u32),
+                get("clock_hz").unwrap_or(fc::DEFAULT_CLOCK_HZ),
+            ))
         }
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
