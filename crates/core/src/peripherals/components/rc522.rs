@@ -30,6 +30,10 @@ const REG_FIFOLEVEL: u8 = 0x0A;
 const REG_CONTROL: u8 = 0x0C;
 const REG_BITFRAMING: u8 = 0x0D;
 const REG_COLL: u8 = 0x0E;
+const REG_MODE: u8 = 0x11;
+const REG_TXMODE: u8 = 0x12;
+const REG_RXMODE: u8 = 0x13;
+const REG_TXCONTROL: u8 = 0x14;
 const REG_CRCRESULT_H: u8 = 0x21;
 const REG_CRCRESULT_L: u8 = 0x22;
 const REG_VERSION: u8 = 0x37;
@@ -40,7 +44,6 @@ const CMD_TRANSCEIVE: u8 = 0x0C;
 const CMD_SOFTRESET: u8 = 0x0F;
 
 const COMIRQ_TIMER: u8 = 0x01;
-const COMIRQ_IDLE: u8 = 0x04;
 const COMIRQ_RX: u8 = 0x20;
 const COMIRQ_TX: u8 = 0x40;
 const DIVIRQ_CRC: u8 = 0x04;
@@ -117,6 +120,9 @@ impl Rc522 {
         regs[REG_COMMAND as usize] = CMD_IDLE;
         // CollReg power-on: ValuesAfterColl=1 (bit 7).
         regs[REG_COLL as usize] = 0x80;
+        regs[REG_MODE as usize] = 0x3F;
+        regs[REG_TXCONTROL as usize] = 0x80; // antenna off until PCD_AntennaOn
+        regs[REG_CONTROL as usize] = 0x10;
         Self {
             cs_pin: cs_pin.into(),
             regs,
@@ -141,10 +147,12 @@ impl Rc522 {
         self.fifo_len = 0;
         self.fifo_rpos = 0;
         self.regs[REG_FIFOLEVEL as usize] = 0;
+        self.regs[REG_ERROR as usize] &= !0x10; // BufferOvfl
     }
 
     fn fifo_push(&mut self, b: u8) {
         if self.fifo_len >= FIFO_CAP {
+            self.regs[REG_ERROR as usize] |= 0x10; // BufferOvfl
             return;
         }
         let wpos = (self.fifo_rpos + self.fifo_len) % FIFO_CAP;
@@ -206,13 +214,16 @@ impl Rc522 {
         self.regs[REG_COMIRQ as usize] = 0;
         self.regs[REG_DIVIRQ as usize] = 0;
         self.regs[REG_ERROR as usize] = 0;
-        self.regs[REG_CONTROL as usize] = 0;
+        // Datasheet Table 20 reset values (lean subset we model).
+        self.regs[REG_CONTROL as usize] = 0x10;
         self.regs[REG_BITFRAMING as usize] = 0;
         self.regs[REG_COLL as usize] = 0x80;
+        self.regs[REG_MODE as usize] = 0x3F;
+        self.regs[REG_TXMODE as usize] = 0;
+        self.regs[REG_RXMODE as usize] = 0;
+        self.regs[REG_TXCONTROL as usize] = 0x80; // antenna off
         self.fifo_flush();
-        // Soft reset does not remove a card from the field; PICC returns to Idle
-        // if still present (silicon leaves the air interface cold until TxControl
-        // is rewritten — for the Arduino init path Idle is correct).
+        // Soft reset leaves the RF field cold; PICC loses the carrier → Idle.
         if self.card_present {
             self.picc = PiccState::Idle;
         }
@@ -224,31 +235,67 @@ impl Rc522 {
         self.regs[REG_CRCRESULT_L as usize] = lo;
         self.regs[REG_CRCRESULT_H as usize] = hi;
         self.regs[REG_DIVIRQ as usize] |= DIVIRQ_CRC;
-        self.regs[REG_COMMAND as usize] = CMD_IDLE;
+        // Datasheet §10.3.1.4: CalcCRC stays active (does not self-terminate to Idle).
+        self.regs[REG_COMMAND as usize] = CMD_CALCCRC;
+        self.fifo_flush();
     }
 
     fn respond_ok(&mut self, data: &[u8], rx_last_bits: u8) {
-        self.fifo_load(data);
+        let mut out = data.to_vec();
+        // RxCRCEn: silicon checks and strips CRC_A; expose payload only.
+        if self.regs[REG_RXMODE as usize] & 0x80 != 0 && out.len() >= 2 {
+            out.truncate(out.len() - 2);
+        }
+        self.fifo_load(&out);
         self.regs[REG_CONTROL as usize] =
             (self.regs[REG_CONTROL as usize] & !0x07) | (rx_last_bits & 0x07);
         self.regs[REG_ERROR as usize] = 0;
-        self.regs[REG_COMIRQ as usize] |= COMIRQ_TX | COMIRQ_RX | COMIRQ_IDLE;
-        self.regs[REG_COMMAND as usize] = CMD_IDLE;
+        // §10.3.1.8: Transceive does not self-terminate; IdleIRq is not raised.
+        self.regs[REG_COMIRQ as usize] |= COMIRQ_TX | COMIRQ_RX;
+        self.regs[REG_COMMAND as usize] = CMD_TRANSCEIVE;
     }
 
     fn respond_timeout(&mut self) {
         self.fifo_flush();
         self.regs[REG_ERROR as usize] = 0;
-        self.regs[REG_COMIRQ as usize] |= COMIRQ_TIMER;
-        self.regs[REG_COMMAND as usize] = CMD_IDLE;
+        self.regs[REG_COMIRQ as usize] |= COMIRQ_TX | COMIRQ_TIMER;
+        self.regs[REG_COMMAND as usize] = CMD_TRANSCEIVE;
+    }
+
+    fn drop_to_idle_on_unexpected(&mut self) {
+        if matches!(self.picc, PiccState::Ready | PiccState::Active) {
+            self.picc = PiccState::Idle;
+        }
+    }
+
+    fn antenna_on(&self) -> bool {
+        self.regs[REG_TXCONTROL as usize] & 0x03 != 0
+    }
+
+    fn tx_with_optional_crc(&self, tx: &[u8]) -> Vec<u8> {
+        let mut frame = tx.to_vec();
+        if self.regs[REG_TXMODE as usize] & 0x80 != 0 {
+            let c = crc_a(&frame);
+            frame.extend_from_slice(&c);
+        }
+        frame
     }
 
     fn run_transceive(&mut self) {
         // Clear StartSend (self-clearing on silicon).
         self.regs[REG_BITFRAMING as usize] &= !0x80;
         let tx_last_bits = self.regs[REG_BITFRAMING as usize] & 0x07;
-        let tx = self.fifo_snapshot();
-        if tx.is_empty() {
+        let tx_raw = self.fifo_snapshot();
+        if tx_raw.is_empty() {
+            self.respond_timeout();
+            return;
+        }
+
+        // No RF field → no PICC answer (and a card in the field loses power).
+        if !self.antenna_on() {
+            if self.card_present {
+                self.picc = PiccState::Idle;
+            }
             self.respond_timeout();
             return;
         }
@@ -258,9 +305,9 @@ impl Rc522 {
             return;
         }
 
-        // REQA / WUPA — short 7-bit frame.
-        if tx.len() == 1 && tx_last_bits == 7 {
-            let cmd = tx[0] & 0x7F;
+        // REQA / WUPA — short 7-bit frame (CRC not used; ignore TxCRCEn).
+        if tx_raw.len() == 1 && tx_last_bits == 7 {
+            let cmd = tx_raw[0] & 0x7F;
             let accept = match cmd {
                 PICC_REQA => self.picc == PiccState::Idle,
                 PICC_WUPA => matches!(self.picc, PiccState::Idle | PiccState::Halt),
@@ -270,14 +317,16 @@ impl Rc522 {
                 self.picc = PiccState::Ready;
                 self.respond_ok(&ATQA, 0);
             } else {
+                self.drop_to_idle_on_unexpected();
                 self.respond_timeout();
             }
             return;
         }
 
-        // Anticollision CL1: SEL=0x93, NVB=0x20 → UID + BCC.
-        if tx.len() == 2 && tx[0] == PICC_SEL_CL1 && tx[1] == 0x20 {
+        // Anticollision CL1: SEL=0x93, NVB=0x20 → UID + BCC (no CRC on air).
+        if tx_raw.len() == 2 && tx_raw[0] == PICC_SEL_CL1 && tx_raw[1] == 0x20 {
             if self.picc != PiccState::Ready {
+                self.drop_to_idle_on_unexpected();
                 self.respond_timeout();
                 return;
             }
@@ -289,9 +338,13 @@ impl Rc522 {
             return;
         }
 
+        // SELECT / HLTA: TxCRCEn appends CRC_A when the driver omitted it.
+        let tx = self.tx_with_optional_crc(&tx_raw);
+
         // SELECT CL1: 0x93 0x70 UID[4] BCC CRC_A[2].
-        if tx.len() >= 9 && tx[0] == PICC_SEL_CL1 && tx[1] == 0x70 {
+        if tx.len() == 9 && tx[0] == PICC_SEL_CL1 && tx[1] == 0x70 {
             if self.picc != PiccState::Ready {
+                self.drop_to_idle_on_unexpected();
                 self.respond_timeout();
                 return;
             }
@@ -304,21 +357,25 @@ impl Rc522 {
                 let sak_crc = crc_a(&[SAK]);
                 self.respond_ok(&[SAK, sak_crc[0], sak_crc[1]], 0);
             } else {
+                self.drop_to_idle_on_unexpected();
                 self.respond_timeout();
             }
             return;
         }
 
         // HLTA: 0x50 0x00 CRC_A — success is a timeout (no modulation).
-        if tx.len() >= 4 && tx[0] == PICC_HLTA && tx[1] == 0x00 {
+        if tx.len() == 4 && tx[0] == PICC_HLTA && tx[1] == 0x00 {
             let expect_crc = crc_a(&tx[..2]);
             if tx[2] == expect_crc[0] && tx[3] == expect_crc[1] && self.picc == PiccState::Active {
                 self.picc = PiccState::Halt;
+            } else {
+                self.drop_to_idle_on_unexpected();
             }
             self.respond_timeout();
             return;
         }
 
+        self.drop_to_idle_on_unexpected();
         self.respond_timeout();
     }
 
@@ -358,6 +415,17 @@ impl Rc522 {
             REG_BITFRAMING => {
                 self.regs[REG_BITFRAMING as usize] = value;
                 self.maybe_start_transceive();
+            }
+            REG_CONTROL => {
+                // RxLastBits [2:0] are read-only; TStartNow/TStopNow are write-to-actuate.
+                let keep = self.regs[REG_CONTROL as usize] & 0x07;
+                self.regs[REG_CONTROL as usize] = (value & !0x07) | keep;
+            }
+            REG_TXCONTROL => {
+                self.regs[REG_TXCONTROL as usize] = value;
+                if value & 0x03 == 0 && self.card_present {
+                    self.picc = PiccState::Idle;
+                }
             }
             REG_CRCRESULT_H | REG_CRCRESULT_L => {
                 // Read-only result registers.
@@ -426,7 +494,12 @@ impl SpiDevice for Rc522 {
             }
             Phase::Data => {
                 if self.reading {
-                    self.read_reg(self.reg)
+                    let v = self.read_reg(self.reg);
+                    // §8.1.2.1: each subsequent MOSI byte is the next address to read.
+                    if mosi != 0 {
+                        self.reg = reg_from_addr(mosi);
+                    }
+                    v
                 } else {
                     self.write_reg(self.reg, mosi);
                     0x00
@@ -485,9 +558,12 @@ impl SimInput for Rc522 {
             }
             "uid" => {
                 let bits = value as u32;
-                self.uid = bits.to_be_bytes();
-                if self.card_present {
-                    self.picc = PiccState::Idle;
+                let next = bits.to_be_bytes();
+                if next != self.uid {
+                    self.uid = next;
+                    if self.card_present {
+                        self.picc = PiccState::Idle;
+                    }
                 }
             }
             _ => unreachable!("require_channel only returns declared channels"),
@@ -519,10 +595,7 @@ static RC522_METADATA: KitMetadata = KitMetadata {
         "MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface.",
     ),
     detail: std::borrow::Cow::Borrowed(
-        "VersionReg 0x37 returns 0x92. Soft reset, FIFO, ComIrqReg/DivIrqReg, and CRC_A \
-         (CalcCRC) follow the MFRC522 datasheet. REQA/WUPA return ATQA; anticollision CL1 \
-         and SELECT return a 4-byte UID + BCC + SAK; HLTA succeeds as a timeout. Drive \
-         card_present and uid to place or remove a card. MIFARE Crypto1 is not modelled.",
+        "VersionReg 0x37 returns 0x92. Soft reset, FIFO, ComIrqReg/DivIrqReg, and CRC_A          (CalcCRC) follow the MFRC522 datasheet. TxControlReg Tx1RFEn/Tx2RFEn must be on          (PCD_AntennaOn) or every Transceive times out. One card, CL1 only (4-byte UID);          no collision/partial NVB. REQA/WUPA → ATQA; anticollision CL1 + SELECT → UID+BCC+SAK;          HLTA succeeds as a timeout. Drive card_present and uid to place or remove a card.          MIFARE Crypto1 is not modelled.",
     ),
     transport: Transport::Spi,
     category: Category::Spi,

@@ -24,9 +24,17 @@ fn read_reg(dev: &mut Rc522, reg: u8) -> u8 {
 }
 
 fn read_fifo(dev: &mut Rc522, n: usize) -> Vec<u8> {
-    let mut frame = vec![0x80 | (REG_FIFODATA << 1)];
-    frame.extend(std::iter::repeat_n(0u8, n));
+    // Match MFRC522::PCD_ReadRegister: address byte repeated, then trailing 0x00.
+    let addr = 0x80 | (REG_FIFODATA << 1);
+    let mut frame = vec![addr];
+    frame.extend(std::iter::repeat_n(addr, n.saturating_sub(1)));
+    frame.push(0x00);
     xfer(dev, &frame)[1..].to_vec()
+}
+
+fn antenna_on(dev: &mut Rc522) {
+    // PCD_AntennaOn: set Tx1RFEn|Tx2RFEn on top of reset value 0x80.
+    write_reg(dev, REG_TXCONTROL, 0x83);
 }
 
 fn flush_fifo(dev: &mut Rc522) {
@@ -66,8 +74,8 @@ fn calc_crc(dev: &mut Rc522, data: &[u8]) -> [u8; 2] {
     assert_ne!(div & DIVIRQ_CRC, 0, "CalcCRC must raise CRCIRq");
     assert_eq!(
         read_reg(dev, REG_COMMAND) & 0x0F,
-        CMD_IDLE,
-        "CalcCRC completion returns CommandReg to Idle"
+        CMD_CALCCRC,
+        "CalcCRC stays active until a new command is written (§10.3.1.4)"
     );
     [
         read_reg(dev, REG_CRCRESULT_L),
@@ -106,6 +114,7 @@ fn calc_crc_command_fills_result_registers() {
 #[test]
 fn reqa_times_out_when_no_card_in_the_field() {
     let mut d = Rc522::new("PA4");
+    antenna_on(&mut d);
     let (irq, data) = transceive(&mut d, &[PICC_REQA], 7);
     assert_ne!(irq & COMIRQ_TIMER, 0, "no card → TimerIRq");
     assert_eq!(irq & COMIRQ_RX, 0, "no card → no RxIRq");
@@ -115,6 +124,7 @@ fn reqa_times_out_when_no_card_in_the_field() {
 #[test]
 fn reqa_returns_atqa_when_card_present() {
     let mut d = Rc522::new("PA4");
+    antenna_on(&mut d);
     d.set_card(Some([0xDA, 0x01, 0x7A, 0x01]));
     let (irq, data) = transceive(&mut d, &[PICC_REQA], 7);
     assert_ne!(irq & COMIRQ_RX, 0);
@@ -124,6 +134,7 @@ fn reqa_returns_atqa_when_card_present() {
 #[test]
 fn wupa_wakes_a_halted_card() {
     let mut d = Rc522::new("PA4");
+    antenna_on(&mut d);
     d.set_card(Some([0x11, 0x22, 0x33, 0x44]));
     // Drive to Active then Halt.
     let _ = transceive(&mut d, &[PICC_REQA], 7);
@@ -150,6 +161,7 @@ fn wupa_wakes_a_halted_card() {
 fn anticollision_and_select_return_uid_bcc_and_sak() {
     let uid = [0xDA, 0x01, 0x7A, 0x01];
     let mut d = Rc522::new("PA4");
+    antenna_on(&mut d);
     d.set_card(Some(uid));
     let (_irq, atqa) = transceive(&mut d, &[PICC_REQA], 7);
     assert_eq!(atqa, ATQA);
@@ -178,6 +190,7 @@ fn set_input_places_and_removes_card() {
     d.set_input("card_present", 1.0).unwrap();
     assert!(d.card_present());
     assert_eq!(d.uid(), [0x51, 0x02, 0x7A, 0x02]);
+    antenna_on(&mut d);
     let (_irq, data) = transceive(&mut d, &[PICC_REQA], 7);
     assert_eq!(data, ATQA);
 
@@ -196,8 +209,7 @@ fn unknown_input_channel_is_rejected() {
 
 #[test]
 fn shell_transcript_preserves_version_soft_reset_and_mode() {
-    // Same conversation as the old shell golden, except CalcCRC (0x03) completes
-    // and leaves CommandReg Idle (§10.3.1.4) instead of latching.
+    // CalcCRC (0x03) stays latched in CommandReg (§10.3.1.4) until a new command.
     let mut d = Rc522::new("PA4");
     let mut got = Vec::new();
     let script: &[&[u8]] = &[
@@ -215,8 +227,82 @@ fn shell_transcript_preserves_version_soft_reset_and_mode() {
         got.extend(xfer(&mut d, frame));
     }
     const GOLDEN: &[u8] = &[
-        0x00, 0x92, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3D, 0x00,
+        0x00, 0x92, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x3D, 0x00,
         0x00, 0x00, 0x00,
     ];
     assert_eq!(got, GOLDEN);
+}
+
+#[test]
+fn reqa_after_select_without_halt_returns_to_idle() {
+    // Sketch loop without PICC_HaltA: REQA in Active times out and drops to Idle,
+    // so the next REQA sees ATQA again (classic "every other iteration" behaviour).
+    let uid = [0xAA, 0xBB, 0xCC, 0xDD];
+    let mut d = Rc522::new("PA4");
+    antenna_on(&mut d);
+    d.set_card(Some(uid));
+
+    let (i1, a1) = transceive(&mut d, &[PICC_REQA], 7);
+    assert_ne!(i1 & COMIRQ_RX, 0);
+    assert_eq!(a1, ATQA);
+
+    let (_ia, anti) = transceive(&mut d, &[PICC_SEL_CL1, 0x20], 0);
+    let mut sel = vec![PICC_SEL_CL1, 0x70];
+    sel.extend_from_slice(&uid);
+    sel.push(anti[4]);
+    let crc = crc_a(&sel);
+    sel.extend_from_slice(&crc);
+    let (is, sak) = transceive(&mut d, &sel, 0);
+    assert_ne!(is & COMIRQ_RX, 0);
+    assert_eq!(sak[0], SAK);
+
+    let (i2, d2) = transceive(&mut d, &[PICC_REQA], 7);
+    assert_ne!(i2 & COMIRQ_TIMER, 0, "REQA in Active → timeout");
+    assert!(d2.is_empty());
+
+    let (i3, a3) = transceive(&mut d, &[PICC_REQA], 7);
+    assert_ne!(i3 & COMIRQ_RX, 0, "second REQA after drop → ATQA");
+    assert_eq!(a3, ATQA);
+}
+
+#[test]
+fn antenna_off_times_out_even_with_card_present() {
+    let mut d = Rc522::new("PA4");
+    d.set_card(Some([1, 2, 3, 4]));
+    // Default TxControl leaves antenna off.
+    let (irq, data) = transceive(&mut d, &[PICC_REQA], 7);
+    assert_ne!(irq & COMIRQ_TIMER, 0);
+    assert!(data.is_empty());
+}
+
+#[test]
+fn select_with_txcrcen_accepts_7_byte_fifo() {
+    let uid = [0x10, 0x20, 0x30, 0x40];
+    let mut d = Rc522::new("PA4");
+    antenna_on(&mut d);
+    write_reg(&mut d, REG_TXMODE, 0x80);
+    write_reg(&mut d, REG_RXMODE, 0x80);
+    d.set_card(Some(uid));
+    let _ = transceive(&mut d, &[PICC_REQA], 7);
+    let _ = transceive(&mut d, &[PICC_SEL_CL1, 0x20], 0);
+    let bcc = uid[0] ^ uid[1] ^ uid[2] ^ uid[3];
+    let sel = vec![PICC_SEL_CL1, 0x70, uid[0], uid[1], uid[2], uid[3], bcc];
+    let (irq, sak) = transceive(&mut d, &sel, 0);
+    assert_ne!(irq & COMIRQ_RX, 0);
+    assert_eq!(sak, vec![SAK], "RxCRCEn strips CRC from SAK");
+}
+
+#[test]
+fn spi_burst_read_follows_address_bytes() {
+    let mut d = Rc522::new("PA4");
+    // Write distinct values to Version is RO; use ModeReg and CollReg via soft path.
+    write_reg(&mut d, REG_MODE, 0x3D);
+    // Burst: read Mode (0x11) then Coll (0x0E) in one CS window.
+    let frame = [0x80 | (REG_MODE << 1), 0x80 | (REG_COLL << 1), 0x00];
+    let out = xfer(&mut d, &frame);
+    assert_eq!(out[1], 0x3D, "first data byte is ModeReg");
+    assert_eq!(
+        out[2], 0x80,
+        "second data byte is CollReg after address advance"
+    );
 }

@@ -906,7 +906,7 @@
       "device_type": "rc522",
       "label": "RC522 RFID",
       "summary": "MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface.",
-      "detail": "VersionReg 0x37 returns 0x92. Soft reset, FIFO, ComIrqReg/DivIrqReg, and CRC_A (CalcCRC) follow the MFRC522 datasheet. REQA/WUPA return ATQA; anticollision CL1 and SELECT return a 4-byte UID + BCC + SAK; HLTA succeeds as a timeout. Drive card_present and uid to place or remove a card. MIFARE Crypto1 is not modelled.",
+      "detail": "VersionReg 0x37 returns 0x92. Soft reset, FIFO, ComIrqReg/DivIrqReg, and CRC_A          (CalcCRC) follow the MFRC522 datasheet. TxControlReg Tx1RFEn/Tx2RFEn must be on          (PCD_AntennaOn) or every Transceive times out. One card, CL1 only (4-byte UID);          no collision/partial NVB. REQA/WUPA → ATQA; anticollision CL1 + SELECT → UID+BCC+SAK;          HLTA succeeds as a timeout. Drive card_present and uid to place or remove a card.          MIFARE Crypto1 is not modelled.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
