@@ -554,6 +554,9 @@ impl SystemBus {
     /// The single source of truth for both the full rebuild and the per-write
     /// sync, so a write can LOWER the threshold (IDF critical-section exit
     /// restores it) instead of ratcheting against the cached value.
+    ///
+    /// The C6 reuses the C3 IRQ-fabric slot, so these helpers read the
+    /// `irq_fabric.esp32c3.*` peripheral indices.
     fn esp32c6_merged_int_thresh(&self) -> u8 {
         let read = |idx: Option<usize>, off: u64| {
             idx.and_then(|i| self.read_cached_declarative_u32(i, off))
