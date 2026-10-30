@@ -15,6 +15,7 @@ fn open(selected: Option<&str>) -> anyhow::Result<Session> {
             blobs: &BlobMap::new(),
             options: BuildOptions {
                 uart_rx: selected.map(str::to_owned),
+                rtt: None,
                 ..Default::default()
             },
         },
