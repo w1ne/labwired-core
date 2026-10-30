@@ -535,16 +535,13 @@ external_devices:
     assert!(err.contains("both_inputs_low"), "{err}");
 }
 
-
 #[test]
 fn step_dir_folded_into_motor_snapshots() {
     use crate::peripherals::components::step_dir_motor::StepDirMotor;
     use std::sync::Arc;
 
     let mut bus = SystemBus::new();
-    let motor = Arc::new(
-        StepDirMotor::new("nema17", 3, 4, Some(8)).with_device_type("nema17"),
-    );
+    let motor = Arc::new(StepDirMotor::new("nema17", 3, 4, Some(8)).with_device_type("nema17"));
     // EN low, DIR high, 50 full steps → 90 deg
     motor.on_gpio_edge(8, false, 0);
     motor.on_gpio_edge(4, true, 1);
