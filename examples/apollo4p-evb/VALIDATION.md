@@ -2,7 +2,9 @@
 
 Claims, evidence, and what is explicitly **not** claimed yet. **SIM-DERIVED**:
 there is no Apollo4 bench part, and no Renode parity claim is made (Renode's
-`AmbiqApollo4_GPIO` model was used only to cross-check reset values).
+`AmbiqApollo4_GPIO` model was used only to cross-check reset values; its
+`ambiq-apollo4.repl` maps the same 4 KiB boot-ROM window and answers the CPU
+block's `DAXICTRL` with `DAXIREADY`).
 
 ## Tier status
 
@@ -24,7 +26,17 @@ there is no Apollo4 bench part, and no Renode parity claim is made (Renode's
 | GPIO interrupts | **not modelled** | `INTnSTAT` changes only by software `SET`/`CLR` |
 | Determinism (same inputs → same output) | smoke-tested | three runs: identical `uart.log`, final PC and cycle count |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
-| Boot ROM, secure bootloader, OTP/INFO | **not modelled** | fast boot at `reset_vector_offset 0x18000` |
+| Stock Zephyr v3.7.0 `samples/hello_world` (`apollo4p_evb`, AmbiqSuite HAL via hal_ambiq) | smoke-tested | `zephyr-hello.yaml` 2/2 checks, 3,000,000 steps: `*** Booting Zephyr OS build v3.7.0 ***`, `Hello World! apollo4p_evb/apollo4p`; `firmware_survival::test_apollo4p_evb_zephyr_survival` |
+| Boot-ROM helper table at `0x0800_0000` (clean-room, `crates/core/roms/apollo4`): `br_util_read_word` / `write_word` / `delay_cycles` | integration-tested on the CPU model; exercised | `apollo4_bootrom` (3 tests, with and without `event-scheduler`); Zephyr's `am_hal_delay_us` |
+| `br_util_delay_cycles` timing | **2 cycles/iteration, silicon 3** | the CPU model charges a taken branch 1 cycle, so HAL delays run ~1/3 short |
+| Boot-ROM MRAM helpers (`nv_*`) | **not modelled** | return -1, change nothing (`apollo4_bootrom::mram_helpers_report_failure_and_change_nothing`) |
+| CPU block (`0x4800_0000`): DAXI flush/invalidate with `DAXIREADY`, `CACHECTRL.CACHEREADY` | unit-tested; exercised | `cargo test -p labwired-core --lib apollo4` (`cpu_*`, 2 tests); Zephyr's `am_hal_pwrctrl_low_power_init` |
+| `SYNC_READ` bus write-flush (`0x47FF_0000`) | exercised | a read-0 stub; writes are never queued in the model |
+| Negative control | fails | on main (no boot-ROM window) the Zephyr image faults at step 3,081 fetching `0x0800_009C`; without the CPU block it BusFaults at `0x4800_0050` in `daxi_flush_invalidate` |
+| Determinism of the Zephyr run | smoke-tested | two runs: identical `uart.log` and `snapshot.json` |
+| Instruction support for the Zephyr image | audited | `unsupported_instruction_audit.sh`: 3,000,000 steps, 0 unsupported |
+| Rest of the boot ROM, secure bootloader, OTP/INFO | **not modelled** | fast boot at `reset_vector_offset 0x18000` |
+| Cache / DAXI buffering | **not modelled** | memory is coherent; actions complete at once |
 | CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT, security, crypto, GPU/display, SDIO, USB, audio | declared stubs | `configs/chips/amap42kp.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
@@ -37,6 +49,20 @@ cargo build -p firmware-apollo4p-evb-smoke --release --target thumbv7em-none-eab
 ./examples/apollo4p-evb/ci/test.sh
 #   PASS  3/3 checks · io-smoke · 4000000 steps
 #   Audit summary: unknown_thumb16: 0 · unhandled_thumb32: 0 · unsupported_total: 0
+#   PASS  2/2 checks · zephyr-hello · 3000000 steps
+#   Audit summary: unsupported_total: 0
+
+# Stock Zephyr (2026-10-30): rebuild byte-identical, then run
+PATH=~/tools/zephyr-venv/bin:$PATH crates/firmware-apollo4p-zephyr/build.sh
+#   dbf18ce4d3f2c53f4b5fec947664c00c93ebc4948cb8cbb3f2ffbeb377d6443f  amap42kp-zephyr-hello.elf
+./target/release/labwired test --script examples/apollo4p-evb/zephyr-hello.yaml \
+  --output-dir out/apollo4p-zephyr --no-uart-stdout
+#   PASS  2/2 checks · zephyr-hello · 3000000 steps
+#   *** Booting Zephyr OS build v3.7.0 ***
+#   Hello World! apollo4p_evb/apollo4p
+cargo test -p labwired-core --test apollo4_bootrom
+cargo test -p labwired-core --features event-scheduler --test apollo4_bootrom
+#   3 passed each
 
 ./target/release/labwired \
   --firmware target/thumbv7em-none-eabi/release/firmware-apollo4p-evb-smoke \

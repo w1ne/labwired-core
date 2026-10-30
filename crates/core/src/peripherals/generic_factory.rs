@@ -385,6 +385,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // staged onboarding/ambiq-apollo4 descriptor, which keeps its placeholder.
     "apollo4_gpio",
     "apollo4_pwrctrl",
+    "apollo4_cpu",
     // NXP S32K3 SIUL2: MSCR pad mux + GPDO/GPDI/PGPDO/PGPDI/MPGPDO GPIO.
     // Deliberately not `s32k3xx_systemintegrationunitlite2`: that spelling
     // belongs to the staged onboarding/nxp-s32k388 descriptors, which keep
@@ -1499,6 +1500,7 @@ pub fn try_build(
         }
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
+        "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
         "lpc_flexcomm_usart" => {
             // PSELID present bits: USART/SPI/I2C/I2S (0xF0) unless the yaml

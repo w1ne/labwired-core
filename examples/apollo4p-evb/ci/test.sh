@@ -15,3 +15,15 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 200000 \
   --out-dir "$OUT/unsupported-audit" \
   --fail-on-unsupported
+# Stock Zephyr v3.7.0 hello_world through the AmbiqSuite HAL's power, DAXI
+# and boot-ROM delay paths (tests/fixtures/amap42kp-zephyr-hello.elf).
+cargo run -q -p labwired-cli -- test \
+  --script examples/apollo4p-evb/zephyr-hello.yaml \
+  --output-dir "$OUT/zephyr-hello" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/amap42kp-zephyr-hello.elf \
+  --system configs/systems/apollo4p-evb.yaml \
+  --max-steps 3000000 \
+  --out-dir "$OUT/zephyr-unsupported-audit" \
+  --fail-on-unsupported

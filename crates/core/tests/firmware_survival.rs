@@ -373,6 +373,28 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"APOLLO4P EVB SMOKE\n",
     },
     SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `apollo4p_evb` (Zephyr commit
+        // 36940db938a8, hal_ambiq e25327f026df,
+        // crates/firmware-apollo4p-zephyr/build.sh). The AmbiqSuite HAL runs
+        // unpatched: am_hal_pwrctrl_low_power_init powers domains through
+        // PWRCTRL, flushes the DAXI (CPU block, DAXIREADY) via SYNC_READ, and
+        // am_hal_delay_us calls the boot ROM's br_util_delay_cycles at
+        // 0x0800_009D (the in-tree clean-room table, roms/apollo4).
+        name: "apollo4p_evb_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "amap42kp",
+        system: "apollo4p-evb",
+        fixture: "amap42kp-zephyr-hello.elf",
+        valid_pc_ranges: &[
+            (0x0001_8000, 0x001F_FFFF),
+            (0x0800_0000, 0x0800_0FFF),
+            (0x1000_0000, 0x102B_FFFF),
+        ],
+        expected_uart_output: b"Hello World! apollo4p_evb",
+    },
+    SurvivalCase {
         // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
         // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
         // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the
@@ -2298,6 +2320,7 @@ survival_gate!(
     "cc2538dk_contiki_hello"
 );
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
+survival_gate!(test_apollo4p_evb_zephyr_survival, "apollo4p_evb_zephyr");
 
 /// The Apollo4 secure bootloader owns MRAM 0x0-0x17FFF and hands over to the
 /// application vector table at 0x0001_8000. The committed smoke ELF must load

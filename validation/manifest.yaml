@@ -9400,6 +9400,11 @@ boards:
     # the 128-pin GPIO block (apollo4_gpio, PADKEY-locked PINCFG + RD/WT/
     # WTS/WTC/EN banks), PWRCTRL (apollo4_pwrctrl, DEVPWREN mirrored into
     # DEVPWRSTATUS, MCUPERFREQ ack) and UART0-3 on the pl011 layout.
+    # Later the same day, stock Zephyr v3.7.0 hello_world
+    # (tests/fixtures/amap42kp-zephyr-hello.elf) through the AmbiqSuite HAL:
+    # a clean-room boot-ROM helper table at 0x0800_0000 (crates/core/roms/
+    # apollo4, NOT an Ambiq dump: delay/read/write; MRAM helpers -1), the
+    # CPU cache/DAXI block (apollo4_cpu, DAXIREADY) and the SYNC_READ stub.
     # CLKGEN, MCUCTRL, RSTGEN, IOM, MSPI, ADC, timers, RTC, WDT, security,
     # crypto, GPU/display, SDIO, USB and audio are declared stubs.
     # SIM-DERIVED — no Apollo4 bench part. See docs/boards/apollo4p-evb.md
@@ -9409,6 +9414,8 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_apollo4p_evb_smoke_survival"
+      - "firmware_survival::test_apollo4p_evb_zephyr_survival"
+      - "apollo4_bootrom (3 tests: boot-ROM helper table on the CPU model)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9421,6 +9428,8 @@ boards:
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
       - crates/firmware-apollo4p-evb-smoke
+      - crates/firmware-apollo4p-zephyr
+      - crates/core/roms/apollo4
       - configs/chips/amap42kp.yaml
       - configs/systems/apollo4p-evb.yaml
 

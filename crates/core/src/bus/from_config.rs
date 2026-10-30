@@ -36,6 +36,12 @@ fn embedded_region_image(env: &str) -> Option<&'static [u8]> {
         "LABWIRED_CC2538_INFO_PAGE" => {
             Some(include_bytes!("../../roms/cc2538/cc2538_info_page.bin"))
         }
+        // Clean-room Apollo4 Plus boot-ROM helper table
+        // (roms/apollo4/apollo4_bootrom.S): the AmbiqSuite HAL's
+        // am_hal_delay_us / am_hal_load_ui32 / am_hal_store_ui32 call into it.
+        "LABWIRED_APOLLO4_BOOTROM" => {
+            Some(include_bytes!("../../roms/apollo4/apollo4_bootrom.bin"))
+        }
         _ => None,
     }
 }
