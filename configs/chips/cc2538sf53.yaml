@@ -1,0 +1,232 @@
+# LabWired - CC2538SF53 chip configuration
+#
+# The TI CC2538SF53: Cortex-M3, 512 KiB flash, 32 KiB SRAM, 2.4-GHz
+# IEEE 802.15.4 radio — the MCU on the TI CC2538DK (CC2538EM on a SmartRF06
+# evaluation board).
+#
+# Sources:
+# - SWRU319C "CC2538 User's Guide" (April 2012, rev. May 2013):
+#   Table 4-1 "Memory Map" (every base address below), Table 5-2 interrupt
+#   assignments (regular map), Table 7-3 "SYS_CTRL Register Summary",
+#   §8.6 flash/CCA, §9 GPIO + IOC, Table 18-4 "UART0 Register Summary".
+# - SWRS096 "CC2538 datasheet": device table (CC2538SF53 = 512 KB flash,
+#   32 KB RAM), §5.18 "DC Characteristics" (input thresholds).
+#
+# Profiles:
+# - uart  `pl011`               — UART0/1 are PL011-compatible (DR @0x000,
+#   FR @0x018, IBRD @0x024, FBRD @0x028, LCRH @0x02C, CTL @0x030). The
+#   CC2538 extras (UART_CC @0xFC8, LCTL/LSS/LTIM, 9-bit address) are accepted
+#   and ignored; UART_CC = 0 (SYS_DIV baud clock) is the reset state.
+# - gpio  `cc2538_pl061_gpio`   — GPIO_DATA address-masked over 0x000-0x3FC,
+#   GPIO_DIR @0x400, GPIO_AFSEL @0x420 (crates/core/src/peripherals/cc2538.rs).
+# - clock `cc2538_sys_ctrl`     — CLOCK_CTRL/CLOCK_STA and the RCGC/SCGC/DCGC
+#   gate banks at their Table 7-3 reset values.
+#
+# Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
+# GPIO_DATA readback and the five keys' reset pull-up levels. SIM-DERIVED
+# (no CC2538 bench part).
+#
+# NOT modelled in this slice:
+# - The ROM at 0x00000000 (boot ROM + ROM function table): the engine
+#   fast-boots the ELF at its flash vector table, which is what the ROM does
+#   for a valid CCA image (§8.6.1). The ROM itself is not present.
+# - SYS_CTRL clock gating: the gates are stored and read back, but no
+#   peripheral is gated by them. No oscillator start-up timing, no 32-kHz
+#   sync, no PM1-3, no software reset.
+# - IOC pin muxing/pad overrides (IOC_Pxx_SEL / IOC_Pxx_OVER /
+#   IOC_UARTRXD_UART0): the IOC window is a stub. The firmware writes it as
+#   silicon requires; the console model does not depend on it.
+# - GPIO interrupts (RIS/MIS never set) and the AFSEL commit lock.
+# - RF core, AES/PKA crypto, flash controller, SSI0/1, I2C, GPTimer0-3, USB,
+#   uDMA, WDT/sleep timer, SoC ADC/analog: declared stubs.
+#
+# Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
+# (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
+
+name: "cc2538sf53"
+arch: "arm"
+core: "cortex-m3"
+# CC2538 maximum system clock, 32 MHz (32-MHz crystal, SYS_DIV = 000).
+cpu_hz: 32_000_000
+# SWRS096 §5.18 DC Characteristics, at VDD = 3 V: logic-0 input max 0.5 V,
+# logic-1 input min 2.5 V → 0.5/3 and 2.5/3 of the rail.
+io_voltage_v: 3.0
+gpio_input_thresholds:
+  vil: 0.1667
+  vih: 0.8333
+
+flash:
+  # Table 4-1 "On-chip flash" 0x0020_0000; Table 8-2: the 512 KB option
+  # spans 0x00200000-0x0027FFFF. The last 2-KiB page holds the CCA (§8.6).
+  base: 0x00200000
+  size: "512KB"
+ram:
+  # Table 4-1: 0x2000_0000-0x2000_3FFF bit-banded SRAM (no retention in
+  # PM2/3) + 0x2000_4000-0x2000_7FFF low-leakage SRAM (the 16 KB retained in
+  # all power modes, §8.9 "SRAM" / SWRS096). Contiguous 32 KiB on the SF53.
+  base: 0x20000000
+  size: "32KB"
+# Address 0x0 is the ROM, not a flash alias (Table 4-1 "Reserved for ROM").
+flash_boot_alias: false
+
+pins:
+  # CC2538DK / SmartRF06 EB wiring (Contiki-NG `cc2538dk` dev/board.h, RIOT
+  # `cc2538dk` board.h / periph_conf.h).
+  PA0: { gpio: "gpioa", bit: 0 }  # UART0 RX (SmartRF06 EB USB VCP)
+  PA1: { gpio: "gpioa", bit: 1 }  # UART0 TX (SmartRF06 EB USB VCP)
+  PA3: { gpio: "gpioa", bit: 3 }  # key SELECT, active low (CCA backdoor pin)
+  PC0: { gpio: "gpioc", bit: 0 }  # LED1 red, active high; shared with USB D+ pull-up
+  PC1: { gpio: "gpioc", bit: 1 }  # LED2 yellow, active high
+  PC2: { gpio: "gpioc", bit: 2 }  # LED3 green, active high
+  PC3: { gpio: "gpioc", bit: 3 }  # LED4 orange, active high
+  PC4: { gpio: "gpioc", bit: 4 }  # key LEFT, active low
+  PC5: { gpio: "gpioc", bit: 5 }  # key RIGHT, active low
+  PC6: { gpio: "gpioc", bit: 6 }  # key UP, active low
+  PC7: { gpio: "gpioc", bit: 7 }  # key DOWN, active low
+
+peripherals:
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # --- UART (PL011-compatible; Table 4-1, Table 18-4) -------------------
+  # UART0 is the CC2538DK console (PA0 RX / PA1 TX via the IOC). IRQs are the
+  # regular-map interrupt numbers of Table 5-2 (SYS_CTRL_I_MAP resets to 0).
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x4000C000
+    size: "4KB"
+    irq: 5
+    config:
+      profile: "pl011"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x4000D000
+    size: "4KB"
+    irq: 6
+    config:
+      profile: "pl011"
+
+  # --- GPIO A-D (PL061-style; Table 4-1, Table 9-2) ---------------------
+  # pull_up_mask: the reset IOC_Pxx_OVER pull-up (§9.2.3 CAUTION). PC0-PC3
+  # are high-drive cells with no on-die pulls (§9.2.2.5 NOTE).
+  - id: "gpioa"
+    type: "cc2538_pl061_gpio"
+    base_address: 0x400D9000
+    size: "4KB"
+    config:
+      pull_up_mask: 0xFF
+  - id: "gpiob"
+    type: "cc2538_pl061_gpio"
+    base_address: 0x400DA000
+    size: "4KB"
+    config:
+      pull_up_mask: 0xFF
+  - id: "gpioc"
+    type: "cc2538_pl061_gpio"
+    base_address: 0x400DB000
+    size: "4KB"
+    config:
+      pull_up_mask: 0xF0
+  - id: "gpiod"
+    type: "cc2538_pl061_gpio"
+    base_address: 0x400DC000
+    size: "4KB"
+    config:
+      pull_up_mask: 0xFF
+
+  # --- System control (Table 4-1 0x400D_2000, Table 7-3) ----------------
+  # Reset clock: 16-MHz HF-RC, SYS_DIV = IO_DIV = 001 (16 MHz). The smoke
+  # runs here; the 32-MHz crystal switch is modelled as instant.
+  - id: "sys_ctrl"
+    type: "cc2538_sys_ctrl"
+    base_address: 0x400D2000
+    size: "4KB"
+
+  # --- Declared, not modelled (honest L1 boundary) -----------------------
+  # I/O muxing (IOC_Pxx_SEL / IOC_Pxx_OVER / IOC_UARTRXD_UART0): written by
+  # the smoke as §18.5 requires; not enforced by the console model.
+  - id: "ioc"
+    type: "stub"
+    base_address: 0x400D4000
+    size: "4KB"
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x400D3000
+    size: "4KB"
+  # WDT + sleep timer (SMWDTHROSC).
+  - id: "smwdthrosc"
+    type: "stub"
+    base_address: 0x400D5000
+    size: "4KB"
+  - id: "ana_regs"
+    type: "stub"
+    base_address: 0x400D6000
+    size: "4KB"
+  - id: "soc_adc"
+    type: "stub"
+    base_address: 0x400D7000
+    size: "4KB"
+  - id: "ssi0"
+    type: "stub"
+    base_address: 0x40008000
+    size: "4KB"
+  - id: "ssi1"
+    type: "stub"
+    base_address: 0x40009000
+    size: "4KB"
+  - id: "i2cm"
+    type: "stub"
+    base_address: 0x40020000
+    size: "256B"
+  - id: "i2cs"
+    type: "stub"
+    base_address: 0x40020800
+    size: "256B"
+  - id: "gptimer0"
+    type: "stub"
+    base_address: 0x40030000
+    size: "4KB"
+  - id: "gptimer1"
+    type: "stub"
+    base_address: 0x40031000
+    size: "4KB"
+  - id: "gptimer2"
+    type: "stub"
+    base_address: 0x40032000
+    size: "4KB"
+  - id: "gptimer3"
+    type: "stub"
+    base_address: 0x40033000
+    size: "4KB"
+  # 2.4-GHz IEEE 802.15.4 RF core.
+  - id: "rfcore"
+    type: "stub"
+    base_address: 0x40088000
+    size: "4KB"
+  - id: "usb"
+    type: "stub"
+    base_address: 0x40089000
+    size: "4KB"
+  - id: "aes"
+    type: "stub"
+    base_address: 0x4008B000
+    size: "4KB"
+  - id: "udma"
+    type: "stub"
+    base_address: 0x400FF000
+    size: "4KB"
+  - id: "pka"
+    type: "stub"
+    base_address: 0x44004000
+    size: "4KB"
+  - id: "pka_sram"
+    type: "stub"
+    base_address: 0x44006000
+    size: "2KB"
+  # CCTEST / OBSSEL (Table 4-1: 0x4401_0000-0x4401_0030).
+  - id: "cctest"
+    type: "stub"
+    base_address: 0x44010000
+    size: "64B"
