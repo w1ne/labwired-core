@@ -8,7 +8,10 @@
 # - SWRU319C "CC2538 User's Guide" (April 2012, rev. May 2013):
 #   Table 4-1 "Memory Map" (every base address below), Table 5-2 interrupt
 #   assignments (regular map), Table 7-3 "SYS_CTRL Register Summary",
-#   §8.6 flash/CCA, §9 GPIO + IOC, Table 18-4 "UART0 Register Summary".
+#   §8.6 flash/CCA, §9 GPIO + IOC, §13 sleep timer, Table 18-4 "UART0
+#   Register Summary", §23 radio (Tables 23-9/23-10).
+# - SWRU333A "CC2538 ROM User's Guide": §2.2 start-up sequence, §3.2 utility
+#   API (the in-tree clean-room ROM).
 # - SWRS096 "CC2538 datasheet": device table (CC2538SF53 = 512 KB flash,
 #   32 KB RAM), §5.18 "DC Characteristics" (input thresholds).
 #
@@ -20,25 +23,34 @@
 # - gpio  `cc2538_pl061_gpio`   — GPIO_DATA address-masked over 0x000-0x3FC,
 #   GPIO_DIR @0x400, GPIO_AFSEL @0x420 (crates/core/src/peripherals/cc2538.rs).
 # - clock `cc2538_sys_ctrl`     — CLOCK_CTRL/CLOCK_STA and the RCGC/SCGC/DCGC
-#   gate banks at their Table 7-3 reset values.
+#   gate banks at their Table 7-3 reset values; CLOCK_STA.SYNC_32K from the
+#   cycle clock.
+# - `cc2538_rfcore`             — the 802.15.4 radio alone in an empty
+#   channel (crates/core/src/peripherals/cc2538/rfcore.rs).
+# - `cc2538_sleep_timer`        — SMWDTHROSC 32-kHz count + compare IRQ
+#   (crates/core/src/peripherals/cc2538/sleep_timer.rs).
 #
 # Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
-# GPIO_DATA readback and the five keys' reset pull-up levels. SIM-DERIVED
-# (no CC2538 bench part).
+# GPIO_DATA readback and the five keys' reset pull-up levels — plus stock
+# Contiki-NG v4.9 hello-world booting through the ROM, RF core and sleep timer
+# (examples/cc2538dk/contiki-hello.yaml). SIM-DERIVED (no CC2538 bench part).
 #
 # NOT modelled in this slice:
-# - The ROM at 0x00000000 (boot ROM + ROM function table): the engine
-#   fast-boots the ELF at its flash vector table, which is what the ROM does
-#   for a valid CCA image (§8.6.1). The ROM itself is not present.
+# - TI's ROM itself: 0x0 holds LabWired's clean-room ROM (memory_regions
+#   below) — no serial boot loader, backdoor pin or RAM BIST, and
+#   PageErase/ProgramFlash return -1. An image with valid vectors at the flash
+#   base is still entered there directly by the loader.
 # - SYS_CTRL clock gating: the gates are stored and read back, but no
-#   peripheral is gated by them. No oscillator start-up timing, no 32-kHz
-#   sync, no PM1-3, no software reset.
+#   peripheral is gated by them. No oscillator start-up timing, no PM1-3, no
+#   software reset.
 # - IOC pin muxing/pad overrides (IOC_Pxx_SEL / IOC_Pxx_OVER /
 #   IOC_UARTRXD_UART0): the IOC window is a stub. The firmware writes it as
 #   silicon requires; the console model does not depend on it.
 # - GPIO interrupts (RIS/MIS never set) and the AFSEL commit lock.
-# - RF core, AES/PKA crypto, flash controller, SSI0/1, I2C, GPTimer0-3, USB,
-#   uDMA, WDT/sleep timer, SoC ADC/analog: declared stubs.
+# - RF reception and RF interrupts (nothing is ever received), the watchdog
+#   and sleep-timer capture.
+# - AES/PKA crypto, flash controller, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
+#   SoC ADC/analog: declared stubs.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
 # (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
@@ -68,6 +80,26 @@ ram:
   size: "32KB"
 # Address 0x0 is the ROM, not a flash alias (Table 4-1 "Reserved for ROM").
 flash_boot_alias: false
+memory_regions:
+  # Table 4-1 "Reserved for ROM" 0x0000_0000-0x0001_FFFF. Filled with the
+  # in-tree clean-room ROM (crates/core/roms/cc2538/cc2538_rom.S — NOT a TI
+  # dump): the SWRU333A §2.2 start-up sequence and the §3.2 utility API table
+  # at 0x48. Set LABWIRED_CC2538_ROM to a file to replace it, or to "" to
+  # leave the window zero-filled.
+  - name: "rom"
+    base: 0x00000000
+    size: "128KB"
+    image_env: "LABWIRED_CC2538_ROM"
+  # Flash information page (§8.2.1, 2 KiB at 0x0028_0000, factory-written,
+  # read-only on silicon). TI does not publish its layout; only the primary
+  # IEEE address at +0x28 that Contiki-NG / TI driverlib read is filled in
+  # (a fixed 00:12:4B:00:00:00:00:01, NOT a real device's), the rest reads
+  # erased. The model does not block writes to it.
+  - name: "info_page"
+    base: 0x00280000
+    size: "2KB"
+    erased: true
+    image_env: "LABWIRED_CC2538_INFO_PAGE"
 
 pins:
   # CC2538DK / SmartRF06 EB wiring (Contiki-NG `cc2538dk` dev/board.h, RIOT
@@ -155,11 +187,16 @@ peripherals:
     type: "stub"
     base_address: 0x400D3000
     size: "4KB"
-  # WDT + sleep timer (SMWDTHROSC).
+  # WDT + sleep timer (SMWDTHROSC, §13/§14): the 32-kHz count and the compare
+  # interrupt (SM Timer, IRQ 145 in the regular map, Table 5-2). `clock_hz` is
+  # the CPU clock the cycle count runs at (reset SYS clock, 16 MHz).
   - id: "smwdthrosc"
-    type: "stub"
+    type: "cc2538_sleep_timer"
     base_address: 0x400D5000
     size: "4KB"
+    irq: 145
+    config:
+      clock_hz: 16000000
   - id: "ana_regs"
     type: "stub"
     base_address: 0x400D6000
@@ -200,11 +237,15 @@ peripherals:
     type: "stub"
     base_address: 0x40033000
     size: "4KB"
-  # 2.4-GHz IEEE 802.15.4 RF core.
+  # 2.4-GHz IEEE 802.15.4 RF core (§23): registers, strobes, the timed main
+  # FSM, RSSI/CCA and RFRND of a radio alone in an empty channel. Nothing is
+  # ever received; a sent frame goes nowhere; no RF interrupt is raised.
   - id: "rfcore"
-    type: "stub"
+    type: "cc2538_rfcore"
     base_address: 0x40088000
     size: "4KB"
+    config:
+      clock_hz: 16000000
   - id: "usb"
     type: "stub"
     base_address: 0x40089000

@@ -51,6 +51,8 @@ enum Hal {
     Zephyr,
     /// Arduino core sketch.
     Arduino,
+    /// Unmodified upstream Contiki-NG build.
+    Contiki,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -313,6 +315,48 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"CC2538DK SMOKE\n",
     },
     SurvivalCase {
+        // CC2538DK running REAL, unmodified upstream Contiki-NG v4.9 —
+        // examples/hello-world for TARGET=cc2538dk with the full default
+        // netstack (RPL Lite, 6LoWPAN, CSMA on the cc2538 RF driver), the
+        // binary Renode's cc2538_single-node.robot runs. It boots through the
+        // in-tree clean-room ROM (CCA -> VTOR 0x0020_2000, the 0x48 utility
+        // API for .data/.bss), waits out SYNC_32K, seeds its PRNG from the RF
+        // core (ISRXON, RSSI_VALID, RFRND), brings up the radio, reads its
+        // IEEE address from the info page and prints from its etimer process.
+        // `fade()` in platform_init busy-loops ~0.5 s of 16-MHz cycles first,
+        // hence the wider budget (see `case_cycles`). Rebuild:
+        // crates/firmware-cc2538dk-contiki/build.sh.
+        name: "cc2538dk_contiki_hello",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-hello.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Hello, world",
+    },
+    SurvivalCase {
+        // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
+        // SRAM at 0x20000000. SCI0 (P411/P410) is the J-Link OB console; the
+        // smoke runs on the reset MOCO, walks LED1-LED3 (P006-P008) with
+        // PCNTR1 PODR readback and reads S1/S2 through the PFS pull-ups.
+        // SIM-DERIVED.
+        name: "ek_ra6m5_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa6m5bh",
+        system: "ek-ra6m5",
+        fixture: "ek-ra6m5-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output: b"EK-RA6M5 SMOKE\n",
+    },
+    SurvivalCase {
         // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
         // the application vector table at 0x18000 (the secure bootloader owns
         // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
@@ -374,6 +418,40 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "sam-e70-xplained-smoke.elf",
         valid_pc_ranges: &[(0x0040_0000, 0x005F_FFFF), (0x2040_0000, 0x2045_FFFF)],
         expected_uart_output: b"SAM E70 XPLAINED SMOKE\n",
+    },
+    SurvivalCase {
+        // S32K388EVB-Q289: S32K388 (CM7_0, Cortex-M7), 8 MiB program flash
+        // at 0x00400000 (boot header at the base, vector table at
+        // 0x00401000), SRAM_0-2 at 0x20400000. The smoke disables SWT_0,
+        // gates SIUL2/LPUART2 in MC_ME, prints on LPUART2 and walks the six
+        // RGB LED pads through GPDO/PGPDO/MPGPDO with PGPDI readback.
+        // SIM-DERIVED.
+        name: "s32k388_evb_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "s32k388",
+        system: "s32k388-evb",
+        fixture: "s32k388-evb-smoke.elf",
+        valid_pc_ranges: &[(0x0040_1000, 0x00BF_FFFF), (0x2040_0000, 0x204B_FFFF)],
+        expected_uart_output: b"S32K388 EVB SMOKE\n",
+    },
+    SurvivalCase {
+        // MIMXRT595-EVK: MIMXRT595S (Cortex-M33), XIP from the FlexSPI0 NOR
+        // window at 0x08000000 (FCB at 0x08000400, vector table at
+        // 0x08001000), data in SRAM at 0x20280000. The smoke sets the clock
+        // gates/resets and pads, prints on FLEXCOMM0 (USART) and walks the RGB
+        // LED through the GPIO SET/B/W/NOT/MPIN/CLR views with PIN readback.
+        // SIM-DERIVED.
+        name: "mimxrt595_evk_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "mimxrt595s",
+        system: "mimxrt595-evk",
+        fixture: "mimxrt595-evk-smoke.elf",
+        valid_pc_ranges: &[(0x0800_1000, 0x087F_FFFF), (0x2000_0000, 0x204F_FFFF)],
+        expected_uart_output: b"MIMXRT595 EVK SMOKE\n",
     },
     SurvivalCase {
         // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
@@ -1846,10 +1924,12 @@ fn run_survival_case(case: &SurvivalCase) {
 /// peripheral/USB setup and the sketch's 200 ms loop delay. The old 2M-cycle
 /// window covered only 16 ms once TIMER runs at its correct 1 MHz rate.
 fn case_cycles(case: &SurvivalCase) -> u32 {
-    if case.name == "rp2040_arduino_serial" {
-        125_000_000 / 2
-    } else {
-        SURVIVAL_CYCLES
+    match case.name {
+        "rp2040_arduino_serial" => 125_000_000 / 2,
+        // Contiki-NG's cc2538dk platform_init runs a busy-loop LED `fade()`
+        // (~8.0M cycles at 16 MHz) before the first "Hello, world".
+        "cc2538dk_contiki_hello" => 10_000_000,
+        _ => SURVIVAL_CYCLES,
     }
 }
 
@@ -2192,7 +2272,15 @@ survival_gate!(
     "sam_e70_xplained_smoke"
 );
 
+survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
+
+survival_gate!(test_mimxrt595_evk_smoke_survival, "mimxrt595_evk_smoke");
+
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
+survival_gate!(
+    test_cc2538dk_contiki_hello_survival,
+    "cc2538dk_contiki_hello"
+);
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
 
 /// The Apollo4 secure bootloader owns MRAM 0x0-0x17FFF and hands over to the
@@ -2227,6 +2315,8 @@ fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
         "reset {reset:#x}"
     );
 }
+
+survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
 
 /// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
 /// in the top 44 bytes of the last flash page and only enters a valid image.

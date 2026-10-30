@@ -54,6 +54,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no edge bring-up path for i.MX LPUART in this gate yet
 * **litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the litex-vexriscv survival smoke
+* **mimxrt595s**
+  * UART: no FLEXCOMM0 USART bring-up in this harness; bytes are proven by the mimxrt595-evk survival smoke
 * **mk64f12**
   * UART: no UART0 bring-up in this harness; bytes are proven by the frdm-k64f survival smoke
 * **mkw41z4**
@@ -75,12 +77,16 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * SPI: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * UART: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
+* **r7fa6m5bh**
+  * UART: no SCI0 bring-up in this harness; bytes are proven by the ek-ra6m5 survival smoke
 * **ra4m1**
   * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **s32k388**
+  * UART: no LPUART2 bring-up in this harness; bytes are proven by the s32k388-evb survival smoke
 * **sam4s16c**
   * UART: no UART0 bring-up in this harness; bytes are proven by the sam4s-xplained survival smoke
 * **same70q21b**
@@ -126,6 +132,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
+| mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
 | nrf51822 | — | — | — |
@@ -141,10 +148,12 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | pic24f08ka102 | — | — | — |
 | pic24f16ka101 | — | — | — |
 | pic24f16ka102 | — | — | — |
+| r7fa6m5bh | — | — | — |
 | ra4m1 | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
+| s32k388 | — | — | — |
 | sam4s16c | — | — | — |
 | same70q21b | — | — | — |
 | stm32f072 | ✓ | ✓ | — |

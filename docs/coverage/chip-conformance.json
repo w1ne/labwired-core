@@ -52,6 +52,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "r7fa6m5bh",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "amap42kp",
     "reg_match": 0
   },
@@ -67,6 +74,20 @@
     "excluded": 0,
     "level": 1,
     "name": "same70q21b",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "s32k388",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "mimxrt595s",
     "reg_match": 0
   },
   {

@@ -143,6 +143,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no UART0 bring-up in this harness; bytes are proven by the \
          cc2538dk survival smoke",
     ),
+    // EK-RA6M5: no SCI0 bring-up in this harness; bytes are proven by the
+    // ek-ra6m5 survival smoke.
+    (
+        "r7fa6m5bh",
+        BusKind::Uart,
+        "no SCI0 bring-up in this harness; bytes are proven by the \
+         ek-ra6m5 survival smoke",
+    ),
     // SAM E70 Xplained: no USART1 bring-up in this harness; bytes are proven
     // by the sam-e70-xplained survival smoke.
     (
@@ -158,6 +166,22 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "no PWRCTRL/UART0 bring-up in this harness; bytes are proven by the \
          apollo4p-evb survival smoke",
+    ),
+    // S32K388EVB-Q289: no LPUART2 bring-up in this harness; bytes are proven
+    // by the s32k388-evb survival smoke.
+    (
+        "s32k388",
+        BusKind::Uart,
+        "no LPUART2 bring-up in this harness; bytes are proven by the \
+         s32k388-evb survival smoke",
+    ),
+    // MIMXRT595-EVK: no FLEXCOMM0 bring-up in this harness; bytes are proven
+    // by the mimxrt595-evk survival smoke.
+    (
+        "mimxrt595s",
+        BusKind::Uart,
+        "no FLEXCOMM0 USART bring-up in this harness; bytes are proven by the \
+         mimxrt595-evk survival smoke",
     ),
     // SAM4S Xplained: no UART0 bring-up in this harness; bytes are proven by
     // the sam4s-xplained survival smoke.

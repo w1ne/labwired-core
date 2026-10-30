@@ -9328,12 +9328,18 @@ boards:
 
   - id: cc2538sf53
     # 2026-10-30: TI CC2538DK (CC2538SF53, Cortex-M3; 512 KiB flash at
-    # 0x00200000, 32 KiB SRAM at 0x20000000; the ROM at 0x0 is not
-    # modelled). First CC2538 part: SYS_CTRL (cc2538_sys_ctrl, CLOCK_CTRL/
-    # CLOCK_STA + gate banks at their SWRU319C Table 7-3 reset values), the
-    # PL061-style GPIO A-D (cc2538_pl061_gpio, address-masked GPIO_DATA) and
-    # UART0/1 on the pl011 layout. IOC, RF core, AES/PKA, flash controller,
-    # SSI, I2C, GPTimers, USB, uDMA, WDT/sleep timer and ADC are declared
+    # 0x00200000, 32 KiB SRAM at 0x20000000). First CC2538 part: SYS_CTRL
+    # (cc2538_sys_ctrl, CLOCK_CTRL/CLOCK_STA + gate banks at their SWRU319C
+    # Table 7-3 reset values, SYNC_32K from the cycle clock), the PL061-style
+    # GPIO A-D (cc2538_pl061_gpio, address-masked GPIO_DATA) and UART0/1 on
+    # the pl011 layout. Same day, a stock Contiki-NG boot: an in-tree clean-room ROM at 0x0
+    # (crates/core/roms/cc2538, NOT a TI dump: SWRU333A CCA boot + the 0x48
+    # utility API), the RF core alone in an empty channel (cc2538_rfcore:
+    # strobes, timed main FSM, RSSI/CCA, RFRND; no reception), the sleep
+    # timer (cc2538_sleep_timer: 32-kHz count + compare IRQ 145) and the info
+    # page's primary IEEE address, enough for stock Contiki-NG v4.9
+    # hello-world (tests/fixtures/cc2538dk-contiki-hello.elf). IOC, AES/PKA,
+    # flash controller, SSI, I2C, GPTimers, USB, uDMA and ADC are declared
     # stubs. SIM-DERIVED — no CC2538 bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
@@ -9341,10 +9347,15 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_cc2538dk_smoke_survival"
+      - "firmware_survival::test_cc2538dk_contiki_hello_survival"
+      - "cc2538_rom (8 tests: ROM utility API + CCA boot on the CPU model)"
+      - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/cc2538.rs
+      - crates/core/src/peripherals/cc2538/rfcore.rs
+      - crates/core/src/peripherals/cc2538/sleep_timer.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -9352,7 +9363,9 @@ boards:
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
+      - crates/core/roms/cc2538
       - crates/firmware-cc2538dk-smoke
+      - crates/firmware-cc2538dk-contiki
       - configs/chips/cc2538sf53.yaml
       - configs/systems/cc2538dk.yaml
   - id: amap42kp
@@ -9385,6 +9398,37 @@ boards:
       - crates/firmware-apollo4p-evb-smoke
       - configs/chips/amap42kp.yaml
       - configs/systems/apollo4p-evb.yaml
+
+  - id: r7fa6m5bh
+    # 2026-10-30: Renesas EK-RA6M5 (R7FA6M5BH, Cortex-M33; 2 MiB code flash
+    # at 0x0, 512 KiB SRAM at 0x20000000). First RA6M5 part. Reuses the RA4M1
+    # models at the RA6M5 bases: PORT0-B (ra_port), PmnPFS/PWPR (ra_pfs),
+    # SYSTEM HOCOCR/OSCSF (ra_sysc) and SCI0 on the sci layout. MSTP, ICU,
+    # DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS/USBHS, IIC, CANFD, AGT, ETHERC,
+    # SPI, GPT, ADC12 and FACI are declared stubs; SCI1-9 and the remaining
+    # blocks are not mapped. SIM-DERIVED — no RA6M5 bench part. See
+    # docs/boards/ek-ra6m5.md and examples/ek-ra6m5/VALIDATION.md.
+    doc: docs/boards/ek-ra6m5.md
+    chip: configs/chips/r7fa6m5bh.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_ek_ra6m5_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/ra_pfs.rs
+      - crates/core/src/peripherals/ra_clock.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-ek-ra6m5-smoke
+      - configs/chips/r7fa6m5bh.yaml
+      - configs/systems/ek-ra6m5.yaml
 
   - id: same70q21b
     # 2026-10-30: Microchip SAM E70 Xplained (ATSAME70Q21B, Cortex-M7; 2 MiB
@@ -9446,6 +9490,68 @@ boards:
       - crates/firmware-frdm-k64f-smoke
       - configs/chips/mk64f12.yaml
       - configs/systems/frdm-k64f.yaml
+
+  - id: s32k388
+    # 2026-10-30: NXP S32K388EVB-Q289 (S32K388; only CM7_0, a Cortex-M7, is
+    # modelled; 8 MiB program flash at 0x00400000 with the boot header (IVT)
+    # at the base and the vector table at 0x00401000; SRAM_0-2 = 768 KiB at
+    # 0x20400000). First S32K3 part: the new SIUL2 model (s32k3_siul2) and
+    # LPUART0-15 on the i.MX RT LPUART layout (imxrt_lpuart). MC_ME, MC_CGM,
+    # SWT_0, STM_0 and the other clock/system blocks are declared stubs;
+    # FlexCAN, LPSPI, LPI2C, eMIOS, eDMA, GMAC, ADC and the other cores are
+    # not mapped. SIM-DERIVED — no S32K388 bench part. See
+    # docs/boards/s32k388-evb.md and examples/s32k388-evb/VALIDATION.md.
+    doc: docs/boards/s32k388-evb.md
+    chip: configs/chips/s32k388.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_s32k388_evb_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/s32k3_siul2.rs
+      - crates/core/src/peripherals/imxrt/lpuart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-s32k388-evb-smoke
+      - configs/chips/s32k388.yaml
+      - configs/systems/s32k388-evb.yaml
+  - id: mimxrt595s
+    # 2026-10-30: NXP MIMXRT595-EVK (MIMXRT595S, Cortex-M33; the HiFi4 DSP,
+    # GPU and PowerQuad are not modelled; no internal flash: XIP from the
+    # FlexSPI0 NOR window at 0x08000000 with the FCB at 0x08000400 and the
+    # vector table at 0x08001000; 5 MiB SRAM at 0x20000000). First i.MX RT500
+    # part: the new LPC-style FLEXCOMM USART (lpc_flexcomm_usart) and GPIO
+    # (lpc_gpio) models and the CLKCTL/RSTCTL/IOPCTL register banks
+    # (rt5xx_ctl, storage only). SYSCTL0/1, PMC, CACHE64, WWDT0, INPUTMUX and
+    # the FlexSPI0 controller are declared stubs; the other FLEXCOMMs,
+    # timers, DMA, USB and display blocks are not mapped. SIM-DERIVED — no
+    # MIMXRT595 bench part. See docs/boards/mimxrt595-evk.md and
+    # examples/mimxrt595-evk/VALIDATION.md.
+    doc: docs/boards/mimxrt595-evk.md
+    chip: configs/chips/mimxrt595s.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_mimxrt595_evk_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/lpc/flexcomm_usart.rs
+      - crates/core/src/peripherals/lpc/gpio.rs
+      - crates/core/src/peripherals/lpc/rt5xx_ctl.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-mimxrt595-evk-smoke
+      - configs/chips/mimxrt595s.yaml
+      - configs/systems/mimxrt595-evk.yaml
 
   - id: sam4s16c
     # 2026-10-23: SAM4S Xplained (ATSAM4S16C, Cortex-M4; 1 MiB flash at

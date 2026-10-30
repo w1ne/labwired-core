@@ -142,6 +142,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
     },
     ChipConf {
+        // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
+        // Modelled: the RA PORT (ra_port), PmnPFS/PWPR (ra_pfs), SYSTEM
+        // HOCOCR/OSCSF (ra_sysc) and SCI0 on the sci layout, all reused from
+        // RA4M1 at the RA6M5 bases. MSTP, ICU and the listed timers/comms
+        // blocks are declared stubs; SCI1-9 and the rest are not mapped — see
+        // examples/ek-ra6m5/VALIDATION.md.
+        name: "r7fa6m5bh",
+        yaml: "configs/chips/r7fa6m5bh.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_ek_ra6m5_smoke_survival"),
+    },
+    ChipConf {
         // Apollo4 Plus EVB (AMAP42KP-KBR, Cortex-M4F). SIM-DERIVED: no Apollo4
         // bench part. Modelled: the 128-pin GPIO block (apollo4_gpio,
         // PADKEY-locked PINCFG + RD/WT/WTS/WTC/EN), PWRCTRL (apollo4_pwrctrl)
@@ -177,6 +189,32 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/same70q21b.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_sam_e70_xplained_smoke_survival"),
+    },
+    ChipConf {
+        // S32K388EVB-Q289 (S32K388, CM7_0 Cortex-M7 only). SIM-DERIVED: no
+        // S32K388 bench part. Modelled: SIUL2 (s32k3_siul2) and LPUART0-15
+        // (imxrt_lpuart, the same register layout). MC_ME/MC_CGM/SWT_0/STM_0
+        // and the other clock/system blocks are declared stubs; FlexCAN,
+        // LPSPI, LPI2C, eMIOS, eDMA, GMAC and the rest are not mapped — see
+        // examples/s32k388-evb/VALIDATION.md.
+        name: "s32k388",
+        yaml: "configs/chips/s32k388.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_s32k388_evb_smoke_survival"),
+    },
+    ChipConf {
+        // MIMXRT595-EVK (MIMXRT595S, Cortex-M33; the HiFi4 DSP is not
+        // modelled). SIM-DERIVED: no MIMXRT595 bench part. Modelled: FLEXCOMM0
+        // USART (lpc_flexcomm_usart), the high-speed GPIO (lpc_gpio), CLKCTL/
+        // RSTCTL (rt5xx_ctl) and IOPCTL (rt5xx_iopctl), all storage-level for
+        // the clock/pad banks. SYSCTL0/1, PMC, CACHE64, WWDT0, INPUTMUX and the
+        // FlexSPI0 controller are declared stubs; the other FLEXCOMMs, timers,
+        // DMA, USB, display and DSP blocks are not mapped — see
+        // examples/mimxrt595-evk/VALIDATION.md.
+        name: "mimxrt595s",
+        yaml: "configs/chips/mimxrt595s.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_mimxrt595_evk_smoke_survival"),
     },
     ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 //! TI CC2538 peripherals: the PL061-style GPIO port and the SYS_CTRL block.
+//! The RF core and the sleep timer live in [`rfcore`] and [`sleep_timer`].
 //!
 //! Source: *CC2538 System-on-Chip Solution for 2.4-GHz IEEE 802.15.4 and
 //! ZigBee/ZigBee IP Applications, User's Guide* (SWRU319C, April 2012, revised
@@ -34,7 +35,12 @@
 //! the oscillator selection and the SYS_DIV/IO_DIV dividers switch at once
 //! (`SOURCE_CHANGE` never reads 1), and a divider faster than the selected
 //! oscillator allows is clamped ("Cannot be higher than OSC setting").
-//! NOT modelled: oscillator start-up timing, the 32-kHz sync (`SYNC_32K` is 0),
+//! `CLOCK_STA.SYNC_32K` (bit 26) is the 32.768-kHz clock as the system clock
+//! samples it: a square wave derived from the bus cycle count at the selected
+//! SYS_DIV rate, so a firmware waiting out one 32-kHz edge (Contiki-NG
+//! `sys_ctrl_init`) sees it. Without an attached cycle clock it reads 0.
+//! NOT modelled: oscillator start-up timing, the 32-kHz source's own accuracy
+//! (RCOSC vs crystal: both are exactly 32 768 Hz here),
 //! the clock gates' effect on other blocks (RCGC/SCGC/DCGC are stored and read
 //! back but no peripheral is gated by them), software reset (`SRCRC`), the
 //! power-mode controller (`PMCTL`) and the alternate interrupt map (`I_MAP`).
@@ -230,19 +236,26 @@ fn lane_merge(word: u32, offset: u64, value: u8) -> u32 {
     (word & !(0xFF << shift)) | (u32::from(value) << shift)
 }
 
+/// `keep [field, ...]` names `#[serde(skip)]` fields (the bus cycle clock)
+/// that a restore must carry over instead of resetting to `None`.
 macro_rules! snapshot_impl {
     ($ty:ty, $name:literal) => {
+        snapshot_impl!($ty, $name, keep []);
+    };
+    ($ty:ty, $name:literal, keep [$($keep:ident),*]) => {
         fn snapshot(&self) -> serde_json::Value {
             serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
         }
 
         fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
-            let restored: $ty = serde_json::from_value(state).map_err(|error| {
+            #[allow(unused_mut)]
+            let mut restored: $ty = serde_json::from_value(state).map_err(|error| {
                 crate::SimulationError::NotImplemented(format!(
                     concat!($name, " snapshot decode: {}"),
                     error
                 ))
             })?;
+            $(restored.$keep = self.$keep.take();)*
             *self = restored;
             Ok(())
         }
@@ -255,17 +268,22 @@ macro_rules! snapshot_impl {
             if bytes.is_empty() {
                 return Ok(());
             }
-            let restored: $ty = bincode::deserialize(bytes).map_err(|error| {
+            #[allow(unused_mut)]
+            let mut restored: $ty = bincode::deserialize(bytes).map_err(|error| {
                 crate::SimulationError::NotImplemented(format!(
                     concat!($name, " runtime snapshot decode: {}"),
                     error
                 ))
             })?;
+            $(restored.$keep = self.$keep.take();)*
             *self = restored;
             Ok(())
         }
     };
 }
+
+pub mod rfcore;
+pub mod sleep_timer;
 
 impl Peripheral for Cc2538Gpio {
     /// A pure register bank: no `tick()`, no IRQ, DMA or event from the walk
@@ -419,6 +437,12 @@ const CLK_OSC32K: u32 = 1 << 24;
 const CLK_OSC: u32 = 1 << 16;
 /// `CLOCK_STA.XOSC_STB` (bit 19).
 const STA_XOSC_STB: u32 = 1 << 19;
+/// `CLOCK_STA.SYNC_32K` (bit 26): the 32-kHz clock synced to the system clock.
+const STA_SYNC_32K: u32 = 1 << 26;
+/// The 32-kHz clock (§7.2.3: 32.768-kHz crystal or 32-kHz RCOSC).
+const CLK_32K_HZ: u64 = 32_768;
+/// The 32-MHz crystal; SYS clock = this / 2^SYS_DIV (SYS_DIV >= 1 on HF-RC).
+const XOSC_HZ: u64 = 32_000_000;
 const DIV_MASK: u32 = 0x7;
 const IO_DIV_SHIFT: u32 = 8;
 /// `CLOCK_STA` bits that never come from `CLOCK_CTRL` in this model: the
@@ -460,6 +484,9 @@ fn sys_ctrl_documented(offset: u64) -> bool {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Cc2538SysCtrl {
     regs: Vec<u32>,
+    /// Bus cycle clock, for `CLOCK_STA.SYNC_32K`. Not chip state.
+    #[serde(skip)]
+    clock: Option<crate::CycleClock>,
 }
 
 impl Cc2538SysCtrl {
@@ -470,7 +497,7 @@ impl Cc2538SysCtrl {
         regs[(SYS_CTRL_CLD / 4) as usize] = CLD_RESET;
         regs[(SYS_CTRL_IWE / 4) as usize] = IWE_RESET;
         regs[(SYS_CTRL_EMUOVR / 4) as usize] = EMUOVR_RESET;
-        Self { regs }
+        Self { regs, clock: None }
     }
 
     fn clock_ctrl(&self) -> u32 {
@@ -498,6 +525,19 @@ impl Cc2538SysCtrl {
             // The 32-MHz crystal is reported stable as soon as it is
             // selected; no start-up time is modelled.
             sta |= STA_XOSC_STB;
+        }
+        if let Some(clock) = &self.clock {
+            // The core runs at SYS clock = undivided / 2^SYS_DIV, so `now`
+            // cycles are now / sys_hz seconds; SYNC_32K is the level of a
+            // 50 %-duty 32 768-Hz wave at that instant. A clock switch moves
+            // the phase (the cycle count is not re-anchored). `sys_div` is
+            // already clamped to the oscillator, so this never exceeds it.
+            let sys_hz = XOSC_HZ >> sys_div;
+            let half_periods =
+                u128::from(clock.now()) * u128::from(2 * CLK_32K_HZ) / u128::from(sys_hz);
+            if half_periods & 1 == 1 {
+                sta |= STA_SYNC_32K;
+            }
         }
         sta
     }
@@ -569,10 +609,16 @@ impl Peripheral for Cc2538SysCtrl {
     }
 
     fn on_node_reset(&mut self) {
+        let clock = self.clock.take();
         *self = Self::new();
+        self.clock = clock;
     }
 
-    snapshot_impl!(Cc2538SysCtrl, "Cc2538SysCtrl");
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    snapshot_impl!(Cc2538SysCtrl, "Cc2538SysCtrl", keep[clock]);
 }
 
 #[cfg(test)]

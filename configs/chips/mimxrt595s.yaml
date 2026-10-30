@@ -1,0 +1,139 @@
+# LabWired - NXP MIMXRT595S chip configuration
+#
+# The i.MX RT595S: Arm Cortex-M33 (the HiFi4 DSP, the 2D GPU and the
+# PowerQuad are not modelled), no internal flash, 5 MiB on-chip SRAM, booting
+# XIP from an external FlexSPI NOR flash. The MCU on the NXP MIMXRT595-EVK.
+# The first i.MX RT500 part in the engine.
+#
+# Sources:
+# - The MCUXpresso SDK device header MIMXRT595S_cm33.h: every peripheral base
+#   below (the non-secure *_BASE values; the secure aliases at +0x1000_0000
+#   are not mapped), the IRQ numbers, and the FLEXCOMM/USART, GPIO, IOPCTL,
+#   CLKCTL/RSTCTL register layouts.
+# - The SDK evkmimxrt595 flash linker file (MIMXRT595Sxxxx_cm33_flash.ld):
+#   the FlexSPI configuration block (FCB) at 0x08000400, the vector table at
+#   0x08001000, code from 0x08001180, data at 0x20280000.
+# - The SDK evkmimxrt595 board.h: debug console on FLEXCOMM0 (USART0),
+#   RGB LED on P0_14 (red) / P1_0 (green) / P3_17 (blue), SW1 on P0_25,
+#   SW2 on P0_10.
+# - Renode v1.17.0 platforms/cpus/imxrt500.repl as a cross-check of the
+#   FLEXCOMM0/12, CLKCTL0/1, OS timer and FlexSPI bases and the SRAM size.
+#
+# Boot: the RT500 boot ROM reads the FCB at FlexSPI0 + 0x400 and the image
+# header at FlexSPI0 + 0x1000, then jumps through the vector table there. The
+# simulator does not run the boot ROM and does not parse the FCB. The first
+# words of the FlexSPI window are erased (0xFFFFFFFF) on an SDK image, so
+# reset uses reset_vector_offset 0x1000 = 0x08001000, where the SDK linker
+# file (and the smoke) put the vector table.
+#
+# Memory: FlexSPI0 is mapped as a flat 8 MiB read-only array at 0x08000000
+# (the same size Renode maps; the EVK's MX25UM51345G is 64 MiB, and the
+# Octal-SPI controller, its LUTs and the CACHE64 are not modelled). The 5 MiB
+# SRAM is mapped once, at its data-bus address 0x20000000; its code-bus
+# alias at 0x00000000 and every secure alias are not mapped.
+#
+# Modelled: FLEXCOMM0 in USART mode (`lpc_flexcomm_usart`), the high-speed
+# GPIO (`lpc_gpio`, ports 0-6), CLKCTL0/1 and RSTCTL0/1 (`rt5xx_ctl`, stored
+# words with SET/CLR aliases, no effect), IOPCTL (`rt5xx_iopctl`, stored only).
+# Declared stubs (accept writes, read zero): SYSCTL0/1, PMC, CACHE64_CTRL0,
+# WWDT0, INPUTMUX, FlexSPI0 controller. Not mapped (access faults): FLEXCOMM1-
+# 16 (FLEXCOMM12 is not mapped either), CTIMER0-4, OS timer, MRT0, UTICK0,
+# SCT0, DMA0/1, SDIO, USB, ADC, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, OTP,
+# SECGPIO and the HiFi4 DSP.
+#
+# Tier: L1 smoke — boot + FLEXCOMM0 USART console + GPIO LED/button path on
+# the MIMXRT595-EVK map. SIM-DERIVED (no MIMXRT595 bench part).
+
+name: "mimxrt595s"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 120
+# 48 MHz: the FRO DIV clock with FRODIVSEL = /4 of the 192 MHz FRO
+# (MAINCLKSELA = 1, MAINCLKSELB = 0, SYSCPUAHBCLKDIV = /1; SDK system.c
+# SystemCoreClockUpdate). The smoke selects this itself. MAINCLKSELA resets
+# to 0 (the 1 MHz LPOSC, SDK DEFAULT_SYSTEM_CLOCK), but the boot ROM may
+# leave another source selected; the clock selects have no simulated effect.
+# The smoke never starts the main PLL.
+cpu_hz: 48_000_000
+
+flash:
+  # FlexSPI0 XIP window (non-secure). See "Memory" above.
+  base: 0x08000000
+  size: "8192KB"
+ram:
+  # On-chip SRAM, data-bus view (5 MiB, 0x20000000-0x204FFFFF).
+  base: 0x20000000
+  size: "5120KB"
+# The RT500 has no flash alias at 0 (0x0 is the SRAM code-bus view).
+flash_boot_alias: false
+# The vector table sits after the FCB page (see "Boot" above).
+reset_vector_offset: 0x1000
+
+pins:
+  # Board-relevant pads (GPIO pin index = 32 * port + pin).
+  P0_1: { gpio: "gpio", bit: 1 }
+  P0_2: { gpio: "gpio", bit: 2 }
+  P0_10: { gpio: "gpio", bit: 10 }
+  P0_14: { gpio: "gpio", bit: 14 }
+  P0_25: { gpio: "gpio", bit: 25 }
+  P1_0: { gpio: "gpio", bit: 32 }
+  P3_17: { gpio: "gpio", bit: 113 }
+
+peripherals:
+  - id: "rstctl0"
+    type: "rt5xx_ctl"
+    base_address: 0x40000000
+    size: "4KB"
+  - id: "clkctl0"
+    type: "rt5xx_ctl"
+    base_address: 0x40001000
+    size: "4KB"
+  - id: "sysctl0"
+    type: "stub"
+    base_address: 0x40002000
+    size: "4KB"
+  - id: "iopctl"
+    type: "rt5xx_iopctl"
+    base_address: 0x40004000
+    size: "4KB"
+  - id: "wwdt0"
+    type: "stub"
+    base_address: 0x4000E000
+    size: "4KB"
+  - id: "rstctl1"
+    type: "rt5xx_ctl"
+    base_address: 0x40020000
+    size: "4KB"
+  - id: "clkctl1"
+    type: "rt5xx_ctl"
+    base_address: 0x40021000
+    size: "4KB"
+  - id: "sysctl1"
+    type: "stub"
+    base_address: 0x40022000
+    size: "4KB"
+  - id: "inputmux"
+    type: "stub"
+    base_address: 0x40026000
+    size: "4KB"
+  - id: "cache64_ctrl0"
+    type: "stub"
+    base_address: 0x40033000
+    size: "4KB"
+  - id: "gpio"
+    type: "lpc_gpio"
+    base_address: 0x40100000
+    size: "16KB"
+  - id: "flexcomm0"
+    type: "lpc_flexcomm_usart"
+    base_address: 0x40106000
+    size: "4KB"
+    irq: 14
+  - id: "flexspi0"
+    type: "stub"
+    base_address: 0x40134000
+    size: "4KB"
+  - id: "pmc"
+    type: "stub"
+    base_address: 0x40135000
+    size: "4KB"

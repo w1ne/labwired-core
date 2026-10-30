@@ -143,6 +143,10 @@
   },
   {
     "buses": [],
+    "name": "mimxrt595s"
+  },
+  {
+    "buses": [],
     "name": "mk64f12"
   },
   {
@@ -215,6 +219,10 @@
   },
   {
     "buses": [],
+    "name": "r7fa6m5bh"
+  },
+  {
+    "buses": [],
     "name": "ra4m1"
   },
   {
@@ -232,6 +240,10 @@
   {
     "buses": [],
     "name": "rv1103"
+  },
+  {
+    "buses": [],
+    "name": "s32k388"
   },
   {
     "buses": [],

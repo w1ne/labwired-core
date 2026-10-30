@@ -1,0 +1,294 @@
+# LabWired - NXP S32K388 chip configuration
+#
+# The S32K388: Arm Cortex-M7 (the S32K388 has several M7 cores; only CM7_0,
+# the boot core, is modelled), 8 MiB program flash at 0x00400000, SRAM_0-2 at
+# 0x20400000, 32 KiB ITCM at 0x0 and 64 KiB DTCM at 0x20000000 (CM7_0's
+# view). The MCU on the NXP S32K388EVB-Q289 board. The first S32K3 part in
+# the engine.
+#
+# Sources:
+# - NXP RTD device headers S32K388_*.h (BaseNXP): every peripheral base below
+#   (IP_*_BASE), the interrupt numbers (S32K388_COMMON.h IRQn_Type), the
+#   SIUL2/LPUART/MC_ME/MC_CGM/SWT register layouts, and S32K388_M7.svd for the
+#   MC_CGM/SWT reset values.
+# - The S32DS RTD template linker file linker_flash_s32k388.ld for the memory
+#   map: ITCM 0x0/32 KiB, DTCM 0x20000000/64 KiB, program flash
+#   0x00400000/8 MiB (the last 176 KiB reserved for HSE firmware), data flash
+#   0x10000000/128 KiB, SRAM_0/1/2 = 3 x 256 KiB from 0x20400000.
+# - The S32DS RTD ivt_config.c for the boot header (IVT): marker 0x5AA55AA5
+#   at the start of program flash, the CM7_0 start address at IVT + 0x0C.
+# - Renode v1.17.0 platforms/cpus/nxp-s32k388.repl as a cross-check of the
+#   LPUART/SIUL2 bases only.
+#
+# Boot: the S32K3 boot ROM (SBAF) reads the IVT at 0x00400000 and starts CM7_0
+# at the address it holds. The simulator does not run the boot ROM and does
+# not parse the IVT. The IVT's first two words are not a valid SP/PC pair, so
+# reset falls through to reset_vector_offset 0x1000 = 0x00401000, the address
+# the RTD template (and the smoke) put in the IVT CM7_0 slot. An image whose
+# IVT names a different CM7_0 start address will not boot correctly here.
+#
+# Profiles: the S32K3 LPUART is the i.MX RT LPUART layout (VERID/PARAM/GLOBAL/
+# PINCFG in front of BAUD @ 0x10, STAT @ 0x14, CTRL @ 0x18, DATA @ 0x1C;
+# S32K388_LPUART.h), so it reuses `imxrt_lpuart`. SIUL2 is the new
+# `s32k3_siul2` model (MSCR pad mux + GPDO/GPDI/PGPDO/PGPDI/MPGPDO).
+#
+# Declared stubs (accept writes, read zero): MC_ME, MC_CGM, MC_RGM, PMC, FIRC,
+# SIRC, FXOSC, SXOSC, PLL/PLL_AUX, SWT_0, STM_0, MSCM, XRDC, PFLASH/FLASH
+# controllers, DCM_GPR, CONFIGURATION_GPR and DMAMUX_0/1. Not mapped (access
+# faults): data flash, eDMA/TCDs, SWT_1-3, STM_1-3, PIT, RTC, FlexCAN, LPSPI,
+# LPI2C, eMIOS, ADC/BCTU, GMAC, QuadSPI, SAI, FlexIO, HSE/MU, CRC, WKPU and
+# the rest; the other M7 cores and their lockstep checkers.
+#
+# Tier: L1 smoke — boot + LPUART2 console + SIUL2 LED path on the
+# S32K388EVB-Q289 map. SIM-DERIVED (no S32K388 bench part).
+
+name: "s32k388"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 120
+# The S32K388 resets onto the 48 MHz FIRC with MC_CGM MUX_0 DC_0 = /1, so
+# CORE_CLK is 48 MHz until firmware starts the PLL (S32K388_M7.svd reset
+# values: MUX_0_CSS SELSTAT = 0 (FIRC), MUX_0_DC_0 = 0x80000000).
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x00400000
+  # 8 MiB program flash (linker_flash_s32k388.ld). The last 176 KiB hold the
+  # HSE firmware on silicon; the simulator maps the whole array.
+  size: "8192KB"
+ram:
+  base: 0x20400000
+  # SRAM_0 + SRAM_1 + SRAM_2 = 3 x 256 KiB (linker_flash_s32k388.ld). Any
+  # further SRAM the part has is not mapped.
+  size: "768KB"
+memory_regions:
+  # CM7_0's tightly coupled memories, at the CM7_0-local addresses.
+  - name: "itcm"
+    base: 0x00000000
+    size: "32KB"
+  - name: "dtcm"
+    base: 0x20000000
+    size: "64KB"
+# The S32K3 boots from program flash at 0x00400000, not from an alias at 0
+# (0x0 is the ITCM).
+flash_boot_alias: false
+# The application vector table follows the 4 KiB IVT page (see "Boot" above).
+reset_vector_offset: 0x1000
+
+pins:
+  # Board-relevant pads (MSCR index = 32 * port + pin). PTF23 is the
+  # S32K388EVB-Q289 green LED (NXP "Start Developing With S32K388EVB-Q289");
+  # the other LED pads and SW10 (PTA1) are from the Renode nxp-s32k388evb.repl
+  # cross-check only, not from the board's hardware manual.
+  PTA1: { gpio: "siul2", bit: 1 }
+  PTF17: { gpio: "siul2", bit: 177 }
+  PTF18: { gpio: "siul2", bit: 178 }
+  PTF19: { gpio: "siul2", bit: 179 }
+  PTF22: { gpio: "siul2", bit: 182 }
+  PTF23: { gpio: "siul2", bit: 183 }
+  PTF24: { gpio: "siul2", bit: 184 }
+
+peripherals:
+  # --- AIPS_0 ---------------------------------------------------------------
+  - id: "mscm"
+    type: "stub"
+    base_address: 0x40260000
+    size: "16KB"
+  - id: "pflash"
+    type: "stub"
+    base_address: 0x40268000
+    size: "16KB"
+  # SWT_0 (CM7_0's watchdog). The SVD reset value of CR has WEN = 0; the
+  # smoke still unlocks it (SR 0xC520/0xD928) and clears WEN, as the RTD
+  # startup does. The stub accepts the writes and never fires.
+  - id: "swt0"
+    type: "stub"
+    base_address: 0x40270000
+    size: "16KB"
+  - id: "stm0"
+    type: "stub"
+    base_address: 0x40274000
+    size: "16KB"
+  - id: "xrdc"
+    type: "stub"
+    base_address: 0x40278000
+    size: "16KB"
+  - id: "dmamux0"
+    type: "stub"
+    base_address: 0x40280000
+    size: "16KB"
+  - id: "dmamux1"
+    type: "stub"
+    base_address: 0x40284000
+    size: "16KB"
+  - id: "mc_rgm"
+    type: "stub"
+    base_address: 0x4028C000
+    size: "16KB"
+  - id: "siul2"
+    type: "s32k3_siul2"
+    base_address: 0x40290000
+    size: "16KB"
+  - id: "dcm_gpr"
+    type: "stub"
+    base_address: 0x402AC000
+    size: "16KB"
+  - id: "sirc"
+    type: "stub"
+    base_address: 0x402C8000
+    size: "16KB"
+  - id: "sxosc"
+    type: "stub"
+    base_address: 0x402CC000
+    size: "16KB"
+  - id: "firc"
+    type: "stub"
+    base_address: 0x402D0000
+    size: "16KB"
+  - id: "fxosc"
+    type: "stub"
+    base_address: 0x402D4000
+    size: "16KB"
+  # MC_CGM: the clock muxes/dividers. A stub, so a MUX/DC write has no effect
+  # and every status read is 0; the core stays at the 48 MHz reset clock.
+  - id: "mc_cgm"
+    type: "stub"
+    base_address: 0x402D8000
+    size: "16KB"
+  # MC_ME: partition clock gating (PRTNn_COFBm_CLKEN, PCONF/PUPD, CTL_KEY).
+  # A stub, so gating has no effect (every peripheral runs ungated) and the
+  # COFB status registers read 0.
+  - id: "mc_me"
+    type: "stub"
+    base_address: 0x402DC000
+    size: "16KB"
+  - id: "pll"
+    type: "stub"
+    base_address: 0x402E0000
+    size: "16KB"
+  - id: "pll_aux"
+    type: "stub"
+    base_address: 0x402E4000
+    size: "16KB"
+  - id: "pmc"
+    type: "stub"
+    base_address: 0x402E8000
+    size: "16KB"
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x402EC000
+    size: "16KB"
+
+  # --- AIPS_1: LPUART0-7 -----------------------------------------------------
+  # clock_hz is the LPUART functional clock at reset: LPUART0 on AIPS_PLAT_CLK
+  # (48 MHz, MUX_0_DC_1 = /1), the others on AIPS_SLOW_CLK (24 MHz,
+  # MUX_0_DC_2 = /2). The per-instance clock assignment follows the S32K3
+  # clocking scheme and is not confirmed from an S32K388 primary source; it
+  # only sets the simulated frame time.
+  - id: "lpuart0"
+    type: "imxrt_lpuart"
+    base_address: 0x40328000
+    size: "16KB"
+    irq: 141
+    config: { clock_hz: 48000000 }
+  - id: "lpuart1"
+    type: "imxrt_lpuart"
+    base_address: 0x4032C000
+    size: "16KB"
+    irq: 142
+    config: { clock_hz: 24000000 }
+  - id: "lpuart2"
+    type: "imxrt_lpuart"
+    base_address: 0x40330000
+    size: "16KB"
+    irq: 143
+    config: { clock_hz: 24000000 }
+  - id: "lpuart3"
+    type: "imxrt_lpuart"
+    base_address: 0x40334000
+    size: "16KB"
+    irq: 144
+    config: { clock_hz: 24000000 }
+  - id: "lpuart4"
+    type: "imxrt_lpuart"
+    base_address: 0x40338000
+    size: "16KB"
+    irq: 145
+    config: { clock_hz: 24000000 }
+  - id: "lpuart5"
+    type: "imxrt_lpuart"
+    base_address: 0x4033C000
+    size: "16KB"
+    irq: 146
+    config: { clock_hz: 24000000 }
+  - id: "lpuart6"
+    type: "imxrt_lpuart"
+    base_address: 0x40340000
+    size: "16KB"
+    irq: 147
+    config: { clock_hz: 24000000 }
+  - id: "lpuart7"
+    type: "imxrt_lpuart"
+    base_address: 0x40344000
+    size: "16KB"
+    irq: 148
+    config: { clock_hz: 24000000 }
+  - id: "configuration_gpr"
+    type: "stub"
+    base_address: 0x4039C000
+    size: "16KB"
+
+  # --- AIPS_2: LPUART8-15 ----------------------------------------------------
+  - id: "lpuart8"
+    type: "imxrt_lpuart"
+    base_address: 0x4048C000
+    size: "16KB"
+    irq: 149
+    config: { clock_hz: 48000000 }
+  - id: "lpuart9"
+    type: "imxrt_lpuart"
+    base_address: 0x40490000
+    size: "16KB"
+    irq: 150
+    config: { clock_hz: 24000000 }
+  - id: "lpuart10"
+    type: "imxrt_lpuart"
+    base_address: 0x40494000
+    size: "16KB"
+    irq: 151
+    config: { clock_hz: 24000000 }
+  - id: "lpuart11"
+    type: "imxrt_lpuart"
+    base_address: 0x40498000
+    size: "16KB"
+    irq: 152
+    config: { clock_hz: 24000000 }
+  - id: "lpuart12"
+    type: "imxrt_lpuart"
+    base_address: 0x4049C000
+    size: "16KB"
+    irq: 153
+    config: { clock_hz: 24000000 }
+  - id: "lpuart13"
+    type: "imxrt_lpuart"
+    base_address: 0x404A0000
+    size: "16KB"
+    irq: 154
+    config: { clock_hz: 24000000 }
+  - id: "lpuart14"
+    type: "imxrt_lpuart"
+    base_address: 0x404A4000
+    size: "16KB"
+    irq: 155
+    config: { clock_hz: 24000000 }
+  - id: "lpuart15"
+    type: "imxrt_lpuart"
+    base_address: 0x404A8000
+    size: "16KB"
+    irq: 156
+    config: { clock_hz: 24000000 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: 16
