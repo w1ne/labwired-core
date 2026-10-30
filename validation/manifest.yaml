@@ -1657,7 +1657,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 1b164aa0df4c1427f204d4ec64456193cb15bf77331f3f54ef79d3dc7d53aebf
+    drift_ack_digest: ea2dd5a34b46b789f460b819af6789848562c4c826b0c1d1fa22cc8c8c9a6c4c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2232,7 +2232,13 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    drift_ack: 2026-10-30
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -3661,7 +3667,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3de3e5508bfa2990c8e138d894fd6a8edd4bd77bade2fefee8739ef8eda06eb3
+    drift_ack_digest: f497e8ed6c39dfd643733b5f32f2f33ffd35ff1eb6d50dcf0dd05c47f763df0a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4224,7 +4230,13 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    drift_ack: 2026-10-30
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -4623,7 +4635,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: db62b4ac08dced24891354672e6a447076d1a11a32a11ae34dadf928d4313cdf
+    drift_ack_digest: 67a618cbcf1241fb26f1fe5451df8d50c5c8cb127bdf23099e50381ec114bd96
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5119,7 +5131,13 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    drift_ack: 2026-10-30
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -5576,7 +5594,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: a01f76b4a20109caff38db7d16d2ffaa4447b22aaed5add01899b54656e44c2a
+    drift_ack_digest: 6f77c2475b98cb7fff635ec9f0c76d7fcfd60530b2e5981676344b4460a48336
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6142,7 +6160,13 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    drift_ack: 2026-10-30
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -6562,7 +6586,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b4427abedf6ad554401900eb8d5b1171966f10479c2e5e50c105527f49e7b059
+    drift_ack_digest: 5fc759dbe968faae002d6e61eda78510a26ad14d91c943e6fdef71b0d39b88aa
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7067,7 +7091,13 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    drift_ack: 2026-10-30
+    # 2026-10-30 (feat/ek-ra8m1-l1): uart.rs gained the SCI_B layout
+    # (SciB arm, sci_b register file, TE gate; every branch is guarded by
+    # the SciB layout), profiles.rs maps `sci_b`/ra8 SCI names to it, and
+    # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
+    # constructors. STM32 UART/GPIO register maps and byte paths are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -9429,6 +9459,37 @@ boards:
       - crates/firmware-ek-ra6m5-smoke
       - configs/chips/r7fa6m5bh.yaml
       - configs/systems/ek-ra6m5.yaml
+  - id: r7fa8m1ah
+    # 2026-10-30: Renesas EK-RA8M1 (R7FA8M1AH, Cortex-M85; 2 MiB code flash
+    # at 0x02000000, 896 KiB SRAM at 0x22000000). First RA8 part. New: the
+    # SCI_B UART layout (sci_b), the RA8 PFS with PWPR/PWPRS moved (ra8_pfs)
+    # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP, ICU,
+    # DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT,
+    # ADC12, ETHERC, SPI and CANFD are declared stubs; SCI0-8 and the remaining
+    # blocks are not mapped. Helium/MVE, LOB and TrustZone are not modelled.
+    # SIM-DERIVED — no RA8M1 bench part. See docs/boards/ek-ra8m1.md and
+    # examples/ek-ra8m1/VALIDATION.md.
+    doc: docs/boards/ek-ra8m1.md
+    chip: configs/chips/r7fa8m1ah.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_ek_ra8m1_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/ra_pfs.rs
+      - crates/core/src/peripherals/ra_clock.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-ek-ra8m1-smoke
+      - configs/chips/r7fa8m1ah.yaml
+      - configs/systems/ek-ra8m1.yaml
 
   - id: same70q21b
     # 2026-10-30: Microchip SAM E70 Xplained (ATSAME70Q21B, Cortex-M7; 2 MiB

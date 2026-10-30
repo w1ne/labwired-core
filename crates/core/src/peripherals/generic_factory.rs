@@ -337,8 +337,12 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
+    // Renesas RA8 SYSTEM (adds the SCICKCR handshake).
+    "ra8_sysc",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
+    // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
+    "ra8_pfs",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1348,7 +1352,9 @@ pub fn try_build(
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
+        "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new_ra8()),
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
+        "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),
         "imxrt_ccm" => Box::new(crate::peripherals::imxrt::ccm::ImxrtCcm::new()),

@@ -1,0 +1,56 @@
+# LabWired - EK-RA8M1 example system (R7FA8M1AH)
+#
+# Same board manifest as configs/systems/ek-ra8m1.yaml, kept beside the
+# example so the package is self-contained.
+#
+# Board facts (Renesas EK-RA8M1; Zephyr `ek_ra8m1` ek_ra8m1.dts and
+# ek_ra8m1-pinctrl.dtsi):
+#   LEDs (active high): LED1 blue P600, LED2 green P414, LED3 red P107.
+#   Switches (active low, pull-up): S1 P009, S2 P008.
+#   Console: SCI9 PA14 (TXD9) / PA15 (RXD9), the J-Link OB virtual COM port.
+#
+# Renode's boards/renesas-ek_ra8m1.repl wires port1 pin 7 for the red LED but
+# attaches the LED itself at port9 13; this manifest follows the Zephyr board
+# (P107).
+#
+# The simulator captures the SCI9 stream; the J-Link OB bridge, the Ethernet
+# PHY, the OSPI flash, the camera/display connectors and USB are not modelled.
+
+name: "ek-ra8m1"
+chip: "../../configs/chips/r7fa8m1ah.yaml"
+# The RA8M1 resets onto MOCO (8 MHz) with every divider at /1. The smoke never
+# starts HOCO or the PLLs, so this is the real core rate, not the part's
+# 480 MHz maximum. The browser's RealtimeGovernor paces to this value.
+cpu_hz: 8_000_000
+external_devices: []
+board_io:
+  - id: "led1_blue"
+    kind: "led"
+    peripheral: "port6"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led2_green"
+    kind: "led"
+    peripheral: "port4"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "led3_red"
+    kind: "led"
+    peripheral: "port1"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "s1"
+    kind: "button"
+    peripheral: "port0"
+    pin: 9
+    signal: "input"
+    active_high: false
+  - id: "s2"
+    kind: "button"
+    peripheral: "port0"
+    pin: 8
+    signal: "input"
+    active_high: false

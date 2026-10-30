@@ -357,6 +357,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"EK-RA6M5 SMOKE\n",
     },
     SurvivalCase {
+        // EK-RA8M1: R7FA8M1AH (Cortex-M85), 2 MiB code flash at 0x02000000,
+        // 896 KiB SRAM at 0x22000000. SCI9 (SCI_B, PA14/PA15) is the J-Link
+        // OB console; the smoke switches SCICLK to MOCO, waits for
+        // CESR.TIST/RIST, walks LED1-LED3 (P600/P414/P107) with PCNTR1 PODR
+        // readback and reads S1/S2 through the PFS pull-ups. SIM-DERIVED.
+        name: "ek_ra8m1_smoke",
+        core: "cortex-m85",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa8m1ah",
+        system: "ek-ra8m1",
+        fixture: "ek-ra8m1-smoke.elf",
+        valid_pc_ranges: &[(0x0200_0000, 0x021F_FFFF), (0x2200_0000, 0x220D_FFFF)],
+        expected_uart_output: b"EK-RA8M1 SMOKE\n",
+    },
+    SurvivalCase {
         // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
         // the application vector table at 0x18000 (the secure bootloader owns
         // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
@@ -2317,6 +2333,7 @@ fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
 }
 
 survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
+survival_gate!(test_ek_ra8m1_smoke_survival, "ek_ra8m1_smoke");
 
 /// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
 /// in the top 44 bytes of the last flash page and only enters a valid image.

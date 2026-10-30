@@ -1,0 +1,287 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Renesas R7FA8M1AHECBD (RA8M1, Arm Cortex-M85, 2 MiB code flash, 896 KiB
+# user SRAM + 64 KiB ITCM + 64 KiB DTCM) for the EK-RA8M1 evaluation kit.
+# SIM-DERIVED: no RA8M1 bench part.
+#
+# Sources:
+#   - Renesas FSP CMSIS header R7FA8M1AH.h (peripheral bases and register
+#     layouts: R_SYSTEM 0x4001E000, R_MSTP 0x40203000, R_PORT0 0x40400000,
+#     R_PFS 0x40400800, R_PMISC 0x40400D00, R_SCI_B0 0x40358000, R_ICU
+#     0x40006000) and FSP ra8m1 bsp_feature.h (code flash at 0x02000000,
+#     SCKDIVCR resets to 0 = all /1, non-secure alias offset 0x10000000).
+#   - Zephyr dts/arm/renesas/ra/ra8/{ra8x1,r7fa8m1xh}.dtsi (code flash at
+#     0x02000000, 2016 KiB exposed to Zephyr; data flash 12 KiB at 0x27000000;
+#     SRAM 896 KiB at 0x22000000; sci0-9 are `renesas,ra8-uart-sci-b`).
+#   - Renode v1.17.0 platforms/cpus/renesas-r7fa8m1a.repl (memory map
+#     cross-check: ITCM 64 KiB @ 0x0, code flash 2 MiB @ 0x02000000, DTCM
+#     64 KiB @ 0x20000000, SRAM 0xE0000 @ 0x22000000, data flash 0x3000 @
+#     0x27000000). Not a Renode parity claim. Renode puts the ICU at
+#     0x4000C000; R7FA8M1AH.h says 0x40006000, which is used here.
+#
+# The RA8 blocks differ from RA4M1/RA6M5 in three places this descriptor
+# depends on:
+#   - SCI is SCI_B, a 32-bit register rework (RDR +0x00, TDR +0x04, CCR0-4
+#     +0x08..+0x18, CESR +0x1C, FCR +0x24, CSR +0x48, CFCLR +0x68):
+#     `profile: "sci_b"`, not the classic SMR/BRR/SCR/TDR/SSR byte block.
+#   - PMISC moved: PWPR at 0x40400D0C and the secure twin PWPRS at
+#     0x40400D14 (`ra8_pfs`). PmnPFS keeps the RA layout, for ports 0-B.
+#   - The SCI kernel clock is its own SCICLK (SYSTEM SCICKDIVCR +0x54 /
+#     SCICKCR +0x55, with a CKSREQ/CKSRDY switch handshake: `ra8_sysc`).
+# PORTn keeps the RA PCNTR1-4 layout at 0x40400000 + 0x20*n.
+#
+# Tier: L1 UART+LED smoke. Boot from code flash, the SCI9 console (PA14
+# TXD9 / PA15 RXD9, the J-Link OB virtual COM port) and the three user LEDs
+# with PODR readback.
+#
+# NOT modelled in this slice:
+# - Cortex-M85 features beyond Armv8-M Mainline: Helium/MVE, the Armv8.1-M
+#   low-overhead-branch (WLS/DLS/LE) and PACBTI instructions, the M85
+#   caches. The engine runs the same Thumb-2 decoder it uses for the
+#   Cortex-M33 (docs/isa_coverage.md); an MVE or LOB opcode is not decoded
+#   and stops the run with a decode error. Firmware built for
+#   `thumbv8m.main` (no `-mcpu=cortex-m85` auto-vectorisation) is what this
+#   slice runs.
+# - TrustZone: the simulator has no security state, peripherals are mapped
+#   at their secure addresses only (the +0x10000000 non-secure aliases are
+#   NOT mapped), no IDAU/SAU attribution, no CPSCU/PSCU.
+# - Clock generation: `ra8_sysc` models HOCOCR/OSCSF and the SCICKCR
+#   handshake only. Every other SYSTEM register (SCKDIVCR, SCKSCR, PLLs,
+#   PRCR) reads 0 and drops writes. No peripheral rate is derived from
+#   SCICKCR; the smoke stays on the reset MOCO (8 MHz) for both ICLK and
+#   SCICLK.
+# - Module stop (MSTP): declared stub. The smoke clears MSTPCRB.MSTPB22
+#   (SCI9) as silicon requires, but SCI9 works whether or not it is.
+# - ICU/IELSR event linking: declared stub; SCI interrupts are not routed to
+#   the NVIC, so the smoke is polled.
+# - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
+#   routing in the model.
+# - SCI_B: async polled TX/RX only. FIFO mode, the CCR0 TIE/TEIE/RIE
+#   interrupts, error flags, simple-SPI/I2C/LIN/Manchester modes and the
+#   baud generator (no wire timing) are not modelled; the control registers
+#   are stored and read back.
+# - Option-setting memory (OFS0/OFS1 at 0x0300A100+), factory flash, flash
+#   programming (FACI), standby SRAM, OSPI/xSPI, SDRAM, Ethernet, USB, CAN
+#   FD, timers, ADC, DAC, crypto (RSIP-E51A), CEU and every block not listed
+#   below are not mapped or are declared stubs.
+
+name: "r7fa8m1ah"
+arch: "arm"
+core: "cortex-m85"
+# Reset clock: MOCO 8 MHz, ICLK /1 (FSP bsp_feature.h
+# BSP_FEATURE_CGC_ICLK_DIV_RESET = DIV_1). The EK-RA8M1 smoke never starts
+# HOCO or the PLLs.
+cpu_hz: 8_000_000
+flash:
+  base: 0x02000000
+  size: "2048KB"
+ram:
+  base: 0x22000000
+  size: "896KB"
+memory_regions:
+  # Cortex-M85 tightly coupled memories (Renode repl; secure aliases only).
+  - name: "itcm"
+    base: 0x00000000
+    size: "64KB"
+  - name: "dtcm"
+    base: 0x20000000
+    size: "64KB"
+  # Data flash (Zephyr data_flash node), erased reads 0xFF.
+  - name: "data_flash"
+    base: 0x27000000
+    size: "12KB"
+    erased: true
+pins:
+  # SCI9 console (Zephyr ek_ra8m1-pinctrl.dtsi sci9_default: tx PA14, rx PA15).
+  PA14: { gpio: porta, bit: 14, functions: [{ type: uart, peripheral: sci9, role: tx }] }
+  PA15: { gpio: porta, bit: 15, functions: [{ type: uart, peripheral: sci9, role: rx }] }
+  # User LEDs LED1-LED3 (Zephyr ek_ra8m1.dts).
+  P600: { gpio: port6, bit: 0, functions: [{ type: gpio, peripheral: port6 }] }
+  P414: { gpio: port4, bit: 14, functions: [{ type: gpio, peripheral: port4 }] }
+  P107: { gpio: port1, bit: 7, functions: [{ type: gpio, peripheral: port1 }] }
+  # User switches S1/S2 (Zephyr ek_ra8m1.dts).
+  P009: { gpio: port0, bit: 9, functions: [{ type: gpio, peripheral: port0 }] }
+  P008: { gpio: port0, bit: 8, functions: [{ type: gpio, peripheral: port0 }] }
+peripherals:
+  # R_SYSTEM @ 0x4001E000 (PRCR at +0x3FA, HOCOLDOCR at +0xB0C). Only
+  # HOCOCR (+0x36), OSCSF (+0x3C), SCICKDIVCR (+0x54) and SCICKCR (+0x55)
+  # are modelled; see the header.
+  - id: "ra_sysc"
+    type: "ra8_sysc"
+    base_address: 0x4001E000
+    size: "4KB"
+  # R_MSTP @ 0x40203000: MSTPCRA +0x00 .. MSTPCRE +0x10 (R7FA8M1AH.h).
+  - id: "mstp"
+    type: "stub"
+    base_address: 0x40203000
+    size: "64B"
+  # PORT0-B @ 0x40400000 + n*0x20, pull-ups linked to PmnPFS.PCR.
+  - id: "port0"
+    type: "gpio"
+    base_address: 0x40400000
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 0 }
+  - id: "port1"
+    type: "gpio"
+    base_address: 0x40400020
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 1 }
+  - id: "port2"
+    type: "gpio"
+    base_address: 0x40400040
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 2 }
+  - id: "port3"
+    type: "gpio"
+    base_address: 0x40400060
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 3 }
+  - id: "port4"
+    type: "gpio"
+    base_address: 0x40400080
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 4 }
+  - id: "port5"
+    type: "gpio"
+    base_address: 0x404000A0
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 5 }
+  - id: "port6"
+    type: "gpio"
+    base_address: 0x404000C0
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 6 }
+  - id: "port7"
+    type: "gpio"
+    base_address: 0x404000E0
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 7 }
+  - id: "port8"
+    type: "gpio"
+    base_address: 0x40400100
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 8 }
+  - id: "port9"
+    type: "gpio"
+    base_address: 0x40400120
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 9 }
+  - id: "porta"
+    type: "gpio"
+    base_address: 0x40400140
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 10 }
+  - id: "portb"
+    type: "gpio"
+    base_address: 0x40400160
+    size: "32B"
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 11 }
+  # PFS @ 0x40400800 (PmnPFS for ports 0-B) with PMISC at +0x500:
+  # PWPR +0x50C, PWPRS +0x514.
+  - id: "pfs"
+    type: "ra8_pfs"
+    base_address: 0x40400800
+    size: "1536B"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # SCI9 @ 0x40358900: the EK-RA8M1 console (Zephyr `zephyr,console =
+  # &uart9` on sci9). IELSR routing is not modelled (the ICU is a stub), so
+  # irq 1 is nominal and the smoke polls CSR.TDRE.
+  - id: "sci9"
+    type: "uart"
+    base_address: 0x40358900
+    size: "256B"
+    irq: 1
+    config:
+      profile: "sci_b"
+  # Declared stubs (bases from R7FA8M1AH.h; reads 0, writes dropped).
+  # ICU: IRQCRn, NMI, IELSR0-95 (R_ICU_BASE).
+  - id: "icu"
+    type: "stub"
+    base_address: 0x40006000
+    size: "2KB"
+  # DMAC0-7 + DMA + DTC (0x4000A000-0x4000AFFF).
+  - id: "dmac_dtc"
+    type: "stub"
+    base_address: 0x4000A000
+    size: "4KB"
+  # FCACHE (flash cache / wait states).
+  - id: "fcache"
+    type: "stub"
+    base_address: 0x4001C100
+    size: "256B"
+  # FACI_HP flash programming interface.
+  - id: "faci"
+    type: "stub"
+    base_address: 0x4011E000
+    size: "4KB"
+  # ELC event link controller.
+  - id: "elc"
+    type: "stub"
+    base_address: 0x40201000
+    size: "256B"
+  # RTC.
+  - id: "rtc"
+    type: "stub"
+    base_address: 0x40202000
+    size: "512B"
+  # IWDT.
+  - id: "iwdt"
+    type: "stub"
+    base_address: 0x40202200
+    size: "512B"
+  # WDT.
+  - id: "wdt"
+    type: "stub"
+    base_address: 0x40202600
+    size: "512B"
+  # AGTX0-9.
+  - id: "agt"
+    type: "stub"
+    base_address: 0x40221000
+    size: "4KB"
+  # USBFS0.
+  - id: "usbfs"
+    type: "stub"
+    base_address: 0x40250000
+    size: "8KB"
+  # IIC0-2.
+  - id: "iic"
+    type: "stub"
+    base_address: 0x4025E000
+    size: "1KB"
+  # GPT0-13 + GPT_OPS.
+  - id: "gpt"
+    type: "stub"
+    base_address: 0x40322000
+    size: "8KB"
+  # ADC0/ADC1.
+  - id: "adc12"
+    type: "stub"
+    base_address: 0x40332000
+    size: "1KB"
+  # USBHS0.
+  - id: "usbhs"
+    type: "stub"
+    base_address: 0x40351000
+    size: "8KB"
+  # ETHERC_EDMAC + ETHERC0.
+  - id: "ether"
+    type: "stub"
+    base_address: 0x40354000
+    size: "1KB"
+  # SPI0/SPI1 (SPI_B).
+  - id: "spi"
+    type: "stub"
+    base_address: 0x4035C000
+    size: "512B"
+  # CANFD0/CANFD1.
+  - id: "canfd"
+    type: "stub"
+    base_address: 0x40380000
+    size: "16KB"
