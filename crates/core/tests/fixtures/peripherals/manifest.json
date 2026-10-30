@@ -905,8 +905,8 @@
     {
       "device_type": "rc522",
       "label": "RC522 RFID",
-      "summary": "MFRC522 SPI RFID reader register shell (no RF).",
-      "detail": "VersionReg 0x37 returns 0x92. Soft reset via CommandReg is accepted. ISO14443 card UID / crypto is not simulated.",
+      "summary": "MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface.",
+      "detail": "VersionReg 0x37 returns 0x92. Soft reset, FIFO, ComIrqReg/DivIrqReg, and CRC_A          (CalcCRC) follow the MFRC522 datasheet. TxControlReg Tx1RFEn/Tx2RFEn must be on          (PCD_AntennaOn) or every Transceive times out. One card, CL1 only (4-byte UID);          no collision/partial NVB. REQA/WUPA → ATQA; anticollision CL1 + SELECT → UID+BCC+SAK;          HLTA succeeds as a timeout. Drive card_present and uid to place or remove a card.          MIFARE Crypto1 is not modelled.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -917,7 +917,24 @@
         }
       ],
       "labs": [],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "card_present",
+          "label": "Card present",
+          "unit": "on/off",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "uid",
+          "label": "Card UID",
+          "unit": "u32",
+          "min": 0.0,
+          "max": 4294967295.0,
+          "default": 3735928559.0
+        }
+      ]
     },
     {
       "device_type": "atecc608a",
