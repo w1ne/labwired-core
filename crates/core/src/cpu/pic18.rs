@@ -50,6 +50,9 @@ pub const PIC18_ACCESS_SPLIT_DEFAULT: u8 = 0x60;
 
 /// Classic PIC18 hardware return-stack depth.
 pub const PIC18_STACK_DEPTH: usize = 31;
+/// Flash-resident configuration bytes past the end of J-series program
+/// memory (CONFIG1L..CONFIG4H).
+const PIC18_FLASH_CONFIG_BYTES: usize = 8;
 /// 21-bit byte PC; bit 0 is always clear.
 pub const PIC18_PC_MASK: u32 = 0x1F_FFFE;
 
@@ -210,9 +213,11 @@ struct FileAccess {
 /// SDCC 4.4.0 device header. Flash size is the gputils `<part>_g.lkr` code
 /// page; the split is SDCC `pic16devices.txt` (`0x80` for SFRs from 0xF80,
 /// `0x60` for SFRs from 0xF60). J-series flash ends 8 bytes early because
-/// the configuration words live in the last program-memory row.
+/// the configuration words live in the last program-memory row;
+/// `load_flash` routes those bytes to the configuration registers.
 /// Parts left out: J11/J13/J50/J53 (EUSART1 at 0xFAE), K40/Q10 (moved SFR
-/// map), 1220/1230/1320/1330 (no PORTC), K50 (IOC replaces RBIE/RBIF).
+/// map), 1220/1230/1320/1330 (no PORTC), 13K50/14K50 (IOC replaces
+/// RBIE/RBIF; the 2x/45K50 parts keep RBIE/RBIF and are listed).
 const PIC18_DEVICES: &[(&str, usize, u8)] = &[
     ("pic18f13k22", 8192, 0x60),
     ("pic18lf13k22", 8192, 0x60),
@@ -555,12 +560,25 @@ impl Pic18 {
             return;
         }
         let start = addr as usize & !1;
-        let end = start.saturating_add(bytes.len()).min(self.flash.len());
-        assert!(
-            start <= self.flash.len(),
-            "fixture exceeds PIC18 model flash"
-        );
-        self.flash[start..end].copy_from_slice(&bytes[..end - start]);
+        let len = self.flash.len();
+        let end = start.saturating_add(bytes.len()).min(len);
+        // J-series parts (flash size not a whole KiB) keep their
+        // configuration words in the 8 bytes past the `PIC18_DEVICES` flash
+        // size; hardware copies them to 0x300000 at reset, so they land in
+        // `config` here.
+        let flash_config = if len % 1024 == 0 {
+            0
+        } else {
+            PIC18_FLASH_CONFIG_BYTES
+        };
+        for (i, byte) in bytes.iter().enumerate().skip(end.saturating_sub(start)) {
+            let at = start + i;
+            assert!(at < len + flash_config, "fixture exceeds PIC18 model flash");
+            self.config[at - len] = *byte;
+        }
+        if start < end {
+            self.flash[start..end].copy_from_slice(&bytes[..end - start]);
+        }
     }
 
     /// Load a program image. PIC18 image addresses are byte addresses; the
@@ -2897,6 +2915,8 @@ mod tests {
             ("pic18f45k22", 32 * 1024, 0x60),
             ("pic18lf46k80", 64 * 1024, 0x60),
             ("pic18f8722", 128 * 1024, 0x60),
+            ("pic18f2682", 80 * 1024, 0x60),
+            ("pic18f63j90", 8 * 1024 - 8, 0x60),
         ] {
             let cpu = Pic18::for_chip_name(name);
             assert_eq!(cpu.flash.len(), flash, "{name} flash");
@@ -2911,6 +2931,22 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), PIC18_DEVICES.len(), "duplicate device row");
+    }
+
+    #[test]
+    fn j_series_flash_config_words_load_into_config() {
+        // PIC18F45J10: 32 KiB - 8 of program flash, CONFIG1L..CONFIG3H in
+        // the last row (0x7FF8..).
+        let mut cpu = Pic18::for_chip_name("pic18f45j10");
+        cpu.load_flash(0x7FF6, &[0x12, 0x00, 0xE1, 0xF4, 0xC7, 0xFF]);
+        assert_eq!(cpu.flash[0x7FF6], 0x12);
+        assert_eq!(&cpu.config[..4], &[0xE1, 0xF4, 0xC7, 0xFF]);
+    }
+
+    #[test]
+    #[should_panic(expected = "fixture exceeds PIC18 model flash")]
+    fn whole_kib_flash_rejects_bytes_past_the_end() {
+        Pic18::for_chip_name("pic18f4520").load_flash(0x8000, &[0xFF]);
     }
 
     #[test]
