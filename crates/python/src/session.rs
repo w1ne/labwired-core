@@ -111,6 +111,7 @@ impl NativeSession {
                 blobs: &BlobMap::new(),
                 options: BuildOptions {
                     uart_rx: system.debug_uart.clone(),
+                    rtt: None,
                     ..Default::default()
                 },
             },

@@ -50,20 +50,20 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `055d0e04d3f28413` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `41d18264d3f4d4cc` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `659d6a4bb2eb12d5` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `6b41f89eb20d80c3` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `cdf5e7c04b0863bb` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `ecf00f3232ba0def` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `abfb693f10569fd0` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `0c2f25a6937dd775` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `f7cb072be6e5fd4a` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `6cd4c4ca35da40f0` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `9d531a139b001c70` | no silicon capture |
-| `s32k388` | 🟡 smoke-manual | — | `2e3f23cf62c530f4` | no silicon capture |
-| `mimxrt595s` | 🟡 smoke-manual | — | `edce634f8b09756a` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `6ded09afea634afb` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `485d6a65190d2569` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `f564a7d2af1fd337` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `7108813e8f77000e` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `94f590cc0fa52e20` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `1721422c159d16e7` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `94323e9970179fde` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `d5d9c113407d1cef` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `e077502285980728` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `d09914e6b62cfe5d` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `df32909dc33659dd` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `5cd53d47460f4984` | no silicon capture |
+| `s32k388` | 🟡 smoke-manual | — | `fd81d437cafa8134` | no silicon capture |
+| `mimxrt595s` | 🟡 smoke-manual | — | `16069bb312829928` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `08cf4a7a364f1c0b` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `0eb62e4944a7b588` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `2b993818cfae535c` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `0e58526cab1e3ae9` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
