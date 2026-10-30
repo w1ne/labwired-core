@@ -247,7 +247,8 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
    more parts whose SFR map is identical to the PIC18F4520's for every
    register and bit the model implements (checked per part against the
    SDCC 4.4.0 device headers; flash from the gputils linker scripts, split
-   from SDCC `pic16devices.txt`). A table row is geometry only: a part
+   from SDCC `pic16devices.txt`; `scripts/pic18/check_sfr_map.py
+   --check-table` re-verifies every row). A table row is geometry only: a part
    still needs its own descriptor and a firmware run before it counts as
    supported, and support must not be inferred from a family label.
    J11/J13/J50/J53, K40/Q10, K50 and 1220/1230/1320/1330 are left out
