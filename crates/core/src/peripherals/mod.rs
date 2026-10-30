@@ -100,6 +100,7 @@ pub mod rsim;
 pub mod rtc;
 pub mod rtc_f1;
 pub mod rtc_v3;
+pub mod s32k3_siul2;
 pub mod sai;
 pub mod sam;
 pub mod sam4s;

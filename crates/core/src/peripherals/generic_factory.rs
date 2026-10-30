@@ -383,6 +383,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // staged onboarding/ambiq-apollo4 descriptor, which keeps its placeholder.
     "apollo4_gpio",
     "apollo4_pwrctrl",
+    // NXP S32K3 SIUL2: MSCR pad mux + GPDO/GPDI/PGPDO/PGPDI/MPGPDO GPIO.
+    // Deliberately not `s32k3xx_systemintegrationunitlite2`: that spelling
+    // belongs to the staged onboarding/nxp-s32k388 descriptors, which keep
+    // their placeholder.
+    "s32k3_siul2",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1460,6 +1465,7 @@ pub fn try_build(
         "cc2538_sys_ctrl" => Box::new(crate::peripherals::cc2538::Cc2538SysCtrl::new()),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
+        "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

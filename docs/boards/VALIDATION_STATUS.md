@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `74c15f2371508cba` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `c06d24d3b4159e40` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `8da53dc66c60f832` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `3132bb384f27acab` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `a016530ed7a99aeb` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `c4ff22a3c1de6d34` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `2a2896a89de190e0` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `11151f5bf0d15d9b` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `38900bceab074c73` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `1aab802cf04923b5` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `f065dbab0b52dc63` | no silicon capture |
 | `esp32` | ⚪ structural | — | `3789b1727d91b788` | no silicon capture |
@@ -49,17 +49,18 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `c4588d8d9cdd2dff` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `4c9b3e1ee387534a` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b2225cb7b9fa7f7c` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `69f9b0a51229025f` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `1ad4ec78bb42d51e` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `b0acab786df660d5` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `080484e523c4dd6f` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `b47ad213dd59e649` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `d23e13c0a15425a8` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `8c21a851d1047f90` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `950f4c890b7e01c8` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `ac4588941f1eae37` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `9a1f264c4501305f` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `6ef9ba5d01d65474` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `216de7e7d7248b68` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `98933fa950d8e685` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `0e75b04cf58b91c8` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `8c2c70d7b30f560c` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `6262d3de1fe54cd8` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `c3a050fbdc05db9b` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `e7879e4c775681c0` | no silicon capture |
+| `s32k388` | 🟡 smoke-manual | — | `4852546a981156ac` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `e200713563f8af4f` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `688a05432108da3f` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `2f22c675158dbf91` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `e122249e097a3369` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -458,6 +459,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/frdm-k64f.md`](frdm-k64f.md)  ·  Chip: `configs/chips/mk64f12.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_frdm_k64f_smoke_survival
+- Drift status: **no silicon capture**
+
+## `s32k388` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/s32k388-evb.md`](s32k388-evb.md)  ·  Chip: `configs/chips/s32k388.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_s32k388_evb_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual

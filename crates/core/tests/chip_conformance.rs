@@ -179,6 +179,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_sam_e70_xplained_smoke_survival"),
     },
     ChipConf {
+        // S32K388EVB-Q289 (S32K388, CM7_0 Cortex-M7 only). SIM-DERIVED: no
+        // S32K388 bench part. Modelled: SIUL2 (s32k3_siul2) and LPUART0-15
+        // (imxrt_lpuart, the same register layout). MC_ME/MC_CGM/SWT_0/STM_0
+        // and the other clock/system blocks are declared stubs; FlexCAN,
+        // LPSPI, LPI2C, eMIOS, eDMA, GMAC and the rest are not mapped — see
+        // examples/s32k388-evb/VALIDATION.md.
+        name: "s32k388",
+        yaml: "configs/chips/s32k388.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_s32k388_evb_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

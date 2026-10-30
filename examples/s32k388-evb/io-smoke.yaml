@@ -1,0 +1,36 @@
+# LabWired - S32K388EVB-Q289 LPUART2+LED IO smoke
+#
+# Build: cargo build -p firmware-s32k388-evb-smoke --release --target thumbv7em-none-eabi
+#
+# The image carries the S32K3 boot header (IVT) at 0x00400000 whose CM7_0
+# slot names the vector table at 0x00401000. The firmware disables SWT_0,
+# gates SIUL2/LPUART2 in MC_ME partition 1, brings LPUART2 up at 115384 baud
+# 8N1 on the 24 MHz AIPS_SLOW_CLK (OSR 16, SBR 13), then walks the six RGB
+# LED pads (PTF17-19, PTF22-24) through the SIUL2 GPDO bytes, MPGPDO11 and
+# PGPDO11, reading the pads back through GPDI/PGPDI11, and reads PTA1 with
+# the internal pull-up and pull-down.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-s32k388-evb-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "S32K388 EVB SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m7 core=cm7_0 uart=lpuart2"
+      - "ivt marker=5aa55aa5 cm7_0=00401000 vtor=00401000"
+      - "clk aips_slow=24000000 osr=16 sbr=13 baud=115384"
+      - "leds=off pgpdo11=0000 pgpdi11=0000"
+      - "on ptf17 gpdi=1 pgpdo11=4000 pgpdi11=4000"
+      - "on ptf18 gpdi=1 pgpdo11=6000 pgpdi11=6000"
+      - "on ptf19 gpdi=1 pgpdo11=7000 pgpdi11=7000"
+      - "on ptf22 gpdi=1 pgpdo11=7200 pgpdi11=7200"
+      - "on ptf23 gpdi=1 pgpdo11=7300 pgpdi11=7300"
+      - "on ptf24 gpdi=1 pgpdo11=7380 pgpdi11=7380"
+      - "mpgpdo pgpdo11=0380 pgpdi11=0380"
+      - "pgpdo pgpdo11=0000 pgpdi11=0000"
+      - "pta1 pu=1 pd=0"
+      - "hb=0 ptf23=1"
+      - "hb=1 ptf23=0"
+  - expected_stop_reason: max_steps
