@@ -109,6 +109,7 @@ impl SystemBus {
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
             ns_alias_offset: None,
+            mem_aliases: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
@@ -219,6 +220,7 @@ impl SystemBus {
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
             ns_alias_offset: None,
+            mem_aliases: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
@@ -1274,9 +1276,13 @@ impl SystemBus {
             return false;
         };
         let pc = pc & !1; // strip the Thumb bit
-                          // The initial SP is the top of the full-descending stack, conventionally
-                          // one past the last RAM byte (ram.base + ram.size), so the upper bound
-                          // is inclusive.
+                          // A vector linked into a same-backing mirror (RT500 secure views) is
+                          // as valid as one linked at the mirror's target.
+        let sp = self.resolve_mem_alias(sp as u64) as u32;
+        let pc = self.resolve_mem_alias(pc as u64) as u32;
+        // The initial SP is the top of the full-descending stack, conventionally
+        // one past the last RAM byte (ram.base + ram.size), so the upper bound
+        // is inclusive.
         let in_ram = (sp as u64) >= self.ram.base_addr
             && (sp as u64) <= self.ram.base_addr + self.ram.data.len() as u64;
         let in_flash = (pc as u64) >= self.flash.base_addr

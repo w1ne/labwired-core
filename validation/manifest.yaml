@@ -9643,20 +9643,34 @@ boards:
     # (lpc_gpio) models and the CLKCTL/RSTCTL/IOPCTL register banks
     # (rt5xx_ctl, storage only). SYSCTL0/1, PMC, CACHE64, WWDT0, INPUTMUX and
     # the FlexSPI0 controller are declared stubs; the other FLEXCOMMs,
-    # timers, DMA, USB and display blocks are not mapped. SIM-DERIVED — no
-    # MIMXRT595 bench part. See docs/boards/mimxrt595-evk.md and
+    # timers, DMA, USB and display blocks are not mapped.
+    # 2026-10-30: stock Zephyr v3.7.0 samples/hello_world and
+    # samples/synchronization for mimxrt595_evk/mimxrt595s/cm33 boot on the
+    # secure map (tests/fixtures/mimxrt595-zephyr-{hello,sync}.elf, rebuilt
+    # byte-identical by crates/firmware-mimxrt595-evk-zephyr/build.sh): the
+    # IDAU secure aliases as same-backing memory mirrors
+    # (memory_regions[].alias_of), the CLKCTL0/1 status bits
+    # (rt5xx_clkctl0/1), a clean-room boot-ROM OTP API window
+    # (crates/core/roms/rt500), the FlexSPI0 controller (imxrt_flexspi), the OS
+    # event timer (rt5xx_ostimer) and FLEXCOMM12. SIM-DERIVED — no MIMXRT595
+    # bench part. See docs/boards/mimxrt595-evk.md and
     # examples/mimxrt595-evk/VALIDATION.md.
     doc: docs/boards/mimxrt595-evk.md
     chip: configs/chips/mimxrt595s.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_mimxrt595_evk_smoke_survival"
+      - "firmware_survival::test_mimxrt595_evk_zephyr_survival (stock Zephyr hello)"
+      - "rt500_secure_map (secure aliases + boot-ROM OTP API)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/lpc/flexcomm_usart.rs
       - crates/core/src/peripherals/lpc/gpio.rs
       - crates/core/src/peripherals/lpc/rt5xx_ctl.rs
+      - crates/core/src/peripherals/lpc/ostimer.rs
+      - crates/core/src/peripherals/imxrt/flexspi.rs
+      - crates/core/roms/rt500
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/bus/from_config.rs
@@ -9664,6 +9678,7 @@ boards:
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
       - crates/firmware-mimxrt595-evk-smoke
+      - crates/firmware-mimxrt595-evk-zephyr
       - configs/chips/mimxrt595s.yaml
       - configs/systems/mimxrt595-evk.yaml
 

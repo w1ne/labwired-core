@@ -1928,6 +1928,19 @@ impl<C: Cpu> Machine<C> {
 impl<C: Cpu> Machine<C> {
     pub fn load_firmware(&mut self, image: &memory::ProgramImage) -> SimResult<()> {
         for segment in &image.segments {
+            // 0. A segment linked into a same-backing mirror (the RT500
+            //    secure FlexSPI/SRAM views) loads into the mirror's target.
+            let aliased;
+            let segment = match self.bus.resolve_mem_alias(segment.start_addr) {
+                a if a == segment.start_addr => segment,
+                start_addr => {
+                    aliased = memory::Segment {
+                        start_addr,
+                        data: segment.data.clone(),
+                    };
+                    &aliased
+                }
+            };
             // 1. Try Cortex-M / ARM flash backing.
             if self.bus.flash.load_from_segment(segment) {
                 continue;

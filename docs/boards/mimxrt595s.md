@@ -10,4 +10,5 @@ and validation evidence:
 This part-level page exists so the model-rating table links to the promoted
 board package. The earlier auto-generated `imxrt500` onboarding report
 exercised a staged descriptor with a generic UART fixture; that is not the
-promoted FLEXCOMM USART+LED L1 package.
+promoted FLEXCOMM USART+LED L1 package, which also boots stock Zephyr
+v3.7.0 on the secure address map.

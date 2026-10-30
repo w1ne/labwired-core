@@ -524,6 +524,31 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"MIMXRT595 EVK SMOKE\n",
     },
     SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `mimxrt595_evk/mimxrt595s/cm33`
+        // (Zephyr commit 36940db938a8, hal_nxp 862e001504bd;
+        // crates/firmware-mimxrt595-evk-zephyr/build.sh). The image runs
+        // secure: XIP through the FlexSPI secure alias 0x1800_0000, data and
+        // relocated code at 0x3018_0000, peripherals at 0x5xxx_xxxx, all
+        // mirrors of the non-secure map. Zephyr's own RT5xx bring-up runs
+        // unpatched: CLKCTL ready/REQFLAG/PFD hand-shakes, the FRO trim via
+        // the boot-ROM OTP API (clean-room roms/rt500), the FRO tuner, the
+        // FlexSPI0 re-clock (SWRESET, idle, DLL lock), then the OS timer system
+        // clock and the FLEXCOMM0 console.
+        name: "mimxrt595_evk_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "mimxrt595s",
+        system: "mimxrt595-evk",
+        fixture: "mimxrt595-zephyr-hello.elf",
+        valid_pc_ranges: &[
+            (0x1300_0000, 0x1300_FFFF),
+            (0x1800_0000, 0x187F_FFFF),
+            (0x3000_0000, 0x304F_FFFF),
+        ],
+        expected_uart_output: b"Hello World! mimxrt595_evk/mimxrt595s/cm33",
+    },
+    SurvivalCase {
         // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
         // 0x08000000, 16 KiB SRAM at 0x20000000. USART1 (PA9/PA10) is the
         // ST-LINK VCP; the smoke walks the four user LEDs with GPIOC ODR
@@ -2347,6 +2372,7 @@ survival_gate!(
 survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
 
 survival_gate!(test_mimxrt595_evk_smoke_survival, "mimxrt595_evk_smoke");
+survival_gate!(test_mimxrt595_evk_zephyr_survival, "mimxrt595_evk_zephyr");
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
 survival_gate!(

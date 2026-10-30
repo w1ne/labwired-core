@@ -1052,6 +1052,22 @@ impl SystemBus {
         }
     }
 
+    /// Rewrite an address inside a same-backing mirror
+    /// (`NamedMemoryRange::alias_of`) onto its target, or return it unchanged.
+    /// One `is_empty` test on every chip that declares no mirror.
+    #[inline]
+    pub fn resolve_mem_alias(&self, addr: u64) -> u64 {
+        if self.mem_aliases.is_empty() {
+            return addr;
+        }
+        for a in &self.mem_aliases {
+            if addr >= a.start && addr < a.end {
+                return a.target + (addr - a.start);
+            }
+        }
+        addr
+    }
+
     pub(crate) fn find_peripheral_index(&self, addr: u64) -> Option<usize> {
         // Canonical routing: among the windows CONTAINING `addr`, the one
         // with the GREATEST start wins (last-start-wins; equal starts resolve
