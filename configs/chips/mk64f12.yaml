@@ -151,12 +151,47 @@ peripherals:
       profile: "kinetis"
 
   # --- Clock control -----------------------------------------------------
-  # MCG: the existing behavioural Kinetis block. At reset it reports FEI
-  # (IREFST=1, CLKST=00), which is the clock the smoke runs on. No PLL.
+  # MCG: the behavioural Kinetis block with the K6x PLL0 (`profile: k6x`).
+  # At reset it reports FEI (IREFST=1, CLKST=00), which is the clock the
+  # smoke runs on. Zephyr's frdm_k64f soc init runs CLOCK_BootToPeeMode
+  # (FBE -> PBE -> PEE on the 50 MHz EXTAL0): C6.PLLS reports S.PLLST and
+  # S.LOCK0, and CLKS=00 then reports CLKST=11. Lock is immediate and the
+  # 120 MHz PLL output is not derived.
   - id: "mcg"
     type: "nxp_mcg"
     base_address: 0x40064000
     size: "16B"
+    config:
+      profile: "k6x"
+
+  # PMC (ch. 16) and OSC0 (ch. 26): register files from the NXP SVD. Zephyr's
+  # k6x_init writes PMC_REGSC.ACKISO and CLOCK_InitOsc0 writes OSC_CR before
+  # the MCG hand-off; both bus-faulted while unmapped. Nothing acts on them.
+  - id: "pmc"
+    type: "declarative"
+    base_address: 0x4007D000
+    size: "4B"
+    config:
+      path: "../peripherals/mk64f12/pmc.yaml"
+  - id: "osc"
+    type: "declarative"
+    base_address: 0x40065000
+    size: "4B"
+    config:
+      path: "../peripherals/mk64f12/osc.yaml"
+
+  # SYSMPU (K64P144M120SF5RM ch. 18) — a register file from the NXP SVD:
+  # CESR 0x00815101 (VLD=1, 12 region descriptors), RGDn WORD0-3 and
+  # RGDAACn read back what was written. Zephyr's nxp_mpu driver clears
+  # CESR.VLD, programs its regions and sets VLD again; unmapped, the first
+  # access bus-faulted. Accesses are never checked: no MPU protection is
+  # modelled.
+  - id: "sysmpu"
+    type: "declarative"
+    base_address: 0x4000D000
+    size: "4KB"
+    config:
+      path: "../peripherals/mk64f12/sysmpu.yaml"
 
   # --- Declared, not modelled (honest L1 boundary) -----------------------
   # SIM clock gates (SIM_SCGC1/4/5) are not modelled; the smoke writes them
