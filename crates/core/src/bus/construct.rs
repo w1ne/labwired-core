@@ -1087,15 +1087,6 @@ impl SystemBus {
         sources
     }
 
-    /// Get the shared RX buffer handle for one named UART peripheral. Returns
-    /// `None` when no matching UART peripheral exists on this bus — mirrors
-    /// `attach_uart_tx_sink_named`'s by-name resolution. The caller can push
-    /// bytes into the returned buffer to inject serial input at any time; a
-    /// byte pushed before the firmware has configured or read the UART sits
-    /// in the queue rather than being dropped (see `Uart::read`: RX presence
-    /// is derived from the queue being non-empty, with no enable gating).
-    /// Give `bytes` to the far side of the external device `device` that is
-    /// attached to the UART `uart` (see `UartStreamDevice::inject_remote`).
     /// Push `bytes` into the named UART's external RX queue and re-arm its
     /// scheduler wake.
     ///
@@ -1123,6 +1114,8 @@ impl SystemBus {
         Ok(bytes.len())
     }
 
+    /// Give `bytes` to the far side of the external device `device` that is
+    /// attached to the UART `uart` (see `UartStreamDevice::inject_remote`).
     pub fn inject_uart_peer_remote(
         &mut self,
         uart: &str,
@@ -1162,6 +1155,13 @@ impl SystemBus {
         ))
     }
 
+    /// Get the shared RX buffer handle for one named UART peripheral. Returns
+    /// `None` when no matching UART peripheral exists on this bus — mirrors
+    /// `attach_uart_tx_sink_named`'s by-name resolution. The caller can push
+    /// bytes into the returned buffer to inject serial input at any time; a
+    /// byte pushed before the firmware has configured or read the UART sits
+    /// in the queue rather than being dropped (see `Uart::read`: RX presence
+    /// is derived from the queue being non-empty, with no enable gating).
     pub fn attach_uart_rx_source_named(&self, name: &str) -> Option<Arc<Mutex<VecDeque<u8>>>> {
         for p in &self.peripherals {
             if p.name != name {
