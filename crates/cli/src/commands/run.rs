@@ -1881,6 +1881,7 @@ pub(crate) fn run_interactive(
             labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
             labwired_core::Arch::Avr => labwired_config::Arch::Avr,
             labwired_core::Arch::Pic24 => labwired_config::Arch::Pic24,
+            labwired_core::Arch::Pic18 => labwired_config::Arch::Pic18,
             _ => labwired_config::Arch::Unknown,
         };
 

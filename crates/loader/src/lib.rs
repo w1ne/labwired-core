@@ -97,6 +97,9 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
     if arch == labwired_core::Arch::Pic24 {
         labwired_core::cpu::pic24::check_xc16_entry(elf.entry).map_err(|e| anyhow!(e))?;
     }
+    if arch == labwired_core::Arch::Pic18 {
+        labwired_core::cpu::pic18::check_pic18_entry(elf.entry).map_err(|e| anyhow!(e))?;
+    }
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
     if arch == labwired_core::Arch::Pic24 {
