@@ -30,6 +30,8 @@
 # - MCG PLL/FEE: the smoke runs on the reset FEI clock (20.97 MHz). The MCG
 #   model is the KW41Z FEI/FBE behavioural block; the K64F PLL (C5/C6,
 #   S_LOCK0/PLLST) is NOT modelled.
+# - WDOG: declared stub. Not modelled (no timeout/reset); the firmware
+#   disables it at the top of `main` as silicon requires.
 # - ENET + KSZ8081 PHY, RNGA, FTFE flash controller, eDMA, PIT/FTM, I2C/SPI,
 #   ADC/DAC, USB, CAN, SDHC: declared stubs. The Zephyr TCP test is deferred
 #   until an Ethernet MAC/PHY model exists.
@@ -161,6 +163,14 @@ peripherals:
     type: "stub"
     base_address: 0x40047000
     size: "8KB"
+  # WDOG is enabled out of reset on silicon; it is not modelled here (no
+  # timeout, no reset). The smoke unlocks it (0xC520/0xD928 to WDOG_UNLOCK)
+  # and clears STCTRLH.WDOGEN as real firmware must; the stub absorbs those
+  # 16-bit writes.
+  - id: "wdog"
+    type: "stub"
+    base_address: 0x40052000
+    size: "32B"
   # PORT pad mux/pulls (PORTx_PCRn) are not modelled. The GPIO output path
   # and the LED readback do not need them; UART0 pin muxing is not enforced.
   - id: "porta"

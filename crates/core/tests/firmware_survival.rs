@@ -2142,6 +2142,29 @@ survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
 survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
 survival_gate!(test_frdm_k64f_smoke_survival, "frdm_k64f_smoke");
 
+/// The K64F loads FSEC/FOPT/FPROT from the Flash Configuration Field at
+/// 0x400..0x40F on reset. Code bytes there can secure (or, with MEEN=0b10,
+/// permanently lock) a real FRDM-K64F, so the committed smoke ELF must carry
+/// the unsecured FCF: key/FPROT all 0xFF, FSEC=0xFE, FOPT/FEPROT/FDPROT=0xFF.
+#[test]
+fn test_frdm_k64f_smoke_flash_config_field_is_unsecured() {
+    let bytes = std::fs::read(fixtures().join("frdm-k64f-smoke.elf")).expect("read fixture");
+    let elf = goblin::elf::Elf::parse(&bytes).expect("parse fixture ELF");
+    let fcf = elf
+        .program_headers
+        .iter()
+        .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
+        .find(|ph| ph.p_paddr <= 0x400 && 0x410 <= ph.p_paddr + ph.p_filesz)
+        .map(|ph| {
+            let start = (ph.p_offset + 0x400 - ph.p_paddr) as usize;
+            &bytes[start..start + 16]
+        })
+        .expect("no loadable segment covers the FCF at 0x400..0x410");
+    let mut expected = [0xFFu8; 16];
+    expected[12] = 0xFE; // FSEC: unsecured, mass erase enabled
+    assert_eq!(fcf, expected, "FRDM-K64F smoke FCF at 0x400");
+}
+
 survival_gate!(
     test_stm32f072b_disco_smoke_survival,
     "stm32f072b_disco_smoke"

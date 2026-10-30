@@ -49,6 +49,7 @@ LED path (with `PDOR` read-back) are proven by a committed smoke fixture and an
 | UART1–4 | `0x4006_B000`… / `0x400E_A000` | modelled — same layout, unexercised |
 | GPIOA–E | `0x400F_F000` + `0x40`×n | modelled — PDOR/PSOR/PCOR/PDIR/PDDR |
 | PORTA–E | `0x4004_9000` + `0x1000`×n | `type: stub` — pad mux/pulls not modelled |
+| WDOG | `0x4005_2000` | `type: stub` — no timeout/reset; the smoke disables it as silicon requires |
 | RGB LED | red PTB22, green PTE26, blue PTB21 | modelled GPIO — active low |
 | Buttons | SW2 PTC6, SW3 PTA4 | declared `board_io` — not read by the smoke |
 | UART0 VCP | PTB16 / PTB17, ALT3 | simulator captures the UART0 stream; OpenSDA/USB not modelled |

@@ -6,9 +6,11 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 
 | Capability | Tier | Evidence |
 | :--- | :--- | :--- |
-| Boot from ELF via the vector table (PC/SP init) | smoke-tested | run below: `Initial PC: 0x400, SP: 0x20030000` |
+| Boot from ELF via the vector table (PC/SP init) | smoke-tested | run below: `Initial PC: 0x410, SP: 0x20030000` (`.text` starts after the FCF at 0x400) |
 | Cortex-M4 core executing the committed firmware | smoke-tested | `labwired test` 3/3 checks, 4,000,000 steps |
-| SIM clock gates (`SCGC4` UART0, `SCGC5` PORTB/PORTE) | declared only | the SIM window is a stub; the firmware writes the gates for silicon realism, the simulator does not gate on them |
+| Flash Configuration Field at 0x400..0x40F | fixture-checked | `test_frdm_k64f_smoke_flash_config_field_is_unsecured`: key/FPROT `0xFF`, FSEC `0xFE` (unsecured, mass erase enabled), FOPT/FEPROT/FDPROT `0xFF` |
+| WDOG disabled at the top of `main` (`0xC520`/`0xD928` unlock, `STCTRLH.WDOGEN=0`) | declared only | WDOG is a stub (no timeout/reset modelled); the firmware disables it as silicon requires |
+| SIM clock gates (`SCGC4` UART0, `SCGC5` PORTB/PORTE) | declared only | the SIM window is a stub; the firmware writes the gates as silicon requires, the simulator does not gate on them |
 | GPIOB/GPIOE output drive + PDOR readback | smoke-tested | `led=red on pin=0` … asserted in `io-smoke.yaml` |
 | UART0 PTB16/PTB17 TX @ 115200 from 20.97152 MHz FEI | smoke-tested | `FRDM-K64F SMOKE` + heartbeat lines on the console sink |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
@@ -18,7 +20,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | ENET + KSZ8081 PHY / TCP | **not modelled** | the Ethernet blocks are stubs; the Zephyr TCP test is deferred |
 | RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN, SDHC | declared stubs | `configs/chips/mk64f12.yaml` |
 
-## Commands and evidence (verified 2026-10-29)
+## Commands and evidence (verified 2026-10-30)
 
 ```bash
 # from the repository root
@@ -33,7 +35,7 @@ cargo build -p firmware-frdm-k64f-smoke --release --target thumbv7em-none-eabi
 ./target/release/labwired \
   --firmware target/thumbv7em-none-eabi/release/firmware-frdm-k64f-smoke \
   --system configs/systems/frdm-k64f.yaml --max-steps 400000
-#   Initial PC: 0x400, SP: 0x20030000
+#   Initial PC: 0x410, SP: 0x20030000
 #   FRDM-K64F SMOKE
 #   cpu=cortex-m4 uart=uart0
 #   led=red on pin=0

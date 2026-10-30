@@ -16,6 +16,12 @@
 //! 20.97152 MHz). No PLL/MCG change is made: UART0 (like UART1) is clocked
 //! from the core/system clock, which in FEI is the 20.97152 MHz FLL output.
 //! BR = 20.97152 MHz / (16 * 115200) = 11.375 → BDL 11, BRFA 12.
+//!
+//! Silicon prerequisites the simulator does not enforce but real hardware does:
+//!   - the Flash Configuration Field at 0x400 (`FLASH_CONFIG` below, placed by
+//!     `memory.x`) keeps the part unsecured with mass erase enabled;
+//!   - WDOG is enabled out of reset (~0.24 s timeout on the bus clock), so
+//!     `main` unlocks and disables it before doing anything else.
 
 #![no_std]
 #![no_main]
@@ -23,6 +29,34 @@
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
+
+// Flash Configuration Field (K64 RM §29.3.1), loaded at reset:
+//   0x400..0x407 backdoor comparison key = all 0xFF
+//   0x408..0x40B FPROT0..3 = 0xFF (no region protected)
+//   0x40C FSEC = 0xFE (SEC = 0b10 unsecured, MEEN = 0b11 mass erase enabled,
+//                      FSLACC/KEYEN = 0b11 disabled)
+//   0x40D FOPT = 0xFF (NMI pin enabled, EzPort enabled, normal boot)
+//   0x40E FEPROT = 0xFF, 0x40F FDPROT = 0xFF
+#[link_section = ".flash_config"]
+#[used]
+#[no_mangle]
+pub static FLASH_CONFIG: [u8; 16] = [
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // backdoor key
+    0xFF, 0xFF, 0xFF, 0xFF, // FPROT3..0
+    0xFE, 0xFF, 0xFF, 0xFF, // FSEC, FOPT, FEPROT, FDPROT
+];
+
+// WDOG (K64 RM §23): STCTRLH @ 0x00 (16-bit), UNLOCK @ 0x0E (16-bit).
+// The unlock sequence must complete, and the STCTRLH write follow it, within
+// the WCT window (256 bus clocks) — so no calls in between.
+const WDOG: u32 = 0x4005_2000;
+const WDOG_STCTRLH: *mut u16 = WDOG as *mut u16;
+const WDOG_UNLOCK: *mut u16 = (WDOG + 0x0E) as *mut u16;
+const WDOG_UNLOCK_KEY1: u16 = 0xC520;
+const WDOG_UNLOCK_KEY2: u16 = 0xD928;
+// STCTRLH reset value 0x01D3 with WDOGEN (bit 0) cleared; ALLOWUPDATE (bit 4)
+// kept set so later firmware could still reconfigure it.
+const WDOG_STCTRLH_DISABLED: u16 = 0x01D2;
 
 // SIM (K64 RM §12): SCGC4 @ 0x1034, SCGC5 @ 0x1038.
 const SIM: u32 = 0x4004_7000;
@@ -136,6 +170,11 @@ fn spin(iterations: u32) {
 #[entry]
 fn main() -> ! {
     unsafe {
+        // Disable the watchdog first, inside the WCT window after reset.
+        write_volatile(WDOG_UNLOCK, WDOG_UNLOCK_KEY1);
+        write_volatile(WDOG_UNLOCK, WDOG_UNLOCK_KEY2);
+        write_volatile(WDOG_STCTRLH, WDOG_STCTRLH_DISABLED);
+
         // UART0 on SCGC4 bit 10; PORTB/PORTE on SCGC5 bits 10/13.
         write_volatile(SIM_SCGC4, read_volatile(SIM_SCGC4) | (1 << 10));
         write_volatile(SIM_SCGC5, read_volatile(SIM_SCGC5) | (1 << 10) | (1 << 13));

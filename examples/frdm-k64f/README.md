@@ -64,6 +64,10 @@ hb=0 red=0 green=1 blue=1
 
 ## Explicitly not claimed
 
+- **WDOG** is not modelled (a stub: no timeout, no reset). The firmware
+  unlocks and disables it at the top of `main`, as it must on silicon, where
+  WDOG is enabled out of reset. The ELF also carries the unsecured Flash
+  Configuration Field at `0x400` (FSEC `0xFE`), so it is safe to flash.
 - **SIM clock gating** is not modelled (the SIM window is a stub). The firmware
   writes `SCGC4`/`SCGC5` as silicon requires, but the simulator does not gate on
   them.
