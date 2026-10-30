@@ -1,7 +1,7 @@
 # LabWired - MK64FN1M0VLL12 chip configuration
 #
 # The MK64FN1M0VLL12: Cortex-M4F, 1 MiB flash, 256 KiB SRAM — the MCU on the
-# NXP FRDM-K64F. Second Renode-survey candidate after STM32L552.
+# NXP FRDM-K64F.
 #
 # Sources:
 # - K64P144M120SF5RM (K64 Sub-Family Reference Manual): SIM, MCG, UART, GPIO,

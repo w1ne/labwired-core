@@ -13,8 +13,9 @@
 //!   UART0 PTB16 (RX) / PTB17 (TX), ALT3, OpenSDA VCP, 115200 8N1
 //!
 //! The firmware runs on the MCG FEI reset clock (32.768 kHz IRC x 640 =
-//! 20.97152 MHz). No PLL/MCG change is made: UART0's reset clock source is
-//! MCGFLLCLK. BR = 20.97152 MHz / (16 * 115200) = 11.375 → BDL 11, BRFA 12.
+//! 20.97152 MHz). No PLL/MCG change is made: UART0 (like UART1) is clocked
+//! from the core/system clock, which in FEI is the 20.97152 MHz FLL output.
+//! BR = 20.97152 MHz / (16 * 115200) = 11.375 → BDL 11, BRFA 12.
 
 #![no_std]
 #![no_main]

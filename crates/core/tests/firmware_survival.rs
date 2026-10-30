@@ -307,7 +307,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         chip: "mk64f12",
         system: "frdm-k64f",
         fixture: "frdm-k64f-smoke.elf",
-        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2003_FFFF)],
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
         expected_uart_output: b"FRDM-K64F SMOKE\n",
     },
     SurvivalCase {
