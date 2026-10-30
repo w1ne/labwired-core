@@ -904,9 +904,10 @@ impl WasmSimulator {
             states.push(serde_json::json!({
                 "id": id,
                 "kind": stepper.device_type(),
-                "angle": stepper.angle_degrees() as f64,
+                "angle": stepper.angle_degrees_f64(),
                 "steps": stepper.steps(),
-                "active": stepper.is_commanded(),
+                // Live enable (EN active), not latched "ever stepped".
+                "active": stepper.is_enabled(),
             }));
         }
         // DC/BLDC only — steppers are emitted above (motor_snapshots also
@@ -915,7 +916,7 @@ impl WasmSimulator {
             .bus
             .motor_snapshots()
             .into_iter()
-            .filter(|s| s.kind != "stepper")
+            .filter(|s| s.kind != labwired_core::bus::STEPPER_SNAPSHOT_KIND)
             .collect();
         states.extend(motor_states_json(dc_bldc));
 

@@ -534,3 +534,39 @@ external_devices:
     let err = manifest.resolved_motor_models().unwrap_err().to_string();
     assert!(err.contains("both_inputs_low"), "{err}");
 }
+
+
+#[test]
+fn step_dir_folded_into_motor_snapshots() {
+    use crate::peripherals::components::step_dir_motor::StepDirMotor;
+    use std::sync::Arc;
+
+    let mut bus = SystemBus::new();
+    let motor = Arc::new(
+        StepDirMotor::new("nema17", 3, 4, Some(8)).with_device_type("nema17"),
+    );
+    // EN low, DIR high, 50 full steps → 90 deg
+    motor.on_gpio_edge(8, false, 0);
+    motor.on_gpio_edge(4, true, 1);
+    for i in 0..50u64 {
+        motor.on_gpio_edge(3, true, 2 + i * 2);
+        motor.on_gpio_edge(3, false, 3 + i * 2);
+    }
+    bus.observe_device(motor.clone());
+
+    let snaps = bus.motor_snapshots();
+    let step = snaps
+        .iter()
+        .find(|s| s.id == "nema17")
+        .expect("nema17 snapshot");
+    assert_eq!(step.kind, STEPPER_SNAPSHOT_KIND);
+    assert!((step.position_rad.to_degrees() - 90.0).abs() < 1e-9);
+    assert_eq!(step.control_state, "step");
+
+    // Disable EN → idle, angle holds
+    motor.on_gpio_edge(8, true, 200);
+    let snaps = bus.motor_snapshots();
+    let step = snaps.iter().find(|s| s.id == "nema17").unwrap();
+    assert_eq!(step.control_state, "idle");
+    assert!((step.position_rad.to_degrees() - 90.0).abs() < 1e-9);
+}

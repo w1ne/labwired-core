@@ -179,6 +179,10 @@ pub(super) struct PwmPhaseCursor {
     prescaler_phase: u32,
 }
 
+/// `MotorSnapshot.kind` for STEP/DIR steppers folded from ObservedDevice.
+/// Keep in sync with the filter in wasm `get_actuator_states`.
+pub const STEPPER_SNAPSHOT_KIND: &str = "stepper";
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct MotorSnapshot {
     pub id: String,
@@ -1258,10 +1262,13 @@ impl SystemBus {
         // oracles can assert shaft angle via `position_rad`.
         for m in self.observed_of::<crate::peripherals::components::step_dir_motor::StepDirMotor>()
         {
-            let angle_deg = f64::from(m.angle_degrees());
+            if m.id().is_empty() {
+                continue;
+            }
+            let angle_deg = m.angle_degrees_f64();
             out.push(MotorSnapshot {
                 id: m.id().to_string(),
-                kind: "stepper",
+                kind: STEPPER_SNAPSHOT_KIND,
                 position_rad: angle_deg.to_radians(),
                 speed_rpm: 0.0,
                 speed_rpm_peak_abs: 0.0,
@@ -1272,6 +1279,8 @@ impl SystemBus {
                 phase_currents_a: None,
                 bus_voltage_v: 0.0,
                 commutation_sector: None,
+                // `commanded` clears when EN goes inactive, so this returns
+                // to idle after the firmware disables the driver.
                 control_state: if m.is_commanded() {
                     "step".to_owned()
                 } else {

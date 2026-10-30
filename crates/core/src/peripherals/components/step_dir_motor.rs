@@ -13,7 +13,7 @@ use std::sync::Mutex;
 #[derive(Debug, Clone, Copy)]
 pub struct StepDirConfig {
     /// Degrees of shaft rotation per full step (e.g. 1.8° for NEMA17).
-    pub degrees_per_step: f32,
+    pub degrees_per_step: f64,
     /// When true, EN low enables the driver (A4988/TMC2209 default).
     pub enable_active_low: bool,
 }
@@ -59,6 +59,8 @@ impl StepDirMotor {
             cfg: StepDirConfig::default(),
             state: Mutex::new(State::default()),
             id: id.into(),
+            // Kit attach always overrides via with_device_type(ctx.device_type()).
+            // Default is the canonical kit id for hand-built test twins.
             device_type: "a4988".into(),
         }
     }
@@ -86,12 +88,47 @@ impl StepDirMotor {
     }
 
     pub fn angle_degrees(&self) -> f32 {
+        self.angle_degrees_f64() as f32
+    }
+
+    /// Shaft angle in degrees (for prove `position_rad`).
+    pub fn angle_degrees_f64(&self) -> f64 {
         let s = self.state.lock().unwrap();
-        s.steps as f32 * self.cfg.degrees_per_step
+        s.steps as f64 * self.cfg.degrees_per_step
+    }
+
+    pub fn degrees_per_step(&self) -> f64 {
+        self.cfg.degrees_per_step
+    }
+
+    /// True while the driver is currently enabled (EN active).
+    pub fn is_enabled(&self) -> bool {
+        let s = self.state.lock().unwrap();
+        match self.en_pin {
+            None => true,
+            Some(_) => {
+                if self.cfg.enable_active_low {
+                    !s.en_level
+                } else {
+                    s.en_level
+                }
+            }
+        }
     }
 
     pub fn is_commanded(&self) -> bool {
         self.state.lock().unwrap().commanded
+    }
+
+    fn enabled_level(cfg: &StepDirConfig, en_level: bool, has_en: bool) -> bool {
+        if !has_en {
+            return true;
+        }
+        if cfg.enable_active_low {
+            !en_level
+        } else {
+            en_level
+        }
     }
 
     pub fn on_gpio_edge(&self, pin: u8, to: bool, _sim_cycle: u64) {
@@ -101,16 +138,7 @@ impl StepDirMotor {
             s.step_level = to;
             if to && !was {
                 // Rising STEP edge
-                let enabled = match self.en_pin {
-                    None => true,
-                    Some(_) => {
-                        if self.cfg.enable_active_low {
-                            !s.en_level
-                        } else {
-                            s.en_level
-                        }
-                    }
-                };
+                let enabled = Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some());
                 if enabled {
                     if s.dir_level {
                         s.steps += 1;
@@ -124,6 +152,11 @@ impl StepDirMotor {
             s.dir_level = to;
         } else if self.en_pin == Some(pin) {
             s.en_level = to;
+            // EN inactive → not currently stepping; clear so control_state /
+            // active can read idle after the firmware disables the driver.
+            if !Self::enabled_level(&self.cfg, s.en_level, true) {
+                s.commanded = false;
+            }
         }
     }
 }
@@ -269,5 +302,20 @@ mod tests {
         }
         assert_eq!(m.steps(), 200);
         assert!((m.angle_degrees() - 360.0).abs() < 0.01);
+        assert!((m.angle_degrees_f64() - 360.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn commanded_clears_when_en_disabled() {
+        let m = StepDirMotor::new("m", 2, 3, Some(4));
+        m.on_gpio_edge(4, false, 0); // EN low
+        m.on_gpio_edge(3, true, 1);
+        m.on_gpio_edge(2, true, 2);
+        assert!(m.is_commanded());
+        assert!(m.is_enabled());
+        m.on_gpio_edge(4, true, 3); // EN high = disabled
+        assert!(!m.is_enabled());
+        assert!(!m.is_commanded());
+        assert_eq!(m.steps(), 1); // position holds
     }
 }
