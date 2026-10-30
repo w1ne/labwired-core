@@ -201,6 +201,187 @@ struct FileAccess {
     post: Option<(usize, i32)>,
 }
 
+/// Per-device geometry for the PIC18 parts whose SFR map matches this model:
+/// `(chip name, program flash bytes, Access Bank split)`.
+///
+/// A part is listed only when every SFR address and every bit position the
+/// model implements (core, INTCON/INTCON2/INTCON3, PIR/PIE/IPR 1-2, RCON,
+/// EUSART TX, PORT/LAT/TRIS A-C) is identical to the PIC18F4520 map in the
+/// SDCC 4.4.0 device header. Flash size is the gputils `<part>_g.lkr` code
+/// page; the split is SDCC `pic16devices.txt` (`0x80` for SFRs from 0xF80,
+/// `0x60` for SFRs from 0xF60). J-series flash ends 8 bytes early because
+/// the configuration words live in the last program-memory row.
+/// Parts left out: J11/J13/J50/J53 (EUSART1 at 0xFAE), K40/Q10 (moved SFR
+/// map), 1220/1230/1320/1330 (no PORTC), K50 (IOC replaces RBIE/RBIF).
+const PIC18_DEVICES: &[(&str, usize, u8)] = &[
+    ("pic18f13k22", 8192, 0x60),
+    ("pic18lf13k22", 8192, 0x60),
+    ("pic18f14k22", 16384, 0x60),
+    ("pic18lf14k22", 16384, 0x60),
+    ("pic18f2220", 4096, 0x80),
+    ("pic18f2221", 4096, 0x80),
+    ("pic18f2320", 8192, 0x80),
+    ("pic18f2321", 8192, 0x80),
+    ("pic18f2331", 8192, 0x60),
+    ("pic18f23k20", 8192, 0x60),
+    ("pic18f23k22", 8192, 0x60),
+    ("pic18lf23k22", 8192, 0x60),
+    ("pic18f2410", 16384, 0x80),
+    ("pic18f242", 16384, 0x80),
+    ("pic18f2420", 16384, 0x80),
+    ("pic18f2423", 16384, 0x80),
+    ("pic18f2431", 16384, 0x60),
+    ("pic18f2450", 16384, 0x60),
+    ("pic18f2455", 24576, 0x60),
+    ("pic18f2458", 24576, 0x60),
+    ("pic18f248", 16384, 0x60),
+    ("pic18f2480", 16384, 0x60),
+    ("pic18f24j10", 16376, 0x80),
+    ("pic18f24k20", 16384, 0x60),
+    ("pic18f24k22", 16384, 0x60),
+    ("pic18lf24k22", 16384, 0x60),
+    ("pic18f24k50", 16384, 0x60),
+    ("pic18lf24k50", 16384, 0x60),
+    ("pic18f2510", 32768, 0x80),
+    ("pic18f2515", 49152, 0x80),
+    ("pic18f252", 32768, 0x80),
+    ("pic18f2520", 32768, 0x80),
+    ("pic18f2523", 32768, 0x80),
+    ("pic18f2525", 49152, 0x80),
+    ("pic18f2550", 32768, 0x60),
+    ("pic18f2553", 32768, 0x60),
+    ("pic18f258", 32768, 0x60),
+    ("pic18f2580", 32768, 0x60),
+    ("pic18f2585", 49152, 0x60),
+    ("pic18f25j10", 32760, 0x80),
+    ("pic18f25k20", 32768, 0x60),
+    ("pic18f25k22", 32768, 0x60),
+    ("pic18lf25k22", 32768, 0x60),
+    ("pic18f25k50", 32768, 0x60),
+    ("pic18lf25k50", 32768, 0x60),
+    ("pic18f25k80", 32768, 0x60),
+    ("pic18lf25k80", 32768, 0x60),
+    ("pic18f2610", 65536, 0x80),
+    ("pic18f2620", 65536, 0x80),
+    ("pic18f2680", 65536, 0x60),
+    ("pic18f2682", 81920, 0x60),
+    ("pic18f2685", 98304, 0x60),
+    ("pic18f26k20", 65536, 0x60),
+    ("pic18f26k22", 65536, 0x60),
+    ("pic18lf26k22", 65536, 0x60),
+    ("pic18f26k80", 65536, 0x60),
+    ("pic18lf26k80", 65536, 0x60),
+    ("pic18f4220", 4096, 0x80),
+    ("pic18f4221", 4096, 0x80),
+    ("pic18f4320", 8192, 0x80),
+    ("pic18f4321", 8192, 0x80),
+    ("pic18f4331", 8192, 0x60),
+    ("pic18f43k20", 8192, 0x60),
+    ("pic18f43k22", 8192, 0x60),
+    ("pic18lf43k22", 8192, 0x60),
+    ("pic18f4410", 16384, 0x80),
+    ("pic18f442", 16384, 0x80),
+    ("pic18f4420", 16384, 0x80),
+    ("pic18f4423", 16384, 0x80),
+    ("pic18f4431", 16384, 0x60),
+    ("pic18f4450", 16384, 0x60),
+    ("pic18f4455", 24576, 0x60),
+    ("pic18f4458", 24576, 0x60),
+    ("pic18f448", 16384, 0x60),
+    ("pic18f4480", 16384, 0x60),
+    ("pic18f44j10", 16376, 0x80),
+    ("pic18f44k20", 16384, 0x60),
+    ("pic18f44k22", 16384, 0x60),
+    ("pic18lf44k22", 16384, 0x60),
+    ("pic18f4510", 32768, 0x80),
+    ("pic18f4515", 49152, 0x80),
+    ("pic18f452", 32768, 0x80),
+    ("pic18f4520", 32768, 0x80),
+    ("pic18f4523", 32768, 0x80),
+    ("pic18f4525", 49152, 0x80),
+    ("pic18f4550", 32768, 0x60),
+    ("pic18f4553", 32768, 0x60),
+    ("pic18f458", 32768, 0x60),
+    ("pic18f4580", 32768, 0x60),
+    ("pic18f4585", 49152, 0x60),
+    ("pic18f45j10", 32760, 0x80),
+    ("pic18f45k20", 32768, 0x60),
+    ("pic18f45k22", 32768, 0x60),
+    ("pic18lf45k22", 32768, 0x60),
+    ("pic18f45k50", 32768, 0x60),
+    ("pic18lf45k50", 32768, 0x60),
+    ("pic18f45k80", 32768, 0x60),
+    ("pic18lf45k80", 32768, 0x60),
+    ("pic18f4610", 65536, 0x80),
+    ("pic18f4620", 65536, 0x80),
+    ("pic18f4680", 65536, 0x60),
+    ("pic18f4682", 81920, 0x60),
+    ("pic18f4685", 98304, 0x60),
+    ("pic18f46k20", 65536, 0x60),
+    ("pic18f46k22", 65536, 0x60),
+    ("pic18lf46k22", 65536, 0x60),
+    ("pic18f46k80", 65536, 0x60),
+    ("pic18lf46k80", 65536, 0x60),
+    ("pic18f6390", 8192, 0x60),
+    ("pic18f6393", 8192, 0x60),
+    ("pic18f63j90", 8184, 0x60),
+    ("pic18f6490", 16384, 0x60),
+    ("pic18f6493", 16384, 0x60),
+    ("pic18f64j90", 16376, 0x60),
+    ("pic18f6520", 32768, 0x60),
+    ("pic18f6527", 49152, 0x60),
+    ("pic18f6585", 49152, 0x60),
+    ("pic18f65j90", 32760, 0x60),
+    ("pic18f65k22", 32768, 0x60),
+    ("pic18f65k80", 32768, 0x60),
+    ("pic18lf65k80", 32768, 0x60),
+    ("pic18f65k90", 32768, 0x60),
+    ("pic18f6620", 65536, 0x60),
+    ("pic18f6622", 65536, 0x60),
+    ("pic18f6627", 98304, 0x60),
+    ("pic18f6628", 98304, 0x60),
+    ("pic18f6680", 65536, 0x60),
+    ("pic18f66k22", 65536, 0x60),
+    ("pic18f66k80", 65536, 0x60),
+    ("pic18lf66k80", 65536, 0x60),
+    ("pic18f66k90", 65536, 0x60),
+    ("pic18f6720", 131072, 0x60),
+    ("pic18f6722", 131072, 0x60),
+    ("pic18f6723", 131072, 0x60),
+    ("pic18f67k22", 131072, 0x60),
+    ("pic18f67k90", 131072, 0x60),
+    ("pic18f8390", 8192, 0x60),
+    ("pic18f8393", 8192, 0x60),
+    ("pic18f83j90", 8184, 0x60),
+    ("pic18f8490", 16384, 0x60),
+    ("pic18f8493", 16384, 0x60),
+    ("pic18f84j90", 16376, 0x60),
+    ("pic18f8520", 32768, 0x60),
+    ("pic18f8527", 49152, 0x60),
+    ("pic18f8585", 49152, 0x60),
+    ("pic18f85j90", 32760, 0x60),
+    ("pic18f85k22", 32768, 0x60),
+    ("pic18f85k90", 32768, 0x60),
+    ("pic18f8620", 65536, 0x60),
+    ("pic18f8622", 65536, 0x60),
+    ("pic18f8627", 98304, 0x60),
+    ("pic18f8680", 65536, 0x60),
+    ("pic18f86k22", 65536, 0x60),
+    ("pic18f86k90", 65536, 0x60),
+    ("pic18f8720", 131072, 0x60),
+    ("pic18f8722", 131072, 0x60),
+    ("pic18f87k22", 131072, 0x60),
+    ("pic18f87k90", 131072, 0x60),
+];
+
+/// Look up `(flash bytes, Access Bank split)` for a lowercase chip name.
+pub fn pic18_device_geometry(name: &str) -> Option<(usize, u8)> {
+    PIC18_DEVICES
+        .iter()
+        .find(|(n, _, _)| *n == name)
+        .map(|&(_, flash, split)| (flash, split))
+}
+
 #[derive(Debug, Clone)]
 pub struct Pic18 {
     wreg: u8,
@@ -282,13 +463,14 @@ impl Pic18 {
     /// PIC18F4520 (DS39631E): 32 KB flash, 31-level stack, SFRs from
     /// `0xF80`, so the Access Bank splits at `0x80`.
     pub fn for_chip_name(name: &str) -> Self {
-        match name.trim().to_ascii_lowercase().as_str() {
-            "pic18f4520" => {
-                let mut cpu = Self::with_geometry(32 * 1024, PIC18_STACK_DEPTH);
-                cpu.access_split = 0x80;
+        let name = name.trim().to_ascii_lowercase();
+        match pic18_device_geometry(&name) {
+            Some((flash_bytes, access_split)) => {
+                let mut cpu = Self::with_geometry(flash_bytes, PIC18_STACK_DEPTH);
+                cpu.access_split = access_split;
                 cpu
             }
-            _ => Self::new(),
+            None => Self::new(),
         }
     }
 
@@ -2702,6 +2884,47 @@ mod tests {
         // read-modify-write hazard that LATx exists to avoid.
         run(&mut cpu, 1);
         assert_eq!(cpu.read_data(latb), 0x0F);
+    }
+
+    #[test]
+    fn device_table_geometry_matches_sdcc_and_gputils() {
+        // (name, gputils code page bytes, SDCC split)
+        for (name, flash, split) in [
+            ("pic18f4520", 32 * 1024, 0x80),
+            ("pic18f2221", 4 * 1024, 0x80),
+            ("pic18f4620", 64 * 1024, 0x80),
+            ("pic18f45j10", 32 * 1024 - 8, 0x80),
+            ("pic18f45k22", 32 * 1024, 0x60),
+            ("pic18lf46k80", 64 * 1024, 0x60),
+            ("pic18f8722", 128 * 1024, 0x60),
+        ] {
+            let cpu = Pic18::for_chip_name(name);
+            assert_eq!(cpu.flash.len(), flash, "{name} flash");
+            assert_eq!(cpu.access_split, split, "{name} split");
+        }
+        // Parts with a different EUSART/SFR map stay off the table.
+        for name in ["pic18f46j50", "pic18f45k40", "pic18f14k50", "pic18f1220"] {
+            assert_eq!(pic18_device_geometry(name), None, "{name}");
+        }
+        let mut names: Vec<_> = PIC18_DEVICES.iter().map(|d| d.0).collect();
+        assert!(names.iter().all(|n| *n == n.to_ascii_lowercase()));
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), PIC18_DEVICES.len(), "duplicate device row");
+    }
+
+    #[test]
+    fn k_series_access_bank_splits_at_0x60() {
+        let mut cpu = Pic18::for_chip_name("PIC18F45K22");
+        cpu.load_words(&[
+            0x0E5A, // MOVLW 0x5A
+            0x6E5F, // MOVWF 0x5F, access -> GPR 0x05F
+            0x6E60, // MOVWF 0x60, access -> SFR 0xF60
+        ]);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.data[0x05F], 0x5A);
+        assert_eq!(cpu.data[0xF60], 0x5A);
+        assert_eq!(cpu.data[0x060], 0);
     }
 
     #[test]
