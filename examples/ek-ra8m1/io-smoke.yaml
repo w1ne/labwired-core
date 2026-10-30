@@ -1,0 +1,32 @@
+# LabWired - EK-RA8M1 SCI9+LED IO smoke
+#
+# Build: cargo build -p firmware-ek-ra8m1-smoke --release --target thumbv8m.main-none-eabi
+#
+# The firmware switches SCICLK to MOCO /1 with the SCICKCR CKSREQ/CKSRDY
+# handshake, clears MSTPCRB.MSTPB22 (SCI9), routes PA14/PA15 to SCI9 and turns
+# on the S1/S2 pull-ups through PmnPFS behind PWPRS, brings SCI9 (SCI_B) up at
+# 9600 8N1 (CCR2.BRR 25) and waits for CESR.TIST/RIST, then walks LED1-LED3
+# (P600, P414, P107, active high) through PCNTR3 POSR/PORR and prints the pin
+# and the whole PODR of its port read back.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra8m1-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "EK-RA8M1 SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m85 uart=sci9 (sci_b)"
+      - "clk src=moco sciclk=8000000 scickcr=01 brr=25 baud=9600"
+      - "ccr3=00001200 cesr=11"
+      - "led=blue on pin=1 port=6 podr=0001"
+      - "led=blue off pin=0 port=6 podr=0000"
+      - "led=green on pin=1 port=4 podr=4000"
+      - "led=green off pin=0 port=4 podr=0000"
+      - "led=red on pin=1 port=1 podr=0080"
+      - "led=red off pin=0 port=1 podr=0000"
+      - "s1=1 s2=1"
+      - "hb=0 podr6=0001 s1=1 s2=1"
+      - "hb=1 podr6=0001 s1=1 s2=1"
+  - expected_stop_reason: max_steps

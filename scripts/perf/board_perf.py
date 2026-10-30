@@ -306,6 +306,8 @@ FIXTURES = {
     ("arm", 0x00200000, 0x20000000): ("cc2538", SPIN_CORTEX_M),
     # Microchip SAM E70: flash at 0x00400000, SRAM at 0x20400000.
     ("arm", 0x00400000, 0x20400000): ("same70", SPIN_CORTEX_M),
+    # Renesas RA8M1: code flash at 0x02000000, SRAM at 0x22000000.
+    ("arm", 0x02000000, 0x22000000): ("ra8m1", SPIN_CORTEX_M),
     # Ambiq Apollo4 Plus: MRAM at 0x0, RAM (TCM first) at 0x10000000.
     ("arm", 0x00000000, 0x10000000): ("apollo4p", SPIN_CORTEX_M),
     # i.MX RT1064's smoke image executes directly from DTCM. It is still an
