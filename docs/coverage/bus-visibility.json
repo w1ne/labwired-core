@@ -234,6 +234,10 @@
     "name": "sam4s16c"
   },
   {
+    "buses": [],
+    "name": "same70q21b"
+  },
+  {
     "buses": [
       "I2C",
       "SPI"

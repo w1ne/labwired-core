@@ -54,7 +54,8 @@ The models column is a content digest over everything that board's `models` list
 | `stm32l552` | 🟡 smoke-manual | — | `b0acab786df660d5` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `080484e523c4dd6f` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `6622530fe8fb43d4` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `f3257ea9eb2a0a17` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `d23e13c0a15425a8` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `950f4c890b7e01c8` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `ac4588941f1eae37` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `9a1f264c4501305f` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `6ef9ba5d01d65474` | no silicon capture |
@@ -442,6 +443,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/apollo4p-evb.md`](apollo4p-evb.md)  ·  Chip: `configs/chips/amap42kp.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_apollo4p_evb_smoke_survival
+- Drift status: **no silicon capture**
+
+## `same70q21b` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/sam-e70-xplained.md`](sam-e70-xplained.md)  ·  Chip: `configs/chips/same70q21b.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_sam_e70_xplained_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual
