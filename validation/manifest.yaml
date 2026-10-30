@@ -1657,7 +1657,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: ea2dd5a34b46b789f460b819af6789848562c4c826b0c1d1fa22cc8c8c9a6c4c
+    drift_ack_digest: 951ed1e0e3db11084e9b91979b3237be6741e22bbcea7395e38694a699115db4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3667,7 +3667,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: f497e8ed6c39dfd643733b5f32f2f33ffd35ff1eb6d50dcf0dd05c47f763df0a
+    drift_ack_digest: 463baad1da9ed4d72fa85ba67577c2a8e50170eafc91329698f8a1dd5d5a52b0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4635,7 +4635,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 67a618cbcf1241fb26f1fe5451df8d50c5c8cb127bdf23099e50381ec114bd96
+    drift_ack_digest: be92670fd4e90872884d56599bac0ac97ee6970741875b5209c692efa535e853
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5594,7 +5594,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 6f77c2475b98cb7fff635ec9f0c76d7fcfd60530b2e5981676344b4460a48336
+    drift_ack_digest: 7fa145c64778352ac2614b2f839663ca8f3b5a988294b4df0fda67553215576f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6586,7 +6586,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 5fc759dbe968faae002d6e61eda78510a26ad14d91c943e6fdef71b0d39b88aa
+    drift_ack_digest: dad34a2a13a777629ba42df4772d212caafdd1c0a0be18d6288437eb4f61865e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

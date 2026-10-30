@@ -233,6 +233,8 @@ fn main() -> ! {
         write_volatile(SCICKCR, read_volatile(SCICKCR) | SCICKCR_CKSREQ);
         while read_volatile(SCICKCR) & SCICKCR_CKSRDY == 0 {}
         write_volatile(SCICKDIVCR, 0);
+        // FSP's read-modify-write writes CKSRDY back as 1. CKSRDY is
+        // read-only, so the write has no effect on it.
         write_volatile(SCICKCR, SCICKSEL_MOCO | SCICKCR_CKSREQ | SCICKCR_CKSRDY);
         write_volatile(SCICKCR, read_volatile(SCICKCR) & !SCICKCR_CKSREQ);
         while read_volatile(SCICKCR) & SCICKCR_CKSRDY != 0 {}

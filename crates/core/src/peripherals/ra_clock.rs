@@ -66,6 +66,8 @@ impl RaSysc {
 
     /// The RA8 SYSTEM window: adds the SCICKDIVCR/SCICKCR handshake. Both
     /// reset to 0 here; the HW-manual reset values are not cross-checked.
+    // TODO: take the SCICKCR/SCICKDIVCR reset values from the RA8M1 HW
+    // manual (R01UH0994). SCICKSEL may not reset to 0 on silicon.
     pub fn new_ra8() -> Self {
         Self {
             sci_clock: Some((0, 0)),

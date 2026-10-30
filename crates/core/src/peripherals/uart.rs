@@ -2879,9 +2879,6 @@ mod tests {
         }
     }
 
-    /// YAML `profile: custom`: TX at a declared data-register offset reaches
-    /// the UART capture sink; optional enable_mask gates TX until set.
-    /// Offsets are synthetic (0x10/0x14/0x18) — not a vendor fingerprint.
     /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while
     /// CCR0.TE is set, CESR mirrors TE/RE, CSR@0x48 reports TDRE|TEND and
     /// RDRF on RX data, control registers read back from their FSP reset.
@@ -2944,6 +2941,9 @@ mod tests {
         );
     }
 
+    /// YAML `profile: custom`: TX at a declared data-register offset reaches
+    /// the UART capture sink; optional enable_mask gates TX until set.
+    /// Offsets are synthetic (0x10/0x14/0x18) — not a vendor fingerprint.
     #[test]
     fn test_custom_layout_tx_offset_and_enable_gate() {
         let map = UartRegMap {
