@@ -9,7 +9,9 @@
 //! step, so the run stops at `max_steps`. With it on, `step` counts retired
 //! instructions only, and the loop used to skip idle time forever without
 //! moving it: `labwired test` never returned. Both arms must now report the
-//! same run, and neither may hang (a watchdog kills a hung child).
+//! same status, stop reason and step count, and neither may hang (a watchdog
+//! kills a hung child). Total cycles are expected to differ: the early end
+//! moves no device time, so the skip-on arm reports fewer cycles.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
