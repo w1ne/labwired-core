@@ -79,6 +79,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
 * **sam4s16c**
   * UART: no UART0 bring-up in this harness; bytes are proven by the sam4s-xplained survival smoke
+* **same70q21b**
+  * UART: no USART1 bring-up in this harness; bytes are proven by the sam-e70-xplained survival smoke
 * **stm32f072**
   * UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke
 * **stm32l552**
@@ -138,6 +140,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
 | sam4s16c | — | — | — |
+| same70q21b | — | — | — |
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f103c4 | ✓ | ✓ | ✓ |

@@ -328,6 +328,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"SAM4S XPLAINED SMOKE\n",
     },
     SurvivalCase {
+        // SAM E70 Xplained: ATSAME70Q21B (Cortex-M7), 2 MiB flash at
+        // 0x00400000, 384 KiB SRAM at 0x20400000. USART1 (PA21/PB4) is the
+        // EDBG virtual COM port; the smoke disables the WDT, releases PB4
+        // through CCFG_SYSIO, walks LED0 (PC8, active low) with ODSR readback
+        // and reads the pulled-up SW0 (PA11). SIM-DERIVED.
+        name: "sam_e70_xplained_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "same70q21b",
+        system: "sam-e70-xplained",
+        fixture: "sam-e70-xplained-smoke.elf",
+        valid_pc_ranges: &[(0x0040_0000, 0x005F_FFFF), (0x2040_0000, 0x2045_FFFF)],
+        expected_uart_output: b"SAM E70 XPLAINED SMOKE\n",
+    },
+    SurvivalCase {
         // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
         // 0x08000000, 16 KiB SRAM at 0x20000000. USART1 (PA9/PA10) is the
         // ST-LINK VCP; the smoke walks the four user LEDs with GPIOC ODR
@@ -2138,6 +2154,11 @@ survival_gate!(
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 
 survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
+
+survival_gate!(
+    test_sam_e70_xplained_smoke_survival,
+    "sam_e70_xplained_smoke"
+);
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
 
