@@ -40,7 +40,7 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
 | Relative | `BRA`, `RCALL`, `BZ`, `BNZ`, `BC`, `BNC`, `BOV`, `BNOV`, `BN`, `BNN` | signed offsets in instruction words |
 | Absolute | two-word `GOTO`, two-word `CALL` | 20-bit literal is a **word** address (`k -> PC<20:1>`) |
 | Stack | `RETURN`/`RETURN FAST` | `CALL FAST` saves WREG/STATUS/BSR for the matching fast return |
-| Interrupts | `RETFIE`/`RETFIE FAST` | vectors at `0x0008`/`0x0018`, `INTCON`/`INTCON2`/`INTCON3`, `PIR1`/`PIR2`/`PIE1`/`PIE2`/`IPR1`/`IPR2`, `RCON.IPEN`, `GIE`/`GIEH`/`GIEL`; fast restores the shadow registers |
+| Interrupts | `RETFIE`/`RETFIE FAST` | vectors at `0x0008`/`0x0018`, `INTCON`/`INTCON2`/`INTCON3`, `PIR1`/`PIR2`/`PIE1`/`PIE2`/`IPR1`/`IPR2`, `RCON.IPEN`, `GIE`/`GIEH`/`GIEL`/`PEIE`; entry saves and `FAST` restores the fast register stack |
 | FSR literal | `LFSR` | 12-bit literal loaded into FSR0/FSR1/FSR2 |
 | Indirect | `INDF0/1/2`, `POSTINC0/1/2`, `POSTDEC0/1/2`, `PREINC0/1/2`, `PLUSW0/1/2` | Virtual Access Bank registers used by byte/bit file operations; full 12-bit FSR address, independent of BSR and `a` |
 
@@ -66,18 +66,29 @@ current instruction retires) and pushes the next instruction as the return
 address. Sticky flags live in the SFR file and are cleared by the ISR.
 
 * `RCON.IPEN = 0`: every source vectors to `0x0008`; `INTCON.GIE` (bit 7) is
-  the global enable and is cleared on entry. `RETFIE` sets it again.
+  the global enable and is cleared on entry. The `PIR1`/`PIR2` peripheral
+  sources additionally need `INTCON.PEIE` (bit 6); the `INTCON`/`INTCON3`
+  sources need only `GIE`. `RETFIE` sets `GIE` again.
 * `RCON.IPEN = 1`: high-priority sources vector to `0x0008` through `GIEH`
-  (bit 7), low-priority sources to `0x0018` through `GIEL` (bit 6). Entry
+  (bit 7), low-priority sources to `0x0018` through `GIEH` **and** `GIEL`
+  (bit 6) — `GIEH = 0` disables all interrupts (DS39631 Register 9-1). Entry
   clears only the matching global bit, so a high-priority source may nest
   inside a low-priority ISR. `RETFIE` sets both `GIEH` and `GIEL`.
 * Sources: `INTCON` TMR0/INT0/RB, `INTCON3` INT1/INT2, and the eight bits of
   `PIR1`/`PIE1`/`IPR1` and `PIR2`/`PIE2`/`IPR2`. INT0 is always high priority
   when `IPEN = 1`; the other source priorities come from `INTCON2`,
-  `INTCON3` or the matching IPR bit.
-* `RETFIE FAST` restores WREG/STATUS/BSR from the same one-level shadow that
-  `CALL FAST`/`RETURN FAST` use. A full interrupt fast-register stack (and
-  per-device vector remapping) is not modelled yet.
+  `INTCON3` or the matching IPR bit. `INTCON3` follows the PIC18F4520
+  layout (DS39631 Register 9-3): INT2IP=7, INT1IP=6, INT2IE=4, INT1IE=3,
+  INT2IF=1, INT1IF=0.
+* Interrupt entry loads WREG/STATUS/BSR into the one-level fast register
+  stack (the same shadow `CALL FAST`/`RETURN FAST` use), and `RETFIE FAST`
+  restores them. A high-priority entry nested in a low-priority ISR
+  overwrites that save, as on silicon. Per-device vector remapping is not
+  modelled.
+* **No peripheral raises a flag yet.** `interrupt_request` reads the CPU's
+  internal SFR array only, and no bus peripheral writes `PIRx`/`INTCONx`, so
+  today the only way to pend a source is firmware (or a test) writing the
+  flag bit. `Cpu::set_exception_pending` is recorded but not consumed.
 
 
 * Default model: 16 banks x 256 bytes (`0x000..0xFFF`) and a 64 KiB flash.
@@ -168,10 +179,13 @@ addressing, two-word `GOTO`/`CALL`/`RETURN`, `LFSR`, conditional branches,
 overflow/underflow, PCL latch writes, `MOVFF` to `PCL`, `ADDWF PCL` computed
 jumps with and without low-byte carry, unknown-opcode `DecodeError`, snapshot
 round-trip, program image loading, and a hand-assembled add/store/GOTO program.
-The interrupt tests cover GIE masking, the high/low vectors and
-`GIEH`/`GIEL` gating, `INTCON` TMR0/INT0 and `INTCON3` INT1 sources,
-`PIR1`/`PIE1`/`IPR1` priority, `RETFIE` re-enabling and `RETFIE FAST` shadow
-restore. No catalogue part is onboarded or claimed.
+The interrupt tests cover GIE masking, `PEIE` gating of peripheral sources
+with `IPEN = 0`, the high/low vectors and `GIEH`/`GIEL` gating (including
+`GIEH = 0` masking low-priority sources), `INTCON` TMR0/INT0 sources, the
+`INTCON3` INT1/INT2 bits pinned to raw datasheet values, `PIR1`/`PIE1`/`IPR1`
+priority, `RETFIE` re-enabling, and `RETFIE FAST` restoring the context
+saved on interrupt entry (no hand-seeded shadow). `cpu_trace_conformance`
+covers `Pic18` like every other core. No catalogue part is onboarded or claimed.
 
 Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 
@@ -189,9 +203,9 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
    section handling, and a committed fixture are the next loader work.
 2. **Interrupts.** The basic controller is in: vectors `0x0008`/`0x0018`,
    `INTCON`/`INTCON2`/`INTCON3`, `PIR1`/`PIR2`/`PIE1`/`PIE2`/`IPR1`/`IPR2`,
-   `RCON.IPEN`, `GIE/GIEH/GIEL`, `RETFIE`/`RETFIE FAST`, and the one-level
-   fast shadow restore. Still missing: a full interrupt fast-register stack,
-   per-device vector remapping, interrupt latency/cycle accounting, and the
+   `RCON.IPEN`, `GIE/GIEH/GIEL`/`PEIE`, `RETFIE`/`RETFIE FAST`, and the
+   fast register stack saved on entry. Still missing: peripherals that
+   raise `PIRx` flags, per-device vector remapping, interrupt latency/cycle accounting, and the
    `RCON` reset-source/`STVREN` behavior tied to the vector path.
 3. **Peripherals.** GPIO (`TRIS`/`LAT`/`PORT`, pad masks, analog/PPS), oscillator
    and `CONFIG`, TMR0/1/2/3, CCP/ECCP, MSSP, EUSART, ADC, comparators, WDT,

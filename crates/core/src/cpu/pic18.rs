@@ -115,13 +115,13 @@ const INTCON_RBIF: u8 = 1 << 0;
 // INTCON2 priority bits.
 const INTCON2_TMR0IP: u8 = 1 << 2;
 const INTCON2_RBIP: u8 = 1 << 0;
-// INTCON3 bits.
-const INTCON3_INT2IE: u8 = 1 << 7;
-const INTCON3_INT1IE: u8 = 1 << 6;
-const INTCON3_INT2IF: u8 = 1 << 5;
-const INTCON3_INT1IF: u8 = 1 << 4;
-const INTCON3_INT2IP: u8 = 1 << 1;
-const INTCON3_INT1IP: u8 = 1 << 0;
+// INTCON3 bits (PIC18F4520 DS39631 Register 9-3; bits 5 and 2 unimplemented).
+const INTCON3_INT2IP: u8 = 1 << 7;
+const INTCON3_INT1IP: u8 = 1 << 6;
+const INTCON3_INT2IE: u8 = 1 << 4;
+const INTCON3_INT1IE: u8 = 1 << 3;
+const INTCON3_INT2IF: u8 = 1 << 1;
+const INTCON3_INT1IF: u8 = 1 << 0;
 // RCON.IPEN.
 const RCON_IPEN: u8 = 1 << 7;
 
@@ -362,25 +362,30 @@ impl Pic18 {
     /// ISR exactly as on silicon. Returns `Some(true)` for a high-priority
     /// source and `Some(false)` for a low-priority one.
     ///
-    /// With `RCON.IPEN = 0` every source vectors to `0x0008` and `INTCON.GIE`
-    /// gates it. With `IPEN = 1`, `GIEH`/`GIEL` gate the two vectors (a
-    /// high-priority source may nest inside a low-priority ISR).
+    /// With `RCON.IPEN = 0` every source vectors to `0x0008`: `INTCON.GIE`
+    /// gates them all, and the PIR1/PIR2 peripheral sources additionally need
+    /// `INTCON.PEIE` (INTCON<6>). With `IPEN = 1`, `GIEH` enables the
+    /// high-priority vector and `GIEH && GIEL` the low-priority one — GIEH=0
+    /// "disables all interrupts" (DS39631 Register 9-1) — so a high-priority
+    /// source may nest inside a low-priority ISR but not the reverse.
     fn interrupt_request(&self) -> Option<bool> {
         let intcon = self.read_data(SFR_INTCON);
         let intcon2 = self.read_data(SFR_INTCON2);
         let intcon3 = self.read_data(SFR_INTCON3);
         let ipen = self.read_data(SFR_RCON) & RCON_IPEN != 0;
 
-        let high_enabled = intcon & INTCON_GIE_GIEH != 0;
-        let low_enabled = if ipen {
-            intcon & INTCON_GIEL != 0
-        } else {
-            intcon & INTCON_GIE_GIEH != 0
-        };
-        if !high_enabled && !low_enabled {
+        let gie_gieh = intcon & INTCON_GIE_GIEH != 0;
+        // INTCON<6> is GIEL with IPEN=1 and PEIE with IPEN=0.
+        let giel_peie = intcon & INTCON_GIEL != 0;
+        if !gie_gieh {
             return None;
         }
-        let eligible = |high: bool| if high { high_enabled } else { low_enabled };
+        // GIE/GIEH is set past this point, so a high-priority source is always
+        // eligible; a low-priority one also needs GIEL when IPEN=1.
+        let low_enabled = !ipen || giel_peie;
+        let eligible = |high: bool| high || low_enabled;
+        // PIR/PIE peripheral sources in compatibility mode also need PEIE.
+        let peripheral_enabled = ipen || giel_peie;
 
         // INT0 is always a high-priority source with priority enabled; with
         // IPEN=0 it shares the single 0x0008 vector.
@@ -442,7 +447,7 @@ impl Pic18 {
             let priority = self.read_data(ipr);
             for bit in 0..8 {
                 let mask = 1 << bit;
-                if pending & mask != 0 && enabled & mask != 0 {
+                if pending & mask != 0 && enabled & mask != 0 && peripheral_enabled {
                     let high = if ipen { priority & mask != 0 } else { true };
                     if eligible(high) {
                         return Some(high);
@@ -457,7 +462,14 @@ impl Pic18 {
     /// Enter the interrupt vector for `high` priority, pushing the next
     /// instruction as the return address and clearing the matching global
     /// enable exactly as the hardware does.
+    ///
+    /// Entry also loads WREG, STATUS and BSR into the fast register stack
+    /// (DS39631 "Fast Register Stack"), which `RETFIE FAST` restores. A
+    /// high-priority entry nested in a low-priority ISR overwrites the
+    /// low-priority save, as on silicon — the low ISR must then save its own
+    /// context and return with a plain `RETFIE`.
     fn take_interrupt(&mut self, high: bool) {
+        self.shadow = Some((self.wreg, self.status, self.bsr));
         self.push(self.pc);
         let intcon = self.read_data(SFR_INTCON);
         let ipen = self.read_data(SFR_RCON) & RCON_IPEN != 0;
@@ -1181,6 +1193,10 @@ impl Cpu for Pic18 {
         self.stkptr = (val as usize).min(depth) as u8;
     }
 
+    /// Recorded for the `Cpu` contract but not consumed: PIC18 interrupts
+    /// are raised by firmware-visible PIRx/INTCONx flags, which
+    /// `interrupt_request` samples directly. No bus peripheral drives those
+    /// flags yet, so nothing calls this on a PIC18 system.
     fn set_exception_pending(&mut self, exception_num: u32) {
         self.exception_pending = Some(exception_num);
     }
@@ -1886,7 +1902,8 @@ mod tests {
         cpu.load_words(&[0x0000]); // NOP at 0
         cpu.load_flash(PIC18_HIGH_VECTOR, &0x0010u16.to_le_bytes()); // RETFIE
 
-        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH);
+        // IPEN=0: a PIR1 source needs GIE and PEIE (INTCON<6>).
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
         cpu.write_data(SFR_PIE1, 0x01);
         cpu.write_data(SFR_PIR1, 0x01);
 
@@ -2027,24 +2044,106 @@ mod tests {
     }
 
     #[test]
-    fn retfie_fast_restores_the_shadow_registers() {
+    fn retfie_fast_restores_the_context_saved_on_interrupt_entry() {
         let mut cpu = Pic18::new();
         cpu.load_words(&[0x0000]);
-        cpu.load_flash(PIC18_HIGH_VECTOR, &0x0011u16.to_le_bytes()); // RETFIE FAST
-        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH);
+        // ISR at 0x0008: MOVLW 0x99, MOVLB 5, RETFIE FAST.
+        let isr: Vec<u8> = [0x0E99u16, 0x0105, 0x0011]
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect();
+        cpu.load_flash(PIC18_HIGH_VECTOR, &isr);
+
+        // Interrupted context — no CALL FAST ever runs, so only interrupt
+        // entry can have filled the fast register stack.
+        cpu.wreg = 0x34;
+        cpu.status = STATUS_Z;
+        cpu.bsr = 0x02;
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
         cpu.write_data(SFR_PIE1, 0x01);
         cpu.write_data(SFR_PIR1, 0x01);
         run(&mut cpu, 1);
         assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
 
-        // The fast context would have been saved by CALL FAST/entry; seed the
-        // shadow the same way and require RETFIE FAST to restore it.
-        cpu.shadow = Some((0x34, STATUS_Z, 0x02));
-        cpu.write_data(SFR_PIR1, 0);
-        run(&mut cpu, 1);
+        cpu.write_data(SFR_PIR1, 0); // ISR acknowledges the source
+        run(&mut cpu, 2); // MOVLW 0x99, MOVLB 5 clobber WREG/BSR
+        assert_eq!(cpu.wreg(), 0x99);
+        assert_eq!(cpu.bsr(), 0x05);
+        cpu.status = STATUS_C; // and the ISR's arithmetic clobbers STATUS
+
+        run(&mut cpu, 1); // RETFIE FAST
         assert_eq!(cpu.wreg(), 0x34);
         assert_eq!(cpu.status(), STATUS_Z);
         assert_eq!(cpu.bsr(), 0x02);
         assert_eq!(cpu.get_pc(), 0x0002);
+    }
+
+    #[test]
+    fn peie_gates_peripheral_sources_when_ipen_is_clear() {
+        // GIE=1, PEIE=0: a PIR1/PIE1 pair must NOT vector.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000, 0x0000]);
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH);
+        cpu.write_data(SFR_PIE1, 0x01);
+        cpu.write_data(SFR_PIR1, 0x01);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x0002, "PEIE=0 masks PIR1 with IPEN=0");
+
+        // Setting PEIE (INTCON<6>, raw 0x40) lets it through.
+        cpu.write_data(SFR_INTCON, 0x80 | 0x40);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
+
+        // INTCON's own sources (TMR0 here) need only GIE, not PEIE.
+        let mut tmr0 = Pic18::new();
+        tmr0.load_words(&[0x0000]);
+        tmr0.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_TMR0IE | INTCON_TMR0IF);
+        run(&mut tmr0, 1);
+        assert_eq!(tmr0.get_pc(), PIC18_HIGH_VECTOR);
+    }
+
+    #[test]
+    fn low_priority_needs_gieh_as_well_as_giel() {
+        // IPEN=1, GIEL=1 but GIEH=0: GIEH=0 disables all interrupts.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]);
+        cpu.write_data(SFR_RCON, RCON_IPEN);
+        cpu.write_data(SFR_INTCON, INTCON_GIEL);
+        cpu.write_data(SFR_PIE1, 0x01);
+        cpu.write_data(SFR_PIR1, 0x01);
+        cpu.write_data(SFR_IPR1, 0x00); // low-priority source
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x0002, "GIEH=0 masks a low source too");
+    }
+
+    #[test]
+    fn intcon3_matches_the_pic18f4520_datasheet_bit_layout() {
+        // Raw bit values from DS39631 Register 9-3, deliberately NOT the
+        // module's own constants: INT2IP=7, INT1IP=6, INT2IE=4, INT1IE=3,
+        // INT2IF=1, INT1IF=0.
+        let vector_for = |intcon3: u8| {
+            let mut cpu = Pic18::new();
+            cpu.load_words(&[0x0000]);
+            cpu.write_data(SFR_RCON, RCON_IPEN);
+            cpu.write_data(SFR_INTCON, 0x80 | 0x40); // GIEH | GIEL
+            cpu.write_data(SFR_INTCON3, intcon3);
+            run(&mut cpu, 1);
+            cpu.get_pc()
+        };
+        assert_eq!(vector_for(0x08 | 0x01), PIC18_LOW_VECTOR, "INT1, IP=0");
+        assert_eq!(
+            vector_for(0x40 | 0x08 | 0x01),
+            PIC18_HIGH_VECTOR,
+            "INT1, IP=1"
+        );
+        assert_eq!(vector_for(0x10 | 0x02), PIC18_LOW_VECTOR, "INT2, IP=0");
+        assert_eq!(
+            vector_for(0x80 | 0x10 | 0x02),
+            PIC18_HIGH_VECTOR,
+            "INT2, IP=1"
+        );
+        // Flag without enable, and the unimplemented bits 5/2, never vector.
+        assert_eq!(vector_for(0x01 | 0x02), 0x0002);
+        assert_eq!(vector_for(0x20 | 0x04), 0x0002);
     }
 }
