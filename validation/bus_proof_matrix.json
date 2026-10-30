@@ -1497,6 +1497,26 @@
         "lane": "none"
       }
     },
+    "mk64f12": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_frdm_k64f_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/frdm-k64f-smoke.elf boots on the Cortex-M4 and the survival gate asserts 'FRDM-K64F SMOKE\\n' on the UART0 TX sink; examples/frdm-k64f/io-smoke.yaml asserts the full RGB LED/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/frdm-k64f/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI device is attached on the FRDM-K64F package; the K64F SPI controllers are not modelled in this UART-only slice.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C device is attached on the FRDM-K64F package; the FXOS8700 sensor and K64F I2C controllers are not modelled in this UART-only slice.",
+        "lane": "none"
+      }
+    },
     "pic24f04ka200": {
       "in_boards": false,
       "uart": {

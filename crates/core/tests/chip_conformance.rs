@@ -155,6 +155,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_apollo4p_evb_smoke_survival"),
     },
     ChipConf {
+        // FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F). SIM-DERIVED: no K64F bench
+        // part. UART-only L1: classic Kinetis UART0-4, Kinetis GPIO A-E and the
+        // behavioural MCG FEI block. SIM clock gating, PORT pad mux and MCG PLL
+        // are not modelled; ENET/PHY, RNGA and FTFE are declared stubs;
+        // eDMA/PIT/FTM/I2C/SPI/ADC/DAC/USB/CAN/SDHC are not mapped — see
+        // examples/frdm-k64f/VALIDATION.md.
+        name: "mk64f12",
+        yaml: "configs/chips/mk64f12.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_frdm_k64f_smoke_survival"),
+    },
+    ChipConf {
         // SAM E70 Xplained (ATSAME70Q21B, Cortex-M7). SIM-DERIVED: no SAM E70
         // bench part. Modelled: PMC (sam4s_pmc) and PIOA-E (sam4s_pio), the
         // SAM4S layouts at the SAM E70 bases, and UART0-4/USART0-2 (sam
