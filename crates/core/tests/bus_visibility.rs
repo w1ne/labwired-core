@@ -135,6 +135,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LPUART bring-up in this harness; bytes are proven by the \
          vegaboard-ri5cy survival smoke",
     ),
+    // CC2538DK: no UART0 bring-up in this harness; bytes are proven by the
+    // cc2538dk survival smoke.
+    (
+        "cc2538sf53",
+        BusKind::Uart,
+        "no UART0 bring-up in this harness; bytes are proven by the \
+         cc2538dk survival smoke",
+    ),
     // SAM4S Xplained: no UART0 bring-up in this harness; bytes are proven by
     // the sam4s-xplained survival smoke.
     (

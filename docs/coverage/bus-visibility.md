@@ -34,6 +34,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: Metro M4 twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **atsamd51-pybadge**
   * UART: PyBadge variant of the atsamd51 twin: generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
+* **cc2538sf53**
+  * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -108,6 +110,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd21j18a | — | — | — |
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
+| cc2538sf53 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |

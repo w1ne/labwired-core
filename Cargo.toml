@@ -79,6 +79,7 @@ members = [
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
     "crates/firmware-sam4s-xplained-smoke",
+    "crates/firmware-cc2538dk-smoke",
     "crates/firmware-stm32f072b-disco-smoke",
     "crates/firmware-l552ze-smoke",
     "crates/firmware-frdm-k64f-smoke",

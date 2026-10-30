@@ -302,6 +302,8 @@ FIXTURES = {
     ("arm", 0x00018000, 0x20000000): ("nrf51-app", SPIN_CORTEX_M),
     ("arm", 0x00000000, 0x1FFF8000): ("kinetis", SPIN_CORTEX_M),
     ("arm", 0x10000000, 0x20000000): ("rp2xxx", SPIN_CORTEX_M),
+    # TI CC2538: flash at 0x00200000 (the ROM, not flash, is at 0x0).
+    ("arm", 0x00200000, 0x20000000): ("cc2538", SPIN_CORTEX_M),
     # i.MX RT1064's smoke image executes directly from DTCM. It is still an
     # ordinary Cortex-M ELF to the runner; only its link origins differ.
     ("arm", 0x20000000, 0x20010000): ("imxrt", SPIN_CORTEX_M),

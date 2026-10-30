@@ -313,6 +313,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"FRDM-K64F SMOKE\n",
     },
     SurvivalCase {
+        // CC2538DK: CC2538SF53 (Cortex-M3), 512 KiB flash at 0x00200000 (the
+        // ROM, not flash, sits at 0x0), 32 KiB SRAM at 0x20000000. UART0
+        // (PA0/PA1 via the IOC) is the console; the smoke reads CLOCK_STA,
+        // derives IBRD/FBRD and walks LED2-LED4 (PC1-PC3) with address-masked
+        // GPIO_DATA readback. SIM-DERIVED.
+        name: "cc2538dk_smoke",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-smoke.elf",
+        valid_pc_ranges: &[(0x0020_0000, 0x0027_FFFF), (0x2000_0000, 0x2000_7FFF)],
+        expected_uart_output: b"CC2538DK SMOKE\n",
+    },
+    SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,
         // 128 KiB SRAM at 0x20000000. UART0 is the board's virtual COM port;
         // the smoke walks the PIOC LED with ODSR readback and reads the
@@ -2138,6 +2154,35 @@ survival_gate!(
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 
 survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
+
+survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
+
+/// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
+/// in the top 44 bytes of the last flash page and only enters a valid image.
+/// The committed smoke ELF must carry: backdoor byte 0xF3 (enabled, active
+/// low, PA3), image valid = 0, vector table at 0x0020_0000, all pages and
+/// debug unlocked (0xFF).
+#[test]
+fn test_cc2538dk_smoke_customer_configuration_area_boots() {
+    const CCA: u64 = 0x0027_FFD4;
+    let bytes = std::fs::read(fixtures().join("cc2538dk-smoke.elf")).expect("read fixture");
+    let elf = goblin::elf::Elf::parse(&bytes).expect("parse fixture ELF");
+    let cca = elf
+        .program_headers
+        .iter()
+        .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
+        .find(|ph| ph.p_paddr <= CCA && CCA + 44 <= ph.p_paddr + ph.p_filesz)
+        .map(|ph| {
+            let start = (ph.p_offset + CCA - ph.p_paddr) as usize;
+            &bytes[start..start + 44]
+        })
+        .expect("no loadable segment covers the CCA at 0x0027FFD4");
+    let mut expected = [0xFFu8; 44];
+    expected[3] = 0xF3; // backdoor config (byte 2007)
+    expected[4..8].copy_from_slice(&0u32.to_le_bytes()); // image valid
+    expected[8..12].copy_from_slice(&0x0020_0000u32.to_le_bytes()); // vector table
+    assert_eq!(cca, expected, "CC2538DK smoke CCA");
+}
 
 survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
 survival_gate!(test_frdm_k64f_smoke_survival, "frdm_k64f_smoke");

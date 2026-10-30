@@ -141,6 +141,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_frdm_k64f_smoke_survival"),
     },
     ChipConf {
+        // CC2538DK (CC2538SF53, Cortex-M3). SIM-DERIVED: no CC2538 bench part.
+        // Modelled: SYS_CTRL (cc2538_sys_ctrl), the PL061-style GPIO A-D
+        // (cc2538_pl061_gpio, address-masked GPIO_DATA) and UART0/1 on the
+        // pl011 layout. IOC, RF core, crypto, flash controller, SSI, I2C,
+        // GPTimers, USB, uDMA, WDT/sleep timer and ADC are declared stubs —
+        // see examples/cc2538dk/VALIDATION.md.
+        name: "cc2538sf53",
+        yaml: "configs/chips/cc2538sf53.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

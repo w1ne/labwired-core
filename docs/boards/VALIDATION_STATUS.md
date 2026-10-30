@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `74c15f2371508cba` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `c06d24d3b4159e40` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `8da53dc66c60f832` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `084b3772ba16cce8` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `27e57602409c6ce0` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `e4eb7c4bb46f79d1` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `28123afbc1ce6074` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `a2fa4bc6fddb9873` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `09db309b07017984` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `1aab802cf04923b5` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `f065dbab0b52dc63` | no silicon capture |
 | `esp32` | ⚪ structural | — | `3789b1727d91b788` | no silicon capture |
@@ -49,14 +49,14 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `c4588d8d9cdd2dff` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `4c9b3e1ee387534a` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b2225cb7b9fa7f7c` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `c2732bdf6bba219e` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `5c5a794d33e14602` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `c5b0433014180d96` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `18097b9d4374fce7` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `ada4838ec0fa768f` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `fda4c6a7243f5f48` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `751a9a29d74ca992` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `1eea67811643e20d` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `a87768db15b05191` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `384480d343c253d2` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `a53003b6b0998836` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `6f8c6eca42e1ff05` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `3acd2ef645595c4a` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `bd2cc28311c33528` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `712ee74297560f2b` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `90174f3cc1df5d94` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -429,11 +429,11 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): firmware_survival::test_nucleo_l552ze_q_smoke_survival
 - Drift status: **no silicon capture**
 
-## `mk64f12` — 🟡 smoke-manual
+## `cc2538sf53` — 🟡 smoke-manual
 
-- Doc: [`docs/boards/frdm-k64f.md`](frdm-k64f.md)  ·  Chip: `configs/chips/mk64f12.yaml`
+- Doc: [`docs/boards/cc2538dk.md`](cc2538dk.md)  ·  Chip: `configs/chips/cc2538sf53.yaml`
 - Silicon: none — not validated against real hardware.
-  - offline (CI): firmware_survival::test_frdm_k64f_smoke_survival
+  - offline (CI): firmware_survival::test_cc2538dk_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual

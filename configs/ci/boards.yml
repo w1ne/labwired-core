@@ -50,6 +50,14 @@ boards:
     path: examples/atmega1281-io
     apt: [gcc-avr, binutils-avr, avr-libc]
     gate: true
+  # CC2538DK: the first TI CC2538 part. Builds the cortex-m-rt smoke for
+  # thumbv7m (the CC2538 is a Cortex-M3) and runs the UART0/LED io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: cc2538dk
+    kind: sim-validate
+    path: examples/cc2538dk
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
   # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
   # instruction audit through the CLI, so the chip is proven by a gate on

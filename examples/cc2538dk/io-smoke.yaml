@@ -1,0 +1,32 @@
+# LabWired - CC2538DK UART+LED IO smoke
+#
+# Build: cargo build -p firmware-cc2538dk-smoke --release --target thumbv7m-none-eabi
+#
+# The firmware gates UART0 on (SYS_CTRL_RCGCUART), routes PA1 to UART0 TXD and
+# PA0 to UART0 RX through the IOC, reads SYS_CTRL_CLOCK_STA for the reset
+# clock (16-MHz HF-RC, SYS_DIV 001), derives IBRD/FBRD for 115200 8N1 from it,
+# then walks LED2-LED4 (PC1-PC3, active high) with single address-masked
+# GPIO_DATA stores and prints the pin and the whole LED nibble it read back.
+# LED1 (PC0) shares the USB D+ pull-up and is never driven.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "CC2538DK SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m3 uart=uart0"
+      - "clk osc=hfrc16 sys_div=1 io_div=1 sysclk=16000000"
+      - "uart0 rcgc=1 ibrd=8 fbrd=44"
+      - "led=yellow on pin=1 leds=02"
+      - "led=yellow off pin=0 leds=00"
+      - "led=green on pin=1 leds=04"
+      - "led=green off pin=0 leds=00"
+      - "led=orange on pin=1 leds=08"
+      - "led=orange off pin=0 leds=00"
+      - "keys select=1 left=1 right=1 up=1 down=1"
+      - "hb=0 yellow=1 green=0 orange=0"
+      - "hb=1 yellow=1 green=0 orange=0"
+  - expected_stop_reason: max_steps
