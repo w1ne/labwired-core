@@ -55,7 +55,7 @@ pub(super) fn build(
         req.options.echo_uart_stdout,
     )
     .map_err(|e| anyhow!(e))?;
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     let program_image =
         parse_avr_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;

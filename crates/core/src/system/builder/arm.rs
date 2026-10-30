@@ -43,7 +43,7 @@ pub(super) fn build(
     let sink = console.heard_sink();
     bus.attach_host_console_echo(console.tapped(), sink.clone(), req.options.echo_uart_stdout)
         .map_err(|e| anyhow!(e))?;
-    let rx = super::uart_rx_sources(&bus, &req.options)?;
+    let rx = super::wire_host_streams(&mut bus, &req.options)?;
 
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let boxed: Box<dyn Cpu> = Box::new(cpu);
