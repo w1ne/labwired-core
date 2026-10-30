@@ -66,6 +66,14 @@ boards:
     path: examples/ek-ra6m5
     rust_targets: [thumbv8m.main-none-eabi]
     gate: true
+  # SAM E70 Xplained: the first SAM E70 part. Builds the cortex-m-rt smoke for
+  # thumbv7em (the SAM E70 is a Cortex-M7) and runs the USART1/LED io-smoke
+  # plus the unsupported-instruction audit through the CLI.
+  - id: sam-e70-xplained
+    kind: sim-validate
+    path: examples/sam-e70-xplained
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
   # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
   # instruction audit through the CLI, so the chip is proven by a gate on

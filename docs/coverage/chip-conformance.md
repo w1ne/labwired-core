@@ -14,6 +14,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32l552 | **L1** | ✓ | 46 | — | — | firmware_survival::test_nucleo_l552ze_q_smoke_survival |
 | cc2538sf53 | **L1** | ✓ | 28 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
 | r7fa6m5bh | **L1** | ✓ | 33 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
+| same70q21b | **L1** | ✓ | 22 | — | — | firmware_survival::test_sam_e70_xplained_smoke_survival |
 | sam4s16c | **L1** | ✓ | 20 | — | — | firmware_survival::test_sam4s_xplained_smoke_survival |
 | stm32f072 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32f072b_disco_smoke_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
