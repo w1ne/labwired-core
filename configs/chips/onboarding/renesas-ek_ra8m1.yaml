@@ -4,6 +4,11 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# SUPERSEDED: staged onboarding descriptor (flash 64 KiB at 0x08000000 and RAM
+# 64 KiB at 0x30000000 are placeholders; the RA8M1 has 2 MiB code flash at
+# 0x02000000 and 896 KiB SRAM at 0x22000000 per R7FA8M1AH.h / Zephyr
+# ra8x1.dtsi). The promoted RA8M1 part is configs/chips/r7fa8m1ah.yaml (board:
+# configs/systems/ek-ra8m1.yaml).
 name: renesas-ek_ra8m1
 arch: arm
 flash:
