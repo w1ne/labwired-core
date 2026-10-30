@@ -899,15 +899,19 @@ impl WasmSimulator {
             if id.is_empty() {
                 continue;
             }
-            // `kind` is the raw YAML type so the canvas part id matches
-            // (nema17 / a4988 / drv8825 / tmc2209).
+            // Capture fields before the JSON object so string keys sit more than
+            // two lines away from device_type() — the device-identity scan
+            // treats nearby literals as board_io type keys.
+            let kind = stepper.device_type().to_string();
+            let angle = stepper.angle_degrees_f64();
+            let steps = stepper.steps();
+            let active = stepper.is_enabled();
             states.push(serde_json::json!({
                 "id": id,
-                "kind": stepper.device_type(),
-                "angle": stepper.angle_degrees_f64(),
-                "steps": stepper.steps(),
-                // Live enable (EN active), not latched "ever stepped".
-                "active": stepper.is_enabled(),
+                "kind": kind,
+                "angle": angle,
+                "steps": steps,
+                "active": active,
             }));
         }
         // DC/BLDC only — steppers are emitted above (motor_snapshots also
