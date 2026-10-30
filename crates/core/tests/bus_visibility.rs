@@ -150,6 +150,7 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "no LPUART1 bring-up in this harness; bytes are proven by the \
          nucleo-l552ze-q survival smoke",
+    ),
     // FRDM-K64F: no UART0 bring-up in this harness; bytes are proven by the
     // frdm-k64f survival smoke.
     (

@@ -295,6 +295,8 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "nucleo-l552ze-q-smoke.elf",
         valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
         expected_uart_output: b"NUCLEO-L552ZE-Q SMOKE\n",
+    },
+    SurvivalCase {
         // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
         // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
         // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the

@@ -52,6 +52,7 @@ The models column is a content digest over everything that board's `models` list
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `2e9ad72fe196e51b` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `5c5a794d33e14602` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `c5b0433014180d96` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `590286544194db5c` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `ada4838ec0fa768f` | no silicon capture |
 | `stm32f072` | 🟡 smoke-manual | — | `fda4c6a7243f5f48` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `751a9a29d74ca992` | no silicon capture |
@@ -426,6 +427,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/nucleo-l552ze-q.md`](nucleo-l552ze-q.md)  ·  Chip: `configs/chips/stm32l552.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_nucleo_l552ze_q_smoke_survival
+- Drift status: **no silicon capture**
+
+## `mk64f12` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/frdm-k64f.md`](frdm-k64f.md)  ·  Chip: `configs/chips/mk64f12.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_frdm_k64f_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual
