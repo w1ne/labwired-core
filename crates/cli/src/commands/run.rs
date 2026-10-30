@@ -1815,6 +1815,8 @@ pub(crate) fn run_interactive(
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
+    // Chip name for per-device CPU geometry (PIC18 flash size / Access Bank).
+    let mut chip_name = String::new();
     let cpu_arch = if let Some(sys_path) = &system_path {
         match labwired_config::SystemManifest::from_file(sys_path) {
             Ok(manifest) => {
@@ -1839,7 +1841,10 @@ pub(crate) fn run_interactive(
                             );
                             return ExitCode::from(EXIT_CONFIG_ERROR);
                         }
-                        _ => c.arch,
+                        _ => {
+                            chip_name = c.name.clone();
+                            c.arch
+                        }
                     },
                     Err(e) => {
                         emit_error(
@@ -1899,6 +1904,9 @@ pub(crate) fn run_interactive(
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
         labwired_config::Arch::Xtensa => run_interactive_xtensa(cli, bus, program, metrics),
         labwired_config::Arch::Pic24 => run_interactive_pic24(cli, bus, program, metrics),
+        labwired_config::Arch::Pic18 => {
+            run_interactive_pic18(cli, bus, program, metrics, &chip_name)
+        }
         _ => {
             emit_error(
                 cli.json,
@@ -2531,6 +2539,56 @@ pub(crate) fn run_interactive_pic24(
     machine.add_observer(metrics.clone());
 
     info!("Starting Simulation (PIC24/dsPIC33 M0)...");
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if !cli.json {
+        if let Ok(bytes) = uart_sink.lock() {
+            if !bytes.is_empty() {
+                println!("UART: {}", String::from_utf8_lossy(&bytes));
+            }
+        }
+    }
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
+}
+
+pub(crate) fn run_interactive_pic18(
+    cli: Cli,
+    bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+    chip_name: &str,
+) -> ExitCode {
+    let mut cpu = labwired_core::cpu::Pic18::for_chip_name(chip_name);
+    cpu.load_program_image(&program);
+    // The EUSART TX register is on the CPU; keep the bytes for the console.
+    let uart_sink: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    cpu.set_serial_sink(uart_sink.clone());
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.add_observer(metrics.clone());
+
+    info!("Starting Simulation (PIC18)...");
 
     let result = run_simulation_loop(&cli, &mut machine, &metrics);
 

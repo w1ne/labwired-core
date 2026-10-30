@@ -4,9 +4,11 @@ Branch: `agent/pic18-core`
 
 Base revision: `8e3b5ee4d`
 
-Status: **first real public PIC18 vertical slice**. This is generic public CPU
-infrastructure. It does not onboard any catalogue part, does not copy private
-chip data, and does not claim Proteus parity. No PIC18 chip descriptor is added.
+Status: **standard instruction set complete; first part onboarded at L1.**
+The PIC18F4520 (`configs/chips/pic18f4520.yaml`, `examples/pic18f4520`) boots
+real SDCC 4.4.0 C firmware with EUSART TX and the PORTB latch. No other PIC18
+part is claimed, no private chip data is copied, and no Proteus parity is
+claimed.
 
 ## Landed
 
@@ -32,10 +34,13 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
 
 | Group | Instructions | Notes |
 | :--- | :--- | :--- |
-| Control | `NOP` | `0x0000` and the `1111 xxxx xxxx xxxx` form |
-| Literal | `MOVLW`, `MOVLB`, `RETLW` | `MOVLB` selects `BSR<3:0>` |
-| Byte move | `MOVWF`, `MOVF`, `MOVFF` | `MOVFF` is two words and uses a 12-bit absolute source/destination, ignoring banking |
-| Byte ALU | `ADDWF`, `ANDWF`, `IORWF`, `XORWF`, `CLRF`, `INCF`, `DECF` | `d` and `a` bits honored |
+| Control | `NOP`, `SLEEP`, `CLRWDT`, `RESET`, `DAW`, `PUSH`, `POP` | `0x0000` and the `1111 xxxx xxxx xxxx` NOP form; `SLEEP` sets `RCON.TO`, clears `PD` and idles until an enabled flag; `CLRWDT` sets `TO`/`PD` (no WDT); `RESET` restores the reset SFR state and keeps program memory |
+| Literal | `MOVLW`, `MOVLB`, `RETLW`, `ADDLW`, `SUBLW`, `ANDLW`, `IORLW`, `XORLW`, `MULLW` | `MOVLB` selects `BSR<3:0>`; `SUBLW` is `k - W`; `MULLW` writes `PRODH:PRODL` |
+| Byte move | `MOVWF`, `MOVF`, `MOVFF` | `MOVFF` is two words and uses a 12-bit absolute source/destination, ignoring banking; either side may be an indirect alias |
+| Byte ALU | `ADDWF`, `ADDWFC`, `SUBWF`, `SUBWFB`, `SUBFWB`, `ANDWF`, `IORWF`, `XORWF`, `COMF`, `NEGF`, `CLRF`, `SETF`, `INCF`, `DECF`, `SWAPF`, `MULWF` | `d` and `a` bits honored; borrow forms subtract `!C` |
+| Rotate | `RLCF`, `RLNCF`, `RRCF`, `RRNCF` | the `C` forms rotate through carry |
+| Skip | `CPFSEQ`, `CPFSGT`, `CPFSLT`, `TSTFSZ`, `DECFSZ`, `DCFSNZ`, `INCFSZ`, `INFSNZ` | unsigned compares; no flags; a skipped two-word instruction is skipped as a unit |
+| Table | `TBLRD*`, `*+`, `*-`, `+*`; `TBLWT*`, `*+`, `*-`, `+*` | reads flash, user ID and CONFIG bytes (unimplemented memory reads 0); `TBLWT` only moves `TBLPTR`, since no EECON1 write sequence is modelled |
 | Bit | `BCF`, `BSF`, `BTG`, `BTFSC`, `BTFSS` | skip instructions skip a following two-word instruction as a unit |
 | Relative | `BRA`, `RCALL`, `BZ`, `BNZ`, `BC`, `BNC`, `BOV`, `BNOV`, `BN`, `BNN` | signed offsets in instruction words |
 | Absolute | two-word `GOTO`, two-word `CALL` | 20-bit literal is a **word** address (`k -> PC<20:1>`) |
@@ -53,9 +58,16 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
   overflow from same-sign operands, zero and sign of the result.
 * `DECF`: borrow polarity follows PIC18 subtraction (`C`/`DC` set when no
   borrow), signed overflow from opposite-sign inputs, zero and sign.
-* `ANDWF`, `IORWF`, `XORWF`, `MOVF`: `Z` and `N` only.
+* `ADDWFC`, `ADDLW`: as `ADDWF`, with carry-in for `ADDWFC`.
+* `SUBWF`, `SUBLW`, `SUBWFB`, `SUBFWB`, `NEGF`: subtraction polarity as
+  `DECF`; the borrow forms subtract `!C`; `NEGF` is `0 - f`.
+* `ANDWF`, `IORWF`, `XORWF`, `MOVF`, `COMF`, `ANDLW`, `IORLW`, `XORLW`,
+  `RLNCF`, `RRNCF`: `Z` and `N` only.
+* `RLCF`, `RRCF`: `C`, `Z`, `N`.
+* `DAW`: `C` set when the adjust carries out (never cleared).
 * `CLRF`: `Z` only.
-* `MOVWF`, `MOVFF`, `BCF`, `BSF`, `BTG`: no flags.
+* `MOVWF`, `MOVFF`, `SETF`, `SWAPF`, `MULWF`, `MULLW`, the skip forms, `BCF`,
+  `BSF`, `BTG`: no flags.
 * Instructions that affect flags do not write their result into `STATUS`; they
   update only the flag bits, matching the datasheet destination rule.
 
@@ -126,10 +138,13 @@ address. Sticky flags live in the SFR file and are cleared by the ISR.
 * FSR addresses and updates wrap in the 12-bit data space. The direct SFR
   read/write helpers still expose the raw file bytes; indirect expansion and
   virtual-target filtering are instruction-operand features.
-* `MOVFF` keeps its 12-bit absolute-address path and does not expand virtual
-  `FSRn` aliases in this milestone. The public material inspected did not
-  establish that behavior for `MOVFF`, so it is left explicit rather than
-  guessed.
+* `MOVFF` takes 12-bit absolute operands (no BSR) and expands the virtual
+  `FSRn` aliases on either side: the source is read and its FSR updated,
+  then the destination is resolved and written. The evidence is compiled
+  code: SDCC 4.4.0's pic16 port builds its software stack from
+  `MOVFF r, POSTDEC1`, `MOVFF PREINC1, r` and `MOVFF PLUSW2, r`, and the
+  PIC18F4520 smoke (`examples/pic18f4520`) only prints its banner if those
+  moves are indirect.
 * `TOSL/H/U` remain direct hardware-stack mirrors; indirect-target semantics
   for those stack registers are not claimed. The virtual-operand rule above is
   limited to the documented 15 INDF/POST/PRE/PLUS addresses.
@@ -199,31 +214,33 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
 
 ## Next missing pieces
 
-1. **Loader / firmware toolchain.** XC8 output format and address semantics
-   still need verification against a pinned compiler. The current ELF path
-   treats `PT_LOAD` `p_paddr` as a byte address; a real XC8 ELF/HEX/COFF path,
-   section handling, and a committed fixture are the next loader work.
+1. **Loader / firmware toolchain.** SDCC 4.4.0 + gputils HEX output is
+   wrapped byte for byte in an `EM_MCHP_PIC` ELF (`examples/pic18f4520/
+   firmware/hex2elf.py`) and loads through the `PT_LOAD` byte-address path,
+   CONFIG words included. A native XC8 ELF still needs verifying against a
+   pinned XC8 release.
 2. **Interrupts.** The basic controller is in: vectors `0x0008`/`0x0018`,
    `INTCON`/`INTCON2`/`INTCON3`, `PIR1`/`PIR2`/`PIE1`/`PIE2`/`IPR1`/`IPR2`,
    `RCON.IPEN`, `GIE/GIEH/GIEL`/`PEIE`, `RETFIE`/`RETFIE FAST`, and the
    fast register stack saved on entry. Still missing: peripherals that
    raise `PIRx` flags, per-device vector remapping, interrupt latency/cycle accounting, and the
    `RCON` reset-source/`STVREN` behavior tied to the vector path.
-3. **Peripherals.** GPIO (`TRIS`/`LAT`/`PORT`, pad masks, analog/PPS), oscillator
-   and `CONFIG`, TMR0/1/2/3, CCP/ECCP, MSSP, EUSART, ADC, comparators, WDT,
-   sleep/idle, and reset sources/`RCON`.
-4. **Full ISA.** Remaining standard instructions (`ADDLW`, `SUBLW`, `ANDLW`,
-   `IORLW`, `XORLW`, rotates/shifts, `COMF`, `NEGF`, `SETF`, `SWAPF`, `MULLW`,
-   `MULWF`, `CPFS*`, `TSTFSZ`, `DECFSZ`, `INCFSZ`, `DAW`, `PUSH`/`POP`,
-   `TBLRD`/`TBLWT`), and the `XINST` extended set plus indexed-literal
-   addressing. Each newly decoded class needs a fixture before it is added.
+3. **Peripherals.** In: EUSART TX (`TXREG` to the console, read-only
+   `TRMT`/`TXIF`), `PORTA..E`/`LATx`/`TRISx` with reset directions (input pins
+   read 0), `SLEEP` wake, and `RCON.TO/PD`. Missing: pad masks and external
+   pin drive, analog/PPS, oscillator and `CONFIG` decoding, TMR0/1/2/3,
+   CCP/ECCP, MSSP, EUSART RX and baud timing, ADC, comparators, WDT, EEPROM,
+   and reset sources.
+4. **Full ISA.** The standard set is complete. Still missing: the `XINST`
+   extended set and indexed-literal addressing, and per-instruction cycle
+   counts for skips over two-word instructions (counted as 2, not 3).
 5. **Data-memory completeness.** Expanded (>4 KiB) data memory and wider FSR
    pointers, direct `FSRnH` field masking (indirect paths already wrap at 12
-   bits), device-specific Access Bank split (`0x60` vs `0x80`), unmodeled SFR
-   reset values, indirect-target behavior for `TOSL/H/U`, and
-   `MOVFF`/`MOVFFL` virtual-alias behavior that still needs authoritative
-   evidence.
-6. **Device geometry and integration.** Per-device flash size, RAM/bank count,
-   stack depth, `STVREN`, chip YAMLs, console/UART wiring, and a real
-   end-to-end firmware run. Interrupt and peripheral support must not be
-   inferred from a family label; each device needs datasheet evidence.
+   bits), unmodeled SFR reset values, indirect-target behavior for
+   `TOSL/H/U`, and `MOVFFL`. The per-device Access Bank split is in
+   (`Pic18::for_chip_name`: `0x80` for the PIC18F4520, `0x60` by default).
+6. **Device geometry and integration.** The PIC18F4520 has a chip YAML,
+   geometry, console wiring (`labwired test` and the interactive run) and a
+   real end-to-end firmware run. Every other part still needs its own
+   descriptor and datasheet evidence; support must not be inferred from a
+   family label. RAM/bank-count limits and `STVREN` remain unmodelled.

@@ -108,6 +108,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32g071 | open | L1 | 41 | 937.4 | 1.6 | ≥1× (CI) | — |
 | dspic33fj32mc204 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | dspic33fj32mc202 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic18f4520 | open | L1 | 0 | — | — | ≥1× (CI) | — |
 | pic24f04ka200 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f04ka201 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f08ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |

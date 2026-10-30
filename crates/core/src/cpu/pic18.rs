@@ -15,14 +15,18 @@
 //! Data memory is the classic 16-bank file:
 //!
 //! * `a = 1` uses `BSR<3:0>:f`;
-//! * `a = 0` uses the Access Bank: `f < 0x60` is access RAM `0x000..0x05F`,
-//!   `f >= 0x60` is the SFR window `0xF60..0xFFF`.
+//! * `a = 0` uses the Access Bank: `f` below the device's split is access
+//!   RAM, `f` at or above it is the SFR window `0xF00 | f`. The default
+//!   split is `0x60` (`0x000..0x05F` / `0xF60..0xFFF`); devices whose SFRs
+//!   start at `0xF80`, such as the PIC18F4520, split at `0x80`
+//!   ([`Pic18::for_chip_name`]).
 //!
 //! Access-bank `INDFn`, `POSTINCn`, `POSTDECn`, `PREINCn` and `PLUSWn` are
 //! virtual registers. Byte and bit file operations route through the
 //! per-instruction resolver, which uses `FSRn` as a full 12-bit data address
 //! and applies the alias's FSR update once per instruction access.
-//! `MOVFF` keeps its 12-bit absolute-address path (see the progress doc).
+//! `MOVFF` takes 12-bit absolute operands and expands the same aliases on
+//! either side (see the progress doc).
 //!
 //! This milestone models the instruction subset listed in
 //! `docs/PIC18-CORE-PROGRESS.md`. Anything else returns
@@ -30,7 +34,7 @@
 
 use crate::snapshot::{CpuSnapshot, Pic18CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Modeled program-flash size. A per-device geometry can be supplied with
 /// [`Pic18::with_geometry`]; this default is large enough for the hand
@@ -41,6 +45,9 @@ pub const PIC18_DATA_BYTES: usize = 0x1000;
 /// 12-bit data-space mask; classic PIC18 `FSRn` values are a full 12-bit
 /// address, not a bank-relative offset.
 pub const PIC18_DATA_MASK: u16 = (PIC18_DATA_BYTES - 1) as u16;
+/// Default Access Bank split (`0x000..0x05F` RAM, `0xF60..0xFFF` SFRs).
+pub const PIC18_ACCESS_SPLIT_DEFAULT: u8 = 0x60;
+
 /// Classic PIC18 hardware return-stack depth.
 pub const PIC18_STACK_DEPTH: usize = 31;
 /// 21-bit byte PC; bit 0 is always clear.
@@ -122,8 +129,32 @@ const INTCON3_INT2IE: u8 = 1 << 4;
 const INTCON3_INT1IE: u8 = 1 << 3;
 const INTCON3_INT2IF: u8 = 1 << 1;
 const INTCON3_INT1IF: u8 = 1 << 0;
-// RCON.IPEN.
+// RCON.IPEN and the TO/PD status bits that SLEEP/CLRWDT update.
 const RCON_IPEN: u8 = 1 << 7;
+const RCON_TO: u8 = 1 << 3;
+const RCON_PD: u8 = 1 << 2;
+
+// EUSART and I/O port SFRs, PIC18F4520 map (DS39631 Table 5-1).
+pub const SFR_TXREG: u16 = 0xFAD;
+pub const SFR_TXSTA: u16 = 0xFAC;
+pub const SFR_RCSTA: u16 = 0xFAB;
+pub const SFR_SPBRG: u16 = 0xFAF;
+pub const SFR_PORTA: u16 = 0xF80;
+pub const SFR_LATA: u16 = 0xF89;
+pub const SFR_TRISA: u16 = 0xF92;
+/// Ports A..E; PORTx, LATx and TRISx are each five consecutive SFRs.
+pub const PIC18_PORT_COUNT: u16 = 5;
+const TXSTA_TXEN: u8 = 1 << 5;
+const TXSTA_TRMT: u8 = 1 << 1;
+const RCSTA_SPEN: u8 = 1 << 7;
+const PIR1_TXIF: u8 = 1 << 4;
+
+/// Table pointer width (TBLPTRU<5:0>:TBLPTRH:TBLPTRL).
+pub const PIC18_TBLPTR_MASK: u32 = 0x3F_FFFF;
+/// User ID locations (`IDLOC0..7`).
+pub const PIC18_IDLOC_BASE: u32 = 0x20_0000;
+/// Configuration words (`CONFIG1L..CONFIG7H`).
+pub const PIC18_CONFIG_BASE: u32 = 0x30_0000;
 
 pub const STATUS_C: u8 = 1 << 0;
 pub const STATUS_DC: u8 = 1 << 1;
@@ -191,6 +222,14 @@ pub struct Pic18 {
     stk_unf: bool,
     shadow: Option<(u8, u8, u8)>,
     exception_pending: Option<u32>,
+    /// First Access Bank offset that maps to the SFR window.
+    access_split: u8,
+    /// Set by `SLEEP`; cleared by an enabled interrupt source.
+    asleep: bool,
+    idloc: [u8; 8],
+    config: [u8; 16],
+    /// EUSART TX bytes, when a console is attached.
+    serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
 }
 
 impl Default for Pic18 {
@@ -207,7 +246,7 @@ impl Pic18 {
     pub fn with_geometry(flash_bytes: usize, stack_depth: usize) -> Self {
         assert!(flash_bytes >= 2, "PIC18 flash must hold at least one word");
         assert!(stack_depth > 0, "PIC18 return stack must not be empty");
-        Self {
+        let mut cpu = Self {
             wreg: 0,
             status: 0,
             bsr: 0,
@@ -227,7 +266,73 @@ impl Pic18 {
             stk_unf: false,
             shadow: None,
             exception_pending: None,
+            access_split: PIC18_ACCESS_SPLIT_DEFAULT,
+            asleep: false,
+            idloc: [0xFF; 8],
+            config: [0xFF; 16],
+            serial_sink: None,
+        };
+        cpu.reset_core();
+        cpu
+    }
+
+    /// Per-device geometry for the catalogue parts this model knows. Unknown
+    /// names get the generic default core ([`Pic18::new`]).
+    ///
+    /// PIC18F4520 (DS39631E): 32 KB flash, 31-level stack, SFRs from
+    /// `0xF80`, so the Access Bank splits at `0x80`.
+    pub fn for_chip_name(name: &str) -> Self {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "pic18f4520" => {
+                let mut cpu = Self::with_geometry(32 * 1024, PIC18_STACK_DEPTH);
+                cpu.access_split = 0x80;
+                cpu
+            }
+            _ => Self::new(),
         }
+    }
+
+    /// Route EUSART TX bytes to `sink` (the console / `uart_contains` buffer).
+    pub fn set_serial_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
+        self.serial_sink = Some(sink);
+    }
+
+    /// Whether the core is idling in `SLEEP`.
+    pub fn is_asleep(&self) -> bool {
+        self.asleep
+    }
+
+    /// Power-on/`RESET`-instruction state of the core registers and the SFRs
+    /// this model implements. Program memory, ID and configuration bytes are
+    /// non-volatile and survive.
+    fn reset_core(&mut self) {
+        self.wreg = 0;
+        self.status = 0;
+        self.bsr = 0;
+        self.pc = 0;
+        self.fsr = [0; 3];
+        self.prod = 0;
+        self.tblptr = 0;
+        self.tablat = 0;
+        self.pclath = 0;
+        self.pclatu = 0;
+        self.stack.fill(0);
+        self.stkptr = 0;
+        self.stk_full = false;
+        self.stk_unf = false;
+        self.shadow = None;
+        self.exception_pending = None;
+        self.asleep = false;
+        self.data.fill(0);
+        // DS39631 power-on reset values: all port pins are inputs
+        // (TRISE<3> is unimplemented), the EUSART shift register is empty,
+        // and RCON reads TO = PD = 1 with the POR/BOR bits clear.
+        for n in 0..PIC18_PORT_COUNT {
+            self.data[usize::from(SFR_TRISA + n)] = 0xFF;
+        }
+        self.data[usize::from(SFR_TRISA + 4)] = 0x07;
+        self.data[usize::from(SFR_TXSTA)] = TXSTA_TRMT;
+        self.data[usize::from(SFR_RCON)] = 0x1C;
     }
 
     /// Load 16-bit instruction words starting at the reset vector.
@@ -242,8 +347,25 @@ impl Pic18 {
         }
     }
 
-    /// Load raw bytes at a byte-addressed program address.
+    /// Load raw bytes at a byte-addressed program address. Bytes for the
+    /// user ID and configuration windows land in those windows; anything
+    /// else past the modelled flash is unimplemented memory and is dropped.
     pub fn load_flash(&mut self, addr: u32, bytes: &[u8]) {
+        if addr >= PIC18_IDLOC_BASE {
+            for (i, byte) in bytes.iter().enumerate() {
+                let at = addr + i as u32;
+                match at {
+                    PIC18_IDLOC_BASE..=0x20_0007 => {
+                        self.idloc[(at - PIC18_IDLOC_BASE) as usize] = *byte
+                    }
+                    PIC18_CONFIG_BASE..=0x30_000F => {
+                        self.config[(at - PIC18_CONFIG_BASE) as usize] = *byte
+                    }
+                    _ => {}
+                }
+            }
+            return;
+        }
         let start = addr as usize & !1;
         let end = start.saturating_add(bytes.len()).min(self.flash.len());
         assert!(
@@ -277,7 +399,7 @@ impl Pic18 {
     pub fn file_address(&self, f: u8, a: bool) -> u16 {
         if a {
             (u16::from(self.bsr) << 8) | u16::from(f)
-        } else if f < 0x60 {
+        } else if f < self.access_split {
             u16::from(f)
         } else {
             0xF00 | u16::from(f)
@@ -308,6 +430,25 @@ impl Pic18 {
             SFR_TOSL => self.top_of_stack() as u8,
             SFR_TOSH => (self.top_of_stack() >> 8) as u8,
             SFR_TOSU => (self.top_of_stack() >> 16) as u8,
+            // TXIF is read-only and set whenever TXREG is empty; this model
+            // shifts a byte out the instant it is written, so it is set
+            // whenever the transmitter is enabled.
+            SFR_PIR1 => {
+                let pir1 = self.data[usize::from(SFR_PIR1)] & !PIR1_TXIF;
+                if self.data[usize::from(SFR_TXSTA)] & TXSTA_TXEN != 0 {
+                    pir1 | PIR1_TXIF
+                } else {
+                    pir1
+                }
+            }
+            // PORTx reads the pins: an output pin reads its latch; an input
+            // pin reads 0 because no external driver is modelled yet.
+            a if (SFR_PORTA..SFR_PORTA + PIC18_PORT_COUNT).contains(&a) => {
+                let n = a - SFR_PORTA;
+                let lat = self.data[usize::from(SFR_LATA + n)];
+                let tris = self.data[usize::from(SFR_TRISA + n)];
+                lat & !tris
+            }
             _ => self.data.get(addr as usize).copied().unwrap_or(0),
         }
     }
@@ -346,6 +487,26 @@ impl Pic18 {
             SFR_TOSL => self.write_tos_byte(0, value),
             SFR_TOSH => self.write_tos_byte(1, value),
             SFR_TOSU => self.write_tos_byte(2, value),
+            // TRMT is read-only and stays set (the shift register empties
+            // instantly in this model).
+            SFR_TXSTA => self.data[usize::from(SFR_TXSTA)] = value | TXSTA_TRMT,
+            SFR_PIR1 => self.data[usize::from(SFR_PIR1)] = value & !PIR1_TXIF,
+            SFR_TXREG => {
+                self.data[usize::from(SFR_TXREG)] = value;
+                let txsta = self.data[usize::from(SFR_TXSTA)];
+                let rcsta = self.data[usize::from(SFR_RCSTA)];
+                if txsta & TXSTA_TXEN != 0 && rcsta & RCSTA_SPEN != 0 {
+                    if let Some(sink) = &self.serial_sink {
+                        if let Ok(mut buf) = sink.lock() {
+                            buf.push(value);
+                        }
+                    }
+                }
+            }
+            // Writing PORTx writes the output latch (DS39631, I/O Ports).
+            a if (SFR_PORTA..SFR_PORTA + PIC18_PORT_COUNT).contains(&a) => {
+                self.data[usize::from(SFR_LATA + (a - SFR_PORTA))] = value;
+            }
             _ => {
                 if let Some(slot) = self.data.get_mut(addr as usize) {
                     *slot = value;
@@ -457,6 +618,19 @@ impl Pic18 {
         }
 
         None
+    }
+
+    /// Whether any individually enabled interrupt source has its flag set,
+    /// regardless of the global enables — the wake condition for `SLEEP`.
+    fn wake_pending(&self) -> bool {
+        let intcon = self.read_data(SFR_INTCON);
+        let intcon3 = self.read_data(SFR_INTCON3);
+        let intcon_src = (intcon & 0x07) & ((intcon >> 3) & 0x07);
+        let int1 = intcon3 & INTCON3_INT1IF != 0 && intcon3 & INTCON3_INT1IE != 0;
+        let int2 = intcon3 & INTCON3_INT2IF != 0 && intcon3 & INTCON3_INT2IE != 0;
+        let peripheral = self.read_data(SFR_PIR1) & self.read_data(SFR_PIE1) != 0
+            || self.read_data(SFR_PIR2) & self.read_data(SFR_PIE2) != 0;
+        intcon_src != 0 || int1 || int2 || peripheral
     }
 
     /// Enter the interrupt vector for `high` priority, pushing the next
@@ -797,11 +971,19 @@ impl Pic18 {
             if second & 0xF000 != 0xF000 {
                 return Err(SimulationError::DecodeError(u64::from(pc)));
             }
-            let src = word & 0x0FFF;
-            let dst = second & 0x0FFF;
-            let value = self.read_data(src);
+            // Both operands are 12-bit absolute addresses (no BSR), and each
+            // may be a virtual indirect alias: the source is read in the
+            // first cycle and its FSR updated, then the destination is
+            // resolved and written. Compiled code depends on this — SDCC's
+            // pic16 software stack is `MOVFF r, POSTDEC1` / `MOVFF PREINC1, r`
+            // / `MOVFF PLUSW2, r`.
+            let src = self.resolve_data_access(word & 0x0FFF);
+            let value = self.read_file_data(src.addr);
+            self.complete_file_read(src);
             self.pc = Self::align_pc(pc.wrapping_add(4));
-            self.write_data(dst, value);
+            let dst = self.resolve_data_access(second & 0x0FFF);
+            let wrote = self.write_file_data(dst.addr, value);
+            self.complete_file_write(dst, wrote);
             return Ok(2);
         }
 
@@ -901,6 +1083,16 @@ impl Pic18 {
                 }
             }
             return Ok(2);
+        }
+
+        if let Some(cycles) = self.execute_control(word, pc)? {
+            return Ok(cycles);
+        }
+        if let Some(cycles) = self.execute_literal(word) {
+            return Ok(cycles);
+        }
+        if let Some(cycles) = self.execute_byte_extended(word, pc) {
+            return Ok(cycles);
         }
 
         if word & 0xFE00 == 0x6E00 {
@@ -1090,6 +1282,355 @@ impl Pic18 {
         Err(SimulationError::DecodeError(u64::from(pc)))
     }
 
+    /// Inherent control words in the `0x0003..=0x00FF` range (DS39631
+    /// Table 26-2): `SLEEP`, `CLRWDT`, `PUSH`, `POP`, `DAW`, the eight table
+    /// read/write forms, and `RESET`. `self.pc` already points past `word`.
+    fn execute_control(&mut self, word: u16, pc: u32) -> SimResult<Option<u32>> {
+        let cycles = match word {
+            0x0003 => {
+                // SLEEP: TO = 1, PD = 0; the core idles until a wake source.
+                let rcon = self.read_data(SFR_RCON);
+                self.write_data(SFR_RCON, (rcon | RCON_TO) & !RCON_PD);
+                self.asleep = true;
+                1
+            }
+            0x0004 => {
+                // CLRWDT: no watchdog is modelled; only TO/PD are visible.
+                let rcon = self.read_data(SFR_RCON);
+                self.write_data(SFR_RCON, rcon | RCON_TO | RCON_PD);
+                1
+            }
+            0x0005 => {
+                self.push(pc.wrapping_add(2));
+                1
+            }
+            0x0006 => {
+                // POP discards the top of stack; underflow sets STKUNF.
+                if self.stkptr == 0 {
+                    self.stk_unf = true;
+                } else {
+                    self.stkptr -= 1;
+                }
+                1
+            }
+            0x0007 => {
+                let mut w = u16::from(self.wreg);
+                if w & 0x0F > 0x09 || self.status & STATUS_DC != 0 {
+                    w += 0x06;
+                }
+                if w & 0x1F0 > 0x90 || self.status & STATUS_C != 0 {
+                    w += 0x60;
+                }
+                if w > 0xFF {
+                    self.status |= STATUS_C;
+                }
+                self.wreg = w as u8;
+                1
+            }
+            0x0008..=0x000B => {
+                // TBLRD *, *+, *-, +*
+                if word == 0x000B {
+                    self.tblptr = self.tblptr.wrapping_add(1) & PIC18_TBLPTR_MASK;
+                }
+                self.tablat = self.program_byte(self.tblptr);
+                match word {
+                    0x0009 => self.tblptr = self.tblptr.wrapping_add(1) & PIC18_TBLPTR_MASK,
+                    0x000A => self.tblptr = self.tblptr.wrapping_sub(1) & PIC18_TBLPTR_MASK,
+                    _ => {}
+                }
+                2
+            }
+            0x000C..=0x000F => {
+                // TBLWT *, *+, *-, +*: only the pointer side effect is
+                // modelled. The holding-register write and the EECON1
+                // erase/write sequence that would commit it are not, so
+                // program memory never changes.
+                match word {
+                    0x000D => self.tblptr = self.tblptr.wrapping_add(1) & PIC18_TBLPTR_MASK,
+                    0x000E => self.tblptr = self.tblptr.wrapping_sub(1) & PIC18_TBLPTR_MASK,
+                    0x000F => self.tblptr = self.tblptr.wrapping_add(1) & PIC18_TBLPTR_MASK,
+                    _ => {}
+                }
+                2
+            }
+            0x00FF => {
+                self.reset_core();
+                1
+            }
+            _ => return Ok(None),
+        };
+        Ok(Some(cycles))
+    }
+
+    /// Literal ALU forms: `SUBLW`, `IORLW`, `XORLW`, `ANDLW`, `MULLW`,
+    /// `ADDLW`. (`MOVLW`, `RETLW` and `MOVLB` are decoded earlier.)
+    fn execute_literal(&mut self, word: u16) -> Option<u32> {
+        let k = word as u8;
+        match word & 0xFF00 {
+            0x0800 => {
+                let result = k.wrapping_sub(self.wreg);
+                self.set_sub_flags(k, self.wreg, result);
+                self.wreg = result;
+            }
+            0x0900 => {
+                self.wreg |= k;
+                self.set_nz(self.wreg);
+            }
+            0x0A00 => {
+                self.wreg ^= k;
+                self.set_nz(self.wreg);
+            }
+            0x0B00 => {
+                self.wreg &= k;
+                self.set_nz(self.wreg);
+            }
+            0x0D00 => self.prod = u16::from(self.wreg) * u16::from(k),
+            0x0F00 => {
+                let result = self.wreg.wrapping_add(k);
+                self.set_add_flags(self.wreg, k, result);
+                self.wreg = result;
+            }
+            _ => return None,
+        }
+        Some(1)
+    }
+
+    /// The remaining byte-oriented file operations: the `a`-only compare,
+    /// test, multiply, set and negate forms, and the `d,a` carry/borrow
+    /// arithmetic, complement, rotate, swap and skip-on-result forms.
+    fn execute_byte_extended(&mut self, word: u16, pc: u32) -> Option<u32> {
+        let a = word & 0x0100 != 0;
+        let f = word as u8;
+
+        match word & 0xFE00 {
+            0x0200 => {
+                // MULWF: PRODH:PRODL = W * f, no flags.
+                let (value, access) = self.read_file_access(f, a);
+                self.complete_file_read(access);
+                self.prod = u16::from(self.wreg) * u16::from(value);
+                return Some(1);
+            }
+            0x6000 | 0x6200 | 0x6400 | 0x6600 => {
+                // CPFSLT / CPFSEQ / CPFSGT (unsigned compare with W) and
+                // TSTFSZ; none of them touch STATUS.
+                let (value, access) = self.read_file_access(f, a);
+                self.complete_file_read(access);
+                let skip = match word & 0xFE00 {
+                    0x6000 => value < self.wreg,
+                    0x6200 => value == self.wreg,
+                    0x6400 => value > self.wreg,
+                    _ => value == 0,
+                };
+                return Some(self.skip_if(skip, pc));
+            }
+            0x6800 => {
+                // SETF: no flags.
+                let access = self.resolve_file_access(f, a);
+                let wrote = self.write_file_data(access.addr, 0xFF);
+                self.complete_file_write(access, wrote);
+                return Some(1);
+            }
+            0x6C00 => {
+                // NEGF: f = -f, flags as for 0 - f.
+                let (value, access) = self.read_file_access(f, a);
+                let result = 0u8.wrapping_sub(value);
+                self.set_sub_flags(0, value, result);
+                let wrote = self.write_result_at(access, true, result);
+                self.complete_result(access, true, wrote);
+                return Some(1);
+            }
+            _ => {}
+        }
+
+        let d = word & 0x0200 != 0;
+        let op = word & 0xFC00;
+        if !matches!(
+            op,
+            0x2000
+                | 0x5400
+                | 0x5C00
+                | 0x5800
+                | 0x1C00
+                | 0x3400
+                | 0x4400
+                | 0x3000
+                | 0x4000
+                | 0x3800
+                | 0x2C00
+                | 0x4C00
+                | 0x3C00
+                | 0x4800
+        ) {
+            return None;
+        }
+
+        let (value, access) = self.read_file_access(f, a);
+        let carry = u8::from(self.status & STATUS_C != 0);
+        let w = self.wreg;
+        let (result, skip) = match op {
+            0x2000 => {
+                // ADDWFC: W + f + C.
+                let result = w.wrapping_add(value).wrapping_add(carry);
+                self.set_add_carry_flags(w, value, carry, result);
+                (result, None)
+            }
+            0x5400 => {
+                // SUBFWB: W - f - !C.
+                let result = w.wrapping_sub(value).wrapping_sub(1 - carry);
+                self.set_sub_borrow_flags(w, value, 1 - carry, result);
+                (result, None)
+            }
+            0x5C00 => {
+                // SUBWF: f - W.
+                let result = value.wrapping_sub(w);
+                self.set_sub_flags(value, w, result);
+                (result, None)
+            }
+            0x5800 => {
+                // SUBWFB: f - W - !C.
+                let result = value.wrapping_sub(w).wrapping_sub(1 - carry);
+                self.set_sub_borrow_flags(value, w, 1 - carry, result);
+                (result, None)
+            }
+            0x1C00 => {
+                let result = !value;
+                self.set_nz(result);
+                (result, None)
+            }
+            0x3400 => {
+                // RLCF: C <- f<7>, f<0> <- C.
+                let result = (value << 1) | carry;
+                self.set_carry(value & 0x80 != 0);
+                self.set_nz(result);
+                (result, None)
+            }
+            0x4400 => {
+                let result = value.rotate_left(1);
+                self.set_nz(result);
+                (result, None)
+            }
+            0x3000 => {
+                // RRCF: C <- f<0>, f<7> <- C.
+                let result = (value >> 1) | (carry << 7);
+                self.set_carry(value & 0x01 != 0);
+                self.set_nz(result);
+                (result, None)
+            }
+            0x4000 => {
+                let result = value.rotate_right(1);
+                self.set_nz(result);
+                (result, None)
+            }
+            0x3800 => (value.rotate_left(4), None),
+            0x2C00 => {
+                let result = value.wrapping_sub(1);
+                (result, Some(result == 0))
+            }
+            0x4C00 => {
+                let result = value.wrapping_sub(1);
+                (result, Some(result != 0))
+            }
+            0x3C00 => {
+                let result = value.wrapping_add(1);
+                (result, Some(result == 0))
+            }
+            _ => {
+                let result = value.wrapping_add(1);
+                (result, Some(result != 0))
+            }
+        };
+
+        // SWAPF and the skip forms leave STATUS alone, so a STATUS
+        // destination takes the result; flag-setting forms let the flags win
+        // (the same rule `write_result_at` applies to the existing ALU ops).
+        let flagless = op == 0x3800 || skip.is_some();
+        let wrote = if flagless && d {
+            self.write_file_data(access.addr, result)
+        } else {
+            self.write_result_at(access, d, result)
+        };
+        self.complete_result(access, d, wrote);
+        Some(match skip {
+            Some(skip) => self.skip_if(skip, pc),
+            None => 1,
+        })
+    }
+
+    fn skip_if(&mut self, skip: bool, pc: u32) -> u32 {
+        if skip {
+            self.skip_next(pc);
+            2
+        } else {
+            1
+        }
+    }
+
+    fn set_carry(&mut self, carry: bool) {
+        if carry {
+            self.status |= STATUS_C;
+        } else {
+            self.status &= !STATUS_C;
+        }
+    }
+
+    fn set_add_carry_flags(&mut self, a: u8, b: u8, carry: u8, result: u8) {
+        let mut flags = 0;
+        if u16::from(a) + u16::from(b) + u16::from(carry) > 0xFF {
+            flags |= STATUS_C;
+        }
+        if (a & 0x0F) + (b & 0x0F) + carry > 0x0F {
+            flags |= STATUS_DC;
+        }
+        if (a ^ result) & (b ^ result) & 0x80 != 0 {
+            flags |= STATUS_OV;
+        }
+        if result == 0 {
+            flags |= STATUS_Z;
+        }
+        if result & 0x80 != 0 {
+            flags |= STATUS_N;
+        }
+        self.status = (self.status & !STATUS_FLAG_MASK) | flags;
+    }
+
+    fn set_sub_borrow_flags(&mut self, a: u8, b: u8, borrow: u8, result: u8) {
+        let mut flags = 0;
+        if u16::from(a) >= u16::from(b) + u16::from(borrow) {
+            flags |= STATUS_C;
+        }
+        if (a & 0x0F) >= (b & 0x0F) + borrow {
+            flags |= STATUS_DC;
+        }
+        if (a ^ b) & (a ^ result) & 0x80 != 0 {
+            flags |= STATUS_OV;
+        }
+        if result == 0 {
+            flags |= STATUS_Z;
+        }
+        if result & 0x80 != 0 {
+            flags |= STATUS_N;
+        }
+        self.status = (self.status & !STATUS_FLAG_MASK) | flags;
+    }
+
+    /// Program-space byte for table reads. Flash below the modelled size
+    /// reads back its contents; the user ID (`0x200000..0x200008`) and
+    /// configuration (`0x300000..0x300010`) windows read back what the image
+    /// programmed, or `0xFF` (erased) where it programmed nothing. Every other
+    /// address — including the device ID words, which are not modelled —
+    /// reads `0`, the documented value for unimplemented program memory.
+    fn program_byte(&self, addr: u32) -> u8 {
+        let addr = addr & PIC18_TBLPTR_MASK;
+        if let Some(byte) = self.flash.get(addr as usize) {
+            return *byte;
+        }
+        match addr {
+            PIC18_IDLOC_BASE..=0x20_0007 => self.idloc[(addr - PIC18_IDLOC_BASE) as usize],
+            PIC18_CONFIG_BASE..=0x30_000F => self.config[(addr - PIC18_CONFIG_BASE) as usize],
+            _ => 0,
+        }
+    }
+
     fn sign_extend(value: u16, bits: u32) -> i32 {
         let shift = 32 - bits;
         (i32::from(value) << shift) >> shift
@@ -1111,24 +1652,8 @@ impl Pic18 {
 
 impl Cpu for Pic18 {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
-        self.wreg = 0;
-        self.status = 0;
-        self.bsr = 0;
-        self.pc = 0;
+        self.reset_core();
         self.cycles = 0;
-        self.fsr = [0; 3];
-        self.prod = 0;
-        self.tblptr = 0;
-        self.tablat = 0;
-        self.pclath = 0;
-        self.pclatu = 0;
-        self.stack.fill(0);
-        self.stkptr = 0;
-        self.stk_full = false;
-        self.stk_unf = false;
-        self.shadow = None;
-        self.exception_pending = None;
-        self.data.fill(0);
         Ok(())
     }
 
@@ -1138,6 +1663,23 @@ impl Cpu for Pic18 {
         observers: &[Arc<dyn SimulationObserver>],
         _config: &SimulationConfig,
     ) -> SimResult<()> {
+        if self.asleep {
+            // SLEEP: the core idles one instruction cycle at a time until an
+            // enabled source raises its flag. Waking does not need GIE; with
+            // GIE clear execution resumes after SLEEP, with it set the
+            // vector is taken (DS39631, "Wake-up from Sleep and Idle").
+            self.cycles += 1;
+            crate::advance_batch_cycle(bus, 1);
+            if !self.wake_pending() {
+                return Ok(());
+            }
+            self.asleep = false;
+            if let Some(high) = self.interrupt_request() {
+                self.take_interrupt(high);
+            }
+            return Ok(());
+        }
+
         let pc = self.pc;
         let word = self.fetch_word(pc);
         let observed = !observers.is_empty();
@@ -1266,6 +1808,7 @@ impl Cpu for Pic18 {
             stack: self.stack.clone(),
             stk_full: self.stk_full,
             stk_unf: self.stk_unf,
+            asleep: self.asleep,
         }))
     }
 
@@ -1289,6 +1832,7 @@ impl Cpu for Pic18 {
             self.stkptr = (s.stkptr as usize).min(depth) as u8;
             self.stk_full = s.stk_full;
             self.stk_unf = s.stk_unf;
+            self.asleep = s.asleep;
         }
     }
 }
@@ -1838,10 +2382,373 @@ mod tests {
 
     #[test]
     fn unknown_opcode_is_a_decode_error() {
+        // 0x0001/0x0002 are unassigned in the standard set; the extended
+        // (XINST) words such as ADDFSR (0xE8xx) are not decoded either.
+        for word in [0x0001, 0x0002, 0xE800] {
+            let mut cpu = Pic18::new();
+            cpu.load_words(&[word]);
+            let err = run_err(&mut cpu, 1);
+            assert!(
+                matches!(err, SimulationError::DecodeError(0)),
+                "{word:#06x}"
+            );
+        }
+    }
+
+    /// Run one instruction from a fresh core with `w`, `c` and `[0x20]`
+    /// seeded; returns the core for inspection.
+    fn exec_one(word: u16, w: u8, c: bool, f: u8) -> Pic18 {
         let mut cpu = Pic18::new();
-        cpu.load_words(&[0x0D00]); // MULLW is outside this milestone's subset.
-        let err = run_err(&mut cpu, 1);
-        assert!(matches!(err, SimulationError::DecodeError(0)));
+        cpu.wreg = w;
+        cpu.status = if c { STATUS_C } else { 0 };
+        cpu.data[0x20] = f;
+        cpu.load_words(&[word]);
+        run(&mut cpu, 1);
+        cpu
+    }
+
+    #[test]
+    fn literal_alu_ops_match_the_datasheet_examples() {
+        // ADDLW 0x15, W = 0x10 -> 0x25.
+        assert_eq!(exec_one(0x0F15, 0x10, false, 0).wreg(), 0x25);
+        // SUBLW 0x02: W = 1 -> 1 (C); W = 2 -> 0 (C, Z); W = 3 -> 0xFF (N, !C).
+        let cpu = exec_one(0x0802, 0x01, false, 0);
+        assert_eq!(
+            (cpu.wreg(), cpu.status() & (STATUS_C | STATUS_Z)),
+            (0x01, STATUS_C)
+        );
+        let cpu = exec_one(0x0802, 0x02, false, 0);
+        assert_eq!(cpu.wreg(), 0);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_Z), STATUS_C | STATUS_Z);
+        let cpu = exec_one(0x0802, 0x03, false, 0);
+        assert_eq!(cpu.wreg(), 0xFF);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_N), STATUS_N);
+        // ANDLW 0x5F, W = 0xA3 -> 0x03; IORLW 0x35, W = 0x9A -> 0xBF;
+        // XORLW 0xAF, W = 0xB5 -> 0x1A.
+        assert_eq!(exec_one(0x0B5F, 0xA3, false, 0).wreg(), 0x03);
+        let cpu = exec_one(0x0935, 0x9A, false, 0);
+        assert_eq!((cpu.wreg(), cpu.status() & STATUS_N), (0xBF, STATUS_N));
+        assert_eq!(exec_one(0x0AAF, 0xB5, false, 0).wreg(), 0x1A);
+        // MULLW 0xC4, W = 0xE2 -> PRODH:PRODL = 0xAD08, W and STATUS untouched.
+        let cpu = exec_one(0x0DC4, 0xE2, true, 0);
+        assert_eq!(
+            (cpu.prod, cpu.wreg(), cpu.status()),
+            (0xAD08, 0xE2, STATUS_C)
+        );
+    }
+
+    #[test]
+    fn carry_and_borrow_arithmetic() {
+        // SUBWF 0x20,F: 3 - 2 = 1, no borrow.
+        let cpu = exec_one(0x5E20, 0x02, false, 0x03);
+        assert_eq!(cpu.data[0x20], 0x01);
+        assert_eq!(cpu.status() & STATUS_C, STATUS_C);
+        // SUBWFB 0x20,F: 0x19 - 0x0D - !C(=0) = 0x0C.
+        let cpu = exec_one(0x5A20, 0x0D, true, 0x19);
+        assert_eq!(cpu.data[0x20], 0x0C);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_Z), STATUS_C);
+        // SUBWFB with C = 0 borrows one more: 0x19 - 0x0D - 1 = 0x0B.
+        assert_eq!(exec_one(0x5A20, 0x0D, false, 0x19).data[0x20], 0x0B);
+        // SUBFWB 0x20,W: W - f - !C = 2 - 3 - 0 = 0xFF, borrow, negative.
+        let cpu = exec_one(0x5420, 0x02, true, 0x03);
+        assert_eq!(cpu.wreg(), 0xFF);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_N), STATUS_N);
+        assert_eq!(cpu.data[0x20], 0x03);
+        // ADDWFC 0x20,W: 0x02 + 0x4D + C = 0x50, half carry.
+        let cpu = exec_one(0x2020, 0x4D, true, 0x02);
+        assert_eq!(cpu.wreg(), 0x50);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_DC), STATUS_DC);
+        // ADDWFC carries out: 0xFF + 0x00 + 1 = 0x00 with C and Z.
+        let cpu = exec_one(0x2020, 0x00, true, 0xFF);
+        assert_eq!(cpu.wreg(), 0);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_Z), STATUS_C | STATUS_Z);
+        // NEGF 0x20: 0b0011_1010 -> 0b1100_0110.
+        let cpu = exec_one(0x6C20, 0, false, 0x3A);
+        assert_eq!(cpu.data[0x20], 0xC6);
+        assert_eq!(cpu.status() & (STATUS_C | STATUS_N), STATUS_N);
+        // MULWF 0x20: W = 0xC4, f = 0xB5 -> 0x8A94; f and W untouched.
+        let cpu = exec_one(0x0220, 0xC4, false, 0xB5);
+        assert_eq!((cpu.prod, cpu.wreg(), cpu.data[0x20]), (0x8A94, 0xC4, 0xB5));
+    }
+
+    #[test]
+    fn rotate_swap_complement_and_set() {
+        // RLCF 0x20,W: 0b1110_0110, C = 0 -> W = 0b1100_1100, C = 1.
+        let cpu = exec_one(0x3420, 0, false, 0xE6);
+        assert_eq!(cpu.wreg(), 0xCC);
+        assert_eq!(cpu.status() & STATUS_C, STATUS_C);
+        assert_eq!(cpu.data[0x20], 0xE6);
+        // RRCF 0x20,W: 0b1110_0110, C = 0 -> 0b0111_0011, C = 0.
+        let cpu = exec_one(0x3020, 0, false, 0xE6);
+        assert_eq!((cpu.wreg(), cpu.status() & STATUS_C), (0x73, 0));
+        // RRCF shifts C into bit 7.
+        assert_eq!(exec_one(0x3020, 0, true, 0x02).wreg(), 0x81);
+        // RLNCF 0b1010_1011 -> 0b0101_0111; RRNCF 0b1101_0111 -> 0b1110_1011;
+        // neither touches C.
+        let cpu = exec_one(0x4420, 0, true, 0xAB);
+        assert_eq!((cpu.wreg(), cpu.status() & STATUS_C), (0x57, STATUS_C));
+        assert_eq!(exec_one(0x4020, 0, false, 0xD7).wreg(), 0xEB);
+        // SWAPF 0x20,F: 0x53 -> 0x35, no flags.
+        let cpu = exec_one(0x3A20, 0, false, 0x53);
+        assert_eq!((cpu.data[0x20], cpu.status()), (0x35, 0));
+        // COMF 0x20,W: 0x13 -> 0xEC.
+        let cpu = exec_one(0x1C20, 0, false, 0x13);
+        assert_eq!((cpu.wreg(), cpu.status() & STATUS_N), (0xEC, STATUS_N));
+        // SETF 0x20 -> 0xFF, no flags.
+        let cpu = exec_one(0x6820, 0, false, 0x5A);
+        assert_eq!((cpu.data[0x20], cpu.status()), (0xFF, 0));
+    }
+
+    #[test]
+    fn skip_on_result_and_compare_forms() {
+        // Each case: (opcode, W, f) -> skips?  The next word is NOP, then a
+        // second NOP, so the PC tells whether the skip happened.
+        let cases = [
+            (0x2E20, 0, 0x01, true),  // DECFSZ: 1 -> 0, skip
+            (0x2E20, 0, 0x02, false), // DECFSZ: 2 -> 1
+            (0x4E20, 0, 0x02, true),  // DCFSNZ: 2 -> 1, skip
+            (0x4E20, 0, 0x01, false), // DCFSNZ: 1 -> 0
+            (0x3E20, 0, 0xFF, true),  // INCFSZ: 0xFF -> 0, skip
+            (0x3E20, 0, 0x00, false), // INCFSZ: 0 -> 1
+            (0x4A20, 0, 0x00, true),  // INFSNZ: 0 -> 1, skip
+            (0x4A20, 0, 0xFF, false), // INFSNZ: 0xFF -> 0
+            (0x6220, 7, 7, true),     // CPFSEQ
+            (0x6220, 7, 8, false),
+            (0x6420, 7, 8, true), // CPFSGT (unsigned)
+            (0x6420, 0x80, 0x7F, false),
+            (0x6020, 0x80, 0x7F, true), // CPFSLT (unsigned)
+            (0x6020, 7, 7, false),
+            (0x6620, 0, 0, true), // TSTFSZ
+            (0x6620, 0, 1, false),
+        ];
+        for (word, w, f, skips) in cases {
+            let mut cpu = Pic18::new();
+            cpu.wreg = w;
+            cpu.status = STATUS_C;
+            cpu.data[0x20] = f;
+            cpu.load_words(&[word, 0x0000, 0x0000]);
+            run(&mut cpu, 1);
+            let expected = if skips { 4 } else { 2 };
+            assert_eq!(cpu.get_pc(), expected, "{word:#06x} W={w:#x} f={f:#x}");
+            // None of these forms touch STATUS.
+            assert_eq!(cpu.status(), STATUS_C, "{word:#06x}");
+        }
+        // The skip steps over a whole two-word instruction.
+        let mut cpu = Pic18::new();
+        cpu.data[0x20] = 1;
+        cpu.load_words(&[0x2E20, 0xEF00, 0xF000, 0x0000]); // DECFSZ; GOTO 0
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 6);
+        assert_eq!(cpu.data[0x20], 0);
+    }
+
+    #[test]
+    fn daw_push_pop_and_reset() {
+        // DAW: W = 0xA5 -> 0x05, C; W = 0xCE -> 0x34, C (DS39631 examples).
+        let cpu = exec_one(0x0007, 0xA5, false, 0);
+        assert_eq!((cpu.wreg(), cpu.status() & STATUS_C), (0x05, STATUS_C));
+        let cpu = exec_one(0x0007, 0xCE, false, 0);
+        assert_eq!((cpu.wreg(), cpu.status() & STATUS_C), (0x34, STATUS_C));
+        // A valid BCD value is left alone.
+        assert_eq!(exec_one(0x0007, 0x42, false, 0).wreg(), 0x42);
+
+        // PUSH stacks the next instruction; POP discards the top of stack.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0005, 0x0005, 0x0006]);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.stack_pointer(), 2);
+        assert_eq!(cpu.top_of_stack(), 4);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.stack_pointer(), 1);
+        assert_eq!(cpu.top_of_stack(), 2);
+        // POP on an empty stack flags underflow.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0006]);
+        run(&mut cpu, 1);
+        assert_ne!(cpu.read_data(SFR_STKPTR) & STKPTR_STKUNF, 0);
+
+        // RESET returns to address 0 with reset SFR values but keeps flash.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0E42, 0x6E20, 0x0E00, 0x6E93, 0x00FF]);
+        run(&mut cpu, 5);
+        assert_eq!(cpu.get_pc(), 0);
+        assert_eq!(cpu.wreg(), 0);
+        assert_eq!(cpu.read_data(0x20), 0);
+        assert_eq!(cpu.read_data(SFR_TRISA + 1), 0xFF);
+        assert_eq!(cpu.fetch_word(0), 0x0E42);
+    }
+
+    #[test]
+    fn table_reads_walk_flash_and_the_configuration_window() {
+        let mut cpu = Pic18::with_geometry(32 * 1024, PIC18_STACK_DEPTH);
+        cpu.load_flash(0x0100, &[0x11, 0x22, 0x33]);
+        cpu.load_flash(PIC18_CONFIG_BASE + 1, &[0x02]); // CONFIG1H
+        cpu.tblptr = 0x0100;
+        cpu.load_words(&[0x0009, 0x0009, 0x000A, 0x000B, 0x0008]);
+        run(&mut cpu, 2); // TBLRD*+ twice
+        assert_eq!((cpu.tablat, cpu.tblptr), (0x22, 0x0102));
+        run(&mut cpu, 1); // TBLRD*-
+        assert_eq!((cpu.tablat, cpu.tblptr), (0x33, 0x0101));
+        run(&mut cpu, 1); // TBLRD+*
+        assert_eq!((cpu.tablat, cpu.tblptr), (0x33, 0x0102));
+        assert_eq!(cpu.clock_cycles(), 8);
+
+        // Programmed config byte, erased config byte, unimplemented memory.
+        for (addr, expected) in [
+            (PIC18_CONFIG_BASE + 1, 0x02),
+            (PIC18_CONFIG_BASE + 2, 0xFF),
+            (0x8000, 0x00),
+            (0x3F_FFFE, 0x00),
+        ] {
+            cpu.tblptr = addr;
+            cpu.set_pc(8);
+            run(&mut cpu, 1); // TBLRD*
+            assert_eq!(cpu.tablat, expected, "{addr:#x}");
+        }
+        // TBLWT moves the pointer but never reprograms flash.
+        let mut cpu = Pic18::new();
+        cpu.tblptr = 0x0100;
+        cpu.tablat = 0x55;
+        cpu.load_words(&[0x000D]);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.tblptr, 0x0101);
+        assert_eq!(cpu.program_byte(0x0100), 0xFF);
+    }
+
+    #[test]
+    fn sleep_idles_until_an_enabled_source_and_sets_pd() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0003, 0x0E42]); // SLEEP; MOVLW 0x42
+        run(&mut cpu, 1);
+        assert!(cpu.is_asleep());
+        assert_eq!(cpu.read_data(SFR_RCON) & (RCON_TO | RCON_PD), RCON_TO);
+        run(&mut cpu, 10);
+        assert!(cpu.is_asleep());
+        assert_eq!(cpu.wreg(), 0);
+        // A flagged but disabled source does not wake the core.
+        cpu.write_data(SFR_PIR1, 0x01);
+        run(&mut cpu, 1);
+        assert!(cpu.is_asleep());
+        // Enabling it wakes the core even with GIE clear; execution resumes
+        // after SLEEP without vectoring.
+        cpu.write_data(SFR_PIE1, 0x01);
+        run(&mut cpu, 2);
+        assert!(!cpu.is_asleep());
+        assert_eq!(cpu.wreg(), 0x42);
+        assert_eq!(cpu.stack_pointer(), 0);
+        // CLRWDT sets TO and PD again.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0003]);
+        run(&mut cpu, 1);
+        cpu.load_words(&[0x0004]);
+        cpu.asleep = false;
+        cpu.set_pc(0);
+        run(&mut cpu, 1);
+        assert_eq!(
+            cpu.read_data(SFR_RCON) & (RCON_TO | RCON_PD),
+            RCON_TO | RCON_PD
+        );
+    }
+
+    #[test]
+    fn eusart_tx_reaches_the_sink_only_when_enabled() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut cpu = Pic18::new();
+        cpu.set_serial_sink(sink.clone());
+        // Power-on: TRMT set, TXIF clear (transmitter off).
+        assert_eq!(cpu.read_data(SFR_TXSTA), TXSTA_TRMT);
+        assert_eq!(cpu.read_data(SFR_PIR1) & PIR1_TXIF, 0);
+        cpu.write_data(SFR_TXREG, b'x'); // disabled: dropped
+        cpu.write_data(SFR_TXSTA, TXSTA_TXEN); // TRMT stays set
+        assert_eq!(cpu.read_data(SFR_TXSTA), TXSTA_TXEN | TXSTA_TRMT);
+        assert_ne!(cpu.read_data(SFR_PIR1) & PIR1_TXIF, 0);
+        cpu.write_data(SFR_TXREG, b'y'); // SPEN still clear: dropped
+        cpu.write_data(SFR_RCSTA, RCSTA_SPEN);
+        cpu.write_data(SFR_SPBRG, 25);
+        // Firmware writes TXREG through MOVWF like real code.
+        cpu.load_words(&[0x0E4F, 0x6EAD, 0x0E4B, 0x6EAD]); // "OK"
+        run(&mut cpu, 4);
+        assert_eq!(sink.lock().unwrap().as_slice(), b"OK");
+        // TXIF cannot be cleared by firmware while TXREG is empty.
+        cpu.write_data(SFR_PIR1, 0);
+        assert_ne!(cpu.read_data(SFR_PIR1) & PIR1_TXIF, 0);
+    }
+
+    #[test]
+    fn port_reads_follow_tris_and_writes_land_in_the_latch() {
+        let mut cpu = Pic18::new();
+        let (portb, latb, trisb) = (SFR_PORTA + 1, SFR_LATA + 1, SFR_TRISA + 1);
+        assert_eq!(cpu.read_data(trisb), 0xFF);
+        assert_eq!(cpu.read_data(SFR_TRISA + 4), 0x07);
+        cpu.load_words(&[
+            0x0EF0, // MOVLW 0xF0
+            0x6E93, // MOVWF TRISB: RB0..RB3 outputs
+            0x0EFF, // MOVLW 0xFF
+            0x6E81, // MOVWF PORTB -> LATB
+            0x8081, // BSF PORTB,0 (RMW reads pins, writes the latch)
+        ]);
+        run(&mut cpu, 4);
+        assert_eq!(cpu.read_data(latb), 0xFF);
+        // Only the output pins read back high; inputs are undriven.
+        assert_eq!(cpu.read_data(portb), 0x0F);
+        // BSF on PORTB reads the pins and writes the latch, so the undriven
+        // input bits come back as 0 in LATB: the classic PORT
+        // read-modify-write hazard that LATx exists to avoid.
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(latb), 0x0F);
+    }
+
+    #[test]
+    fn pic18f4520_access_bank_splits_at_0x80() {
+        let mut cpu = Pic18::for_chip_name("PIC18F4520");
+        cpu.load_words(&[
+            0x0E5A, // MOVLW 0x5A
+            0x6E70, // MOVWF 0x70, access -> GPR 0x070 (not SFR 0xF70)
+            0x6E81, // MOVWF 0x81, access -> PORTB (0xF81) -> LATB
+        ]);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.data[0x070], 0x5A);
+        assert_eq!(cpu.data[0xF70], 0);
+        assert_eq!(cpu.read_data(SFR_LATA + 1), 0x5A);
+        assert_eq!(cpu.flash.len(), 32 * 1024);
+        // The generic core keeps the 0x60 split.
+        assert_eq!(Pic18::new().file_address(0x70, false), 0xF70);
+    }
+
+    #[test]
+    fn movff_expands_indirect_aliases_on_both_operands() {
+        // SDCC's pic16 prologue/epilogue: push with POSTDEC1, frame reads
+        // with PLUSW2, pop with PREINC1.
+        let mut cpu = Pic18::new();
+        cpu.fsr[1] = 0x0FF;
+        cpu.data[0x010] = 0xAB;
+        cpu.data[0x011] = 0xCD;
+        cpu.load_words(&[
+            0xC010, 0xFFE5, // MOVFF 0x010, POSTDEC1 -> [0xFF]=0xAB, FSR1=0xFE
+            0xC011, 0xFFE5, // MOVFF 0x011, POSTDEC1 -> [0xFE]=0xCD, FSR1=0xFD
+            0xCFE1, 0xFFD9, // MOVFF FSR1L, FSR2L -> FSR2=0x0FD (FSR2H is 0)
+            0x0E02, //         MOVLW 2
+            0xCFDB, 0xF020, // MOVFF PLUSW2, 0x020 -> [0x0FF]=0xAB
+            0xCFE4, 0xF021, // MOVFF PREINC1, 0x021 -> FSR1=0xFE, 0xCD
+            0xCFE4, 0xF022, // MOVFF PREINC1, 0x022 -> FSR1=0xFF, 0xAB
+        ]);
+        run(&mut cpu, 7);
+        assert_eq!((cpu.data[0x0FF], cpu.data[0x0FE]), (0xAB, 0xCD));
+        assert_eq!(cpu.fsr[2], 0x0FD);
+        assert_eq!(
+            (cpu.data[0x020], cpu.data[0x021], cpu.data[0x022]),
+            (0xAB, 0xCD, 0xAB)
+        );
+        assert_eq!(cpu.fsr[1], 0x0FF);
+
+        // Indirect-to-indirect: one update per side.
+        let mut cpu = Pic18::new();
+        cpu.fsr = [0x030, 0x040, 0];
+        cpu.data[0x030] = 0x77;
+        cpu.load_words(&[0xCFEE, 0xFFE6]); // MOVFF POSTINC0, POSTINC1
+        run(&mut cpu, 1);
+        assert_eq!(cpu.data[0x040], 0x77);
+        assert_eq!((cpu.fsr[0], cpu.fsr[1]), (0x031, 0x041));
     }
 
     #[test]

@@ -105,6 +105,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
 | dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
 | dspic33fj32mc202 | **L1** | ✓ | 3 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
+| pic18f4520 | **L1** | ✓ | 0 | — | — | pic18f4520_smoke::sdcc_firmware_boots_and_prints_the_banner |
 | pic24f04ka200 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka200_uart_smoke |
 | pic24f04ka201 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka201_uart_smoke |
 | pic24f08ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka101_uart_smoke |
