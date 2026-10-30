@@ -281,6 +281,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"verdict=GOOD rp2040",
     },
     SurvivalCase {
+        // NUCLEO-L552ZE-Q: STM32L552ZET6Q (Cortex-M33 / Armv8-M), 512 KiB flash
+        // at 0x08000000, 192 KiB SRAM1 at 0x20000000 (+64 KiB SRAM2 at
+        // 0x20030000). LPUART1 (PG7/PG8, AF8) is the VCP console; the smoke
+        // walks the PC7/PB7/PA9 LEDs with ODR readback and reads PC13.
+        // SIM-DERIVED (no STM32L552 bench part); TrustZone/MPU not modelled.
+        name: "nucleo_l552ze_q_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "stm32l552",
+        system: "nucleo-l552ze-q",
+        fixture: "nucleo-l552ze-q-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"NUCLEO-L552ZE-Q SMOKE\n",
+    },
+    SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,
         // 128 KiB SRAM at 0x20000000. UART0 is the board's virtual COM port;
         // the smoke walks the PIOC LED with ODSR readback and reads the
@@ -2106,6 +2122,8 @@ survival_gate!(
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 
 survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
+
+survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
 
 survival_gate!(
     test_stm32f072b_disco_smoke_survival,

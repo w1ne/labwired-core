@@ -79,6 +79,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no UART0 bring-up in this harness; bytes are proven by the sam4s-xplained survival smoke
 * **stm32f072**
   * UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke
+* **stm32l552**
+  * UART: no LPUART1 bring-up in this harness; bytes are proven by the nucleo-l552ze-q survival smoke
 * **vegaboard-ri5cy**
   * UART: no LPUART bring-up in this harness; bytes are proven by the vegaboard-ri5cy survival smoke
 
@@ -176,6 +178,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32h735 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |
+| stm32l552 | ✓ | ✓ | — |
 | stm32u545 | ✓ | ✓ | ✓ |
 | stm32u575 | ✓ | ✓ | ✓ |
 | stm32u5a5zj | ✓ | ✓ | ✓ |

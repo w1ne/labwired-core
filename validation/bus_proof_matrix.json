@@ -1417,6 +1417,26 @@
         "lane": "none"
       }
     },
+    "stm32l552": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_nucleo_l552ze_q_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/nucleo-l552ze-q-smoke.elf boots on the Cortex-M33 and the survival gate asserts 'NUCLEO-L552ZE-Q SMOKE\\n' on the LPUART1 TX sink; examples/nucleo-l552ze-q/io-smoke.yaml asserts the full LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; strict_onboarding examples/nucleo-l552ze-q/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI device is attached on the NUCLEO-L552ZE-Q package; SPI1/SPI2/SPI3 are modelled but unexercised.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C device is attached on the NUCLEO-L552ZE-Q package; I2C1/I2C2 are modelled but unexercised.",
+        "lane": "none"
+      }
+    },
     "pic24f04ka200": {
       "in_boards": false,
       "uart": {

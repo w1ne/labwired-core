@@ -1366,6 +1366,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-l552ze-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-litex-vexriscv-smoke"
 version = "0.1.0"
 dependencies = [

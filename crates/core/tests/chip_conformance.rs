@@ -118,6 +118,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_vegaboard_ri5cy_smoke_survival"),
     },
     ChipConf {
+        // NUCLEO-L552ZE-Q (STM32L552ZET6Q, Cortex-M33 / Armv8-M). SIM-DERIVED:
+        // no STM32L552 bench part. The new L5 RCC profile and the v2 GPIO /
+        // LPUART / SPI / I2C / timer / DMA models carry the smoke. TrustZone/
+        // SAU/GTZC, MPU/PMSAv8 enforcement and the L5 non-secure flash
+        // controller are NOT modelled; FLASH/EXTI/ADC/FDCAN/USB are declared
+        // stubs — see examples/nucleo-l552ze-q/VALIDATION.md.
+        name: "stm32l552",
+        yaml: "configs/chips/stm32l552.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_nucleo_l552ze_q_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

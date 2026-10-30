@@ -491,6 +491,10 @@
     "sam4s16c": {
       "how": "needs-build",
       "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "stm32l552": {
+      "how": "needs-build",
+      "why": "The STM32L5 part (and the new stm32l5 RCC profile) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/nucleo-l552ze-q-smoke.elf prints 'NUCLEO-L552ZE-Q SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }

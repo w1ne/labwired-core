@@ -611,6 +611,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
         "sam4s16c",
+        // First STM32L5 part (NUCLEO-L552ZE-Q): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "stm32l552",
         // First STM32F0 part (STM32F072B-DISCO): chip + system + example with
         // an io-smoke, a committed fixture and a survival gate; no catalog
         // board, no silicon capture and no executing-fidelity differential.
