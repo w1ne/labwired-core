@@ -540,6 +540,20 @@ impl DapServer {
                     );
                 }
 
+                // RTT polling: same Debug Console, its own category and event.
+                let rtt = adapter_clone.poll_rtt();
+                if !rtt.is_empty() {
+                    let text = String::from_utf8_lossy(&rtt).to_string();
+                    let _ = sender_clone.send_event(
+                        "output",
+                        Some(json!({
+                            "category": "console",
+                            "output": text,
+                        })),
+                    );
+                    let _ = sender_clone.send_event("rtt", Some(json!({ "output": text })));
+                }
+
                 // Telemetry polling
                 let telemetry_interval = if is_running {
                     Duration::from_millis(100)
