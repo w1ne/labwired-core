@@ -703,6 +703,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "pic18f4520",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "pic24f04ka200",
     "reg_match": 0
   },

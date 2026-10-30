@@ -245,3 +245,77 @@ fn a_clean_riscv_run_still_exits_zero() {
         String::from_utf8_lossy(&out.stdout)
     );
 }
+
+// ── PIC18 interactive run ───────────────────────────────────────────────────
+//
+// The PIC24/PIC18 arms of the interactive runner (`labwired --firmware …
+// --system …`) returned 0 for every run, faulted or not. The PIC18F4520
+// unsupported-instruction audit judges by that exit status, so an
+// undecodable opcode read as "0 unsupported".
+
+/// A one-segment ELF32 stamped EM_MCHP_PIC (204), loaded at byte address 0,
+/// as `examples/pic18f4520/firmware/hex2elf.py` writes them.
+fn pic18_elf(code: &[u8]) -> Vec<u8> {
+    let (ehsize, phentsize) = (52u32, 32u32);
+    let offset = ehsize + phentsize;
+    let mut elf = b"\x7fELF\x01\x01\x01\x00".to_vec();
+    elf.extend_from_slice(&[0; 8]);
+    for half in [2u16, 204] {
+        elf.extend_from_slice(&half.to_le_bytes());
+    }
+    for word in [1u32, 0, ehsize, 0, 0] {
+        elf.extend_from_slice(&word.to_le_bytes());
+    }
+    for half in [ehsize as u16, phentsize as u16, 1, 40, 0, 0] {
+        elf.extend_from_slice(&half.to_le_bytes());
+    }
+    let len = code.len() as u32;
+    for word in [1u32, offset, 0, 0, len, len, 5, 1] {
+        elf.extend_from_slice(&word.to_le_bytes());
+    }
+    elf.extend_from_slice(code);
+    elf
+}
+
+fn pic18_run(code: &[u8], name: &str) -> std::process::Output {
+    let root = workspace_root();
+    let dir = std::env::temp_dir().join(format!("lw-pic18-exit-{}-{name}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let fw = dir.join("fw.elf");
+    std::fs::write(&fw, pic18_elf(code)).expect("write elf");
+    let out = Command::new(labwired_bin())
+        .arg("--firmware")
+        .arg(&fw)
+        .arg("--system")
+        .arg(root.join("configs/systems/pic18f4520-demo.yaml"))
+        .arg("--max-steps")
+        .arg("1000")
+        .output()
+        .expect("spawn labwired");
+    let _ = std::fs::remove_dir_all(&dir);
+    out
+}
+
+#[test]
+fn a_pic18_run_that_ends_on_a_decode_error_exits_non_zero() {
+    // 0x0001 is unassigned in the standard PIC18 instruction set.
+    let out = pic18_run(&[0x01, 0x00], "decode");
+    assert_eq!(
+        out.status.code(),
+        Some(EXIT_RUNTIME_ERROR),
+        "an undecodable opcode must not report success; stderr was: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_clean_pic18_run_still_exits_zero() {
+    // `BRA $` (0xD7FF): spins on itself until max-steps.
+    let out = pic18_run(&[0xFF, 0xD7], "clean");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a max-steps run is not a fault; stderr was: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
