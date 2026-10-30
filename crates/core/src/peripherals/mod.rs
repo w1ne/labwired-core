@@ -54,6 +54,7 @@ pub mod stm32u5_hash;
 pub mod stm32u5_pka;
 pub mod stm32u5_saes;
 // Historical timing oracle, including its former hook state; production uses GPIO schedules.
+pub mod cortex_m7_cache;
 #[cfg(test)]
 #[allow(dead_code)]
 pub mod hc_sr04;

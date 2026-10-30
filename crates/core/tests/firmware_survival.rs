@@ -490,6 +490,23 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"SAM E70 XPLAINED SMOKE\n",
     },
     SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `sam_e70_xplained/same70q21b`
+        // (Zephyr commit 36940db938a8,
+        // crates/firmware-sam-e70-xplained-zephyr/build.sh). Zephyr's own
+        // SAM E70 bring-up runs unpatched: the M7 I/D cache set/way
+        // invalidate/enable/disable sequence, MAINCK RC -> crystal, PLLA + UPLL lock, MCK to
+        // PLLA, the CHIPID_CIDR check, then USART1 prints.
+        name: "sam_e70_xplained_zephyr",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "same70q21b",
+        system: "sam-e70-xplained",
+        fixture: "same70q21b-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0040_0000, 0x005F_FFFF), (0x2040_0000, 0x2045_FFFF)],
+        expected_uart_output: b"Hello World! sam_e70_xplained/same70q21b",
+    },
+    SurvivalCase {
         // S32K388EVB-Q289: S32K388 (CM7_0, Cortex-M7), 8 MiB program flash
         // at 0x00400000 (boot header at the base, vector table at
         // 0x00401000), SRAM_0-2 at 0x20400000. The smoke disables SWT_0,
@@ -2367,6 +2384,11 @@ survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
 survival_gate!(
     test_sam_e70_xplained_smoke_survival,
     "sam_e70_xplained_smoke"
+);
+
+survival_gate!(
+    test_sam_e70_xplained_zephyr_survival,
+    "sam_e70_xplained_zephyr"
 );
 
 survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
