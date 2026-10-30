@@ -1,0 +1,27 @@
+# LabWired - CC2538DK: stock Contiki-NG v4.9 Coffee file example
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-coffee.elf — UNMODIFIED upstream
+# Contiki-NG examples/storage/cfs-coffee/example-coffee.c for TARGET=cc2538dk
+# (rebuild: crates/firmware-cc2538dk-contiki/build.sh).
+#
+# Writes a message to a Coffee file, reads it back, appends a second one, reads
+# both, and lists the root directory — all through the clean-room ROM's
+# PageErase/ProgramFlash into the FLASH_CTRL model. With the old ROM stubs the
+# reads come back empty ("Read message \"\", sequence 0").
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-coffee.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+assertions:
+  - uart_ordered:
+      - "[INFO: Main      ] Starting Contiki-NG-release/v4.9"
+      - "Wrote message \"The first test\", sequence 1"
+      - "Read message \"The first test\", sequence 1"
+      - "Wrote message \"The second test\", sequence 2"
+      - "Read message \"The first test\", sequence 1"
+      - "Read message \"The second test\", sequence 2"
+      - "Available files"
+      - "test (34 bytes)"
+  - expected_stop_reason: max_steps

@@ -358,6 +358,27 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"Hello, world",
     },
     SurvivalCase {
+        // CC2538DK flash controller: a Contiki-NG v4.9 app
+        // (crates/firmware-cc2538dk-contiki/flash-test) running the steps of
+        // Renode's cc2538_flash_controller.robot through the clean-room ROM's
+        // PageErase/ProgramFlash into the FLASH_CTRL model (20-ms erases,
+        // FCTL/FADDR/FWDATA write sequence, NOR AND rule). The marker needs
+        // the last erase check to print [OK].
+        name: "cc2538dk_contiki_flash_test",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-flash-test.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"[OK] Data erased successfully\nFLASH TEST DONE",
+    },
+    SurvivalCase {
         // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
         // SRAM at 0x20000000. SCI0 (P411/P410) is the J-Link OB console; the
         // smoke runs on the reset MOCO, walks LED1-LED3 (P006-P008) with
@@ -1978,6 +1999,8 @@ fn case_cycles(case: &SurvivalCase) -> u32 {
         // Contiki-NG's cc2538dk platform_init runs a busy-loop LED `fade()`
         // (~8.0M cycles at 16 MHz) before the first "Hello, world".
         "cc2538dk_contiki_hello" => 10_000_000,
+        // The same fade(), then four 20-ms page erases (1.28M cycles).
+        "cc2538dk_contiki_flash_test" => 12_000_000,
         _ => SURVIVAL_CYCLES,
     }
 }
@@ -2329,6 +2352,10 @@ survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
 survival_gate!(
     test_cc2538dk_contiki_hello_survival,
     "cc2538dk_contiki_hello"
+);
+survival_gate!(
+    test_cc2538dk_contiki_flash_test_survival,
+    "cc2538dk_contiki_flash_test"
 );
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
 
