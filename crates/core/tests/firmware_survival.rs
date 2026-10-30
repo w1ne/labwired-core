@@ -299,6 +299,23 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NUCLEO-L552ZE-Q SMOKE\n",
     },
     SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `nucleo_l552ze_q` (Zephyr commit
+        // 36940db938a8, crates/firmware-l552ze-zephyr/build.sh): the sample
+        // Renode's ARMv8M.robot boots on this part. Zephyr's own L5 bring-up
+        // runs unpatched: ICACHE enable (SR.BUSYF poll), DBGMCU stop/standby
+        // clear at 0xE0044000, MSI -> PLL 110 MHz, VDDIO2 for port G, then
+        // the LPUART1 console on PG7/PG8.
+        name: "stm32l552_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "stm32l552",
+        system: "nucleo-l552ze-q",
+        fixture: "stm32l552-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_l552ze_q",
+    },
+    SurvivalCase {
         // CC2538DK: CC2538SF53 (Cortex-M3), 512 KiB flash at 0x00200000 (the
         // ROM, not flash, sits at 0x0), 32 KiB SRAM at 0x20000000. UART0
         // (PA0/PA1 via the IOC) is the console; the smoke reads CLOCK_STA,
@@ -2346,6 +2363,7 @@ fn test_cc2538dk_smoke_customer_configuration_area_boots() {
 }
 
 survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
+survival_gate!(test_stm32l552_zephyr_survival, "stm32l552_zephyr");
 survival_gate!(test_frdm_k64f_smoke_survival, "frdm_k64f_smoke");
 
 /// The K64F loads FSEC/FOPT/FPROT from the Flash Configuration Field at

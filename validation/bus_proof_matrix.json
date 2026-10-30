@@ -1544,7 +1544,8 @@
         "file": "crates/core/tests/firmware_survival.rs",
         "test": "test_nucleo_l552ze_q_smoke_survival",
         "signal": "committed ELF fixture tests/fixtures/nucleo-l552ze-q-smoke.elf boots on the Cortex-M33 and the survival gate asserts 'NUCLEO-L552ZE-Q SMOKE\\n' on the LPUART1 TX sink; examples/nucleo-l552ze-q/io-smoke.yaml asserts the full LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
-        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; strict_onboarding examples/nucleo-l552ze-q/io-smoke.yaml"
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; strict_onboarding examples/nucleo-l552ze-q/io-smoke.yaml",
+        "note": "a second independent LPUART1 proof lands in the same file: test_stm32l552_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/stm32l552-zephyr-hello.elf, built for nucleo_l552ze_q) and asserts 'Hello World! nucleo_l552ze_q'. Evidence captured 2026-10-30."
       },
       "spi": {
         "state": "none",

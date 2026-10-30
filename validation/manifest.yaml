@@ -9291,6 +9291,11 @@ boards:
     # v2 FIFO, v2 I2C, timers, DMA/DMAMUX, RNG/CRC/RTC/IWDG/WWDG and PWR.
     # FLASH controller, EXTI, ADC, FDCAN and USB are declared stubs.
     # TrustZone/SAU/GTZC and MPU/PMSAv8 enforcement are NOT modelled.
+    # 2026-10-30: stock Zephyr v3.7.0 samples/hello_world for
+    # nucleo_l552ze_q boots and prints over LPUART1
+    # (tests/fixtures/stm32l552-zephyr-hello.elf, rebuilt byte-identical by
+    # crates/firmware-l552ze-zephyr/build.sh) after mapping the ICACHE (the
+    # U5 icache model, same IP) and the DBGMCU at 0xE0044000.
     # SIM-DERIVED — no STM32L552 bench part. See
     # docs/boards/nucleo-l552ze-q.md and
     # examples/nucleo-l552ze-q/VALIDATION.md.
@@ -9299,6 +9304,7 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_nucleo_l552ze_q_smoke_survival"
+      - "firmware_survival::test_stm32l552_zephyr_survival (stock Zephyr hello)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9318,11 +9324,14 @@ boards:
       - crates/core/src/peripherals/iwdg.rs
       - crates/core/src/peripherals/wwdg.rs
       - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/icache.rs
+      - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
       - crates/firmware-l552ze-smoke
+      - crates/firmware-l552ze-zephyr
       - configs/chips/stm32l552.yaml
       - configs/systems/nucleo-l552ze-q.yaml
 
