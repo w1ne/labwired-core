@@ -237,18 +237,10 @@ pub fn seed_rom_data(bus: &mut SystemBus) {
         for (i, b) in bytes.iter().enumerate() {
             let addr = *dst as u64 + i as u64;
             if let Err(e) = bus.write_u8(addr, *b) {
-                eprintln!("seed_rom_data write fail @ {addr:#x}: {e:?}");
+                tracing::debug!("seed_rom_data write fail @ {addr:#x}: {e:?}");
             }
         }
     }
-    // Prove the heap_tlsf_table_ptr seed stuck (ROM multi_heap_register_impl
-    // loads this before calling into the tlsf dispatch table).
-    let mut v = [0u8; 4];
-    for (i, b) in v.iter_mut().enumerate() {
-        *b = bus.read_u8(0x4087_ffd8 + i as u64).unwrap_or(0xEE);
-    }
-    let ptr = u32::from_le_bytes(v);
-    eprintln!("seed_rom_data: heap_tlsf_table_ptr @ 0x4087ffd8 = {ptr:#010x}");
 }
 
 /// Install the C6 Arduino flash substrate when `chip` is a C6; no-op otherwise.
@@ -348,9 +340,16 @@ mod tests {
         for (i, byte) in e.iter_mut().enumerate() {
             *byte = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
         }
-        // Without ROM image this may be 0; with LABWIRED_ESP32C6_ROM it should be 0x400210b2
+        // The ROM image is not committed: without LABWIRED_ESP32C6_ROM the
+        // region stays zero; with Espressif's esp32c6_rev0_rom image the tlsf
+        // table entry at +0x34 is the ROM function 0x400210b2.
         let v = u32::from_le_bytes(e);
-        eprintln!("tlsf table +52 = {v:#x}");
+        let expected = if std::env::var_os("LABWIRED_ESP32C6_ROM").is_some() {
+            0x4002_10b2
+        } else {
+            0
+        };
+        assert_eq!(v, expected, "tlsf table entry @ ROM+0x34");
     }
 
     #[test]

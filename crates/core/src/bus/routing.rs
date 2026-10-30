@@ -549,6 +549,35 @@ impl SystemBus {
             || self.peripherals.iter().any(|p| p.dev.observes_gpio_edges());
     }
 
+    /// C6 merged interrupt threshold, read fresh from the stored register
+    /// banks: `max(PLIC_MXINT_THRESH @0x90, INTPRI_CORE0_CPU_INT_THRESH @0x8C)`.
+    /// The single source of truth for both the full rebuild and the per-write
+    /// sync, so a write can LOWER the threshold (IDF critical-section exit
+    /// restores it) instead of ratcheting against the cached value.
+    fn esp32c6_merged_int_thresh(&self) -> u8 {
+        let read = |idx: Option<usize>, off: u64| {
+            idx.and_then(|i| self.read_cached_declarative_u32(i, off))
+                .unwrap_or(0)
+        };
+        let intpri = (read(self.irq_fabric.esp32c3.intpri_idx, 0x8C) & 0xFF) as u8;
+        let plic = (read(self.irq_fabric.esp32c3.plic_mx_idx, 0x90) & 0xFF) as u8;
+        plic.max(intpri)
+    }
+
+    /// C6 merged priority of CPU line `line`, read fresh from the stored
+    /// banks: `max(PLIC_MXINT_n_PRI @0x10+4n, INTPRI_CORE0_CPU_INT_PRI_n
+    /// @0x0C+4n)`. See [`Self::esp32c6_merged_int_thresh`].
+    fn esp32c6_merged_line_pri(&self, line: usize) -> u8 {
+        let read = |idx: Option<usize>, off: u64| {
+            idx.and_then(|i| self.read_cached_declarative_u32(i, off))
+                .unwrap_or(0)
+        };
+        let off = (line as u64) * 4;
+        let intpri = (read(self.irq_fabric.esp32c3.intpri_idx, 0x0C + off) & 0xF) as u8;
+        let plic = (read(self.irq_fabric.esp32c3.plic_mx_idx, 0x10 + off) & 0xF) as u8;
+        plic.max(intpri)
+    }
+
     pub(crate) fn rebuild_esp32c3_irq_cache(&mut self) {
         let Some(int_idx) = self.irq_fabric.esp32c3.interrupt_core0_idx else {
             self.irq_fabric.esp32c3.intc = None;
@@ -574,40 +603,21 @@ impl SystemBus {
             // `esprv_intc_*` programs enable/priority/threshold at PLIC
             // @0x2000_1000; bare-metal examples (gpio-net) still write the
             // INTPRI SVD copies. Merge both so either path can arm a line:
-            // enable is OR'd; per-line priority and threshold take the max
-            // (more permissive of the two programmed floors).
+            // enable is OR'd; per-line priority and threshold take the max of
+            // the two programmed banks. For the threshold the max is the MORE
+            // RESTRICTIVE floor (a line passes only if pri >= thresh); a bank
+            // left at reset (0) therefore never relaxes the other one.
             let intpri_en = self.read_cached_declarative_u32(p_idx, 0x00).unwrap_or(0);
-            let intpri_thresh =
-                (self.read_cached_declarative_u32(p_idx, 0x8C).unwrap_or(0) & 0xFF) as u8;
-            let (plic_en, plic_thresh) = if let Some(plic_idx) = self.irq_fabric.esp32c3.plic_mx_idx
-            {
-                (
-                    self.read_cached_declarative_u32(plic_idx, 0x00)
-                        .unwrap_or(0),
-                    (self
-                        .read_cached_declarative_u32(plic_idx, 0x90)
-                        .unwrap_or(0)
-                        & 0xFF) as u8,
-                )
-            } else {
-                (0u32, 0u8)
-            };
+            let plic_en = self
+                .irq_fabric
+                .esp32c3
+                .plic_mx_idx
+                .and_then(|i| self.read_cached_declarative_u32(i, 0x00))
+                .unwrap_or(0);
             cache.int_enable = plic_en | intpri_en;
-            cache.int_thresh = plic_thresh.max(intpri_thresh);
+            cache.int_thresh = self.esp32c6_merged_int_thresh();
             for line in 0..cache.line_pri.len() {
-                let intpri_pri = (self
-                    .read_cached_declarative_u32(p_idx, 0x0C + (line as u64) * 4)
-                    .unwrap_or(0)
-                    & 0xF) as u8;
-                let plic_pri = if let Some(plic_idx) = self.irq_fabric.esp32c3.plic_mx_idx {
-                    (self
-                        .read_cached_declarative_u32(plic_idx, 0x10 + (line as u64) * 4)
-                        .unwrap_or(0)
-                        & 0xF) as u8
-                } else {
-                    0
-                };
-                cache.line_pri[line] = plic_pri.max(intpri_pri);
+                cache.line_pri[line] = self.esp32c6_merged_line_pri(line);
             }
             cache.from_cpu_source_base = 22;
             for n in 0..4 {
@@ -750,6 +760,12 @@ impl SystemBus {
                 .intpri_idx
                 .and_then(|i| self.read_cached_declarative_u32(i, 0x00))
                 .unwrap_or(0);
+            // Threshold / priority are recomputed from BOTH stored banks (never
+            // max'd against the cached value) so a write can lower them.
+            let merged_thresh = self.esp32c6_merged_int_thresh();
+            let merged_pri = (0x10..=0x8C)
+                .contains(&aligned)
+                .then(|| self.esp32c6_merged_line_pri(((aligned - 0x10) / 4) as usize));
             if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
                 match aligned {
                     0x00 => {
@@ -757,13 +773,13 @@ impl SystemBus {
                         inputs_changed = true;
                     }
                     0x90 => {
-                        cache.int_thresh = cache.int_thresh.max((value & 0xFF) as u8);
+                        cache.int_thresh = merged_thresh;
                         inputs_changed = true;
                     }
                     0x10..=0x8C if (aligned - 0x10) % 4 == 0 => {
                         let line = ((aligned - 0x10) / 4) as usize;
-                        if let Some(pri) = cache.line_pri.get_mut(line) {
-                            *pri = (*pri).max((value & 0xF) as u8);
+                        if let (Some(pri), Some(new)) = (cache.line_pri.get_mut(line), merged_pri) {
+                            *pri = new;
                             inputs_changed = true;
                         }
                     }
@@ -780,6 +796,11 @@ impl SystemBus {
                 .plic_mx_idx
                 .and_then(|i| self.read_cached_declarative_u32(i, 0x00))
                 .unwrap_or(0);
+            // Recompute from both stored banks so a write can lower them.
+            let merged_thresh = self.esp32c6_merged_int_thresh();
+            let merged_pri = (0x0C..=0x88)
+                .contains(&aligned)
+                .then(|| self.esp32c6_merged_line_pri(((aligned - 0x0C) / 4) as usize));
             if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
                 match aligned {
                     0x00 => {
@@ -788,13 +809,13 @@ impl SystemBus {
                         inputs_changed = true;
                     }
                     0x8C => {
-                        cache.int_thresh = cache.int_thresh.max((value & 0xFF) as u8);
+                        cache.int_thresh = merged_thresh;
                         inputs_changed = true;
                     }
                     0x0C..=0x88 if (aligned - 0x0C) % 4 == 0 => {
                         let line = ((aligned - 0x0C) / 4) as usize;
-                        if let Some(pri) = cache.line_pri.get_mut(line) {
-                            *pri = (*pri).max((value & 0xF) as u8);
+                        if let (Some(pri), Some(new)) = (cache.line_pri.get_mut(line), merged_pri) {
+                            *pri = new;
                             inputs_changed = true;
                         }
                     }

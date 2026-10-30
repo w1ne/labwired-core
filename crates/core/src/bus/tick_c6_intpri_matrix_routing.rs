@@ -144,6 +144,71 @@ fn c6_priority_below_threshold_is_masked() {
     );
 }
 
+/// IDF critical sections (`esprv_int_set_threshold`) RAISE `PLIC_MXINT_THRESH`
+/// on entry and RESTORE it on exit. The write choke must let the threshold go
+/// back down: a pending line masked by the raised threshold must assert again
+/// once it is lowered, without waiting for a full cache rebuild.
+#[test]
+fn c6_lowering_threshold_unmasks_a_pending_line() {
+    let mut bus = c6_bus();
+    arm_line(&mut bus);
+    bus.write_u32(INTPRI + CPU_INTR_FROM_CPU_0, 1).unwrap();
+    assert_eq!(
+        bus.irq_fabric.esp32c3.irq_lines,
+        1 << LINE,
+        "priority 1 >= threshold 0 must route the pending doorbell"
+    );
+
+    // Enter a "critical section": threshold above the line's priority.
+    bus.write_u32(PLIC_MX + PLIC_THRESH, 5).unwrap();
+    assert_eq!(
+        bus.irq_fabric.esp32c3.irq_lines, 0,
+        "priority 1 < threshold 5 must mask the line"
+    );
+
+    // Exit: restore the threshold with the doorbell still pending.
+    bus.write_u32(PLIC_MX + PLIC_THRESH, 1).unwrap();
+    assert_eq!(
+        bus.irq_fabric.esp32c3.intc.as_ref().unwrap().int_thresh,
+        1,
+        "the cached threshold must follow a lowering write"
+    );
+    assert_eq!(
+        bus.irq_fabric.esp32c3.irq_lines,
+        1 << LINE,
+        "lowering the threshold must re-assert the still-pending line"
+    );
+}
+
+/// Lowering a line's priority below the threshold must mask it at the write
+/// (`esp_intr_free` → re-alloc at a lower level).
+#[test]
+fn c6_lowering_priority_below_threshold_masks_the_line() {
+    let mut bus = c6_bus();
+    arm_line(&mut bus);
+    bus.write_u32(PLIC_MX + PLIC_PRI_BASE + (LINE as u64) * 4, 6)
+        .unwrap();
+    bus.write_u32(PLIC_MX + PLIC_THRESH, 3).unwrap();
+    bus.write_u32(INTPRI + CPU_INTR_FROM_CPU_0, 1).unwrap();
+    assert_eq!(
+        bus.irq_fabric.esp32c3.irq_lines,
+        1 << LINE,
+        "priority 6 >= threshold 3 must route the pending doorbell"
+    );
+
+    bus.write_u32(PLIC_MX + PLIC_PRI_BASE + (LINE as u64) * 4, 2)
+        .unwrap();
+    assert_eq!(
+        bus.irq_fabric.esp32c3.intc.as_ref().unwrap().line_pri[LINE as usize],
+        2,
+        "the cached line priority must follow a lowering write"
+    );
+    assert_eq!(
+        bus.irq_fabric.esp32c3.irq_lines, 0,
+        "priority 2 < threshold 3 must mask the line"
+    );
+}
+
 /// `ETS_UART0_INTR_SOURCE` (esp32c6.svd `INTERRUPT_CORE0` interrupt `UART0`);
 /// the C3 numbers the same UART0 21.
 const SOURCE_UART0: u64 = 43;
