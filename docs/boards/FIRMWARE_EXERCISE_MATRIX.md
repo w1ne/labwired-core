@@ -659,6 +659,10 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console a
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x08000000, the new L5 RCC gates (AHB2ENR GPIO, APB1ENR2.LPUART1EN), the LPUART1 console (PG7/PG8, AF8) and the three-LED GPIO walk with ODR readback plus the PC13 button are proven by tests/fixtures/nucleo-l552ze-q-smoke.elf and examples/nucleo-l552ze-q/io-smoke.yaml. TrustZone/SAU/GTZC, MPU/PMSAv8 enforcement and the L5 non-secure FLASH controller are not modelled; FLASH/EXTI/ADC/FDCAN/USB are declared stubs (examples/nucleo-l552ze-q/VALIDATION.md), so no advanced blocks exist to list._
 
+### `cc2538sf53`
+
+_L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x00200000 flash vector table (CCA image-valid, ROM not modelled), the SYS_CTRL reset clock read from CLOCK_STA (16-MHz HF-RC, SYS_DIV 001) and the RCGCUART gate, the PL011-compatible UART0 console (PA0/PA1 via the IOC, 115200 from IBRD 8 / FBRD 44) and the SmartRF06 LED2-LED4 walk (PC1-PC3) with address-masked GPIO_DATA readback plus the five keys' reset pull-up levels are proven by tests/fixtures/cc2538dk-smoke.elf and examples/cc2538dk/io-smoke.yaml. SYS_CTRL gating has no effect on other blocks, the IOC pin mux/pad overrides and GPIO interrupts are not modelled; the RF core, AES/PKA, flash controller, SSI, I2C, GPTimers, USB, uDMA, WDT/sleep timer and ADC are declared stubs (examples/cc2538dk/VALIDATION.md), so no advanced blocks exist to list._
+
 ### `sam4s16c`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the PMC clock enables (PCER0) and master-clock-ready status, the UART0 console and the SAM4S PIO LED/button path with ODSR readback are proven by tests/fixtures/sam4s-xplained-smoke.elf and examples/sam4s-xplained/io-smoke.yaml. TC/SPI/TWI/EEFC and the RSTC/SUPC/RTT/WDT/RTC system controller are declared stubs (examples/sam4s-xplained/VALIDATION.md), so no advanced blocks exist to list._

@@ -372,6 +372,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA) and
+    // SYS_CTRL. Deliberately not `cc2538_gpio`: that spelling belongs to the
+    // staged onboarding/cc2538 descriptor, which keeps its placeholder.
+    "cc2538_pl061_gpio",
+    "cc2538_sys_ctrl",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1434,6 +1439,19 @@ pub fn try_build(
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        "cc2538_pl061_gpio" => {
+            // Pads that carry the reset IOC pull-up (SWRU319C §9.2.3); port C
+            // passes 0xF0 because PC0-PC3 have no on-die pulls.
+            let mask = p_cfg
+                .config
+                .get("pull_up_mask")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0xFF);
+            Box::new(crate::peripherals::cc2538::Cc2538Gpio::with_pull_up_mask(
+                mask as u32,
+            ))
+        }
+        "cc2538_sys_ctrl" => Box::new(crate::peripherals::cc2538::Cc2538SysCtrl::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

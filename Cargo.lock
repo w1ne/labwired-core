@@ -1202,6 +1202,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-cc2538dk-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ci-fixture"
 version = "0.25.0"
 dependencies = [

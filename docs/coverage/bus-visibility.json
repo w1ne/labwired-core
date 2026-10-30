@@ -81,6 +81,10 @@
   },
   {
     "buses": [],
+    "name": "cc2538sf53"
+  },
+  {
+    "buses": [],
     "name": "dspic33fj32mc202"
   },
   {
