@@ -109,8 +109,10 @@ address. Sticky flags live in the SFR file and are cleared by the ISR.
   A per-device geometry can be supplied with `Pic18::with_geometry`;
   `Pic18::for_chip_name` looks it up in the `PIC18_DEVICES` table.
 * `a = 1`: `BSR<3:0>:f`.
-* `a = 0`: `f < 0x60` addresses access RAM at `f`; `f >= 0x60` addresses the
-  SFR window at `0xF00 + f` (so `0xE8` is WREG at `0xFE8`).
+* `a = 0`: `f` below the device's Access Bank split addresses access RAM at
+  `f`; `f` at or above it addresses the SFR window at `0xF00 + f` (so `0xE8`
+  is WREG at `0xFE8`). The split is `0x80` for parts whose SFRs start at
+  `0xF80` (PIC18F4520) and `0x60` for the K-series and unlisted names.
 * Modeled SFRs: WREG, STATUS, BSR, FSR0L/H, FSR1L/H, FSR2L/H, PRODL/H, TABLAT,
   TBLPTRL/H/U, PCL, PCLATH, PCLATU, STKPTR, TOSL/H/U. Other SFR addresses are
   plain bytes in the file for now.
@@ -166,7 +168,9 @@ address. Sticky flags live in the SFR file and are cleared by the ISR.
 
 ## Tests and results
 
-Commands run from this worktree:
+Commands run for the first vertical slice (`d6402f376`). This table is a
+record of that commit; it predates the PIC18F4520 firmware smoke, and the
+unit test count has grown since (`cargo test -p labwired-core --lib cpu::pic18`):
 
 | Command | Result |
 | :--- | :--- |
@@ -203,7 +207,9 @@ with `IPEN = 0`, the high/low vectors and `GIEH`/`GIEL` gating (including
 `INTCON3` INT1/INT2 bits pinned to raw datasheet values, `PIR1`/`PIE1`/`IPR1`
 priority, `RETFIE` re-enabling, and `RETFIE FAST` restoring the context
 saved on interrupt entry (no hand-seeded shadow). `cpu_trace_conformance`
-covers `Pic18` like every other core. No catalogue part is onboarded or claimed.
+covers `Pic18` like every other core. At that commit no catalogue part was
+onboarded; the PIC18F4520 L1 slice (`examples/pic18f4520`) now boots a real
+SDCC-built firmware image.
 
 Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 

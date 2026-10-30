@@ -54,6 +54,11 @@ packages usually leave out the pic16 port) and gputils:
 SDCC=/path/to/sdcc-4.4.0/bin/sdcc examples/pic18f4520/firmware/build.sh
 ```
 
+`build.sh` passes `--use-non-free`: SDCC's pic16 device libraries (the
+`pic18f4520` SFR definitions and startup code) live in its `non-free` tree
+under Microchip's license, not the GPL, and they are linked into the
+committed HEX/ELF.
+
 The build is deterministic: HEX
 `85aefef9420c177d799d5cab1c623e45cd2bd2001317afb17f7c4bbb3755ab6f`, ELF
 `dd272de1acd0df45ed25108ac5eeedc85c7f955ceb62b52b1cb4650651aac6e8`.

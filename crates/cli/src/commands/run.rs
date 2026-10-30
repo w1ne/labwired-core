@@ -2520,6 +2520,28 @@ fn note_itm_echo_suppressed(cli: &Cli) {
     }
 }
 
+/// Whether a PIC24/PIC18 interactive run ended on a simulation fault.
+///
+/// `run_simulation_loop` turns a fault into a stop reason and returns
+/// normally, so without this check an undecodable opcode or a bad access
+/// still exited 0, and a harness reading `$?` (the unsupported-instruction
+/// audit's `sim_exit_code`) saw a pass.
+fn pic_run_faulted(stop_reason: &StopReason) -> bool {
+    matches!(
+        stop_reason,
+        StopReason::DecodeError | StopReason::MemoryViolation | StopReason::Exception
+    )
+}
+
+/// Exit status for a PIC24/PIC18 interactive run: `EXIT_RUNTIME_ERROR` on a
+/// fault, as `labwired run` does for ARM, RISC-V and Xtensa.
+fn pic_run_exit_code(faulted: bool) -> ExitCode {
+    if faulted {
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+    ExitCode::from(EXIT_PASS)
+}
+
 /// PIC24/dsPIC33 interactive run (M0).
 ///
 /// UART1 lives on the CPU, so there is no RTT/GDB/bus-UART wiring yet; the
@@ -2541,6 +2563,7 @@ pub(crate) fn run_interactive_pic24(
     info!("Starting Simulation (PIC24/dsPIC33 M0)...");
 
     let result = run_simulation_loop(&cli, &mut machine, &metrics);
+    let faulted = pic_run_faulted(&result.stop_reason);
 
     if !cli.json {
         if let Ok(bytes) = uart_sink.lock() {
@@ -2570,7 +2593,7 @@ pub(crate) fn run_interactive_pic24(
     }
 
     crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
-    ExitCode::from(EXIT_PASS)
+    pic_run_exit_code(faulted)
 }
 
 pub(crate) fn run_interactive_pic18(
@@ -2591,6 +2614,7 @@ pub(crate) fn run_interactive_pic18(
     info!("Starting Simulation (PIC18)...");
 
     let result = run_simulation_loop(&cli, &mut machine, &metrics);
+    let faulted = pic_run_faulted(&result.stop_reason);
 
     if !cli.json {
         if let Ok(bytes) = uart_sink.lock() {
@@ -2620,7 +2644,7 @@ pub(crate) fn run_interactive_pic18(
     }
 
     crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
-    ExitCode::from(EXIT_PASS)
+    pic_run_exit_code(faulted)
 }
 
 pub(crate) fn run_interactive_riscv(

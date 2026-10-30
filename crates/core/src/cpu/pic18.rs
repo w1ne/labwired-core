@@ -134,6 +134,7 @@ const INTCON3_INT2IF: u8 = 1 << 1;
 const INTCON3_INT1IF: u8 = 1 << 0;
 // RCON.IPEN and the TO/PD status bits that SLEEP/CLRWDT update.
 const RCON_IPEN: u8 = 1 << 7;
+const RCON_RI: u8 = 1 << 4;
 const RCON_TO: u8 = 1 << 3;
 const RCON_PD: u8 = 1 << 2;
 
@@ -511,7 +512,11 @@ impl Pic18 {
         self.exception_pending = None;
         self.asleep = false;
         self.data.fill(0);
-        // DS39631 power-on reset values: all port pins are inputs
+        // DS39631 power-on reset values. Every `PIC18_DEVICES` row gets these
+        // PIC18F4520 port/IPR values (TRISE<2:0>, PORTD/E present, IPR2 bit 5
+        // unimplemented); gate them per device before a part whose ports or
+        // interrupt registers differ claims anything beyond geometry.
+        // All port pins are inputs
         // (TRISE<3> is unimplemented), the EUSART shift register is empty,
         // and RCON reads TO = PD = 1 with the POR/BOR bits clear. Every
         // interrupt priority bit resets high (INTCON2 `1111 -1-1`, INTCON3
@@ -526,6 +531,22 @@ impl Pic18 {
         self.data[usize::from(SFR_INTCON3)] = INTCON3_INT2IP | INTCON3_INT1IP;
         self.data[usize::from(SFR_IPR1)] = 0xFF;
         self.data[usize::from(SFR_IPR2)] = 0xDF;
+    }
+
+    /// The `RESET` instruction (DS39631 Table 4-4, "RESET Instruction"
+    /// column). The SFRs take the same values as at power-on, except that
+    /// general purpose RAM is left unchanged, RCON clears RI and IPEN but
+    /// keeps TO/PD/POR/BOR, and STKPTR keeps STKFUL/STKUNF.
+    fn reset_instruction(&mut self) {
+        let gpr_end = 0xF00 | usize::from(self.access_split);
+        let gprs = self.data[..gpr_end].to_vec();
+        let rcon = self.data[usize::from(SFR_RCON)];
+        let (stk_full, stk_unf) = (self.stk_full, self.stk_unf);
+        self.reset_core();
+        self.data[..gpr_end].copy_from_slice(&gprs);
+        self.data[usize::from(SFR_RCON)] = rcon & !(RCON_IPEN | RCON_RI);
+        self.stk_full = stk_full;
+        self.stk_unf = stk_unf;
     }
 
     /// Load 16-bit instruction words starting at the reset vector.
@@ -1560,7 +1581,7 @@ impl Pic18 {
                 2
             }
             0x00FF => {
-                self.reset_core();
+                self.reset_instruction();
                 1
             }
             _ => return Ok(None),
@@ -2773,15 +2794,28 @@ mod tests {
         run(&mut cpu, 1);
         assert_ne!(cpu.read_data(SFR_STKPTR) & STKPTR_STKUNF, 0);
 
-        // RESET returns to address 0 with reset SFR values but keeps flash.
+        // RESET returns to address 0 with reset SFR values but keeps flash
+        // and general purpose RAM, and clears RI (DS39631 Table 4-4).
         let mut cpu = Pic18::new();
         cpu.load_words(&[0x0E42, 0x6E20, 0x0E00, 0x6E93, 0x00FF]);
+        assert_ne!(cpu.read_data(SFR_RCON) & RCON_RI, 0);
         run(&mut cpu, 5);
         assert_eq!(cpu.get_pc(), 0);
         assert_eq!(cpu.wreg(), 0);
-        assert_eq!(cpu.read_data(0x20), 0);
+        assert_eq!(cpu.read_data(0x20), 0x42);
         assert_eq!(cpu.read_data(SFR_TRISA + 1), 0xFF);
+        assert_eq!(cpu.read_data(SFR_RCON) & RCON_RI, 0);
+        assert_eq!(
+            cpu.read_data(SFR_RCON) & (RCON_TO | RCON_PD),
+            RCON_TO | RCON_PD
+        );
         assert_eq!(cpu.fetch_word(0), 0x0E42);
+        // A stack underflow flag survives RESET; only a POR clears it.
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0006, 0x00FF]);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.get_pc(), 0);
+        assert_ne!(cpu.read_data(SFR_STKPTR) & STKPTR_STKUNF, 0);
     }
 
     #[test]

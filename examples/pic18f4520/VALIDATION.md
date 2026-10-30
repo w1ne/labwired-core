@@ -15,7 +15,7 @@ is no silicon capture; everything here is simulation-derived.
 | PORTB LED | ✅ | `pic18f4520_smoke::sdcc_firmware_drives_the_rb0_led_latch` |
 | CLI smoke | ✅ | `examples/pic18f4520/io-smoke.yaml` (ordered UART lines) |
 | Determinism | ✅ | `sdcc_firmware_run_is_deterministic` (bytes, cycles, PC) |
-| Unsupported instructions | ✅ 0 | 200k-step audit exits 0 (a PIC18 decode error would abort) |
+| Unsupported instructions | ✅ 0 | 200k-step audit exits 0; a PIC18 decode error ends the run with exit 3, which the audit records as `sim_exit_code` (`crates/cli/tests/run_exit_code.rs` checks both cases) |
 | Silicon capture | ❌ none | simulation-derived only |
 
 ## Evidence

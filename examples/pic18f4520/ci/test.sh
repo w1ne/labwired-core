@@ -20,7 +20,8 @@ cargo run -q -p labwired-cli -- test \
   --output-dir "$OUT/io-smoke" \
   --no-uart-stdout
 
-# A PIC18 decode error aborts the run, so a clean 200k-step exit is the
+# A PIC18 decode error ends the run with exit 3 (EXIT_RUNTIME_ERROR), which
+# the audit records as sim_exit_code, so a clean 200k-step exit is the
 # unsupported-instruction signal for this core (the audit's per-pattern
 # counters are ARM/RISC-V only).
 ./scripts/unsupported_instruction_audit.sh \
