@@ -1342,7 +1342,13 @@ pub fn try_build(
         // clock bring-up (which spins on MCG_S / RSIM_CONTROL status bits)
         // settles instead of hanging. A passive register bank cannot complete
         // these hand-offs. See peripherals/mcg.rs and peripherals/rsim.rs.
-        "nxp_mcg" | "kinetis_mcg" => Box::new(crate::peripherals::mcg::Mcg::new()),
+        // `config: { profile: k6x }` adds PLL0 (C5/C6, S.PLLST/LOCK0) for the
+        // K64F; the default is the PLL-less KW41Z / Kinetis-L block.
+        "nxp_mcg" | "kinetis_mcg" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            Some("k6x") => Box::new(crate::peripherals::mcg::Mcg::new_k6x()),
+            None | Some("kl") => Box::new(crate::peripherals::mcg::Mcg::new()),
+            Some(other) => anyhow::bail!("nxp_mcg: unknown profile '{other}' (expected k6x or kl)"),
+        },
         "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
