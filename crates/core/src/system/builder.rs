@@ -256,12 +256,32 @@ pub struct BuildOptions {
     /// legacy broadcast to all UART RX queues. TX is selected independently
     /// by the manifest's `debug_uart` declaration.
     pub uart_rx: Option<String>,
+    /// Attach a SEGGER RTT model and capture its up-channel bytes (debug
+    /// adapters, IDE consoles). `None` leaves RTT off, as before.
+    pub rtt: Option<RttCapture>,
+}
+
+/// Where RTT output goes, and the control block if the firmware names one
+/// (`_SEGGER_RTT`); `None` scans RAM for it.
+#[derive(Debug, Clone)]
+pub struct RttCapture {
+    pub sink: Arc<Mutex<Vec<u8>>>,
+    pub control_block: Option<u32>,
 }
 
 type UartRxSources = Vec<Arc<Mutex<VecDeque<u8>>>>;
 
-/// Resolve serial input before constructing the CPU so an unavailable port
-/// cannot silently swallow input or redirect it to another peripheral.
+/// Wire the host-side streams the options ask for (RTT capture, serial input)
+/// before constructing the CPU, so an unavailable port cannot silently swallow
+/// input or redirect it to another peripheral.
+fn wire_host_streams(bus: &mut SystemBus, options: &BuildOptions) -> anyhow::Result<UartRxSources> {
+    if let Some(rtt) = &options.rtt {
+        bus.attach_segger_rtt(rtt.control_block);
+        bus.attach_rtt_sink(Some(rtt.sink.clone()), false);
+    }
+    uart_rx_sources(bus, options)
+}
+
 fn uart_rx_sources(bus: &SystemBus, options: &BuildOptions) -> anyhow::Result<UartRxSources> {
     match options.uart_rx.as_deref() {
         None => Ok(bus.attach_uart_rx_source()),
@@ -345,5 +365,33 @@ pub fn build_machine_with_plugins(
         MachineFamily::Avr => avr::build(req, plugins),
         MachineFamily::Pic24 => pic24::build(req, plugins),
         MachineFamily::Pic18 => pic18::build(req, plugins),
+    }
+}
+
+#[cfg(test)]
+mod host_stream_tests {
+    use super::*;
+
+    #[test]
+    fn wire_host_streams_attaches_an_rtt_model_with_the_requested_sink() {
+        let mut bus = SystemBus::new();
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let options = BuildOptions {
+            rtt: Some(RttCapture {
+                sink: sink.clone(),
+                control_block: None,
+            }),
+            ..Default::default()
+        };
+        wire_host_streams(&mut bus, &options).unwrap();
+        sink.lock().unwrap().extend_from_slice(b"rtt");
+        assert_eq!(bus.drain_rtt_output(), b"rtt");
+    }
+
+    #[test]
+    fn wire_host_streams_leaves_rtt_off_by_default() {
+        let mut bus = SystemBus::new();
+        wire_host_streams(&mut bus, &BuildOptions::default()).unwrap();
+        assert!(bus.segger_rtt_status().is_none());
     }
 }
