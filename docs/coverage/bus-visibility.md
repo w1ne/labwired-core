@@ -10,6 +10,8 @@ This is NOT a pad-binding board. Binding answers the static question "what could
 
 Chips that cannot yet produce edges for a bus are listed here with a reason — never silently skipped.
 
+* **amap42kp**
+  * UART: no PWRCTRL/UART0 bring-up in this harness; bytes are proven by the apollo4p-evb survival smoke
 * **arty-litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the arty-litex-vexriscv survival smoke
 * **atmega1281**
@@ -92,6 +94,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
+| amap42kp | — | — | — |
 | arty-litex-vexriscv | — | — | — |
 | atmega1281 | — | — | — |
 | atmega2560 | — | — | — |

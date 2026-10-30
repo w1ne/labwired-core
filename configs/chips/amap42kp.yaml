@@ -1,0 +1,284 @@
+# LabWired - AMAP42KP (Ambiq Apollo4 Plus) chip configuration
+#
+# The Ambiq Apollo4 Plus SoC, ordering code AMAP42KP-KBR (146-ball BGA):
+# Cortex-M4F up to 192 MHz, 2 MiB MRAM, 384 KiB TCM + 2.375 MiB extended and
+# shared SRAM — the MCU on the Ambiq Apollo4 Plus EVB (AMAP4PEVB).
+#
+# Sources:
+# - Ambiq CMSIS device header apollo4p.h (AmbiqSuite R4.x; mirrored in
+#   zephyrproject-rtos/hal_ambiq CMSIS/AmbiqMicro/Include/apollo4p.h): every
+#   peripheral *_BASE below, IRQn_Type, GPIO_Type / PWRCTRL_Type / UART0_Type
+#   register layouts and their _Pos/_Msk bit fields.
+# - hal_ambiq mcu/apollo4p/regs/am_reg_base_addresses.h: MRAM_BASEADDR 0x0 /
+#   MRAM_MAX_SIZE 2048 KiB; TCM_BASEADDR 0x1000_0000 / TCM_MAX_SIZE 384 KiB;
+#   SSRAM0 1 MiB, EXTRAM (DSP0 IRAM 128 KiB + DRAM 256 KiB), SSRAM1 1 MiB,
+#   contiguous after the TCM (RAM_TOTAL_SIZE 2816 KiB).
+# - Zephyr dts/arm/ambiq/ambiq_apollo4p.dtsi: application flash at
+#   0x0001_8000 (flash0 reg <0x18000 0x1e8000>; the secure bootloader owns
+#   0x0-0x17FFF), uart0 @ 0x4001_C000 IRQ 15, GPIO banks IRQ 56-59.
+# - Ambiq Apollo4 Plus SoC datasheet (A-SOC-DS-0001...) for the part summary.
+#
+# Profiles:
+# - uart  `pl011`           — the Apollo4 UART is the ARM PL011 register map
+#   (DR @0x00, RSR @0x04, FR @0x18, ILPR @0x20, IBRD @0x24, FBRD @0x28,
+#   LCRH @0x2C, CR @0x30, IFLS @0x34, IER @0x38, IES @0x3C, MIS @0x40,
+#   IEC @0x44 per UART0_Type). Ambiq's additions sit in bits PL011 reserves:
+#   CR.CLKEN [3] and CR.CLKSEL [6:4] (the UART clock source), FR.TXBUSY [8].
+#   They are stored; the console model does not depend on them.
+# - gpio  `apollo4_gpio`    — one 128-pin block: PADKEY-locked PINCFGn,
+#   RD/WT/WTS/WTC/EN/ENS/ENC banks (crates/core/src/peripherals/apollo4.rs).
+# - power `apollo4_pwrctrl` — MCUPERFREQ request/ack and DEVPWREN mirrored
+#   into DEVPWRSTATUS.
+#
+# Tier: L1 UART+LED smoke — boot from the post-SBL vector table, UART0
+# console, the EVB LEDs with RD readback and the two buttons' pull-up levels.
+# SIM-DERIVED (no Apollo4 bench part).
+#
+# NOT modelled in this slice:
+# - The boot ROM and the secure bootloader (SBL) in MRAM 0x0-0x17FFF: the
+#   engine finds no valid vector table at the flash base and fast-boots the
+#   ELF at reset_vector_offset 0x18000, which is where the SBL hands over.
+#   The SBL itself, OTP/INFO0/INFO1 and the secure-boot checks are absent.
+# - CLKGEN / MCUCTRL / RSTGEN: declared stubs. No HFRC/HFRC2/XTAL, no
+#   CLKSEL clock tree, no reset-cause registers. cpu_hz is the LP-mode 96 MHz.
+# - Power domains have no effect: a peripheral whose DEVPWREN bit is clear
+#   still works; DEVPWRSTATUS follows DEVPWREN on the same access.
+# - GPIO interrupts (no edge detection, no IRQ 56-59), the peripheral side of
+#   non-GPIO FNCSEL selections, drive strength, NCE routing.
+# - IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT, security, crypto, GPU,
+#   display, SDIO, USB, audio, IOS, DSP: declared stubs.
+#
+# Supersedes the staged configs/chips/onboarding/ambiq-apollo4.yaml, whose
+# memory map (flash 0x0800_0000 / 4 KiB, RAM 0x2000_0000 / 2 MiB) is the
+# Renode bootrom-logger scaffold, not the Apollo4 Plus map.
+
+name: "amap42kp"
+arch: "arm"
+core: "cortex-m4"
+# Apollo4 Plus boots in LP mode: MCUPERFREQ_MCUPERFSTATUS_LP = 96 MHz
+# (HP = 192 MHz is not entered by this smoke).
+cpu_hz: 96_000_000
+
+flash:
+  # MRAM, am_reg_base_addresses.h MRAM_BASEADDR / MRAM_MAX_SIZE.
+  base: 0x00000000
+  size: "2048KB"
+ram:
+  # TCM (384 KiB) + SSRAM0 (1 MiB) + DSP0 IRAM/DRAM (384 KiB) + SSRAM1
+  # (1 MiB), contiguous from 0x1000_0000 (RAM_TOTAL_SIZE; Zephyr's tcm +
+  # sram0 cover the same 0x1000_0000-0x102B_FFFF span).
+  base: 0x10000000
+  size: "2816KB"
+# The secure bootloader owns MRAM 0x0-0x17FFF and starts the application at
+# 0x0001_8000 (Zephyr flash0). The engine does not run the SBL.
+reset_vector_offset: 0x18000
+
+pins:
+  # Apollo4 Plus EVB wiring (Zephyr boards/ambiq/apollo4p_evb).
+  GPIO18: { gpio: "gpio", bit: 18 }  # BTN0, active low, pull-up
+  GPIO19: { gpio: "gpio", bit: 19 }  # BTN1, active low, pull-up
+  GPIO30: { gpio: "gpio", bit: 30 }  # LED0, active low
+  GPIO47: { gpio: "gpio", bit: 47 }  # UART0 RX (FNCSEL 4), J-Link VCOM
+  GPIO60: { gpio: "gpio", bit: 60 }  # UART0 TX (FNCSEL 4), J-Link VCOM
+  GPIO90: { gpio: "gpio", bit: 90 }  # LED1, active low
+  GPIO97: { gpio: "gpio", bit: 97 }  # LED2, active low
+
+peripherals:
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # --- UART0-3 (PL011 register map; apollo4p.h UARTn_BASE, IRQn 15-18) --
+  # UART0 is the EVB console (GPIO60 TX / GPIO47 RX, J-Link VCOM, 115200).
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x4001C000
+    size: "4KB"
+    irq: 15
+    config:
+      profile: "pl011"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x4001D000
+    size: "4KB"
+    irq: 16
+    config:
+      profile: "pl011"
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x4001E000
+    size: "4KB"
+    irq: 17
+    config:
+      profile: "pl011"
+  - id: "uart3"
+    type: "uart"
+    base_address: 0x4001F000
+    size: "4KB"
+    irq: 18
+    config:
+      profile: "pl011"
+
+  # --- GPIO (GPIO_BASE 0x4001_0000, GPIO_Type size 0x440) ---------------
+  - id: "gpio"
+    type: "apollo4_gpio"
+    base_address: 0x40010000
+    size: "2KB"
+
+  # --- Power control (PWRCTRL_BASE 0x4002_1000) -------------------------
+  - id: "pwrctrl"
+    type: "apollo4_pwrctrl"
+    base_address: 0x40021000
+    size: "4KB"
+
+  # --- Declared, not modelled (honest L1 boundary) -----------------------
+  - id: "rstgen"
+    type: "stub"
+    base_address: 0x40000000
+    size: "1KB"
+  # CLKGEN (0x4000_4000) and RTC (0x4000_4800) share one 4-KiB page.
+  - id: "clkgen"
+    type: "stub"
+    base_address: 0x40004000
+    size: "2KB"
+  - id: "rtc"
+    type: "stub"
+    base_address: 0x40004800
+    size: "2KB"
+  - id: "timer"
+    type: "stub"
+    base_address: 0x40008000
+    size: "2KB"
+  - id: "stimer"
+    type: "stub"
+    base_address: 0x40008800
+    size: "2KB"
+  - id: "vcomp"
+    type: "stub"
+    base_address: 0x4000C000
+    size: "1KB"
+  - id: "apbdma"
+    type: "stub"
+    base_address: 0x40011000
+    size: "4KB"
+  - id: "mcuctrl"
+    type: "stub"
+    base_address: 0x40020000
+    size: "4KB"
+  - id: "wdt"
+    type: "stub"
+    base_address: 0x40024000
+    size: "1KB"
+  - id: "security"
+    type: "stub"
+    base_address: 0x40030000
+    size: "4KB"
+  - id: "ioslave"
+    type: "stub"
+    base_address: 0x40034000
+    size: "4KB"
+  - id: "adc"
+    type: "stub"
+    base_address: 0x40038000
+    size: "4KB"
+  - id: "iom0"
+    type: "stub"
+    base_address: 0x40050000
+    size: "4KB"
+  - id: "iom1"
+    type: "stub"
+    base_address: 0x40051000
+    size: "4KB"
+  - id: "iom2"
+    type: "stub"
+    base_address: 0x40052000
+    size: "4KB"
+  - id: "iom3"
+    type: "stub"
+    base_address: 0x40053000
+    size: "4KB"
+  - id: "iom4"
+    type: "stub"
+    base_address: 0x40054000
+    size: "4KB"
+  - id: "iom5"
+    type: "stub"
+    base_address: 0x40055000
+    size: "4KB"
+  - id: "iom6"
+    type: "stub"
+    base_address: 0x40056000
+    size: "4KB"
+  - id: "iom7"
+    type: "stub"
+    base_address: 0x40057000
+    size: "4KB"
+  - id: "mspi0"
+    type: "stub"
+    base_address: 0x40060000
+    size: "4KB"
+  - id: "mspi1"
+    type: "stub"
+    base_address: 0x40061000
+    size: "4KB"
+  - id: "mspi2"
+    type: "stub"
+    base_address: 0x40062000
+    size: "4KB"
+  - id: "sdio"
+    type: "stub"
+    base_address: 0x40070000
+    size: "4KB"
+  - id: "gpu"
+    type: "stub"
+    base_address: 0x40090000
+    size: "4KB"
+  - id: "dc"
+    type: "stub"
+    base_address: 0x400A0000
+    size: "4KB"
+  - id: "dsi"
+    type: "stub"
+    base_address: 0x400A8000
+    size: "4KB"
+  - id: "usb"
+    type: "stub"
+    base_address: 0x400B0000
+    size: "4KB"
+  - id: "usbphy"
+    type: "stub"
+    base_address: 0x400B4000
+    size: "4KB"
+  - id: "crypto"
+    type: "stub"
+    base_address: 0x400C0000
+    size: "4KB"
+  - id: "pdm0"
+    type: "stub"
+    base_address: 0x40201000
+    size: "4KB"
+  - id: "pdm1"
+    type: "stub"
+    base_address: 0x40202000
+    size: "4KB"
+  - id: "pdm2"
+    type: "stub"
+    base_address: 0x40203000
+    size: "4KB"
+  - id: "pdm3"
+    type: "stub"
+    base_address: 0x40204000
+    size: "4KB"
+  - id: "i2s0"
+    type: "stub"
+    base_address: 0x40208000
+    size: "4KB"
+  - id: "i2s1"
+    type: "stub"
+    base_address: 0x40209000
+    size: "4KB"
+  - id: "audadc"
+    type: "stub"
+    base_address: 0x40210000
+    size: "4KB"

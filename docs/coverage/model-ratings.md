@@ -16,6 +16,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |
 | stm32l552 | open | L1 | 46 | 904.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
 | cc2538sf53 | open | L1 | 28 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
+| amap42kp | open | L1 | 44 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/amap42kp.md) |
 | mk64f12 | open | L1 | 22 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/mk64f12.md) |
 | same70q21b | open | L1 | 22 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/same70q21b.md) |
 | sam4s16c | open | L1 | 20 | — | — | ≥1× (CI) | [doc](docs/boards/sam4s16c.md) |

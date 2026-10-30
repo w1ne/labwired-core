@@ -52,6 +52,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "amap42kp",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "mk64f12",
     "reg_match": 0
   },

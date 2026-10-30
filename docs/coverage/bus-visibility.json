@@ -1,6 +1,10 @@
 [
   {
     "buses": [],
+    "name": "amap42kp"
+  },
+  {
+    "buses": [],
     "name": "arty-litex-vexriscv"
   },
   {
