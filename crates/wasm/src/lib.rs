@@ -569,6 +569,9 @@ impl WasmSimulator {
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
             MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
             MachineFamily::Pic24 => Self::new_from_config_pic24(&chip, &manifest, firmware),
+            MachineFamily::Pic18 => Err(JsValue::from_str(
+                "PIC18 (M0) is not available in the browser build yet",
+            )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.
