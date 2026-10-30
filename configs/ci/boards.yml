@@ -73,6 +73,15 @@ boards:
     path: examples/ek-ra6m5
     rust_targets: [thumbv8m.main-none-eabi]
     gate: true
+  # EK-RA8M1: the first RA8 part. Builds the cortex-m-rt smoke for
+  # thumbv8m.main (Armv8-M Mainline code; the RA8M1's Cortex-M85 Helium/MVE
+  # and low-overhead branches are not decoded) and runs the SCI9/LED
+  # io-smoke plus the unsupported-instruction audit through the CLI.
+  - id: ek-ra8m1
+    kind: sim-validate
+    path: examples/ek-ra8m1
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # SAM E70 Xplained: the first SAM E70 part. Builds the cortex-m-rt smoke for
   # thumbv7em (the SAM E70 is a Cortex-M7) and runs the USART1/LED io-smoke
   # plus the unsupported-instruction audit through the CLI.

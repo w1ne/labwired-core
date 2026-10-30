@@ -1,5 +1,12 @@
 # Validation Report: renesas-ek_ra8m1
 
+> **Superseded.** This is the auto-generated report for the staged
+> `onboarding/renesas-ek_ra8m1` descriptor (a generic UART fixture on a
+> placeholder memory map: flash at `0x0800_0000` and RAM at `0x3000_0000`,
+> not the RA8M1's code flash at `0x0200_0000` and SRAM at `0x2200_0000`). The
+> promoted RA8M1 part is [`r7fa8m1ah`](r7fa8m1ah.md), and the board package is
+> **[EK-RA8M1](ek-ra8m1.md)**.
+
 **Architecture:** ARM Cortex-M85.
 
 ## 1. Dynamic Simulation Validation
