@@ -82,6 +82,14 @@ boards:
     path: examples/apollo4p-evb
     rust_targets: [thumbv7em-none-eabi]
     gate: true
+  # S32K388EVB-Q289: the first S32K3 part. Builds the cortex-m-rt smoke for
+  # thumbv7em (CM7_0 is a Cortex-M7) and runs the LPUART2/SIUL2 io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: s32k388-evb
+    kind: sim-validate
+    path: examples/s32k388-evb
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
   # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
   # instruction audit through the CLI, so the chip is proven by a gate on

@@ -83,6 +83,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **s32k388**
+  * UART: no LPUART2 bring-up in this harness; bytes are proven by the s32k388-evb survival smoke
 * **sam4s16c**
   * UART: no UART0 bring-up in this harness; bytes are proven by the sam4s-xplained survival smoke
 * **same70q21b**
@@ -148,6 +150,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
+| s32k388 | — | — | — |
 | sam4s16c | — | — | — |
 | same70q21b | — | — | — |
 | stm32f072 | ✓ | ✓ | — |

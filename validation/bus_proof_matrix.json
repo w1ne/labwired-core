@@ -1437,6 +1437,26 @@
         "lane": "none"
       }
     },
+    "s32k388": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_s32k388_evb_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/s32k388-evb-smoke.elf boots CM7_0 from the 0x00401000 vector table named by its boot header and the survival gate asserts 'S32K388 EVB SMOKE\\n' on the LPUART2 TX sink; examples/s32k388-evb/io-smoke.yaml asserts the full IVT/clock/LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/s32k388-evb/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "LPSPI0-5 and QuadSPI are not mapped (the S32K3 LPSPI is not wired on this chip) and no SPI device is attached on the S32K388EVB-Q289 package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "LPI2C0/1 are not mapped and no I2C device is attached on the S32K388EVB-Q289 package.",
+        "lane": "none"
+      }
+    },
     "r7fa6m5bh": {
       "in_boards": false,
       "uart": {

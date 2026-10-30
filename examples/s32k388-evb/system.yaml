@@ -1,0 +1,33 @@
+# LabWired - NXP S32K388EVB-Q289 example system (S32K388)
+#
+# Same board manifest as configs/systems/s32k388-evb.yaml, kept beside the
+# example so the package is self-contained.
+#
+# Board facts (NXP S32K388EVB-Q289, S32K388 in a 289 MAPBGA):
+#   Green LED on PTF23 (NXP "Start Developing With S32K388EVB-Q289").
+#   The other RGB LED pads (D77: PTF17/18/19, D78: PTF22/24 with PTF23) are
+#   taken from the Renode v1.17.0 nxp-s32k388evb.repl cross-check, not from the
+#   board's hardware user manual, and so is their active-high polarity.
+#   Console: LPUART2. NOT confirmed as the EVB's USB-UART (OpenSDA) port; it
+#   is the LPUART the Renode S32K388 test uses (see
+#   examples/s32k388-evb/VALIDATION.md).
+#
+# The simulator captures the LPUART2 stream; the USB-UART bridge, the FS26
+# system basis chip, the CAN/LIN/Ethernet transceivers and the
+# potentiometers are not modelled.
+
+name: "s32k388-evb"
+chip: "../../configs/chips/s32k388.yaml"
+# CORE_CLK at reset: the 48 MHz FIRC, MC_CGM MUX_0 DC_0 = /1. The smoke never
+# starts the PLL, so this is the real core rate, not the part's 320 MHz
+# maximum.
+cpu_hz: 48_000_000
+debug_uart: "lpuart2"
+external_devices: []
+board_io:
+  - id: "led1_green"
+    kind: "led"
+    peripheral: "siul2"
+    pin: 183
+    signal: "output"
+    active_high: true
