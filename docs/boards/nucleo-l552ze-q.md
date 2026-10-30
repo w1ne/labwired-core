@@ -9,8 +9,10 @@ ST-LINK/V2-1 Virtual COM Port on **LPUART1** `PG7`/`PG8` (AF8).
 This is the **first STM32L5 part in the engine**. It is an **L1 (smoke)**
 target: boot, the new L5 RCC clock gates, the LPUART1 console and the
 GPIO LED/button path (with `ODR` read-back) are proven by a committed smoke
-fixture and an `io-smoke.yaml`. There is no silicon capture: **SIM-DERIVED**,
-no executing-fidelity differential.
+fixture and an `io-smoke.yaml`. Unmodified upstream **Zephyr v3.7.0
+`hello_world`** (the sample Renode's `ARMv8M.robot` boots) also runs through
+Zephyr's own L5 clock/ICACHE/DBGMCU bring-up and prints on LPUART1. There is
+no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 
 !!! warning "Not claimed yet"
     TrustZone / SAU / GTZC and the secure/non-secure split, MPU/PMSAv8
@@ -36,6 +38,7 @@ no executing-fidelity differential.
 | Reference firmware | [`crates/firmware-l552ze-smoke/`](../../crates/firmware-l552ze-smoke/) |
 | Example | [`examples/nucleo-l552ze-q/`](../../examples/nucleo-l552ze-q/) |
 | Committed artifact | `tests/fixtures/nucleo-l552ze-q-smoke.elf` (`NUCLEO-L552ZE-Q SMOKE`) |
+| Zephyr fixture | `tests/fixtures/stm32l552-zephyr-hello.elf` — stock Zephyr v3.7.0 `hello_world`, rebuilt by [`crates/firmware-l552ze-zephyr/build.sh`](../../crates/firmware-l552ze-zephyr/build.sh) |
 | Build target | `thumbv8m.main-none-eabi` |
 | Tier (snapshot) | **L1** — smoke (CPU + memory + LPUART1 + GPIO); SIM-DERIVED |
 
@@ -59,7 +62,9 @@ no executing-fidelity differential.
 | TIM1–8, TIM15–17 | see descriptor | modelled — generic TIMx, unexercised |
 | DMA1 / DMA2 / DMAMUX1 | `0x4002_0000` / `0x4002_0400` / `0x4002_0800` | modelled — unexercised |
 | RNG / CRC / RTC / IWDG / WWDG / PWR | see descriptor | modelled — unexercised |
-| FLASH controller, EXTI, ADC1, FDCAN1, USB | see descriptor | `type: stub` — zeros |
+| ICACHE | `0x4003_0400` | modelled — the U5 `icache` model (same IP); Zephyr enables it |
+| DBGMCU | `0xE004_4000` | modelled — `IDCODE 0x2001_6472` (DEV_ID 0x472, rev Z) |
+| FLASH controller, EXTI, ADC1, FDCAN1, USB | see descriptor | `type: stub` — zeros (so `FLASH_ACR.LATENCY` does not read back) |
 | TrustZone / SAU / GTZC / MPU / TT | — | **not modelled** |
 
 ## Boot path
@@ -76,6 +81,8 @@ secure-boot path are not modelled.
 # from the repository root
 cargo build -p firmware-l552ze-smoke --release --target thumbv8m.main-none-eabi
 ./target/release/labwired test --script examples/nucleo-l552ze-q/io-smoke.yaml --no-uart-stdout
+# stock Zephyr hello_world (committed fixture)
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-hello.yaml
 ```
 
 See [`examples/nucleo-l552ze-q/VALIDATION.md`](../../examples/nucleo-l552ze-q/VALIDATION.md)

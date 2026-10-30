@@ -15,6 +15,10 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | PC13 button input | smoke-tested (reads 0 released) | `btn=0` line |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
+| Stock Zephyr v3.7.0 `samples/hello_world` (`nucleo_l552ze_q`) | smoke-tested | `zephyr-hello.yaml` 2/2 (`*** Booting Zephyr OS build v3.7.0 ***` then `Hello World! nucleo_l552ze_q/stm32l552xx`); `firmware_survival::test_stm32l552_zephyr_survival` |
+| ICACHE (`0x4003_0400`) | modelled — the U5 `icache` model, same IP (RM0438 §8 = RM0456 §8) | Zephyr's soc init polls `SR.BUSYF` and sets `CR.EN`; unmapped, it bus-faulted before `main` |
+| DBGMCU (`0xE004_4000`) | modelled — `IDCODE 0x2001_6472` (DEV_ID 0x472, rev Z; not silicon-captured) | Zephyr clears `DBG_STOP`/`DBG_STANDBY`; unmapped, it bus-faulted |
+| FLASH `ACR.LATENCY` read-back | **not modelled** — fidelity gap | the FLASH controller is a stub, so `LL_SetFlashLatency` reads 0 back, gives up after two reads and returns `ERROR`, which Zephyr ignores. Silicon latches 5 wait states for 110 MHz |
 | TrustZone / SAU / GTZC / secure aliasing | **not modelled** | core stores MPU registers but does not enforce them |
 | MPU / PMSAv8 / `TT`/`TTA` | **not modelled** | `docs/isa_coverage.md` known gap |
 | VDDIO2 isolation of PG[15:2] until `PWR_CR2.IOSV` | **not modelled** — fidelity gap | the sim drives port G whether or not IOSV is set, so a firmware that forgets IOSV passes here and stays silent on the board. The smoke sets IOSV (RM0438 PWR chapter; CMSIS `PWR_CR2_IOSV_Pos = 9`) |
@@ -56,6 +60,42 @@ cmp out/run1/snapshot.json out/run2/snapshot.json  # clean
   --max-steps 200000 --out-dir out/unsupported-audit/nucleo-l552ze-q
 #   Instructions executed: 200000 · Unsupported: 0
 ```
+
+### Stock Zephyr hello_world (verified 2026-10-30)
+
+The fixture is unmodified upstream Zephyr v3.7.0 (commit `36940db938a8`)
+`samples/hello_world` for `nucleo_l552ze_q`, built with
+`arm-none-eabi-gcc` 13.2.1 (gnuarmemb) and debug-stripped. It is the sample
+Renode's `ARMv8M.robot` "Should Boot Zephyr Hello World" runs. Renode loads
+the `_ns` build behind TF-M. LabWired does not model TrustZone, so it boots
+the TrustZone-disabled board target, which runs secure from `0x0800_0000`.
+
+```bash
+crates/firmware-l552ze-zephyr/build.sh      # needs a Zephyr v3.7.0 west workspace
+#   sha256 f590906969f282b0642499de991245239cf45aafe34f09343b711bdb22cdc219
+#   (two rebuilds, identical)
+
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-hello.yaml
+#   *** Booting Zephyr OS build v3.7.0 ***
+#   Hello World! nucleo_l552ze_q/stm32l552xx
+#   PASS  2/2 checks · zephyr-hello · 2000000 steps
+
+# Determinism: two runs with --output-dir; uart.log and snapshot.json cmp clean
+
+cargo test -p labwired-core --test firmware_survival l552
+#   test_nucleo_l552ze_q_smoke_survival ... ok
+#   test_stm32l552_zephyr_survival ... ok
+
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/stm32l552-zephyr-hello.elf \
+  --system configs/systems/nucleo-l552ze-q.yaml --max-steps 2000000 ...
+#   instructions_executed 1999998 · unsupported_total 0
+```
+
+Path exercised by the unpatched Zephyr bring-up: ICACHE enable, DBGMCU,
+the L5 RCC MSI range 6 (4 MHz) -> PLL (`M=1 N=55 R=2`, 110 MHz) switch with
+the `SWS` handshake, `PWR_CR2.IOSV` (VDDIO2, written by Zephyr's GPIO
+driver for port G) and the LPUART1 console on PG7/PG8.
 
 ## Notes
 
