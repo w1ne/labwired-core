@@ -203,6 +203,20 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_s32k388_evb_smoke_survival"),
     },
     ChipConf {
+        // MIMXRT595-EVK (MIMXRT595S, Cortex-M33; the HiFi4 DSP is not
+        // modelled). SIM-DERIVED: no MIMXRT595 bench part. Modelled: FLEXCOMM0
+        // USART (lpc_flexcomm_usart), the high-speed GPIO (lpc_gpio), CLKCTL/
+        // RSTCTL (rt5xx_ctl) and IOPCTL (rt5xx_iopctl), all storage-level for
+        // the clock/pad banks. SYSCTL0/1, PMC, CACHE64, WWDT0, INPUTMUX and the
+        // FlexSPI0 controller are declared stubs; the other FLEXCOMMs, timers,
+        // DMA, USB, display and DSP blocks are not mapped — see
+        // examples/mimxrt595-evk/VALIDATION.md.
+        name: "mimxrt595s",
+        yaml: "configs/chips/mimxrt595s.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_mimxrt595_evk_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

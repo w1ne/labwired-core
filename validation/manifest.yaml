@@ -9507,6 +9507,38 @@ boards:
       - crates/firmware-s32k388-evb-smoke
       - configs/chips/s32k388.yaml
       - configs/systems/s32k388-evb.yaml
+  - id: mimxrt595s
+    # 2026-10-30: NXP MIMXRT595-EVK (MIMXRT595S, Cortex-M33; the HiFi4 DSP,
+    # GPU and PowerQuad are not modelled; no internal flash: XIP from the
+    # FlexSPI0 NOR window at 0x08000000 with the FCB at 0x08000400 and the
+    # vector table at 0x08001000; 5 MiB SRAM at 0x20000000). First i.MX RT500
+    # part: the new LPC-style FLEXCOMM USART (lpc_flexcomm_usart) and GPIO
+    # (lpc_gpio) models and the CLKCTL/RSTCTL/IOPCTL register banks
+    # (rt5xx_ctl, storage only). SYSCTL0/1, PMC, CACHE64, WWDT0, INPUTMUX and
+    # the FlexSPI0 controller are declared stubs; the other FLEXCOMMs,
+    # timers, DMA, USB and display blocks are not mapped. SIM-DERIVED — no
+    # MIMXRT595 bench part. See docs/boards/mimxrt595-evk.md and
+    # examples/mimxrt595-evk/VALIDATION.md.
+    doc: docs/boards/mimxrt595-evk.md
+    chip: configs/chips/mimxrt595s.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_mimxrt595_evk_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/lpc/flexcomm_usart.rs
+      - crates/core/src/peripherals/lpc/gpio.rs
+      - crates/core/src/peripherals/lpc/rt5xx_ctl.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-mimxrt595-evk-smoke
+      - configs/chips/mimxrt595s.yaml
+      - configs/systems/mimxrt595-evk.yaml
 
   - id: sam4s16c
     # 2026-10-23: SAM4S Xplained (ATSAM4S16C, Cortex-M4; 1 MiB flash at

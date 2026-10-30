@@ -84,6 +84,7 @@ members = [
     "crates/firmware-ek-ra6m5-smoke",
     "crates/firmware-apollo4p-evb-smoke",
     "crates/firmware-s32k388-evb-smoke",
+    "crates/firmware-mimxrt595-evk-smoke",
     "crates/firmware-stm32f072b-disco-smoke",
     "crates/firmware-l552ze-smoke",
     "crates/firmware-frdm-k64f-smoke",

@@ -1477,6 +1477,26 @@
         "lane": "none"
       }
     },
+    "mimxrt595s": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_mimxrt595_evk_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/mimxrt595-evk-smoke.elf boots the Cortex-M33 from the 0x08001000 vector table behind the FlexSPI FCB and the survival gate asserts 'MIMXRT595 EVK SMOKE\\n' on the FLEXCOMM0 USART TX sink; examples/mimxrt595-evk/io-smoke.yaml asserts the full clock/pad/LED/switch/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/mimxrt595-evk/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "Only FLEXCOMM0 is mapped and only its USART view is modelled (with PERSEL = SPI the window reads 0); FLEXCOMM1-16 are not mapped and the FlexSPI0 controller is a declared stub, and no SPI device is attached on the MIMXRT595-EVK package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Only FLEXCOMM0 is mapped and only its USART view is modelled; the I2C-mode FLEXCOMMs and I3C are not mapped and no I2C device is attached on the MIMXRT595-EVK package.",
+        "lane": "none"
+      }
+    },
     "same70q21b": {
       "in_boards": false,
       "uart": {

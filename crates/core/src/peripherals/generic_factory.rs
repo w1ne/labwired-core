@@ -388,6 +388,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // belongs to the staged onboarding/nxp-s32k388 descriptors, which keep
     // their placeholder.
     "s32k3_siul2",
+    // NXP i.MX RT500 (MIMXRT595S): the LPC-style FLEXCOMM USART and GPIO, and
+    // the CLKCTL/RSTCTL (SET/CLR aliased) and IOPCTL (plain) register banks.
+    // Not `lpc_usart`: the Renode-import profile heuristic maps that spelling
+    // to a 16550 layout, which the FLEXCOMM USART is not.
+    "lpc_flexcomm_usart",
+    "lpc_gpio",
+    "rt5xx_ctl",
+    "rt5xx_iopctl",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1466,6 +1474,19 @@ pub fn try_build(
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
+        "lpc_flexcomm_usart" => {
+            // PSELID present bits: USART/SPI/I2C/I2S (0xF0) unless the yaml
+            // narrows them for a FLEXCOMM without every function.
+            let present = p_cfg
+                .config
+                .get("present")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0xF0) as u32;
+            Box::new(crate::peripherals::lpc::flexcomm_usart::LpcFlexcommUsart::new(present))
+        }
+        "lpc_gpio" => Box::new(crate::peripherals::lpc::gpio::LpcGpio::new()),
+        "rt5xx_ctl" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::new()),
+        "rt5xx_iopctl" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::plain()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

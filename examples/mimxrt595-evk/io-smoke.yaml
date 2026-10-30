@@ -1,0 +1,35 @@
+# LabWired - MIMXRT595-EVK FLEXCOMM0+LED IO smoke
+#
+# Build: cargo build -p firmware-mimxrt595-evk-smoke --release --target thumbv8m.main-none-eabi
+#
+# The image carries the FlexSPI configuration block header (tag "FCFB") at
+# 0x08000400 and its vector table at 0x08001000. The firmware selects the
+# 48 MHz FRO DIV main clock, opens the FLEXCOMM0/HSGPIO clock gates and
+# resets, muxes P0_1/P0_2 to FLEXCOMM0, brings FLEXCOMM0 up as a USART at
+# 115384 baud 8N1 (48 MHz FRO_DIV4, OSR 16, BRG 26), walks the RGB LED (P0_14,
+# P1_0, P3_17) through the GPIO SET, B, W, NOT, MPIN/MASK and CLR views with
+# PIN readback, and reads SW1 (P0_25) / SW2 (P0_10) released.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt595-evk-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "MIMXRT595 EVK SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m33 uart=flexcomm0 pselid=000000f1 fifosize=16"
+      - "fcb tag=42464346 vtor=08001000"
+      - "clk frodivsel=1 mainclksela=1 pscctl0=00000100 pscctl1=0000000b"
+      - "uart fclk=48000000 osr=16 brg=26 baud=115384"
+      - "leds=off r=0 g=0 b=0 pin0=02000400"
+      - "set red r=1 g=0 b=0 pin0=02004400"
+      - "byte green r=1 g=1 b=0 pin0=02004400"
+      - "word blue r=1 g=1 b=1 pin0=02004400"
+      - "not red r=0 g=1 b=1 pin0=02000400"
+      - "mpin red r=1 g=1 b=1 pin0=02004400"
+      - "clr all r=0 g=0 b=0 pin0=02000400"
+      - "sw1=1 sw2=1"
+      - "hb=0 green=1"
+      - "hb=1 green=0"
+  - expected_stop_reason: max_steps
