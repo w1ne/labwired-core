@@ -2661,6 +2661,32 @@ pub(crate) fn run_test(
             let machine = labwired_core::Machine::new(cpu, bus);
             run_machine!(machine)
         }
+        labwired_core::Arch::Pic18 => {
+            // PIC18 is Harvard too: program memory is CPU-local and sized
+            // from the chip; the EUSART TX register is on the CPU.
+            let pic18_chip_name = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .map(|c| c.name)
+                .unwrap_or_else(|| {
+                    // `for_chip_name("")` falls back to the 0x60 Access Bank
+                    // split and the default flash size; say so rather than
+                    // run a PIC18F4520 image on the wrong geometry silently.
+                    warn!(
+                        "PIC18: could not resolve the chip from the system manifest; \
+                         using the default PIC18 geometry"
+                    );
+                    String::new()
+                });
+            let mut cpu = labwired_core::cpu::Pic18::for_chip_name(&pic18_chip_name);
+            cpu.load_program_image(&program);
+            cpu.set_serial_sink(uart_tx.clone());
+            let machine = labwired_core::Machine::new(cpu, bus);
+            run_machine!(machine)
+        }
         _ => {
             let msg = format!("Unsupported architecture: {:?}", program.arch);
             error!("{}", msg);

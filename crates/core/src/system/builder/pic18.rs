@@ -6,9 +6,12 @@
 
 //! PIC18 (M0) construction.
 //!
-//! Mirrors the PIC24 builder: a bus from config, the firmware image loaded
-//! into the CPU's own Harvard flash, and no bus-side CPU peripherals yet.
-//! PIC18 has no modelled console/serial sink at this milestone.
+//! Mirrors the PIC24 builder: a bus from config, host console wired as the
+//! heard sink, and the firmware image loaded into the CPU's own Harvard flash.
+//! The core is built with the chip's own geometry
+//! ([`crate::cpu::Pic18::for_chip_name`]: flash size, Access Bank split), and
+//! the EUSART is CPU-internal — writing `TXREG` reaches the console sink
+//! directly, as on the CLI `run`/`test` paths.
 
 use super::{BootMode, BuildRequest, BuiltMachine, FirmwareSource, UartWires};
 use crate::bus::SystemBus;
@@ -57,7 +60,7 @@ pub(super) fn build(
     crate::cpu::pic18::check_pic18_entry(program_image.entry_point)
         .map_err(|e| anyhow!("Loader Error: {e}"))?;
 
-    let mut cpu = crate::cpu::Pic18::new();
+    let mut cpu = new_core(&chip.name, uart_sink.clone());
     cpu.load_program_image(&program_image);
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);
@@ -73,4 +76,26 @@ pub(super) fn build(
         arch: labwired_config::Arch::Pic18,
         firmware_bytes: firmware.to_vec(),
     })
+}
+
+/// The chip's own core with its EUSART wired to the console `sink`.
+fn new_core(chip_name: &str, sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>) -> crate::cpu::Pic18 {
+    let mut cpu = crate::cpu::Pic18::for_chip_name(chip_name);
+    // EUSART TX is on the CPU, not a bus UART peripheral.
+    cpu.set_serial_sink(sink);
+    cpu
+}
+
+#[cfg(test)]
+mod tests {
+    use super::new_core;
+
+    #[test]
+    fn pic18f4520_core_has_the_chip_geometry() {
+        // DS39631E: 32 KB flash, SFRs from 0xF80 so the Access Bank splits
+        // at 0x80 (the generic default core splits at 0x60).
+        let cpu = new_core("pic18f4520", Default::default());
+        assert_eq!(cpu.access_split(), 0x80);
+        assert_eq!(cpu.flash_bytes(), 32 * 1024);
+    }
 }
