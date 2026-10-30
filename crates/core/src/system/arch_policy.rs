@@ -36,6 +36,7 @@ pub enum MachineFamily {
     Xtensa,
     Avr,
     Pic24,
+    Pic18,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -57,8 +58,9 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Xtensa => Ok(MachineFamily::Xtensa),
         Arch::Avr => Ok(MachineFamily::Avr),
         Arch::Pic24 => Ok(MachineFamily::Pic24),
+        Arch::Pic18 => Ok(MachineFamily::Pic18),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, or pic24)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, or pic18)",
             chip.name
         ),
     }
@@ -80,6 +82,10 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         // EM_DSPIC30F (binutils elf.h) — the machine Microchip's dsPIC30/33
         // toolchains stamp on 16-bit MCU/DSC ELFs.
         118 => Some(crate::Arch::Pic24),
+        // EM_MCHP_PIC (204), the registered ELF machine value for Microchip's
+        // 8-bit PIC family (gABI). It is the only 8-bit PIC machine value
+        // available; PIC18 is the only 8-bit PIC core this engine models.
+        204 => Some(crate::Arch::Pic18),
         _ => None,
     }
 }

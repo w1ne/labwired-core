@@ -22,6 +22,9 @@ pub enum Arch {
     /// PIC24 / dsPIC33 16-bit MCU & DSC family (24-bit instruction words).
     #[serde(alias = "dspic33", alias = "pic24f", alias = "dspic33f")]
     Pic24,
+    /// PIC18 8-bit MCU family (16-bit instruction words, byte-addressed PC).
+    #[serde(alias = "pic18f")]
+    Pic18,
     Unknown,
 }
 

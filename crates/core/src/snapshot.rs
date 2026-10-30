@@ -52,6 +52,7 @@ pub enum CpuSnapshot {
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
     Pic24(Box<Pic24CpuSnapshot>),
+    Pic18(Box<Pic18CpuSnapshot>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -338,6 +339,31 @@ pub struct Pic24CpuSnapshot {
     pub ipc3: u16,
     #[serde(default)]
     pub ipc4: u16,
+}
+
+/// PIC18 visible architectural state (byte-addressed PC, bank selector,
+/// FSRs and the hardware return stack). Data memory is not part of the CPU
+/// snapshot: it belongs to the core's private file store for now.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic18CpuSnapshot {
+    pub wreg: u8,
+    pub status: u8,
+    pub bsr: u8,
+    pub pc: u32,
+    pub cycles: u64,
+    pub fsr: [u16; 3],
+    pub tblptr: u32,
+    pub tablat: u8,
+    pub pclath: u8,
+    pub pclatu: u8,
+    #[serde(default)]
+    pub prod: u16,
+    pub stkptr: u8,
+    pub stack: Vec<u32>,
+    #[serde(default)]
+    pub stk_full: bool,
+    #[serde(default)]
+    pub stk_unf: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
