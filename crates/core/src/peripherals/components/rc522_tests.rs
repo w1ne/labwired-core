@@ -135,11 +135,12 @@ fn reqa_returns_atqa_when_card_present() {
 fn wupa_wakes_a_halted_card() {
     let mut d = Rc522::new("PA4");
     antenna_on(&mut d);
-    d.set_card(Some([0x11, 0x22, 0x33, 0x44]));
+    let uid = [0x11u8, 0x22, 0x33, 0x44];
+    d.set_card(Some(uid));
     // Drive to Active then Halt.
     let _ = transceive(&mut d, &[PICC_REQA], 7);
-    let bcc = 0x11 ^ 0x22 ^ 0x33 ^ 0x44;
-    let mut sel = vec![PICC_SEL_CL1, 0x70, 0x11, 0x22, 0x33, 0x44, bcc];
+    let bcc = uid.iter().fold(0u8, |a, b| a ^ b);
+    let mut sel = vec![PICC_SEL_CL1, 0x70, uid[0], uid[1], uid[2], uid[3], bcc];
     let crc = crc_a(&sel);
     sel.extend_from_slice(&crc);
     let _ = transceive(&mut d, &sel, 0);
