@@ -134,6 +134,7 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
+    size: "16B"
   - id: "flexspi0"
     type: "stub"
     base_address: 0x40134000
