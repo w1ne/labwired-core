@@ -9361,9 +9361,10 @@ boards:
     # 0x00000000, 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at
     # 0x20000000). UART-only L1 slice: the classic Kinetis UART0-4 block,
     # Kinetis GPIO A-E (PDOR/PSOR/PCOR/PDIR/PDDR) and the behavioural MCG FEI
-    # clock. SIM clock gating, PORT pad mux/pulls, MCG PLL/FEE, ENET+KSZ8081,
-    # RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are
-    # declared stubs. SIM-DERIVED — no K64F bench part. See
+    # clock. SIM clock gating, PORT pad mux/pulls and MCG PLL/FEE are not
+    # modelled; ENET+KSZ8081, RNGA and FTFE are declared stubs; eDMA, PIT/FTM,
+    # I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped (access faults).
+    # SIM-DERIVED — no K64F bench part. See
     # docs/boards/frdm-k64f.md and examples/frdm-k64f/VALIDATION.md.
     doc: docs/boards/frdm-k64f.md
     chip: configs/chips/mk64f12.yaml

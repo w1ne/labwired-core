@@ -144,8 +144,9 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         // FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F). SIM-DERIVED: no K64F bench
         // part. UART-only L1: classic Kinetis UART0-4, Kinetis GPIO A-E and the
-        // behavioural MCG FEI block. SIM clock gating, PORT pad mux, MCG PLL,
-        // ENET/PHY, RNGA, FTFE and the rest are declared stubs — see
+        // behavioural MCG FEI block. SIM clock gating, PORT pad mux and MCG PLL
+        // are not modelled; ENET/PHY, RNGA and FTFE are declared stubs;
+        // eDMA/PIT/FTM/I2C/SPI/ADC/DAC/USB/CAN/SDHC are not mapped — see
         // examples/frdm-k64f/VALIDATION.md.
         name: "mk64f12",
         yaml: "configs/chips/mk64f12.yaml",
