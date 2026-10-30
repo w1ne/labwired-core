@@ -101,7 +101,7 @@ pub const SFR_PIR1: u16 = 0xF9E;
 pub const SFR_PIR2: u16 = 0xFA1;
 pub const SFR_PIE1: u16 = 0xF9D;
 pub const SFR_PIE2: u16 = 0xFA0;
-pub const SFR_IPR1: u16 = 0xF9C;
+pub const SFR_IPR1: u16 = 0xF9F;
 pub const SFR_IPR2: u16 = 0xFA2;
 pub const SFR_RCON: u16 = 0xFD0;
 
@@ -326,13 +326,19 @@ impl Pic18 {
         self.data.fill(0);
         // DS39631 power-on reset values: all port pins are inputs
         // (TRISE<3> is unimplemented), the EUSART shift register is empty,
-        // and RCON reads TO = PD = 1 with the POR/BOR bits clear.
+        // and RCON reads TO = PD = 1 with the POR/BOR bits clear. Every
+        // interrupt priority bit resets high (INTCON2 `1111 -1-1`, INTCON3
+        // `11-0 0-00`, IPR1 `1111 1111`, IPR2 `11-1 1111`).
         for n in 0..PIC18_PORT_COUNT {
             self.data[usize::from(SFR_TRISA + n)] = 0xFF;
         }
         self.data[usize::from(SFR_TRISA + 4)] = 0x07;
         self.data[usize::from(SFR_TXSTA)] = TXSTA_TRMT;
         self.data[usize::from(SFR_RCON)] = 0x1C;
+        self.data[usize::from(SFR_INTCON2)] = 0xF5;
+        self.data[usize::from(SFR_INTCON3)] = INTCON3_INT2IP | INTCON3_INT1IP;
+        self.data[usize::from(SFR_IPR1)] = 0xFF;
+        self.data[usize::from(SFR_IPR2)] = 0xDF;
     }
 
     /// Load 16-bit instruction words starting at the reset vector.
@@ -2883,6 +2889,26 @@ mod tests {
             INTCON_GIEL,
             "GIEL survives a high-priority entry"
         );
+    }
+
+    #[test]
+    fn interrupt_priority_sfrs_match_ds39631_map_and_reset() {
+        // DS39631 Table 5-1 puts IPR1 at 0xF9F, above PIR1/PIE1; 0xF9C is
+        // unimplemented. Every priority bit powers up set (high priority).
+        assert_eq!(SFR_IPR1, 0xF9F);
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[0x0000]);
+        assert_eq!(cpu.read_data(SFR_IPR1), 0xFF);
+        assert_eq!(cpu.read_data(SFR_IPR2), 0xDF);
+        assert_eq!(cpu.read_data(SFR_INTCON2), 0xF5);
+        assert_eq!(cpu.read_data(SFR_INTCON3), INTCON3_INT2IP | INTCON3_INT1IP);
+        // With IPR1 untouched, an enabled PIR1 source takes the high vector.
+        cpu.write_data(SFR_RCON, RCON_IPEN);
+        cpu.write_data(SFR_INTCON, INTCON_GIE_GIEH | INTCON_GIEL);
+        cpu.write_data(SFR_PIE1, 0x01);
+        cpu.write_data(SFR_PIR1, 0x01);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC18_HIGH_VECTOR);
     }
 
     #[test]
