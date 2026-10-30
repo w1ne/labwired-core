@@ -14,9 +14,14 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | GPIOB/GPIOE output drive + PDOR readback | smoke-tested | `led=red on pin=0` … asserted in `io-smoke.yaml` |
 | UART0 PTB16/PTB17 TX @ 115200 from 20.97152 MHz FEI | smoke-tested | `FRDM-K64F SMOKE` + heartbeat lines on the console sink |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
-| Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
+| Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported (smoke); 2,000,000 each, 0 unsupported (both Zephyr fixtures) |
 | PORT pad mux/pulls | **not modelled** | PORTx PCR is a stub |
-| MCG PLL/FEE | **not modelled** | the smoke uses the reset FEI clock |
+| Stock Zephyr v3.7.0 `samples/hello_world` (`frdm_k64f`) | smoke-tested | `zephyr-hello.yaml` 2/2; `firmware_survival::test_frdm_k64f_zephyr_survival` |
+| Zephyr `tests/drivers/uart/uart_basic_api` (Renode `NXP-K64F.robot` UART case) | smoke-tested | `zephyr-uart-basic-api.yaml` 2/2: 7/7 ztest cases, `PROJECT EXECUTION SUCCESSFUL` |
+| UART0 C2 `TIE`/`TCIE`/`RIE` interrupts (IRQ 31) | smoke-tested + unit | IRQ-driven `fifo_fill`/`fifo_read` and the `uart_irq_is_pending` test pass; `uart::tests::test_kinetis_uart_c2_interrupt_enables` |
+| MCG PLL0 (`k6x` profile): FBE → PBE → PEE | smoke-tested + unit | Zephyr's `CLOCK_BootToPeeMode` settles; `mcg::tests::k6x_*`. Lock is immediate and the 120 MHz output is not derived |
+| MCG FEE (the KW41Z FLL path) | unit-tested | unchanged; `mcg::tests` |
+| SYSMPU / PMC / OSC0 | register files (NXP SVD) | Zephyr's `nxp_mpu`, `k6x_init` and `CLOCK_InitOsc0` writes land and read back; **no MPU protection, LVD or oscillator is modelled** |
 | ENET + KSZ8081 PHY / TCP | **not modelled** | the Ethernet blocks are stubs; the Zephyr TCP test is deferred |
 | RNGA, FTFE | declared stubs | `configs/chips/mk64f12.yaml` (`type: "stub"`) |
 | eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN, SDHC | **not mapped** | no window in `configs/chips/mk64f12.yaml`; an access faults with a memory violation |
@@ -53,6 +58,50 @@ cmp out/run1/snapshot.json out/run2/snapshot.json  # clean
   --max-steps 200000 --out-dir out/unsupported-audit/frdm-k64f
 #   Instructions executed: 200000 · Unsupported: 0
 ```
+
+### Stock Zephyr (verified 2026-10-30)
+
+Both fixtures are unmodified upstream Zephyr v3.7.0 (commit `36940db938a8`)
+for `frdm_k64f`, built with `arm-none-eabi-gcc` 13.2.1 (gnuarmemb) and
+debug-stripped.
+
+```bash
+crates/firmware-frdm-k64f-zephyr/build.sh       # needs a Zephyr v3.7.0 west workspace
+#   b0b136f6…ea3993  tests/fixtures/mk64f12-zephyr-hello.elf
+#   6ea91e77…711f2e  tests/fixtures/mk64f12-zephyr-uart-basic-api.elf
+#   (two rebuilds, identical)
+
+./target/release/labwired test --script examples/frdm-k64f/zephyr-hello.yaml
+#   *** Booting Zephyr OS build v3.7.0 ***
+#   Hello World! frdm_k64f/mk64f12
+#   PASS  2/2 checks · zephyr-hello · 3000000 steps
+
+./target/release/labwired test --script examples/frdm-k64f/zephyr-uart-basic-api.yaml
+#   SUITE PASS - 100.00% [uart_basic_api]: pass = 6, fail = 0, skip = 0, total = 6
+#   SUITE PASS - 100.00% [uart_basic_api_pending]: pass = 1, fail = 0, skip = 0, total = 1
+#   PROJECT EXECUTION SUCCESSFUL
+#   PASS  2/2 checks · zephyr-uart-basic-api · 45092621 steps · ~10 s
+
+# Determinism: both scripts run twice with --output-dir; uart.log and
+# snapshot.json cmp clean.
+```
+
+How it differs from the Renode robot:
+
+- Renode waits for each `Please send characters to serial console` line, but
+  a LabWired script cannot wait for a UART line. So the three
+  `uart_injections` are cycle-timed (70M / 95M / 105M). The prompts land at
+  ~61M, ~71–80M and ~96–100M cycles, measured with `max_cycles` probes.
+- Zephyr v3.7.0 adds the third prompt (`uart_basic_api_pending`). Renode's
+  older prebuilt ELF stops at two.
+- The run is bounded by `max_cycles`. The pending test leaves `C2.RIE` set, so
+  the UART keeps its per-cycle RX wakeup armed while the idle thread sits in
+  WFI. Under idle fast-forward those cycles are not steps, so `max_steps`
+  alone never ends the run. The wakeup itself is needed, because hosts such
+  as the playground push typed bytes straight into the RX buffer.
+
+Negative control: the same script on a build without the C2 interrupt
+enables fails at `test_uart_fifo_fill` (0/2).
 
 ## Notes
 

@@ -1657,7 +1657,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 1b164aa0df4c1427f204d4ec64456193cb15bf77331f3f54ef79d3dc7d53aebf
+    drift_ack_digest: 93fbfc80ff3a3552c63fa9447993416173683beab14eaa6f04110d1029b02dcd
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2232,7 +2232,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -3661,7 +3666,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3de3e5508bfa2990c8e138d894fd6a8edd4bd77bade2fefee8739ef8eda06eb3
+    drift_ack_digest: 22a785ea6ec263b3d9fc0de6ea34a571c3788b03b0f0e274992557c3d2985f98
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4224,7 +4229,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -4623,7 +4633,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: db62b4ac08dced24891354672e6a447076d1a11a32a11ae34dadf928d4313cdf
+    drift_ack_digest: 079c1ca355affbc90d4257bde3654c03c40a9812d81ad0d6f9be60a46534b926
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5119,7 +5129,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -5576,7 +5591,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: a01f76b4a20109caff38db7d16d2ffaa4447b22aaed5add01899b54656e44c2a
+    drift_ack_digest: 7e307e715abd6fb9b93d2bb82e7e0d5737c7c7cd997af2a7012f0e6765c65830
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6142,7 +6157,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -6562,7 +6582,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b4427abedf6ad554401900eb8d5b1171966f10479c2e5e50c105527f49e7b059
+    drift_ack_digest: 15c1d36c96fe67f02f6eda2256cf56dc345cd391687d547e922d1a2c5669bdc7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7067,7 +7087,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-29
+    # 2026-10-30 (feat/k64f-zephyr-hello): uart.rs gives the Kinetis K6x UART
+    # layout its C2 interrupt enables (cr1 -> 0x03, TIE/TCIE, RIE in
+    # rxneie_mask) and generic_factory.rs takes an `nxp_mcg` profile. Both
+    # only touch the KinetisUart / nxp_mcg arms: STM32 register maps, reset
+    # values and byte paths are unchanged. ACK, NOT A SILICON CAPTURE.
+    drift_ack: 2026-10-30
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -9468,6 +9493,12 @@ boards:
     # clock. SIM clock gating, PORT pad mux/pulls and MCG PLL/FEE are not
     # modelled; ENET+KSZ8081, RNGA and FTFE are declared stubs; eDMA, PIT/FTM,
     # I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped (access faults).
+    # 2026-10-30: stock Zephyr v3.7.0 boots (crates/firmware-frdm-k64f-zephyr,
+    # byte-identical rebuilds): hello_world, plus tests/drivers/uart/uart_basic_api
+    # (the suite Renode's NXP-K64F.robot runs) passes 7/7 with injected input.
+    # New for this: MCG `k6x` profile (PLL0 PLLST/LOCK0, PEE CLKST=11), the
+    # Kinetis UART C2 TIE/TCIE/RIE interrupts, and SVD register files for
+    # SYSMPU, PMC and OSC (no MPU protection modelled).
     # SIM-DERIVED — no K64F bench part. See
     # docs/boards/frdm-k64f.md and examples/frdm-k64f/VALIDATION.md.
     doc: docs/boards/frdm-k64f.md
@@ -9475,6 +9506,8 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_frdm_k64f_smoke_survival"
+      - "firmware_survival::test_frdm_k64f_zephyr_survival (stock Zephyr hello)"
+      - "mcg::tests (k6x PLL0) + uart::tests::test_kinetis_uart_c2_interrupt_enables"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9487,8 +9520,13 @@ boards:
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
+      - crates/core/src/peripherals/declarative.rs
       - crates/firmware-frdm-k64f-smoke
+      - crates/firmware-frdm-k64f-zephyr
       - configs/chips/mk64f12.yaml
+      - configs/peripherals/mk64f12/sysmpu.yaml
+      - configs/peripherals/mk64f12/pmc.yaml
+      - configs/peripherals/mk64f12/osc.yaml
       - configs/systems/frdm-k64f.yaml
 
   - id: s32k388

@@ -8,11 +8,17 @@ OpenSDA Virtual COM Port on **UART0** `PTB16`/`PTB17` (ALT3).
 
 This is the **UART-only L1 slice**. Boot, the UART0 console and the GPIO RGB
 LED path (with `PDOR` read-back) are proven by a committed smoke fixture and an
-`io-smoke.yaml`. The Ethernet/TCP milestone is explicitly deferred.
+`io-smoke.yaml`. Unmodified upstream **Zephyr v3.7.0** also runs.
+`hello_world` boots through Zephyr's own K6x bring-up (SYSMPU, PMC, OSC, MCG
+PEE on PLL0). `tests/drivers/uart/uart_basic_api`, the suite Renode's
+`NXP-K64F.robot` "Should Run Zephyr Tests for UART" runs, passes 7/7 with the
+same typed input. The Ethernet/TCP milestone is explicitly deferred.
 
 !!! warning "Not claimed yet"
-    SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE mode are **not
-    modelled**. The Ethernet MAC + KSZ8081 PHY, RNGA and FTFE are declared
+    SIM clock gating and PORT pad mux/pulls are **not modelled**. The MCG
+    PLL0 reports lock immediately and its output frequency is not derived. The
+    SYSMPU, PMC and OSC are register files: no MPU protection, LVD or
+    oscillator is modelled. The Ethernet MAC + KSZ8081 PHY, RNGA and FTFE are declared
     stubs. eDMA, PIT/FTM, I²C/SPI, ADC/DAC, USB, CAN and SDHC are **not
     mapped**: firmware that touches them faults with a memory violation. There
     is no silicon capture: **SIM-DERIVED**.
@@ -45,8 +51,10 @@ LED path (with `PDOR` read-back) are proven by a committed smoke fixture and an
 | Flash | `0x0000_0000`, 1 MiB | modelled — the smoke links and runs here |
 | SRAM_L / SRAM_U | `0x1FFF_0000` 64 KiB / `0x2000_0000` 192 KiB | modelled — stack in SRAM_U |
 | SIM | `0x4004_7000` | `type: stub` — clock gates are not modelled |
-| MCG | `0x4006_4000` | modelled (`nxp_mcg`) — FEI reset clock; no PLL |
-| UART0 (console) | `0x4006_A000` | modelled — classic Kinetis 8-bit UART, IRQ 31 |
+| MCG | `0x4006_4000` | modelled (`nxp_mcg`, `profile: k6x`) — FEI reset; PLL0 `PLLST`/`LOCK0`, PEE `CLKST=11` (lock immediate) |
+| OSC0 / PMC | `0x4006_5000` / `0x4007_D000` | register files from the NXP SVD — Zephyr writes `OSC_CR` and `PMC_REGSC.ACKISO` |
+| SYSMPU | `0x4000_D000` | register file from the NXP SVD (`CESR 0x0081_5101`, 12 RGDs) — no protection enforced |
+| UART0 (console) | `0x4006_A000` | modelled — classic Kinetis 8-bit UART, IRQ 31; C2 `TIE`/`TCIE`/`RIE` interrupts |
 | UART1–4 | `0x4006_B000`… / `0x400E_A000` | modelled — same layout, unexercised |
 | GPIOA–E | `0x400F_F000` + `0x40`×n | modelled — PDOR/PSOR/PCOR/PDIR/PDDR |
 | PORTA–E | `0x4004_9000` + `0x1000`×n | `type: stub` — pad mux/pulls not modelled |
@@ -70,6 +78,9 @@ not modelled.
 # from the repository root
 cargo build -p firmware-frdm-k64f-smoke --release --target thumbv7em-none-eabi
 ./target/release/labwired test --script examples/frdm-k64f/io-smoke.yaml --no-uart-stdout
+# stock Zephyr (committed fixtures, rebuilt by crates/firmware-frdm-k64f-zephyr/build.sh)
+./target/release/labwired test --script examples/frdm-k64f/zephyr-hello.yaml
+./target/release/labwired test --script examples/frdm-k64f/zephyr-uart-basic-api.yaml
 ```
 
 See [`examples/frdm-k64f/VALIDATION.md`](../../examples/frdm-k64f/VALIDATION.md)
