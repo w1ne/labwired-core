@@ -27,6 +27,15 @@ fn embedded_region_image(env: &str) -> Option<&'static [u8]> {
         // = 0x2100 on the W25Q080 stage 2) — and the lookup branches into
         // flash and BusFaults (PC just past that entry, e.g. 0x2106).
         "LABWIRED_RP2040_BOOTROM" => Some(include_bytes!("../../roms/rp2040/bootrom.bin")),
+        // Clean-room CC2538 ROM (roms/cc2538/cc2538_rom.S): the SWRU333A
+        // start-up sequence (CCA -> VTOR/SP/PC) and the utility API table at
+        // 0x48 that Contiki-NG's startup calls to copy .data and zero .bss.
+        "LABWIRED_CC2538_ROM" => Some(include_bytes!("../../roms/cc2538/cc2538_rom.bin")),
+        // CC2538 flash information page head: a fixed primary IEEE address
+        // at +0x28 (roms/cc2538/build.sh), read by Contiki-NG ieee-addr.c.
+        "LABWIRED_CC2538_INFO_PAGE" => {
+            Some(include_bytes!("../../roms/cc2538/cc2538_info_page.bin"))
+        }
         _ => None,
     }
 }

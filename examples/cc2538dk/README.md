@@ -3,8 +3,10 @@
 The [CC2538DK](https://www.ti.com/tool/CC2538DK) development kit: a
 **CC2538SF53** evaluation module (Cortex-M3, 512 KiB flash, 32 KiB SRAM,
 32 MHz max, 2.4-GHz IEEE 802.15.4 radio) on a SmartRF06 evaluation board. This
-is the **UART+LED L1 slice** — the radio and the rest of the SoC are declared
-stubs.
+is the **UART+LED L1 slice**, plus **stock Contiki-NG v4.9 hello-world**
+booting through a clean-room boot ROM with the RF core and sleep timer
+modelled. AES/PKA, the flash controller, SSI, I2C, GPTimers, USB, uDMA and the
+ADC are declared stubs.
 
 ## What runs here
 
@@ -27,7 +29,27 @@ LED1 (red, PC0) is **not driven**: PC0 is also the CC2538 USB D+ pull-up.
 
 The image carries a real Customer Configuration Area at `0x0027_FFD4`
 (image valid, vector table `0x0020_0000`, SELECT-key backdoor), so the same
-ELF would boot through the CC2538 ROM on silicon. The simulator fast-boots it.
+ELF would boot through the CC2538 ROM on silicon. The loader enters it at
+that flash-base table directly.
+
+### Stock Contiki-NG hello-world
+
+`tests/fixtures/cc2538dk-contiki-hello.elf` is the **unmodified** upstream
+Contiki-NG v4.9 `examples/hello-world` for `TARGET=cc2538dk` (rebuild:
+`crates/firmware-cc2538dk-contiki/build.sh`). `contiki-hello.yaml` asserts its
+banner (RPL Lite, sicslowpan, CSMA, channel 26), the link-layer address
+`0012.4b00.0000.0001` it derives from the information page, and three
+`Hello, world` lines (boot + two 10-s etimer periods). On the way it runs:
+
+- the **ROM** (`crates/core/roms/cc2538/cc2538_rom.S`, written from the
+  SWRU333A interface, not a TI dump): CCA check, VTOR = `0x0020_2000`, then
+  `reset_handler`'s `.data` copy and `.bss` clear through the `0x48` API;
+- `SYS_CTRL_CLOCK_STA.SYNC_32K` (`sys_ctrl_init` waits for one 32-kHz edge);
+- the **RF core** (`random_init`: `ISRXON` → `RSSI_VALID` → `RFRND`, then the
+  CSMA radio driver's channel/CCA/MAC-timer bring-up);
+- the **sleep timer** count (rtimer, LPM durations) and SysTick (the etimer).
+  The compare interrupt is not used by this firmware (the listening radio
+  keeps LPM in PM0); `cc2538_sleep_timer_irq` covers it.
 
 ## Build and run
 
@@ -74,7 +96,8 @@ hb=0 yellow=1 green=0 orange=0
 | MCU | CC2538SF53 (512 KB flash, 32 KB RAM) | SWRS096 device table |
 | Core / clock | Cortex-M3, 32 MHz max; 16-MHz HF-RC at reset (`SYS_DIV 001`) | SWRU319C Table 7-3 |
 | Flash / RAM | 512 KiB @ 0x00200000 / 32 KiB @ 0x20000000 (upper 16 KiB retained) | SWRU319C Table 4-1, Table 8-2, §8.9 |
-| ROM | 0x00000000 (boot ROM; not modelled) | SWRU319C Table 4-1, §8.6.1 |
+| ROM | 0x00000000-0x0001FFFF; clean-room ROM: CCA boot, utility API at 0x48 | SWRU319C Table 4-1; SWRU333A §2.2, §3.2 |
+| IEEE address | info page 0x00280028, fixed 00:12:4B:00:00:00:00:01 (not a real device's) | Contiki-NG `ieee-addr.h`/`ieee-addr.c` |
 | LEDs | LED1 red PC0, LED2 yellow PC1, LED3 green PC2, LED4 orange PC3, active high | Contiki-NG `cc2538dk` dev/board.h + leds-arch.c; RIOT `cc2538dk` board.h |
 | Keys | SELECT PA3, LEFT PC4, RIGHT PC5, UP PC6, DOWN PC7, active low, pull-up | Contiki-NG `cc2538dk` dev/board.h + board-buttons.c |
 | Console UART | UART0 PA0 (RX) / PA1 (TX), 115200 8N1 | Contiki-NG dev/board.h; RIOT periph_conf.h |
@@ -82,15 +105,23 @@ hb=0 yellow=1 green=0 orange=0
 ## Explicitly not claimed
 
 - **SYS_CTRL clock gating** has no effect: the gates are stored and read back,
-  but no peripheral is gated by them. Oscillator start-up timing, the 32-kHz
-  sync, power modes and software reset are not modelled.
+  but no peripheral is gated by them. Oscillator start-up timing, power modes
+  and software reset are not modelled. `SYNC_32K` is a 32 768-Hz square wave
+  from the cycle count.
 - **IOC** pin muxing and pad overrides are a stub. The firmware writes them as
   §18.5 requires, but the console model does not depend on them.
 - **GPIO interrupts** (`GPIO_RIS`/`GPIO_MIS`) are never raised; the AFSEL commit
   lock is not enforced.
-- **RF core, AES/PKA, flash controller, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
-  WDT/sleep timer, SoC ADC** are declared stubs.
-- The **boot ROM** is not present; the engine enters the ELF at its flash
-  vector table, which is what the ROM does for a valid CCA image.
+- **RF core:** the radio is alone in an empty channel. Nothing is ever
+  received, a sent frame goes nowhere, no RF interrupt is raised, and frame
+  filtering, the CSP program, the MAC timer count and the analog front end are
+  not modelled.
+- **ROM:** no serial boot loader (an invalid CCA parks in WFI), no backdoor
+  pin, no RAM BIST; `PageErase`/`ProgramFlash` return -1 and change nothing.
+  `GetChipId`/`GetFlashSize` return SF53 constants.
+- **Sleep timer:** the watchdog never bites, and capture is not modelled. The
+  32-kHz rate assumes the CPU runs at `clock_hz` (16 MHz).
+- **AES/PKA, flash controller, SSI0/1, I2C, GPTimer0-3, USB, uDMA, SoC ADC**
+  are declared stubs.
 
 See `VALIDATION.md` for the tier table.

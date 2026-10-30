@@ -1,0 +1,39 @@
+# LabWired - CC2538DK: stock Contiki-NG v4.9 hello-world
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-hello.elf — UNMODIFIED upstream
+# Contiki-NG examples/hello-world for TARGET=cc2538dk (rebuild:
+# crates/firmware-cc2538dk-contiki/build.sh), the binary Renode's
+# cc2538_single-node.robot runs.
+#
+# Boot path: reset enters the in-tree clean-room ROM at 0x0, which reads the
+# CCA (Image Valid = 0, Application Entry Point 0x0020_2000), sets VTOR and
+# jumps; reset_handler copies .data / clears .bss through the ROM utility API
+# at 0x48. Contiki then waits a SYNC_32K edge, seeds its PRNG from the RF core
+# (ISRXON -> RSSI_VALID -> RFRND), brings up the CSMA radio driver, reads the
+# primary IEEE address from the flash information page, and its hello-world
+# process prints every 10 s on its etimer (SysTick + LPM/sleep timer).
+#
+# The link-layer address comes from the model's fixed info-page IEEE address
+# (00:12:4B:00:00:00:00:01), and Node ID 1 from its low bytes. Three prints =
+# boot + two 10-s etimer periods.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 10000000
+assertions:
+  - uart_ordered:
+      - "[INFO: Main      ] Starting Contiki-NG-release/v4.9"
+      - "[INFO: Main      ] - Routing: RPL Lite"
+      - "[INFO: Main      ] - Net: sicslowpan"
+      - "[INFO: Main      ] - MAC: CSMA"
+      - "[INFO: Main      ] - 802.15.4 Default channel: 26"
+      - "[INFO: Main      ] Node ID: 1"
+      - "[INFO: Main      ] Link-layer address: 0012.4b00.0000.0001"
+      - "[INFO: Main      ] Tentative link-local IPv6 address: fe80::212:4b00:0:1"
+      - "[INFO: CC2538DK  ] TI SmartRF06 + cc2538EM"
+      - "Hello, world"
+      - "Hello, world"
+      - "Hello, world"
+  - expected_stop_reason: max_steps
