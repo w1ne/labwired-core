@@ -104,18 +104,12 @@ impl StepDirMotor {
     /// True while the driver is currently enabled (EN active).
     pub fn is_enabled(&self) -> bool {
         let s = self.state.lock().unwrap();
-        match self.en_pin {
-            None => true,
-            Some(_) => {
-                if self.cfg.enable_active_low {
-                    !s.en_level
-                } else {
-                    s.en_level
-                }
-            }
-        }
+        Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some())
     }
 
+    /// True after at least one STEP while enabled since EN last became active.
+    /// Cleared when EN goes inactive; with no EN pin, stays true after the
+    /// first edge.
     pub fn is_commanded(&self) -> bool {
         self.state.lock().unwrap().commanded
     }
