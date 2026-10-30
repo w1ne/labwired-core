@@ -195,8 +195,9 @@ fn unknown_input_channel_is_rejected() {
 }
 
 #[test]
-fn shell_golden_transcript_matches_migration_parity() {
-    // Same conversation as spi_shell_migration_parity::rc_script / RC522_GOLDEN.
+fn shell_transcript_preserves_version_soft_reset_and_mode() {
+    // Same conversation as the old shell golden, except CalcCRC (0x03) completes
+    // and leaves CommandReg Idle (§10.3.1.4) instead of latching.
     let mut d = Rc522::new("PA4");
     let mut got = Vec::new();
     let script: &[&[u8]] = &[

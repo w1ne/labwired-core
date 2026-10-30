@@ -30,7 +30,6 @@ const REG_FIFOLEVEL: u8 = 0x0A;
 const REG_CONTROL: u8 = 0x0C;
 const REG_BITFRAMING: u8 = 0x0D;
 const REG_COLL: u8 = 0x0E;
-const REG_MODE: u8 = 0x11;
 const REG_CRCRESULT_H: u8 = 0x21;
 const REG_CRCRESULT_L: u8 = 0x22;
 const REG_VERSION: u8 = 0x37;
