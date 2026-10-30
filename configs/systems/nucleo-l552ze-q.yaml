@@ -1,6 +1,6 @@
 # LabWired - NUCLEO-L552ZE-Q system manifest
 #
-# Board pinout per UM2623 (STM32 Nucleo-144 user manual) and Zephyr
+# Board pinout per UM2581 (STM32L5 Nucleo-144 board MB1361 user manual) and Zephyr
 # `nucleo_l552ze_q`:
 #   LD1 (green)  PC7  active high
 #   LD2 (blue)   PB7  active high
@@ -9,7 +9,7 @@
 #   VCP console  LPUART1 PG7 (TX) / PG8 (RX), AF8
 #   second UART  USART3 PD8 (TX) / PD9 (RX), AF7
 #
-# The on-board ST-LINK/V3E exposes LPUART1 as the Virtual COM Port; USART3 is
+# The on-board ST-LINK/V2-1 exposes LPUART1 as the Virtual COM Port; USART3 is
 # available on the morpho/Arduino headers. Only LPUART1 is the console here.
 
 name: "nucleo-l552ze-q"

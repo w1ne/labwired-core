@@ -4,10 +4,12 @@
 # MCU on the NUCLEO-L552ZE-Q. First STM32L5 part in the engine.
 #
 # Sources:
-# - RM0432 (STM32L55x/L56x reference manual): RCC §7, GPIO §9, USART/LPUART §37,
-#   SPI §36, I2C §35, timers §31, DMA §13, EXTI §20, PWR §6, FLASH §8.
-# - DS12380 (STM32L552xx/L562xx datasheet): memory boundaries, pin map, clock
-#   limits, I/O static characteristics.
+# - RM0438 (STM32L552xx/L562xx reference manual): the RCC, PWR, GPIO,
+#   USART/LPUART, SPI, I2C, timer, DMA, EXTI and FLASH chapters. Cited by
+#   chapter and register name; register offsets/bits are cross-checked against
+#   CMSIS `stm32l552xx.h`.
+# - DS12737 (STM32L552xx datasheet): memory boundaries, pin map, clock limits,
+#   I/O static characteristics.
 # - ST CMSIS `stm32l552xx.h` (RCC/PWR/FLASH/EXTI register maps).
 # - Zephyr `nucleo_l552ze_q` board dts: console LPUART1 (PG7/PG8), LEDs and
 #   button map (the board package lives in the system manifest, not here).
@@ -16,7 +18,7 @@
 #   it fakes the RCC with PythonPeripheral).
 #
 # Profiles (shared silicon IP, chosen per family):
-# - rcc     `stm32l5`  — RM0432 §7 map (AHB1ENR@0x48, AHB2ENR@0x4C,
+# - rcc     `stm32l5`  — RM0438 RCC map (AHB1ENR@0x48, AHB2ENR@0x4C,
 #                        APB1ENR1@0x58, APB1ENR2@0x5C, APB2ENR@0x60; MSI boot).
 # - gpio    `stm32v2`  — MODER/OTYPER/OSPEEDR/PUPDR/IDR/ODR/BSRR/AFRx.
 # - uart    `stm32v2`  — ISR/RDR/TDR ("USART v2"); LPUART1 uses the same
@@ -43,9 +45,9 @@
 name: "stm32l552"
 arch: "arm"
 core: "cortex-m33"
-# STM32L552 maximum core clock, 110 MHz (DS12380).
+# STM32L552 maximum core clock, 110 MHz (DS12737).
 cpu_hz: 110_000_000
-# DS12380 §5.3.14 "I/O static characteristics": VIL max 0.3·VDDIOx,
+# DS12737 "I/O static characteristics": VIL max 0.3·VDDIOx,
 # VIH min 0.7·VDDIOx.
 io_voltage_v: 3.3
 gpio_input_thresholds:
@@ -54,14 +56,14 @@ gpio_input_thresholds:
 
 flash:
   base: 0x08000000
-  # 512 KiB of main flash (L552ZE; DS12380 Table 2, Zephyr stm32l552Xe.dtsi).
+  # 512 KiB of main flash (L552ZE; DS12737 device summary, Zephyr stm32l552Xe.dtsi).
   size: "512KB"
 ram:
   base: 0x20000000
   # SRAM1 = 192 KiB at 0x20000000 (Zephyr stm32l552Xe.dtsi sram0).
   size: "192KB"
 memory_regions:
-  # SRAM2 = 64 KiB at 0x20030000 (RM0432 memory map; the Renode platform
+  # SRAM2 = 64 KiB at 0x20030000 (RM0438 memory map; the Renode platform
   # declares the same split).
   - name: "sram2"
     base: 0x20030000
@@ -91,7 +93,7 @@ peripherals:
     type: "pwr"
     base_address: 0x40007000
     size: "1KB"
-    # PWREN: RCC_APB1ENR1 bit 28 (RM0432 §7.4.25).
+    # PWREN: RCC_APB1ENR1 bit 28 (RM0438 RCC_APB1ENR1; CMSIS RCC_APB1ENR1_PWREN).
     clock: { reg: "apb1enr1", bit: 28 }
 
   - id: "systick"
@@ -258,7 +260,8 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
-    irq: 41
+    # TIM1_UP_IRQn = 42 (CMSIS); the timer model raises on update/compare.
+    irq: 42
     clock: { reg: "apb2enr", bit: 11 }
   - id: "tim2"
     type: "timer"
@@ -304,7 +307,8 @@ peripherals:
     type: "timer"
     base_address: 0x40013400
     size: "1KB"
-    irq: 51
+    # TIM8_UP_IRQn = 52 (CMSIS).
+    irq: 52
     clock: { reg: "apb2enr", bit: 13 }
   - id: "tim15"
     type: "timer"
@@ -384,9 +388,11 @@ peripherals:
     size: "1KB"
   # L5 EXTI is a 64-line G0-style block (RPR1/FPR1 + EXTICR at 0x60), not the
   # L4 two-bank map; declared as a stub until a matching model exists.
+  # Base per ST CMSIS `stm32l552xx.h`: EXTI_BASE_NS = AHB1PERIPH_BASE_NS +
+  # 0xF400 = 0x4002F400 (the non-secure alias; secure is 0x5002F400).
   - id: "exti"
     type: "stub"
-    base_address: 0x4000F400
+    base_address: 0x4002F400
     size: "1KB"
   - id: "adc1"
     type: "stub"

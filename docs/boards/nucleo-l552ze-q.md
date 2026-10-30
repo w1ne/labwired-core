@@ -4,7 +4,7 @@ The **NUCLEO-L552ZE-Q** with an **STM32L552ZET6Q** (Cortex-M33, Armv8-M,
 110 MHz max): 512 KiB of flash at `0x08000000`, 192 KiB SRAM1 at `0x20000000`
 plus 64 KiB SRAM2 at `0x20030000`, three user LEDs on `PC7` (LD1, green),
 `PB7` (LD2, blue) and `PA9` (LD3, red), a user button on `PC13`, and the
-ST-LINK/V3E Virtual COM Port on **LPUART1** `PG7`/`PG8` (AF8).
+ST-LINK/V2-1 Virtual COM Port on **LPUART1** `PG7`/`PG8` (AF8).
 
 This is the **first STM32L5 part in the engine**. It is an **L1 (smoke)**
 target: boot, the new L5 RCC clock gates, the LPUART1 console and the
@@ -65,8 +65,9 @@ no executing-fidelity differential.
 ## Boot path
 
 **Fast boot.** The engine loads the ELF and enters it at its entry point
-(vector table at the flash base, `0x0800_0000`) with SP seeded at the top of
-SRAM1 (`0x2003_0000`). The STM32 system-memory bootloader and TrustZone
+(vector table at the flash base, `0x0800_0000`). The initial SP is word 0 of
+the firmware's vector table — `0x2003_0000`, the top of SRAM1 in the smoke's
+`memory.x` — not an engine default. The STM32 system-memory bootloader and TrustZone
 secure-boot path are not modelled.
 
 ## Validation
@@ -82,8 +83,9 @@ for the claims, runtime evidence and explicit non-claims.
 
 ## Sources
 
-RM0432 (STM32L55x/L56x reference manual) for the RCC/GPIO/USART/SPI/I2C
-register maps; DS12380 (STM32L552xx/L562xx datasheet) for the memory
-boundaries and pin map; UM2623 (NUCLEO-144 user manual) and the Zephyr
+RM0438 (STM32L552xx/L562xx reference manual) for the RCC/PWR/GPIO/USART/
+SPI/I2C register maps; DS12737 (STM32L552xx datasheet) for the memory
+boundaries and pin map; UM2581 (STM32L5 Nucleo-144 board MB1361 user
+manual) and the Zephyr
 `nucleo_l552ze_q` board dts for the LED/button/console wiring — detailed in
 [`examples/nucleo-l552ze-q/REQUIRED_DOCS.md`](../../examples/nucleo-l552ze-q/REQUIRED_DOCS.md).

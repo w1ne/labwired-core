@@ -54,7 +54,7 @@ pub enum RccRegisterLayout {
     Stm32H7,
     /// STM32L4 family (RM0351). Verified on NUCLEO-L476RG over SWD.
     Stm32L4,
-    /// STM32L5 family (RM0432 §7). The L4-style clock tree (CR/ICSCR/CFGR/
+    /// STM32L5 family (RM0438 RCC chapter). The L4-style clock tree (CR/ICSCR/CFGR/
     /// PLLCFGR/PLLSAIxCFGR, BDCR@0x90, CSR@0x94, CRRCR@0x98) with the
     /// L4/G4-shaped enable block — AHB1ENR@0x48, AHB2ENR@0x4C, AHB3ENR@0x50,
     /// APB1ENR1@0x58, APB1ENR2@0x5C, APB2ENR@0x60. Offsets verified against
@@ -1966,7 +1966,7 @@ impl RccModel for L4Rcc {
 }
 
 // ── STM32L5 ─────────────────────────────────────────────────────────────────
-// RM0432 §7 register map, cross-checked against ST's CMSIS `stm32l552xx.h`
+// RM0438 RCC register map, cross-checked against ST's CMSIS `stm32l552xx.h`
 // RCC_TypeDef. The L5 keeps the L4 clock tree (CR/ICSCR/CFGR/PLLCFGR/
 // PLLSAI1CFGR/PLLSAI2CFGR, BDCR@0x90, CSR@0x94, CRRCR@0x98) but carries the
 // L4/G4-shaped enable block in full: AHB1ENR@0x48, AHB2ENR@0x4C,
@@ -2002,7 +2002,7 @@ pub struct L5Rcc {
 
 impl L5Rcc {
     fn new() -> Self {
-        // RM0432 §7.4.1: reset CR 0x0000_0063 (MSION | MSIRDY | MSIRANGE=6).
+        // RM0438 RCC_CR: reset CR 0x0000_0063 (MSION | MSIRDY | MSIRANGE=6).
         let mut s = Self {
             cr: 0x0000_0063,
             ..Default::default()
@@ -2011,10 +2011,15 @@ impl L5Rcc {
         s
     }
 
-    /// L5 CR ready rule (RM0432 §7.4.1): MSI bit0→bit1, HSI16 bit8→bit10,
+    /// L5 CR ready rule (RM0438 RCC_CR): MSI bit0→bit1, HSI16 bit8→bit10,
     /// HSE bit16→bit17 gated by HSEBYP(bit18), PLL bit24→bit25 gated by the
     /// PLLCFGR.PLLSRC clock being ready. Same handshakes the CubeL5 HAL and
     /// Zephyr's L5 clock driver poll.
+    ///
+    /// HSERDY only latches in bypass mode (HSEBYP set): the NUCLEO-L552ZE-Q
+    /// feeds HSE from the ST-LINK MCO, which is a bypass input. A board with a
+    /// real HSE crystal (HSEON without HSEBYP) never sees HSERDY here — the
+    /// crystal oscillator start-up is not modelled.
     fn ready(&self, mut cr: u32) -> u32 {
         for &(on, rdy) in &[(0u32, 1u32), (8, 10)] {
             if cr & (1 << on) != 0 {
@@ -2717,7 +2722,7 @@ impl Rcc {
                 "apb2enr" => Some(0x60),
                 _ => None,
             },
-            // L5 (RM0432 §7.4 / CMSIS stm32l552xx.h): the full L4/G4-shaped
+            // L5 (RM0438 RCC / CMSIS stm32l552xx.h): the full L4/G4-shaped
             // enable block. LPUART1 is on APB1ENR2 bit 0, GPIO on AHB2ENR.
             Self::Stm32L5(_) => match r.as_str() {
                 "cr" => Some(0x00),
@@ -4114,14 +4119,14 @@ mod tests {
     fn test_rcc_l5_map_and_msi_reset() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32L5);
 
-        // RM0432 §7.4.1: MSION | MSIRDY | MSIRANGE=6.
+        // RM0438 RCC_CR: MSION | MSIRDY | MSIRANGE=6.
         assert_eq!(
             rcc.read_u32(0x00).unwrap(),
             0x0000_0063,
             "L5 boots on MSI range 6 (4 MHz)"
         );
 
-        // LPUART1EN: APB1ENR2 bit 0 (RM0432 §7.4.29).
+        // LPUART1EN: APB1ENR2 bit 0 (RM0438 RCC_APB1ENR2).
         rcc.write_u32(0x5C, 1).unwrap();
         assert_eq!(rcc.read_u32(0x5C).unwrap(), 1);
         assert_eq!(rcc.rcc_reg_offset("apb1enr2"), Some(0x5C));
@@ -4145,7 +4150,7 @@ mod tests {
         );
 
         // CFGR.SW follows only while the requested source is ready: with the
-        // PLL off, a write asking for PLL leaves SWS on MSI (RM0432 §7.4.2).
+        // PLL off, a write asking for PLL leaves SWS on MSI (RM0438 RCC_CFGR).
         rcc.write_u32(0x00, 0x0000_0063).unwrap();
         rcc.write_u32(0x08, 0x3).unwrap();
         assert_eq!(

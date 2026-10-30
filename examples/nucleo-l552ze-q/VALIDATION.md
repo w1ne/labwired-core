@@ -8,7 +8,8 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | :--- | :--- | :--- |
 | Boot from ELF via the vector table (PC/SP init) | smoke-tested | run below: `Initial PC: 0x8000800, SP: 0x20030000` |
 | Cortex-M33 core executing the committed firmware | smoke-tested | `labwired test` 3/3 checks, 4,000,000 steps |
-| L5 RCC clock gates (`AHB2ENR` GPIO, `APB1ENR2.LPUART1EN`) | smoke-tested | firmware bring-up + LPUART output |
+| L5 RCC clock gates (`AHB2ENR` GPIO, `APB1ENR1.PWREN`, `APB1ENR2.LPUART1EN`) | smoke-tested | firmware bring-up + LPUART output |
+| VDDIO2 enable (`PWR_CR2.IOSV`) before PG7/PG8 | written by the firmware, **not enforced** | the firmware sets IOSV as silicon requires; see the VDDIO2 row below |
 | GPIO PC7/PB7/PA9 drive + ODR readback | smoke-tested | `led=ld1 odr=00000080` … asserted in `io-smoke.yaml` |
 | LPUART1 PG7 TX @ 115200 from 4 MHz MSI | smoke-tested | `NUCLEO-L552ZE-Q SMOKE` + heartbeat lines on the console sink |
 | PC13 button input | smoke-tested (reads 0 released) | `btn=0` line |
@@ -16,11 +17,12 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | TrustZone / SAU / GTZC / secure aliasing | **not modelled** | core stores MPU registers but does not enforce them |
 | MPU / PMSAv8 / `TT`/`TTA` | **not modelled** | `docs/isa_coverage.md` known gap |
+| VDDIO2 isolation of PG[15:2] until `PWR_CR2.IOSV` | **not modelled** — fidelity gap | the sim drives port G whether or not IOSV is set, so a firmware that forgets IOSV passes here and stays silent on the board. The smoke sets IOSV (RM0438 PWR chapter; CMSIS `PWR_CR2_IOSV_Pos = 9`) |
 | L5 non-secure FLASH controller, EXTI, ADC, FDCAN, USB | declared stubs | `configs/chips/stm32l552.yaml` |
 | SPI/I2C/timers/DMA/RNG/RTC | modelled, **unexercised** | declared; no firmware path in this slice |
 | USB / Ethernet / radio | **not modelled** | — |
 
-## Commands and evidence (verified 2026-10-29)
+## Commands and evidence (verified 2026-10-30)
 
 ```bash
 # from the repository root
@@ -63,6 +65,6 @@ cmp out/run1/snapshot.json out/run2/snapshot.json  # clean
   determinism claim; `uart.log` and `snapshot.json` are.
 - The `stm32l5` RCC profile is reference-manual/CMSIS derived
   (`stm32l552xx.h`), not silicon-verified: there is no L552 bench part.
-- The board's real LEDs are LD1 PC7, LD2 PB7, LD3 PA9 (UM2623 and the Zephyr
+- The board's real LEDs are LD1 PC7, LD2 PB7, LD3 PA9 (UM2581 and the Zephyr
   board dts). Some test platform fixtures wire a stand-in green LED to PA5
   (Arduino D13); that is not this board's LD1.

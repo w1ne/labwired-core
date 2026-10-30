@@ -6,14 +6,16 @@
 //! light over the three user LEDs plus a heartbeat line on LPUART1, in bare
 //! registers.
 //!
-//! Board facts (UM2623; Zephyr `nucleo_l552ze_q`):
+//! Board facts (UM2581; Zephyr `nucleo_l552ze_q`):
 //!   LD1 (green) PC7, LD2 (blue) PB7, LD3 (red) PA9 — active high
 //!   B1  (user)  PC13 — active high
 //!   VCP console LPUART1 PG7 (TX) / PG8 (RX), AF8, 115200 8N1
 //!
 //! The firmware enables the L5 clock gates (RCC_AHB2ENR for GPIOA/B/C/G,
-//! RCC_APB1ENR2.LPUART1EN), configures PG7/PG8 as AF8, walks the LEDs and
-//! prints the actual GPIO ODR readback, then reads the button and heartbeats.
+//! RCC_APB1ENR2.LPUART1EN), enables VDDIO2 (PG[15:2] sit on the VDDIO2 rail
+//! and stay isolated until PWR_CR2.IOSV is set), configures PG7/PG8 as AF8,
+//! walks the LEDs and prints the actual GPIO ODR readback, then reads the
+//! button and heartbeats.
 //!
 //! Only the reset MSI (4 MHz) is used: LPUART BRR = 256 * 4 MHz / 115200 =
 //! 8889 = 0x22B9 (the LPUART uses a 256x oversampling divider).
@@ -25,10 +27,18 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// RCC (RM0432 §7): AHB2ENR @ 0x4C (GPIO), APB1ENR2 @ 0x5C (LPUART1).
+// RCC (RM0438 RCC chapter): AHB2ENR @ 0x4C (GPIO), APB1ENR1 @ 0x58 (PWR),
+// APB1ENR2 @ 0x5C (LPUART1).
 const RCC: u32 = 0x4002_1000;
 const RCC_AHB2ENR: *mut u32 = (RCC + 0x4C) as *mut u32;
+const RCC_APB1ENR1: *mut u32 = (RCC + 0x58) as *mut u32;
 const RCC_APB1ENR2: *mut u32 = (RCC + 0x5C) as *mut u32;
+const RCC_APB1ENR1_PWREN: u32 = 1 << 28;
+
+// PWR_CR2 @ 0x04: IOSV (bit 9) removes the VDDIO2 isolation on PG[15:2]
+// (CMSIS `PWR_CR2_IOSV_Pos = 9`; HAL_PWREx_EnableVddIO2()).
+const PWR_CR2: *mut u32 = (0x4000_7000 + 0x04) as *mut u32;
+const PWR_CR2_IOSV: u32 = 1 << 9;
 
 // GPIO register offsets (STM32 GPIO v2 block).
 const MODER: u32 = 0x00;
@@ -179,6 +189,15 @@ fn main() -> ! {
         );
         // LPUART1EN: APB1ENR2 bit 0.
         write_volatile(RCC_APB1ENR2, read_volatile(RCC_APB1ENR2) | 1);
+
+        // PG7/PG8 are VDDIO2 pins: clock the PWR block, then set IOSV so
+        // the port G pads are no longer isolated. Without this the VCP
+        // stays silent on the real board.
+        write_volatile(
+            RCC_APB1ENR1,
+            read_volatile(RCC_APB1ENR1) | RCC_APB1ENR1_PWREN,
+        );
+        write_volatile(PWR_CR2, read_volatile(PWR_CR2) | PWR_CR2_IOSV);
 
         // PG7/PG8 as AF8 (LPUART1_TX/RX).
         pin_af(GPIOG, 7, 8);

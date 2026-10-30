@@ -59,12 +59,12 @@ hb=0 odr=00000080 btn=0
 
 | Item | Value | Source |
 | :--- | :--- | :--- |
-| MCU | STM32L552ZET6Q, LQFP144 | UM2623 §2; DS12380 |
-| Core / clock | Cortex-M33, 110 MHz max (MSI 4 MHz at reset) | DS12380 §2; RM0432 §7 |
-| Flash / RAM | 512 KiB @ 0x08000000 / 192 KiB @ 0x20000000 (+64 KiB @ 0x20030000) | DS12380 Table 2; Zephyr `stm32l552Xe.dtsi` |
-| User LEDs | LD1 PC7, LD2 PB7, LD3 PA9, active high | UM2623; Zephyr `nucleo_l552ze_q` |
-| User button | B1 PC13, active high | UM2623; Zephyr `nucleo_l552ze_q` |
-| Console UART | LPUART1 PG7 (TX) / PG8 (RX), AF8, 115200 8N1 | UM2623; Zephyr board dts |
+| MCU | STM32L552ZET6Q, LQFP144 | UM2581; DS12737 |
+| Core / clock | Cortex-M33, 110 MHz max (MSI 4 MHz at reset) | DS12737; RM0438 RCC chapter |
+| Flash / RAM | 512 KiB @ 0x08000000 / 192 KiB @ 0x20000000 (+64 KiB @ 0x20030000) | DS12737 device summary; Zephyr `stm32l552Xe.dtsi` |
+| User LEDs | LD1 PC7, LD2 PB7, LD3 PA9, active high | UM2581; Zephyr `nucleo_l552ze_q` |
+| User button | B1 PC13, active high | UM2581; Zephyr `nucleo_l552ze_q` |
+| Console UART | LPUART1 PG7 (TX) / PG8 (RX), AF8, 115200 8N1 | UM2581; Zephyr board dts |
 
 ## Explicitly not claimed
 
