@@ -9355,6 +9355,36 @@ boards:
       - crates/firmware-cc2538dk-smoke
       - configs/chips/cc2538sf53.yaml
       - configs/systems/cc2538dk.yaml
+  - id: amap42kp
+    # 2026-10-30: Ambiq Apollo4 Plus EVB (AMAP4PEVB; AMAP42KP-KBR SoC,
+    # Cortex-M4F; 2 MiB MRAM at 0x0 with the application at 0x18000 after
+    # the secure bootloader, 2816 KiB RAM from 0x10000000). First Ambiq part:
+    # the 128-pin GPIO block (apollo4_gpio, PADKEY-locked PINCFG + RD/WT/
+    # WTS/WTC/EN banks), PWRCTRL (apollo4_pwrctrl, DEVPWREN mirrored into
+    # DEVPWRSTATUS, MCUPERFREQ ack) and UART0-3 on the pl011 layout.
+    # CLKGEN, MCUCTRL, RSTGEN, IOM, MSPI, ADC, timers, RTC, WDT, security,
+    # crypto, GPU/display, SDIO, USB and audio are declared stubs.
+    # SIM-DERIVED — no Apollo4 bench part. See docs/boards/apollo4p-evb.md
+    # and examples/apollo4p-evb/VALIDATION.md.
+    doc: docs/boards/apollo4p-evb.md
+    chip: configs/chips/amap42kp.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_apollo4p_evb_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/apollo4.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-apollo4p-evb-smoke
+      - configs/chips/amap42kp.yaml
+      - configs/systems/apollo4p-evb.yaml
 
   - id: r7fa6m5bh
     # 2026-10-30: Renesas EK-RA6M5 (R7FA6M5BH, Cortex-M33; 2 MiB code flash

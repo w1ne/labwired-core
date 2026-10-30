@@ -1,5 +1,13 @@
 # Validation Report: ambiq-apollo4
 
+> **Superseded.** This is the auto-generated report for the staged
+> `onboarding/ambiq-apollo4` descriptor (a generic UART fixture on a
+> placeholder memory map — flash at `0x0800_0000`, RAM at `0x2000_0000` — that
+> is not the Apollo4 Plus map). The promoted Apollo4 Plus part is
+> [`amap42kp`](amap42kp.md), and the board package is
+> **[Apollo4 Plus EVB](apollo4p-evb.md)**. The staged descriptor stays only
+> because `crates/core/src/bus/known_stubs.rs` still cites it.
+
 **Architecture:** ARM Cortex-M4F. Ultra-low power MCU with SPOT technology.
 
 ## 1. Dynamic Simulation Validation

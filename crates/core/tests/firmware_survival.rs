@@ -329,6 +329,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"EK-RA6M5 SMOKE\n",
     },
     SurvivalCase {
+        // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
+        // the application vector table at 0x18000 (the secure bootloader owns
+        // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
+        // (GPIO60/47) is the console after the PWRCTRL power handshake; the
+        // smoke walks LED0-LED2 (GPIO30/90/97) with RD readback. SIM-DERIVED.
+        name: "apollo4p_evb_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "amap42kp",
+        system: "apollo4p-evb",
+        fixture: "apollo4p-evb-smoke.elf",
+        valid_pc_ranges: &[(0x0001_8000, 0x001F_FFFF), (0x1000_0000, 0x1005_FFFF)],
+        expected_uart_output: b"APOLLO4P EVB SMOKE\n",
+    },
+    SurvivalCase {
         // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
         // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
         // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the
@@ -2193,6 +2209,40 @@ survival_gate!(
 );
 
 survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
+survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
+
+/// The Apollo4 secure bootloader owns MRAM 0x0-0x17FFF and hands over to the
+/// application vector table at 0x0001_8000. The committed smoke ELF must load
+/// nothing below that, and its vector table must give an SP inside the TCM
+/// and a Thumb reset handler inside the application MRAM.
+#[test]
+fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
+    const APP: u64 = 0x0001_8000;
+    let bytes = std::fs::read(fixtures().join("apollo4p-evb-smoke.elf")).expect("read fixture");
+    let elf = goblin::elf::Elf::parse(&bytes).expect("parse fixture ELF");
+    let loads: Vec<_> = elf
+        .program_headers
+        .iter()
+        .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD && ph.p_filesz > 0)
+        .collect();
+    assert!(
+        loads.iter().all(|ph| ph.p_paddr >= APP),
+        "a segment loads into the bootloader region"
+    );
+    let vt = loads
+        .iter()
+        .find(|ph| ph.p_paddr == APP)
+        .map(|ph| &bytes[ph.p_offset as usize..ph.p_offset as usize + 8])
+        .expect("no segment starts at the 0x18000 vector table");
+    let sp = u32::from_le_bytes(vt[0..4].try_into().unwrap());
+    let reset = u32::from_le_bytes(vt[4..8].try_into().unwrap());
+    assert!((0x1000_0000..=0x1006_0000).contains(&sp), "SP {sp:#x}");
+    assert_eq!(reset & 1, 1, "reset handler must be Thumb");
+    assert!(
+        (0x0001_8000..0x0020_0000).contains(&(reset & !1)),
+        "reset {reset:#x}"
+    );
+}
 
 survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
 

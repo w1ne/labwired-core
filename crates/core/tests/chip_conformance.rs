@@ -154,6 +154,19 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_ek_ra6m5_smoke_survival"),
     },
     ChipConf {
+        // Apollo4 Plus EVB (AMAP42KP-KBR, Cortex-M4F). SIM-DERIVED: no Apollo4
+        // bench part. Modelled: the 128-pin GPIO block (apollo4_gpio,
+        // PADKEY-locked PINCFG + RD/WT/WTS/WTC/EN), PWRCTRL (apollo4_pwrctrl)
+        // and UART0-3 on the pl011 layout. CLKGEN, MCUCTRL, RSTGEN, IOM,
+        // MSPI, ADC, timers, RTC, WDT, security, crypto, GPU/display, SDIO,
+        // USB and audio are declared stubs — see
+        // examples/apollo4p-evb/VALIDATION.md.
+        name: "amap42kp",
+        yaml: "configs/chips/amap42kp.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_apollo4p_evb_smoke_survival"),
+    },
+    ChipConf {
         // FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F). SIM-DERIVED: no K64F bench
         // part. UART-only L1: classic Kinetis UART0-4, Kinetis GPIO A-E and the
         // behavioural MCG FEI block. SIM clock gating, PORT pad mux and MCG PLL
