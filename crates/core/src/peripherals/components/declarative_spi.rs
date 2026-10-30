@@ -1414,8 +1414,8 @@ pub static LORA_SX1278_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     .expect("lora_sx1278.yaml is a valid declarative spi descriptor")
 });
 
-/// RC522 attach kit lives in `components::rc522` (ISO 14443-A). The YAML
-/// descriptor remains embedded for register-shell migration parity.
+// RC522 attach kit lives in `components::rc522` (ISO 14443-A). The YAML
+// descriptor remains embedded for register-shell migration parity.
 
 /// Maxim MAX7219 8×8 LED matrix driver (declarative `max7219.yaml`).
 ///

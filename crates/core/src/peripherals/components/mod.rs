@@ -56,7 +56,6 @@ pub mod iolink_station;
 pub mod lcd1602;
 pub mod max30102;
 pub mod mcp2515;
-pub mod rc522;
 pub mod microsd;
 pub mod mlx90640;
 /// Shared fixture for the per-controller TCA9548A coverage tests. Each I²C
@@ -69,6 +68,7 @@ pub mod nau88l21;
 pub mod ov3660;
 pub mod pca9685;
 pub mod pn532;
+pub mod rc522;
 pub mod rule_machine;
 pub mod sensirion;
 pub mod servo;

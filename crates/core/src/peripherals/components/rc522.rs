@@ -312,10 +312,8 @@ impl Rc522 {
         // HLTA: 0x50 0x00 CRC_A — success is a timeout (no modulation).
         if tx.len() >= 4 && tx[0] == PICC_HLTA && tx[1] == 0x00 {
             let expect_crc = crc_a(&tx[..2]);
-            if tx[2] == expect_crc[0] && tx[3] == expect_crc[1] {
-                if self.picc == PiccState::Active {
-                    self.picc = PiccState::Halt;
-                }
+            if tx[2] == expect_crc[0] && tx[3] == expect_crc[1] && self.picc == PiccState::Active {
+                self.picc = PiccState::Halt;
             }
             self.respond_timeout();
             return;
@@ -531,9 +529,7 @@ static RC522_METADATA: KitMetadata = KitMetadata {
     config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
         name: std::borrow::Cow::Borrowed("cs_pin"),
         ty: ConfigType::Str,
-        doc: std::borrow::Cow::Borrowed(
-            "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4.",
-        ),
+        doc: std::borrow::Cow::Borrowed("SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4."),
     }]),
     labs: std::borrow::Cow::Borrowed(&[]),
 };
