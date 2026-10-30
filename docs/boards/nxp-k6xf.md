@@ -1,5 +1,11 @@
 # Validation Report: nxp-k6xf
 
+> **Superseded.** This is the auto-generated report for the staged
+> `onboarding/nxp-k6xf` descriptor (a generic UART fixture on a placeholder
+> memory map). The promoted K64F part is [`mk64f12`](mk64f12.md), and the board
+> package is **[FRDM-K64F](frdm-k64f.md)**. The staged descriptor stays only
+> because `crates/core/src/bus/known_stubs.rs` still cites it.
+
 **Architecture:** ARMv7-M.
 
 ## 1. Dynamic Simulation Validation

@@ -623,6 +623,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
         "stm32l552",
+        // FRDM-K64F UART-only L1: chip + system + example with an io-smoke, a
+        // committed fixture and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential. ENET/TCP deferred.
+        "mk64f12",
         // First STM32F0 part (STM32F072B-DISCO): chip + system + example with
         // an io-smoke, a committed fixture and a survival gate; no catalog
         // board, no silicon capture and no executing-fidelity differential.

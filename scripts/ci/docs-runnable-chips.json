@@ -503,6 +503,10 @@
     "stm32l552": {
       "how": "needs-build",
       "why": "The STM32L5 part (and the new stm32l5 RCC profile) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/nucleo-l552ze-q-smoke.elf prints 'NUCLEO-L552ZE-Q SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "mk64f12": {
+      "how": "needs-build",
+      "why": "The MK64F12 descriptor is newer than the released CLI this gate installs. The committed smoke tests/fixtures/frdm-k64f-smoke.elf prints 'FRDM-K64F SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }
