@@ -579,6 +579,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // PIC24 core. Same rationale: no bundled-configs.ts board and no
         // silicon oracle yet.
         "dspic33fj32mc202",
+        // First PIC18 part on the public PIC18 core: L1 boot + EUSART TX +
+        // PORTB latch from real SDCC firmware. No bundled-configs.ts board,
+        // no silicon oracle and no executing-fidelity differential yet.
+        "pic18f4520",
         // PIC24F KA family: six exact part descriptors plus per-part XC16 UART
         // smokes on the public PIC24 core. The modelled slice is package GPIO
         // and UART1 only; no bundled-configs.ts catalog board, no silicon

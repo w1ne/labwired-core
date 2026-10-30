@@ -1598,6 +1598,26 @@
         "lane": "none"
       }
     },
+    "pic18f4520": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic18f4520_smoke.rs",
+        "test": "sdcc_firmware_boots_and_prints_the_banner",
+        "signal": "the committed SDCC 4.4.0 ELF boots on pic18f4520 and writes 'PIC18F4520 OK' / 'LED=1' / 'TOGGLE OK' through the EUSART TXREG (0xFAD); examples/pic18f4520/io-smoke.yaml asserts the same ordered output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic18f4520_smoke; strict_onboarding examples/pic18f4520/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The PIC18 model has no MSSP; SPI is not modelled for this part.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The PIC18 model has no MSSP; I2C is not modelled for this part.",
+        "lane": "none"
+      }
+    },
     "pic24f04ka200": {
       "in_boards": false,
       "uart": {
