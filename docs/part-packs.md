@@ -1315,10 +1315,11 @@ different facts.
   to stay bug-compatible with it forever. A stub in YAML is three lines of
   `register_file:` that a customer can fork. They are **ported** —
   `lora_sx1278.yaml`, `nrf24l01.yaml`, `rc522.yaml` — and what is still missing
-  is stated in each descriptor's own header rather than in this list. The rule
-  that survives is the one about the FAKE: nothing invents a packet, a tag or an
-  RSSI, and `nrf24l01.yaml` says in its first paragraph that a `write()` waiting
-  on TX_DS waits forever.
+  is stated in each descriptor's own header rather than in this list. (RC522
+  later returned to a hand-written kit for ISO 14443-A CL1; the YAML is kept for
+  register-shell parity only.) The rule that survives is the one about the FAKE:
+  nothing invents a packet, a tag or an RSSI, and `nrf24l01.yaml` says in its
+  first paragraph that a `write()` waiting on TX_DS waits forever.
 - **MCP2515** — the SPI and register half is expressible, but the part's reason
   to exist is `attach_can_bus`: a `Sender`/`Receiver` pair of `CanFrame`s the
   engine hands it, plus `poll_external_bus`. That is an engine SEAM, not a
@@ -1369,7 +1370,8 @@ bus write. A SPI part's address comes out of the command byte and its walk is
 `framing.auto_increment`, so those three keys would be dead fields a descriptor
 could set and have ignored.
 
-Proved by **`lora_sx1278.yaml`**, **`rc522.yaml`** and **`nrf24l01.yaml`**.
+Proved by **`lora_sx1278.yaml`**, **`rc522.yaml`** (shell transcript only; live
+attach is the Rust ISO 14443-A kit) and **`nrf24l01.yaml`**.
 
 ### `spi.framing.op_mask` / `op_read` / `op_write` — an OPCODE command byte
 
