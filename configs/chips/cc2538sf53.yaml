@@ -25,8 +25,10 @@
 # - clock `cc2538_sys_ctrl`     — CLOCK_CTRL/CLOCK_STA and the RCGC/SCGC/DCGC
 #   gate banks at their Table 7-3 reset values; CLOCK_STA.SYNC_32K from the
 #   cycle clock.
-# - `cc2538_rfcore`             — the 802.15.4 radio alone in an empty
-#   channel (crates/core/src/peripherals/cc2538/rfcore.rs).
+# - `cc2538_rfcore`             — the 802.15.4 radio; alone, in an empty
+#   channel; on a world's shared 802.15.4 air (crates/core/src/peripherals/
+#   ieee802154_air.rs), TX/RX with the RX FIFO, frame filtering, AUTOACK and
+#   the RF TX/RX IRQ 141 (crates/core/src/peripherals/cc2538/rfcore.rs).
 # - `cc2538_sleep_timer`        — SMWDTHROSC 32-kHz count + compare IRQ
 #   (crates/core/src/peripherals/cc2538/sleep_timer.rs).
 # - `cc2538_flash_ctrl`         — FLASH_CTRL page erase / word write, CCA
@@ -35,6 +37,9 @@
 #   Table 22-103): two-channel DMA, key store, AES ECB/CBC/CTR/CBC-MAC/CCM/
 #   GCM at 128/192/256 bits, SHA-256, IRQ 143
 #   (crates/core/src/peripherals/cc2538/aes.rs).
+# - `cc2538_udma`               — µDMA (PL230, SWRU319C §10): software-
+#   requested basic/auto transfers, CHIS + IRQ 46
+#   (crates/core/src/peripherals/cc2538/udma.rs).
 #
 # Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
 # GPIO_DATA readback and the five keys' reset pull-up levels — plus stock
@@ -54,11 +59,15 @@
 #   IOC_UARTRXD_UART0): the IOC window is a stub. The firmware writes it as
 #   silicon requires; the console model does not depend on it.
 # - GPIO interrupts (RIS/MIS never set) and the AFSEL commit lock.
-# - RF reception and RF interrupts (nothing is ever received), the watchdog
-#   and sleep-timer capture.
+# - RF: path loss, range and collisions on the air (lossless, every node
+#   hears every other), the CSP, the MAC timer count, source matching and the
+#   RF error IRQ. Without an air nothing is ever received. The watchdog and
+#   sleep-timer capture.
+# - µDMA peripheral requests, CHASGN/CHMAP routing, ping-pong/scatter-gather
+#   and the error IRQ (a channel moves only on a software request).
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
-# - PKA, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
+# - PKA, SSI0/1, I2C, GPTimer0-3, USB,
 #   SoC ADC/analog: declared stubs.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
@@ -254,12 +263,16 @@ peripherals:
     base_address: 0x40033000
     size: "4KB"
   # 2.4-GHz IEEE 802.15.4 RF core (§23): registers, strobes, the timed main
-  # FSM, RSSI/CCA and RFRND of a radio alone in an empty channel. Nothing is
-  # ever received; a sent frame goes nowhere; no RF interrupt is raised.
+  # FSM, RSSI/CCA and RFRND. Alone, a radio in an empty channel (nothing is
+  # received, a sent frame goes nowhere). On a world's shared 802.15.4 air
+  # it sends and receives: RX FIFO, frame filtering, AUTOACK, FIFOP/SFD.
+  # RF TX/RX interrupt, IRQ 141 in the regular map (Table 5-2); the RF error
+  # interrupt (142) is not raised.
   - id: "rfcore"
     type: "cc2538_rfcore"
     base_address: 0x40088000
     size: "4KB"
+    irq: 141
     config:
       clock_hz: 16000000
   - id: "usb"
@@ -273,10 +286,13 @@ peripherals:
     base_address: 0x4008B000
     size: "4KB"
     irq: 143
+  # µDMA (§10, a PL230): software-requested basic/auto transfers through the
+  # control table. Software transfer done, IRQ 46 (Table 10-6).
   - id: "udma"
-    type: "stub"
+    type: "cc2538_udma"
     base_address: 0x400FF000
     size: "4KB"
+    irq: 46
   - id: "pka"
     type: "stub"
     base_address: 0x44004000

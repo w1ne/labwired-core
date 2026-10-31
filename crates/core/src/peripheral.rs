@@ -1666,6 +1666,15 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Default no-op: a peripheral with no radio has no air to move.
     fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
 
+    /// Put this peripheral's IEEE 802.15.4 radio on `air` (a world's shared
+    /// 802.15.4 medium). Default no-op: a peripheral with no 802.15.4 radio
+    /// has nothing to attach.
+    fn attach_ieee802154_air(
+        &mut self,
+        _air: crate::peripherals::ieee802154_air::Ieee802154AirBus,
+    ) {
+    }
+
     /// Drive the analog level, in millivolts, on one of this peripheral's ADC
     /// input channels. Returns whether it took it.
     ///
