@@ -5,8 +5,9 @@ The [CC2538DK](https://www.ti.com/tool/CC2538DK) development kit: a
 32 MHz max, 2.4-GHz IEEE 802.15.4 radio) on a SmartRF06 evaluation board. This
 is the **UART+LED L1 slice**, plus **stock Contiki-NG v4.9 hello-world**
 booting through a clean-room boot ROM with the RF core and sleep timer
-modelled. AES/PKA, the flash controller, SSI, I2C, GPTimers, USB, uDMA and the
-ADC are declared stubs.
+modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
+cryptoprocessor (the Contiki-NG crypto suite). PKA, SSI, I2C, GPTimers, USB,
+uDMA and the ADC are declared stubs.
 
 ## What runs here
 
@@ -67,6 +68,27 @@ AND rule), CCA page-lock bits and the lock-bit page's `UPPER_PAGE_ACCESS`.
   pattern write, page erase, two-page erase). It reports `FLASH SIZE:
   0x80000`, what a CC2538SF53's `DIECFG0` gives; Renode prints `0x10000`
   because its model returns the instant-of-reset `DIECFG0`.
+
+### Crypto: the AES/SHA-256 cryptoprocessor
+
+The `cc2538_aes` model (`crates/core/src/peripherals/cc2538/aes.rs`, SWRU319C
+§22.2) moves data with its own two-channel DMA, loads keys through the key
+store and raises the level AES interrupt (IRQ 143). The **unmodified**
+Contiki-NG v4.9 `examples/platform-specific/cc2538-common/crypto` suite runs
+on it, each test from its own fixture, every vector printing `... OK`:
+
+| script | vectors | Renode `cc2538_cryptoprocessor.robot` |
+|---|---|---|
+| `crypto-cbc.yaml` | 16 AES-CBC | "Should Handle CBC Mode" (superset) |
+| `crypto-cbc-mac.yaml` | 16 AES-CBC-MAC | "Should Handle CBC MAC Mode" (superset) |
+| `crypto-ctr.yaml` | 6 AES-CTR | "Should Handle CTR Mode" (superset) |
+| `crypto-ccm.yaml` | 22 AES-CCM, incl. AAD-only and `mic_len` 0 | "Should Handle CCM Mode" (superset) |
+| `crypto-ecb.yaml` | 16 AES-ECB | not in Renode's test |
+| `crypto-gcm.yaml` | 8 + 8 AES-GCM | not in Renode's test |
+| `crypto-sha256.yaml` | 9 SHA-256, intermediate digests resumed | not in Renode's test |
+
+Renode's test loads a TI ROM dump and two flip-flop stubs; these run through
+LabWired's clean-room ROM and the SYS_CTRL model.
 
 ## Build and run
 
@@ -134,11 +156,12 @@ hb=0 yellow=1 green=0 orange=0
   filtering, the CSP program, the MAC timer count and the analog front end are
   not modelled.
 - **ROM:** no serial boot loader (an invalid CCA parks in WFI), no backdoor
-  pin, no RAM BIST; `PageErase`/`ProgramFlash` return -1 and change nothing.
-  `GetChipId`/`GetFlashSize` return SF53 constants.
+  pin, no RAM BIST. `PageErase`/`ProgramFlash` drive the flash controller;
+  `GetChipId`/`GetFlashSize` read `DIECFG0`.
 - **Sleep timer:** the watchdog never bites, and capture is not modelled. The
   32-kHz rate assumes the CPU runs at `clock_hz` (16 MHz).
-- **AES/PKA, flash controller, SSI0/1, I2C, GPTimer0-3, USB, uDMA, SoC ADC**
-  are declared stubs.
+- **Cryptoprocessor:** the slave-interface (non-DMA) data path, `KEY2`/`KEY3`,
+  pulse interrupts and processing latency are not modelled.
+- **PKA, SSI0/1, I2C, GPTimer0-3, USB, uDMA, SoC ADC** are declared stubs.
 
 See `VALIDATION.md` for the tier table.

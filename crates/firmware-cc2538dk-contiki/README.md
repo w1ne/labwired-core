@@ -10,6 +10,7 @@ TI **CC2538SF53** (CC2538DK: CC2538EM on a SmartRF06 EB, Cortex-M3):
 | `cc2538dk-contiki-test-cfs.elf` | `examples/storage/cfs-coffee` `test-cfs` | a 65 000-byte Coffee file written, read back and appended through ROM `PageErase`/`ProgramFlash` and the flash controller |
 | `cc2538dk-contiki-coffee.elf`  | `examples/storage/cfs-coffee` `example-coffee` | Coffee file write, read, append and directory listing |
 | `cc2538dk-contiki-flash-test.elf` | `flash-test/` (this directory, MIT) | the steps of Renode's `cc2538_flash_controller.robot` on the ROM utility API |
+| `cc2538dk-contiki-crypto-<t>.elf`, t = `ecb` `cbc` `ctr` `cbc-mac` `gcm` `ccm` `sha256` | `examples/platform-specific/cc2538-common/crypto` `<t>-test` | every vector of the AES/SHA-256 suite through the key store, the cryptoprocessor DMA and the AES interrupt; cbc/cbc-mac/ctr/ccm print the lines Renode's `cc2538_cryptoprocessor.robot` waits for |
 
 This is the binary the Renode `cc2538_single-node.robot` test runs (Renode
 fetches a prebuilt one and loads a TI ROM dump; LabWired runs its own
@@ -32,7 +33,7 @@ application). hello-world exercises:
 ## Build
 
 ```sh
-./build.sh          # -> tests/fixtures/cc2538dk-contiki-{hello,test-cfs,coffee,flash-test}.elf
+./build.sh          # -> tests/fixtures/cc2538dk-contiki-{hello,test-cfs,coffee,flash-test,crypto-*}.elf
 ```
 
 Requirements: `arm-none-eabi-gcc` and git. The script clones Contiki-NG
