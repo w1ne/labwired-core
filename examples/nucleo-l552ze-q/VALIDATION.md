@@ -92,6 +92,38 @@ cargo test -p labwired-core --test firmware_survival l552
 #   instructions_executed 1999998 · unsupported_total 0
 ```
 
+### Stock Zephyr synchronization (verified 2026-10-31)
+
+Unmodified upstream Zephyr v3.7.0 `samples/synchronization` for the same
+board target, built by the same script (which pins the Zephyr module list, so
+the hello fixture above still rebuilds to `f5909069…`). Two threads hand a
+semaphore back and forth; each prints, busy-waits 100 ms (`k_busy_wait`,
+11 M cycles at Zephyr's 110 MHz clock) and then sleeps 500 ms on the SysTick
+system timer. The `thread_b` line needs the SysTick timeout wake, the
+semaphore give/take and a PendSV context switch; the second `thread_a` line
+needs a full a -> b -> a round. No model change was needed.
+
+```bash
+crates/firmware-l552ze-zephyr/build.sh
+#   sha256 45229cd392a0b1378145022519ed7db22e58fb2e104f034739f57d9bb353f0de
+#   (two rebuilds, identical)
+
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-sync.yaml
+#   *** Booting Zephyr OS build v3.7.0 ***
+#   thread_a: Hello World from cpu 0 on nucleo_l552ze_q!
+#   thread_b: Hello World from cpu 0 on nucleo_l552ze_q!
+#   thread_a: Hello World from cpu 0 on nucleo_l552ze_q!
+#   PASS  2/2 checks · zephyr-sync · 30000000 steps
+
+# Determinism: two runs with --output-dir; uart.log and snapshot.json cmp clean
+# Negative control: max_steps 8000000 stops before the timeout round -> FAIL 1/2
+
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/stm32l552-zephyr-sync.elf \
+  --system configs/systems/nucleo-l552ze-q.yaml --max-steps 30000000 ...
+#   unsupported_total 0
+```
+
 Path exercised by the unpatched Zephyr bring-up: ICACHE enable, DBGMCU,
 the L5 RCC MSI range 6 (4 MHz) -> PLL (`M=1 N=55 R=2`, 110 MHz) switch with
 the `SWS` handshake, `PWR_CR2.IOSV` (VDDIO2, written by Zephyr's GPIO
