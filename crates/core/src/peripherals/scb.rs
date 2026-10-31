@@ -38,8 +38,8 @@ pub struct ScbFaultState {
     pub cfsr: AtomicU32,
     /// HFSR (0xE000ED2C) — HardFault Status. Write-1-to-clear.
     pub hfsr: AtomicU32,
-    /// MMFAR (0xE000ED34) — MemManage Fault Address. Stored for round-trip; the
-    /// MPU is not enforced, so nothing in the model ever writes it.
+    /// MMFAR (0xE000ED34) — MemManage Fault Address. Written by the core on a
+    /// data access an enforcing Armv8-M MPU denies (`armv8m_mpu`).
     pub mmfar: AtomicU32,
     /// BFAR (0xE000ED38) — BusFault Address.
     pub bfar: AtomicU32,
@@ -49,6 +49,15 @@ pub struct ScbFaultState {
     pub ccr_div_0_trp: AtomicBool,
 }
 
+/// `SHCSR.MEMFAULTENA`, bit 16 (ARMv7-M ARM B3.2.13).
+pub const SHCSR_MEMFAULTENA: u32 = 1 << 16;
+/// `CFSR.MMFSR.IACCVIOL` — MMFSR bit 0 (B3.2.15): an instruction fetch the MPU
+/// denied. MMFAR is not written.
+pub const CFSR_MMFSR_IACCVIOL: u32 = 1 << 0;
+/// `CFSR.MMFSR.DACCVIOL` — MMFSR bit 1 (B3.2.15): a data access the MPU denied.
+pub const CFSR_MMFSR_DACCVIOL: u32 = 1 << 1;
+/// `CFSR.MMFSR.MMARVALID` — MMFSR bit 7 (B3.2.15): MMFAR holds the address.
+pub const CFSR_MMFSR_MMARVALID: u32 = 1 << 7;
 /// `SHCSR.BUSFAULTENA`, bit 17 (ARMv7-M ARM B3.2.13).
 pub const SHCSR_BUSFAULTENA: u32 = 1 << 17;
 /// `CFSR.BFSR.PRECISERR` — BFSR bit 1, i.e. CFSR bit 9 (B3.2.15).

@@ -34,9 +34,8 @@
 # NUCLEO-L552ZE-Q board map. SIM-DERIVED (no STM32L552 bench part).
 #
 # Explicitly NOT modelled here (see docs/boards/nucleo-l552ze-q.md):
-# - TrustZone / SAU / GTZC / secure-vs-non-secure aliasing, MPU/PMSAv8
-#   enforcement, TT/TTA. The Cortex-M33 core stores the MPU registers but does
-#   not enforce them (docs/isa_coverage.md).
+# - TrustZone / SAU / GTZC / secure-vs-non-secure aliasing (TT's SAU/IDAU
+#   fields read 0). The PMSAv8 MPU below is enforced (docs/isa_coverage.md).
 # - The L5 non-secure FLASH controller, EXTI (L5 has its own 64-line block),
 #   FDCAN1, ADC1/ADC2 and USB FS are declared as stubs. The `flash:` memory
 #   region below still boots/executes; only the controller register file is a
@@ -111,8 +110,9 @@ peripherals:
     size: "28B"
 
   # Cortex-M33 PMSAv8 MPU, 8 regions (RM0438 "Memory protection unit"; DDI
-  # 0553 B3.5): per-region RBAR/RLAR + aliases, stored and reported by TT, not
-  # enforced. Zephyr's Armv8-M MPU driver finds a stack's static region by TT.
+  # 0553 B3.5): per-region RBAR/RLAR + aliases, reported by TT and enforced
+  # (MemManage). Zephyr's Armv8-M MPU driver finds a stack's static region by
+  # TT; Zephyr mem_protect/protection relies on the enforcement.
   - id: "mpu"
     type: "armv8m_mpu"
     base_address: 0xE000ED90

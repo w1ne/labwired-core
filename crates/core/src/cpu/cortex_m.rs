@@ -7,9 +7,11 @@
 use crate::bus::SystemBus;
 use crate::decoder::arm::{decode_thumb_16, decode_thumb_32, Instruction};
 use crate::fault_verdict::{FaultCapture, FaultEntry, FaultRegs, LockupEntry, StackedFrame};
+use crate::peripherals::armv8m_mpu::{CTRL_HFNMIENA, PERM_EXEC, PERM_READ, PERM_WRITE};
 use crate::peripherals::scb::{
-    ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, CFSR_UFSR_DIVBYZERO,
-    CFSR_UFSR_UNDEFINSTR, HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_USGFAULTENA,
+    ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, CFSR_MMFSR_DACCVIOL,
+    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_UNDEFINSTR,
+    HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
 };
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -191,6 +193,15 @@ pub struct CortexM {
     ///
     /// Only ever written on the error path, so a clean step costs nothing.
     pending_data_fault: Option<u32>,
+    /// Set when the Armv8-M MPU denied an access (`mpu_allows`), so
+    /// `step_internal` raises MemManage instead of BusFault. Only ever
+    /// written on the error path.
+    pending_mem_manage: Option<MemManageCause>,
+    /// The last MPU decision for a data access and for a fetch, reused while
+    /// the address stays in its span and the MPU generation and privilege are
+    /// unchanged. Derived state: never snapshotted.
+    mpu_data_span: MpuSpanCache,
+    mpu_fetch_span: MpuSpanCache,
     /// Set when decode reached an instruction this model does not implement, so
     /// `step_internal` can raise UsageFault instead of returning the bare
     /// `DecodeError`.
@@ -325,6 +336,9 @@ impl Default for CortexM {
             fp_ctx: None,
             mpu_v8: None,
             pending_data_fault: None,
+            pending_mem_manage: None,
+            mpu_data_span: MpuSpanCache::default(),
+            mpu_fetch_span: MpuSpanCache::default(),
             pending_undef_instruction: false,
             pending_div0: false,
             fault_entry: None,
@@ -593,6 +607,26 @@ pub fn vfp_fma(a_bits: u32, b_bits: u32, c_bits: u32, neg_a: bool, neg_c: bool, 
     } else {
         result
     }
+}
+
+/// Why the MPU refused an access (MMFSR, ARMv7-M ARM B3.2.15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MemManageCause {
+    /// DACCVIOL + MMARVALID, MMFAR = the address.
+    Data(u32),
+    /// IACCVIOL: an instruction fetch from an execute-never address.
+    Fetch,
+}
+
+/// One cached [`crate::peripherals::armv8m_mpu::MpuSpan`]; `generation` 0
+/// is "empty" (the MPU's counter starts at 1).
+#[derive(Debug, Clone, Copy, Default)]
+struct MpuSpanCache {
+    generation: u32,
+    privileged: bool,
+    lo: u32,
+    hi: u32,
+    perms: u8,
 }
 
 impl CortexM {
@@ -2523,6 +2557,10 @@ impl CortexM {
         if bus.requires_cycle_accurate() {
             return false;
         }
+        // Compiled blocks bypass the MPU check in `load`/`store`/fetch.
+        if self.mpu_enforcing() {
+            return false;
+        }
         if let Some(sb) = bus
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
@@ -3188,7 +3226,8 @@ impl Cpu for CortexM {
             let t16_ram_fast = observers.is_empty()
                 && sysbus.observers.is_empty()
                 && tap.is_none()
-                && !trace_insn_enabled();
+                && !trace_insn_enabled()
+                && !self.mpu_enforcing();
             while executed < max_count {
                 // End the batch early when a takeable exception is pending:
                 // its priority must be strictly higher (smaller number) than
@@ -3442,6 +3481,9 @@ impl CortexM {
     /// see [`CortexM::bus_load`].
     #[inline(always)]
     fn load<B: Bus + ?Sized>(&mut self, bus: &B, addr: u32, width: AccessWidth) -> SimResult<u32> {
+        if self.mpu_v8.is_some() && !self.mpu_allows(addr, PERM_READ, false) {
+            return Err(self.latch_mpu_denial(addr));
+        }
         match Self::bus_load(bus, addr, width) {
             Err(SimulationError::MemoryViolation(a)) => {
                 self.pending_data_fault = Some(a as u32);
@@ -3462,6 +3504,9 @@ impl CortexM {
         width: AccessWidth,
         value: u32,
     ) -> SimResult<()> {
+        if self.mpu_v8.is_some() && !self.mpu_allows(addr, PERM_WRITE, false) {
+            return Err(self.latch_mpu_denial(addr));
+        }
         match Self::bus_store(bus, addr, width, value) {
             Err(SimulationError::MemoryViolation(a)) => {
                 self.pending_data_fault = Some(a as u32);
@@ -3654,6 +3699,134 @@ impl CortexM {
         true
     }
 
+    /// The Armv8-M MPU access check for one access by the current code
+    /// (`mpu_v8` must be `Some`). Privileged is Handler mode or CONTROL.nPRIV
+    /// clear. A hit in the cached span costs four compares; anything else,
+    /// and every access at a negative execution priority (where HFNMIENA
+    /// decides whether the MPU applies at all), resolves the region file.
+    #[inline(always)]
+    fn mpu_allows(&mut self, addr: u32, need: u8, fetch: bool) -> bool {
+        let privileged = self.active_exception != 0 || self.control & 1 == 0;
+        let negative_priority = self.faultmask || matches!(self.active_exception, 2 | 3);
+        let generation = self.mpu_v8.as_deref().map_or(0, |m| m.generation());
+        let slot = if fetch {
+            &self.mpu_fetch_span
+        } else {
+            &self.mpu_data_span
+        };
+        if !negative_priority
+            && slot.generation == generation
+            && slot.privileged == privileged
+            && addr >= slot.lo
+            && addr <= slot.hi
+        {
+            return slot.perms & need == need;
+        }
+        self.mpu_resolve(addr, need, fetch, privileged, negative_priority)
+    }
+
+    #[inline(never)]
+    fn mpu_resolve(
+        &mut self,
+        addr: u32,
+        need: u8,
+        fetch: bool,
+        privileged: bool,
+        negative_priority: bool,
+    ) -> bool {
+        let Some(mpu) = self.mpu_v8.as_deref() else {
+            return true;
+        };
+        let bypass = negative_priority && mpu.ctrl() & CTRL_HFNMIENA == 0;
+        let span = mpu.resolve(addr, privileged, bypass);
+        if !negative_priority {
+            let entry = MpuSpanCache {
+                generation: mpu.generation(),
+                privileged,
+                lo: span.lo,
+                hi: span.hi,
+                perms: span.perms,
+            };
+            if fetch {
+                self.mpu_fetch_span = entry;
+            } else {
+                self.mpu_data_span = entry;
+            }
+        }
+        span.perms & need == need
+    }
+
+    /// Record a data access [`CortexM::mpu_allows`] refused. Unprivileged
+    /// code touching the PPB is a precise BusFault (ARMv8-M ARM B3.5.1, the
+    /// PPB is privileged-only); anything else the MPU denied is MemManage.
+    #[cold]
+    fn latch_mpu_denial(&mut self, addr: u32) -> SimulationError {
+        if crate::peripherals::armv8m_mpu::is_ppb(addr) {
+            self.pending_data_fault = Some(addr);
+        } else {
+            self.pending_mem_manage = Some(MemManageCause::Data(addr));
+        }
+        SimulationError::MemoryViolation(u64::from(addr))
+    }
+
+    /// True while an Armv8-M MPU is enabled. The Thumb-1 fast paths and the
+    /// JIT read and write memory without going through [`CortexM::load`] /
+    /// [`CortexM::store`], so they stand down.
+    #[inline(always)]
+    fn mpu_enforcing(&self) -> bool {
+        self.mpu_v8.as_deref().is_some_and(|m| m.enabled())
+    }
+
+    /// ARMv7-M B1.5.14 escalation for an access the **MPU denied**.
+    ///
+    /// Same shape as [`CortexM::escalate_precise_data_fault`], with MemManage
+    /// (exception 4, enabled by `SHCSR.MEMFAULTENA`) in place of BusFault:
+    ///
+    /// * data access: `CFSR.MMFSR.DACCVIOL` + `MMARVALID`, `MMFAR` = address;
+    /// * instruction fetch: `CFSR.MMFSR.IACCVIOL`, MMFAR not written.
+    ///
+    /// The stacked PC is the faulting instruction either way. Returns `false`
+    /// for LOCKUP (B1.5.15).
+    fn escalate_mem_manage(&mut self, cause: MemManageCause) -> bool {
+        let Some(faults) = self.faults.clone() else {
+            return false;
+        };
+        match cause {
+            MemManageCause::Data(addr) => {
+                faults.cfsr.fetch_or(
+                    CFSR_MMFSR_DACCVIOL | CFSR_MMFSR_MMARVALID,
+                    Ordering::Relaxed,
+                );
+                faults.mmfar.store(addr, Ordering::Relaxed);
+            }
+            MemManageCause::Fetch => {
+                faults.cfsr.fetch_or(CFSR_MMFSR_IACCVIOL, Ordering::Relaxed);
+            }
+        }
+        let memfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_MEMFAULTENA != 0;
+        let exec_prio = self.execution_priority();
+        let target = if memfault_enabled && self.exception_priority(4) < exec_prio {
+            4
+        } else {
+            faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
+            3
+        };
+        if self.exception_priority(target) >= exec_prio {
+            return false; // LOCKUP
+        }
+        if trace_exc_enabled() {
+            eprintln!(
+                "EXC mpu fault {:?} -> exc={} pc=0x{:08X}",
+                cause, target, self.pc
+            );
+        }
+        if self.vector_catch_halts(crate::peripherals::scs_debug::DEMCR_VC_MMERR, target) {
+            return true;
+        }
+        self.set_exception_pending(target);
+        true
+    }
+
     /// ARMv7-M B1.5.14 escalation for an **undefined instruction**.
     ///
     /// Same shape as [`CortexM::escalate_precise_data_fault`], with UsageFault
@@ -3732,10 +3905,12 @@ impl CortexM {
                 let undef = std::mem::take(&mut self.pending_undef_instruction);
                 let div0 = std::mem::take(&mut self.pending_div0);
                 let data = self.pending_data_fault.take();
+                let mpu = self.pending_mem_manage.take();
                 if !self.faults_enabled() {
                     return Err(e);
                 }
                 let escalated = match (data, undef, div0) {
+                    _ if mpu.is_some() => mpu.map(|cause| self.escalate_mem_manage(cause)),
                     (Some(addr), _, _) => Some(self.escalate_precise_data_fault(addr)),
                     // An undefined instruction escalates to UsageFault, or to
                     // HardFault when UsageFault is not enabled. Escalation
@@ -3988,6 +4163,12 @@ impl CortexM {
             }
             // Can't take this exception right now (lower priority than active).
             // Fall through and execute the current instruction normally.
+        }
+        // An MPU-denied fetch (XN region, or no region for unprivileged code)
+        // faults before decode, whether or not the decode is cached.
+        if self.mpu_v8.is_some() && !self.mpu_allows(self.pc & !1, PERM_EXEC, true) {
+            self.pending_mem_manage = Some(MemManageCause::Fetch);
+            return Err(SimulationError::MemoryViolation(u64::from(self.pc)));
         }
         // Fetch/Decode with optional Cache
         // Check the tag through a borrow before copying the cached payload.

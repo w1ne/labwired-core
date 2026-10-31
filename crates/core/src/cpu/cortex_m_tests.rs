@@ -4210,7 +4210,9 @@ fn tt_reports_the_mpu_region() {
     mpu.write_u32(0x08, 5).unwrap(); // RNR
     mpu.write_u32(0x0C, 0x2000_0002).unwrap(); // RBAR
     mpu.write_u32(0x10, 0x2000_FFE1).unwrap(); // RLAR, EN
-    mpu.write_u32(0x04, 1).unwrap(); // CTRL.ENABLE
+                                               // CTRL.ENABLE + PRIVDEFENA: the enforcing MPU must still let the
+                                               // privileged test code at 0x1000 be fetched.
+    mpu.write_u32(0x04, 5).unwrap();
     run_test_instr(&mut cpu, &mut bus, 0xE840_F300, true);
     assert_eq!(cpu.r3, 5 | (1 << 16) | (1 << 18) | (1 << 19));
 

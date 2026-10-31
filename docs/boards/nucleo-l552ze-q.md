@@ -16,17 +16,25 @@ stock `synchronization` runs its two-thread semaphore hand-off on SysTick
 timeouts and PendSV context switches. Stock **`tests/kernel/fpu_sharing/generic`**
 (Renode's `ARMv8M.robot` FPU sharing case) passes 2/2 on the modelled FP
 context (`CONTROL.FPCA`, extended exception frames) and the PMSAv8 MPU
-region file that `TT` reports from. There is
+region file that `TT` reports from. Stock
+**`tests/kernel/mem_protect/protection`** (Renode's `ARMv8M.robot` protection
+case) passes 5/5: the MPU is enforced, so a store to the read-only flash
+region and a fetch from execute-never SRAM raise MemManage. Stock
+**`tests/kernel/mem_protect/userspace`** (Renode's userspace case) passes all
+40 cases in its three suites: user threads run unprivileged, kernel memory and
+the PPB are closed to them, MSR cannot clear `CONTROL.nPRIV`, and `TTT`
+reports the unprivileged view that syscall buffer checks use. All four
+Renode `ARMv8M.robot` cases now run. There is
 no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 
 !!! warning "Not claimed yet"
-    TrustZone / SAU / GTZC and the secure/non-secure split and MPU
-    enforcement are **not modelled**. The PMSAv8 region file is stored and
-    `TT` reports regions from it, but no access is checked and MemManage is
-    never raised ([ISA coverage](../isa_coverage.md)). FP state is stacked
+    TrustZone / SAU / GTZC and the secure/non-secure split are **not
+    modelled**. The PMSAv8 MPU is enforced for data accesses and instruction
+    fetches (MemManage DACCVIOL/IACCVIOL), but MAIR memory types, faults on
+    exception stacking (MSTKERR/MUNSTKERR) and lazy FP preservation (MLSPERR)
+    are not ([ISA coverage](../isa_coverage.md)). FP state is stacked
     eagerly, not lazily (`FPCCR.LSPACT` reads 0). The L5 non-secure FLASH controller,
-    EXTI, ADC, FDCAN and USB are declared stubs. Do not advertise the Zephyr
-    protection/userspace test cases for this part.
+    EXTI, ADC, FDCAN and USB are declared stubs.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -72,7 +80,7 @@ no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 | DBGMCU | `0xE004_4000` | modelled — `IDCODE 0x2001_6472` (DEV_ID 0x472, rev Z) |
 | FLASH controller, EXTI, ADC1, FDCAN1, USB | see descriptor | `type: stub` — zeros (so `FLASH_ACR.LATENCY` does not read back) |
 | FP extension (FPCCR/FPCAR/FPDSCR/MVFR) | `0xE000_EF34` | modelled — `cortex_m_fpu`: `CONTROL.FPCA`, extended frames (eager) |
-| MPU (PMSAv8, 8 regions) | `0xE000_ED90` | stored + reported by `TT` — `armv8m_mpu`; **not enforced** |
+| MPU (PMSAv8, 8 regions) | `0xE000_ED90` | modelled + enforced — `armv8m_mpu`: AP/XN/PRIVDEFENA/HFNMIENA, MemManage with MMFAR; reported by `TT` |
 | TrustZone / SAU / GTZC | — | **not modelled** |
 
 ## Boot path
