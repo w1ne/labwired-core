@@ -29,15 +29,19 @@
 #   RD/WT/WTS/WTC/EN/ENS/ENC banks (crates/core/src/peripherals/apollo4.rs).
 # - power `apollo4_pwrctrl` — MCUPERFREQ request/ack and DEVPWREN mirrored
 #   into DEVPWRSTATUS.
+# - `apollo4_cpu`           — CM4 cache / DAXI control (CPU_BASE): an idle,
+#   always-ready block; CACHECTRL/DAXICTRL actions complete at once.
 #
 # Tier: L1 UART+LED smoke — boot from the post-SBL vector table, UART0
 # console, the EVB LEDs with RD readback and the two buttons' pull-up levels.
 # SIM-DERIVED (no Apollo4 bench part).
 #
 # NOT modelled in this slice:
-# - The boot ROM and the secure bootloader (SBL) in MRAM 0x0-0x17FFF: the
-#   engine finds no valid vector table at the flash base and fast-boots the
-#   ELF at reset_vector_offset 0x18000, which is where the SBL hands over.
+# - The boot ROM beyond the HAL's helper table (memory_regions below: a
+#   clean-room delay/read/write table, MRAM helpers return -1), and the
+#   secure bootloader (SBL) in MRAM 0x0-0x17FFF: the engine finds no valid
+#   vector table at the flash base and fast-boots the ELF at
+#   reset_vector_offset 0x18000, which is where the SBL hands over.
 #   The SBL itself, OTP/INFO0/INFO1 and the secure-boot checks are absent.
 # - CLKGEN / MCUCTRL / RSTGEN: declared stubs. No HFRC/HFRC2/XTAL, no
 #   CLKSEL clock tree, no reset-cause registers. cpu_hz is the LP-mode 96 MHz.
@@ -72,6 +76,17 @@ ram:
 # The secure bootloader owns MRAM 0x0-0x17FFF and starts the application at
 # 0x0001_8000 (Zephyr flash0). The engine does not run the SBL.
 reset_vector_offset: 0x18000
+memory_regions:
+  # Boot ROM, 0x0800_0000 (am_hal_bootrom_helper.c; 4 KiB as in Renode's
+  # ambiq-apollo4.repl). Filled with the in-tree clean-room helper table
+  # (crates/core/roms/apollo4/apollo4_bootrom.S — NOT an Ambiq dump):
+  # br_util_delay_cycles / read_word / write_word; the MRAM helpers return
+  # -1. Set LABWIRED_APOLLO4_BOOTROM to a file to replace it, or to "" to
+  # leave the window zero-filled.
+  - name: "bootrom"
+    base: 0x08000000
+    size: "4KB"
+    image_env: "LABWIRED_APOLLO4_BOOTROM"
 
 pins:
   # Apollo4 Plus EVB wiring (Zephyr boards/ambiq/apollo4p_evb).
@@ -131,6 +146,22 @@ peripherals:
     type: "apollo4_pwrctrl"
     base_address: 0x40021000
     size: "4KB"
+
+  # --- CPU cache / DAXI control (CPU_BASE 0x4800_0000) -------------------
+  # The AmbiqSuite HAL flushes/invalidates DAXI and polls DAXIREADY
+  # (am_hal_cachectrl.c) during am_hal_pwrctrl_low_power_init.
+  - id: "cpu"
+    type: "apollo4_cpu"
+    base_address: 0x48000000
+    size: "4KB"
+
+  # SYNC_READ (am_hal_sysctrl.h): the HAL's bus write-flush is a dummy read
+  # of 0x47FF_0000. On silicon it returns once queued writes drain; here
+  # writes are never queued, so a read-0 window is the whole behaviour.
+  - id: "sync_read"
+    type: "stub"
+    base_address: 0x47FF0000
+    size: "4B"
 
   # --- Declared, not modelled (honest L1 boundary) -----------------------
   - id: "rstgen"
