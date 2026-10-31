@@ -13,7 +13,11 @@ header, then derive the rest of the row:
 * flash words: the end of the last gputils `<part>_g.lkr` code page,
 * port masks: the `RA0..RE7` bit fields the header declares for PORTA-E,
 * memory aliases: the lkr `SHAREBANK` groups (the first range of a group
-  is the backing store; every other range in it aliases that one).
+  is the backing store; every other range in it aliases that one),
+* own SFRs: the bank-2/3 mirror addresses of TMR0/PORTB/OPTION_REG/TRISB
+  (0x101/0x106/0x181/0x186) at which the header defines a register of the
+  part's own (ANSELB at 0x186 on the PIC16F72x), so the model must not
+  mirror them.
 
 Needs a local upstream SDCC 4.4.0 (distribution packages often omit the
 PIC ports) and gputils 1.4.0. Neither is vendored, so CI does not run this
@@ -46,6 +50,11 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 PIC16_RS = REPO / "crates" / "core" / "src" / "cpu" / "pic16.rs"
 
 # SFRs the model implements, at their PIC16F877A addresses (DS39582B).
+# Bank-2/3 mirrors of TMR0, PORTB, OPTION_REG and TRISB in the classic model
+# (`Pic16::canonical`). A part that defines its own register at one of them
+# lists it in its row (`dev_own`).
+MIRRORS = (0x101, 0x106, 0x181, 0x186)
+
 SFRS = {
     "INDF": 0x00, "TMR0": 0x01, "PCL": 0x02, "STATUS": 0x03, "FSR": 0x04,
     "PORTA": 0x05, "PORTB": 0x06, "PORTC": 0x07,
@@ -253,13 +262,19 @@ def geometry(part: str):
             if re.search(rf"unsigned\s+R{port}{bit}\s*:\s*1", h):
                 mask |= 1 << bit
         masks.append(mask)
-    return flash_words, masks, sorted(aliases)
+    defined = {int(a, 16)
+               for a in re.findall(r"#define\s+\w+_ADDR\s+0x([0-9A-Fa-f]+)", h)}
+    own = sorted(a for a in MIRRORS if a in defined)
+    return flash_words, masks, sorted(aliases), own
 
 
 def row(part: str) -> str:
-    flash_words, masks, aliases = geometry(part)
+    flash_words, masks, aliases, own = geometry(part)
     m = ", ".join(f"0x{x:02X}" for x in masks)
     a = ", ".join(f"(0x{s:03X}, 0x{e:03X}, 0x{t:03X})" for s, e, t in aliases)
+    if own:
+        o = ", ".join(f"0x{x:03X}" for x in own)
+        return f'    dev_own("{part}", {flash_words}, [{m}], &[{a}], &[{o}]),'
     return (f'    dev("{part}", {flash_words}, [{m}], &[{a}]),')
 
 
@@ -331,12 +346,14 @@ def committed_rows() -> dict[str, tuple]:
         sys.exit("error: PIC16_DEVICES not found in pic16.rs")
     rows = {}
     for m in re.finditer(
-            r'\bdev\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\],?\s*\)',
+            r'\bdev(_own)?\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
+            r'(?:,\s*&\[([^\]]*)\])?,?\s*\)',
             table[1], re.S):
-        masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[3])]
+        masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[4])]
         aliases = [tuple(int(x, 16) for x in t)
-                   for t in re.findall(r"\(0x(\w+),\s*0x(\w+),\s*0x(\w+)\)", m[4])]
-        rows[m[1]] = (int(m[2]), masks, aliases)
+                   for t in re.findall(r"\(0x(\w+),\s*0x(\w+),\s*0x(\w+)\)", m[5])]
+        own = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[6] or "")]
+        rows[m[2]] = (int(m[3]), masks, aliases, own)
     return rows
 
 
