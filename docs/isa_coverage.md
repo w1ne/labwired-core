@@ -74,7 +74,7 @@ opcodes bubble up as `SimulationError::DecodeError`.
 | FPU (VFPv4)       | `VSQRT`, `VABS`, `VNEG`, `VCMP`, `VCVT`, double-precision Dn/Dm — partial   |
 | Exclusives        | `CLREX` (the LDREX/STREX/LDAEX/STLEX family is implemented)                 |
 | TT / security     | ARMv8-M Security Extension (SAU/IDAU, secure state). `TT`/`TTT`/`TTA`/`TTAT` decode and report the MPU region (MREGION/MRVALID/R/RW) on chips that declare `armv8m_mpu`; the SAU/IDAU fields read 0 |
-| MPU enforcement   | No MPU (PMSAv7 or PMSAv8) checks accesses; MemManage is never raised        |
+| MPU enforcement   | PMSAv7 (Armv7-M) is not enforced. PMSAv8 is enforced on chips that declare `armv8m_mpu` (data accesses + fetches, MemManage DACCVIOL/IACCVIOL); unprivileged PPB access is a BusFault there. MAIR Device-type XN, MSTKERR/MUNSTKERR/MLSPERR and PXN are not. MSR from unprivileged Thread mode writes only the APSR (all Cortex-M) |
 | FP context        | Lazy FP state preservation (`FPCCR.LSPACT`): chips that declare `cortex_m_fpu` track `CONTROL.FPCA` and stack the extended frame eagerly; other chips never stack FP state |
 
 ---

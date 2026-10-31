@@ -17,6 +17,7 @@ pub mod cortex_m_fault_escalation;
 pub mod cortex_m_jit_batch_gates;
 #[cfg(test)]
 pub mod cortex_m_memory_contract;
+pub mod cortex_m_mpu_enforcement;
 #[cfg(test)]
 pub mod device_identity_one_home;
 #[cfg(test)]

@@ -172,6 +172,15 @@ impl CortexM {
     pub(in crate::cpu::cortex_m) fn exec_msr(&mut self, sysm: u8, rn: u8) -> SimResult<PcAdvance> {
         let mut __pc = PcAdvance::Keep;
         let val = self.read_reg(rn);
+        // Unprivileged Thread mode may write only the APSR: MSR to the stack
+        // pointers, PRIMASK, BASEPRI(_MAX), FAULTMASK and CONTROL is ignored
+        // (ARMv7-M ARM B5.2.3 / ARMv8-M ARM `MSR` pseudocode, all under
+        // `CurrentModeIsPrivileged()`). That is what keeps user code from
+        // clearing CONTROL.nPRIV (Zephyr userspace `test_write_control`).
+        let privileged = self.active_exception != 0 || self.control & 1 == 0;
+        if !privileged && sysm >= 0x08 {
+            return Ok(PcAdvance::Add4);
+        }
         match sysm {
             0x08 => {
                 // MSP bank. If MSP is the live stack, update `sp` too.

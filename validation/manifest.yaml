@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 13740f226d51a531cbea0a259223edaf6bc0dfee867e951e4822a5d097f246df
+    drift_ack_digest: 7ee67267bb0669a0b73074f335da30363bbd17d55d9fcec10c53d237c9bf579b
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -673,6 +673,14 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -996,7 +1004,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 13740f226d51a531cbea0a259223edaf6bc0dfee867e951e4822a5d097f246df
+    drift_ack_digest: 7ee67267bb0669a0b73074f335da30363bbd17d55d9fcec10c53d237c9bf579b
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1215,6 +1223,14 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -1685,7 +1701,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: f4cccca7964baf00cdff4d3a9efdf54e88f6cdeeca4419f8733e0ec3e2dae578
+    drift_ack_digest: e0bfa3c5c58665d26e5bdd215056efb1f293c2ad54f60de98efa5a09fdfefbbb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2272,6 +2288,14 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -3719,7 +3743,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: a1c838c3ba6a5d36997b110b1ead61545045bc29cd834c81f0dfce04e5587dad
+    drift_ack_digest: e6de21e9848adbf16a198cd243e9b3b236dd639cd406156760e8ef7a1f1c6235
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4294,6 +4318,14 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -4711,7 +4743,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: c05664ae944b4c736202acbbe3ccbff9e36ce9debee1a6c0f01cccb27c51beec
+    drift_ack_digest: 5b1bc1d5eab97acc545160db765ef1a8e65973b42241670ecbd31a1c6e3ca9b0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5219,6 +5251,14 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -5694,7 +5734,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 5338bdd51061703797518f9d8b9d67f56d1d10db9b5fcecb0c47dda20ae331b0
+    drift_ack_digest: 938c027a69b2f3a06df21fef11cd05e143c2418b946be26bf1690c0553e2c88b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6272,6 +6312,14 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -6710,7 +6758,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 0cce096d301d23e24e208b83b4c4912b504ebdb129cfecd2170b9a98d1be85dd
+    drift_ack_digest: 3948bffd85cf7a3ca1642fb983b5664da1cd82d4d4157377edc9590f54031c63
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7227,6 +7275,14 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+    # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+    # cores given an `armv8m_mpu` region file. This board declares none, so
+    # every access takes the unchanged path (one `Option` test). MSR from
+    # unprivileged Thread mode now writes only the APSR (architectural on
+    # every Cortex-M); privileged code, which is all this board's firmware
+    # runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+    # remains pending.
     # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
     # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
     # file) blocks, and the Armv8-M TT instruction. This board declares
@@ -9468,7 +9524,7 @@ boards:
     # MSI boot, APB1ENR2.LPUART1EN), v2 GPIO, LPUART1/USART1-3/UART4-5, SPI
     # v2 FIFO, v2 I2C, timers, DMA/DMAMUX, RNG/CRC/RTC/IWDG/WWDG and PWR.
     # FLASH controller, EXTI, ADC, FDCAN and USB are declared stubs.
-    # TrustZone/SAU/GTZC and MPU/PMSAv8 enforcement are NOT modelled.
+    # TrustZone/SAU/GTZC are NOT modelled.
     # 2026-10-30: stock Zephyr v3.7.0 samples/hello_world for
     # nucleo_l552ze_q boots and prints over LPUART1
     # (tests/fixtures/stm32l552-zephyr-hello.elf, rebuilt byte-identical by
@@ -9478,6 +9534,12 @@ boards:
     # (tests/fixtures/stm32l552-zephyr-sync.elf, same build script):
     # SysTick k_msleep timeouts, semaphore hand-off and PendSV switches,
     # asserted by examples/nucleo-l552ze-q/zephyr-sync.yaml in ci/test.sh.
+    # 2026-10-31 (feat/l552-mpu-protection): the PMSAv8 MPU is enforced
+    # (armv8m_mpu + cortex_m.rs: MemManage DACCVIOL/MMFAR, IACCVIOL); stock
+    # Zephyr tests/kernel/mem_protect/protection passes 5/5 and
+    # tests/kernel/mem_protect/userspace 40/40 (PPB privileged-only,
+    # unprivileged MSR ignored, TTT R/RW), zephyr-protection.yaml and
+    # zephyr-userspace.yaml in ci/test.sh: all four Renode ARMv8M.robot cases.
     # SIM-DERIVED — no STM32L552 bench part. See
     # docs/boards/nucleo-l552ze-q.md and
     # examples/nucleo-l552ze-q/VALIDATION.md.
@@ -9510,6 +9572,7 @@ boards:
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/cortex_m_fpu.rs
       - crates/core/src/peripherals/armv8m_mpu.rs
+      - crates/core/src/peripherals/scb.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
