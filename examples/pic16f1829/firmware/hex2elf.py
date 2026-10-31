@@ -11,7 +11,7 @@ firmware from ELF images stamped EM_MCHP_PIC (204), the machine value
 Microchip's XC8 uses. This tool copies the HEX data records byte for byte
 into one PT_LOAD segment per contiguous run (p_paddr = p_vaddr = the HEX
 byte address, entry 0 = the reset vector). It adds no code and changes no
-byte; `crates/core/tests/pic16f877a_smoke.rs` checks that the ELF payload
+byte; `crates/core/tests/pic16f1829_smoke.rs` checks that the ELF payload
 equals the HEX.
 
 Usage: hex2elf.py IN.hex OUT.elf

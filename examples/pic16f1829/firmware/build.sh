@@ -5,7 +5,7 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Rebuild the PIC16F877A smoke firmware.
+# Rebuild the PIC16F1829 smoke firmware.
 #
 # Toolchain (pinned; the committed image was built with exactly these):
 #   - SDCC 4.4.0 upstream amd64 release (sdcc-4.4.0-amd64-unknown-linux2.5,

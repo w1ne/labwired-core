@@ -1461,10 +1461,12 @@ impl Pic16 {
         }
         if self.enhanced {
             for (i, reg) in Self::SHADOWED.iter().enumerate() {
-                let v = if *reg == SFR_WREG {
-                    self.wreg
-                } else {
-                    self.data[usize::from(*reg)]
+                let v = match *reg {
+                    SFR_WREG => self.wreg,
+                    // STATUS_SHAD holds only C, DC and Z: TO and PD are
+                    // not shadowed (DS40001440E section 7.5).
+                    SFR_STATUS => self.data[usize::from(SFR_STATUS)] & STATUS_ALU,
+                    _ => self.data[usize::from(*reg)],
                 };
                 self.data[usize::from(SFR_STATUS_SHAD) + i] = v;
             }
@@ -1837,10 +1839,15 @@ impl Pic16 {
                 }
                 for (i, reg) in Self::SHADOWED.iter().enumerate() {
                     let v = self.data[usize::from(SFR_STATUS_SHAD) + i];
-                    if *reg == SFR_WREG {
-                        self.wreg = v;
-                    } else {
-                        self.data[usize::from(*reg)] = v;
+                    match *reg {
+                        SFR_WREG => self.wreg = v,
+                        // Keep the live TO/PD: RETFIE must not undo a
+                        // CLRWDT/SLEEP executed inside the ISR.
+                        SFR_STATUS => {
+                            let st = &mut self.data[usize::from(SFR_STATUS)];
+                            *st = (*st & !STATUS_ALU) | (v & STATUS_ALU);
+                        }
+                        _ => self.data[usize::from(*reg)] = v,
                     }
                 }
                 self.data[usize::from(SFR_INTCON)] |= INTCON_GIE;
@@ -2782,6 +2789,48 @@ mod tests {
         assert_eq!(cpu.fsr(0), 0x1234);
         assert_ne!(cpu.status() & STATUS_C, 0);
         assert_ne!(cpu.read_data(SFR_INTCON) & INTCON_GIE, 0);
+    }
+
+    #[test]
+    fn retfie_keeps_live_to_pd() {
+        // DS40001440E section 7.5: STATUS is shadowed except TO and PD. Main
+        // sleeps (PD = 0), wakes on INTF with GIE = 0, then sets GIE and is
+        // vectored; the ISR's CLRWDT sets PD = 1, which RETFIE must keep.
+        let mut words = vec![0u16; 0x20];
+        words[0] = 0x2810; // GOTO 0x10
+        words[4] = 0x0064; // CLRWDT
+        words[5] = bcf(0x0B, 1); // INTF
+        words[6] = 0x0009; // RETFIE
+        let main = [
+            movlw(0x10),
+            movwf(0x0B),
+            0x0063,
+            0x0000,
+            bsf(0x0B, 7),
+            0x0000,
+        ];
+        words[0x10..0x10 + main.len()].copy_from_slice(&main);
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, 4);
+        assert_eq!(cpu.status() & STATUS_PD, 0, "asleep, PD = 0");
+        cpu.write_data(SFR_INTCON, 0x12); // INTE | INTF
+        for _ in 0..8 {
+            if cpu.get_pc() == 4 {
+                break;
+            }
+            run(&mut cpu, 1);
+        }
+        assert_eq!(cpu.get_pc(), 4, "vectored");
+        assert_eq!(cpu.status() & STATUS_PD, 0);
+        assert_eq!(
+            cpu.read_data(SFR_STATUS_SHAD) & (STATUS_TO | STATUS_PD),
+            0,
+            "TO/PD not shadowed"
+        );
+        run(&mut cpu, 3);
+        assert_ne!(cpu.read_data(SFR_INTCON) & INTCON_GIE, 0, "returned");
+        assert_ne!(cpu.status() & STATUS_PD, 0, "CLRWDT's PD survives RETFIE");
+        assert_ne!(cpu.status() & STATUS_TO, 0);
     }
 
     #[test]
