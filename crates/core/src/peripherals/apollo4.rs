@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Ambiq Apollo4 Plus peripherals: the 128-pin GPIO block and PWRCTRL.
+//! Ambiq Apollo4 Plus peripherals: the 128-pin GPIO block, PWRCTRL and the
+//! CPU cache / DAXI control block.
 //!
 //! Source: Ambiq's CMSIS device header `apollo4p.h` (AmbiqSuite R4.x, mirrored
 //! in `zephyrproject-rtos/hal_ambiq` at `CMSIS/AmbiqMicro/Include/apollo4p.h`):
@@ -48,6 +49,18 @@
 //! is off still works), memory/SSRAM bank power (stored only, reset 0, not
 //! verified against silicon), the voltage regulators, the DSPs and the energy
 //! monitors.
+//!
+//! **CPU** (`CPU_Type` @ `0x4800_0000`: CM4 cache and DAXI control). A
+//! register file over `0x000..0x100`. `CACHECTRL` @ `0x08` and `DAXICTRL` @
+//! `0x54` take write-one actions (cache INVALIDATE / RESETSTAT; DAXI
+//! FLUSHWRITE / INVALIDATE) that complete at once and read back 0; the status
+//! bits answer for an idle block: `CACHECTRL.CACHEREADY` follows
+//! `CACHECFG.ENABLE`, `DAXICTRL.DAXIREADY` reads 1 and the DAXI busy /
+//! buffer-state bits 0. Everything else is stored. The header carries no
+//! reset values, so the block resets to 0 (NOT verified against silicon;
+//! Renode's `ambiq-apollo4.repl` answers only `DAXICTRL` = `DAXIREADY`).
+//! NOT modelled: any cache or DAXI buffering (memory is coherent), the cache
+//! statistics counters (read 0) and the ICODE/DCODE/SYS fault-address capture.
 
 use crate::pins::{External, InputChange, PadDriver, PinPort, Pull};
 use crate::{Peripheral, SimResult};
@@ -556,6 +569,107 @@ impl Peripheral for Apollo4PwrCtrl {
     snapshot_impl!(Apollo4PwrCtrl, "Apollo4PwrCtrl");
 }
 
+// ── CPU (apollo4p.h CPU_Type, @ 0x4800_0000) ────────────────────────────────
+const CACHECFG: u64 = 0x00;
+const CACHECTRL: u64 = 0x08;
+const DAXICTRL: u64 = 0x54;
+const CPU_WORDS: usize = 0x100 / 4;
+/// `CPU_CACHECFG_ENABLE`.
+const CACHECFG_ENABLE: u32 = 1 << 0;
+/// `CPU_CACHECTRL_CACHEREADY`.
+const CACHECTRL_CACHEREADY: u32 = 1 << 2;
+/// `CPU_DAXICTRL_DAXIREADY`.
+const DAXICTRL_DAXIREADY: u32 = 1 << 2;
+
+/// The Apollo4 Plus CPU cache / DAXI control block (see the module docs).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Apollo4Cpu {
+    regs: Vec<u32>,
+}
+
+impl Apollo4Cpu {
+    pub fn new() -> Self {
+        Self {
+            regs: vec![0; CPU_WORDS],
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            CACHECTRL => {
+                if self.regs[(CACHECFG / 4) as usize] & CACHECFG_ENABLE != 0 {
+                    CACHECTRL_CACHEREADY
+                } else {
+                    0
+                }
+            }
+            DAXICTRL => DAXICTRL_DAXIREADY,
+            _ => match self.regs.get((offset / 4) as usize) {
+                Some(value) => *value,
+                None => {
+                    crate::census_reg!("apollo4:Apollo4Cpu", offset, "read");
+                    0
+                }
+            },
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        let index = (offset / 4) as usize;
+        match offset {
+            // Write-one actions that complete at once; status is derived.
+            CACHECTRL | DAXICTRL => {}
+            _ if index < self.regs.len() => self.regs[index] = value,
+            _ => {
+                crate::census_reg!("apollo4:Apollo4Cpu", offset, "write");
+            }
+        }
+    }
+}
+
+impl Default for Apollo4Cpu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Peripheral for Apollo4Cpu {
+    /// A register file with no `tick()`, IRQ, DMA or event.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok(lane_read(self.read_reg(offset & !3), offset))
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let merged = lane_merge(self.read_reg(reg), offset, value);
+        self.write_reg(reg, merged);
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+
+    fn on_node_reset(&mut self) {
+        *self = Self::new();
+    }
+
+    snapshot_impl!(Apollo4Cpu, "Apollo4Cpu");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -742,5 +856,28 @@ mod tests {
         assert!(!Apollo4Gpio::new().needs_legacy_walk());
         assert!(!Apollo4PwrCtrl::new().legacy_tick_active());
         assert!(!Apollo4PwrCtrl::new().needs_legacy_walk());
+    }
+
+    #[test]
+    fn cpu_daxi_is_always_ready_and_actions_read_back_zero() {
+        let mut c = Apollo4Cpu::new();
+        assert_eq!(c.read_u32(DAXICTRL).unwrap(), DAXICTRL_DAXIREADY);
+        // DAXIFLUSHWRITE | DAXIINVALIDATE complete at once.
+        c.write_u32(DAXICTRL, 0x3).unwrap();
+        assert_eq!(c.read_u32(DAXICTRL).unwrap(), DAXICTRL_DAXIREADY);
+    }
+
+    #[test]
+    fn cpu_cache_ready_follows_enable_and_config_is_stored() {
+        let mut c = Apollo4Cpu::new();
+        assert_eq!(c.read_u32(CACHECTRL).unwrap(), 0);
+        c.write_u32(CACHECFG, 0x0000_0305).unwrap();
+        assert_eq!(c.read_u32(CACHECFG).unwrap(), 0x0000_0305);
+        c.write_u32(CACHECTRL, 0x1).unwrap();
+        assert_eq!(c.read_u32(CACHECTRL).unwrap(), CACHECTRL_CACHEREADY);
+        c.write_u32(0x50, 0x0001_0F02).unwrap();
+        assert_eq!(c.read_u32(0x50).unwrap(), 0x0001_0F02, "DAXICFG stored");
+        c.on_node_reset();
+        assert_eq!(c.read_u32(CACHECFG).unwrap(), 0);
     }
 }
