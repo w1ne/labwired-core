@@ -23,9 +23,29 @@
 //! levels deep and circular: a ninth push overwrites the first, with no
 //! overflow flag (DS39582B section 2.4).
 //!
-//! The enhanced mid-range (PIC16F1xxx) instruction set and SFR map are not
-//! modelled here. An unknown opcode returns
-//! [`SimulationError::DecodeError`]; it is never guessed.
+//! The same type also runs the **enhanced mid-range** core (PIC16F1xxx,
+//! 49 instructions; DS40001440E chapter 3 and Table 29-3) when the device
+//! row says so:
+//! - The PC is 15 bits and `PCLATH` is 7. `GOTO`/`CALL` take their page
+//!   from `PCLATH<6:3>`.
+//! - Data memory is 32 banks of 128 bytes, selected by `BSR`. Every bank
+//!   starts with the twelve core registers (`INDF0`/`INDF1`, `PCL`,
+//!   `STATUS`, `FSR0L/H`, `FSR1L/H`, `BSR`, `WREG`, `PCLATH`, `INTCON`) and
+//!   ends with the 16-byte common RAM at 0x70-0x7F.
+//! - The 16-bit `FSR0`/`FSR1` see three spaces: the banked map
+//!   (0x0000-0x0FFF), linear GPR (0x2000-0x29AF, 80 bytes per bank), and
+//!   program flash (0x8000-0xFFFF, low byte of each word, read-only).
+//! - The return stack is 16 levels with `STKPTR`/`TOSL`/`TOSH` in bank 31.
+//!   An overflow or underflow sets `PCON.STKOVF`/`STKUNF` and, with
+//!   `CONFIG2.STVREN`, resets the core.
+//! - Interrupt entry saves `W`, `STATUS`, `BSR`, `PCLATH` and both FSRs into
+//!   the bank-31 shadow registers, and `RETFIE` restores them.
+//!
+//! Not modelled on the enhanced core: the extra cycle for a program-flash
+//! read through an FSR, the 64-bank parts (PIC16F188xx, 6-bit `BSR`), and
+//! every peripheral except the EUSART TX path, the ports, TMR0 and the
+//! oscillator ready flags. An unknown opcode returns [`SimulationError::DecodeError`];
+//! it is never guessed.
 
 use crate::snapshot::{CpuSnapshot, Pic16CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
@@ -55,6 +75,23 @@ pub const PIC16_EEDATA_BASE: u32 = 0x2100;
 /// Largest classic mid-range data EEPROM (256 B).
 pub const PIC16_EEDATA_BYTES: usize = 256;
 
+/// Enhanced mid-range: 15-bit program counter.
+pub const PIC16E_PC_MASK: u32 = 0x7FFF;
+/// Enhanced mid-range hardware return stack depth.
+pub const PIC16E_STACK_DEPTH: usize = 16;
+/// Enhanced mid-range user ID words (word addresses 0x8000-0x8003).
+pub const PIC16E_IDLOC_BASE: u32 = 0x8000;
+/// Enhanced mid-range CONFIG1 (word address); CONFIG2 follows.
+pub const PIC16E_CONFIG_WORD: u32 = 0x8007;
+/// Enhanced mid-range data EEPROM initialisers (word addresses 0xF000-0xF0FF).
+pub const PIC16E_EEDATA_BASE: u32 = 0xF000;
+/// Enhanced mid-range banks (BSR<4:0>).
+pub const PIC16E_BANKS: usize = 32;
+/// The enhanced mid-range "STKPTR = empty" value.
+const STKPTR_EMPTY: u8 = 0x1F;
+/// Return-stack storage: the larger of the two cores.
+const STACK_SLOTS: usize = PIC16E_STACK_DEPTH;
+
 pub const SFR_INDF: u16 = 0x00;
 pub const SFR_TMR0: u16 = 0x01;
 pub const SFR_PCL: u16 = 0x02;
@@ -75,6 +112,30 @@ pub const SFR_TXSTA: u16 = 0x98;
 pub const SFR_SPBRG: u16 = 0x99;
 pub const SFR_ADCON1: u16 = 0x9F;
 
+// Enhanced mid-range core registers (offsets 0x00-0x0B of every bank).
+pub const SFR_INDF0: u16 = 0x00;
+pub const SFR_INDF1: u16 = 0x01;
+pub const SFR_FSR0L: u16 = 0x04;
+pub const SFR_FSR0H: u16 = 0x05;
+pub const SFR_FSR1L: u16 = 0x06;
+pub const SFR_FSR1H: u16 = 0x07;
+pub const SFR_BSR: u16 = 0x08;
+pub const SFR_WREG: u16 = 0x09;
+// Enhanced mid-range bank 31: shadows (STATUS, WREG, BSR, PCLATH, FSR0L,
+// FSR0H, FSR1L, FSR1H in that order) and the stack window.
+pub const SFR_STATUS_SHAD: u16 = 0xFE4;
+pub const SFR_STKPTR: u16 = 0xFED;
+pub const SFR_TOSL: u16 = 0xFEE;
+pub const SFR_TOSH: u16 = 0xFEF;
+
+const PCON_STKOVF: u8 = 1 << 7;
+const PCON_STKUNF: u8 = 1 << 6;
+const PCON_RI: u8 = 1 << 2;
+/// PCON after a power-on reset: RWDT = RMCLR = RI = 1 (DS40001440E Table 6-4).
+const PCON_POR: u8 = 0x1C;
+/// CONFIG2.STVREN: a stack overflow/underflow resets the core.
+const CONFIG2_STVREN: u16 = 1 << 9;
+
 /// PORTA..PORTE.
 pub const PIC16_PORT_COUNT: u16 = 5;
 
@@ -89,26 +150,99 @@ pub const STATUS_IRP: u8 = 1 << 7;
 /// Bits an instruction result or a file write can change: TO and PD are
 /// read-only (set by reset, `SLEEP` and `CLRWDT`).
 const STATUS_WRITABLE: u8 = !(STATUS_TO | STATUS_PD);
+/// Enhanced mid-range STATUS: bits 7-5 are unimplemented (bank select moved
+/// to BSR).
+const STATUS_E_IMPLEMENTED: u8 = 0x1F;
 const STATUS_ALU: u8 = STATUS_C | STATUS_DC | STATUS_Z;
 
 const INTCON_GIE: u8 = 1 << 7;
 const INTCON_PEIE: u8 = 1 << 6;
+const INTCON_T0IF: u8 = 1 << 2;
+
+// OPTION_REG: T0CS (1 = T0CKI pin), PSA (1 = prescaler not on TMR0), PS<2:0>.
+const OPTION_T0CS: u8 = 1 << 5;
+const OPTION_PSA: u8 = 1 << 3;
 
 const TXSTA_TXEN: u8 = 1 << 5;
 const TXSTA_TRMT: u8 = 1 << 1;
 const RCSTA_SPEN: u8 = 1 << 7;
 const PIR1_TXIF: u8 = 1 << 4;
 
-/// One classic mid-range part: program words, implemented port bits
-/// (PORTA..PORTE) and the GPR address ranges that alias another range.
+/// Where the registers this model implements live on one SFR layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pic16SfrMap {
+    pub porta: u16,
+    pub trisa: u16,
+    /// LATA; the classic core has no LAT registers.
+    pub lata: Option<u16>,
+    /// PIR1.. and the matching PIE1.. (same length).
+    pub pir: &'static [u16],
+    pub pie: &'static [u16],
+    pub tmr0: u16,
+    pub option_reg: u16,
+    pub rcsta: u16,
+    pub txreg: u16,
+    pub txsta: u16,
+    pub spbrg: u16,
+    /// PCON (stack overflow/underflow and RESET-instruction flags).
+    pub pcon: Option<u16>,
+    /// The oscillator status register and the ready bits it always reads
+    /// set: the clocks are not modelled, so they are ready at once.
+    pub osc_ready: Option<(u16, u8)>,
+}
+
+/// The classic mid-range layout (PIC16F877A, DS39582B Figure 2-3).
+pub const PIC16_CLASSIC_MAP: Pic16SfrMap = Pic16SfrMap {
+    porta: SFR_PORTA,
+    trisa: SFR_TRISA,
+    lata: None,
+    pir: &[SFR_PIR1, SFR_PIR2],
+    pie: &[SFR_PIE1, SFR_PIE2],
+    tmr0: SFR_TMR0,
+    option_reg: SFR_OPTION_REG,
+    rcsta: SFR_RCSTA,
+    txreg: SFR_TXREG,
+    txsta: SFR_TXSTA,
+    spbrg: SFR_SPBRG,
+    pcon: None,
+    osc_ready: None,
+};
+
+/// The PIC16F182x/F193x enhanced mid-range layout (DS40001440E Table 3-8):
+/// ports at 0x00C, TRIS at 0x08C, LAT at 0x10C, PIR1-4 at 0x011, PIE1-4 at
+/// 0x091, TMR0 0x015, OPTION_REG 0x095, PCON 0x096, OSCSTAT 0x09A (HFIOFR, HFIOFL,
+/// MFIOFR, LFIOFR, HFIOFS) and the EUSART at 0x199-0x19F.
+pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
+    porta: 0x00C,
+    trisa: 0x08C,
+    lata: Some(0x10C),
+    pir: &[0x011, 0x012, 0x013, 0x014],
+    pie: &[0x091, 0x092, 0x093, 0x094],
+    tmr0: 0x015,
+    option_reg: 0x095,
+    rcsta: 0x19D,
+    txreg: 0x19A,
+    txsta: 0x19E,
+    spbrg: 0x19B,
+    pcon: Some(0x096),
+    osc_ready: Some((0x09A, 0x1F)),
+};
+
+/// One mid-range part: core, program words, implemented port bits
+/// (PORTA..PORTE), SFR layout and the GPR address ranges that alias
+/// another range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pic16Device {
     pub name: &'static str,
+    /// The enhanced mid-range (PIC16F1xxx) core instead of the classic one.
+    pub enhanced: bool,
     pub flash_words: usize,
     pub port_masks: [u8; PIC16_PORT_COUNT as usize],
+    pub map: Pic16SfrMap,
     /// `(start, end, target)`: banked addresses `start..=end` are the same
     /// bytes as `target..`. Taken from the gputils `SHAREBANK` groups (the
     /// 0x70-0x7F block on most parts; whole banks on the PIC16F873/874).
+    /// The enhanced core's core registers and common RAM are built in.
     pub aliases: &'static [(u16, u16, u16)],
 }
 
@@ -120,9 +254,28 @@ const fn dev(
 ) -> Pic16Device {
     Pic16Device {
         name,
+        enhanced: false,
         flash_words,
         port_masks,
+        map: PIC16_CLASSIC_MAP,
         aliases,
+    }
+}
+
+/// An enhanced mid-range row.
+const fn edev(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    map: Pic16SfrMap,
+) -> Pic16Device {
+    Pic16Device {
+        name,
+        enhanced: true,
+        flash_words,
+        port_masks,
+        map,
+        aliases: &[],
     }
 }
 
@@ -500,7 +653,27 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x1F0, 0x1FF, 0x070),
         ],
     ),
+    // Enhanced mid-range. PIC16F1829: 8K words, RA0-RA5, RB4-RB7, RC0-RC7
+    // (DS40001440E Table 1-1 / Figure 3-2).
+    edev(
+        "pic16f1829",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
 ];
+
+/// What a data-space access through an FSR (or a direct `INDFn`) lands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    /// A banked data address (already canonical).
+    Data(u16),
+    /// A program-flash word (enhanced FSR 0x8000-0xFFFF): reads the low byte.
+    Flash(u32),
+    /// Unimplemented, or `INDFn` addressed through an FSR: reads 0, writes
+    /// are ignored.
+    Void,
+}
 
 /// Geometry for a catalogue part, if this model knows it.
 pub fn pic16_device(name: &str) -> Option<&'static Pic16Device> {
@@ -523,16 +696,26 @@ pub struct Pic16 {
     wreg: u8,
     pc: u32,
     cycles: u64,
+    /// The enhanced mid-range core (see the module docs).
+    enhanced: bool,
+    map: Pic16SfrMap,
     flash: Vec<u16>,
     data: Vec<u8>,
-    /// PORTA..PORTE output latches. Writes to PORTx land here; reads see
-    /// the pins.
+    /// PORTA..PORTE output latches (LATx on the enhanced core). Writes to
+    /// PORTx land here; reads see the pins.
     latch: [u8; PIC16_PORT_COUNT as usize],
     port_masks: [u8; PIC16_PORT_COUNT as usize],
     aliases: &'static [(u16, u16, u16)],
-    stack: [u32; PIC16_STACK_DEPTH],
-    /// Next free stack slot, modulo the depth.
+    stack: [u32; STACK_SLOTS],
+    /// Classic: next free slot, modulo 8. Enhanced: `STKPTR`, the slot of
+    /// the top of stack, with 0x1F meaning empty.
     stkptr: u8,
+    /// A reset requested mid-instruction (enhanced `RESET`, or a stack
+    /// overflow/underflow with STVREN): `(PCON bits to set, to clear)`.
+    pending_reset: Option<(u8, u8)>,
+    /// Instruction cycles counted toward the next TMR0 increment while the
+    /// prescaler is assigned to TMR0.
+    tmr0_prescale: u16,
     exception_pending: Option<u32>,
     asleep: bool,
     idloc: [u16; 4],
@@ -557,17 +740,26 @@ impl Pic16 {
 
     pub fn with_device(device: &Pic16Device) -> Self {
         assert!(device.flash_words > 0, "PIC16 flash must hold a word");
+        let data_bytes = if device.enhanced {
+            PIC16E_BANKS * 0x80
+        } else {
+            PIC16_DATA_BYTES
+        };
         let mut cpu = Self {
             wreg: 0,
             pc: 0,
             cycles: 0,
+            enhanced: device.enhanced,
+            map: device.map,
             flash: vec![PIC16_WORD_MASK; device.flash_words],
-            data: vec![0; PIC16_DATA_BYTES],
+            data: vec![0; data_bytes],
             latch: [0; PIC16_PORT_COUNT as usize],
             port_masks: device.port_masks,
             aliases: device.aliases,
-            stack: [0; PIC16_STACK_DEPTH],
+            stack: [0; STACK_SLOTS],
             stkptr: 0,
+            pending_reset: None,
+            tmr0_prescale: 0,
             exception_pending: None,
             asleep: false,
             idloc: [PIC16_WORD_MASK; 4],
@@ -576,6 +768,9 @@ impl Pic16 {
             serial_sink: None,
         };
         cpu.reset_core();
+        if let Some(pcon) = cpu.map.pcon {
+            cpu.data[usize::from(pcon)] = PCON_POR;
+        }
         cpu
     }
 
@@ -595,14 +790,30 @@ impl Pic16 {
         self.serial_sink = Some(sink);
     }
 
+    /// Whether this is the enhanced mid-range core.
+    pub fn is_enhanced(&self) -> bool {
+        self.enhanced
+    }
+
+    /// The SFR layout this core decodes.
+    pub fn sfr_map(&self) -> &Pic16SfrMap {
+        &self.map
+    }
+
     /// Program memory size in words.
     pub fn flash_words(&self) -> usize {
         self.flash.len()
     }
 
-    /// The configuration word (word address 0x2007) as loaded.
+    /// The configuration word (CONFIG1 on the enhanced core) as loaded.
     pub fn config_word(&self) -> u16 {
         self.config[0]
+    }
+
+    /// The second configuration word (CONFIG2), erased (0x3FFF) if the image
+    /// has none.
+    pub fn config_word2(&self) -> u16 {
+        self.config[1]
     }
 
     /// Data EEPROM byte `n` as programmed by the image (0xFF = erased).
@@ -627,34 +838,83 @@ impl Pic16 {
         self.data[usize::from(SFR_STATUS)]
     }
 
+    /// `FSR0` (`n = 0`) or `FSR1` as a 16-bit address (enhanced core).
+    pub fn fsr(&self, n: u16) -> u16 {
+        let lo = usize::from(SFR_FSR0L + 2 * n);
+        u16::from_le_bytes([self.data[lo], self.data[lo + 1]])
+    }
+
+    fn set_fsr(&mut self, n: u16, value: u16) {
+        let lo = usize::from(SFR_FSR0L + 2 * n);
+        let [l, h] = value.to_le_bytes();
+        self.data[lo] = l;
+        self.data[lo + 1] = h;
+    }
+
+    fn pc_mask(&self) -> u32 {
+        if self.enhanced {
+            PIC16E_PC_MASK
+        } else {
+            PIC16_PC_MASK
+        }
+    }
+
+    fn pclath_mask(&self) -> u8 {
+        if self.enhanced {
+            0x7F
+        } else {
+            0x1F
+        }
+    }
+
+    fn stack_depth(&self) -> usize {
+        if self.enhanced {
+            PIC16E_STACK_DEPTH
+        } else {
+            PIC16_STACK_DEPTH
+        }
+    }
+
     /// Power-on reset values for the registers this model implements
-    /// (DS39582B Table 14-6). General purpose RAM is left as it is.
+    /// (DS39582B Table 14-6; DS40001440E Table 3-8 for the enhanced core).
+    /// General purpose RAM is left as it is.
     fn reset_core(&mut self) {
         self.wreg = 0;
         self.pc = 0;
-        self.stack = [0; PIC16_STACK_DEPTH];
-        self.stkptr = 0;
+        self.stack = [0; STACK_SLOTS];
+        self.stkptr = if self.enhanced { STKPTR_EMPTY } else { 0 };
+        self.pending_reset = None;
+        self.tmr0_prescale = 0;
         self.asleep = false;
         self.latch = [0; PIC16_PORT_COUNT as usize];
+        let map = self.map;
         // STATUS 0001 1xxx: TO = PD = 1, bank 0.
         self.data[usize::from(SFR_STATUS)] = STATUS_TO | STATUS_PD;
-        self.data[usize::from(SFR_FSR)] = 0;
         self.data[usize::from(SFR_PCLATH)] = 0;
         self.data[usize::from(SFR_INTCON)] = 0;
-        self.data[usize::from(SFR_PIR1)] = 0;
-        self.data[usize::from(SFR_PIR2)] = 0;
-        self.data[usize::from(SFR_PIE1)] = 0;
-        self.data[usize::from(SFR_PIE2)] = 0;
-        self.data[usize::from(SFR_OPTION_REG)] = 0xFF;
-        for n in 0..PIC16_PORT_COUNT {
-            self.data[usize::from(SFR_TRISA + n)] = 0xFF;
+        if self.enhanced {
+            for r in [SFR_FSR0L, SFR_FSR0H, SFR_FSR1L, SFR_FSR1H, SFR_BSR] {
+                self.data[usize::from(r)] = 0;
+            }
+        } else {
+            self.data[usize::from(SFR_FSR)] = 0;
         }
-        // TRISE 0000 -111: PSP mode off, RE0-RE2 inputs.
-        self.data[usize::from(SFR_TRISA + 4)] = 0x07;
-        self.data[usize::from(SFR_TXSTA)] = TXSTA_TRMT;
-        self.data[usize::from(SFR_RCSTA)] = 0;
-        self.data[usize::from(SFR_SPBRG)] = 0;
-        self.data[usize::from(SFR_ADCON1)] = 0;
+        for (&pir, &pie) in map.pir.iter().zip(map.pie) {
+            self.data[usize::from(pir)] = 0;
+            self.data[usize::from(pie)] = 0;
+        }
+        self.data[usize::from(map.option_reg)] = 0xFF;
+        for n in 0..PIC16_PORT_COUNT {
+            self.data[usize::from(map.trisa + n)] = 0xFF;
+        }
+        if !self.enhanced {
+            // TRISE 0000 -111: PSP mode off, RE0-RE2 inputs.
+            self.data[usize::from(SFR_TRISA + 4)] = 0x07;
+            self.data[usize::from(SFR_ADCON1)] = 0;
+        }
+        self.data[usize::from(map.txsta)] = TXSTA_TRMT;
+        self.data[usize::from(map.rcsta)] = 0;
+        self.data[usize::from(map.spbrg)] = 0;
     }
 
     /// Load 14-bit instruction words from the reset vector (test fixtures).
@@ -670,31 +930,54 @@ impl Pic16 {
 
     /// Load bytes at a **byte** address (two per word, little-endian). The
     /// ID and configuration words land in their own registers and the data
-    /// EEPROM initialisers (0x2100-0x21FF) in the EEPROM image; any other
-    /// address past the part's flash is a fixture error.
+    /// EEPROM initialisers (classic 0x2100-0x21FF, enhanced 0xF000-0xF0FF)
+    /// in the EEPROM image; any other address past the part's flash is a
+    /// fixture error and panics. [`Self::try_load_flash`] reports it instead.
     pub fn load_flash(&mut self, addr: u32, bytes: &[u8]) {
+        if let Err(e) = self.try_load_flash(addr, bytes) {
+            panic!("{e}");
+        }
+    }
+
+    /// [`Self::load_flash`], returning an error for a byte this part has no
+    /// home for (for example an enhanced mid-range image, CONFIG at word
+    /// 0x8007, on a classic part). Bytes before the bad one are loaded.
+    pub fn try_load_flash(&mut self, addr: u32, bytes: &[u8]) -> Result<(), String> {
+        let (idloc, config, eedata) = if self.enhanced {
+            (PIC16E_IDLOC_BASE, PIC16E_CONFIG_WORD, PIC16E_EEDATA_BASE)
+        } else {
+            (PIC16_IDLOC_BASE, PIC16_CONFIG_WORD, PIC16_EEDATA_BASE)
+        };
         for (i, byte) in bytes.iter().enumerate() {
             let at = addr + i as u32;
             let word = at / 2;
             let high = at % 2 == 1;
-            if (PIC16_EEDATA_BASE..PIC16_EEDATA_BASE + PIC16_EEDATA_BYTES as u32).contains(&word) {
+            if (eedata..eedata + PIC16_EEDATA_BYTES as u32).contains(&word) {
                 // One data byte per word; the high byte of the word is padding.
                 if !high {
-                    self.eedata[(word - PIC16_EEDATA_BASE) as usize] = *byte;
+                    self.eedata[(word - eedata) as usize] = *byte;
                 }
                 continue;
             }
             let slot = match word {
                 w if (w as usize) < self.flash.len() => &mut self.flash[w as usize],
-                w if (PIC16_IDLOC_BASE..PIC16_IDLOC_BASE + 4).contains(&w) => {
-                    &mut self.idloc[(w - PIC16_IDLOC_BASE) as usize]
+                w if (idloc..idloc + 4).contains(&w) => &mut self.idloc[(w - idloc) as usize],
+                w if (config..config + 2).contains(&w) => &mut self.config[(w - config) as usize],
+                // Between the ID words and CONFIG1: reserved / revision and
+                // device ID, not programmable.
+                w if (idloc..=config).contains(&w) => continue,
+                _ => {
+                    return Err(format!(
+                        "fixture exceeds PIC16 model flash (byte {at:#x}, word {word:#x}; \
+                         {} has {} words)",
+                        if self.enhanced {
+                            "this enhanced mid-range part"
+                        } else {
+                            "this classic mid-range part"
+                        },
+                        self.flash.len()
+                    ))
                 }
-                w if (PIC16_CONFIG_WORD..PIC16_CONFIG_WORD + 2).contains(&w) => {
-                    &mut self.config[(w - PIC16_CONFIG_WORD) as usize]
-                }
-                // 0x2004-0x2006 (reserved / device ID) are not programmable.
-                w if (PIC16_IDLOC_BASE..=PIC16_CONFIG_WORD).contains(&w) => continue,
-                _ => panic!("fixture exceeds PIC16 model flash (byte {at:#x})"),
             };
             *slot = if high {
                 (*slot & 0x00FF) | (u16::from(*byte) << 8)
@@ -702,19 +985,33 @@ impl Pic16 {
                 (*slot & 0xFF00) | u16::from(*byte)
             } & PIC16_WORD_MASK;
         }
+        Ok(())
     }
 
     /// Load a program image (byte addresses). The PC starts at the reset
-    /// vector.
-    pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
+    /// vector. An image with bytes outside the part's program, ID, config
+    /// and EEPROM spaces is an error, not a panic: it is user firmware.
+    pub fn load_program_image(
+        &mut self,
+        image: &crate::memory::ProgramImage,
+    ) -> Result<(), String> {
         for seg in &image.segments {
-            self.load_flash(seg.start_addr as u32, &seg.data);
+            self.try_load_flash(seg.start_addr as u32, &seg.data)?;
         }
         self.pc = 0;
+        Ok(())
     }
 
-    /// Map a 9-bit banked address onto the register that backs it.
+    /// Map a banked address onto the register that backs it.
     fn canonical(&self, addr: u16) -> u16 {
+        if self.enhanced {
+            let addr = addr & (self.data.len() as u16 - 1);
+            return match addr & 0x7F {
+                // Core registers and common RAM appear in every bank.
+                off @ (0x00..=0x0B | 0x70..=0x7F) => off,
+                _ => addr,
+            };
+        }
         let addr = addr & 0x1FF;
         let off = (addr & 0x7F) as u8;
         match off {
@@ -745,10 +1042,15 @@ impl Pic16 {
         }
     }
 
-    /// Direct file address for a 7-bit `f` in the bank `RP1:RP0` selects.
+    /// Direct file address for a 7-bit `f` in the bank `RP1:RP0` (classic)
+    /// or `BSR` (enhanced) selects.
     pub fn file_address(&self, f: u8) -> u16 {
-        let rp = u16::from((self.status() >> 5) & 0x03);
-        (rp << 7) | u16::from(f & 0x7F)
+        let bank = if self.enhanced {
+            u16::from(self.data[usize::from(SFR_BSR)])
+        } else {
+            u16::from((self.status() >> 5) & 0x03)
+        };
+        (bank << 7) | u16::from(f & 0x7F)
     }
 
     fn indirect_address(&self) -> u16 {
@@ -756,39 +1058,122 @@ impl Pic16 {
         (irp << 8) | u16::from(self.data[usize::from(SFR_FSR)])
     }
 
-    /// Resolve `f`, following `INDF` through `IRP:FSR`.
-    fn resolve(&self, f: u8) -> u16 {
-        let addr = self.canonical(self.file_address(f));
-        if addr == SFR_INDF {
-            self.canonical(self.indirect_address())
-        } else {
-            addr
+    /// What a 16-bit enhanced FSR value addresses.
+    fn fsr_target(&self, fsr: u16) -> Target {
+        match fsr {
+            0x0000..=0x0FFF if usize::from(fsr) < self.data.len() => match self.canonical(fsr) {
+                SFR_INDF0 | SFR_INDF1 => Target::Void,
+                a => Target::Data(a),
+            },
+            // Linear GPR: 80 bytes per bank from offset 0x20; bank 31 has none.
+            0x2000..=0x29AF => {
+                let n = fsr - 0x2000;
+                let bank = n / 80;
+                Target::Data(self.canonical((bank << 7) | (0x20 + n % 80)))
+            }
+            0x8000..=0xFFFF => Target::Flash(u32::from(fsr & 0x7FFF)),
+            _ => Target::Void,
         }
+    }
+
+    /// Resolve `f`, following `INDF` through `IRP:FSR` (classic) or `INDFn`
+    /// through `FSRn` (enhanced).
+    fn resolve(&self, f: u8) -> Target {
+        let addr = self.canonical(self.file_address(f));
+        if self.enhanced {
+            match addr {
+                SFR_INDF0 => self.fsr_target(self.fsr(0)),
+                SFR_INDF1 => self.fsr_target(self.fsr(1)),
+                _ => Target::Data(addr),
+            }
+        } else if addr == SFR_INDF {
+            Target::Data(self.canonical(self.indirect_address()))
+        } else {
+            Target::Data(addr)
+        }
+    }
+
+    fn read_target(&self, target: Target) -> u8 {
+        match target {
+            Target::Data(addr) => self.read_data(addr),
+            Target::Flash(word) => self.fetch_word(word) as u8,
+            Target::Void => 0,
+        }
+    }
+
+    fn write_target(&mut self, target: Target, value: u8) {
+        if let Target::Data(addr) = target {
+            self.write_data(addr, value);
+        }
+    }
+
+    /// The port index of a PORTx (`false`) or LATx (`true`) address.
+    fn port_index(&self, addr: u16) -> Option<(usize, bool)> {
+        if (self.map.porta..self.map.porta + PIC16_PORT_COUNT).contains(&addr) {
+            return Some((usize::from(addr - self.map.porta), false));
+        }
+        match self.map.lata {
+            Some(lata) if (lata..lata + PIC16_PORT_COUNT).contains(&addr) => {
+                Some((usize::from(addr - lata), true))
+            }
+            _ => None,
+        }
+    }
+
+    /// The top-of-stack slot (enhanced `TOSL`/`TOSH`), if the stack is not
+    /// empty.
+    fn tos_slot(&self) -> Option<usize> {
+        let slot = usize::from(self.stkptr);
+        (slot < PIC16E_STACK_DEPTH).then_some(slot)
     }
 
     /// Read a data-space register by banked address.
     pub fn read_data(&self, addr: u16) -> u8 {
         let addr = self.canonical(addr);
+        let map = self.map;
+        if self.enhanced {
+            match addr {
+                // INDFn addressed directly (not through an instruction) reads 0.
+                SFR_INDF0 | SFR_INDF1 => return 0,
+                SFR_STATUS => return self.data[usize::from(SFR_STATUS)] & STATUS_E_IMPLEMENTED,
+                SFR_WREG => return self.wreg,
+                SFR_STKPTR => return self.stkptr,
+                SFR_TOSL => return self.tos_slot().map_or(0, |s| self.stack[s] as u8),
+                SFR_TOSH => {
+                    return self
+                        .tos_slot()
+                        .map_or(0, |s| (self.stack[s] >> 8) as u8 & 0x7F)
+                }
+                _ => {}
+            }
+            if let Some((osc, ready)) = map.osc_ready {
+                if addr == osc {
+                    return self.data[usize::from(addr)] | ready;
+                }
+            }
+        }
+        if let Some((n, lat)) = self.port_index(addr) {
+            // LATx reads the latch. A PORTx pin set as output reads its
+            // latch; an input reads 0 because nothing external drives it yet.
+            let tris = self.data[usize::from(map.trisa) + n];
+            return if lat {
+                self.latch[n]
+            } else {
+                self.latch[n] & !tris & self.port_masks[n]
+            };
+        }
         match addr {
-            // INDF addressed through FSR = INDF reads 0.
-            SFR_INDF => 0,
+            SFR_INDF if !self.enhanced => 0,
             SFR_PCL => self.pc as u8,
             // TXIF is read-only and set while TXREG is empty; a byte leaves
             // the instant it is written here, so it follows TXEN.
-            SFR_PIR1 => {
-                let pir1 = self.data[usize::from(SFR_PIR1)] & !PIR1_TXIF;
-                if self.data[usize::from(SFR_TXSTA)] & TXSTA_TXEN != 0 {
+            a if a == map.pir[0] => {
+                let pir1 = self.data[usize::from(a)] & !PIR1_TXIF;
+                if self.data[usize::from(map.txsta)] & TXSTA_TXEN != 0 {
                     pir1 | PIR1_TXIF
                 } else {
                     pir1
                 }
-            }
-            // A pin set as output reads its latch; an input reads 0 because
-            // nothing external drives it yet.
-            a if (SFR_PORTA..SFR_PORTA + PIC16_PORT_COUNT).contains(&a) => {
-                let n = usize::from(a - SFR_PORTA);
-                let tris = self.data[usize::from(SFR_TRISA) + n];
-                self.latch[n] & !tris & self.port_masks[n]
             }
             _ => self.data[usize::from(addr)],
         }
@@ -797,25 +1182,70 @@ impl Pic16 {
     /// Write a data-space register by banked address.
     pub fn write_data(&mut self, addr: u16, value: u8) {
         let addr = self.canonical(addr);
+        let map = self.map;
+        if self.enhanced {
+            match addr {
+                SFR_INDF0 | SFR_INDF1 => return,
+                SFR_STATUS => {
+                    // Only C, DC and Z are writable; TO/PD are read-only.
+                    let old = self.data[usize::from(SFR_STATUS)];
+                    self.data[usize::from(SFR_STATUS)] = (old & !STATUS_ALU) | (value & STATUS_ALU);
+                    return;
+                }
+                SFR_WREG => {
+                    self.wreg = value;
+                    return;
+                }
+                SFR_BSR => {
+                    self.data[usize::from(SFR_BSR)] = value & (PIC16E_BANKS as u8 - 1);
+                    return;
+                }
+                SFR_STKPTR => {
+                    self.stkptr = value & 0x1F;
+                    return;
+                }
+                SFR_TOSL | SFR_TOSH => {
+                    if let Some(s) = self.tos_slot() {
+                        let v = self.stack[s];
+                        self.stack[s] = if addr == SFR_TOSL {
+                            (v & 0x7F00) | u32::from(value)
+                        } else {
+                            (v & 0x00FF) | (u32::from(value & 0x7F) << 8)
+                        };
+                    }
+                    return;
+                }
+                _ => {}
+            }
+        }
+        if let Some((n, _)) = self.port_index(addr) {
+            self.latch[n] = value & self.port_masks[n];
+            return;
+        }
         match addr {
-            SFR_INDF => {}
+            SFR_INDF if !self.enhanced => {}
             SFR_PCL => {
-                let pclath = u32::from(self.data[usize::from(SFR_PCLATH)] & 0x1F);
-                self.pc = ((pclath << 8) | u32::from(value)) & PIC16_PC_MASK;
+                let pclath = u32::from(self.data[usize::from(SFR_PCLATH)]);
+                self.pc = ((pclath << 8) | u32::from(value)) & self.pc_mask();
             }
             SFR_STATUS => {
                 let old = self.data[usize::from(SFR_STATUS)];
                 self.data[usize::from(SFR_STATUS)] =
                     (old & !STATUS_WRITABLE) | (value & STATUS_WRITABLE);
             }
-            SFR_PCLATH => self.data[usize::from(SFR_PCLATH)] = value & 0x1F,
-            SFR_PIR1 => self.data[usize::from(SFR_PIR1)] = value & !PIR1_TXIF,
+            SFR_PCLATH => self.data[usize::from(SFR_PCLATH)] = value & self.pclath_mask(),
+            a if a == map.pir[0] => self.data[usize::from(a)] = value & !PIR1_TXIF,
+            // A TMR0 write also clears the prescaler count.
+            a if a == map.tmr0 => {
+                self.data[usize::from(a)] = value;
+                self.tmr0_prescale = 0;
+            }
             // TRMT is read-only and stays set.
-            SFR_TXSTA => self.data[usize::from(SFR_TXSTA)] = value | TXSTA_TRMT,
-            SFR_TXREG => {
-                self.data[usize::from(SFR_TXREG)] = value;
-                let txsta = self.data[usize::from(SFR_TXSTA)];
-                let rcsta = self.data[usize::from(SFR_RCSTA)];
+            a if a == map.txsta => self.data[usize::from(a)] = value | TXSTA_TRMT,
+            a if a == map.txreg => {
+                self.data[usize::from(a)] = value;
+                let txsta = self.data[usize::from(map.txsta)];
+                let rcsta = self.data[usize::from(map.rcsta)];
                 if txsta & TXSTA_TXEN != 0 && rcsta & RCSTA_SPEN != 0 {
                     if let Some(sink) = &self.serial_sink {
                         if let Ok(mut buf) = sink.lock() {
@@ -824,23 +1254,19 @@ impl Pic16 {
                     }
                 }
             }
-            a if (SFR_PORTA..SFR_PORTA + PIC16_PORT_COUNT).contains(&a) => {
-                let n = usize::from(a - SFR_PORTA);
-                self.latch[n] = value & self.port_masks[n];
-            }
             _ => self.data[usize::from(addr)] = value,
         }
     }
 
     /// Read `f` for an instruction (bank select + `INDF`).
     pub fn read_file(&self, f: u8) -> u8 {
-        self.read_data(self.resolve(f))
+        self.read_target(self.resolve(f))
     }
 
     /// Write `f` for an instruction (bank select + `INDF`).
     pub fn write_file(&mut self, f: u8, value: u8) {
-        let addr = self.resolve(f);
-        self.write_data(addr, value);
+        let target = self.resolve(f);
+        self.write_target(target, value);
     }
 
     /// Store an ALU result to W (`d = 0`) or `f` (`d = 1`), then apply the
@@ -868,12 +1294,17 @@ impl Pic16 {
     }
 
     fn add_flags(a: u8, b: u8) -> (u8, u8) {
-        let result = a.wrapping_add(b);
+        Self::add_carry_flags(a, b, 0)
+    }
+
+    /// `a + b + carry_in` (ADDWFC).
+    fn add_carry_flags(a: u8, b: u8, carry_in: u8) -> (u8, u8) {
+        let result = a.wrapping_add(b).wrapping_add(carry_in);
         let mut set = Self::z(result);
-        if u16::from(a) + u16::from(b) > 0xFF {
+        if u16::from(a) + u16::from(b) + u16::from(carry_in) > 0xFF {
             set |= STATUS_C;
         }
-        if (a & 0x0F) + (b & 0x0F) > 0x0F {
+        if (a & 0x0F) + (b & 0x0F) + carry_in > 0x0F {
             set |= STATUS_DC;
         }
         (result, set)
@@ -881,25 +1312,81 @@ impl Pic16 {
 
     /// `a - b`: C and DC are "no borrow".
     fn sub_flags(a: u8, b: u8) -> (u8, u8) {
-        let result = a.wrapping_sub(b);
+        Self::sub_borrow_flags(a, b, 0)
+    }
+
+    /// `a - b - borrow_in` (SUBWFB, where `borrow_in = !C`).
+    fn sub_borrow_flags(a: u8, b: u8, borrow_in: u8) -> (u8, u8) {
+        let result = a.wrapping_sub(b).wrapping_sub(borrow_in);
         let mut set = Self::z(result);
-        if a >= b {
+        if u16::from(a) >= u16::from(b) + u16::from(borrow_in) {
             set |= STATUS_C;
         }
-        if (a & 0x0F) >= (b & 0x0F) {
+        if (a & 0x0F) >= (b & 0x0F) + borrow_in {
             set |= STATUS_DC;
         }
         (result, set)
     }
 
-    fn push(&mut self, value: u32) {
-        self.stack[usize::from(self.stkptr)] = value & PIC16_PC_MASK;
-        self.stkptr = (self.stkptr + 1) % PIC16_STACK_DEPTH as u8;
+    /// Push a return address. Returns `false` if the push overflowed into
+    /// a STVREN reset (the caller must not change the PC further).
+    fn push(&mut self, value: u32) -> bool {
+        let value = value & self.pc_mask();
+        if !self.enhanced {
+            self.stack[usize::from(self.stkptr)] = value;
+            self.stkptr = (self.stkptr + 1) % PIC16_STACK_DEPTH as u8;
+            return true;
+        }
+        if usize::from(self.stkptr) == PIC16E_STACK_DEPTH - 1 {
+            // Overflow: the 17th push (DS40001440E section 3.5.2).
+            if self.stack_fault(PCON_STKOVF) {
+                return false;
+            }
+        }
+        self.stkptr = self.stkptr.wrapping_add(1) % PIC16E_STACK_DEPTH as u8;
+        self.stack[usize::from(self.stkptr)] = value;
+        true
     }
 
-    fn pop(&mut self) -> u32 {
-        self.stkptr = (self.stkptr + PIC16_STACK_DEPTH as u8 - 1) % PIC16_STACK_DEPTH as u8;
-        self.stack[usize::from(self.stkptr)]
+    /// Pop a return address; `None` if the pop underflowed into a STVREN
+    /// reset.
+    fn pop(&mut self) -> Option<u32> {
+        if !self.enhanced {
+            self.stkptr = (self.stkptr + PIC16_STACK_DEPTH as u8 - 1) % PIC16_STACK_DEPTH as u8;
+            return Some(self.stack[usize::from(self.stkptr)]);
+        }
+        if self.stkptr == STKPTR_EMPTY && self.stack_fault(PCON_STKUNF) {
+            return None;
+        }
+        let slot = usize::from(self.stkptr) % PIC16E_STACK_DEPTH;
+        let value = self.stack[slot];
+        self.stkptr = if slot == 0 {
+            STKPTR_EMPTY
+        } else {
+            slot as u8 - 1
+        };
+        Some(value)
+    }
+
+    /// Record a stack overflow/underflow in PCON; with STVREN, request a
+    /// reset and return `true`.
+    fn stack_fault(&mut self, flag: u8) -> bool {
+        if let Some(pcon) = self.map.pcon {
+            self.data[usize::from(pcon)] |= flag;
+        }
+        if self.config[1] & CONFIG2_STVREN != 0 {
+            self.pending_reset = Some((flag, 0));
+            return true;
+        }
+        false
+    }
+
+    /// Return through the stack: the popped address, or stay put if the pop
+    /// requested a reset.
+    fn ret(&mut self) {
+        if let Some(pc) = self.pop() {
+            self.pc = pc;
+        }
     }
 
     fn fetch_word(&self, pc: u32) -> u16 {
@@ -910,9 +1397,11 @@ impl Pic16 {
             .unwrap_or(PIC16_WORD_MASK)
     }
 
-    /// `PCLATH<4:3>` page for `GOTO`/`CALL`.
+    /// `PCLATH<4:3>` (classic) or `PCLATH<6:3>` (enhanced) page for
+    /// `GOTO`/`CALL`.
     fn page(&self) -> u32 {
-        u32::from(self.data[usize::from(SFR_PCLATH)] & 0x18) << 8
+        let mask = if self.enhanced { 0x78 } else { 0x18 };
+        u32::from(self.data[usize::from(SFR_PCLATH)] & mask) << 8
     }
 
     fn interrupt_request(&self) -> bool {
@@ -921,20 +1410,70 @@ impl Pic16 {
     }
 
     /// An enabled source with its flag set, ignoring GIE (the `SLEEP` wake
-    /// condition). INTCON T0IF/INTF/RBIF pair with T0IE/INTE/RBIE; the
-    /// PIR1/PIR2 peripheral flags also need PEIE.
+    /// condition). INTCON T0IF/INTF/RBIF (IOCIF on the enhanced core) pair
+    /// with T0IE/INTE/RBIE; the PIRx peripheral flags also need PEIE.
     fn source_pending(&self, intcon: u8) -> bool {
         let core = intcon & 0x07 & (intcon >> 3);
         let peripheral = intcon & INTCON_PEIE != 0
-            && (self.read_data(SFR_PIR1) & self.read_data(SFR_PIE1) != 0
-                || self.read_data(SFR_PIR2) & self.read_data(SFR_PIE2) != 0);
+            && self
+                .map
+                .pir
+                .iter()
+                .zip(self.map.pie)
+                .any(|(&pir, &pie)| self.read_data(pir) & self.read_data(pie) != 0);
         core != 0 || peripheral
     }
 
-    /// Vector to 0x0004: push the return address and clear GIE. There is no
-    /// hardware context save on the classic mid-range.
+    /// Advance TMR0 by `cycles` instruction cycles in timer mode (T0CS = 0,
+    /// Fosc/4), through the prescaler when PSA = 0 (1:2 .. 1:256). An
+    /// overflow from 0xFF sets T0IF/TMR0IF. Counter mode (T0CKI) never
+    /// counts: nothing drives the pin. The two-cycle increment inhibit after
+    /// a TMR0 write is not modelled.
+    fn tick_tmr0(&mut self, cycles: u32) {
+        let option = self.data[usize::from(self.map.option_reg)];
+        if option & OPTION_T0CS != 0 {
+            return;
+        }
+        let tmr0 = usize::from(self.map.tmr0);
+        for _ in 0..cycles {
+            if option & OPTION_PSA == 0 {
+                self.tmr0_prescale += 1;
+                if self.tmr0_prescale < 2 << (option & 0x07) {
+                    continue;
+                }
+                self.tmr0_prescale = 0;
+            }
+            self.data[tmr0] = self.data[tmr0].wrapping_add(1);
+            if self.data[tmr0] == 0 {
+                self.data[usize::from(SFR_INTCON)] |= INTCON_T0IF;
+            }
+        }
+    }
+
+    /// The core registers the enhanced core shadows, in shadow order.
+    const SHADOWED: [u16; 8] = [
+        SFR_STATUS, SFR_WREG, SFR_BSR, SFR_PCLATH, SFR_FSR0L, SFR_FSR0H, SFR_FSR1L, SFR_FSR1H,
+    ];
+
+    /// Vector to 0x0004: push the return address and clear GIE. The classic
+    /// core has no hardware context save; the enhanced core copies its core
+    /// registers into the bank-31 shadows (DS40001440E section 7.5).
     fn take_interrupt(&mut self) {
-        self.push(self.pc);
+        if !self.push(self.pc) {
+            return;
+        }
+        if self.enhanced {
+            for (i, reg) in Self::SHADOWED.iter().enumerate() {
+                let v = match *reg {
+                    SFR_WREG => self.wreg,
+                    // STATUS_SHAD holds only C, DC and Z: TO and PD are
+                    // not shadowed (DS40001440E section 7.5).
+                    SFR_STATUS => self.data[usize::from(SFR_STATUS)] & STATUS_ALU,
+                    _ => self.data[usize::from(*reg)],
+                };
+                self.data[usize::from(SFR_STATUS_SHAD) + i] = v;
+            }
+        }
         self.data[usize::from(SFR_INTCON)] &= !INTCON_GIE;
         self.pc = PIC16_INT_VECTOR;
     }
@@ -966,18 +1505,19 @@ impl Pic16 {
             }
             0b10 => {
                 let target = self.page() | u32::from(word & 0x07FF);
-                if word & 0x0800 == 0 {
-                    self.push(self.pc);
+                if word & 0x0800 == 0 && !self.push(self.pc) {
+                    return Ok(2);
                 }
                 self.pc = target;
                 Ok(2)
             }
+            _ if self.enhanced => self.execute_literal_enhanced(word, f, d),
             _ => {
                 match (word >> 8) & 0x0F {
                     0x0..=0x3 => self.wreg = k8,
                     0x4..=0x7 => {
                         self.wreg = k8;
-                        self.pc = self.pop();
+                        self.ret();
                         return Ok(2);
                     }
                     0x8 => {
@@ -1012,6 +1552,130 @@ impl Pic16 {
         }
     }
 
+    /// Sign-extend the low `bits` of `v`.
+    fn signed(v: u16, bits: u32) -> i32 {
+        let shift = 32 - bits;
+        ((u32::from(v) << shift) as i32) >> shift
+    }
+
+    /// The enhanced core's `11 xxxx` group (DS40001440E Table 29-3): the
+    /// literal operations, BRA, ADDFSR/MOVLP, the shifts, ADDWFC/SUBWFB and
+    /// indexed MOVIW/MOVWI.
+    fn execute_literal_enhanced(&mut self, word: u16, f: u8, d: bool) -> SimResult<u32> {
+        let k8 = word as u8;
+        let extra = self.pcl_extra(f, d);
+        match (word >> 8) & 0x0F {
+            0x0 => self.wreg = k8,
+            0x1 => {
+                if word & 0x80 == 0 {
+                    // ADDFSR FSRn, k (signed 6-bit).
+                    let n = (word >> 6) & 1;
+                    let k = Self::signed(word & 0x3F, 6);
+                    self.set_fsr(n, self.fsr(n).wrapping_add(k as u16));
+                } else {
+                    // MOVLP k
+                    self.data[usize::from(SFR_PCLATH)] = (word & 0x7F) as u8;
+                }
+            }
+            0x2 | 0x3 => {
+                // BRA k (signed 9-bit, relative to PC + 1).
+                let k = Self::signed(word & 0x1FF, 9);
+                self.pc = (self.pc as i32).wrapping_add(k) as u32 & PIC16E_PC_MASK;
+                return Ok(2);
+            }
+            0x4 => {
+                self.wreg = k8;
+                self.ret();
+                return Ok(2);
+            }
+            0x5 => {
+                // LSLF
+                let v = self.read_file(f);
+                let r = v << 1;
+                self.store(f, d, r, Some((STATUS_C | STATUS_Z, (v >> 7) | Self::z(r))));
+                return Ok(1 + extra);
+            }
+            0x6 => {
+                // LSRF
+                let v = self.read_file(f);
+                let r = v >> 1;
+                self.store(f, d, r, Some((STATUS_C | STATUS_Z, (v & 1) | Self::z(r))));
+                return Ok(1 + extra);
+            }
+            0x7 => {
+                // ASRF: the sign bit is kept.
+                let v = self.read_file(f);
+                let r = (v >> 1) | (v & 0x80);
+                self.store(f, d, r, Some((STATUS_C | STATUS_Z, (v & 1) | Self::z(r))));
+                return Ok(1 + extra);
+            }
+            0x8 => {
+                self.wreg |= k8;
+                let z = Self::z(self.wreg);
+                self.set_flags(STATUS_Z, z);
+            }
+            0x9 => {
+                self.wreg &= k8;
+                let z = Self::z(self.wreg);
+                self.set_flags(STATUS_Z, z);
+            }
+            0xA => {
+                self.wreg ^= k8;
+                let z = Self::z(self.wreg);
+                self.set_flags(STATUS_Z, z);
+            }
+            0xB => {
+                // SUBWFB: f - W - !C.
+                let borrow = u8::from(self.status() & STATUS_C == 0);
+                let (r, set) = Self::sub_borrow_flags(self.read_file(f), self.wreg, borrow);
+                self.store(f, d, r, Some((STATUS_ALU, set)));
+                return Ok(1 + extra);
+            }
+            0xC => {
+                // SUBLW: k - W.
+                let (r, set) = Self::sub_flags(k8, self.wreg);
+                self.wreg = r;
+                self.set_flags(STATUS_ALU, set);
+            }
+            0xD => {
+                // ADDWFC: f + W + C.
+                let carry = self.status() & STATUS_C;
+                let (r, set) = Self::add_carry_flags(self.read_file(f), self.wreg, carry);
+                self.store(f, d, r, Some((STATUS_ALU, set)));
+                return Ok(1 + extra);
+            }
+            0xE => {
+                let (r, set) = Self::add_flags(self.wreg, k8);
+                self.wreg = r;
+                self.set_flags(STATUS_ALU, set);
+            }
+            _ => {
+                // MOVIW k[FSRn] (bit 7 clear) / MOVWI k[FSRn] (bit 7 set).
+                let n = (word >> 6) & 1;
+                let k = Self::signed(word & 0x3F, 6);
+                let target = self.fsr_target(self.fsr(n).wrapping_add(k as u16));
+                self.move_indirect(word & 0x80 != 0, target);
+            }
+        }
+        Ok(1)
+    }
+
+    /// MOVIW (`to_memory = false`: W = target, Z affected) or MOVWI.
+    fn move_indirect(&mut self, to_memory: bool, target: Target) {
+        if to_memory {
+            self.write_target(target, self.wreg);
+        } else {
+            self.wreg = self.read_target(target);
+            let z = Self::z(self.wreg);
+            self.set_flags(STATUS_Z, z);
+        }
+    }
+
+    /// A write to PCL is a jump and costs a second cycle.
+    fn pcl_extra(&self, f: u8, d: bool) -> u32 {
+        u32::from(d && self.resolve(f) == Target::Data(SFR_PCL))
+    }
+
     fn set_flags(&mut self, mask: u8, set: u8) {
         let status = &mut self.data[usize::from(SFR_STATUS)];
         *status = (*status & !mask) | (set & mask);
@@ -1019,7 +1683,7 @@ impl Pic16 {
 
     fn skip_if(&mut self, skip: bool) -> u32 {
         if skip {
-            self.pc = (self.pc + 1) & PIC16_PC_MASK;
+            self.pc = (self.pc + 1) & self.pc_mask();
             2
         } else {
             1
@@ -1031,11 +1695,17 @@ impl Pic16 {
     fn execute_byte(&mut self, word: u16, pc: u32, f: u8, d: bool) -> SimResult<u32> {
         let op = (word >> 8) & 0x0F;
         if op == 0 && !d {
-            return self.execute_control(word, pc);
+            return if self.enhanced {
+                self.execute_control_enhanced(word, pc)
+            } else {
+                self.execute_control(word, pc)
+            };
         }
-        // A write to PCL is a jump and costs a second cycle.
-        let pcl_dest = d && self.resolve(f) == SFR_PCL;
-        let extra = u32::from(pcl_dest);
+        // The enhanced core assigns only 00 0001 0000 0011 to CLRW.
+        if self.enhanced && op == 1 && !d && word != 0x0103 {
+            return Err(SimulationError::DecodeError(u64::from(pc)));
+        }
+        let extra = self.pcl_extra(f, d);
         match op {
             0x0 => {
                 self.write_file(f, self.wreg);
@@ -1116,12 +1786,12 @@ impl Pic16 {
             0x0000 | 0x0020 | 0x0040 | 0x0060 => Ok(1),
             // RETURN
             0x0008 => {
-                self.pc = self.pop();
+                self.ret();
                 Ok(2)
             }
             // RETFIE
             0x0009 => {
-                self.pc = self.pop();
+                self.ret();
                 self.data[usize::from(SFR_INTCON)] |= INTCON_GIE;
                 Ok(2)
             }
@@ -1151,11 +1821,121 @@ impl Pic16 {
         }
     }
 
+    /// The enhanced core's `00 0000 0xxx xxxx` group (DS40001440E Table
+    /// 29-3).
+    fn execute_control_enhanced(&mut self, word: u16, pc: u32) -> SimResult<u32> {
+        match word {
+            0x0000 => Ok(1),
+            // RESET: a software reset; PCON.RI reads 0 afterwards.
+            0x0001 => {
+                self.pending_reset = Some((0, PCON_RI));
+                Ok(1)
+            }
+            0x0008 => {
+                self.ret();
+                Ok(2)
+            }
+            // RETFIE: return, restore the shadowed core registers, GIE = 1.
+            0x0009 => {
+                if self.pop().map(|pc| self.pc = pc).is_none() {
+                    return Ok(2);
+                }
+                for (i, reg) in Self::SHADOWED.iter().enumerate() {
+                    let v = self.data[usize::from(SFR_STATUS_SHAD) + i];
+                    match *reg {
+                        SFR_WREG => self.wreg = v,
+                        // Keep the live TO/PD: RETFIE must not undo a
+                        // CLRWDT/SLEEP executed inside the ISR.
+                        SFR_STATUS => {
+                            let st = &mut self.data[usize::from(SFR_STATUS)];
+                            *st = (*st & !STATUS_ALU) | (v & STATUS_ALU);
+                        }
+                        _ => self.data[usize::from(*reg)] = v,
+                    }
+                }
+                self.data[usize::from(SFR_INTCON)] |= INTCON_GIE;
+                Ok(2)
+            }
+            // CALLW: call PCLATH<6:0>:W.
+            0x000A => {
+                let target =
+                    (u32::from(self.data[usize::from(SFR_PCLATH)]) << 8) | u32::from(self.wreg);
+                if self.push(self.pc) {
+                    self.pc = target & PIC16E_PC_MASK;
+                }
+                Ok(2)
+            }
+            // BRW: branch to PC + 1 + W.
+            0x000B => {
+                self.pc = (self.pc + u32::from(self.wreg)) & PIC16E_PC_MASK;
+                Ok(2)
+            }
+            // MOVIW (0x0010-0x0017) / MOVWI (0x0018-0x001F) with
+            // ++FSRn, --FSRn, FSRn++, FSRn--.
+            0x0010..=0x001F => {
+                let n = (word >> 2) & 1;
+                let mode = word & 0x03;
+                let step: u16 = if mode & 1 == 0 { 1 } else { 0xFFFF };
+                if mode < 2 {
+                    self.set_fsr(n, self.fsr(n).wrapping_add(step));
+                }
+                let target = self.fsr_target(self.fsr(n));
+                self.move_indirect(word & 0x08 != 0, target);
+                if mode >= 2 {
+                    self.set_fsr(n, self.fsr(n).wrapping_add(step));
+                }
+                Ok(1)
+            }
+            // MOVLB k (5-bit BSR).
+            0x0020..=0x003F => {
+                self.data[usize::from(SFR_BSR)] = (word & 0x1F) as u8;
+                Ok(1)
+            }
+            0x0062 => {
+                let option = self.map.option_reg;
+                self.data[usize::from(option)] = self.wreg;
+                Ok(1)
+            }
+            0x0063 => {
+                self.set_flags(STATUS_TO | STATUS_PD, STATUS_TO);
+                self.asleep = true;
+                Ok(1)
+            }
+            0x0064 => {
+                self.set_flags(STATUS_TO | STATUS_PD, STATUS_TO | STATUS_PD);
+                Ok(1)
+            }
+            // TRIS PORTA/PORTB/PORTC.
+            0x0065..=0x0067 => {
+                let tris = self.map.trisa + (word - 0x0065);
+                self.data[usize::from(tris)] = self.wreg;
+                Ok(1)
+            }
+            _ => Err(SimulationError::DecodeError(u64::from(pc))),
+        }
+    }
+
+    /// Apply a reset requested by the instruction that just ran.
+    fn apply_pending_reset(&mut self) {
+        if let Some((set, clear)) = self.pending_reset.take() {
+            self.reset_core();
+            if let Some(pcon) = self.map.pcon {
+                let v = &mut self.data[usize::from(pcon)];
+                *v = (*v | set) & !clear;
+            }
+        }
+    }
+
     fn register_view(&self) -> [u32; 6] {
+        let fsr = if self.enhanced {
+            u32::from(self.fsr(0))
+        } else {
+            u32::from(self.data[usize::from(SFR_FSR)])
+        };
         [
             u32::from(self.wreg),
             u32::from(self.status()),
-            u32::from(self.data[usize::from(SFR_FSR)]),
+            fsr,
             u32::from(self.data[usize::from(SFR_PCLATH)]),
             u32::from(self.stkptr),
             self.pc,
@@ -1199,14 +1979,17 @@ impl Cpu for Pic16 {
             }
         }
 
-        self.pc = (pc + 1) & PIC16_PC_MASK;
+        self.pc = (pc + 1) & self.pc_mask();
         let cycles = self.execute(word, pc)?;
         self.cycles += u64::from(cycles);
         crate::advance_batch_cycle(bus, u64::from(cycles));
+        self.apply_pending_reset();
+        self.tick_tmr0(cycles);
 
         // Interrupts are sampled between instructions.
         if self.interrupt_request() {
             self.take_interrupt();
+            self.apply_pending_reset();
         }
 
         if observed {
@@ -1234,7 +2017,7 @@ impl Cpu for Pic16 {
     }
 
     fn set_pc(&mut self, val: u32) {
-        self.pc = val & PIC16_PC_MASK;
+        self.pc = val & self.pc_mask();
     }
 
     fn get_pc(&self) -> u32 {
@@ -1242,7 +2025,11 @@ impl Cpu for Pic16 {
     }
 
     fn set_sp(&mut self, val: u32) {
-        self.stkptr = (val % PIC16_STACK_DEPTH as u32) as u8;
+        self.stkptr = if self.enhanced {
+            (val & 0x1F) as u8
+        } else {
+            (val % PIC16_STACK_DEPTH as u32) as u8
+        };
     }
 
     /// Recorded for the `Cpu` contract but not consumed: PIC16 interrupts
@@ -1259,8 +2046,9 @@ impl Cpu for Pic16 {
         match id {
             0 => self.wreg = val as u8,
             1 => self.data[usize::from(SFR_STATUS)] = val as u8,
+            2 if self.enhanced => self.set_fsr(0, val as u16),
             2 => self.data[usize::from(SFR_FSR)] = val as u8,
-            3 => self.data[usize::from(SFR_PCLATH)] = val as u8 & 0x1F,
+            3 => self.data[usize::from(SFR_PCLATH)] = val as u8 & self.pclath_mask(),
             4 => self.set_sp(val),
             5 => self.set_pc(val),
             _ => {}
@@ -1268,7 +2056,8 @@ impl Cpu for Pic16 {
     }
 
     fn get_register_names(&self) -> Vec<String> {
-        ["W", "STATUS", "FSR", "PCLATH", "SP", "PC"]
+        let fsr = if self.enhanced { "FSR0" } else { "FSR" };
+        ["W", "STATUS", fsr, "PCLATH", "SP", "PC"]
             .iter()
             .map(|s| s.to_string())
             .collect()
@@ -1278,7 +2067,7 @@ impl Cpu for Pic16 {
         match name.trim().to_ascii_uppercase().as_str() {
             "W" | "WREG" => Some(0),
             "STATUS" => Some(1),
-            "FSR" => Some(2),
+            "FSR" | "FSR0" => Some(2),
             "PCLATH" => Some(3),
             "SP" | "STKPTR" => Some(4),
             "PC" => Some(5),
@@ -1295,8 +2084,19 @@ impl Cpu for Pic16 {
             pc: self.pc,
             cycles: self.cycles,
             stkptr: self.stkptr,
-            stack: self.stack.to_vec(),
+            stack: self.stack[..self.stack_depth()].to_vec(),
             asleep: self.asleep,
+            bsr: if self.enhanced {
+                self.data[usize::from(SFR_BSR)]
+            } else {
+                0
+            },
+            fsr0h: if self.enhanced {
+                self.data[usize::from(SFR_FSR0H)]
+            } else {
+                0
+            },
+            fsr1: if self.enhanced { self.fsr(1) } else { 0 },
         }))
     }
 
@@ -1305,14 +2105,21 @@ impl Cpu for Pic16 {
             self.wreg = s.wreg;
             self.data[usize::from(SFR_STATUS)] = s.status;
             self.data[usize::from(SFR_FSR)] = s.fsr;
-            self.data[usize::from(SFR_PCLATH)] = s.pclath & 0x1F;
-            self.pc = s.pc & PIC16_PC_MASK;
+            self.data[usize::from(SFR_PCLATH)] = s.pclath & self.pclath_mask();
+            self.pc = s.pc & self.pc_mask();
             self.cycles = s.cycles;
-            for (slot, value) in self.stack.iter_mut().zip(s.stack.iter()) {
-                *slot = *value & PIC16_PC_MASK;
+            let mask = self.pc_mask();
+            let depth = self.stack_depth();
+            for (slot, value) in self.stack[..depth].iter_mut().zip(s.stack.iter()) {
+                *slot = *value & mask;
             }
-            self.stkptr = s.stkptr % PIC16_STACK_DEPTH as u8;
+            self.set_sp(u32::from(s.stkptr));
             self.asleep = s.asleep;
+            if self.enhanced {
+                self.data[usize::from(SFR_BSR)] = s.bsr & (PIC16E_BANKS as u8 - 1);
+                self.data[usize::from(SFR_FSR0H)] = s.fsr0h;
+                self.set_fsr(1, s.fsr1);
+            }
         }
     }
 }
@@ -1505,11 +2312,11 @@ mod tests {
             cpu.push(0x100 + i);
         }
         // The ninth push overwrote the first slot.
-        assert_eq!(cpu.pop(), 0x108);
+        assert_eq!(cpu.pop(), Some(0x108));
         for i in (1..8).rev() {
-            assert_eq!(cpu.pop(), 0x100 + i);
+            assert_eq!(cpu.pop(), Some(0x100 + i));
         }
-        assert_eq!(cpu.pop(), 0x108);
+        assert_eq!(cpu.pop(), Some(0x108));
     }
 
     #[test]
@@ -1642,8 +2449,10 @@ mod tests {
     fn bytes_past_flash_are_rejected() {
         let mut small = Pic16::with_device(&Pic16Device {
             name: "t",
+            enhanced: false,
             flash_words: 16,
             port_masks: [0xFF; 5],
+            map: PIC16_CLASSIC_MAP,
             aliases: &[],
         });
         small.load_flash(32, &[0]);
@@ -1699,7 +2508,481 @@ mod tests {
         let d = pic16_device("PIC16F877A").expect("877A row");
         assert_eq!(d.flash_words, 8192);
         assert!(pic16_device("pic16f1847").is_none());
+        assert!(pic16_device("pic16f1829").is_some_and(|d| d.enhanced));
         assert!(check_pic16_entry(0).is_ok());
         assert!(check_pic16_entry(1).is_err());
+    }
+
+    // ---- Enhanced mid-range (PIC16F1829; DS40001440E Table 29-3) ----
+
+    fn ecpu_with(words: &[u16]) -> Pic16 {
+        let mut cpu = Pic16::for_chip_name("pic16f1829");
+        cpu.load_words(words);
+        cpu
+    }
+    fn movlb(k: u8) -> u16 {
+        0x0020 | u16::from(k & 0x1F)
+    }
+    fn movlp(k: u8) -> u16 {
+        0x3180 | u16::from(k & 0x7F)
+    }
+    fn addfsr(n: u16, k: i8) -> u16 {
+        0x3100 | (n << 6) | (k as u16 & 0x3F)
+    }
+    fn bra(k: i16) -> u16 {
+        0x3200 | (k as u16 & 0x1FF)
+    }
+    /// MOVIW (`to_memory = false`) / MOVWI k[FSRn].
+    fn indexed(to_memory: bool, n: u16, k: i8) -> u16 {
+        0x3F00 | (u16::from(to_memory) << 7) | (n << 6) | (k as u16 & 0x3F)
+    }
+    /// Set FSRn to `v` with MOVLW/MOVWF.
+    fn load_fsr(n: u8, v: u16) -> [u16; 4] {
+        [
+            movlw(v as u8),
+            movwf(0x04 + 2 * n),
+            movlw((v >> 8) as u8),
+            movwf(0x05 + 2 * n),
+        ]
+    }
+
+    #[test]
+    fn enhanced_reset_state_matches_ds40001440_por_values() {
+        let cpu = Pic16::for_chip_name("pic16f1829");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 8192);
+        assert_eq!(cpu.read_data(SFR_STATUS), STATUS_TO | STATUS_PD);
+        assert_eq!(cpu.read_data(SFR_STKPTR), STKPTR_EMPTY);
+        assert_eq!(cpu.read_data(SFR_BSR), 0);
+        assert_eq!(cpu.read_data(0x08C), 0xFF, "TRISA");
+        assert_eq!(cpu.read_data(0x095), 0xFF, "OPTION_REG");
+        assert_eq!(cpu.read_data(0x096), PCON_POR, "PCON");
+        assert_eq!(cpu.read_data(0x19E), TXSTA_TRMT, "TXSTA");
+        assert_eq!(cpu.read_data(0x09A) & 0x1F, 0x1F, "OSCSTAT ready bits");
+        // The classic core is unchanged.
+        assert!(!Pic16::new().is_enhanced());
+    }
+
+    #[test]
+    fn enhanced_core_registers_and_common_ram_appear_in_every_bank() {
+        let mut cpu = ecpu_with(&[
+            movlb(7),
+            movlw(0x33),
+            movwf(0x0A), // PCLATH, from bank 7
+            movwf(0x70), // common RAM, from bank 7
+            movwf(0x20), // bank 7 GPR = 0x3A0
+            movlw(0x44),
+            movwf(0x09), // WREG through its file address
+        ]);
+        run(&mut cpu, 7);
+        assert_eq!(cpu.read_data(SFR_PCLATH), 0x33);
+        assert_eq!(cpu.read_data(0x70), 0x33);
+        assert_eq!(cpu.read_data(0x7F0), 0x33, "bank 15 sees the same byte");
+        assert_eq!(cpu.read_data(0x3A0), 0x33);
+        assert_eq!(cpu.read_data(0x020), 0, "bank 0 GPR untouched");
+        assert_eq!(cpu.wreg(), 0x44);
+        assert_eq!(cpu.read_data(0x389), 0x44, "WREG mirrored in bank 7");
+    }
+
+    #[test]
+    fn enhanced_status_has_no_bank_bits_and_keeps_to_pd_read_only() {
+        let mut cpu = ecpu_with(&[movlw(0xFF), movwf(0x03)]);
+        run(&mut cpu, 2);
+        assert_eq!(
+            cpu.read_data(SFR_STATUS),
+            STATUS_TO | STATUS_PD | STATUS_ALU
+        );
+        assert_eq!(
+            cpu.file_address(0x20),
+            0x020,
+            "STATUS does not select a bank"
+        );
+    }
+
+    #[test]
+    fn enhanced_fsr_reaches_banked_linear_and_flash_spaces() {
+        let mut words = Vec::new();
+        words.extend(load_fsr(0, 0x2050)); // linear byte 80 = bank 1 offset 0x20
+        words.push(movlw(0x5A));
+        words.push(movwf(0x00)); // INDF0
+        words.extend(load_fsr(1, 0x0120)); // banked address, bank 2
+        words.push(movlw(0x5A));
+        words.push(movwf(0x01)); // INDF1
+        words.extend(load_fsr(0, 0x8000 + 20)); // flash word 20
+        words.push(byte_op(0x8, 0x00, false)); // MOVF INDF0, W
+        let steps = words.len();
+        while words.len() < 20 {
+            words.push(0x0000);
+        }
+        words.push(0x34A5); // word 20: RETLW 0xA5, low byte 0xA5
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, steps);
+        assert_eq!(cpu.read_data(0x0A0), 0x5A, "linear 0x2050 -> bank 1 0x20");
+        assert_eq!(cpu.read_data(0x120), 0x5A);
+        assert_eq!(cpu.wreg(), 0xA5, "flash read returns the low byte");
+    }
+
+    #[test]
+    fn enhanced_flash_through_fsr_is_read_only_and_indf_via_fsr_reads_zero() {
+        let mut words = Vec::new();
+        words.extend(load_fsr(0, 0x8000));
+        words.push(movlw(0x12));
+        words.push(movwf(0x00));
+        words.extend(load_fsr(1, 0x0000)); // FSR1 -> INDF0
+        words.push(byte_op(0x8, 0x01, false));
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, words.len());
+        assert_eq!(cpu.fetch_word(0), movlw(0x00), "flash unchanged");
+        assert_eq!(cpu.wreg(), 0);
+        assert_ne!(cpu.status() & STATUS_Z, 0);
+    }
+
+    #[test]
+    fn moviw_movwi_pre_and_post_increment_and_decrement() {
+        let mut words = Vec::new();
+        words.extend(load_fsr(0, 0x2000));
+        words.push(movlw(1));
+        words.push(0x001A); // MOVWI FSR0++  -> [0x2000] = 1, FSR0 = 0x2001
+        words.push(movlw(2));
+        words.push(0x0018); // MOVWI ++FSR0  -> FSR0 = 0x2002, [0x2002] = 2
+        words.push(0x0011); // MOVIW --FSR0  -> FSR0 = 0x2001, W = 0, Z
+        words.push(0x0013); // MOVIW FSR0--  -> W = [0x2001] = 0, FSR0 = 0x2000
+        words.push(0x0012); // MOVIW FSR0++  -> W = 1, FSR0 = 0x2001
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, words.len());
+        assert_eq!(cpu.read_data(0x020), 1);
+        assert_eq!(cpu.read_data(0x022), 2);
+        assert_eq!(cpu.wreg(), 1);
+        assert_eq!(cpu.fsr(0), 0x2001);
+        assert_eq!(cpu.status() & STATUS_Z, 0);
+    }
+
+    #[test]
+    fn indexed_moviw_movwi_and_addfsr_use_signed_offsets() {
+        let mut words = Vec::new();
+        words.extend(load_fsr(1, 0x2010));
+        words.push(movlw(0x77));
+        words.push(indexed(true, 1, -3)); // [0x200D] = 0x77
+        words.push(addfsr(1, -16)); // FSR1 = 0x2000
+        words.push(movlw(0));
+        words.push(indexed(false, 1, 13)); // W = [0x200D]
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, words.len());
+        assert_eq!(cpu.read_data(0x02D), 0x77);
+        assert_eq!(cpu.wreg(), 0x77);
+        assert_eq!(cpu.fsr(1), 0x2000, "indexed forms leave FSR alone");
+    }
+
+    #[test]
+    fn bra_brw_callw_and_movlp_paging() {
+        // 0: BRA +2 -> 3; 3: MOVLW 2; 4: BRW -> 4+1+2 = 7; 7: MOVLP 0x10;
+        // 8: MOVLW 0x05; 9: CALLW -> 0x1005; 0x1005: BRA -1 -> 0x1005.
+        let mut words = vec![0u16; 0x1006];
+        words[0] = bra(2);
+        words[3] = movlw(2);
+        words[4] = 0x000B;
+        words[7] = movlp(0x10);
+        words[8] = movlw(0x05);
+        words[9] = 0x000A;
+        words[0x1005] = bra(-1);
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 3);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.get_pc(), 7);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.get_pc(), 0x1005);
+        assert_eq!(cpu.read_data(SFR_STKPTR), 0);
+        assert_eq!(cpu.read_data(SFR_TOSL), 10, "return address = CALLW + 1");
+        assert_eq!(cpu.read_data(SFR_TOSH), 0);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x1005, "BRA -1 loops on itself");
+    }
+
+    #[test]
+    fn goto_takes_its_page_from_pclath_6_3() {
+        let mut cpu = ecpu_with(&[movlp(0x38), 0x2805]); // GOTO 0x005, page 0x38
+        run(&mut cpu, 2);
+        assert_eq!(cpu.get_pc(), 0x3805);
+    }
+
+    #[test]
+    fn shifts_and_carry_arithmetic_set_flags() {
+        let mut cpu = ecpu_with(&[
+            movlw(0x81),
+            movwf(0x20),
+            0x3500 | 0x20,        // LSLF 0x20, W: W = 0x02, C = 1
+            0x3700 | 0x80 | 0x20, // ASRF 0x20, F: 0x81 -> 0xC0, C = 1
+            0x3600 | 0x20,        // LSRF 0x20, W: 0xC0 -> 0x60, C = 0
+        ]);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.wreg(), 0x02);
+        assert_ne!(cpu.status() & STATUS_C, 0);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(0x20), 0xC0);
+        assert_ne!(cpu.status() & STATUS_C, 0);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.wreg(), 0x60);
+        assert_eq!(cpu.status() & STATUS_C, 0);
+
+        // 16-bit add 0x01FF + 0x0001 with ADDWF/ADDWFC, then 16-bit subtract
+        // back with SUBWF/SUBWFB.
+        let mut cpu = ecpu_with(&[
+            movlw(0xFF),
+            movwf(0x20),
+            movlw(0x01),
+            movwf(0x21),
+            movlw(0x01),
+            byte_op(0x7, 0x20, true), // ADDWF lo: 0x00, C = 1
+            movlw(0x00),
+            0x3D80 | 0x21, // ADDWFC hi: 0x02
+            movlw(0x01),
+            byte_op(0x2, 0x20, true), // SUBWF lo: 0x00 - 1 = 0xFF, C = 0 (borrow)
+            movlw(0x00),
+            0x3B80 | 0x21, // SUBWFB hi: 0x02 - 0 - 1 = 0x01, C = 1
+        ]);
+        run(&mut cpu, 8);
+        assert_eq!(cpu.read_data(0x20), 0x00);
+        assert_eq!(cpu.read_data(0x21), 0x02);
+        run(&mut cpu, 4);
+        assert_eq!(cpu.read_data(0x20), 0xFF);
+        assert_eq!(cpu.read_data(0x21), 0x01);
+        assert_ne!(cpu.status() & STATUS_C, 0);
+        assert_eq!(cpu.status() & STATUS_Z, 0);
+    }
+
+    #[test]
+    fn interrupt_entry_shadows_core_registers_and_retfie_restores_them() {
+        // Main: BSR = 3, PCLATH = 0x02, FSR0 = 0x1234, W = 0x5A, C set,
+        // then enable INTE + GIE with INTF set. The ISR at 4 trashes W,
+        // BSR and PCLATH, clears INTF and returns.
+        let mut words = vec![0u16; 0x20];
+        words[0] = 0x2810; // GOTO 0x10
+        words[4] = movlw(0xEE);
+        words[5] = movlb(9);
+        words[6] = movlp(0x05);
+        words[7] = bcf(0x0B, 1); // INTF
+        words[8] = 0x0009; // RETFIE
+        let main = [
+            movlb(3),
+            movlp(0x02),
+            movlw(0x34),
+            movwf(0x04),
+            movlw(0x12),
+            movwf(0x05),
+            bsf(0x03, 0), // C
+            movlw(0x5A),
+            movwf(0x7F),
+            movlw(0x92), // GIE | INTE | INTF
+            movwf(0x0B),
+        ];
+        words[0x10..0x10 + main.len()].copy_from_slice(&main);
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, 1 + main.len());
+        assert_eq!(cpu.get_pc(), 4, "vectored");
+        assert_eq!(cpu.read_data(SFR_STATUS_SHAD + 2), 3, "BSR_SHAD");
+        assert_eq!(cpu.read_data(SFR_STATUS_SHAD + 3), 0x02, "PCLATH_SHAD");
+        // W was 0x92 at entry (the last MOVLW before MOVWF INTCON).
+        assert_eq!(cpu.read_data(SFR_STATUS_SHAD + 1), 0x92, "WREG_SHAD");
+        run(&mut cpu, 5);
+        assert_eq!(cpu.get_pc(), 0x10 + main.len() as u32);
+        assert_eq!(cpu.wreg(), 0x92);
+        assert_eq!(cpu.read_data(SFR_BSR), 3);
+        assert_eq!(cpu.read_data(SFR_PCLATH), 0x02);
+        assert_eq!(cpu.fsr(0), 0x1234);
+        assert_ne!(cpu.status() & STATUS_C, 0);
+        assert_ne!(cpu.read_data(SFR_INTCON) & INTCON_GIE, 0);
+    }
+
+    #[test]
+    fn retfie_keeps_live_to_pd() {
+        // DS40001440E section 7.5: STATUS is shadowed except TO and PD. Main
+        // sleeps (PD = 0), wakes on INTF with GIE = 0, then sets GIE and is
+        // vectored; the ISR's CLRWDT sets PD = 1, which RETFIE must keep.
+        let mut words = vec![0u16; 0x20];
+        words[0] = 0x2810; // GOTO 0x10
+        words[4] = 0x0064; // CLRWDT
+        words[5] = bcf(0x0B, 1); // INTF
+        words[6] = 0x0009; // RETFIE
+        let main = [
+            movlw(0x10),
+            movwf(0x0B),
+            0x0063,
+            0x0000,
+            bsf(0x0B, 7),
+            0x0000,
+        ];
+        words[0x10..0x10 + main.len()].copy_from_slice(&main);
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, 4);
+        assert_eq!(cpu.status() & STATUS_PD, 0, "asleep, PD = 0");
+        cpu.write_data(SFR_INTCON, 0x12); // INTE | INTF
+        for _ in 0..8 {
+            if cpu.get_pc() == 4 {
+                break;
+            }
+            run(&mut cpu, 1);
+        }
+        assert_eq!(cpu.get_pc(), 4, "vectored");
+        assert_eq!(cpu.status() & STATUS_PD, 0);
+        assert_eq!(
+            cpu.read_data(SFR_STATUS_SHAD) & (STATUS_TO | STATUS_PD),
+            0,
+            "TO/PD not shadowed"
+        );
+        run(&mut cpu, 3);
+        assert_ne!(cpu.read_data(SFR_INTCON) & INTCON_GIE, 0, "returned");
+        assert_ne!(cpu.status() & STATUS_PD, 0, "CLRWDT's PD survives RETFIE");
+        assert_ne!(cpu.status() & STATUS_TO, 0);
+    }
+
+    #[test]
+    fn stack_overflow_resets_with_stvren_and_wraps_without() {
+        // CALL 0 forever: the 17th push overflows.
+        let mut cpu = ecpu_with(&[0x2000]);
+        run(&mut cpu, 16);
+        assert_eq!(cpu.read_data(SFR_STKPTR), 15);
+        cpu.write_data(0x096, 0);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(SFR_STKPTR), STKPTR_EMPTY, "reset");
+        assert_eq!(cpu.get_pc(), 0);
+        assert_ne!(cpu.read_data(0x096) & PCON_STKOVF, 0);
+
+        // CONFIG2 with STVREN = 0 (byte address of word 0x8008).
+        let mut cpu = ecpu_with(&[0x2000]);
+        cpu.load_flash(0x8008 * 2, &[0xFF, 0x3D]);
+        assert_eq!(cpu.config_word2() & CONFIG2_STVREN, 0);
+        run(&mut cpu, 17);
+        assert_eq!(cpu.read_data(SFR_STKPTR), 0, "wrapped");
+        assert_ne!(cpu.read_data(0x096) & PCON_STKOVF, 0);
+    }
+
+    #[test]
+    fn stack_underflow_resets_with_stvren() {
+        let mut cpu = ecpu_with(&[movlw(1), 0x0008]);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.get_pc(), 0);
+        assert_ne!(cpu.read_data(0x096) & PCON_STKUNF, 0);
+        assert_eq!(cpu.wreg(), 0, "core reset");
+    }
+
+    #[test]
+    fn reset_instruction_clears_ri_and_restarts() {
+        let mut cpu = ecpu_with(&[movlw(9), 0x0001]);
+        assert_ne!(cpu.read_data(0x096) & PCON_RI, 0);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.get_pc(), 0);
+        assert_eq!(cpu.wreg(), 0);
+        assert_eq!(cpu.read_data(0x096) & PCON_RI, 0);
+    }
+
+    #[test]
+    fn eusart_tx_and_lat_registers_on_the_f182x_map() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut cpu = ecpu_with(&[
+            movlb(3),
+            movlw(0x24),
+            movwf(0x1E), // TXSTA (0x19E)
+            movlw(0x80),
+            movwf(0x1D), // RCSTA (0x19D)
+            movlw(b'K'),
+            movwf(0x1A), // TXREG (0x19A)
+            movlb(1),
+            bcf(0x0E, 0), // TRISC0 (0x08E)
+            movlb(2),
+            bsf(0x0E, 0), // LATC0 (0x10E)
+        ]);
+        cpu.set_serial_sink(sink.clone());
+        run(&mut cpu, 11);
+        assert_eq!(sink.lock().unwrap().as_slice(), b"K");
+        assert_ne!(cpu.read_data(0x011) & PIR1_TXIF, 0, "TXIF follows TXEN");
+        assert_eq!(cpu.read_data(0x10E), 0x01, "LATC");
+        assert_eq!(cpu.read_data(0x00E), 0x01, "PORTC pin driven by LATC0");
+        assert_eq!(cpu.port_latch(2), 0x01);
+    }
+
+    #[test]
+    fn enhanced_image_config_and_eeprom_addresses() {
+        let mut cpu = Pic16::for_chip_name("pic16f1829");
+        cpu.load_flash(0x8007 * 2, &[0xC4, 0x3F, 0xFF, 0x1F]);
+        cpu.load_flash(0x8000 * 2, &[0x01, 0x00]);
+        cpu.load_flash(0xF000 * 2, &[0xAB, 0x00]);
+        assert_eq!(cpu.config_word(), 0x3FC4);
+        assert_eq!(cpu.config_word2(), 0x1FFF);
+        assert_eq!(cpu.eedata(0), 0xAB);
+    }
+
+    #[test]
+    fn enhanced_decode_differs_from_classic_where_the_isa_does() {
+        // 0x3B00 is unassigned on the classic core and SUBWFB on the
+        // enhanced one; 0x0100 is CLRW on the classic core only.
+        let mut bus = crate::bus::SystemBus::new();
+        let config = SimulationConfig::default();
+        let mut classic = cpu_with(&[0x3B00]);
+        assert!(classic.step(&mut bus, &[], &config).is_err());
+        let mut enhanced = ecpu_with(&[0x3B00]);
+        assert!(enhanced.step(&mut bus, &[], &config).is_ok());
+        let mut enhanced = ecpu_with(&[0x0100]);
+        assert!(enhanced.step(&mut bus, &[], &config).is_err());
+        let mut enhanced = ecpu_with(&[0x0103]);
+        assert!(enhanced.step(&mut bus, &[], &config).is_ok());
+        for word in [0x0002u16, 0x0007, 0x000C, 0x0040, 0x0068] {
+            let mut enhanced = ecpu_with(&[word]);
+            assert!(
+                enhanced.step(&mut bus, &[], &config).is_err(),
+                "{word:#06x} must not decode"
+            );
+        }
+    }
+
+    #[test]
+    fn enhanced_snapshot_round_trip_keeps_bsr_and_fsrs() {
+        let mut words = vec![movlb(5)];
+        words.extend(load_fsr(0, 0x2345));
+        words.extend(load_fsr(1, 0x8ABC));
+        words.push(0x2000 | 0x0F); // CALL 0x0F
+        let mut cpu = ecpu_with(&words);
+        run(&mut cpu, words.len());
+        let snap = cpu.snapshot();
+        let mut other = Pic16::for_chip_name("pic16f1829");
+        other.apply_snapshot(&snap);
+        assert_eq!(other.read_data(SFR_BSR), 5);
+        assert_eq!(other.fsr(0), 0x2345);
+        assert_eq!(other.fsr(1), 0x8ABC);
+        assert_eq!(other.read_data(SFR_STKPTR), 0);
+        assert_eq!(other.read_data(SFR_TOSL), words.len() as u8);
+        assert_eq!(other.get_pc(), 0x0F);
+    }
+
+    #[test]
+    fn tmr0_counts_instruction_cycles_through_the_prescaler() {
+        // Classic: OPTION_REG resets to T0CS = 1, so TMR0 holds still.
+        let mut cpu = cpu_with(&[0x0000; 8]);
+        run(&mut cpu, 4);
+        assert_eq!(cpu.read_data(SFR_TMR0), 0);
+
+        // T0CS = 0, PSA = 1: one count per instruction cycle; 0xFE + 2
+        // overflows and sets T0IF.
+        let mut cpu = cpu_with(&[0x0000; 8]);
+        cpu.write_data(SFR_OPTION_REG, OPTION_PSA);
+        cpu.write_data(SFR_TMR0, 0xFE);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.read_data(SFR_TMR0), 0x00);
+        assert_ne!(cpu.read_data(SFR_INTCON) & INTCON_T0IF, 0);
+
+        // Enhanced map (TMR0 at 0x015), PSA = 0, PS = 001: 1:4.
+        let mut cpu = ecpu_with(&[0x0000; 16]);
+        cpu.write_data(0x095, 0x01);
+        run(&mut cpu, 7);
+        assert_eq!(cpu.read_data(0x015), 1);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(0x015), 2);
+        // A TMR0 write clears the prescaler count.
+        run(&mut cpu, 3);
+        cpu.write_data(0x015, 0x10);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.read_data(0x015), 0x10);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(0x015), 0x11);
     }
 }

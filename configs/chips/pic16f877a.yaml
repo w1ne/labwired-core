@@ -11,7 +11,7 @@
 # L1 slice: boot + USART TX + PORTB latch. The USART, port and interrupt
 # SFRs are CPU-internal in the PIC16 model (crates/core/src/cpu/pic16.rs),
 # so no bus-side peripherals are declared. Not modelled: oscillator/CONFIG
-# decoding, TMR0/1/2, CCP, MSSP, ADC (PORTA/PORTE read as digital),
+# decoding, TMR1/2 (TMR0 timer mode is modelled), CCP, MSSP, ADC (PORTA/PORTE read as digital),
 # comparators, EEPROM, WDT, USART RX and baud timing, PSP and external pin
 # drive.
 #

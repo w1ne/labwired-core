@@ -1602,6 +1602,26 @@
         "lane": "none"
       }
     },
+    "pic16f1829": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic16f1829_smoke.rs",
+        "test": "sdcc_firmware_boots_and_prints_the_banner",
+        "signal": "the committed SDCC 4.4.0 ELF boots on pic16f1829 and writes 'PIC16F1829 OK' through 'MUL OK' (eight lines) through the EUSART TXREG (0x19A); examples/pic16f1829/io-smoke.yaml asserts the same ordered output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic16f1829_smoke; strict_onboarding examples/pic16f1829/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The PIC16 model has no MSSP; SPI is not modelled for this part.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The PIC16 model has no MSSP; I2C is not modelled for this part.",
+        "lane": "none"
+      }
+    },
     "pic16f877a": {
       "in_boards": false,
       "uart": {

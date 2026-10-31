@@ -373,7 +373,8 @@ fn build_pic16_node(
     let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Pic16::for_chip_name(&chip.name);
-    cpu.load_program_image(&image);
+    cpu.load_program_image(&image)
+        .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))
 }

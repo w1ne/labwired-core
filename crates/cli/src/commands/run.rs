@@ -2665,7 +2665,10 @@ pub(crate) fn run_interactive_pic16(
     chip_name: &str,
 ) -> ExitCode {
     let mut cpu = labwired_core::cpu::Pic16::for_chip_name(chip_name);
-    cpu.load_program_image(&program);
+    if let Err(e) = cpu.load_program_image(&program) {
+        error!("{e}");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
     // The USART TX register is on the CPU; keep the bytes for the console.
     let uart_sink: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
     cpu.set_serial_sink(uart_sink.clone());

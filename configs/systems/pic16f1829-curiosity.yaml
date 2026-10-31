@@ -1,0 +1,10 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# PIC16F1829 on the Curiosity 8-bit board (DM164137) — L1: boot + EUSART TX
+# (CPU-internal) + LED D4 on RA5.
+name: "pic16f1829-curiosity"
+chip: "../chips/pic16f1829.yaml"

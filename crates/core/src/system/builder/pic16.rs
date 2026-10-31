@@ -65,7 +65,8 @@ pub(super) fn build(
         .map_err(|e| anyhow!("Loader Error: {e}"))?;
 
     let mut cpu = new_core(&chip.name, uart_sink.clone());
-    cpu.load_program_image(&program_image);
+    cpu.load_program_image(&program_image)
+        .map_err(|e| anyhow!("Loader Error: {e}"))?;
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let machine = Machine::new(boxed, bus);

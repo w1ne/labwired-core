@@ -384,6 +384,13 @@ pub struct Pic16CpuSnapshot {
     pub stack: Vec<u32>,
     #[serde(default)]
     pub asleep: bool,
+    /// Enhanced mid-range only: BSR, FSR0H (FSR0L is `fsr`) and FSR1.
+    #[serde(default)]
+    pub bsr: u8,
+    #[serde(default)]
+    pub fsr0h: u8,
+    #[serde(default)]
+    pub fsr1: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
