@@ -3,7 +3,9 @@
 The [FRDM-K64F](https://www.nxp.com/design/design-center/development-boards-and-designs/FRDM-K64F)
 board with an **MK64FN1M0VLL12**: Cortex-M4F, 1 MiB flash, 256 KiB SRAM
 (64 KiB SRAM_L + 192 KiB SRAM_U), 120 MHz max. This is the **UART-only L1
-slice** — the Ethernet/TCP milestone is explicitly deferred.
+slice**, plus stock Zephyr: hello_world, synchronization, and both Renode
+`NXP-K64F.robot` suites (`uart_basic_api` 7/7, `tests/net/tcp` 19/19 over a
+dummy L2). The Ethernet MAC/PHY is not modelled.
 
 ## What runs here
 
@@ -76,8 +78,9 @@ hb=0 red=0 green=1 blue=1
 - **MCG PLL/FEE** is not modelled. The smoke runs on the reset FEI clock; the
   K64F PLL (C5/C6, `S_LOCK0`/`PLLST`) is the Zephyr `hello_world`/TCP schedule
   risk.
-- **Ethernet MAC + KSZ8081 PHY**, RNGA and FTFE are declared stubs (reads
-  return 0, writes are dropped). The Zephyr TCP test is deferred.
+- **Ethernet MAC + KSZ8081 PHY** and FTFE are declared stubs (reads
+  return 0, writes are dropped). The RNGA (`kinetis_rnga`) refills instantly
+  from a deterministic generator and raises no error interrupt.
 - **eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped.**
   Firmware that touches them faults with a memory violation.
 

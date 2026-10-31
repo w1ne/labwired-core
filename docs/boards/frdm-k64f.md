@@ -13,15 +13,19 @@ LED path (with `PDOR` read-back) are proven by a committed smoke fixture and an
 PEE on PLL0). `tests/drivers/uart/uart_basic_api`, the suite Renode's
 `NXP-K64F.robot` "Should Run Zephyr Tests for UART" runs, passes 7/7 with the
 same typed input, and `samples/synchronization` runs its two-thread semaphore
-hand-off on SysTick timeouts and PendSV context switches. The Ethernet/TCP
-milestone is explicitly deferred.
+hand-off on SysTick timeouts and PendSV context switches.
+`tests/net/tcp`, the suite Renode's "Should Run Zephyr Tests for TCP" runs,
+passes 19/19 (IPv4/IPv6 client and server state machine over the test's own
+dummy L2) on the new RNGA model. That covers both Renode `NXP-K64F.robot`
+cases. The Ethernet MAC and PHY are still not modelled.
 
 !!! warning "Not claimed yet"
     SIM clock gating and PORT pad mux/pulls are **not modelled**. The MCG
     PLL0 reports lock immediately and its output frequency is not derived. The
     SYSMPU, PMC and OSC are register files: no MPU protection, LVD or
-    oscillator is modelled. The Ethernet MAC + KSZ8081 PHY, RNGA and FTFE are declared
-    stubs. eDMA, PIT/FTM, I²C/SPI, ADC/DAC, USB, CAN and SDHC are **not
+    oscillator is modelled. The Ethernet MAC + KSZ8081 PHY and FTFE are declared
+    stubs. The RNGA refills instantly from a deterministic generator (not
+    entropy) and does not raise its error interrupt. eDMA, PIT/FTM, I²C/SPI, ADC/DAC, USB, CAN and SDHC are **not
     mapped**: firmware that touches them faults with a memory violation. There
     is no silicon capture: **SIM-DERIVED**.
 
@@ -64,8 +68,9 @@ milestone is explicitly deferred.
 | RGB LED | red PTB22, green PTE26, blue PTB21 | modelled GPIO — active low |
 | Buttons | SW2 PTC6, SW3 PTA4 | declared `board_io` — not read by the smoke |
 | UART0 VCP | PTB16 / PTB17, ALT3 | simulator captures the UART0 stream; OpenSDA/USB not modelled |
-| ENET + KSZ8081 PHY | `0x400C_0000` | `type: stub` — TCP test deferred |
-| RNGA / FTFE / eDMA / PIT / FTM / I²C / SPI / ADC / DAC / USB / CAN / SDHC | see descriptor | not modelled |
+| ENET + KSZ8081 PHY | `0x400C_0000` | `type: stub` — no MAC/PHY model (`tests/net/tcp` uses a dummy L2) |
+| RNGA | `0x4002_9000` | modelled (`kinetis_rnga`) — GO/HA sticky, OREG_LVL, LRS/ORU/ERRI, CLRI; instant refill, deterministic samples, no error IRQ |
+| FTFE / eDMA / PIT / FTM / I²C / SPI / ADC / DAC / USB / CAN / SDHC | see descriptor | not modelled |
 
 ## Boot path
 
@@ -84,6 +89,7 @@ cargo build -p firmware-frdm-k64f-smoke --release --target thumbv7em-none-eabi
 ./target/release/labwired test --script examples/frdm-k64f/zephyr-hello.yaml
 ./target/release/labwired test --script examples/frdm-k64f/zephyr-uart-basic-api.yaml
 ./target/release/labwired test --script examples/frdm-k64f/zephyr-sync.yaml
+./target/release/labwired test --script examples/frdm-k64f/zephyr-net-tcp.yaml
 ```
 
 See [`examples/frdm-k64f/VALIDATION.md`](../../examples/frdm-k64f/VALIDATION.md)
