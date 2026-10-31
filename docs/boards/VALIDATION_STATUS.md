@@ -57,7 +57,7 @@ The models column is a content digest over everything that board's `models` list
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `42f9b109760cacd2` | no silicon capture |
 | `r7fa8m1ah` | 🟡 smoke-manual | — | `6aa6f30ad99bd0dd` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `49492726c425c19d` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `278c9be93b8cd60d` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `5efb633cdb549ac8` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `e9d5f869a16bb33b` | no silicon capture |
 | `mimxrt595s` | 🟡 smoke-manual | — | `ab08bc76bb35332c` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `15102b801d3bad8e` | no silicon capture |
