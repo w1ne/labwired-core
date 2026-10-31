@@ -229,6 +229,23 @@ pub const PIC16_CLASSIC_NO_USART_MAP: Pic16SfrMap = Pic16SfrMap {
     ..PIC16_CLASSIC_MAP
 };
 
+/// The classic layout with something other than ADCON1 at 0x9F, which the
+/// model then leaves alone at reset: VRCON on the PIC16F627A/628A/648A
+/// (per their SDCC 4.4.0 headers).
+pub const PIC16_CLASSIC_NO_ADCON1_MAP: Pic16SfrMap = Pic16SfrMap {
+    adcon1: None,
+    ..PIC16_CLASSIC_MAP
+};
+
+/// The 8-pin PIC12F609/615/675/683/752 and PIC12HV752: no USART, the port
+/// is GPIO/TRISIO (PORTA/TRISA, RA0-RA5/GP0-GP5) and 0x9F is ANSEL
+/// (PIC12F609/615/675/683) or CMOUT (PIC12F752), not ADCON1, so it is not
+/// cleared at reset (per their SDCC 4.4.0 headers).
+pub const PIC12_CLASSIC_MAP: Pic16SfrMap = Pic16SfrMap {
+    adcon1: None,
+    ..PIC16_CLASSIC_NO_USART_MAP
+};
+
 /// The PIC16F84A (DS35007C Table 2-1): PORTA and PORTB only, EEDATA/EEADR
 /// at 0x08/0x09 and EECON1/EECON2 at 0x88/0x89, no PIR/PIE (0x0C-0x4F is
 /// GPR, mirrored in bank 1), no USART and no ADC.
@@ -280,6 +297,22 @@ pub const PIC16E_F161X_MAP: Pic16SfrMap = Pic16SfrMap {
     pir: &[0x010, 0x011, 0x012, 0x013, 0x014],
     pie: &[0x090, 0x091, 0x092, 0x093, 0x094],
     ..PIC16E_F182X_MAP
+};
+
+/// The enhanced layouts on parts with no EUSART: PIC12(L)F1501 and
+/// PIC16(L)F1503/1507 (F151x), PIC16(L)F1613/1703/1707 (F182x). The
+/// 0x199-0x19F addresses and PIR1 bit 4 are plain registers there.
+pub const PIC16E_F182X_NO_EUSART_MAP: Pic16SfrMap = Pic16SfrMap {
+    usart: false,
+    ..PIC16E_F182X_MAP
+};
+pub const PIC16E_F151X_NO_EUSART_MAP: Pic16SfrMap = Pic16SfrMap {
+    usart: false,
+    ..PIC16E_F151X_MAP
+};
+pub const PIC16E_F161X_NO_EUSART_MAP: Pic16SfrMap = Pic16SfrMap {
+    usart: false,
+    ..PIC16E_F161X_MAP
 };
 
 /// One mid-range part: core, program words, implemented port bits
@@ -402,8 +435,21 @@ const fn edev(
 /// PORTA/PORTB: 0x0C-0x4F is GPR and 0x08/0x09/0x88/0x89 are its EEPROM
 /// registers (stored, the EEPROM write sequence is not modelled).
 ///
-/// Left out: classic parts with a USART elsewhere (PIC16F688); enhanced parts without an EUSART
-/// (PIC16F1503/1507/1613/1703/1707), with comparator SFRs at LATD/LATE
+/// The PIC16F627A/628A/648A have VRCON at 0x9F (`PIC16_CLASSIC_NO_ADCON1_MAP`),
+/// so it is not cleared as ADCON1 at reset.
+///
+/// The 8-pin PIC12F6xx/7xx are classic rows too: GPIO/TRISIO are PORTA/TRISA
+/// and their bits GP0-GP5 the PORTA mask. The PIC12F629 uses
+/// [`PIC16_CLASSIC_NO_USART_MAP`]; the others have ANSEL or CMOUT at 0x9F
+/// ([`PIC12_CLASSIC_MAP`]). The PIC12(L)F1822/1840 are enhanced rows on the
+/// F182x map (PORTA only, the EUSART at 0x199).
+///
+/// Enhanced parts with no EUSART (`*_NO_EUSART_MAP`: PIC12(L)F1501,
+/// PIC16(L)F1503/1507/1613/1703/1707) keep 0x199-0x19F and PIR1 bit 4 as
+/// plain registers.
+///
+/// Left out: classic parts with a USART elsewhere (PIC16F688); the PIC10F320/322
+/// (TRISA at 0x06, OPTION_REG at 0x0E); enhanced parts with comparator SFRs at LATD/LATE
 /// (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
 /// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
 /// entry for them, so no lkr cross-check or SDCC firmware build).
@@ -764,7 +810,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
     dev("pic16c65b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
     dev("pic16c73b", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
     dev("pic16c74b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
-    dev(
+    dev_map(
         "pic16f627a",
         1024,
         [0xFF, 0xFF, 0x00, 0x00, 0x00],
@@ -773,8 +819,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        PIC16_CLASSIC_NO_ADCON1_MAP,
     ),
-    dev(
+    dev_map(
         "pic16f628a",
         2048,
         [0xFF, 0xFF, 0x00, 0x00, 0x00],
@@ -783,8 +830,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        PIC16_CLASSIC_NO_ADCON1_MAP,
     ),
-    dev(
+    dev_map(
         "pic16f648a",
         4096,
         [0xFF, 0xFF, 0x00, 0x00, 0x00],
@@ -793,6 +841,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        PIC16_CLASSIC_NO_ADCON1_MAP,
     ),
     dev(
         "pic16f87",
@@ -843,7 +892,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         "pic16f84a",
         1024,
         [0x1F, 0xFF, 0x00, 0x00, 0x00],
-        &[(0x08C, 0x0CF, 0x00C), (0x08C, 0x0CF, 0x00C)],
+        &[(0x08C, 0x0CF, 0x00C)],
         PIC16_CLASSIC_F84A_MAP,
     ),
     dev_map(
@@ -871,7 +920,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         "pic16f630",
         1024,
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
-        &[(0x0A0, 0x0DF, 0x020), (0x0A0, 0x0DF, 0x020)],
+        &[(0x0A0, 0x0DF, 0x020)],
         PIC16_CLASSIC_NO_USART_MAP,
     ),
     dev_map(
@@ -889,7 +938,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         "pic16f676",
         1024,
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
-        &[(0x0A0, 0x0DF, 0x020), (0x0A0, 0x0DF, 0x020)],
+        &[(0x0A0, 0x0DF, 0x020)],
         PIC16_CLASSIC_NO_USART_MAP,
     ),
     dev_map(
@@ -1482,6 +1531,159 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         16384,
         [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
         PIC16E_F182X_MAP,
+    ),
+    dev_map(
+        "pic12f609",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC12_CLASSIC_MAP,
+    ),
+    dev_map(
+        "pic12f615",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC12_CLASSIC_MAP,
+    ),
+    dev_map(
+        "pic12f629",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[(0x0A0, 0x0DF, 0x020)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic12f675",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[(0x0A0, 0x0DF, 0x020)],
+        PIC12_CLASSIC_MAP,
+    ),
+    dev_map(
+        "pic12f683",
+        2048,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC12_CLASSIC_MAP,
+    ),
+    dev_map(
+        "pic12f752",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC12_CLASSIC_MAP,
+    ),
+    dev_map(
+        "pic12hv752",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC12_CLASSIC_MAP,
+    ),
+    edev(
+        "pic12f1822",
+        2048,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic12lf1822",
+        2048,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic12f1840",
+        4096,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic12lf1840",
+        4096,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic12f1501",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic12lf1501",
+        1024,
+        [0x3F, 0x00, 0x00, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16f1503",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1503",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16f1507",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1507",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16f1613",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1613",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16f1703",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1703",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16f1707",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
+    ),
+    edev(
+        "pic16lf1707",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
     ),
 ];
 
@@ -3389,6 +3591,52 @@ mod tests {
     }
 
     #[test]
+    fn pic12_gpio_port_and_ansel_at_0x9f() {
+        // PIC12F675: GPIO/TRISIO at 0x05/0x85 (GP0-GP5), ANSEL at 0x9F.
+        let mut cpu = Pic16::for_chip_name("pic12f675");
+        assert!(!cpu.is_enhanced());
+        assert_eq!(*cpu.sfr_map(), PIC12_CLASSIC_MAP);
+        cpu.write_data(0x85, 0x00);
+        cpu.write_data(0x05, 0xFF);
+        assert_eq!(cpu.read_data(0x05), 0x3F, "GP0-GP5 only");
+        cpu.write_data(0x9F, 0x0F);
+        cpu.reset_core();
+        assert_eq!(cpu.read_data(0x9F), 0x0F, "ANSEL is not ADCON1");
+        // The PIC16F627A's 0x9F is VRCON; the 877A's ADCON1 is cleared.
+        let mut cpu = Pic16::for_chip_name("pic16f627a");
+        cpu.write_data(0x9F, 0xA5);
+        cpu.reset_core();
+        assert_eq!(cpu.read_data(0x9F), 0xA5, "VRCON");
+        let mut cpu = Pic16::for_chip_name("pic16f877a");
+        cpu.write_data(0x9F, 0x06);
+        cpu.reset_core();
+        assert_eq!(cpu.read_data(0x9F), 0x00, "ADCON1 PCFG = 0000");
+    }
+
+    #[test]
+    fn enhanced_parts_without_an_eusart_keep_its_addresses_as_registers() {
+        // PIC16F1503: no EUSART, so 0x199-0x19F and PIR1 bit 4 (TXIF on
+        // the F1829) are unimplemented. Nothing is sent and no TRMT/TXIF
+        // is forced in.
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut cpu = Pic16::for_chip_name("pic16f1503");
+        assert!(cpu.is_enhanced());
+        assert!(!cpu.sfr_map().usart);
+        cpu.set_serial_sink(sink.clone());
+        cpu.write_data(0x19E, 0x20); // F1829 TXSTA.TXEN
+        cpu.write_data(0x19D, 0x80); // F1829 RCSTA.SPEN
+        cpu.write_data(0x19A, b'X'); // F1829 TXREG
+        assert!(sink.lock().unwrap().is_empty(), "no EUSART, no TX");
+        assert_eq!(cpu.read_data(0x19E), 0x20, "no TRMT forced in");
+        cpu.write_data(0x011, 0x00);
+        assert_eq!(cpu.read_data(0x011), 0x00, "no TXIF forced in");
+        // The PIC12F1840 keeps its EUSART on the F182x map.
+        let cpu = Pic16::for_chip_name("pic12f1840");
+        assert!(cpu.sfr_map().usart);
+        assert_eq!(cpu.flash_words(), 4096);
+    }
+
+    #[test]
     fn parts_without_a_usart_keep_its_addresses_as_registers() {
         // PIC16F630 (DS40039F Table 2-1): CMCON at 0x19, VRCON at 0x99,
         // 0x18/0x98 unimplemented, PIR1 bit 3 CMIF (bit 4 unimplemented);
@@ -3473,8 +3721,8 @@ mod tests {
 
     #[test]
     fn enhanced_rows_pick_the_core_flash_and_oscstat_map() {
-        // Left out: no EUSART, 64 banks.
-        for name in ["pic16f1503", "pic16f18855"] {
+        // Left out: PIC10F32x layout, 64 banks.
+        for name in ["pic10f320", "pic16f18855"] {
             assert!(pic16_device(name).is_none(), "{name}");
         }
         let names: Vec<_> = PIC16_DEVICES.iter().map(|d| d.name).collect();

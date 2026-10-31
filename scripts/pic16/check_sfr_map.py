@@ -92,13 +92,34 @@ BITS = {
     "GIE": 0x80, "PEIE": 0x40,
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
-# Classic map names in pic16.rs, by whether the part has the USART.
-# Classic map names in pic16.rs, by (has the USART, has PIR1/PIE1).
+# The 8-pin PIC12F6xx/7xx headers name PORTA/TRISA GPIO/TRISIO and the
+# port bits GP0-GP5 (the PIC12F609/615/752 use the PORTA names).
+SFR_ALIASES = {"GPIO": "PORTA", "TRISIO": "TRISA"}
+# The model clears ADCON1 at reset (`Pic16SfrMap::adcon1`, 0x9F). A part
+# whose 0x9F is another register (VRCON on the PIC16F627A/628A/648A, ANSEL
+# on the PIC12F609/615/675/683, CMOUT on the PIC12F752) gets a map that
+# leaves it alone.
+ADCON1 = 0x9F
+# Classic map names in pic16.rs, by (has the USART, has PIR1/PIE1, 0x9F is
+# ADCON1 or free).
 MAPS = {
-    (True, True): "PIC16_CLASSIC_MAP",
-    (False, True): "PIC16_CLASSIC_NO_USART_MAP",
-    (False, False): "PIC16_CLASSIC_F84A_MAP",
+    (True, True, True): "PIC16_CLASSIC_MAP",
+    (False, True, True): "PIC16_CLASSIC_NO_USART_MAP",
+    (False, False, True): "PIC16_CLASSIC_F84A_MAP",
+    (True, True, False): "PIC16_CLASSIC_NO_ADCON1_MAP",
+    (False, True, False): "PIC12_CLASSIC_MAP",
 }
+
+
+def sfr_addrs(h: str) -> dict[str, int]:
+    """Register name -> address from the header, with GPIO/TRISIO under
+    their PORTA/TRISA names."""
+    addrs = {m[0]: int(m[1], 16)
+             for m in re.findall(r"#define\s+(\w+)_ADDR\s+0x([0-9A-Fa-f]+)", h)}
+    for alias, name in SFR_ALIASES.items():
+        if alias in addrs and name not in addrs:
+            addrs[name] = addrs.pop(alias)
+    return addrs
 
 
 def has_usart(addrs: dict[str, int]) -> bool:
@@ -109,8 +130,12 @@ def has_pir(addrs: dict[str, int]) -> bool:
     return any(name in addrs for name in PIR_SFRS)
 
 
+def adcon1_free(addrs: dict[str, int]) -> bool:
+    return all(n == "ADCON1" for n, a in addrs.items() if a == ADCON1)
+
+
 def classic_map(addrs: dict[str, int]) -> str | None:
-    return MAPS.get((has_usart(addrs), has_pir(addrs)))
+    return MAPS.get((has_usart(addrs), has_pir(addrs), adcon1_free(addrs)))
 
 
 # Enhanced mid-range (PIC16F1xxx, 32 banks): the PIC16F182x/F193x layout
@@ -123,13 +148,19 @@ E_SFRS = {
     ("PORTA",): 0x00C, ("TMR0",): 0x015,
     ("TRISA",): 0x08C, ("OPTION_REG",): 0x095, ("PCON",): 0x096,
     ("LATA",): 0x10C,
-    ("TXREG", "TX1REG"): 0x19A, ("SPBRGL", "SPBRG", "SP1BRGL"): 0x19B,
-    ("RCSTA", "RC1STA"): 0x19D, ("TXSTA", "TX1STA"): 0x19E,
     ("STATUS_SHAD",): 0xFE4, ("WREG_SHAD",): 0xFE5, ("BSR_SHAD",): 0xFE6,
     ("PCLATH_SHAD",): 0xFE7, ("FSR0L_SHAD",): 0xFE8, ("FSR0H_SHAD",): 0xFE9,
     ("FSR1L_SHAD",): 0xFEA, ("FSR1H_SHAD",): 0xFEB,
     ("STKPTR",): 0xFED, ("TOSL",): 0xFEE, ("TOSH",): 0xFEF,
 }
+# The EUSART. A part with none of these registers (PIC12F1501,
+# PIC16F1503/1507/1613/1703/1707) gets a `*_NO_EUSART_MAP`, which leaves
+# them and PIR1.TXIF alone; a part with any of them must have all of them.
+E_USART_SFRS = {
+    ("TXREG", "TX1REG"): 0x19A, ("SPBRGL", "SPBRG", "SP1BRGL"): 0x19B,
+    ("RCSTA", "RC1STA"): 0x19D, ("TXSTA", "TX1STA"): 0x19E,
+}
+E_USART_REGS = ("PIR1", "TXSTA", "RCSTA")
 # The model touches these addresses on every enhanced part (reset values,
 # the PIRx/PIEx interrupt scan, ports, OSCSTAT ready bits). A part may lack
 # the register, but then no other SFR may sit at the address.
@@ -182,13 +213,21 @@ E_BITS = [
 # OSCSTAT<4:0> read as "ready" (the `osc_ready` mask): each of those bits
 # must be one of these clock-ready/stable flags, or unimplemented.
 E_OSC_READY = {"HFIOFS": 0, "LFIOFR": 1, "MFIOFR": 2, "HFIOFL": 3, "HFIOFR": 4}
-# The enhanced maps in pic16.rs, by (PIR1 address, OSCSTAT ready mask).
-# Parts without the MFINTOSC (PIC16F145x/150x/151x) have no MFIOFR/HFIOFL.
+# The enhanced maps in pic16.rs, by (PIR1 address, OSCSTAT ready mask, has
+# the EUSART). Parts without the MFINTOSC (PIC16F145x/150x/151x) have no
+# MFIOFR/HFIOFL.
 E_MAPS = {
-    (0x011, 0x1F): "PIC16E_F182X_MAP",
-    (0x011, 0x13): "PIC16E_F151X_MAP",
-    (0x010, 0x1F): "PIC16E_F161X_MAP",
+    (0x011, 0x1F, True): "PIC16E_F182X_MAP",
+    (0x011, 0x13, True): "PIC16E_F151X_MAP",
+    (0x010, 0x1F, True): "PIC16E_F161X_MAP",
+    (0x011, 0x1F, False): "PIC16E_F182X_NO_EUSART_MAP",
+    (0x011, 0x13, False): "PIC16E_F151X_NO_EUSART_MAP",
+    (0x010, 0x1F, False): "PIC16E_F161X_NO_EUSART_MAP",
 }
+
+
+def e_has_usart(addrs: dict[str, int]) -> bool:
+    return any(n in addrs for names in E_USART_SFRS for n in names)
 
 
 def sdcc_include() -> pathlib.Path:
@@ -209,14 +248,13 @@ def header(part: str) -> str:
 def check(part: str) -> list[str]:
     """Mismatches between the model's SFR map and the part's header."""
     h = header(part)
-    addrs = {m[0]: int(m[1], 16)
-             for m in re.findall(r"#define\s+(\w+)_ADDR\s+0x([0-9A-Fa-f]+)", h)}
+    addrs = sfr_addrs(h)
     bad = []
     if "BSR" in addrs:
         bad.append("enhanced mid-range (BSR)")
     usart, pir = has_usart(addrs), has_pir(addrs)
     if classic_map(addrs) is None:
-        bad.append("USART without PIR1/PIE1: no map")
+        bad.append(f"no map for USART {usart}, PIR1 {pir}, 0x9F ADCON1/free {adcon1_free(addrs)}")
     if not pir:
         bad += [f"{n} present, model decodes PORTA/PORTB only"
                 for n in PORTS_CDE if n in addrs]
@@ -285,6 +323,9 @@ def check_enhanced(part: str) -> list[str]:
         bad.append("no gputils 1.4.0 linker script (cannot cross-check or build)")
     pir1 = addrs.get("PIR1") if addrs.get("PIR1") in E_LAYOUTS else 0x011
     required, optional = e_layout_sfrs(pir1)
+    usart = e_has_usart(addrs)
+    if usart:
+        required = {**required, **E_USART_SFRS}
     for names, want in {**E_SFRS, **required}.items():
         if not any(addrs.get(n) == want for n in names):
             bad.append(f"{names[0]} at {addrs.get(names[0])!r}, model {want:#x}")
@@ -297,6 +338,8 @@ def check_enhanced(part: str) -> list[str]:
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
     for reg_names, bit_names, want in E_BITS:
+        if not usart and reg_names[0] in E_USART_REGS:
+            continue
         reg = next((r for r in reg_names if r in regs), None)
         got = None if reg is None else next(
             (regs[reg][b] for b in bit_names if b in regs[reg]), None)
@@ -309,7 +352,7 @@ def check_enhanced(part: str) -> list[str]:
         for name, pos in E_OSC_READY.items():
             if osc.get(pos) not in (name, None):
                 bad.append(f"OSCSTAT bit {pos} is {osc[pos]!r}, model {name}")
-        if (pir1, osc_ready(h)) not in E_MAPS:
+        if (pir1, osc_ready(h), usart) not in E_MAPS:
             bad.append(f"PIR1 {pir1:#x} with OSCSTAT ready mask {osc_ready(h):#04x} has no map")
     cfg = {m[0]: int(m[1], 16)
            for m in re.findall(r"#define\s+(_CONFIG[12]|_STVREN_OFF|_STVREN_ON)\s+0x([0-9A-Fa-f]+)", h)}
@@ -329,39 +372,36 @@ def geometry(part: str):
     PIC16F630/676 the last word (0x3FF) holds the factory OSCCAL `retlw`,
     and the datasheet counts it in the 1K words."""
     lkr = (lkr_dir() / f"{part[3:]}_g.lkr").read_text()
+    # The OSCCAL page is `oscval` (PIC16F630/676) or `.oscval` (PIC12F629/675).
     pages = re.findall(
-        r"CODEPAGE\s+NAME=(?:page\d*|oscval)\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
+        r"CODEPAGE\s+NAME=(?:page\d*|\.?oscval)\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
     flash_words = max(int(end, 16) for _, end in pages) + 1
     groups: dict[str, list[tuple[int, int]]] = {}
     for name, start, end in re.findall(
             r"SHAREBANK\s+NAME=(\w+)\s+START=(0x\w+)\s+END=(0x\w+)", lkr):
         groups.setdefault(name, []).append((int(start, 16), int(end, 16)))
     aliases = []
+    # The `////SHAREBANK` lines gputils commented out are matched on purpose:
+    # they carry the whole-bank mirrors (PIC16F873/874, 818/819). Where one
+    # repeats a live group (PIC16F630/676, 84A, PIC12F629/675) the alias is
+    # kept once.
     for ranges in groups.values():
         target = ranges[0][0]
         for start, end in ranges[1:]:
-            aliases.append((start, end, target))
+            if (start, end, target) not in aliases:
+                aliases.append((start, end, target))
     h = header(part)
-    masks = []
-    for port in "ABCDE":
-        mask = 0
-        for bit in range(8):
-            if re.search(rf"unsigned\s+R{port}{bit}\s*:\s*1", h):
-                mask |= 1 << bit
-        masks.append(mask)
     defined = {int(a, 16)
                for a in re.findall(r"#define\s+\w+_ADDR\s+0x([0-9A-Fa-f]+)", h)}
     own = sorted(a for a in MIRRORS if a in defined)
-    addrs = {m[0]: int(m[1], 16)
-             for m in re.findall(r"#define\s+(\w+)_ADDR\s+0x([0-9A-Fa-f]+)", h)}
-    return flash_words, masks, sorted(aliases), own, classic_map(addrs)
+    return flash_words, port_masks(part), sorted(aliases), own, classic_map(sfr_addrs(h))
 
 
 def row(part: str) -> str:
     flash_words, masks, aliases, own, map_name = geometry(part)
     m = ", ".join(f"0x{x:02X}" for x in masks)
     a = ", ".join(f"(0x{s:03X}, 0x{e:03X}, 0x{t:03X})" for s, e, t in aliases)
-    if map_name != MAPS[(True, True)]:
+    if map_name != MAPS[(True, True, True)]:
         if own:
             sys.exit(f"error: {part}: no row form for own SFRs on {map_name}")
         return f'    dev_map("{part}", {flash_words}, [{m}], &[{a}], {map_name}),'
@@ -385,12 +425,15 @@ def device_db(part: str) -> dict[str, str]:
 
 
 def port_masks(part: str) -> list[int]:
+    """Implemented PORTA-E bits: the header's `R<port><bit>` fields (`GP<bit>`
+    for the PIC12F6xx GPIO port, which is PORTA)."""
     h = header(part)
     masks = []
     for port in "ABCDE":
         mask = 0
         for bit in range(8):
-            if re.search(rf"unsigned\s+R{port}{bit}\s*:\s*1", h):
+            names = [f"R{port}{bit}"] + ([f"GP{bit}"] if port == "A" else [])
+            if any(re.search(rf"unsigned\s+{n}\s*:\s*1", h) for n in names):
                 mask |= 1 << bit
         masks.append(mask)
     return masks
@@ -413,7 +456,8 @@ def enhanced_geometry(part: str):
         sys.exit(f"error: {part}: pic14devices.txt {flash_words} words, lkr {lkr_words}")
     h = header(part)
     pir1 = int(re.search(r"#define\s+PIR1_ADDR\s+0x([0-9A-Fa-f]+)", h)[1], 16)
-    return flash_words, port_masks(part), E_MAPS[(pir1, osc_ready(h))]
+    usart = e_has_usart(sfr_addrs(h))
+    return flash_words, port_masks(part), E_MAPS[(pir1, osc_ready(h), usart)]
 
 
 def enhanced_row(part: str) -> str:
@@ -442,13 +486,13 @@ def committed_rows() -> dict[str, tuple]:
     rows = {}
     for m in re.finditer(
             r'\bdev(_own|_map)?\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
-            r'(?:,\s*&\[([^\]]*)\])?(?:,\s*(PIC16_\w+))?,?\s*\)',
+            r'(?:,\s*&\[([^\]]*)\])?(?:,\s*(PIC1[26]_\w+))?,?\s*\)',
             table[1], re.S):
         masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[4])]
         aliases = [tuple(int(x, 16) for x in t)
                    for t in re.findall(r"\(0x(\w+),\s*0x(\w+),\s*0x(\w+)\)", m[5])]
         own = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[6] or "")]
-        rows[m[2]] = (int(m[3]), masks, aliases, own, m[7] or MAPS[(True, True)])
+        rows[m[2]] = (int(m[3]), masks, aliases, own, m[7] or MAPS[(True, True, True)])
     return rows
 
 
