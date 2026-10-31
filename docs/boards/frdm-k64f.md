@@ -13,7 +13,8 @@ LED path (with `PDOR` read-back) are proven by a committed smoke fixture and an
 PEE on PLL0). `tests/drivers/uart/uart_basic_api`, the suite Renode's
 `NXP-K64F.robot` "Should Run Zephyr Tests for UART" runs, passes 7/7 with the
 same typed input, and `samples/synchronization` runs its two-thread semaphore
-hand-off on SysTick timeouts and PendSV context switches. The Ethernet/TCP milestone is explicitly deferred.
+hand-off on SysTick timeouts and PendSV context switches. The Ethernet/TCP
+milestone is explicitly deferred.
 
 !!! warning "Not claimed yet"
     SIM clock gating and PORT pad mux/pulls are **not modelled**. The MCG
