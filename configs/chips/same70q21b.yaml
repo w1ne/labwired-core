@@ -18,14 +18,18 @@
 # chip reuses `sam4s_pio` (PIOA-PIOE) and `sam4s_pmc`. UART0-4 and USART0-2
 # use the `sam` UART layout (status SR/CSR @0x14, THR @0x1C, BRGR @0x20).
 #
+# Also modelled: CHIPID (declarative, rev-B CIDR) and the Cortex-M7 L1 cache
+# geometry + maintenance window (`cortex_m7_cache`, no cache contents).
+#
 # Declared stubs (accept writes, read zero): EEFC, the RSTC/SUPC/RTT/WDT/RTC
 # system controller and the bus matrix (CCFG_SYSIO at +0x114, the PB4/TDI
 # select). Not mapped (access faults): GMAC, TRNG, TC0-3, SPI0/1, QSPI,
 # TWIHS0-2, MCAN0/1, AFEC0/1, DACC, PWM0/1, HSMCI, SSC, USBHS, XDMAC, AES,
-# ICM, ISI, the TCM/cache controls beyond the SCB and the rest.
+# ICM, ISI, the TCM controls and the rest.
 #
 # Tier: L1 smoke — boot + USART1 console + PIO LED/button path on the SAM E70
-# Xplained map. SIM-DERIVED (no SAM E70 bench part).
+# Xplained map, plus stock Zephyr v3.7.0 hello_world and synchronization.
+# SIM-DERIVED (no SAM E70 bench part).
 
 name: "same70q21b"
 arch: "arm"
@@ -75,6 +79,15 @@ peripherals:
     irq: 8
     config:
       profile: "sam"
+
+  # CHIPID (CIDR/EXID): the ATSAME70Q21B revision B identification words.
+  # Zephyr's SoC init compares CIDR with its HAL value.
+  - id: "chipid"
+    type: "declarative"
+    base_address: 0x400E0940
+    size: "8B"
+    config:
+      path: "../peripherals/same70q21b/chipid.yaml"
 
   - id: "eefc"
     type: "stub"
@@ -184,6 +197,18 @@ peripherals:
     type: "stub"
     base_address: 0x40088000
     size: 512
+
+  # Cortex-M7 L1 caches: 16 KiB I-cache + 16 KiB D-cache on the SAM E70
+  # (DS60001527, the Cortex-M7 configuration table). The SCB reports this
+  # geometry (CLIDR/CTR/CCSIDR); the maintenance operations at 0xE000EF50 are
+  # accepted as no-ops because simulated memory is always coherent.
+  - id: "l1_cache"
+    type: "cortex_m7_cache"
+    base_address: 0xE000EF50
+    size: 48
+    config:
+      icache_kb: 16
+      dcache_kb: 16
 
   - id: "systick"
     type: "systick"

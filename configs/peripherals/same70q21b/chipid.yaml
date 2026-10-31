@@ -1,0 +1,50 @@
+# SAM E70 CHIPID (DS60001527, "Chip Identifier (CHIPID)" chapter).
+# Two read-only identification words. The values are the ATSAME70Q21B
+# (revision B) ones from Microchip's device header, as vendored by Zephyr
+# hal_atmel (asf/sam/include/same70b/same70q21b.h: CHIP_CIDR 0xA1020E01,
+# CHIP_EXID 0x00000002). Zephyr's same70 SoC init compares CIDR with the HAL
+# value and logs a warning on a mismatch.
+peripheral: CHIPID
+version: 0.1.0
+registers:
+- id: CIDR
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0xA1020E01
+  fields:
+  - name: VERSION
+    bit_range: [0, 4]
+    description: "Version of the Device (1 = revision B)"
+  - name: EPROC
+    bit_range: [5, 7]
+    description: "Embedded Processor (0 = Cortex-M7)"
+  - name: NVPSIZ
+    bit_range: [8, 11]
+    description: "Nonvolatile Program Memory Size (14 = 2048 Kbytes)"
+  - name: NVPSIZ2
+    bit_range: [12, 15]
+    description: "Second Nonvolatile Program Memory Size"
+  - name: SRAMSIZ
+    bit_range: [16, 19]
+    description: "Internal SRAM Size"
+  - name: ARCH
+    bit_range: [20, 27]
+    description: "Architecture Identifier"
+  - name: NVPTYP
+    bit_range: [28, 30]
+    description: "Nonvolatile Program Memory Type"
+  - name: EXT
+    bit_range: [31, 31]
+    description: "Extension Flag (EXID is present)"
+  side_effects: null
+- id: EXID
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000002
+  fields:
+  - name: EXID
+    bit_range: [0, 31]
+    description: "Chip ID Extension (2 = SAM E70Q, 144 pins)"
+  side_effects: null
