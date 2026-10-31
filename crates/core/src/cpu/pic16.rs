@@ -344,7 +344,7 @@ const fn edev(
 ///
 /// Classic parts without PORTC (PIC16F627A/628A/648A, PIC16F87/88) have a
 /// zero PORTC mask, so 0x07 reads 0 and ignores writes; the checker requires
-/// the address to be free in their header. The OTP/EPROM PIC16C63A/73B/74B
+/// the address to be free in their header. The OTP/EPROM PIC16C63A/65B/73B/74B
 /// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
@@ -707,6 +707,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         ],
     ),
     dev("pic16c63a", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
+    dev("pic16c65b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
     dev("pic16c73b", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
     dev("pic16c74b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
     dev(
