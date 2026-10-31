@@ -4,7 +4,12 @@ Claims, evidence, and what is explicitly **not** claimed yet. **SIM-DERIVED**:
 there is no CC2538 bench part. `flash-controller.yaml` follows the steps of
 Renode's `cc2538_flash_controller.robot` with an independent firmware (Renode's
 test ELF is a prebuilt binary run against a TI ROM dump); it is not a run of
-Renode's binary, and no wider Renode parity claim is made.
+Renode's binary. The `crypto-*.yaml` scripts run the Contiki-NG v4.9
+`cc2538-common/crypto` tests, built here; their program names and messages
+are the ones Renode's `cc2538_cryptoprocessor.robot` waits for, and the
+scripts assert a superset of its milestones. Renode's prebuilt ELFs are not
+run. No
+wider Renode parity claim is made.
 
 ## Tier status
 
@@ -31,6 +36,14 @@ Renode's binary, and no wider Renode parity claim is made.
 | Negative control: the old ROM (`PageErase`/`ProgramFlash` returned -1) | fails | `LABWIRED_CC2538_ROM=<old cc2538_rom.bin>`: test-cfs `failed to write at offset 1920` and 3 errors, example-coffee reads `""`, flash test prints `[FAIL]` ×4 |
 | Instruction support for the CFS image | audited | `unsupported_instruction_audit.sh`: 20,000,000 steps, 0 unsupported |
 | Determinism of the flash runs | smoke-tested | two runs of each flash script, identical `uart.log` and `snapshot.json` |
+| AES/SHA-256 registers: Table 22-103 reset values, key store (contiguous free areas, even start for 192/256, write-1-to-free, size write deletes keys, read errors), SAVED_CONTEXT_READY cleared by the 4th TAG word but not by a peek, level IRQ `INT_STAT & INT_EN` | unit-tested | `cargo test -p labwired-core --lib cc2538::aes` (13 tests) |
+| AES modes against published vectors: ECB (FIPS-197 C.1-C.3, all key sizes), CBC and CTR (SP 800-38A F.2.1/F.5.1), CCM (RFC 3610 #1, both directions), GCM (GCM spec test case 4), CBC-MAC, SHA-256 (FIPS 180-4 "abc", resumed two-block message) | unit-tested | same 13 tests |
+| Stock Contiki-NG v4.9 `cc2538-common/crypto` suite: CBC 16, CBC-MAC 16, CTR 6, CCM 22 (incl. AAD-only and `mic_len` 0), ECB 16, GCM 8+8, SHA-256 9 vectors | smoke-tested | `crypto-{cbc,cbc-mac,ctr,ccm,ecb,gcm,sha256}.yaml`, 2/2 checks each, 30,000,000 steps; every vector's `...(): success` and `... OK` lines in order; `firmware_survival::test_cc2538dk_contiki_crypto_{ccm,sha256}_survival` (with and without `event-scheduler`) |
+| Renode `cc2538_cryptoprocessor.robot` milestones | superset | all 48/64/18/99 `Wait For Line On Uart` lines of its CBC/CBC-MAC/CTR/CCM cases appear, in order, in `crypto-{cbc,cbc-mac,ctr,ccm}.yaml` |
+| Negative controls | fail | the old `stub` at `0x4008_B000`: every crypto image hangs at `Filling 128-bit key store...`. Model mutations: no level re-pend → CCM hangs at the AAD-only vector #1; CCM B0 without the Adata flag → `MIC does not match` / `authentication failed`; SHA-256 resume without the digest byte swap and GCM without the ciphertext length → the scripts fail |
+| Instruction support for the crypto images | audited | `unsupported_instruction_audit.sh` on `crypto-ccm`: 30,000,000 steps, 0 unsupported |
+| Determinism of the crypto runs | smoke-tested | two runs of each of the seven scripts, identical `uart.log` and `snapshot.json` |
+| Cryptoprocessor slave-interface data path (`AES_DATA_IN_OUT`, `HASH_DATA_IN`, `INPUT_READY`/`OUTPUT_READY`/`RFD_IN`), `KEY2`/`KEY3`, pulse interrupts, `PROT_EN`, DMA/processing latency | **not modelled** | `crates/core/src/peripherals/cc2538/aes.rs` |
 | SYS_CTRL `CLOCK_STA.SYNC_32K` | exercised | Contiki-NG `sys_ctrl_init` waits for its edge |
 | RF core: strobes, main-FSM timing, RSSI/CCA, RFRND, MTCTRL, TX timing | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::rfcore` (9 tests); Contiki `random_init` + radio init (strobes, RSSI_VALID, RFRND, CCA, MTCTRL) |
 | Sleep timer: 32-kHz count and ST0 latch | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::sleep_timer` (8 tests); Contiki reads the count (5,721 `ST0` latches in the 10M-step run) |
@@ -44,7 +57,7 @@ Renode's binary, and no wider Renode parity claim is made.
 | IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
-| AES/PKA, SSI, I2C, GPTimers, USB, uDMA, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| PKA, SSI, I2C, GPTimers, USB, uDMA, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
 
@@ -74,7 +87,7 @@ cmp out/cc2538dk-run1/uart.log out/cc2538dk-run2/uart.log          # clean
 cmp out/cc2538dk-run1/snapshot.json out/cc2538dk-run2/snapshot.json  # clean
 
 cargo test -p labwired-core --lib cc2538
-#   34 passed (GPIO + SYS_CTRL as before; rfcore 9; sleep_timer 8; flash_ctrl 8)
+#   47 passed (GPIO + SYS_CTRL as before; rfcore 9; sleep_timer 8; flash_ctrl 8; aes 13)
 cargo test -p labwired-core --test cc2538_sleep_timer_irq
 cargo test -p labwired-core --features event-scheduler --test cc2538_sleep_timer_irq
 #   1 passed each (legacy walk / scheduled event)
@@ -83,7 +96,30 @@ cargo test -p labwired-core --features event-scheduler --test cc2538_rom
 #   12 passed each
 cargo test -p labwired-core --test firmware_survival cc2538
 #   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival,
-#   test_cc2538dk_contiki_flash_test_survival ok
+#   test_cc2538dk_contiki_flash_test_survival,
+#   test_cc2538dk_contiki_crypto_ccm_survival,
+#   test_cc2538dk_contiki_crypto_sha256_survival ok
+
+# AES/SHA-256 cryptoprocessor (2026-10-31)
+for t in ecb cbc ctr cbc-mac gcm ccm sha256; do
+  ./target/release/labwired test --script examples/cc2538dk/crypto-$t.yaml \
+    --output-dir out/cc2538dk-crypto-$t --no-uart-stdout
+done
+#   PASS  2/2 checks · crypto-ecb · 30000000 steps
+#   PASS  2/2 checks · crypto-cbc · 30000000 steps
+#   PASS  2/2 checks · crypto-ctr · 30000000 steps
+#   PASS  2/2 checks · crypto-cbc-mac · 30000000 steps
+#   PASS  2/2 checks · crypto-gcm · 30000000 steps
+#   PASS  2/2 checks · crypto-ccm · 30000000 steps
+#   PASS  2/2 checks · crypto-sha256 · 30000000 steps
+#   e.g. crypto-ccm:
+#   Test vector #1: encrypt
+#   len_len=2 key_area=1
+#   adata_len=26 mdata_len=0 mic_len=8
+#   ccm_auth_encrypt_start(): success, 30 us
+#   ccm_auth_encrypt_check_status() wait: 0 us
+#   ccm_auth_encrypt_get_result(): success, 0 us
+#   MIC OK
 
 # Flash controller (2026-10-30)
 ./target/release/labwired test --script examples/cc2538dk/flash-controller.yaml \

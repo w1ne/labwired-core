@@ -379,6 +379,46 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"[OK] Data erased successfully\nFLASH TEST DONE",
     },
     SurvivalCase {
+        // CC2538DK AES/SHA-256 cryptoprocessor: UNMODIFIED Contiki-NG v4.9
+        // examples/platform-specific/cc2538-common/crypto ccm-test (22 AES-CCM
+        // vectors through the key store, the DMA channels and the AES IRQ).
+        // Vector #1 has AAD but no payload, so its result arrives with the AAD
+        // transfer and only the level re-pend wakes the waiting process. The
+        // marker is the first authenticated decrypt (vector #3, after #1);
+        // examples/cc2538dk/crypto-ccm.yaml checks all 22 vectors.
+        name: "cc2538dk_contiki_crypto_ccm",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-crypto-ccm.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Decrypted message OK",
+    },
+    SurvivalCase {
+        // The same suite's sha256-test: nine FIPS/NIST messages through the
+        // hash engine, intermediate digests resumed from HASH_DIGEST_A..H.
+        // The marker is the first digest check; crypto-sha256.yaml checks all.
+        name: "cc2538dk_contiki_crypto_sha256",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-crypto-sha256.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Computed SHA-256 hash OK",
+    },
+    SurvivalCase {
         // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
         // SRAM at 0x20000000. SCI0 (P411/P410) is the J-Link OB console; the
         // smoke runs on the reset MOCO, walks LED1-LED3 (P006-P008) with
@@ -2101,6 +2141,8 @@ fn case_cycles(case: &SurvivalCase) -> u32 {
         "cc2538dk_contiki_hello" => 10_000_000,
         // The same fade(), then four 20-ms page erases (1.28M cycles).
         "cc2538dk_contiki_flash_test" => 12_000_000,
+        // The same fade(), then the crypto vectors.
+        "cc2538dk_contiki_crypto_ccm" | "cc2538dk_contiki_crypto_sha256" => 12_000_000,
         _ => SURVIVAL_CYCLES,
     }
 }
@@ -2462,6 +2504,14 @@ survival_gate!(
 survival_gate!(
     test_cc2538dk_contiki_flash_test_survival,
     "cc2538dk_contiki_flash_test"
+);
+survival_gate!(
+    test_cc2538dk_contiki_crypto_ccm_survival,
+    "cc2538dk_contiki_crypto_ccm"
+);
+survival_gate!(
+    test_cc2538dk_contiki_crypto_sha256_survival,
+    "cc2538dk_contiki_crypto_sha256"
 );
 survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
 survival_gate!(test_apollo4p_evb_zephyr_survival, "apollo4p_evb_zephyr");

@@ -6,7 +6,10 @@
 #   tests/fixtures/cc2538dk-contiki-test-cfs.elf    UNMODIFIED examples/storage/cfs-coffee test-cfs
 #   tests/fixtures/cc2538dk-contiki-coffee.elf      UNMODIFIED examples/storage/cfs-coffee example-coffee
 #   tests/fixtures/cc2538dk-contiki-flash-test.elf  flash-test/ (ours, MIT)
-# The three newer ones are --strip-debug'ed so no host path is embedded.
+#   tests/fixtures/cc2538dk-contiki-crypto-<t>.elf  UNMODIFIED
+#     examples/platform-specific/cc2538-common/crypto <t>-test, for
+#     t = ecb cbc ctr cbc-mac gcm ccm sha256
+# All but hello are --strip-debug'ed so no host path is embedded.
 #
 # Requirements:
 #   - Contiki-NG release/v4.9 (c20b12cd2db707d6c07918f8b26cfeb52cf298ca) with
@@ -61,6 +64,16 @@ arm-none-eabi-strip --strip-debug -o "$FIXTURES/cc2538dk-contiki-flash-test.elf"
 cd "$CONTIKI_NG"
 rm -rf "$app"
 
+cd "$CONTIKI_NG/examples/platform-specific/cc2538-common/crypto"
+make TARGET=cc2538dk clean >/dev/null
+make -j"$(nproc)" TARGET=cc2538dk WERROR=0
+CRYPTO_TESTS="ecb cbc ctr cbc-mac gcm ccm sha256"
+for t in $CRYPTO_TESTS; do
+  arm-none-eabi-strip --strip-debug -o "$FIXTURES/cc2538dk-contiki-crypto-$t.elf" \
+    "build/cc2538dk/$t-test.elf"
+done
+
 cd "$FIXTURES"
 sha256sum cc2538dk-contiki-hello.elf cc2538dk-contiki-test-cfs.elf \
   cc2538dk-contiki-coffee.elf cc2538dk-contiki-flash-test.elf
+for t in $CRYPTO_TESTS; do sha256sum "cc2538dk-contiki-crypto-$t.elf"; done

@@ -9471,7 +9471,11 @@ boards:
     # write sequence, CCA lock bits, DIECFG0-2) behind the ROM's
     # PageErase/ProgramFlash: stock Contiki-NG cfs-coffee test-cfs and
     # example-coffee, plus the steps of Renode's cc2538_flash_controller.robot.
-    # IOC, AES/PKA, SSI, I2C, GPTimers, USB, uDMA and ADC are declared
+    # 2026-10-31: the AES/SHA-256 cryptoprocessor (cc2538_aes: DMA, key
+    # store, ECB/CBC/CTR/CBC-MAC/CCM/GCM, SHA-256, IRQ 143): the unmodified
+    # Contiki-NG cc2538-common/crypto suite, a superset of Renode's
+    # cc2538_cryptoprocessor.robot.
+    # IOC, PKA, SSI, I2C, GPTimers, USB, uDMA and ADC are declared
     # stubs. SIM-DERIVED — no CC2538 bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
@@ -9481,6 +9485,8 @@ boards:
       - "firmware_survival::test_cc2538dk_smoke_survival"
       - "firmware_survival::test_cc2538dk_contiki_hello_survival"
       - "firmware_survival::test_cc2538dk_contiki_flash_test_survival"
+      - "firmware_survival::test_cc2538dk_contiki_crypto_ccm_survival"
+      - "firmware_survival::test_cc2538dk_contiki_crypto_sha256_survival"
       - "cc2538_rom (12 tests: ROM utility API incl. PageErase/ProgramFlash through FLASH_CTRL + CCA boot on the CPU model)"
       - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
     models:
@@ -9490,6 +9496,7 @@ boards:
       - crates/core/src/peripherals/cc2538/rfcore.rs
       - crates/core/src/peripherals/cc2538/sleep_timer.rs
       - crates/core/src/peripherals/cc2538/flash_ctrl.rs
+      - crates/core/src/peripherals/cc2538/aes.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
