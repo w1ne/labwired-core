@@ -436,6 +436,43 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["bldc_hall_driver", "bldc-hall-driver"],
         include_str!("../../../configs/devices/bldc_hall_driver.yaml"),
     ),
+    // ── The everyday sensor set (declarative from the start; no Rust model) ─
+    (
+        &["bme680"],
+        include_str!("../../../configs/devices/bme680.yaml"),
+    ),
+    (
+        &["sht40"],
+        include_str!("../../../configs/devices/sht40.yaml"),
+    ),
+    (
+        &["icm42688"],
+        include_str!("../../../configs/devices/icm42688.yaml"),
+    ),
+    (
+        &["icm20948"],
+        include_str!("../../../configs/devices/icm20948.yaml"),
+    ),
+    (
+        &["sgp40"],
+        include_str!("../../../configs/devices/sgp40.yaml"),
+    ),
+    (
+        &["tsl2591"],
+        include_str!("../../../configs/devices/tsl2591.yaml"),
+    ),
+    (
+        &["dht20"],
+        include_str!("../../../configs/devices/dht20.yaml"),
+    ),
+    (
+        &["pmsa003i"],
+        include_str!("../../../configs/devices/pmsa003i.yaml"),
+    ),
+    (
+        &["ina226"],
+        include_str!("../../../configs/devices/ina226.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.

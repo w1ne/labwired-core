@@ -1,0 +1,192 @@
+# TDK InvenSense ICM-42688-P 6-axis IMU (3-axis accel + 3-axis gyro +
+# temperature) — declarative I²C register-pointer device.
+#
+# Datasheet: TDK InvenSense DS-000347 ("ICM-42688-P Datasheet", rev 1.x):
+#   §"Register Map for User Bank 0" and §"User Bank 0 Register Map –
+#     Descriptions" — every address and reset value below. Cross-checked
+#     against Zephyr's `drivers/sensor/tdk/icm4268x/icm4268x_reg.h`.
+#   §"Device Identification": WHO_AM_I (0x75) = 0x47.
+#   REG_BANK_SEL (0x76) selects user bank 0..4 and is reachable from every
+#     bank; only bank 0 is modelled, so every other register is `page: 0`.
+#
+# ── Output data ───────────────────────────────────────────────────────────
+#   TEMP_DATA1/0  0x1D  Temp °C = TEMP_DATA / 132.48 + 25
+#   ACCEL_DATA_X1 0x1F … ACCEL_DATA_Z0 0x24   int16, big-endian
+#   GYRO_DATA_X1  0x25 … GYRO_DATA_Z0  0x2A   int16, big-endian
+# Big-endian is the power-on byte order (INTF_CONFIG0.SENSOR_DATA_ENDIAN = 1,
+# reset 0x30). Sensitivity follows the full-scale selects:
+#   ACCEL_CONFIG0[7:5] ACCEL_FS_SEL  0 ±16 g 2048 · 1 ±8 g 4096 ·
+#                                    2 ±4 g 8192  · 3 ±2 g 16384 LSB/g
+#   GYRO_CONFIG0[7:5]  GYRO_FS_SEL   0 ±2000 16.4 · 1 ±1000 32.8 · 2 ±500 65.5 ·
+#                                    3 ±250 131 · 4 ±125 262 · 5 ±62.5 524.3 ·
+#                                    6 ±31.25 1048.6 · 7 ±15.625 2097.2 LSB/dps
+# Both reset to 0x06 (FS_SEL = 0, ODR = 1 kHz).
+#
+# ── Power modes: an OFF sensor reads 0x8000, not zero ─────────────────────
+# Every data register resets to 0x80 / 0x00, i.e. −32768 — the part's "no
+# sample" value — and the sensors power up OFF (PWR_MGMT0 = 0x00). The
+# registers keep reading 0x8000 until firmware turns the sensor on:
+#   PWR_MGMT0[1:0] ACCEL_MODE  10 low-noise · 11 low-power ⇒ accel data
+#   PWR_MGMT0[3:2] GYRO_MODE   11 low-noise              ⇒ gyro data
+#   PWR_MGMT0[5]   TEMP_DIS    0 = temperature enabled; the temperature
+#                              sensor runs while the accel or gyro does.
+# This is `source_from` on PWR_MGMT0: the live channel when the mode is on,
+# and otherwise an out-of-range "off" channel that the signed 16-bit encode
+# saturates to exactly −32768 at every full-scale setting. A driver that
+# forgets to enable a sensor reads −32768 here as on silicon — never a
+# plausible-looking zero, and never live data.
+#
+# ── Data ready ───────────────────────────────────────────────────────────
+# INT_STATUS.DATA_RDY_INT (bit 3) rises one ODR period (1 ms at the reset ODR)
+# after PWR_MGMT0 turns a sensor on, and clears when INT_STATUS is read
+# (INT_STATUS is clear-on-read). INT_STATUS powers up 0x10 (RESET_DONE_INT).
+#
+# ⚠️ NOT modelled, named rather than faked: the FIFO (FIFO_COUNT reads 0,
+# FIFO_DATA is undeclared), APEX motion features, the timestamp, the INT1/INT2
+# pins, the ODR and filter settings (stored, inert), the per-ODR data-ready
+# period (always 1 ms), SENSOR_DATA_ENDIAN = 0 (stored, data stays
+# big-endian), banks 1..4 (unmapped, read 0x00), and DEVICE_CONFIG.SOFT_RESET
+# restores only the power and full-scale registers modelled here.
+type: icm42688
+
+behavior:
+  primitive: i2c_device
+  derived:
+    # Out-of-range values the signed 16-bit encode saturates to −32768.
+    - { name: accel_off, expr: "-1000" }
+    - { name: gyro_off, expr: "-100000" }
+    - { name: temp_off, expr: "-1000" }
+  i2c:
+    default_address: 0x68
+    auto_increment: true
+    unmapped_byte: 0x00
+    page_register: 0x76
+    registers:
+      - { name: DEVICE_CONFIG, addr: 0x11, page: 0, width: 1, endian: be, access: rw, write_mask: 0x11, self_clearing: 0x01, reset: 0x00 }
+      - { name: DRIVE_CONFIG, addr: 0x13, page: 0, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x05 }
+      - { name: INT_CONFIG, addr: 0x14, page: 0, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x00 }
+      - { name: FIFO_CONFIG, addr: 0x16, page: 0, width: 1, endian: be, access: rw, write_mask: 0xC0, reset: 0x00 }
+      - name: TEMP_DATA
+        addr: 0x1D
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: temp_off
+        source_from: { register: PWR_MGMT0, mask: 0x2F, table: { 2: temperature, 3: temperature, 6: temperature, 7: temperature, 10: temperature, 11: temperature, 12: temperature, 13: temperature, 14: temperature, 15: temperature } }
+        encode: { scale: 132.48, offset: -3312.0 }
+      - name: ACCEL_DATA_X
+        addr: 0x1F
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: accel_off
+        source_from: { register: PWR_MGMT0, mask: 0x03, table: { 2: accel_x, 3: accel_x } }
+        scale_from: { register: ACCEL_CONFIG0, mask: 0x07, shift: 5, map: { 0: 2048, 1: 4096, 2: 8192, 3: 16384 } }
+      - name: ACCEL_DATA_Y
+        addr: 0x21
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: accel_off
+        source_from: { register: PWR_MGMT0, mask: 0x03, table: { 2: accel_y, 3: accel_y } }
+        scale_from: { register: ACCEL_CONFIG0, mask: 0x07, shift: 5, map: { 0: 2048, 1: 4096, 2: 8192, 3: 16384 } }
+      - name: ACCEL_DATA_Z
+        addr: 0x23
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: accel_off
+        source_from: { register: PWR_MGMT0, mask: 0x03, table: { 2: accel_z, 3: accel_z } }
+        scale_from: { register: ACCEL_CONFIG0, mask: 0x07, shift: 5, map: { 0: 2048, 1: 4096, 2: 8192, 3: 16384 } }
+      - name: GYRO_DATA_X
+        addr: 0x25
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: gyro_off
+        source_from: { register: PWR_MGMT0, mask: 0x03, shift: 2, table: { 3: gyro_x } }
+        scale_from: { register: GYRO_CONFIG0, mask: 0x07, shift: 5, map: { 0: 16.4, 1: 32.8, 2: 65.5, 3: 131, 4: 262, 5: 524.3, 6: 1048.6, 7: 2097.2 } }
+      - name: GYRO_DATA_Y
+        addr: 0x27
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: gyro_off
+        source_from: { register: PWR_MGMT0, mask: 0x03, shift: 2, table: { 3: gyro_y } }
+        scale_from: { register: GYRO_CONFIG0, mask: 0x07, shift: 5, map: { 0: 16.4, 1: 32.8, 2: 65.5, 3: 131, 4: 262, 5: 524.3, 6: 1048.6, 7: 2097.2 } }
+      - name: GYRO_DATA_Z
+        addr: 0x29
+        page: 0
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: gyro_off
+        source_from: { register: PWR_MGMT0, mask: 0x03, shift: 2, table: { 3: gyro_z } }
+        scale_from: { register: GYRO_CONFIG0, mask: 0x07, shift: 5, map: { 0: 16.4, 1: 32.8, 2: 65.5, 3: 131, 4: 262, 5: 524.3, 6: 1048.6, 7: 2097.2 } }
+      - { name: INT_STATUS, addr: 0x2D, page: 0, width: 1, endian: be, access: r, on_read: clear, reset: 0x10 }
+      - { name: FIFO_COUNTH, addr: 0x2E, page: 0, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: FIFO_COUNTL, addr: 0x2F, page: 0, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: SIGNAL_PATH_RESET, addr: 0x4B, page: 0, width: 1, endian: be, access: rw, write_mask: 0x6E, self_clearing: 0x6E, reset: 0x00 }
+      - { name: INTF_CONFIG0, addr: 0x4C, page: 0, width: 1, endian: be, access: rw, reset: 0x30 }
+      - { name: INTF_CONFIG1, addr: 0x4D, page: 0, width: 1, endian: be, access: rw, reset: 0x91 }
+      - { name: PWR_MGMT0, addr: 0x4E, page: 0, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x00 }
+      - { name: GYRO_CONFIG0, addr: 0x4F, page: 0, width: 1, endian: be, access: rw, write_mask: 0xEF, reset: 0x06 }
+      - { name: ACCEL_CONFIG0, addr: 0x50, page: 0, width: 1, endian: be, access: rw, write_mask: 0xEF, reset: 0x06 }
+      - { name: GYRO_CONFIG1, addr: 0x51, page: 0, width: 1, endian: be, access: rw, reset: 0x16 }
+      - { name: GYRO_ACCEL_CONFIG0, addr: 0x52, page: 0, width: 1, endian: be, access: rw, reset: 0x11 }
+      - { name: ACCEL_CONFIG1, addr: 0x53, page: 0, width: 1, endian: be, access: rw, reset: 0x0D }
+      - { name: TMST_CONFIG, addr: 0x54, page: 0, width: 1, endian: be, access: rw, reset: 0x23 }
+      - { name: INT_CONFIG1, addr: 0x64, page: 0, width: 1, endian: be, access: rw, reset: 0x10 }
+      - { name: INT_SOURCE0, addr: 0x65, page: 0, width: 1, endian: be, access: rw, reset: 0x10 }
+      - { name: SELF_TEST_CONFIG, addr: 0x70, page: 0, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: WHO_AM_I, addr: 0x75, page: 0, width: 1, endian: be, access: r, reset: 0x47 }
+      # Reachable from every bank (no `page:`): it is how a driver gets back.
+      - { name: REG_BANK_SEL, addr: 0x76, width: 1, endian: be, access: rw, write_mask: 0x07, reset: 0x00 }
+    data_ready:
+      - name: sample
+        start_register: PWR_MGMT0
+        start_mask: 0x0F
+        ready_register: INT_STATUS
+        ready_mask: 0x08
+        conversion_us: 1000
+        clear_on_read: [INT_STATUS]
+  rules:
+    # DEVICE_CONFIG.SOFT_RESET: the modelled power / full-scale registers
+    # return to their reset values.
+    - on: { write: DEVICE_CONFIG }
+      when: "written & 0x01"
+      do:
+        - { write: { register: PWR_MGMT0, value: "0x00" } }
+        - { write: { register: GYRO_CONFIG0, value: "0x06" } }
+        - { write: { register: ACCEL_CONFIG0, value: "0x06" } }
+        - { write: { register: INTF_CONFIG0, value: "0x30" } }
+        - { write: { register: INT_STATUS, value: "0x10" } }
+
+metadata:
+  label: "ICM-42688-P IMU"
+  summary: "TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C."
+  detail: "TDK InvenSense ICM-42688-P at 0x68 (0x69 with AP_AD0 high). WHO_AM_I (0x75) reads 0x47. Accel, gyro and temperature are big-endian int16 words at 0x1D..0x2A whose sensitivity follows ACCEL_FS_SEL / GYRO_FS_SEL. The sensors power up OFF and their data registers read the datasheet's 0x8000 until PWR_MGMT0 turns them on; DATA_RDY_INT rises 1 ms later. Bank select (0x76) works, but only bank 0 is modelled. The FIFO, APEX features, timestamps and interrupt pins are not modelled."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x68 (AP_AD0 low); 0x69 with AP_AD0 high." }
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_y, label: "Accel Y", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_z, label: "Accel Z", unit: "g", min: -16, max: 16, default: 1 }
+    - { key: gyro_x, label: "Gyro X", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_y, label: "Gyro Y", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_z, label: "Gyro Z", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: temperature, label: "Die temperature", unit: "°C", min: -40, max: 85, default: 25 }

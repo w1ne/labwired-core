@@ -4621,6 +4621,453 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "bme680",
+      "label": "BME680 Environmental",
+      "summary": "Bosch BME680 temperature / pressure / humidity sensor over I²C (gas channel not modelled).",
+      "detail": "Bosch BME680 at 0x76 (0x77 with SDO high). CHIP_ID (0xD0) reads 0x61 and VARIANT_ID (0xF0) 0x00. Serves a full factory-calibration block and raw 20-bit T/P and 16-bit H ADC words that are the exact inverse of Bosch's integer compensation (BME68x_SensorAPI) at those coefficients, so the Bosch, Adafruit and Zephyr drivers recover the host's temperature, pressure and humidity. Forced mode (ctrl_meas mode = 01) raises new_data_0 7.3 ms later and returns to sleep. The gas channel is NOT modelled: gas_r reads 0 with gas_valid clear. Oversampling, filter and noise are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x76 (SDO low); 0x77 with SDO high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%RH",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 50.0
+        },
+        {
+          "key": "pressure",
+          "label": "Pressure",
+          "unit": "hPa",
+          "min": 300.0,
+          "max": 1100.0,
+          "default": 1013.25
+        }
+      ]
+    },
+    {
+      "device_type": "sht40",
+      "label": "SHT40 Temp/Humidity",
+      "summary": "Sensirion SHT40 I²C temperature and humidity sensor (single-byte commands, CRC-8).",
+      "detail": "Sensirion SHT40 at default address 0x44 (0x45 / 0x46 for the -BD1B / -CD1B variants). Single-byte commands: 0xFD / 0xF6 / 0xE0 measure at high / medium / low precision and answer after the datasheet's maximum duration (8.3 / 4.5 / 1.6 ms) with a temperature word and a humidity word, each 16-bit big-endian plus a Sensirion CRC-8. 0x89 reads a constant serial number; 0x94 is a soft reset. A read issued before the measurement completes returns 0xFF. The heater commands take their datasheet time but do not heat.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x44 (SHT40-AD1B); 0x45 / 0x46 for the -BD1B / -CD1B variants."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0,
+          "default": 25.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 50.0
+        }
+      ]
+    },
+    {
+      "device_type": "icm42688",
+      "label": "ICM-42688-P IMU",
+      "summary": "TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C.",
+      "detail": "TDK InvenSense ICM-42688-P at 0x68 (0x69 with AP_AD0 high). WHO_AM_I (0x75) reads 0x47. Accel, gyro and temperature are big-endian int16 words at 0x1D..0x2A whose sensitivity follows ACCEL_FS_SEL / GYRO_FS_SEL. The sensors power up OFF and their data registers read the datasheet's 0x8000 until PWR_MGMT0 turns them on; DATA_RDY_INT rises 1 ms later. Bank select (0x76) works, but only bank 0 is modelled. The FIFO, APEX features, timestamps and interrupt pins are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (AP_AD0 low); 0x69 with AP_AD0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "icm20948",
+      "label": "ICM-20948 IMU",
+      "summary": "TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C.",
+      "detail": "TDK InvenSense ICM-20948 at 0x68 (0x69 with AD0 high). WHO_AM_I (bank 0, 0x00) reads 0xEA. REG_BANK_SEL (0x7F) switches user banks 0/2/3, and the same pointer decodes to a different register in each bank as on silicon. The part powers up asleep (PWR_MGMT_1 = 0x41) and its outputs read 0 until SLEEP is cleared; accel and gyro sensitivity then follow ACCEL_FS_SEL / GYRO_FS_SEL in bank 2. The AK09916 magnetometer behind the auxiliary I²C master is NOT modelled, nor are the FIFO, DMP and interrupt pin.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (AD0 low); 0x69 with AD0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "sgp40",
+      "label": "Sensirion SGP40 VOC",
+      "summary": "MOx VOC sensor returning the raw SRAW_VOC signal over I²C.",
+      "detail": "Sensirion SGP40 at fixed address 0x59, speaking the Sensirion command protocol with CRC-8 (poly 0x31). 0x260F (with RH/T compensation words) answers the raw SRAW_VOC tick after the datasheet's 30 ms; the host's Gas Index Algorithm turns it into a VOC Index. Self-test (0x280E) answers 0xD400 after 320 ms. The raw signal is an externally driven input (channel voc_sraw).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SGP40 fixed address 0x59."
+        },
+        {
+          "name": "voc_sraw",
+          "ty": "float",
+          "doc": "Initial raw VOC tick (~20000..40000). Default 28000. Drive it at runtime with the `voc_sraw` input channel."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "voc_sraw",
+          "label": "VOC raw",
+          "unit": "ticks",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 28000.0
+        }
+      ]
+    },
+    {
+      "device_type": "tsl2591",
+      "label": "TSL2591 Light",
+      "summary": "ams TSL2591 high-dynamic-range light sensor (full-spectrum + IR channels) over I²C.",
+      "detail": "ams TSL2591 at fixed address 0x29. Every transaction starts with the command byte 0xA0 | register. ID (0x12) reads 0x50. CH0 (full spectrum) and CH1 (infrared) are 16-bit little-endian counts that scale with the programmed gain (1×/25×/428×/9876×) and integration time (100–600 ms), saturating at 37888 for 100 ms and 65535 otherwise. Both read 0 until AEN is set; AVALID rises one 100 ms integration later. Host inputs are the counts at 1× gain / 100 ms. Interrupts, persistence and the special-function commands are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x29 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ch0",
+          "label": "CH0 full-spectrum counts (1×, 100 ms)",
+          "unit": "counts",
+          "min": 0.0,
+          "max": 37888.0,
+          "default": 1200.0
+        },
+        {
+          "key": "ch1",
+          "label": "CH1 infrared counts (1×, 100 ms)",
+          "unit": "counts",
+          "min": 0.0,
+          "max": 37888.0,
+          "default": 300.0
+        }
+      ]
+    },
+    {
+      "device_type": "dht20",
+      "label": "DHT20 Temp/Humidity",
+      "summary": "Aosong DHT20 I²C temperature and humidity module (AHT20-based).",
+      "detail": "Aosong DHT20 at fixed address 0x38, following its manual: 0x71 reads the status byte (0x18 = calibrated, idle), 0xAC 0x33 0x00 triggers a measurement, and after the datasheet's 80 ms a 7-byte read returns status, a 20-bit humidity and a 20-bit temperature packed across five bytes, and a CRC-8 over all six. A read during the measurement returns 0x98 (BUSY). Calibration-register initialisation is not modelled; the part always reads calibrated.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x38 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 80.0,
+          "default": 25.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 50.0
+        }
+      ]
+    },
+    {
+      "device_type": "pmsa003i",
+      "label": "PMSA003I PM2.5",
+      "summary": "Plantower PMSA003I particulate-matter sensor (PM1.0 / PM2.5 / PM10) over I²C.",
+      "detail": "Plantower PMSA003I at fixed address 0x12. A 32-byte read (bare, or after pointer 0x00) returns the Plantower frame: 0x42 0x4D, frame length 28, PM1.0/PM2.5/PM10 at CF=1 and atmospheric, six particle-count bins per 0.1 L, a reserved word and a 16-bit check code that is the byte sum of the 30 bytes before it — computed over what the twin actually answered. The pointer wraps 0x1F → 0x00, so repeated bare reads each return a whole frame. CF=1 and atmospheric words report the same values; the fan, cadence and warm-up are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x12 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "pm1_0",
+          "label": "PM1.0",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 5.0
+        },
+        {
+          "key": "pm2_5",
+          "label": "PM2.5",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 8.0
+        },
+        {
+          "key": "pm10",
+          "label": "PM10",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 10.0
+        },
+        {
+          "key": "n0_3",
+          "label": "Particles >0.3 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 900.0
+        },
+        {
+          "key": "n0_5",
+          "label": "Particles >0.5 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 280.0
+        },
+        {
+          "key": "n1_0",
+          "label": "Particles >1.0 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 50.0
+        },
+        {
+          "key": "n2_5",
+          "label": "Particles >2.5 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 6.0
+        },
+        {
+          "key": "n5_0",
+          "label": "Particles >5.0 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 2.0
+        },
+        {
+          "key": "n10",
+          "label": "Particles >10 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
+      "device_type": "ina226",
+      "label": "INA226 Power Monitor",
+      "summary": "TI INA226 bidirectional current / power monitor over I²C (36 V, 16-bit).",
+      "detail": "Texas Instruments INA226 (default 0x40; 0x40–0x4F by A0/A1 strapping). Configuration powers up at 0x4127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x2260. Shunt (2.5 µV/LSB) and bus (1.25 mV/LSB) voltages follow the host's bus_voltage and current through a 0.1 Ω shunt; Current and Power are computed from those words and the Calibration register exactly as the datasheet's equations 3 and 4 say, so they read 0 until firmware writes Calibration. CVRF rises 2.2 ms after a Configuration write. Averaging, the alert comparator and power-down are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0 = A1 = GND); 0x40–0x4F by A0/A1 strapping."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 36.0,
+          "default": 5.0
+        },
+        {
+          "key": "current",
+          "label": "Current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -0.8,
+          "max": 0.8,
+          "default": 0.25
+        }
+      ]
     }
   ]
 }
