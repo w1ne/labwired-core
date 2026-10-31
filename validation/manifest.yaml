@@ -9550,15 +9550,29 @@ boards:
     # QSPI, TWIHS, MCAN, AFEC, DACC, PWM, HSMCI, SSC, USBHS and XDMAC are not
     # mapped. SIM-DERIVED — no SAM E70 bench part. See
     # docs/boards/sam-e70-xplained.md and examples/sam-e70-xplained/VALIDATION.md.
+    # 2026-10-30 (feat/same70-zephyr-hello): stock Zephyr v3.7.0 hello_world
+    # and synchronization boot unmodified. New: the Cortex-M7 L1 cache model
+    # (cortex_m7_cache: SCB CLIDR/CTR/CCSIDR/CSSELR geometry + no-op
+    # maintenance window at 0xE000EF50), the PMC clock generator (CKGR_MOR
+    # key, PLLA/PLLB/UPLL lock, PMC_SR derived) and CHIPID (declarative,
+    # rev-B CIDR). Still SIM-DERIVED.
     doc: docs/boards/sam-e70-xplained.md
     chip: configs/chips/same70q21b.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_sam_e70_xplained_smoke_survival"
+      - "firmware_survival::test_sam_e70_xplained_zephyr_survival"
+      - "same70_zephyr_boot::zephyr_bring_up_walks_the_m7_caches_and_locks_the_plls"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/sam4s.rs
+      - crates/core/src/peripherals/cortex_m7_cache.rs
+      - crates/core/src/peripherals/scb.rs
+      - crates/core/src/system/cortex_m.rs
+      - crates/core/src/peripherals/declarative.rs
+      - configs/peripherals/same70q21b
+      - crates/firmware-sam-e70-xplained-zephyr
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs

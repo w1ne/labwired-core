@@ -376,6 +376,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
+    "cortex_m7_cache",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer and the flash controller. Deliberately not `cc2538_gpio`: that
     // spelling belongs to the staged onboarding/cc2538 descriptor, which keeps its placeholder.
@@ -1477,6 +1479,25 @@ pub fn try_build(
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        "cortex_m7_cache" => {
+            let kb = |key: &str| -> anyhow::Result<u32> {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("cortex_m7_cache: config.{key} (KiB) is required")
+                    })
+            };
+            let geometry = crate::peripherals::cortex_m7_cache::L1CacheGeometry::new(
+                kb("icache_kb")?,
+                kb("dcache_kb")?,
+            )?;
+            Box::new(crate::peripherals::cortex_m7_cache::CortexM7Cache::new(
+                geometry,
+            ))
+        }
         "cc2538_pl061_gpio" => {
             // Pads that carry the reset IOC pull-up (SWRU319C §9.2.3); port C
             // passes 0xF0 because PC0-PC3 have no on-die pulls.

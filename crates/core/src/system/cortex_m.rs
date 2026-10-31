@@ -84,6 +84,13 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         faults,
     });
     scb.event_state = Some(nvic_state.clone());
+    // A Cortex-M7 chip that declares its L1 caches (`cortex_m7_cache` at
+    // 0xE000_EF50) gets CLIDR/CTR/CCSIDR/CSSELR with that geometry; every
+    // other chip keeps reading zero there.
+    scb.l1_cache = bus
+        .peripherals
+        .iter()
+        .find_map(|p| p.dev.l1_cache_geometry());
     // `replace_or_add_peripheral_at` attaches the bus cycle clock, so the SCB's
     // ICSR pend-drain rides the event scheduler (event-scheduler builds), and
     // rebuilds the routing/tick indices after the replacement.
