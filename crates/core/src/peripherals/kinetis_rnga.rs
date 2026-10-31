@@ -131,6 +131,8 @@ impl KinetisRnga {
 }
 
 impl Peripheral for KinetisRnga {
+    // Silicon requires 32-bit accesses to OR. A byte read here goes through
+    // `read_u32`, so each byte of OR pops a whole sample (four per word).
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_u32(offset & !3)?;
         Ok((word >> ((offset & 3) * 8)) as u8)
@@ -142,6 +144,8 @@ impl Peripheral for KinetisRnga {
             // Byte stores into CR merge with the current value; CLRI only
             // acts if this byte carries it.
             CR => self.write_cr((self.cr & !(0xFF << shift)) | ((value as u32) << shift)),
+            // ER is write-only entropy folded in by XOR: a byte store folds
+            // just its shifted byte, which is as good as any other value.
             ER => self.write_er((value as u32) << shift),
             _ => {}
         }

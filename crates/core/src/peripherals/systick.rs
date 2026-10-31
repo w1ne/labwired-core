@@ -109,7 +109,9 @@ pub struct Systick {
     /// re-arm to a later deadline leaves a dead event resident until its
     /// deadline (Zephyr `tests/net/tcp` on FRDM-K64F held 9 at once, past the
     /// scheduler's per-peripheral ceiling). `None` after a restore is safe:
-    /// it only forces a fresh chain.
+    /// it only forces a fresh chain. Any path that bumps `arm_seq` without
+    /// arming a new chain (node reset) must clear it, or the next arm would
+    /// ride a chain that is already dead and SysTick would never fire again.
     #[serde(skip)]
     live_deadline: Option<u64>,
     /// Bus-published cycle clock (walk-free plan Part 1). `Some` once the bus
@@ -347,6 +349,7 @@ impl crate::Peripheral for Systick {
         self.countflag.set(false);
         self.pending_fires.set(0);
         self.arm_seq = self.arm_seq.wrapping_add(1);
+        self.live_deadline = None;
     }
 
     fn systick_ticks_until_fire(&self) -> Option<u64> {
@@ -883,6 +886,25 @@ mod tests {
             sched.advance_to(1010);
             let res = st.on_event(token, &mut sched, &mut bus);
             assert_eq!(res.system_exception, Some(15), "wrap at the new expiry");
+        }
+
+        #[test]
+        fn node_reset_drops_the_live_chain_so_the_next_arm_schedules() {
+            // A warm reset retires the running chain (its event dies on the
+            // token check). Re-enabling afterwards must queue a fresh event
+            // even for an expiry later than the dead chain's deadline.
+            let (mut st, clock) = armed_scheduler(99);
+            let old = st.take_scheduled_events()[0].1;
+            crate::Peripheral::on_node_reset(&mut st);
+            clock.publish(10);
+            st.sync_to(10);
+            st.write_u32(0x04, 999).unwrap(); // RVR: expiry at 10 + 1000
+            st.write_u32(0x08, 0).unwrap();
+            st.write(0x00, 0x07).unwrap();
+            let evs = st.take_scheduled_events();
+            assert_eq!(evs.len(), 1, "re-enable after reset must schedule");
+            assert_ne!(evs[0].1, old, "with a token the reset did not retire");
+            assert_eq!(evs[0].1, st.arm_seq, "carrying the current arm_seq");
         }
 
         #[test]

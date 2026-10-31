@@ -15,7 +15,9 @@
 # The suite reports ~6.6 s of kernel time (~800M cycles at 120 MHz). Nearly
 # all of it is idle, which idle fast-forward skips, so the run takes ~2.9M
 # interpreted steps. `max_cycles` bounds it; `max_steps` alone would not,
-# because skipped WFI cycles are not steps.
+# because skipped WFI cycles are not steps. The bound leaves ~25% headroom
+# and the run is expected to stop on it, so a slowdown shows up as missing
+# UART lines (a failed uart_ordered), not as a different stop reason.
 schema_version: "1.2"
 inputs:
   firmware: "../../tests/fixtures/mk64f12-zephyr-net-tcp.elf"
