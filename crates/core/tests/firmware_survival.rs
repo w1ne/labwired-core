@@ -435,6 +435,25 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"EK-RA6M5 SMOKE\n",
     },
     SurvivalCase {
+        // Stock Zephyr v4.0.0 hello_world for `ek_ra6m5` (Zephyr commit
+        // 8469084dfae8, hal_renesas 10326518701e;
+        // crates/firmware-ek-ra6m5-zephyr/build.sh). soc_early_init_hook
+        // clears the PSCU/CPSCU attribution (stubs); FSP's bsp_clock_init
+        // runs unpatched on `ra6_sysc` (FCACHE invalidate, MOSC/PLL stable
+        // flags, SCKSCR to the PLL), then the SysTick system clock and the
+        // SCI0 console in FIFO mode (FCR reset handshake, FTDRL).
+        name: "ek_ra6m5_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "r7fa6m5bh",
+        system: "ek-ra6m5",
+        fixture: "r7fa6m5bh-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output:
+            b"*** Booting Zephyr OS build v4.0.0 ***\r\nHello World! ek_ra6m5/r7fa6m5bh3cfc",
+    },
+    SurvivalCase {
         // EK-RA8M1: R7FA8M1AH (Cortex-M85), 2 MiB code flash at 0x02000000,
         // 896 KiB SRAM at 0x22000000. SCI9 (SCI_B, PA14/PA15) is the J-Link
         // OB console; the smoke switches SCICLK to MOCO, waits for
@@ -2532,6 +2551,7 @@ fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
 }
 
 survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
+survival_gate!(test_ek_ra6m5_zephyr_survival, "ek_ra6m5_zephyr");
 survival_gate!(test_ek_ra8m1_smoke_survival, "ek_ra8m1_smoke");
 survival_gate!(test_ek_ra8m1_zephyr_survival, "ek_ra8m1_zephyr");
 

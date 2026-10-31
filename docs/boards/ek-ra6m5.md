@@ -8,18 +8,43 @@ two active-low switches (`P005`, `P004`) and the console on **SCI0**
 
 This is the **UART+LED L1 slice**. Boot, the SCI0 console and the GPIO LED path
 (with `PCNTR1` PODR read-back) are proven by a committed smoke fixture and an
-`io-smoke.yaml`. It reuses the RA4M1 PORT, PFS, SYSTEM and SCI models at the
-RA6M5 bases; there is no new peripheral model in this slice.
+`io-smoke.yaml`. It reuses the RA4M1 PORT, PFS and SCI models at the RA6M5
+bases.
+
+**Stock Zephyr boots.** Unmodified upstream Zephyr v4.0.0 `samples/hello_world`
+and `samples/synchronization` for `ek_ra6m5` run to their banners
+(`tests/fixtures/r7fa6m5bh-zephyr-{hello,sync}.elf`, rebuilt byte-identical by
+[`crates/firmware-ek-ra6m5-zephyr/build.sh`](../../crates/firmware-ek-ra6m5-zephyr/build.sh);
+Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
+
+- **The FSP clock bring-up.** `ra6_sysc` is a full `R_SYSTEM` register file
+  (0x700 bytes, `R7FA6M5BH.h`): every register reads back, `OSCSF` is derived
+  from the HOCO/MOSC/PLL/PLL2 stop bits, and the USB/OCTA/CANFD `xxxCKCR`
+  switches complete the CKSREQ/CKSRDY handshake. It shares its model with
+  the RA8M1's `ra8_sysc`, with a per-family layout.
+- **SCI0 in FIFO mode.** FSP's `r_sci_uart` opens SCI0 with `FCR.FM` and
+  waits for the `RFRST`/`TFRST` reset bits to read back 0; Zephyr's
+  `poll_out` waits for `FDR.T` ≤ 8 and writes `FTDRL`. The `sci` UART layout
+  now has `FCR`, `FDR`, `FTDRL` and `FRDRL`.
+- **Declared stubs** for `R_FCACHE` (the FCACHEIV invalidate completes on a
+  0 read), the C-cache (`R_CACHE`) and the TrustZone attribution
+  (`R_PSCU`/`R_CPSCU`), which Zephyr's `soc_early_init_hook` and
+  `bsp_clock_init` write.
 
 !!! warning "Not claimed yet"
-    Clock generation is not modelled: only `HOCOCR`/`OSCSF` exist in the SYSTEM
-    window, and the smoke stays on the reset MOCO. Module stop (MSTP) and ICU
-    event linking are declared stubs, and the PFS peripheral mux is stored
-    only. TrustZone, flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, AGT, GPT,
-    IIC, SPI, ADC12, USBFS/USBHS, ETHERC and CANFD are declared stubs. SCI1–9
-    and the remaining blocks are **not mapped**: firmware that touches them
-    faults with a memory violation. There is no silicon capture:
-    **SIM-DERIVED**.
+    No clock rate is derived from `SCKSCR`/`SCKDIVCR`/`PLLCCR`: oscillators
+    settle at once and `cpu_hz` stays the reset MOCO 8 MHz after Zephyr
+    switches ICLK to the 200 MHz PLL (the SysTick-based Zephyr timebase
+    counts cycles, so it is unaffected). Module stop (MSTP) and ICU event
+    linking are declared stubs, so the Zephyr console is polled, and the PFS
+    peripheral mux is stored only. The SCI FIFO has no TX occupancy (TX
+    drains at once), no trigger levels and no FIFO interrupts. TrustZone,
+    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, AGT, GPT, IIC, SPI,
+    ADC12, USBFS/USBHS, ETHERC and CANFD are declared stubs. SCI1–9 and the
+    remaining blocks are **not mapped**: firmware that touches them faults
+    with a memory violation. Option-setting memory is not mapped either; the
+    loader warns and drops Zephyr's OFS segments. There is no silicon
+    capture: **SIM-DERIVED**.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -34,9 +59,9 @@ RA6M5 bases; there is no new peripheral model in this slice.
 |--------|--------|
 | Chip descriptor | [`configs/chips/r7fa6m5bh.yaml`](../../configs/chips/r7fa6m5bh.yaml) |
 | Example system | [`configs/systems/ek-ra6m5.yaml`](../../configs/systems/ek-ra6m5.yaml) |
-| Reference firmware | [`crates/firmware-ek-ra6m5-smoke/`](../../crates/firmware-ek-ra6m5-smoke/) |
+| Reference firmware | [`crates/firmware-ek-ra6m5-smoke/`](../../crates/firmware-ek-ra6m5-smoke/); stock Zephyr v4.0.0 via [`crates/firmware-ek-ra6m5-zephyr/`](../../crates/firmware-ek-ra6m5-zephyr/) |
 | Example | [`examples/ek-ra6m5/`](../../examples/ek-ra6m5/) |
-| Committed artifact | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`) |
+| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf` |
 | Build target | `thumbv8m.main-none-eabi` |
 | Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI0); SIM-DERIVED |
 
@@ -48,14 +73,17 @@ RA6M5 bases; there is no new peripheral model in this slice.
 |--------|------|-------|
 | Code flash | `0x0000_0000`, 2 MiB | modelled — the smoke links and runs here |
 | Data flash | `0x0800_0000`, 8 KiB | not mapped |
-| Option-setting memory | `0x0100_A100`+ | not mapped — OFS0/OFS1 reset defaults are assumed |
+| Option-setting memory | `0x0100_A100`+ | not mapped — OFS0/OFS1 reset defaults are assumed; Zephyr's OFS segments are dropped with a loader warning |
 | SRAM | `0x2000_0000`, 512 KiB | modelled — stack at the top |
-| SYSTEM | `0x4001_E000` | `ra_sysc` — HOCOCR/OSCSF only; SCKDIVCR/SCKSCR/PRCR read 0, writes dropped |
+| SYSTEM | `0x4001_E000` | `ra6_sysc` — every `R_SYSTEM` register stored (0x700 bytes); `OSCSF` derived from HOCOCR/MOSCCR/PLLCR/PLL2CR; CKSREQ→CKSRDY on USBCKCR/OCTACKCR/CANFDCKCR |
+| FCACHE | `0x4001_C000` | `type: stub` — FCACHEIV reads 0, FLWT dropped |
+| C-cache | `0x4000_7000` | `type: stub` — no cache modelled |
+| CPSCU / PSCU | `0x4000_8000` / `0x400E_0000` | `type: stub` — no security attribution |
 | MSTP | `0x4008_4000` | `type: stub` — module stop not modelled |
 | ICU | `0x4000_6000` | `type: stub` — IELSR event linking not modelled |
 | PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
 | PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
-| SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async, polled |
+| SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async, polled; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`) for the FSP driver |
 | SCI1–9 | `0x4011_8100` + `0x100`×n | not mapped |
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |
 | Switches | S1 P005, S2 P004 | modelled GPIO input — active low, PFS pull-up |
@@ -75,6 +103,9 @@ region that this image does not program.
 # from the repository root
 cargo build -p firmware-ek-ra6m5-smoke --release --target thumbv8m.main-none-eabi
 ./target/release/labwired test --script examples/ek-ra6m5/io-smoke.yaml --no-uart-stdout
+# stock Zephyr v4.0.0 (committed fixtures)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-hello.yaml --no-uart-stdout
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-sync.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra6m5/VALIDATION.md`](../../examples/ek-ra6m5/VALIDATION.md)
