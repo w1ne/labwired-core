@@ -411,6 +411,24 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"EK-RA8M1 SMOKE\n",
     },
     SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `ek_ra8m1` (Zephyr commit
+        // 36940db938a8, hal_renesas af77d7cdfeef;
+        // crates/firmware-ek-ra8m1-zephyr/build.sh). Built for
+        // `-mcpu=cortex-m85+nomve`: the image carries Armv8.1-M DLS/LE and
+        // CSINC. FSP's bsp_clock_init runs unpatched on `ra8_sysc` (MOSC,
+        // PLL1/PLL2 stable flags, SCKSCR to PLL1P, SCICKCR handshake), then
+        // the SysTick system clock and the SCI9 (SCI_B) console.
+        name: "ek_ra8m1_zephyr",
+        core: "cortex-m85",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "r7fa8m1ah",
+        system: "ek-ra8m1",
+        fixture: "r7fa8m1ah-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0200_0000, 0x021F_FFFF), (0x2200_0000, 0x220D_FFFF)],
+        expected_uart_output: b"Hello World! ek_ra8m1/r7fa8m1ahecbd",
+    },
+    SurvivalCase {
         // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
         // the application vector table at 0x18000 (the secure bootloader owns
         // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
@@ -2465,6 +2483,7 @@ fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
 
 survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
 survival_gate!(test_ek_ra8m1_smoke_survival, "ek_ra8m1_smoke");
+survival_gate!(test_ek_ra8m1_zephyr_survival, "ek_ra8m1_zephyr");
 
 /// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
 /// in the top 44 bytes of the last flash page and only enters a valid image.

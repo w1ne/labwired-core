@@ -21,7 +21,9 @@
 #     cross-check: ITCM 64 KiB @ 0x0, code flash 2 MiB @ 0x02000000, DTCM
 #     64 KiB @ 0x20000000, SRAM 0xE0000 @ 0x22000000, data flash 0x3000 @
 #     0x27000000). Not a Renode parity claim. Renode puts the ICU at
-#     0x4000C000; R7FA8M1AH.h says 0x40006000, which is used here.
+#     0x4000C000; R7FA8M1AH.h says R_ICU_BASE is 0x40006000, with the
+#     WUPEN/IELSR block at +0x6000..+0x6480 (0x4000C000). Both windows are
+#     mapped here; CPSCU and DMAC sit in the reserved gap between them.
 #
 # The RA8 blocks differ from RA4M1/RA6M5 in three places this descriptor
 # depends on:
@@ -36,28 +38,35 @@
 #
 # Tier: L1 UART+LED smoke. Boot from code flash, the SCI9 console (PA14
 # TXD9 / PA15 RXD9, the J-Link OB virtual COM port) and the three user LEDs
-# with PODR readback.
+# with PODR readback. Stock Zephyr v3.7.0 hello_world and synchronization
+# for `ek_ra8m1` also boot (crates/firmware-ek-ra8m1-zephyr): FSP's
+# bsp_clock_init (MOSC, PLL1/PLL2, SCKSCR to PLL1P, SCICKCR), the SysTick
+# system timer and the SCI9 console.
 #
 # NOT modelled in this slice:
-# - Cortex-M85 features beyond Armv8-M Mainline: Helium/MVE, the Armv8.1-M
-#   low-overhead-branch (WLS/DLS/LE) and PACBTI instructions, the M85
-#   caches. The engine runs the same Thumb-2 decoder it uses for the
-#   Cortex-M33 (docs/isa_coverage.md); an MVE or LOB opcode is not decoded
-#   and stops the run with a decode error. Firmware built for
-#   `thumbv8m.main` (no `-mcpu=cortex-m85` auto-vectorisation) is what this
-#   slice runs.
+# - Cortex-M85 features beyond Armv8-M Mainline other than the scalar
+#   Armv8.1-M DLS/WLS/LE loops and the CSEL family (decoded, see
+#   docs/isa_coverage.md): Helium/MVE, the tail-predicated loops, PACBTI,
+#   the branch-future BF* instructions and the M85 caches. An MVE opcode is
+#   not decoded and stops the run with a decode error. Zephyr builds for
+#   `-mcpu=cortex-m85+nomve`, which is what the Zephyr fixtures run.
+# - Option-setting memory (OFS0/OFS1, 0x0300A100+): Zephyr's ELF carries
+#   OFS/SECMPU segments there; the loader warns and drops them.
 # - TrustZone: the simulator has no security state, peripherals are mapped
 #   at their secure addresses only (the +0x10000000 non-secure aliases are
 #   NOT mapped), no IDAU/SAU attribution, no CPSCU/PSCU.
-# - Clock generation: `ra8_sysc` models HOCOCR/OSCSF and the SCICKCR
-#   handshake only. Every other SYSTEM register (SCKDIVCR, SCKSCR, PLLs,
-#   PRCR) reads 0 and drops writes. No peripheral rate is derived from
-#   SCICKCR; the smoke stays on the reset MOCO (8 MHz) for both ICLK and
-#   SCICLK.
+# - Clock generation: `ra8_sysc` stores every R_SYSTEM register (0xD80
+#   bytes) and derives OSCSF (HOCOSF/MOSCSF/PLLSF/PLL2SF from the stop bits)
+#   and CKSRDY on every xxxCKCR switch; oscillators settle at once. No rate
+#   is derived from SCKSCR/SCKDIVCR/PLLCCR or the xxxCKCR sources, and
+#   `cpu_hz` stays the reset MOCO 8 MHz even after Zephyr switches ICLK to
+#   the 480 MHz PLL1P (the SysTick-based Zephyr timebase counts cycles, so
+#   it is unaffected).
 # - Module stop (MSTP): declared stub. The smoke clears MSTPCRB.MSTPB22
 #   (SCI9) as silicon requires, but SCI9 works whether or not it is.
-# - ICU/IELSR event linking: declared stub; SCI interrupts are not routed to
-#   the NVIC, so the smoke is polled.
+# - ICU/IELSR event linking: declared stubs (both windows); SCI interrupts
+#   are not routed to the NVIC, so the smoke and the Zephyr console are
+#   polled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
 #   routing in the model.
 # - SCI_B: async polled TX/RX only. FIFO mode, the CCR0 TIE/TEIE/RIE
@@ -107,9 +116,8 @@ pins:
   P009: { gpio: port0, bit: 9, functions: [{ type: gpio, peripheral: port0 }] }
   P008: { gpio: port0, bit: 8, functions: [{ type: gpio, peripheral: port0 }] }
 peripherals:
-  # R_SYSTEM @ 0x4001E000 (PRCR at +0x3FA, HOCOLDOCR at +0xB0C). Only
-  # HOCOCR (+0x36), OSCSF (+0x3C), SCICKDIVCR (+0x54) and SCICKCR (+0x55)
-  # are modelled; see the header.
+  # R_SYSTEM @ 0x4001E000 (R_SYSTEM_Type, 0xD80 bytes; PRCR at +0x3FA).
+  # Register file with derived OSCSF and xxxCKCR CKSRDY; see the header.
   - id: "ra_sysc"
     type: "ra8_sysc"
     base_address: 0x4001E000
@@ -200,10 +208,16 @@ peripherals:
     config:
       profile: "sci_b"
   # Declared stubs (bases from R7FA8M1AH.h; reads 0, writes dropped).
-  # ICU: IRQCRn, NMI, IELSR0-95 (R_ICU_BASE).
+  # ICU (R_ICU_Type is 0x6480 bytes from R_ICU_BASE, mostly reserved):
+  # IRQCRn/NMI at +0x000, and WUPEN0/1 + IELSR0-95 at +0x6000 (IELSR at
+  # +0x6300). Zephyr's SCI_B driver clears IELSRn.IR at init.
   - id: "icu"
     type: "stub"
     base_address: 0x40006000
+    size: "2KB"
+  - id: "icu_ielsr"
+    type: "stub"
+    base_address: 0x4000C000
     size: "2KB"
   # DMAC0-7 + DMA + DTC (0x4000A000-0x4000AFFF).
   - id: "dmac_dtc"

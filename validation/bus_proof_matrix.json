@@ -1484,7 +1484,8 @@
         "file": "crates/core/tests/firmware_survival.rs",
         "test": "test_ek_ra8m1_smoke_survival",
         "signal": "committed ELF fixture tests/fixtures/ek-ra8m1-smoke.elf boots on the Cortex-M85 (Armv8-M Mainline code) and the survival gate asserts 'EK-RA8M1 SMOKE\\n' on the SCI9 (SCI_B) TX sink; examples/ek-ra8m1/io-smoke.yaml asserts the full clock/CCR readback/LED/switch/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
-        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/ek-ra8m1/io-smoke.yaml"
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/ek-ra8m1/io-smoke.yaml",
+        "note": "a second independent SCI9 proof lands in the same file: test_ek_ra8m1_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/r7fa8m1ah-zephyr-hello.elf, built for ek_ra8m1 with -mcpu=cortex-m85+nomve, so it runs Armv8.1-M DLS/LE and CSINC) and asserts 'Hello World! ek_ra8m1/r7fa8m1ahecbd'. Evidence captured 2026-10-31."
       },
       "spi": {
         "state": "none",

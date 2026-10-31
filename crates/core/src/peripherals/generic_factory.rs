@@ -1365,7 +1365,7 @@ pub fn try_build(
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
-        "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new_ra8()),
+        "ra8_sysc" => Box::new(crate::peripherals::ra_clock::Ra8Sysc::new()),
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
         "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
