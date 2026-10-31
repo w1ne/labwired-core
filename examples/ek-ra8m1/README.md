@@ -50,6 +50,12 @@ which is the subset the engine decodes. It is not built with
 oscillator, PLL1/PLL2, ICLK on PLL1P) before the SCI9 console comes up at
 115200.
 
+Stock Zephyr v4.0.0 `samples/drivers/counter/alarm`
+(`zephyr-counter-alarm.yaml`, fixture
+`tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf`) runs four AGT0
+compare-match alarms; each one reaches the core through the ICU `IELSRn`
+event link (`ra_icu` + `ra_agt`).
+
 ## Build and run
 
 ```bash
