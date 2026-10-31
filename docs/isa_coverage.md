@@ -58,6 +58,7 @@ extensions. Attempting to execute them raises `DecodeError`.
 | **Exclusives**       | `LDREX(B/H)`, `STREX(B/H)`, `LDAEX(B/H)`, `STLEX(B/H)` — monitor always succeeds (single-threaded sim, no preemption between pair); embassy's run-queue relies on this |
 | **VFPv4 (single)**   | `VLDR`, `VSTR`, `VMOV` (S↔Rt and S↔S), `VMUL`, `VADD`, `VSUB`, `VDIV` `.F32` |
 | Breakpoint           | `BKPT` (halts simulation with `SimulationError::Halt`)                       |
+| **Armv8.1-M scalar** | `DLS`, `WLS`, `LE` (with and without LR) low-overhead loops; `CSEL`, `CSINC`, `CSINV`, `CSNEG` (and the `CSET`/`CSETM`/`CINC`/`CINV`/`CNEG` aliases, Rn/Rm = 15 as zero). GCC 13 emits these for `-mcpu=cortex-m85+nomve` (Zephyr `ek_ra8m1`). Decoded for every Cortex-M: the encodings are UNDEFINED on earlier profiles. The tail-predicated `DLSTP`/`WLSTP`/`LETP`/`LCTP`, Helium/MVE, PACBTI and the branch-future `BF*` family are **not** decoded |
 
 **Interrupt model:** NVIC is implemented via the `nvic` peripheral; VTOR
 relocation and exception entry / exit work. Faults (HardFault, MemManage,
