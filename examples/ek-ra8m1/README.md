@@ -40,6 +40,16 @@ Mainline code with no FPU, Helium/MVE or low-overhead-branch instructions,
 which is the subset the engine decodes. It is not built with
 `-mcpu=cortex-m85`.
 
+**Stock Zephyr.** Unmodified Zephyr v3.7.0 `samples/hello_world` and
+`samples/synchronization` for board `ek_ra8m1` also run
+(`zephyr-hello.yaml`, `zephyr-sync.yaml`; fixtures
+`tests/fixtures/r7fa8m1ah-zephyr-{hello,sync}.elf`, rebuilt byte-identical by
+`crates/firmware-ek-ra8m1-zephyr/build.sh`). Zephyr builds for
+`-mcpu=cortex-m85+nomve`, so these images do use the Armv8.1-M `DLS`/`LE` and
+`CSINC` instructions, and they run FSP's full `bsp_clock_init` (main
+oscillator, PLL1/PLL2, ICLK on PLL1P) before the SCI9 console comes up at
+115200.
+
 ## Build and run
 
 ```bash
@@ -92,17 +102,19 @@ hb=0 podr6=0001 s1=1 s2=1
 
 ## Explicitly not claimed
 
-- **Cortex-M85 extensions.** Helium/MVE, the Armv8.1-M low-overhead branches
-  (`WLS`/`DLS`/`LE`), PACBTI and the M85 caches are not modelled.
+- **Cortex-M85 extensions.** Helium/MVE, the tail-predicated loops
+  (`DLSTP`/`WLSTP`/`LETP`/`LCTP`), PACBTI, `BF*` and the M85 caches are not
+  modelled. The scalar `DLS`/`WLS`/`LE` and `CSEL` family are.
 - **TrustZone.** No security state; the non-secure peripheral aliases
   (+0x10000000) are not mapped.
-- **Clock generation.** The SYSTEM window models `HOCOCR`/`OSCSF` and the
-  `SCICKCR` handshake only. The selected SCICLK source is stored, not used;
-  `SCKDIVCR`, `SCKSCR`, the PLLs and `PRCR` read 0 and drop writes.
+- **Clock rates.** The SYSTEM window stores every register, derives `OSCSF`
+  from the oscillator stop bits and answers the xxxCKCR handshakes, but the
+  oscillators settle at once and no rate is derived: `cpu_hz` stays 8 MHz
+  after Zephyr switches ICLK to the 480 MHz PLL1P, and `PRCR` gates nothing.
 - **Module stop.** `MSTP` is a stub: SCI9 runs whether or not `MSTPB22` is
   cleared.
-- **ICU / IELSR.** The ICU is a stub, so no peripheral event reaches the NVIC;
-  the smoke polls `CSR.TDRE`.
+- **ICU / IELSR.** Both ICU windows are stubs, so no peripheral event reaches
+  the NVIC; the smoke polls `CSR.TDRE` and the Zephyr console is polled too.
 - **SCI_B beyond polled async.** FIFO mode, `CCR0` interrupt enables, error
   flags, the simple SPI/I2C/LIN/Manchester modes and wire timing.
 - **PFS peripheral mux.** `PSEL`/`PMR` are stored only; SCI9 TX does not depend

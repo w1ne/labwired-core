@@ -4435,6 +4435,24 @@ impl CortexM {
                 Instruction::Bl { offset } => {
                     pc_increment = self.exec_bl(offset)?.apply(pc_increment);
                 }
+                Instruction::Dls { rn } => {
+                    pc_increment = self.exec_dls(rn)?.apply(pc_increment);
+                }
+                Instruction::Wls { rn, imm } => {
+                    pc_increment = self.exec_wls(rn, imm)?.apply(pc_increment);
+                }
+                Instruction::Le { lr, imm } => {
+                    pc_increment = self.exec_le(lr, imm)?.apply(pc_increment);
+                }
+                Instruction::Csel {
+                    rd,
+                    rn,
+                    rm,
+                    cond,
+                    op,
+                } => {
+                    pc_increment = self.exec_csel(rd, rn, rm, cond, op)?.apply(pc_increment);
+                }
                 Instruction::BranchCond { cond, offset } => {
                     pc_increment = self.exec_branch_cond(cond, offset)?.apply(pc_increment);
                 }

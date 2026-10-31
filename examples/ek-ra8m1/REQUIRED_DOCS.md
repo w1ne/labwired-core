@@ -12,6 +12,15 @@ Authoritative sources used by this example (retrieved 2026-10-30):
 | Zephyr `dts/arm/renesas/ra/ra8/ra8x1.dtsi`, `r7fa8m1xh.dtsi` | SoC devicetree (main) | SRAM 896 KiB at 0x22000000, code flash at 0x02000000 (2016 KiB exposed), data flash 12 KiB at 0x27000000, sci0-9 `renesas,ra8-uart-sci-b`, Cortex-M85 |
 | Renode v1.17.0 `platforms/cpus/renesas-r7fa8m1a.repl`, `platforms/boards/renesas-ek_ra8m1.repl`; renode-infrastructure `Peripherals/SCI/RenesasRA8M1_SCI.cs` (MIT) | Renode RA8M1 platform and SCI_B model | Cross-check of the memory map (ITCM/DTCM 64 KiB, code flash 2 MiB, SRAM 0xE0000) and of CESR TIST/RIST mirroring CCR0 TE/RE. Not a parity claim. Renode's ICU base (0x4000C000) and red LED (port9 13) disagree with FSP/Zephyr; FSP/Zephyr are used |
 
+Added for the stock-Zephyr boot (retrieved 2026-10-31):
+
+| Doc | Title | Used for |
+| :--- | :--- | :--- |
+| `R7FA8M1AH.h` `R_SYSTEM_Type`, `R_ICU_Type` | FSP CMSIS device header (hal_renesas af77d7cdfeef) | `R_SYSTEM` size 0xD80; `MOSCCR` +0x32, `PLLCR` +0x2A, `PLL2CR` +0x4A, `SCKSCR` +0x26, `OSCSF` bits HOCOSF 0 / MOSCSF 3 / PLLSF 5 / PLL2SF 6; the xxxCKCR offsets; `R_ICU_Type` size 0x6480 with `IELSR[96]` at +0x6300 |
+| FSP `bsp_clocks.c` (`bsp_clock_init`, `bsp_prv_clock_set`, `bsp_peripheral_clock_set`) | FSP BSP source | The oscillator start and `FSP_HARDWARE_REGISTER_WAIT` polls the model has to satisfy |
+| Zephyr v3.7.0 `drivers/serial/uart_renesas_ra8_sci_b.c` | Zephyr SCI_B driver | `R_ICU->IELSR_b[n].IR = 0` at init (the BusFault the second ICU window fixes) |
+| Arm `DDI 0553` (Armv8-M ARM, Armv8.1-M additions): `DLS`, `WLS`, `LE`, `CSEL`, `CSINC`, `CSINV`, `CSNEG` | Arm architecture reference | Encodings and semantics. Cross-checked against GNU as `-march=armv8.1-m.main` output; the unit tests use those encodings |
+
 The chip descriptor (`configs/chips/r7fa8m1ah.yaml`) carries the same values
 transcribed with its own citations; this package does not restate them.
 
@@ -22,6 +31,8 @@ packages already cite, and the reset values the model uses come from the FSP
 driver defaults, not the manual. The MOCO frequency (8 MHz) is from the Zephyr
 `r7fa8m1xh.dtsi` `clock-moco` node.
 
-Open item: clock generation, module stop, ICU event linking, TrustZone,
-Helium/MVE and the unmodelled blocks are the explicit L1 boundary, not
-documentation gaps.
+Open item: clock rates, module stop, ICU event linking, TrustZone,
+Helium/MVE and the unmodelled blocks are the explicit boundary, not
+documentation gaps. The `R_SYSTEM` reset values the model uses (stop bits
+set on MOSC/PLL/PLL2/SOSC, SCKSCR = MOCO) are the RA-family pattern FSP
+relies on, not values checked against R01UH0994.
