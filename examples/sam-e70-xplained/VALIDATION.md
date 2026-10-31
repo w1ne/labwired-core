@@ -13,7 +13,14 @@ there is no SAM E70 bench part, and no Renode parity claim is made.
 | `MATRIX CCFG_SYSIO.SYSIO4` (PB4 from TDI to PIO) | declared only | the matrix window is a stub; the PIO model does not gate pads on SYSIO |
 | PMC `PCER0` gates + `PCSR0` readback, `PMC_SR.MCKRDY` | smoke-tested | `pmc pcsr0=00005c00` (ids 10, 11, 12, 14) |
 | PMC `PCER1/PCDR1/PCSR1` at +0x100, `SCER/SCSR` | unit-tested | `sam4s::tests::pmc_bank1_is_at_0x100_and_system_clocks_stay_out_of_bank0` |
-| Clock generation (crystal, PLLA, MCK prescaler) | **not modelled** | the smoke stays on the 12 MHz main RC; `MCKRDY` reads set from reset |
+| PMC clock generator: `CKGR_MOR` (0x37 key), `CKGR_PLLAR`, `CKGR_UCKR`, `PMC_MCKR` CSS/PRES/MDIV, `PMC_SR` derived | unit-tested + Zephyr-boot-tested | `sam4s::tests::pmc_status_follows_the_clock_generator` (reset SR `0x0003_0008`, keyless MOR write aborted); `same70_zephyr_boot`: MOSCSEL, MULA 24 / DIVA 1, CSS PLLA, MDIV /2, SR MOSCXTS/LOCKA/MCKRDY/LOCKU/MOSCSELS |
+| Clock frequencies (start-up times, PLL output, MCK rate) | **not modelled** | every enabled source is stable at once; the core runs at the board's `cpu_hz` whatever MCKR selects |
+| CHIPID `CIDR`/`EXID` | Zephyr-boot-tested | `0xA102_0E01` / `0x2` (rev B, from the hal_atmel `same70q21b.h`); unmapped, Zephyr's `atmel_same70_init` BusFaults at `0x400E_0940` (negative control) |
+| Cortex-M7 L1 cache identification (CLIDR/CTR/CCSIDR/CSSELR) | unit-tested + Zephyr-boot-tested | `cortex_m7_cache::tests`, `scb::tests::cache_id_registers_follow_the_declared_m7_geometry`; CLIDR `0x0900_0003`, D CCSIDR `0xF00F_E019`, I `0xF01F_E009` |
+| Cortex-M7 cache maintenance (`0xE000_EF50`..`EF78`) | Zephyr-boot-tested (accepted, no-op) | `same70_zephyr_boot`: ≥ 4 × 512 set/way ops, CCR.IC/DC set then cleared by `z_arm_init_arch_hw_at_boot`; without the window the first `DCISW` store locks the core up (negative control) |
+| Cache contents / coherence | **not modelled** | memory is always coherent: a missing clean/invalidate around DMA works here and fails on silicon |
+| Stock Zephyr v3.7.0 `hello_world` | smoke-tested | `zephyr-hello.yaml` 2/2; `firmware_survival::test_sam_e70_xplained_zephyr_survival` |
+| Stock Zephyr v3.7.0 `synchronization` (SysTick timeouts, semaphores, PendSV) | smoke-tested | `zephyr-sync.yaml` 2/2 (`thread_a` → `thread_b`); two runs, identical `uart.log` + `snapshot.json` |
 | PIO `ABCDSR1/2` + `PDR` (PA21 → A, PB4 → D) | smoke-tested (stored) | `mux pa21 psr=0 pb4 psr=0 abcd=11`; the select has no routing effect |
 | USART1 async TX, 8N1, `BRGR` CD 6 / FP 4 | smoke-tested | every console line, polled on `US_CSR.TXRDY` |
 | PIOC `PER/OER/SODR/CODR/ODSR/PDSR` (LED0 on PC8, active low) | smoke-tested | `led=on pin=0 odsr=00000000` … (the whole-ODSR read proves no other pin moved) |
@@ -21,7 +28,7 @@ there is no SAM E70 bench part, and no Renode parity claim is made.
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | USART/PIO interrupts | **not modelled** in this slice | the smoke is polled |
-| Caches, TCM, MPU, FPU | **not exercised** | the firmware leaves them at reset and is built without FPU instructions |
+| TCM, MPU, FPU | **not exercised** | the smoke leaves them at reset and is built without FPU instructions; Zephyr's MPU regions are stored, not enforced |
 | EEFC, RSTC, SUPC, RTT, WDT, RTC, bus matrix | declared stubs | `configs/chips/same70q21b.yaml` (`type: "stub"`) |
 | GMAC, TRNG, TC0-3, SPI0/1, QSPI, TWIHS0-2, MCAN0/1, AFEC0/1, DACC, PWM0/1, HSMCI, SSC, USBHS, XDMAC, AES, ICM, ISI | **not mapped** | no window in `configs/chips/same70q21b.yaml`; an access faults with a memory violation |
 
@@ -57,7 +64,54 @@ python3 scripts/perf/board_perf.py --boards same70q21b
 #   same70q21b  same70  step 892.0 · batch 1.4 Ir/step
 ```
 
+### Stock Zephyr (verified 2026-10-30)
+
+```bash
+# Fixtures: unmodified Zephyr v3.7.0 (36940db938a8), board sam_e70_xplained/same70q21b
+./crates/firmware-sam-e70-xplained-zephyr/build.sh
+#   same70q21b-zephyr-hello.elf 5096c83125f750a955f7e137febc51874c425b13e4bcb39332734861321ef6be
+#   same70q21b-zephyr-sync.elf  04f0604a32dae42e470433d9dabfea514fa64c17739c4e6c0d1961d19c6e2db1
+#   (two rebuilds, identical bytes)
+
+./target/release/labwired test --script examples/sam-e70-xplained/zephyr-hello.yaml --no-uart-stdout
+#   *** Booting Zephyr OS build v3.7.0 ***
+#   Hello World! sam_e70_xplained/same70q21b
+#   PASS  2/2 checks · zephyr-hello · 3000000 steps
+
+./target/release/labwired test --script examples/sam-e70-xplained/zephyr-sync.yaml --no-uart-stdout
+#   thread_a: Hello World from cpu 0 on sam_e70_xplained!
+#   thread_b: Hello World from cpu 0 on sam_e70_xplained!
+#   PASS  2/2 checks · zephyr-sync · 50000000 steps
+
+cargo test -p labwired-core --test same70_zephyr_boot
+#   1 passed (zephyr_bring_up_walks_the_m7_caches_and_locks_the_plls)
+
+./scripts/unsupported_instruction_audit.sh --firmware tests/fixtures/same70q21b-zephyr-sync.elf \
+  --system configs/systems/sam-e70-xplained.yaml --max-steps 2000000 --fail-on-unsupported
+#   unsupported_total: 0
+```
+
+Negative controls (each with only that one block removed from the chip YAML):
+no `l1_cache` → core LOCKUP at the first `DCISW` store in
+`SCB_InvalidateDCache`; no `chipid` → precise BusFault at `0x400E_0940` in
+`atmel_same70_init`. With the old PMC (fixed `MOSCXTS|MCKRDY` status) the boot
+spins forever in `soc_pmc_switch_mainck_to_fastrc` waiting for `MOSCRCS`.
+
 ## Notes
+
+- **Zephyr runs cache-off.** `z_arm_platform_init` (SoC) invalidates and
+  enables both caches, then `z_arm_init_arch_hw_at_boot`
+  (`CONFIG_INIT_ARCH_HW_AT_BOOT=y`) cleans and disables them again. That is
+  the stock v3.7.0 sequence on this board, and the model reproduces it; it is
+  not a model artefact.
+- **Busy-wait dominates `synchronization`.** Each thread calls
+  `k_busy_wait(100000)`, 30 M cycles at Zephyr's 300 MHz clock, before
+  `k_msleep(500)`. The sleeps are fast-forwarded, the busy-waits are not, so
+  one `thread_a` → `thread_b` round is what fits in the 50 M-step CLI cap.
+- **`cpu_hz`.** The board keeps `cpu_hz: 12_000_000` (the smoke's real clock).
+  Zephyr programs 300 MHz and computes SysTick reloads for it; the simulated
+  core runs one instruction per cycle either way, so in-guest timing is
+  self-consistent, only wall-clock pacing differs.
 
 - **Reused models.** The SAM E70 PIO and PMC keep the SAM4S register layouts,
   so this slice reuses `sam4s_pio` and `sam4s_pmc`. Two model fixes came

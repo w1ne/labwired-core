@@ -1,0 +1,25 @@
+# LabWired - EK-RA8M1 stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/hello_world` for board
+# `ek_ra8m1`. Rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# Built for `-mcpu=cortex-m85+nomve`: the image carries Armv8.1-M scalar
+# instructions (a DLS/LE low-overhead loop in z_arm_interrupt_init, CSINC in
+# cbprintf). FSP's bsp_clock_init runs unpatched on the `ra8_sysc` model:
+# MOSC start + OSCSF.MOSCSF, PLL1/PLL2 start + PLLSF/PLL2SF, the SCKSCR switch
+# to PLL1P, then the SCICKCR CKSREQ/CKSRDY switch for the SCI9 console.
+# Zephyr's SCI_B driver clears ICU IELSRn.IR at init (0x4000C3xx).
+#
+# Stops once both lines are seen: after the banner Zephyr idles in WFI on the
+# SysTick system timer.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Hello World! ek_ra8m1/r7fa8m1ahecbd"

@@ -446,6 +446,15 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Cortex-M7 L1 cache capability: the I/D cache geometry this peripheral
+    /// declares (`cortex_m7_cache`). `configure_cortex_m` asks every
+    /// peripheral and hands the answer to the SCB's CLIDR/CTR/CCSIDR, so the
+    /// cache model does not have to be found by downcasting. `None` for every
+    /// other peripheral, and on chips without the caches.
+    fn l1_cache_geometry(&self) -> Option<crate::peripherals::cortex_m7_cache::L1CacheGeometry> {
+        None
+    }
+
     /// Bind a power controller's backup-domain write-enable signal to its
     /// clock controller. Models without that protection ignore the signal.
     fn bind_backup_domain_write_enable(

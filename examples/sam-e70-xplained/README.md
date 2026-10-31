@@ -40,9 +40,15 @@ hb=1 odsr=00000100 sw0=1
 cargo build -p firmware-sam-e70-xplained-smoke --release --target thumbv7em-none-eabi
 cargo run -q -p labwired-cli -- test \
   --script examples/sam-e70-xplained/io-smoke.yaml --no-uart-stdout
+# stock Zephyr v3.7.0 (committed fixtures; rebuild with
+# crates/firmware-sam-e70-xplained-zephyr/build.sh)
+cargo run -q -p labwired-cli -- test \
+  --script examples/sam-e70-xplained/zephyr-hello.yaml --no-uart-stdout
+cargo run -q -p labwired-cli -- test \
+  --script examples/sam-e70-xplained/zephyr-sync.yaml --no-uart-stdout
 ```
 
-`ci/test.sh` runs the same io-smoke and then the unsupported-instruction audit
+`ci/test.sh` runs the same io-smoke, both Zephyr scripts and then the unsupported-instruction audit
 with `--fail-on-unsupported`; `configs/ci/boards.yml` runs both on every PR
 that touches configs/ or examples/.
 
@@ -52,6 +58,8 @@ that touches configs/ or examples/.
 | :--- | :--- |
 | `system.yaml` | Board manifest (same as `configs/systems/sam-e70-xplained.yaml`) |
 | `io-smoke.yaml` | Ordered UART assertions over 4,000,000 steps |
+| `zephyr-hello.yaml` | Stock Zephyr v3.7.0 `hello_world` |
+| `zephyr-sync.yaml` | Stock Zephyr v3.7.0 `synchronization` (threads, semaphore, SysTick sleep) |
 | `ci/build.sh`, `ci/test.sh` | Board gate build and proof |
 | `VALIDATION.md` | Claims, evidence and non-claims |
 | `REQUIRED_DOCS.md` | Sources |

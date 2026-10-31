@@ -1066,6 +1066,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/rp2350/xip_ctrl.yaml"),
     ),
     (
+        "same70q21b/chipid.yaml",
+        include_str!("../../../../configs/peripherals/same70q21b/chipid.yaml"),
+    ),
+    (
         "stm32f103/adc1.yaml",
         include_str!("../../../../configs/peripherals/stm32f103/adc1.yaml"),
     ),

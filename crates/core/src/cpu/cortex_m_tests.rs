@@ -3879,3 +3879,143 @@ fn test_exec_wide_ldrh_ldrb_imm() {
     run_test_instr(&mut cpu, &mut bus, 0xF892_3070, true); // ldrb.w r3,[r2,#112]
     assert_eq!(cpu.r3, 0x5A);
 }
+
+/// Load Thumb halfwords at `base` and point the PC at them.
+fn load_thumb(cpu: &mut CortexM, bus: &mut MockBus, base: u32, code: &[u16]) {
+    for (i, hw) in code.iter().enumerate() {
+        bus.write_u16(base as u64 + 2 * i as u64, *hw).unwrap();
+    }
+    cpu.pc = base;
+}
+
+fn step(cpu: &mut CortexM, bus: &mut MockBus) {
+    cpu.step_internal(bus, &[], &bus.config.clone()).unwrap();
+}
+
+/// Armv8.1-M low-overhead loop, as GCC 13 emits it for `-mcpu=cortex-m85`
+/// (Zephyr's `z_arm_interrupt_init`). Encodings from GNU as
+/// `-march=armv8.1-m.main`:
+///
+/// ```text
+///   0: 2000       movs r0, #0
+///   2: 2105       movs r1, #5
+///   4: f041 e001  dls  lr, r1
+///   8: 3001       adds r0, #1
+///   a: f00f c803  le   lr, 8
+///   e: ...
+/// ```
+///
+/// Before LOB was decoded, DLS/LE fell into the legacy branch/hint fallback
+/// and were skipped, so the body ran once (r0 == 1).
+#[test]
+fn armv81m_dls_le_loop_runs_the_body_lr_times() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    load_thumb(
+        &mut cpu,
+        &mut bus,
+        0x1000,
+        &[
+            0x2000, 0x2105, 0xF041, 0xE001, 0x3001, 0xF00F, 0xC803, 0xBF00,
+        ],
+    );
+    for _ in 0..3 {
+        step(&mut cpu, &mut bus);
+    }
+    assert_eq!(cpu.lr, 5, "DLS loads the loop count");
+    assert_eq!(cpu.pc, 0x1008);
+    // Five iterations of ADDS + LE.
+    for _ in 0..10 {
+        step(&mut cpu, &mut bus);
+    }
+    assert_eq!(cpu.read_reg(0), 5, "body ran LR times");
+    assert_eq!(cpu.pc, 0x100E, "fell through after the last LE");
+    assert_eq!(cpu.lr, 1, "LE leaves LR at 1 on exit");
+}
+
+/// WLS skips the loop when the count is zero, else loads LR and falls in.
+///   e: f042 c801  wls lr, r2, 14
+///  12: 3007       adds r0, #7
+///  14: bf00       nop
+#[test]
+fn armv81m_wls_skips_a_zero_trip_loop() {
+    for (count, pc_after, lr) in [(0u32, 0x1014u32, 0xAAAAu32), (3, 0x1012, 3)] {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        load_thumb(
+            &mut cpu,
+            &mut bus,
+            0x100E,
+            &[0xF042, 0xC801, 0x3007, 0xBF00],
+        );
+        cpu.write_reg(2, count);
+        cpu.lr = 0xAAAA;
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.pc, pc_after, "count {count}");
+        assert_eq!(cpu.lr, lr, "count {count}");
+    }
+}
+
+/// `LE <label>` (no LR, F=1) branches back unconditionally and leaves LR.
+///  32: f02f c817  le 8
+#[test]
+fn armv81m_le_without_lr_always_branches() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    load_thumb(&mut cpu, &mut bus, 0x1032, &[0xF02F, 0xC817]);
+    cpu.lr = 1;
+    step(&mut cpu, &mut bus);
+    assert_eq!(cpu.pc, 0x1008);
+    assert_eq!(cpu.lr, 1);
+}
+
+/// CSEL family (Armv8.1-M), GNU as encodings. Register 15 in Rn/Rm is the
+/// zero register, which is how CSET/CSETM/CINC are encoded. Zephyr's
+/// `z_cbvprintf_impl` uses `csinc r3, r3, r3, eq` (ea53 9303).
+#[test]
+fn armv81m_csel_family_selects_and_transforms() {
+    use crate::decoder::arm::{decode_thumb_32, Instruction};
+    // (h1, h2, Z flag, N/V for lt/ge/mi, expected rd value, rd)
+    let cases: [(u16, u16, bool, bool, u32, u8); 11] = [
+        (0xEA54, 0x8305, true, false, 40, 3), // csel  r3, r4, r5, eq (Z=1 -> r4)
+        (0xEA54, 0x8305, false, false, 50, 3), // csel  r3, r4, r5, eq (Z=0 -> r5)
+        (0xEA54, 0x9315, true, false, 51, 3), // csinc r3, r4, r5, ne (Z=1 -> r5+1)
+        (0xEA54, 0xA3B5, false, false, !50u32, 3), // csinv r3, r4, r5, lt (N=V -> ~r5)
+        (0xEA54, 0xB3A5, false, true, 50u32.wrapping_neg(), 3), // csneg r3, r4, r5, ge (N!=V -> -r5)
+        (0xEA54, 0xB3A5, false, false, 40, 3),                  // csneg ge true -> r4
+        (0xEA5F, 0x961F, true, false, 1, 6),                    // cset  r6, eq (Z=1 -> 1)
+        (0xEA5F, 0x961F, false, false, 0, 6),                   // cset  r6, eq (Z=0 -> 0)
+        (0xEA5F, 0xA60F, false, false, 0xFFFF_FFFF, 6),         // csetm r6, ne (Z=0 -> -1)
+        (0xEA58, 0x9758, false, false, 80, 7), // cinc  r7, r8, mi = csinc pl (N=0: mi false -> r8)
+        (0xEA58, 0x9758, false, true, 81, 7),  // cinc  r7, r8, mi (N=1: mi true -> r8+1)
+    ];
+    for (i, (h1, h2, z, nv, want, rd)) in cases.into_iter().enumerate() {
+        assert!(
+            matches!(decode_thumb_32(h1, h2), Instruction::Csel { .. }),
+            "{h1:04x} {h2:04x}"
+        );
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.write_reg(4, 40);
+        cpu.write_reg(5, 50);
+        cpu.write_reg(8, 80);
+        // Z at bit 30; N (bit 31) set and V (bit 28) clear when `nv`.
+        cpu.xpsr = 0x0100_0000 | (if z { 1 << 30 } else { 0 }) | (if nv { 1 << 31 } else { 0 });
+        load_thumb(&mut cpu, &mut bus, 0x2000 + 0x10 * i as u32, &[h1, h2]);
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.read_reg(rd), want, "case {i}: {h1:04x} {h2:04x}");
+        assert_eq!(cpu.pc, 0x2004 + 0x10 * i as u32, "case {i}");
+    }
+}
+
+/// ORRS.W (shifted register) shares H1 with CSEL and keeps decoding as a
+/// data-processing op when H2[15] is 0.
+#[test]
+fn armv81m_csel_decode_leaves_orrs_w_alone() {
+    use crate::decoder::arm::{decode_thumb_32, Instruction};
+    // orrs.w r3, r3, r3, lsl #4 = ea53 1303
+    assert!(!matches!(
+        decode_thumb_32(0xEA53, 0x1303),
+        Instruction::Csel { .. }
+    ));
+}
