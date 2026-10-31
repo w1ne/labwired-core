@@ -1,0 +1,5113 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/howto/gpio-nets/">
+      
+      
+        <link rel="prev" href="../timed-uart-network/">
+      
+      
+        <link rel="next" href="../segger-rtt/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>GPIO nets between machines - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LabWired docs">
+  <meta property="og:title" content="GPIO nets between machines - LabWired docs">
+  <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta property="og:url" content="https://docs.labwired.com/howto/gpio-nets/">
+  <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="GPIO nets between machines - LabWired docs">
+  <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#gpio-nets-between-machines" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              GPIO nets between machines
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../timed-uart-network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Timed UART networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manifest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-net-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the net does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Timing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#speed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Speed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-pads-can-be-on-a-net" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which pads can be on a net
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Which pads can be on a net">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtc-io-esp32-and-esp32-s3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RTC IO (ESP32 and ESP32-S3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-net-support-to-a-gpio-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding net support to a GPIO model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buses-over-nets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Buses over nets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Buses over nets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#spi-dma" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SPI DMA
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reports
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../firmware-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware coverage (lines, branches, CI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_20" id="__nav_7_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend LabWired
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend LabWired
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extend/add-a-peripheral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a peripheral block (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extend/python-device/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an I2C sensor (data + Python)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extend/add-a-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a board (chip + manifest)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extend/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hook surfaces (device, host, Rust)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/microbit-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit V1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32g0b1re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32G0B1RE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-u545re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-U545RE-Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/atsamd21-variants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21 A-variants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/segment-display-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed segment display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/led-matrix-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed LED matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/74hc4051/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    74HC4051
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/max485/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAX485
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/xy-md02/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XY-MD02
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manifest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-net-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the net does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Timing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#speed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Speed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-pads-can-be-on-a-net" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which pads can be on a net
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Which pads can be on a net">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtc-io-esp32-and-esp32-s3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RTC IO (ESP32 and ESP32-S3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-net-support-to-a-gpio-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding net support to a GPIO model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buses-over-nets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Buses over nets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Buses over nets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#spi-dma" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SPI DMA
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reports
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="gpio-nets-between-machines">GPIO nets between machines</h1>
+<p>A <code>gpio_net</code> interconnect joins GPIO pads of two or more world nodes into one
+electrical net: an interrupt line, a ready line, a chip-select handshake, a wake
+pin, or a shared open-drain alert line with a pull-up. Each member keeps
+running its own firmware; the net decides what level the wire carries and when
+each member sees it.</p>
+<p>Runnable example: <a href="../../examples/gpio-net-two-boards"><code>examples/gpio-net-two-boards</code></a>
+(an STM32G0B1 and an ATmega328P; <code>env-rp2040.yaml</code> and <code>env-esp32c6.yaml</code>
+swap the ATmega328P for an RP2040 or an ESP32-C6).</p>
+<h2 id="manifest">Manifest</h2>
+<p>One <code>gpio_net</code> per wire. <code>nodes</code> lists every node that owns a member, once each.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">interconnects</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpio_net</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">nodes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">avr</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">stm</span><span class="p p-Indicator">]</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alert</span><span class="w">              </span><span class="c1"># optional label shown in reports</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="nt">pull</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">up</span><span class="w">                 </span><span class="c1"># none (default) | up | down</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="nt">latency_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span><span class="w">          </span><span class="c1"># default 100; zero is refused</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="nt">members</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> node</span><span class="p">:</span><span class="w"> </span><span class="nv">stm</span><span class="p p-Indicator">,</span><span class="nt"> peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">gpiob</span><span class="p p-Indicator">,</span><span class="nt"> pin</span><span class="p">:</span><span class="w"> </span><span class="nv">4</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># open-drain output</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> node</span><span class="p">:</span><span class="w"> </span><span class="nv">avr</span><span class="p p-Indicator">,</span><span class="nt"> peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">portd</span><span class="p p-Indicator">,</span><span class="nt"> pin</span><span class="p">:</span><span class="w"> </span><span class="nv">4</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># DDR drives low</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>members</code></td>
+<td>At least two pads on at least two nodes. <code>peripheral</code> is the node's GPIO peripheral id (<code>gpioa</code>, <code>portd</code>, <code>gpio</code> on an ESP32-family chip, <code>sio</code> on an RP2040, ...; see the table below). A pad can be on one net only; merge nets that share a pad.</td>
+</tr>
+<tr>
+<td><code>pull</code></td>
+<td>The board's resistor to a rail. A weak level, like a chip's internal pull (see below).</td>
+</tr>
+<tr>
+<td><code>latency_ns</code></td>
+<td>Wire delay from a pad edge to every member seeing it. Default 100 ns. Zero is refused, and so is anything below one cycle of the slowest member.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-the-net-does">What the net does</h2>
+<p>For the drives present at one instant, each member being driving-0 or
+driving-1 (strong), held by its own internal pull-up or pull-down (weak), or
+released with no pull:</p>
+<ol>
+<li>any member driving 0 gives 0, else any driving 1 gives 1;</li>
+<li>else the weak sources, which are the members' internal pulls and the net's
+   <code>pull</code>: all of them up gives 1, all down gives 0;</li>
+<li>weak pulls to both rails with nothing driving are a resistor divider. The
+   net reports <code>GPIO_NET_PULL_CONFLICT</code> (begin and end times, every member's
+   drive) and reads the net's own <code>pull</code> (the board resistor is normally much
+   stronger than a chip's 30-50 kOhm internal one). With no net <code>pull</code> it
+   reads 0, as contention does;</li>
+<li>else the net floats: it reads 0 and is flagged <code>GPIO_NET_FLOATING</code>.</li>
+</ol>
+<p>A chip's internal pull is therefore part of the net. An input with
+<code>PUPDR = 01</code> on an STM32, or an ATmega pad with <code>DDRx = 0</code> and <code>PORTx = 1</code>,
+holds a wire high with no <code>pull:</code> on the net
+(<code>examples/gpio-net-f1-f4</code>). Reports show it as the member's drive:
+<code>pull_up</code> / <code>pull_down</code> next to <code>z</code>, <code>low</code> and <code>high</code>. The world watches each
+member's own output stage (a <code>LogicSource::Driver</code> channel), on which a pulled
+pad reads <code>h</code> / <code>l</code> (the IEEE 1164 weak levels). A probe on the pad
+(<code>LogicSource::Pad</code>, the ordinary four-state pin trace) shows the wire as the
+pad sees it: <code>z</code> for an undriven input, pulled or not, the level a peer
+drives, and <code>x</code> where the pad's own output fights it.</p>
+<p>Members driving 0 and 1 together are in <strong>contention</strong>. The wire resolves to 0
+(a low-side driver usually wins) and the net reports <code>GPIO_NET_CONTENTION</code> with
+the time it began, the time it ended, and every member's drive and own cycle.
+Nothing is dropped silently.</p>
+<p>Open-drain falls out of this: pads that only pull low or release, plus
+<code>pull: up</code>, make a wired-AND. If one member holds the wire low and a second
+joins and then the first lets go, the wire stays low until the second releases:
+one low pulse, not two (<code>open_drain_with_pull_up_is_a_wired_and</code> in
+<code>crates/core/src/network/gpio_net.rs</code>).</p>
+<p>A member's drive is what <em>its own</em> output stage does
+(<a href="../../architecture/pins/"><code>PinPort::driver</code></a>, decoded from the chip's
+registers only). What the net feeds back into the pad (the level firmware
+reads from <code>IDR</code> or <code>PIND</code>) is never part of it, so a pad cannot hold a wire up
+just because it once saw it high.</p>
+<h2 id="timing">Timing</h2>
+<p>Edges are delivered at <code>t_edge + latency_ns</code>, to every member including the
+driver, at an exact cycle of each member (the first instruction boundary at or
+after that time), through the same <code>PinPort::set_external</code> path a board button
+uses (<code>SystemBus::set_pad_external</code>): EXTI interrupts, AVR INT0/INT1 and
+pin-change interrupts, the ESP32-family and RP2040 GPIO interrupts, and timer
+captures see a real edge.</p>
+<p>Each node keeps its own clock (conservative parallel discrete-event
+simulation). A node may run as far as its <em>safe horizon</em>: for each net it is
+on, the earliest time a change it has not been told about can have happened,
+plus the net's latency. Three things bound that time:</p>
+<ul>
+<li>each other member's <em>known time</em>: the time it has reached, since everything
+  it drove before then is already reported;</li>
+<li>for a member asleep until a scheduled event (a Cortex-M in <code>WFI</code>, an
+  ATmega328P in <code>SLEEP</code>, with idle fast-forward on), that event instead: it
+  drives nothing before it unless an input wakes it, so the bound is the
+  earliest of the event, a delivery already queued for it, an edge not yet
+  merged into one of its nets (one latency later), and a peer's own known
+  time plus one latency;</li>
+<li>the earliest edge not yet merged into the net.</li>
+</ul>
+<p>A node's own edges come back to it too, one latency later. Rather than hold a
+node to one latency past its own time, the scheduler runs it until its next
+own drive change: a push of a net pad ends the CPU batch it happens in
+(<code>LogicTap::set_batch_stop_channels</code>), the machine stops at that boundary
+(<code>Machine::advance_to_cycle_or_net_drive_change</code>), and the edge bounds the
+node's horizon before it runs on. A node that cannot stop there (two cores, or
+a pad on the per-cycle poll) keeps its own time in its horizon.</p>
+<p>An edge nobody has reported yet happens after its driver's known time, so its
+delivery is due after the horizon: every delivery a node needs is known before
+the node gets there, whatever order the nodes run in and however far apart
+their clocks are. After a node runs, its drive changes are merged into its nets
+up to the time all their members have reached.</p>
+<p>Results do not depend on node order, round length or how the world is driven:
+<code>world_multichip.rs</code> (<code>gpio_net_world</code>) runs the example with both node orders,
+with rounds from 10 ns to 100 ns, round by round, in one <code>run_until_ps</code> call and
+on the old lockstep round driver (<code>set_gpio_lockstep</code>, still the driver for a
+world that also has a timed UART network), with idle fast-forward off and on,
+and compares every counter, every UART transcript, every applied delivery and
+every node's cycle count, part way through and at the end
+(<code>the_per_node_scheduler_matches_the_lockstep_rounds</code>); the same for the
+ESP32-C6 world (<code>the_esp32c6_world_is_the_same_on_every_driver</code>) and the SPI
+and I²C buses over nets (<code>world_gpio_net_buses.rs</code>).</p>
+<p>A node skips idle time (a Cortex-M in <code>WFI</code>, an ATmega328P in <code>SLEEP</code>) only
+when idle fast-forward is on for it (<code>set_idle_fast_forward(true)</code> on the
+world's machine); the results are the same either way
+(<code>idle_fast_forward_skips_the_avr_sleep_and_changes_nothing</code>).</p>
+<p><code>step_all</code> still advances the world by one round (the shortest latency) per
+call, so a <code>max_steps</code> limit, the browser's step batches and Python's
+<code>run_for</code> keep their meaning. <code>World::step_all_into(&amp;mut results)</code> is the same
+call with a result buffer (<code>StepResults</code>) kept from round to round instead of a
+new map of node ids each time; <code>labwired test</code> and Python step with it.
+<code>World::run_until_ps(t)</code> runs to <code>t</code> in one call, and <code>World::step_rounds(n)</code>
+does <code>n</code> rounds in one call when that gives the same result (the browser's
+<code>step_batch</code> uses it).</p>
+<h3 id="speed">Speed</h3>
+<p><code>examples/gpio-net-two-boards</code>, 30 ms of simulated time, release build with
+the event scheduler, against the same two machines each run alone for 30 ms.
+Instruction counts (callgrind, millions, deterministic; the ratio is to the
+two machines alone, 1023 M) say more than wall time on a shared machine:</p>
+<table>
+<thead>
+<tr>
+<th>How it is driven</th>
+<th>Before</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>one <code>run_until_ps</code> / <code>step_rounds</code> call</td>
+<td>1303 M (1.27x)</td>
+<td>1015 M (0.99x)</td>
+</tr>
+<tr>
+<td>the same, idle fast-forward on</td>
+<td>1395 M</td>
+<td>1104 M</td>
+</tr>
+<tr>
+<td><code>step_all</code> per round</td>
+<td>2284 M (2.23x)</td>
+<td>1985 M (1.94x)</td>
+</tr>
+<tr>
+<td><code>step_all_into</code> per round (<code>labwired test</code>, Python)</td>
+<td>n/a</td>
+<td>1556 M (1.52x)</td>
+</tr>
+<tr>
+<td><code>labwired test --script .../test.yaml</code> (40 ms, per round, whole process)</td>
+<td>3516 M, 0.32 s wall</td>
+<td>2335 M, 0.26 s wall</td>
+</tr>
+</tbody>
+</table>
+<p>Wall time agrees within its noise (median of 6 runs, ±15% on a loaded
+4-core machine): <code>run_until_ps</code> 0.124 s before, 0.083 s now, against 0.077 s
+for the two machines alone. With idle fast-forward on there is no fair
+"alone" figure: alone, the AVR sleeps through the whole run waiting for a peer
+that is not there. The ESP32-C6 world (<code>env-esp32c6.yaml</code>, 2 ms, instruction
+counts) costs what its C6 costs: <code>run_until_ps</code> is 1.01x the two machines
+alone (1.04x before), <code>step_all</code> 1.09x (1.11x).</p>
+<p>(<code>cargo test --release -p labwired-core --features event-scheduler --test
+world_multichip -- --ignored --nocapture gpio_net_speed</code> prints the wall
+times and how many pieces the scheduler cut the run into;
+<code>GPIO_NET_BENCH_ENV=env-esp32c6.yaml</code> and <code>GPIO_NET_BENCH_FF=1</code> pick the
+other cases.)</p>
+<p>What made the difference:</p>
+<ul>
+<li>A node runs until its own next net pad drive change, not one latency past
+  its own time, and its pad state is read only when it stopped for one. On a
+  net it keeps whatever batch width and idle fast-forward it has alone, and two
+  busy nodes leapfrog by two latencies instead of one.</li>
+<li>A node asleep until its next event, with idle fast-forward on, holds its
+  peers back only as far as that event, or whatever input could wake it first.</li>
+<li>A call that ends within one latency of the slowest node (a <code>step_all</code>
+  round) skips the horizons altogether, and <code>step_all_into</code> reuses its result
+  buffer instead of building a map of node ids per round.</li>
+</ul>
+<p>What is still slower than the machines alone, and why:</p>
+<ul>
+<li><code>step_all</code> stops every node at every round end: at 100 ns and 16 MHz that is
+  one or two instructions per node per call, so the per-call cost (and the map
+  <code>step_all</code> returns) dominates. Drive long runs with <code>run_until_ps</code> or
+  <code>step_rounds</code>; <code>latency_ns</code> makes rounds longer where a wire does not need
+  to be fast.</li>
+<li>Two busy nodes cannot run far apart: neither can know when the other will
+  next drive a pad, so each runs at most about two latencies ahead of the
+  other (the example's 30 ms run is 240 000 pieces, both firmware spinning in
+  their final loops). Here the pieces cost about nothing in instructions and
+  some 10% in wall time; a node whose every stop is expensive pays per piece.</li>
+<li>A sleeping node stretches its peers only with idle fast-forward on, and only
+  until something can wake it: an edge a peer drives brings its horizon back
+  to that edge plus one latency.</li>
+<li>A node with two cores (ESP32, ESP32-S3) or with a net pad on the per-cycle
+  poll cannot stop at its own drive change, so it is still held to one latency
+  past its own time.</li>
+<li>A node with push capture armed (every net node) does not use the CPU fast
+  paths that skip the tap (the RISC-V spin and poll windows, the Cortex-M
+  Thumb RAM chunks); that is the cost of stamping every pad write.</li>
+<li>An ESP32-C3 node booting through its ROM was not measured (the ROM image is
+  not in this tree); its wide batches now end at its own net pad pushes
+  rather than every latency, which is the case the batch stop exists for.</li>
+</ul>
+<p>Machines on no net run unchanged and are not held to any net's latency.</p>
+<h2 id="which-pads-can-be-on-a-net">Which pads can be on a net</h2>
+<p>A net member's GPIO model has to implement the pin interface
+(<a href="../../architecture/pins/"><code>docs/architecture/pins.md</code></a>): report what it
+drives and accept an external level. Every GPIO model in tree does:</p>
+<table>
+<thead>
+<tr>
+<th>GPIO model</th>
+<th>Capture</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GpioPort</code>, every register family (STM32 <code>v2</code> and <code>f1</code>, nRF52/54, Kinetis, EFR32 series 2, SAM, RA, i.MX RT)</td>
+<td>push: the port reports its own edges, idle fast-forward stays on</td>
+<td>exercised end to end on STM32 <code>v2</code> (G0B1, F401) and <code>f1</code> (F103). The EXTI raises edge interrupts for net edges on G0 and U5 (port from <code>EXTI_EXTICRx</code>), F1 (port from <code>AFIO_EXTICRx</code>), F4 and L0 (port from <code>SYSCFG_EXTICRx</code>). Internal pulls on the net, and read by an input nothing outside drives: STM32 <code>v2</code> <code>PUPDR</code>, STM32 <code>f1</code> input-with-pull (<code>CNF = 10</code>, <code>ODR</code> picks the rail), nRF52 <code>PIN_CNF.PULL</code>, EFR32 <code>INPUTPULL</code>, SAM <code>PINCFG.PULLEN</code>, and, from the block that keeps them outside the GPIO port (the port's <code>pad_control:</code> in the chip yaml), Kinetis <code>PORTx_PCRn.PE/PS</code>, RA <code>PmnPFS.PCR</code> and i.MX RT IOMUXC <code>SW_PAD_CTL</code> <code>PKE/PUE/PUS</code>.</td>
+</tr>
+<tr>
+<td><code>GpioPort</code> pads routed to a peripheral (AF)</td>
+<td>as above</td>
+<td>the peripheral says what its output stage does (driving, released, input) and reads the level the net delivers; see <a href="#buses-over-nets">Buses over nets</a>. STM32 SPI, modern I²C and legacy (F1/F2/F4) I²C; the RP2040 SIO does the same for SPI and I²C pads (<code>FUNCSEL</code>); the nRF52 <code>PSEL</code> pin selects (SPIM/SPIS/TWIM/TWIS) likewise.</td>
+</tr>
+<tr>
+<td><code>avr_gpio</code> (ATmega328P <code>portb</code>/<code>portc</code>/<code>portd</code>)</td>
+<td>push: the port reports its own edges, idle fast-forward stays on</td>
+<td>INT0/INT1 and PCINT0..2 see external edges; a core parked in <code>SLEEP</code> is skipped until the next edge or Timer0 overflow. Exercised end to end on the Uno (<code>gpio-net-two-boards</code>). An input with its <code>PORTx</code> bit set is a pull-up on the net, unless firmware sets <code>MCUCR.PUD</code>, which takes every pull-up off.</td>
+</tr>
+<tr>
+<td>ESP32 classic <code>gpio</code> (member <code>peripheral: gpio</code>, pins 0..39)</td>
+<td>push</td>
+<td>Drive: <code>GPIO_ENABLE</code> and <code>GPIO_OUT</code> (GPIO0..31), <code>GPIO_ENABLE1</code> and <code>GPIO_OUT1</code> at bit <code>pin - 32</code> (GPIO32..39); <code>GPIO_PINn.PAD_DRIVER</code> open drain drives only a 0 and, holding a 1, reads the wire on <code>GPIO_IN</code> / <code>GPIO_IN1</code>. GPIO34..39 are input-only, as on silicon: their <code>ENABLE1</code> bits store but never drive, and the matrix never routes an output to them; they take input and feed matrix input signals. Interrupts: <code>GPIO_PINn.INT_TYPE</code> edge and level types latch <code>GPIO_STATUS</code> / <code>GPIO_STATUS1</code> and raise matrix source 22 for the CPU whose INT_ENA bit is set (<code>GPIO_ACPU_INT(1)</code>, <code>GPIO_PCPU_INT(1)</code>). The IO_MUX pulls are not modelled on this part; the RTC-capable pads (GPIO0, 2, 4, 12..15, 25..27, 32, 33) take their pull from RTC_IO <code>RUE</code> / <code>RDE</code> in either domain (errata 3.6), reset values included (GPIO0, 14, 15 pulled up, GPIO2, 4, 12, 13 down). A pad whose RTC_IO <code>MUX_SEL</code> is set is driven by the RTC GPIO instead; see <a href="#rtc-io-esp32-and-esp32-s3">RTC IO</a>. Pads the GPIO matrix routes to VSPI, HSPI, I2C0 or I2C1 (<code>GPIO_FUNCn_OUT_SEL_CFG</code> out, <code>GPIO_FUNCn_IN_SEL_CFG</code> in, both indexed by the pad number in either bank) carry those peripherals' lines; see <a href="#buses-over-nets">Buses over nets</a>.</td>
+</tr>
+<tr>
+<td>ESP32-S3 <code>gpio</code> (<code>peripheral: gpio</code>, pins 0..48)</td>
+<td>push</td>
+<td>As classic, both banks (<code>GPIO_OUT1</code> / <code>GPIO_ENABLE1</code> / <code>GPIO_IN1</code> / <code>GPIO_STATUS1</code> at bit <code>pin - 32</code>); matrix source 16 (<code>GPIO_PCPU_INT</code> / <code>GPIO_PCPU_INT1</code>, INT_ENA bit 13). The IO_MUX <code>FUN_WPU</code> pull-up is on the net. GPIO49..53 have registers but no pad, and cannot join a net. Pads the GPIO matrix routes to GP-SPI2, GP-SPI3, I2C0 or I2C1 carry those peripherals' lines. GPIO0..21 with RTC_IO <code>MUX_SEL</code> set are driven by the RTC GPIO; see <a href="#rtc-io-esp32-and-esp32-s3">RTC IO</a>.</td>
+</tr>
+<tr>
+<td>ESP32-C3 / ESP32-C6 <code>gpio</code> (<code>peripheral: gpio</code>, pins 0..25)</td>
+<td>push</td>
+<td>As classic; matrix source 16 on the C3 and 30 on the C6. The IO_MUX <code>FUN_WPU</code> pull-up is on the net where the IO_MUX is wired. Edge types only (level types are not modelled on this block). Exercised end to end on the C6 (<code>env-esp32c6.yaml</code>). Pads the GPIO matrix routes to GP-SPI2 or I2C0 (<code>FUNCn_OUT_SEL_CFG</code> out, <code>FUNCn_IN_SEL_CFG</code> in, each chip's own signal numbers) carry those peripherals' lines; see <a href="#buses-over-nets">Buses over nets</a>.</td>
+</tr>
+<tr>
+<td>Declarative <code>GPIO</code> descriptor (<code>ENABLE</code> / <code>OUT</code> / <code>IN</code> registers)</td>
+<td>poll</td>
+<td>Drive from <code>ENABLE</code> and <code>OUT</code>; no pulls.</td>
+</tr>
+<tr>
+<td>RP2040 <code>sio</code> (<code>peripheral: sio</code>, pins 0..29 = GP0..GP29)</td>
+<td>push</td>
+<td>Drive: <code>GPIO_OE</code> and <code>GPIO_OUT</code> while IO_BANK0 selects SIO for the pad (or nothing yet); open drain is firmware toggling <code>GPIO_OE</code> with the latch at 0. Interrupts: IO_BANK0 <code>INTRn</code> / <code>PROC0_INTEn</code> edge and level bits raise <code>IO_IRQ_BANK0</code> (NVIC 13) from any change of <code>GPIO_IN</code>, the pad's own output included. Exercised end to end (<code>env-rp2040.yaml</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>On the ESP32 family and the RP2040 the GPIO interrupt sees the pad as
+<code>GPIO_IN</code> reports it. On the classic ESP32 and the RP2040 that includes the
+pad's own output; on the C3/C6 and S3 <code>GPIO_IN</code> is the external level only,
+so a pad does not interrupt on its own output there.</p>
+<p>A peripheral that owns no pins, or a pad whose drive is unknown, is refused
+when the world is built, naming the pad.</p>
+<h3 id="rtc-io-esp32-and-esp32-s3">RTC IO (ESP32 and ESP32-S3)</h3>
+<p>The RTC-capable pads (classic GPIO0, 2, 4, 12..15, 25..27, 32..39 =
+RTC_GPIO0..17; S3 GPIO0..21 = RTC_GPIO0..21) have a second owner, the RTC
+IO MUX (<code>rtcio</code> at 0x3FF4_8400 on the classic part, <code>rtc_io</code> at 0x6000_8400
+on the S3). Its pad register's <code>MUX_SEL</code> picks the side: with it set the pad
+is driven by <code>RTC_GPIO_OUT</code> / <code>RTC_GPIO_ENABLE</code> (and their <code>_W1TS</code> /
+<code>_W1TC</code>), <code>RTC_GPIO_PINn.PAD_DRIVER</code> makes it open drain, and <code>RUE</code> / <code>RDE</code>
+pull it; <code>GPIO_OUT</code>, <code>GPIO_ENABLE</code> and the matrix no longer reach it (a
+routed peripheral line goes dark until <code>MUX_SEL</code> clears). The net member is
+still the GPIO port (<code>peripheral: gpio</code>, the GPIO number). Mind the
+numbering on the classic part: RTC GPIO numbers are not GPIO numbers
+(GPIO0 is RTC_GPIO11, GPIO25 RTC_GPIO6, GPIO32 RTC_GPIO9), and RTC GPIO n
+sits at bit <code>14 + n</code> of the RTC GPIO registers (<code>10 + n</code> on the S3).</p>
+<p>The input side follows the TRM: the pad's input reaches both the RTC GPIO
+(<code>RTC_GPIO_IN</code>) and the digital side (<code>GPIO_IN</code>, matrix inputs), through
+the input enable <code>MUX_SEL</code> selects (<code>FUN_IE</code> in the pad register: with it
+clear both read 0). <code>RTC_GPIO_PINn.INT_TYPE</code> latches <code>RTC_GPIO_STATUS</code> (edge
+and level types; <code>_W1TC</code> clears). That latch reaches no CPU interrupt on
+either part (<code>RTC_CNTL_INT_ENA</code> has no RTC GPIO bit; RTC_CORE, source 46 /
+39, is <code>RTC_CNTL_INT_ST</code>), so firmware polls it. On the classic part a pad
+register's <code>HOLD</code> freezes the RTC output stage; the S3 keeps its holds in
+RTC_CNTL, which is not modelled, nor is a hold on a digital-domain pad.
+Every <code>MUX_SEL</code> resets to 0. Firmware that uses an RTC-capable pad
+digitally clears it first, as ESP-IDF's <code>gpio_config()</code> does
+(<code>rtc_gpio_deinit</code>), and the example's Xtensa firmware does too
+(<code>RTC_DIGITAL</code> in <code>src/esp32x.inc</code>). <code>env-rtc-gpio-esp32-esp32s3.yaml</code>
+runs RTC GPIO across three nets between a classic ESP32 and an ESP32-S3
+(an open-drain RTC output released to the peer's <code>RUE</code>, edges counted from
+<code>RTC_GPIO_STATUS</code>) and hands GPIO27 from the RTC domain back to the digital
+output it set up from the start: the net sees the digital 1 only once
+<code>MUX_SEL</code> clears.</p>
+<p>Limits worth knowing:</p>
+<ul>
+<li>On Kinetis, RA and i.MX RT the pull comes from the block the port names
+  in <code>pad_control:</code> (<code>mkw41z4</code> <code>gpioc</code> → <code>portc</code>, <code>ra4m1</code> <code>port1</code>/<code>port3</code> →
+  <code>pfs</code>, <code>imxrt1064</code> <code>gpio2</code> → <code>iomuxc</code>). A port declared without it has no
+  pulls. i.MX RT pads must be contiguous in IOMUXC from the port's pin 0
+  (true for GPIO1, GPIO2 and GPIO4, not GPIO3).</li>
+<li>A pad that firmware drives itself does not raise its own EXTI edge for its own
+  transition (the STM32 EXTI model reacts to edges from outside). It does see
+  the release when the wire rises after a peer let go.</li>
+<li>The ATmega328P samples INT0/INT1 and PCINT pads at instruction boundaries,
+  so an edge is seen at the first boundary after it arrives. Waking from
+  power-down, power-save or standby takes four cycles, as from idle: the
+  oscillator start-up time is not modelled.</li>
+<li>A pad routed to a peripheral signal the model does not publish has no known
+  drive and is refused. Pads start as plain GPIO, so this is checked when the
+  world is built; a pad firmware later routes to such a signal keeps its last
+  known drive on the net.</li>
+<li>The RP2040 <code>GPIOn_CTRL</code> override fields (<code>OUTOVER</code>, <code>OEOVER</code>, <code>INOVER</code>,
+  <code>IRQOVER</code>) are stored but not applied, and only PROC0's interrupt is
+  raised (the model is single-core).</li>
+</ul>
+<h2 id="adding-net-support-to-a-gpio-model">Adding net support to a GPIO model</h2>
+<p>There is nothing net-specific to add: a GPIO model that implements
+<code>pins::PinPort</code> is on nets, the logic analyzer, board buttons and EXTI at
+once. The steps are in
+<a href="../../architecture/pins/#implementing-a-new-gpio-model"><code>docs/architecture/pins.md</code></a>;
+for a net the parts that matter are:</p>
+<ol>
+<li><code>driver(pin)</code>: the pad's own output stage, decoded from the direction,
+   output, open-drain and pull registers. Registers only. An open-drain
+   output holding a 1 is <code>Out::Off</code>; an internal pull is <code>pull</code>, which the
+   net counts as a weak source. A pad handed to a peripheral signal whose
+   drive the model cannot see is <code>None</code>, and the world refuses it.</li>
+<li><code>set_external(pin, External::Level(l))</code>: the level the net settles on.
+   Store it beside the registers (never in them, so <code>driver()</code> cannot see
+   it), fold it into the input register firmware reads, latch whatever
+   interrupt the block raises from that register, and return the input
+   before and after. The bus fans the change out to EXTI and timer captures
+   by the port's <code>PortId</code>.</li>
+<li>Push capture, so a net does not force the node onto the per-cycle poll:
+   keep the <code>PadWatch</code> <code>install_watch</code> hands you and bracket every register
+   write and <code>set_external</code> with <code>pins::watch_begin(self)</code> /
+   <code>pins::watch_end(self)</code>.</li>
+<li>If peripheral lines can be routed to the pad, implement <code>join_wire</code>
+   (mark the line as shared, <code>PadLines::mark_on_net</code>) and <code>routes_changed</code>.</li>
+<li>Register the model in <code>crates/core/src/pins/conformance.rs</code>. The suite
+   checks the driver never echoes the net's level, open drain, pulls, the
+   input round trip, and that push capture equals the poll.</li>
+</ol>
+<h2 id="buses-over-nets">Buses over nets</h2>
+<p>A hardware SPI or I²C peripheral whose pads are on nets talks to the other
+chip bit by bit, at the pads. There is no byte-level shortcut between the
+peripherals: the bits are the net's edges, so the net reports, a logic
+analyzer on either board and the timing all show the real waveform, and the
+bus behaves like wires. Runnable examples:
+<a href="../../examples/gpio-net-buses"><code>examples/gpio-net-buses</code></a> (STM32G071 pairs,
+STM32F401, STM32L476 and STM32G474 pairs on the hardware NSS pads,
+STM32F103 / STM32F401 / STM32G071 mixed I²C, and an RP2040, an nRF52840
+(SPIM0 and SPIM3 with its hardware CSN and D/CX), an ESP32-C3, an ESP32-C6,
+an ESP32-S3 and a classic ESP32 against a G071 on SPI and on I²C).</p>
+<p>One net per wire, as for any other signal:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpio_net</span><span class="w">                     </span><span class="c1"># I²C: open drain, pull-up on the net</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nt">nodes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">a</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">b</span><span class="p p-Indicator">]</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sda</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="nt">pull</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">up</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="nt">members</span><span class="p">:</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> node</span><span class="p">:</span><span class="w"> </span><span class="nv">a</span><span class="p p-Indicator">,</span><span class="nt"> peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">gpiob</span><span class="p p-Indicator">,</span><span class="nt"> pin</span><span class="p">:</span><span class="w"> </span><span class="nv">7</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># I2C1_SDA (AF6)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> node</span><span class="p">:</span><span class="w"> </span><span class="nv">b</span><span class="p p-Indicator">,</span><span class="nt"> peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">gpiob</span><span class="p p-Indicator">,</span><span class="nt"> pin</span><span class="p">:</span><span class="w"> </span><span class="nv">7</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Peripheral</th>
+<th>Register file</th>
+<th>Pads (chip yaml)</th>
+<th>Roles</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32 SPI</td>
+<td>classic F1/F4/L0 (<code>CR1.DFF</code>) / FIFO G0/L4/G4/WB/F7 (<code>CR2.DS</code>, <code>FRXTH</code>, <code>FRLVL</code>/<code>FTLVL</code>); DMA requests (<code>TXDMAEN</code>/<code>RXDMAEN</code>, <code>LDMA_TX</code>/<code>LDMA_RX</code>, <a href="#spi-dma">SPI DMA</a>)</td>
+<td>NSS included on every table: G071 AF0 (<code>pad_map: stm32g0</code>); F4/F7 AF5 (PA4/PA15, PB9/PB12); L476 AF5/AF6 (SPI1 PA4/PA15/PE12, SPI2 PB9/PB12/PD0, SPI3 PA4/PA15 on AF6); G474 (<code>pad_map: stm32g4</code>, SPI1 PA4/PA15/PG5, SPI2 PB12/PF0 and PD15 on AF6, SPI3 PA4/PA15 on AF6); WB55 (<code>pad_map: stm32wb</code>, SPI1 PA4/PA15/PB2, SPI2 PB9/PB12/PD0); L073 (<code>pad_map: stm32l0</code>, SPI1 AF0 PA4/PA15, PE12 AF2; SPI2 PB12 AF0, PB9 AF5, PD0 AF1)</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>STM32 I²C, modern</td>
+<td>L4/G0 <code>TIMINGR</code> (<code>ISR</code>/<code>ICR</code>)</td>
+<td>G071 AF6 (<code>pad_map: stm32g0</code>); L4 AF4</td>
+<td>controller, target</td>
+</tr>
+<tr>
+<td>STM32 I²C, legacy</td>
+<td>F1/F2/F4 (<code>SR1</code>/<code>SR2</code>/<code>CCR</code>/<code>TRISE</code>)</td>
+<td>F103 default mapping (PB6/PB7, PB10/PB11); F401 AF4</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>RP2040 SPI</td>
+<td>PL022 (<code>SSPCR0</code>/<code>SSPCR1</code>/<code>SSPDR</code>/<code>SSPSR</code>/<code>SSPCPSR</code>)</td>
+<td>IO_BANK0 <code>FUNCSEL</code> 1: SCK, TX, RX, CSn</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>RP2040 I²C</td>
+<td>DW_apb_i2c (<code>IC_CON</code>/<code>IC_TAR</code>/<code>IC_SAR</code>/<code>IC_DATA_CMD</code>/...)</td>
+<td>IO_BANK0 <code>FUNCSEL</code> 3: SDA, SCL</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>nRF52 SPI</td>
+<td>SPIM / SPIS, EasyDMA (<code>TXD</code>/<code>RXD</code> <code>PTR</code>/<code>MAXCNT</code>/<code>AMOUNT</code>)</td>
+<td>any pad, by <code>PSEL.SCK</code>/<code>MOSI</code>/<code>MISO</code> (and SPIS <code>PSEL.CSN</code>; SPIM3 <code>PSEL.CSN</code> and <code>PSELDCX</code>)</td>
+<td>master (<code>ENABLE = 7</code>), slave (<code>ENABLE = 2</code>)</td>
+</tr>
+<tr>
+<td>nRF52 I²C</td>
+<td>TWIM / TWIS, EasyDMA</td>
+<td>any pad, by <code>PSEL.SCL</code>/<code>SDA</code></td>
+<td>controller (<code>ENABLE = 6</code>), target (<code>ENABLE = 9</code>)</td>
+</tr>
+<tr>
+<td>ESP32-C3 / ESP32-C6 GP-SPI2</td>
+<td>Espressif GP-SPI (<code>SPI_CMD</code>/<code>SPI_USER</code>/<code>SPI_MS_DLEN</code>/<code>W0..W15</code>/<code>SPI_SLAVE</code>), or by GDMA (<code>SPI_DMA_CONF</code>, <a href="#spi-dma">SPI DMA</a>)</td>
+<td>GPIO matrix: <code>FSPICLK</code>, <code>FSPID</code>, <code>FSPIQ</code>, <code>FSPICS0</code> (63/65/64/68 on both), any pad</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>ESP32-C3 / ESP32-C6 I²C0</td>
+<td>Espressif command list (<code>CTR</code>/<code>COMD0..7</code>/<code>DATA</code> FIFOs/<code>SLAVE_ADDR</code>)</td>
+<td>GPIO matrix: <code>I2CEXT0_SCL</code>/<code>SDA</code> (53/54 on the C3, 45/46 on the C6), any pad, out and back in</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>ESP32-S3 GP-SPI2 / GP-SPI3</td>
+<td>Espressif GP-SPI, as the C3</td>
+<td>GPIO matrix: SPI2 <code>FSPICLK</code>, <code>FSPID</code>, <code>FSPIQ</code>, <code>FSPICS0</code> (101/103/102/110, <code>spi2</code>), SPI3 <code>SPI3_CLK</code>, <code>SPI3_D</code>, <code>SPI3_Q</code>, <code>SPI3_CS0</code> (66/68/67/71, <code>spi3</code>), pads 0..48</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>ESP32-S3 I²C0 / I²C1</td>
+<td>Espressif command list, as the C3</td>
+<td>GPIO matrix: <code>I2CEXT0_SCL</code>/<code>SDA</code> (89/90, <code>i2c0</code>), <code>I2CEXT1_SCL</code>/<code>SDA</code> (91/92, <code>i2c1</code>), pads 0..48, out and back in</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>ESP32 (classic) VSPI / HSPI</td>
+<td>classic SPI (<code>SPI_CMD.USR</code> bit 18, <code>SPI_USER</code>, <code>SPI_MOSI_DLEN</code>/<code>MISO_DLEN</code>, <code>SPI_PIN</code>, <code>SPI_SLAVE</code>, <code>W0..W15</code> at 0x80)</td>
+<td>GPIO matrix: VSPI <code>VSPICLK</code>/<code>VSPID</code>/<code>VSPIQ</code>/<code>VSPICS0</code> (63/65/64/68, <code>spi3</code>), HSPI <code>HSPICLK</code>/<code>HSPID</code>/<code>HSPIQ</code>/<code>HSPICS0</code> (8/10/9/11, <code>spi2</code>), outputs on pads 0..33, inputs on pads 0..39</td>
+<td>master, slave</td>
+</tr>
+<tr>
+<td>ESP32 (classic) I²C0 / I²C1</td>
+<td>Espressif command list, classic opcodes (<code>COMD0..15</code>)</td>
+<td>GPIO matrix: <code>I2CEXT0_SCL</code>/<code>SDA</code> (29/30, <code>i2c0</code>), <code>I2CEXT1_SCL</code>/<code>SDA</code> (95/96, <code>i2c1</code> at 0x3FF6_7000), pads 0..33 out and back in (0..39 in)</td>
+<td>master, slave (no stretching)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>SPI</strong> (STM32 classic/FIFO SPI): SCK, MOSI, MISO and NSS are push-pull
+nets. A master (<code>MSTR=1</code>, <code>SPE=1</code>) drives SCK and MOSI and samples the level
+the net delivers to its MISO pad at its own sampling edge; that is what lands
+in <code>DR</code>. A slave (<code>MSTR=0</code>) has no clock of its own: it reacts to the SCK,
+MOSI and NSS edges the net delivers, shifts MOSI in on its sampling edge and
+puts its transmit word out on MISO on its shift edge. Any CPOL/CPHA, MSB or
+LSB first; 8 or 16 bits (<code>CR1.DFF</code>) on the classic F1/F4/L0 SPI, 4 to 16
+bits (<code>CR2.DS</code>) on the FIFO-type G0/L4/G4/WB/F7 SPI: modes 0-3, LSB-first,
+16-bit frames on an F401 pair, and 4-, 8-, 12- and 16-bit frames on a G071
+pair (each chip as master) each have an end-to-end test. A slave sets RXNE
+with the SPI interrupt when <code>RXNEIE</code> is set; <code>TXEIE</code> interrupts whenever TXE
+is set (enabling it with TXE set interrupts at once), so a slave can feed
+every answer from its TXE interrupt. A <code>DR</code> write fills the slave's transmit
+buffer even while <code>SPE=0</code>. A frame that starts with nothing written to <code>DR</code>
+is an underrun: the shift register goes out as it is, which is the previous
+frame received (0 after reset), and <code>Spi::net_slave_underruns()</code> counts it
+(logged once). It drives MISO only while selected: <code>SSM=1, SSI=0</code>, or <code>SSM=0</code>
+with its NSS pad low. A master with <code>SSOE=1</code> drives NSS low while enabled. A
+disabled SPI drives nothing. A word store to <code>DR</code> is one frame (bits 31:16
+are not part of the register).</p>
+<p>The two register files differ in their buffers, as on silicon. Classic: one
+receive buffer, RXNE on every frame, OVR when a frame arrives before <code>DR</code>
+was read, one transmit buffer. FIFO-type (RM0444 §35.5.9): 32-bit RX and TX
+FIFOs, a frame of up to 8 bits taking one byte and a wider one two; RXNE
+when the RX FIFO holds <code>CR2.FRXTH</code>'s threshold (one byte with <code>FRXTH=1</code>,
+two with the reset <code>FRXTH=0</code> — so 8-bit firmware that never sets <code>FRXTH</code>
+waits for a second frame, as it does on a real G0); TXE while the TX FIFO is
+at most half full; <code>SR.FRLVL</code>/<code>FTLVL</code> report both levels; OVR when a frame
+arrives to a full RX FIFO. <code>DR</code> accesses pack: an 8-bit access moves one
+byte, a 16-bit one two (two frames at <code>DS</code> ≤ 8). A FIFO master with
+<code>NSSP=1</code>, <code>SSOE=1</code> and <code>CPHA=0</code> pulses NSS high for one SCK period between
+back-to-back frames and leaves it high after the last. The tables come from
+ST's open pin data (the CubeMX source of each datasheet's AF table); the G4,
+WB and L0 have their own (<code>pad_map:</code>) because they disagree with the L4 or
+F4 one on some pad (PE12-PE15/AF5 are SPI4 on a G4; the L0's SPI1 is on
+AF0). Tested: an L476 pair and a G474 pair, master <code>SSOE=1</code> / slave <code>SSM=0</code>
+on PA4, with and without <code>NSSP</code> (every frame its own NSS low period when the
+master polls between frames), and a slave whose NSS net is removed, which is
+never selected.</p>
+<p><strong>I²C, modern</strong> (STM32 L4/G0 <code>TIMINGR</code> register file): SCL and SDA are
+open-drain nets; put <code>pull: up</code> on them. The controller generates START, the
+address, data, ACK/NACK, repeated START and STOP with <code>SCLL</code>/<code>SCLH</code>/<code>SDADEL</code>
+timing, and counts the SCL high period from when it <em>sees</em> SCL high, so a
+target holding SCL low stretches the clock. A NACK sets <code>NACKF</code> and sends
+STOP; <code>AUTOEND</code> sends STOP after <code>NBYTES</code>, otherwise <code>TC</code> holds SCL low for a
+repeated START. With <code>RELOAD</code>, <code>TCR</code> holds SCL low after <code>NBYTES</code> until
+firmware writes the next <code>NBYTES</code> (transfers above 255 bytes; the last byte
+of a chunk is ACKed). <code>ADD10</code> sends the 10-bit sequence: write header and low
+byte, and for a read a repeated START with the read header (only the read
+header with <code>HEAD10R</code>). A released SDA read back low is arbitration lost
+(<code>ARLO</code>). A target watches START/STOP and its address on the wire: <code>OAR1</code>
+(7-bit, or 10-bit with <code>OA1MODE</code>), <code>OAR2</code> with <code>OA2MSK</code>, and the general call
+with <code>GCEN</code>; it ACKs those only, sets <code>ADDR</code>, <code>DIR</code> and <code>ADDCODE</code> (<code>11110xx</code>
+for a 10-bit match), and stretches SCL until firmware clears <code>ADDR</code>, reads
+<code>RXDR</code> or writes <code>TXDR</code>. With <code>NOSTRETCH=1</code> it does not stretch: an empty
+<code>TXDR</code> goes out as it is and a byte arriving while <code>RXDR</code> is full is NACKed
+and lost, both with <code>OVR</code>. A transfer to an address nobody owns is the
+pull-up reading 1 in the ACK slot.</p>
+<p><strong>I²C, legacy</strong> (STM32 F1/F2/F4 <code>CR1</code>/<code>CR2</code>/<code>OAR1</code>/<code>OAR2</code>/<code>DR</code>/<code>SR1</code>/<code>SR2</code>/
+<code>CCR</code>/<code>TRISE</code>): the same open-drain wire, driven by the register sequences of
+RM0008/RM0368. Master: <code>START</code> sets SB/MSL/BUSY once START is on the wire;
+the <code>DR</code> write after it is the address byte, whose ACK sets <code>ADDR</code> (<code>TRA</code>
+from R/W) and whose NACK sets <code>AF</code>. A transmitter takes <code>DR</code> after <code>ADDR</code> is
+cleared (SR1 then SR2 read) and holds SCL low with <code>BTF</code> while <code>DR</code> is empty;
+a receiver ACKs by <code>CR1.ACK</code> (with <code>POS</code>, the value in force one byte
+earlier) and holds SCL low with <code>BTF</code> while a byte waits behind a full <code>DR</code>.
+<code>STOP</code> goes out at once from a held bus, otherwise after the byte in flight.
+Slave: it ACKs <code>OAR1</code> (7-bit), <code>OAR2</code> with <code>ENDUAL</code> and the general call
+with <code>ENGC</code> while <code>CR1.ACK</code> is set, stretches SCL while <code>ADDR</code> is up and
+while <code>DR</code> is full (receiver) or empty (transmitter), sets <code>AF</code> when the
+master NACKs what it sent and <code>STOPF</code> when a write ends with STOP. A byte
+loaded into <code>DR</code> that never went out stays there and is the first one the
+next read gets. <code>NOSTRETCH</code> skips the stretch after the address. Timing is
+<code>CCR</code>'s (standard mode, fast mode, <code>DUTY</code>) in PCLK1 periods taken as core
+cycles. Event and error interrupts (<code>ITEVTEN</code>/<code>ITBUFEN</code>/<code>ITERREN</code>, separate
+error vector where the chip yaml gives <code>irq_error</code>) are raised when a flag
+is set and when an enable is written while its flag is up.</p>
+<p><strong>SPI, RP2040</strong> (PL022, Motorola frame format): SCK, TX, RX and CSn. A
+master (<code>SSPCR1.MS = 0</code>) clocks the words queued in its 8-deep TX FIFO at
+<code>CPSDVSR × (1 + SCR)</code> core cycles per bit with SCK idling at <code>SPO</code> and the
+edges <code>SPH</code> gives; TX is MOSI and RX (sampled at each sampling edge) is MISO,
+and each word lands in the 8-deep RX FIFO. CSn is low for a frame; with
+<code>SPH = 0</code> it goes high for one SCK period between back-to-back frames, with
+<code>SPH = 1</code> it stays low until the FIFO runs dry. A slave (<code>MS = 1</code>) reacts to
+the CSn, SCK and RX (MOSI) edges the net delivers, drives TX (MISO) only
+while CSn is low and <code>SOD</code> is clear, and answers from its TX FIFO; a frame
+with the TX FIFO empty sends zeros and is counted
+(<code>Rp2040Spi::net_underruns</code>). <code>SSPSR</code> follows the FIFOs and the shift engine.
+Tested against an STM32G071 both ways round (RP2040 master in mode 0 with
+hardware CSn, RP2040 slave in mode 3). Not on a net: the PL022 interrupt
+registers, DMA, TI/Microwire formats and loopback.</p>
+<p><strong>I²C, RP2040</strong> (DW_apb_i2c): the same open-drain wire. A master
+(<code>IC_CON.MASTER_MODE</code>) works through its 16-deep command FIFO
+(<code>IC_DATA_CMD</code>: a byte to write or a read, with <code>STOP</code> and <code>RESTART</code>):
+START and the <code>IC_TAR</code> 7-bit address when the FIFO has a command, a
+repeated START with the address again on a change of direction or
+<code>RESTART</code>, STOP after a command that asks for it, and SCL held low while the
+FIFO is empty without one (the RP2040's <code>IC_EMPTYFIFO_HOLD_MASTER_EN</code>). A
+read is ACKed unless it carries <code>STOP</code>. A NACKed address or byte aborts with
+<code>TX_ABRT</code> (<code>ABRT_7B_ADDR_NOACK</code> / <code>ABRT_TXDATA_NOACK</code>), flushes the FIFO and
+sends STOP. Timing is <code>IC_SS/FS_SCL_LCNT</code>/<code>HCNT</code> with <code>IC_SDA_HOLD</code>. A slave
+(<code>MASTER_MODE = 0</code>, <code>IC_SLAVE_DISABLE = 0</code>) ACKs <code>IC_SAR</code>, fills the RX FIFO
+(<code>FIRST_DATA_BYTE</code> on the first byte after the address), answers a read from
+its TX FIFO and otherwise holds SCL low with <code>RD_REQ</code> until firmware writes
+<code>IC_DATA_CMD</code>; the master's NACK ends a read with <code>RX_DONE</code>. <code>STOP_DET</code>,
+<code>START_DET</code>, <code>RX_FULL</code>/<code>IC_RX_TL</code>, <code>TX_EMPTY</code>/<code>IC_TX_TL</code> and the <code>IC_CLR_*</code>
+registers follow the DW names; the tests poll <code>IC_RAW_INTR_STAT</code>. Tested
+against an STM32G071 both ways round, including a slave that answers too
+slowly for the clock. Not on a net: 10-bit addressing, the general call,
+SMBus, DMA and <code>RX_FIFO_FULL_HLD_CTRL</code> (a full RX FIFO drops the byte with
+<code>RX_OVER</code>).</p>
+<p><strong>nRF52</strong> (nRF52840 instance 0 at 0x40003000, the window <code>ENABLE</code> turns
+into SPIM, SPIS, TWIM or TWIS; also the standalone TWIM1 and SPIM2): the
+pads are whichever ones the <code>PSEL</code> registers name, so a peripheral is on a
+net when the pad its pin select names is (and it is enabled). A write that
+moves a <code>PSEL</code> or <code>ENABLE</code> is bracketed like an RP2040 <code>FUNCSEL</code> write: the
+port reports what moved and the net's level reaches the newly routed line.
+The window is one register file: what firmware programs before <code>ENABLE</code>
+(buffers, <code>CONFIG</code>, <code>SHORTS</code>, <code>INTEN</code>) reaches every personality. EasyDMA
+reads a TX buffer when its transfer is armed (<code>TASKS_START</code>, <code>STARTTX</code>,
+<code>TASKS_RELEASE</code>, <code>PREPARETX</code>) and writes the RX buffer before the event that
+ends it; the events raise the interrupt where <code>INTEN</code> asks for it.</p>
+<ul>
+<li><em>SPIM</em>: <code>TASKS_START</code> clocks <code>max(TXD.MAXCNT, RXD.MAXCNT)</code> bytes back to
+  back at <code>FREQUENCY</code> in the <code>CONFIG</code> shape (<code>ORC</code> past the TX buffer),
+  sampling MISO at the net's level; <code>EVENTS_STARTED</code>, then <code>ENDTX</code>,
+  <code>ENDRX</code>, <code>END</code> with the amounts. <code>TASKS_STOP</code> ends after the byte on the
+  wire (<code>STOPPED</code>). On SPIM0..2 chip select is a GPIO. SPIM3 (0x4002F000,
+  <code>spi3</code> on the nRF52833/nRF52840) drives its own: with <code>PSEL.CSN</code>
+  connected, CSN sits at its inactive level while enabled (<code>CSNPOL</code> 0:
+  active low), is asserted once the TX buffer is read, and the first byte
+  starts <code>IFTIMING.CSNDUR</code> 64 MHz cycles later (first SCK edge <code>CSNDUR</code> +
+  half an SCK period after the CSN edge); after the last SCK edge CSN is
+  held <code>CSNDUR</code> more, released, and only then <code>END</code> fires. The next
+  assertion waits until CSN has been inactive for <code>CSNDUR</code>. With <code>PSELDCX</code>
+  connected D/CX idles high and is low for the first <code>DCXCNT</code> bytes (all of
+  them at 0xF): it falls with CSN, rises at the last SCK edge of the last
+  command byte, and is high again when CSN is released. <code>IFTIMING.RXDELAY</code>
+  is stored, not modelled.</li>
+<li><em>SPIS</em>: the semaphore decides. <code>TASKS_RELEASE</code> gives the slave the
+  buffers; CSN low then starts a granted transaction (<code>SEMSTAT = 2</code>) that
+  shifts out the TX buffer, then <code>ORC</code> (<code>STATUS.OVERREAD</code>), and fills the RX
+  buffer up to <code>MAXCNT</code> (<code>STATUS.OVERFLOW</code> past it). With the CPU holding
+  the semaphore it sends <code>DEF</code>. CSN high: <code>ENDRX</code>, <code>END</code>, the amounts, and
+  the semaphore back to the CPU with <code>ACQUIRED</code> when it asked
+  (<code>TASKS_ACQUIRE</code>) or <code>SHORTS.END_ACQUIRE</code> is set. MISO is driven only
+  while CSN is low.</li>
+<li><em>TWIM</em>: <code>STARTTX</code>/<code>STARTRX</code> send START (repeated START from a held bus)
+  and <code>ADDRESS</code>; <code>LASTTX</code>/<code>LASTRX</code> fire at the start of the last byte with
+  their shortcuts (<code>LASTTX_STARTRX</code>, <code>_SUSPEND</code>, <code>_STOP</code>, <code>LASTRX_STARTTX</code>,
+  <code>_SUSPEND</code>, <code>_STOP</code>). A received byte is NACKed when STOP or a change of
+  direction follows. A NACK sets <code>ERRORSRC.ANACK</code>/<code>DNACK</code> with <code>ERROR</code> and
+  holds the bus until <code>TASKS_STOP</code> (nrfx's <code>RESUME</code> + <code>STOP</code>). With nothing
+  left to do the TWIM holds SCL low. Timing: <code>FREQUENCY</code> (K100/K250/K400 of
+  64 MHz), SCL low and high half a bit each.</li>
+<li><em>TWIS</em>: ACKs <code>ADDRESS[0]</code>/<code>[1]</code> as <code>CONFIG</code> enables them (<code>MATCH</code>),
+  fires <code>WRITE</code>/<code>READ</code>, and stretches SCL until firmware prepares a buffer
+  (<code>TASKS_PREPARERX</code>/<code>PREPARETX</code>, or <code>RESUME</code> after <code>WRITE_SUSPEND</code>/
+  <code>READ_SUSPEND</code>); <code>RXSTARTED</code>/<code>TXSTARTED</code> follow. Past <code>RXD.MAXCNT</code> a byte
+  is NACKed with <code>ERRORSRC.OVERFLOW | DNACK</code>; past the TX buffer <code>ORC</code> goes
+  out (<code>OVERREAD</code>). Each phase uses up its prepare; STOP fires <code>STOPPED</code>
+  with the amounts.</li>
+</ul>
+<p>Tested against an STM32G071 both ways round on each bus (SPIM master /
+SPIS slave in mode 0, TWIM controller / TWIS target with the <code>env-i2c.yaml</code>
+register-file exchange, the NACK of an absent address, a slow G071 target
+holding the TWIM and a slow TWIS holding the G071), and SPIM3 on its
+hardware CSN against the G071's hardware NSS (<code>env-spi-nrf52-spim3.yaml</code>:
+the CSN-to-SCK and SCK-to-CSN times, D/CX around a one-byte command, and an
+active-high <code>CSNPOL</code> that deselects the G071 for the transfer). Not on a
+net: SPIM3's CSN/D/CX for an attached device model (off a net the bytes
+cross inside one call; the nRF54L map does select such a device), the legacy
+SPI/TWI (<code>ENABLE = 1</code>/<code>5</code>), the TWIM <code>ERRORSRC.OVERRUN</code>, the nRF5340 and
+nRF54 SPIM/TWIM, and the SPIS/TWIS on a window other than a serial
+instance (the nRF52840 chip yaml has them only at 0x40003000).</p>
+<p><strong>SPI, ESP32-C3 / ESP32-C6</strong> (GP-SPI2; the C6 runs the same model): each
+line reaches its pad through the GPIO matrix, out (<code>FUNCn_OUT_SEL_CFG</code> with
+the pad's output stage on) and in (<code>FUNCn_IN_SEL_CFG</code>, <code>SEL</code> set). A master
+(<code>SPI_SLAVE.MODE = 0</code>) runs the transaction <code>SPI_CMD.USR</code> starts on the
+wire, bit by bit at the <code>SPI_CLOCK</code> rate: CS0 low (unless <code>CS0_DIS</code>) for
+<code>CS_SETUP</code>, the command, address and dummy phases when enabled, then the
+data, full duplex (<code>DOUTDIN</code>: <code>MS_DLEN + 1</code> bits out of <code>W0..W15</code> while
+MISO is sampled) or half duplex (a write phase, then a read phase); the bits
+read land in <code>W0..</code>, <code>USR</code> clears and <code>SPI_TRANS_DONE</code> latches after
+<code>CS_HOLD</code>. CPOL is <code>MISC.CK_IDLE_EDGE</code>, CPHA <code>USER.CK_OUT_EDGE</code> XOR CPOL (how
+esp-idf and esp-hal set the four modes), bit order <code>CTRL.WR/RD_BIT_ORDER</code>.
+A slave (<code>MODE = 1</code>, CPU-controlled) answers from <code>W0..W15</code> as they are when
+CS0 falls, drives MISO only while selected, and when CS0 rises writes the
+bits it sampled to <code>W0..</code>, their count to <code>SLAVE1.DATA_BITLEN</code>, and latches
+<code>SPI_TRANS_DONE</code> (CPOL <code>CK_IDLE_EDGE</code>, CPHA <code>SLAVE.CLK_MODE_13</code>, as
+<code>spi_ll_slave_set_mode</code> sets them). Tested against an STM32G071 both ways
+round on the C3 and the C6 (register-level firmware), and with esp-hal
+1.1's blocking master driver (hardware CS0) on the C3. Both roles also run
+by GDMA (see <a href="#spi-dma">SPI DMA</a>). Not on a net: dual/quad modes, segmented
+transfers and the master's CS polarity bits.</p>
+<p><strong>I²C, ESP32-C3 / ESP32-C6</strong> (I2C0): the same open-drain wire engine as the
+legacy STM32 and RP2040 I²C, driven by the command list. A master
+(<code>CTR.MS_MODE</code>) runs <code>COMD0..</code> on <code>TRANS_START</code>: <code>RSTART</code>, <code>WRITE n</code> from
+the TX FIFO (the address is its first byte, as esp-idf and esp-hal queue it)
+with each ACK slot compared to <code>ack_exp</code> when <code>ack_check_en</code> is set,
+<code>READ n</code> into the RX FIFO answered with <code>ack_value</code>, <code>STOP</code>
+(<code>TRANS_COMPLETE</code>) and <code>END</code> (<code>END_DETECT</code>, SCL held low until the next
+<code>TRANS_START</code>); each command sets <code>command_done</code>, <code>SR.RESP_REC</code> records the
+ACKs. A mismatched ACK latches <code>NACK</code> and the master sends STOP (on silicon
+the driver resets the controller after a NACK, which also frees the bus).
+Timing is <code>CLK_CONF</code> with <code>SCL_LOW/HIGH_PERIOD</code> and <code>SDA_HOLD</code>. A slave
+(<code>MS_MODE = 0</code>) ACKs its 7-bit <code>SLAVE_ADDR</code>, fills the RX FIFO
+(<code>RXFIFO_WM</code>), answers reads from the TX FIFO and, with it empty and
+<code>SLAVE_SCL_STRETCH_EN</code> set, holds SCL low with <code>SLAVE_STRETCH</code> until
+firmware writes <code>SLAVE_SCL_STRETCH_CLR</code>; STOP after it was addressed latches
+<code>TRANS_COMPLETE</code>. Tested against an STM32G071 both ways round on the C3 and
+the C6, including a NACK and a slow target on either side that stretches
+SCL, and with esp-hal 1.1's blocking master driver on the C3. Not on a net:
+10-bit addressing, the general call, <code>SLAVE_BYTE_ACK_CTL</code>, the FIFO-address
+and non-FIFO modes, filters and timeouts.</p>
+<p><strong>ESP32-S3 and classic ESP32.</strong> The S3 GP-SPI2 and I2C0 are the C3's
+register files and run the same two engines, with the S3's matrix numbers
+(<code>FUNCn_IN_SEL_CFG</code>: pad [5:0], <code>SEL</code> bit 7) and its I²C timing
+(<code>CLK_CONF</code> source clock, 240 MHz core). The classic part's SPI is the older
+IP: the same fields at other offsets and bits (<code>SPI_CMD.USR</code> 18, <code>SPI_USER</code>
+<code>CS_HOLD</code> 4 / <code>CS_SETUP</code> 5 / <code>CK_OUT_EDGE</code> 7, <code>SPI_CTRL2</code> setup and hold
+times, <code>SPI_MOSI_DLEN</code> / <code>SPI_MISO_DLEN</code>, <code>SPI_PIN</code> <code>CK_IDLE_EDGE</code> /
+<code>CS0_DIS</code> / <code>CS_KEEP_ACTIVE</code>, <code>W0</code> at 0x80); it answers the GP-SPI engine
+through a translated register view. A classic slave is <code>SPI_SLAVE.SLAVE_MODE</code>
+(bit 30) with CPHA from <code>SPI_USER.CK_I_EDGE</code> as esp-idf's
+<code>spi_ll_slave_set_mode</code> sets it (mode 0: <code>CK_I_EDGE</code> = 1); its bit count
+lands in <code>SPI_SLV_RD_BIT</code>, and master and slave both report done in
+<code>SPI_SLAVE.TRANS_DONE</code> (bit 4). VSPI (<code>spi3</code>, 0x3FF6_5000) and HSPI
+(<code>spi2</code>, 0x3FF6_4000, now on the bus) each have their own matrix signals.
+The S3's second GP-SPI (<code>spi3</code>, 0x6002_5000) and I2C1 (<code>i2c1</code>, 0x6002_7000)
+are the same models as SPI2 / I2C0 with their own matrix signals, and so is
+the classic I2C1 (<code>i2c1</code>, 0x3FF6_7000, interrupt source 50, AHB FIFO alias
+0x6002_701C), which is now on the classic bus.
+The classic I2C0 and I2C1 run the command-list engine with the classic opcodes
+(RSTART 0, WRITE 1, READ 2, STOP 3, END 4) and <code>SCL_LOW/HIGH_PERIOD</code> and
+<code>SDA_HOLD</code> in APB cycles; it has no <code>SCL_STRETCH_CONF</code>, so a classic target
+whose TX FIFO is empty sends 0xFF instead of stretching: firmware keeps the
+TX FIFO loaded ahead of a read, as the example does. A TX byte written
+through the classic AHB FIFO alias (0x6001_301C) reaches a master <code>WRITE</code>
+waiting for it only with the next APB register write. Tested against an
+STM32G071 both ways round on each part (<code>env-spi-esp32s3*.yaml</code>,
+<code>env-spi-esp32*.yaml</code>, <code>env-i2c-esp32s3*.yaml</code>, <code>env-i2c-esp32*.yaml</code>;
+hand-written Xtensa assembly, see the example's <code>build.sh</code>), including an
+address NACK, a slow G071 target holding either controller, and a slow S3
+target stretching the G071's clock. The second instances run on bank-1
+pads (GPIO32 and up) in the same tests: the S3's GP-SPI3 on GPIO34..37 and
+I2C1 on GPIO41/42 (<code>env-spi-esp32s3-spi3*.yaml</code>,
+<code>env-i2c-esp32s3-i2c1*.yaml</code>), the classic I2C1 on GPIO32/33
+(<code>env-i2c-esp32-i2c1*.yaml</code>), and the classic VSPI master / HSPI slave with
+MISO, or SCK, MOSI and CS0, on the input-only GPIO34..36
+(<code>env-spi-esp32-hi*.yaml</code>). Plain GPIO crosses bank-1 pads between a classic
+ESP32 and an ESP32-S3 (<code>env-gpio-esp32-esp32s3.yaml</code>: <code>OUT1</code> onto the other
+part's <code>IN1</code>, each edge latched in <code>GPIO_STATUS1</code>).</p>
+<p>The ESP matrix routes follow firmware: a line becomes a net line the first
+time firmware routes it (in or out) to a pad on a net. IO_MUX direct
+functions (<code>MCU_SEL</code> other than GPIO) and <code>IN_INV_SEL</code>/<code>INV_SEL</code> are not
+followed, so choose pads without an IO_MUX function for the signal (esp-hal
+then uses the matrix as well).</p>
+<p>Clock stretching is tested on every target: an STM32G071 (modern), an
+STM32F401 (legacy), an RP2040 and an ESP32-C3 slave whose firmware answers
+several SCL low periods late each hold the controller, and the bytes and
+clock count come out the same; a slow G071 target holds an ESP32-C3
+controller (register level and esp-hal), an ESP32-S3 and a classic ESP32
+controller the same way, and a slow ESP32-S3 target holds the G071. A target that ends a stretch with a new bit on SDA releases
+SCL a data setup time later (<code>SDADEL</code>-style, one quarter of its own SCL low
+period on the legacy and RP2040 engines, 250 ns on the nRF52 TWIS), so the
+change is never read as START or STOP.</p>
+<p>The legacy and modern controllers meet only on the wire, so an F103 target
+answers a G071 controller as it answers an F401 one (tested both ways round
+between F103 and F401, and G071 → F103).</p>
+<p>Everything is event-scheduled: a master's bits run at their exact cycles, a
+slave or target runs when the net delivers an edge (at the cycle the world
+applies it, even on a timed core that publishes its cycle to the bus only at
+peripheral ticks). The one poll is a chip
+holding SCL low until firmware does something with a register <em>read</em>, which
+cannot wake the model: reading <code>RXDR</code> (modern), or clearing <code>ADDR</code> and
+reading <code>DR</code> (legacy). It looks every quarter SCL low period, and at every
+register write.</p>
+<p>Two physical limits come with the wires:</p>
+<ul>
+<li>An answer crosses the wire twice. MISO answers a clock edge only after the
+  edge reached the slave and the answer came back, so two <code>latency_ns</code> must
+  fit in half an SCK period; slow SCK (<code>CR1.BR</code>) or shorten the latency when
+  they do not. The same holds for I²C data and ACKs inside the SCL low period.</li>
+<li>Give SCL and SDA (and SCK and MOSI) the same <code>latency_ns</code>. The receiver
+  tells data from START/STOP by the order the two wires change in.</li>
+</ul>
+<p>The results do not depend on node order or on the world's round size; each
+example's tests run every exchange three ways (as written, nodes swapped,
+37 ns rounds) and compare what every pad saw, cycle by cycle.</p>
+<p>Not modelled on a net yet: other SPI/I²C families (the H5 SPI v3, whose NSS
+pads stay unrouted), legacy-I²C
+10-bit addressing, SMBus/PEC, modern-I²C slave byte control (<code>SBC</code>), the I²C
+filters and timeouts, SPI CRC, TI mode and the SPI mode fault (<code>MODF</code>). Such
+a peripheral on a net keeps its usual behaviour and drives its lines
+push-pull as before.</p>
+<h3 id="spi-dma">SPI DMA</h3>
+<p>The data of an SPI transfer can move by DMA on either chip, master or slave,
+on a net or off it (byte-level devices on the bus); the bits on the wire are
+the same as with the CPU feeding <code>DR</code> or <code>W0..W15</code>.</p>
+<p><strong>STM32</strong> (classic F1/F4/L0 and FIFO G0/L4/G4/WB/F7 SPI). <code>CR2.TXDMAEN</code>
+raises a request while TXE is set (the classic port's buffer is empty; the
+FIFO port's TX FIFO is at or below half full) and the SPI is enabled;
+<code>CR2.RXDMAEN</code> while RXNE is set (on the FIFO port it follows <code>FRXTH</code>). Each
+request is held until the <code>DR</code> write (TX) or read (RX) that answers it, so
+the DMA moves one item per free slot or received frame. The request reaches
+the DMA channel the chip's routing registers select: the F1's fixed channels
+and the L4's <code>CSELR</code> (<code>type: dma</code>, <code>config.requests: { spi1_tx: 3, spi1_rx:
+[2, 1] }</code>), the F4's <code>SxCR.CHSEL</code> (<code>type: stm32f4_dma</code>, <code>config.requests: {
+spi1_tx: [[3, 3], [5, 3]] }</code>, stream and channel), and on the G0 the
+DMAMUX (<code>type: dmamux</code>, <code>DMAMUX_CxCR.DMAREQ_ID</code>, channel x feeding DMA1
+channel x + 1). The G071, F103, F401, F407 and L476 chip files declare their
+SPI routes. Each DMA item is one access at its programmed width, so a
+half-word item packs two frames at <code>DS</code> ≤ 8 bits; with <code>CR2.LDMA_TX</code> the last
+item of a transfer (the DMA tells the SPI, as its end-of-transfer signal
+does) carries one frame, and with <code>LDMA_RX</code> and <code>FRXTH = 0</code> the odd last byte
+is requested below the 16-bit threshold. Enable the DMA channel before the
+SPI's request bit, as HAL does: a request raised while no channel is enabled
+is not seen again until it is answered.</p>
+<p><strong>ESP32-C3 / ESP32-C6</strong> (GP-SPI2 by GDMA). With <code>SPI_DMA_CONF.DMA_TX_ENA</code>
+the transaction's MOSI bytes (a master's data phase, a slave's answer) come
+from what the GDMA OUT link bound to SPI2 (<code>OUT_PERI_SEL = 0</code>) pushed into
+the controller when it was started; with <code>DMA_RX_ENA</code> the bytes received go
+to the IN link (<code>IN_PERI_SEL = 0</code>), whose descriptors get the data, their
+length, <code>suc_eof</code> on the last and the owner bit back to the CPU. The data
+phase may then exceed the 64-byte W buffer. The transaction completes
+(<code>USR</code> clears, <code>SPI_TRANS_DONE</code>) once the IN link holds the bytes, so
+firmware that sees it done finds them in memory; <code>IN_SUC_EOF</code> / <code>IN_DONE</code>
+and <code>OUT_EOF</code> / <code>OUT_TOTAL_EOF</code> / <code>OUT_DONE</code> latch in the GDMA. The SPI's
+AFIFO reset bits (<code>SPI_DMA_CONF</code> 29..31) empty its DMA FIFOs, as drivers do
+before each transaction. The C3 GDMA (<code>esp32c3_gdma</code>) also copies memory to
+memory (<code>IN_CONF0.MEM_TRANS_EN</code>).</p>
+<p><strong>The STM32 DMA controllers themselves.</strong> One data item per arbitration slot
+(one slot per cycle) per controller: when several channels or streams have
+work, the slot goes to the highest software priority (<code>CCR.PL</code>, <code>SxCR.PL</code>;
+GPDMA <code>CCR.PRIO</code>, 11 first), then the lowest channel or stream number, and a
+request that loses the slot stays latched. An item that faults on the bus (an
+unmapped address) sets <code>TEIF</code> (GPDMA <code>DTEF</code>) and disables its channel or
+stream, as silicon does. The F4/F7 stream FIFO (<code>SxFCR.DMDIS</code> = 1, and always
+for memory-to-memory) is modelled: requests fill or drain a 16-byte FIFO at
+the peripheral port (<code>PBURST</code> moves 4/8/16 items per request), the memory
+port moves <code>FTH</code> worth (1/4 .. full) as <code>MSIZE</code> beats (<code>MBURST</code> bursts),
+<code>PSIZE</code> ≠ <code>MSIZE</code> packs and unpacks little-endian, <code>SxNDTR</code> counts <code>PSIZE</code>
+items, <code>SxFCR.FS</code> reads the level, and clearing <code>EN</code> flushes a P2M FIFO to
+memory before the stream stops (<code>EN</code> reads 1 until then, <code>TCIF</code> set).
+Direct mode forces <code>MSIZE</code> = <code>PSIZE</code> and no bursts at enable. <code>FEIF</code> is set
+for a threshold that does not hold a whole number of memory bursts (RM0090
+Table 48: the stream does not enable) and for a FIFO overrun (P2M) or
+underrun (M2P) when a request comes. On the G0 the DMAMUX request generators
+(<code>RGxCR</code>) turn edges of EXTI lines 0..15 (the pad <code>EXTI_EXTICRx</code> selects) or
+of the channel events <code>dmamux_evt0..3</code> into <code>GNBREQ + 1</code> requests, and
+request synchronisation (<code>CxCR.SE</code>, <code>SYNC_ID</code>, <code>SPOL</code>, <code>NBREQ</code>) lets
+<code>NBREQ + 1</code> requests through per edge, holding the rest; <code>EGE</code> emits a
+channel's event every <code>NBREQ + 1</code> requests; <code>RGSR.OF</code> / <code>CSR.SOF</code> report
+overruns.</p>
+<p><strong>GDMA descriptor errors.</strong> On the GP-SPI2 path a CPU-owned descriptor under
+<code>*_CHECK_OWNER</code>, or a descriptor, buffer or next link outside the internal
+SRAM the DMA reaches, stops the walk with <code>IN_DSCR_ERR</code> / <code>OUT_DSCR_ERR</code>; an
+IN list shorter than the data sets <code>IN_DSCR_EMPTY</code> (no <code>IN_SUC_EOF</code>); an OUT
+list that ends without a <code>suc_eof</code> descriptor sends its bytes without
+<code>OUT_EOF</code>. <code>*_DONE</code> latch per descriptor consumed.</p>
+<p>Tested end to end over nets (<code>examples/gpio-net-buses</code>): a G071 master and a
+G071 slave both by DMA through the DMAMUX (<code>env-spi-dma.yaml</code>), an F401
+master whose DMA2 streams first complete two memory-to-memory copies in
+priority order and then move SPI1 both ways through their FIFOs in half-word
+INCR4 bursts against the G071 slave (<code>env-spi-f4-dma.yaml</code>), and an ESP32-C3
+and an ESP32-C6, master and slave by GDMA, against a G071 by DMA
+(<code>env-spi-esp32c3-dma.yaml</code>, <code>env-spi-esp32c3-dma-slave.yaml</code>), each run with
+the nodes swapped and with 37 ns rounds.</p>
+<p>Not modelled: <code>DMEIF</code> (the request handshake never loses a direct-mode
+item), bus timing inside a slot (a burst or FIFO drain moves at once), the
+GPDMA's weighted round robin among low-priority channels (strict <code>PRIO</code>
+order instead), DMAMUX inputs with no source in the model (G071 LPTIM1_OUT,
+LPTIM2_OUT and TIM14_OC), the G071's DMA / DMAMUX interrupt lines (the chip
+file wires none), GDMA descriptor errors on the C6 memory-to-memory path, the
+GP-SPI's segmented DMA transfers, and DMA for the other Espressif peripherals
+(UHCI0, I2S, crypto, ADC stall visibly on the C3 and C6 GDMA).</p>
+<h2 id="reports">Reports</h2>
+<p><code>World::gpio_net_reports()</code> (and <code>result.json</code> <code>gpio_nets</code> from
+<code>labwired test</code>, and <code>WasmWorld.gpio_net_report()</code> in the browser) lists each
+net: level, edge count, contention and floating counters, each member's drive,
+and the diagnostics with times in picoseconds.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

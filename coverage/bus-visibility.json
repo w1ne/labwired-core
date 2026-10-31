@@ -1,0 +1,662 @@
+[
+  {
+    "buses": [],
+    "name": "amap42kp"
+  },
+  {
+    "buses": [],
+    "name": "arty-litex-vexriscv"
+  },
+  {
+    "buses": [],
+    "name": "atmega1281"
+  },
+  {
+    "buses": [],
+    "name": "atmega2560"
+  },
+  {
+    "buses": [],
+    "name": "atmega2561"
+  },
+  {
+    "buses": [],
+    "name": "atmega328p"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e15a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e16a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e17a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e18a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g15a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g16a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g17a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g18a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j15a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j16a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j17a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j18a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd51"
+  },
+  {
+    "buses": [],
+    "name": "atsamd51-pybadge"
+  },
+  {
+    "buses": [],
+    "name": "cc2538sf53"
+  },
+  {
+    "buses": [],
+    "name": "dspic33fj32mc202"
+  },
+  {
+    "buses": [],
+    "name": "dspic33fj32mc204"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "efr32mg26"
+  },
+  {
+    "buses": [
+      "I2C",
+      "UART"
+    ],
+    "name": "esp32"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "esp32c3"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "esp32c6"
+  },
+  {
+    "buses": [],
+    "name": "esp32s3"
+  },
+  {
+    "buses": [],
+    "name": "esp32s3-zero"
+  },
+  {
+    "buses": [],
+    "name": "imxrt1064"
+  },
+  {
+    "buses": [],
+    "name": "litex-vexriscv"
+  },
+  {
+    "buses": [],
+    "name": "mimxrt595s"
+  },
+  {
+    "buses": [],
+    "name": "mk64f12"
+  },
+  {
+    "buses": [],
+    "name": "mkw41z4"
+  },
+  {
+    "buses": [],
+    "name": "nrf51822"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "nrf52832"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "nrf52833"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "nrf52840"
+  },
+  {
+    "buses": [],
+    "name": "nrf5340"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l15"
+  },
+  {
+    "buses": [],
+    "name": "nrf54lm20a"
+  },
+  {
+    "buses": [],
+    "name": "pic16f1829"
+  },
+  {
+    "buses": [],
+    "name": "pic16f877a"
+  },
+  {
+    "buses": [],
+    "name": "pic18f4520"
+  },
+  {
+    "buses": [],
+    "name": "pic24f04ka200"
+  },
+  {
+    "buses": [],
+    "name": "pic24f04ka201"
+  },
+  {
+    "buses": [],
+    "name": "pic24f08ka101"
+  },
+  {
+    "buses": [],
+    "name": "pic24f08ka102"
+  },
+  {
+    "buses": [],
+    "name": "pic24f16ka101"
+  },
+  {
+    "buses": [],
+    "name": "pic24f16ka102"
+  },
+  {
+    "buses": [],
+    "name": "r7fa6m5bh"
+  },
+  {
+    "buses": [],
+    "name": "r7fa8m1ah"
+  },
+  {
+    "buses": [],
+    "name": "ra4m1"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "rp2040"
+  },
+  {
+    "buses": [],
+    "name": "rp2350"
+  },
+  {
+    "buses": [],
+    "name": "rv1103"
+  },
+  {
+    "buses": [],
+    "name": "s32k388"
+  },
+  {
+    "buses": [],
+    "name": "sam4s16c"
+  },
+  {
+    "buses": [],
+    "name": "same70q21b"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "stm32f072"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103c4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103c6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r4h"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r6h"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103rb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103t4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103t6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cc"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cd"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cdu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401ce"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401rb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401rc"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401rd"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401vb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401vc"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401vd"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401ve"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f405"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ie"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ig"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ve"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407vg"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ze"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407zg"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32f746"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f767"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32g071"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32g0b1re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32g474re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32h563"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32h735"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l073"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l476"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "stm32l552"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32u545"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32u575"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32u5a5zj"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32wb55"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32wba52"
+  },
+  {
+    "buses": [],
+    "name": "vegaboard-ri5cy"
+  }
+]

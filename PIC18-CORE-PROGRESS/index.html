@@ -1,0 +1,4387 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/PIC18-CORE-PROGRESS/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>PIC18 public-core vertical slice — progress - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LabWired docs">
+  <meta property="og:title" content="PIC18 public-core vertical slice — progress - LabWired docs">
+  <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta property="og:url" content="https://docs.labwired.com/PIC18-CORE-PROGRESS/">
+  <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PIC18 public-core vertical slice — progress - LabWired docs">
+  <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pic18-public-core-vertical-slice-progress" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              PIC18 public-core vertical slice — progress
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/timed-uart-network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Timed UART networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/gpio-nets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/firmware-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware coverage (lines, branches, CI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_20" id="__nav_7_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend LabWired
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend LabWired
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-peripheral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a peripheral block (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/python-device/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an I2C sensor (data + Python)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a board (chip + manifest)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hook surfaces (device, host, Rust)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit V1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32g0b1re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32G0B1RE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-u545re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-U545RE-Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/atsamd21-variants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21 A-variants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/segment-display-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed segment display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/led-matrix-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed LED matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/74hc4051/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    74HC4051
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/max485/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAX485
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/xy-md02/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XY-MD02
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#landed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Landed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-instruction-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented instruction semantics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented instruction semantics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flags
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interrupts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interrupts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#program-counter-and-return-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program counter and return stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-and-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests and results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-missing-pieces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next missing pieces
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="pic18-public-core-vertical-slice-progress">PIC18 public-core vertical slice — progress</h1>
+<p>Branch: <code>agent/pic18-core</code></p>
+<p>Base revision: <code>8e3b5ee4d</code></p>
+<p>Status: <strong>standard instruction set complete; first part onboarded at L1.</strong>
+The PIC18F4520 (<code>configs/chips/pic18f4520.yaml</code>, <code>examples/pic18f4520</code>) boots
+real SDCC 4.4.0 C firmware with EUSART TX and the PORTB latch. No other PIC18
+part is claimed, no private chip data is copied, and no Proteus parity is
+claimed.</p>
+<h2 id="landed">Landed</h2>
+<ul>
+<li>Public <code>labwired_config::Arch::Pic18</code> with serde spellings <code>pic18</code> and
+  <code>pic18f</code>; existing architecture variants and aliases are unchanged.</li>
+<li>Public <code>labwired_core::Arch::Pic18</code>.</li>
+<li><code>MachineFamily::Pic18</code> and <code>machine_family()</code> mapping. <code>elf_arch(204)</code>
+  recognises <code>EM_MCHP_PIC</code>, the registered ELF machine value for Microchip's
+  8-bit PIC family (PIC18 is the only 8-bit PIC core modelled here).</li>
+<li><code>cpu/pic18.rs</code>: reset, byte-addressed program fetch, 21-bit byte PC with
+  bit 0 always clear, WREG/STATUS/BSR, banked data memory and Access Bank
+  resolution, SFR window, PCL/PCLATH/PCLATU, FSR0-2 (including the indirect
+  aliases), TBLPTR/TABLAT/PROD, and a hardware return stack.</li>
+<li><code>Cpu</code> trait integration, runtime snapshot variant, trace observer events,
+  register names/IDs, builder and node hooks, loader entry-point alignment
+  check, and WASM/loader/CLI match arms (WASM execution is explicitly
+  unavailable for PIC18 at this milestone).</li>
+</ul>
+<h2 id="implemented-instruction-semantics">Implemented instruction semantics</h2>
+<p>Encodings follow the PIC18 standard instruction set. Any word outside this set
+returns <code>SimulationError::DecodeError(pc)</code>; no opcode is guessed.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Group</th>
+<th style="text-align: left;">Instructions</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Control</td>
+<td style="text-align: left;"><code>NOP</code>, <code>SLEEP</code>, <code>CLRWDT</code>, <code>RESET</code>, <code>DAW</code>, <code>PUSH</code>, <code>POP</code></td>
+<td style="text-align: left;"><code>0x0000</code> and the <code>1111 xxxx xxxx xxxx</code> NOP form; <code>SLEEP</code> sets <code>RCON.TO</code>, clears <code>PD</code> and idles until an enabled flag; <code>CLRWDT</code> sets <code>TO</code>/<code>PD</code> (no WDT); <code>RESET</code> restores the reset SFR state and keeps program memory</td>
+</tr>
+<tr>
+<td style="text-align: left;">Literal</td>
+<td style="text-align: left;"><code>MOVLW</code>, <code>MOVLB</code>, <code>RETLW</code>, <code>ADDLW</code>, <code>SUBLW</code>, <code>ANDLW</code>, <code>IORLW</code>, <code>XORLW</code>, <code>MULLW</code></td>
+<td style="text-align: left;"><code>MOVLB</code> selects <code>BSR&lt;3:0&gt;</code>; <code>SUBLW</code> is <code>k - W</code>; <code>MULLW</code> writes <code>PRODH:PRODL</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Byte move</td>
+<td style="text-align: left;"><code>MOVWF</code>, <code>MOVF</code>, <code>MOVFF</code></td>
+<td style="text-align: left;"><code>MOVFF</code> is two words and uses a 12-bit absolute source/destination, ignoring banking; either side may be an indirect alias</td>
+</tr>
+<tr>
+<td style="text-align: left;">Byte ALU</td>
+<td style="text-align: left;"><code>ADDWF</code>, <code>ADDWFC</code>, <code>SUBWF</code>, <code>SUBWFB</code>, <code>SUBFWB</code>, <code>ANDWF</code>, <code>IORWF</code>, <code>XORWF</code>, <code>COMF</code>, <code>NEGF</code>, <code>CLRF</code>, <code>SETF</code>, <code>INCF</code>, <code>DECF</code>, <code>SWAPF</code>, <code>MULWF</code></td>
+<td style="text-align: left;"><code>d</code> and <code>a</code> bits honored; borrow forms subtract <code>!C</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Rotate</td>
+<td style="text-align: left;"><code>RLCF</code>, <code>RLNCF</code>, <code>RRCF</code>, <code>RRNCF</code></td>
+<td style="text-align: left;">the <code>C</code> forms rotate through carry</td>
+</tr>
+<tr>
+<td style="text-align: left;">Skip</td>
+<td style="text-align: left;"><code>CPFSEQ</code>, <code>CPFSGT</code>, <code>CPFSLT</code>, <code>TSTFSZ</code>, <code>DECFSZ</code>, <code>DCFSNZ</code>, <code>INCFSZ</code>, <code>INFSNZ</code></td>
+<td style="text-align: left;">unsigned compares; no flags; a skipped two-word instruction is skipped as a unit</td>
+</tr>
+<tr>
+<td style="text-align: left;">Table</td>
+<td style="text-align: left;"><code>TBLRD*</code>, <code>*+</code>, <code>*-</code>, <code>+*</code>; <code>TBLWT*</code>, <code>*+</code>, <code>*-</code>, <code>+*</code></td>
+<td style="text-align: left;">reads flash, user ID and CONFIG bytes (unimplemented memory reads 0); <code>TBLWT</code> only moves <code>TBLPTR</code>, since no EECON1 write sequence is modelled</td>
+</tr>
+<tr>
+<td style="text-align: left;">Bit</td>
+<td style="text-align: left;"><code>BCF</code>, <code>BSF</code>, <code>BTG</code>, <code>BTFSC</code>, <code>BTFSS</code></td>
+<td style="text-align: left;">skip instructions skip a following two-word instruction as a unit</td>
+</tr>
+<tr>
+<td style="text-align: left;">Relative</td>
+<td style="text-align: left;"><code>BRA</code>, <code>RCALL</code>, <code>BZ</code>, <code>BNZ</code>, <code>BC</code>, <code>BNC</code>, <code>BOV</code>, <code>BNOV</code>, <code>BN</code>, <code>BNN</code></td>
+<td style="text-align: left;">signed offsets in instruction words</td>
+</tr>
+<tr>
+<td style="text-align: left;">Absolute</td>
+<td style="text-align: left;">two-word <code>GOTO</code>, two-word <code>CALL</code></td>
+<td style="text-align: left;">20-bit literal is a <strong>word</strong> address (<code>k -&gt; PC&lt;20:1&gt;</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;">Stack</td>
+<td style="text-align: left;"><code>RETURN</code>/<code>RETURN FAST</code></td>
+<td style="text-align: left;"><code>CALL FAST</code> saves WREG/STATUS/BSR for the matching fast return</td>
+</tr>
+<tr>
+<td style="text-align: left;">Interrupts</td>
+<td style="text-align: left;"><code>RETFIE</code>/<code>RETFIE FAST</code></td>
+<td style="text-align: left;">vectors at <code>0x0008</code>/<code>0x0018</code>, <code>INTCON</code>/<code>INTCON2</code>/<code>INTCON3</code>, <code>PIR1</code>/<code>PIR2</code>/<code>PIE1</code>/<code>PIE2</code>/<code>IPR1</code>/<code>IPR2</code>, <code>RCON.IPEN</code>, <code>GIE</code>/<code>GIEH</code>/<code>GIEL</code>/<code>PEIE</code>; entry saves and <code>FAST</code> restores the fast register stack</td>
+</tr>
+<tr>
+<td style="text-align: left;">FSR literal</td>
+<td style="text-align: left;"><code>LFSR</code></td>
+<td style="text-align: left;">12-bit literal loaded into FSR0/FSR1/FSR2</td>
+</tr>
+<tr>
+<td style="text-align: left;">Indirect</td>
+<td style="text-align: left;"><code>INDF0/1/2</code>, <code>POSTINC0/1/2</code>, <code>POSTDEC0/1/2</code>, <code>PREINC0/1/2</code>, <code>PLUSW0/1/2</code></td>
+<td style="text-align: left;">Virtual Access Bank registers used by byte/bit file operations; full 12-bit FSR address, independent of BSR and <code>a</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="flags">Flags</h3>
+<p><code>STATUS</code> models the classic PIC18 flag bits: <code>C=0</code>, <code>DC=1</code>, <code>Z=2</code>, <code>OV=3</code>,
+<code>N=4</code>; upper bits read 0. Exact rules:</p>
+<ul>
+<li><code>ADDWF</code>, <code>INCF</code>: carry out of bit 7, digit carry out of bit 3, signed
+  overflow from same-sign operands, zero and sign of the result.</li>
+<li><code>DECF</code>: borrow polarity follows PIC18 subtraction (<code>C</code>/<code>DC</code> set when no
+  borrow), signed overflow from opposite-sign inputs, zero and sign.</li>
+<li><code>ADDWFC</code>, <code>ADDLW</code>: as <code>ADDWF</code>, with carry-in for <code>ADDWFC</code>.</li>
+<li><code>SUBWF</code>, <code>SUBLW</code>, <code>SUBWFB</code>, <code>SUBFWB</code>, <code>NEGF</code>: subtraction polarity as
+  <code>DECF</code>; the borrow forms subtract <code>!C</code>; <code>NEGF</code> is <code>0 - f</code>.</li>
+<li><code>ANDWF</code>, <code>IORWF</code>, <code>XORWF</code>, <code>MOVF</code>, <code>COMF</code>, <code>ANDLW</code>, <code>IORLW</code>, <code>XORLW</code>,
+  <code>RLNCF</code>, <code>RRNCF</code>: <code>Z</code> and <code>N</code> only.</li>
+<li><code>RLCF</code>, <code>RRCF</code>: <code>C</code>, <code>Z</code>, <code>N</code>.</li>
+<li><code>DAW</code>: <code>C</code> set when the adjust carries out (never cleared).</li>
+<li><code>CLRF</code>: <code>Z</code> only.</li>
+<li><code>MOVWF</code>, <code>MOVFF</code>, <code>SETF</code>, <code>SWAPF</code>, <code>MULWF</code>, <code>MULLW</code>, the skip forms, <code>BCF</code>,
+  <code>BSF</code>, <code>BTG</code>: no flags.</li>
+<li>Instructions that affect flags do not write their result into <code>STATUS</code>; they
+  update only the flag bits, matching the datasheet destination rule.</li>
+</ul>
+<h3 id="interrupts">Interrupts</h3>
+<p>The core samples enabled interrupt sources between instructions (after the
+current instruction retires) and pushes the next instruction as the return
+address. Sticky flags live in the SFR file and are cleared by the ISR.</p>
+<ul>
+<li><code>RCON.IPEN = 0</code>: every source vectors to <code>0x0008</code>; <code>INTCON.GIE</code> (bit 7) is
+  the global enable and is cleared on entry. The <code>PIR1</code>/<code>PIR2</code> peripheral
+  sources additionally need <code>INTCON.PEIE</code> (bit 6); the <code>INTCON</code>/<code>INTCON3</code>
+  sources need only <code>GIE</code>. <code>RETFIE</code> sets <code>GIE</code> again.</li>
+<li><code>RCON.IPEN = 1</code>: high-priority sources vector to <code>0x0008</code> through <code>GIEH</code>
+  (bit 7), low-priority sources to <code>0x0018</code> through <code>GIEH</code> <strong>and</strong> <code>GIEL</code>
+  (bit 6) — <code>GIEH = 0</code> disables all interrupts (DS39631 Register 9-1). Entry
+  clears only the matching global bit, so a high-priority source may nest
+  inside a low-priority ISR. <code>RETFIE</code> sets <code>GIEH</code> if it is clear (leaving a
+  high ISR) and <code>GIEL</code> otherwise, so a high ISR nested in a low one returns
+  with <code>GIEL</code> still clear.</li>
+<li>Sources: <code>INTCON</code> TMR0/INT0/RB, <code>INTCON3</code> INT1/INT2, and the eight bits of
+  <code>PIR1</code>/<code>PIE1</code>/<code>IPR1</code> and <code>PIR2</code>/<code>PIE2</code>/<code>IPR2</code>. INT0 is always high priority
+  when <code>IPEN = 1</code>; the other source priorities come from <code>INTCON2</code>,
+  <code>INTCON3</code> or the matching IPR bit. <code>INTCON3</code> follows the PIC18F4520
+  layout (DS39631 Register 9-3): INT2IP=7, INT1IP=6, INT2IE=4, INT1IE=3,
+  INT2IF=1, INT1IF=0.</li>
+<li>Interrupt entry loads WREG/STATUS/BSR into the one-level fast register
+  stack (the same shadow <code>CALL FAST</code>/<code>RETURN FAST</code> use), and <code>RETFIE FAST</code>
+  restores them. A high-priority entry nested in a low-priority ISR
+  overwrites that save, as on silicon. Per-device vector remapping is not
+  modelled.</li>
+<li>
+<p><strong>No peripheral raises a flag yet.</strong> <code>interrupt_request</code> reads the CPU's
+  internal SFR array only, and no bus peripheral writes <code>PIRx</code>/<code>INTCONx</code>, so
+  today the only way to pend a source is firmware (or a test) writing the
+  flag bit. <code>Cpu::set_exception_pending</code> is recorded but not consumed.</p>
+</li>
+<li>
+<p>Default model: 16 banks x 256 bytes (<code>0x000..0xFFF</code>) and a 64 KiB flash.
+  A per-device geometry can be supplied with <code>Pic18::with_geometry</code>;
+  <code>Pic18::for_chip_name</code> looks it up in the <code>PIC18_DEVICES</code> table.</p>
+</li>
+<li><code>a = 1</code>: <code>BSR&lt;3:0&gt;:f</code>.</li>
+<li><code>a = 0</code>: <code>f</code> below the device's Access Bank split addresses access RAM at
+  <code>f</code>; <code>f</code> at or above it addresses the SFR window at <code>0xF00 + f</code> (so <code>0xE8</code>
+  is WREG at <code>0xFE8</code>). The split is <code>0x80</code> for parts whose SFRs start at
+  <code>0xF80</code> (PIC18F4520) and <code>0x60</code> for the K-series and unlisted names.</li>
+<li>Modeled SFRs: WREG, STATUS, BSR, FSR0L/H, FSR1L/H, FSR2L/H, PRODL/H, TABLAT,
+  TBLPTRL/H/U, PCL, PCLATH, PCLATU, STKPTR, TOSL/H/U. Other SFR addresses are
+  plain bytes in the file for now.</li>
+<li>Indirect aliases are the classic Access Bank virtual registers in three
+  groups: <code>0xFDB..0xFDF</code> (FSR2), <code>0xFE3..0xFE7</code> (FSR1) and <code>0xFEB..0xFEF</code>
+  (FSR0), each ordered <code>PLUSW</code>, <code>PREINC</code>, <code>POSTDEC</code>, <code>POSTINC</code>, <code>INDF</code>. This
+  matches DS41303F §5.4.3.1/§5.4.3.3, including the INDF1 example at <code>0xFE7</code>.
+  Byte-oriented and bit-oriented file operations resolve through the same
+  helper.</li>
+<li><code>INDFn</code> reads/writes <code>FSRn</code> without changing it. <code>POSTINCn</code>/<code>POSTDECn</code>
+  access the current address and then move the pointer by one;
+  <code>PREINCn</code> moves before the access. A read-modify-write instruction
+  (<code>ADDWF</code>, <code>INCF</code>, <code>BCF</code>, ...) resolves the operand once, writes the original
+  location, then applies the pointer update once. <code>PLUSWn</code> adds the signed
+  8-bit WREG offset and changes neither WREG nor <code>FSRn</code>.</li>
+<li>If an indirect access resolves to any of the 15 virtual operand addresses
+  above, the virtual register is not physically implemented: an indirect read
+  returns <code>0x00</code>, and an indirect write is a <code>NOP</code> (DS41303F §5.4.3.3). A
+  rejected write also drops the selected operand's post-action, because no
+  access is committed in this model.</li>
+<li>If an indirect write resolves to an FSR pair (<code>FSR0L/H</code>, <code>FSR1L/H</code>,
+  <code>FSR2L/H</code>), the byte is stored in the FSR, but the selected operand's
+  <code>POSTINC</code>/<code>POSTDEC</code> is not applied. <code>PREINC</code> has already run before the
+  target is known. This is the documented self-target interaction, e.g.
+  <code>POSTDEC2</code> targeting <code>FSR2L</code> stores the value without decrementing.</li>
+<li>FSR addresses and updates wrap in the 12-bit data space. The direct SFR
+  read/write helpers still expose the raw file bytes; indirect expansion and
+  virtual-target filtering are instruction-operand features.</li>
+<li><code>MOVFF</code> takes 12-bit absolute operands (no BSR) and expands the virtual
+  <code>FSRn</code> aliases on either side: the source is read and its FSR updated,
+  then the destination is resolved and written. The evidence is compiled
+  code: SDCC 4.4.0's pic16 port builds its software stack from
+  <code>MOVFF r, POSTDEC1</code>, <code>MOVFF PREINC1, r</code> and <code>MOVFF PLUSW2, r</code>, and the
+  PIC18F4520 smoke (<code>examples/pic18f4520</code>) only prints its banner if those
+  moves are indirect.</li>
+<li><code>TOSL/H/U</code> remain direct hardware-stack mirrors; indirect-target semantics
+  for those stack registers are not claimed. The virtual-operand rule above is
+  limited to the documented 15 INDF/POST/PRE/PLUS addresses.</li>
+</ul>
+<h3 id="program-counter-and-return-stack">Program counter and return stack</h3>
+<ul>
+<li>The PC is byte addressed; <code>set_pc</code>/snapshot restore clear bit 0.</li>
+<li>Single-word instructions advance by 2; <code>CALL</code>, <code>GOTO</code>, <code>MOVFF</code>, <code>LFSR</code>
+  advance by 4.</li>
+<li>A write to <code>PCL</code> combines PCLATU/PCLATH/PCL and aligns the target.</li>
+<li><code>ADDWF PCL,f</code> is a computed GOTO from the instruction's own address: the
+  low-byte addition does not propagate into the upper PC bytes, and reading
+  <code>PCL</code> latches the current PCLATH/PCLATU. <code>MOVFF ... ,PCL</code> uses the latches.</li>
+<li>Return stack defaults to 31 levels (classic parts). Push past full sets
+  <code>STKFUL</code> and overwrites the top entry; pop from empty sets <code>STKUNF</code> and
+  returns 0. The pointer never wraps circularly. <code>STVREN</code> reset behavior is not
+  modelled yet.</li>
+</ul>
+<h2 id="tests-and-results">Tests and results</h2>
+<p>Commands run for the first vertical slice (<code>d6402f376</code>). This table is a
+record of that commit; it predates the PIC18F4520 firmware smoke, and the
+unit test count has grown since (<code>cargo test -p labwired-core --lib cpu::pic18</code>):</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Command</th>
+<th style="text-align: left;">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-core pic18</code></td>
+<td style="text-align: left;">PASS: 37 PIC18 unit tests; other test binaries filtered to 0</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-core --lib cpu::pic18</code></td>
+<td style="text-align: left;">PASS: 37 passed; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo fmt --all -- --check</code></td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;">XC8 local check (<code>command -v xc8-cc</code> / <code>xc8</code>, repository fixture search)</td>
+<td style="text-align: left;">No XC8 compiler on PATH and no PIC18 ELF/HEX fixture in the worktree; no real firmware smoke is claimed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-core one_arch_policy</code></td>
+<td style="text-align: left;">PASS: 8 passed; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-core --test session_catalog</code></td>
+<td style="text-align: left;">PASS: 1 passed; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-core --test register_compliance</code></td>
+<td style="text-align: left;">PASS: 1 passed; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-core --test register_coverage</code></td>
+<td style="text-align: left;">PASS: 1 passed; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-config --lib --tests</code></td>
+<td style="text-align: left;">PASS: 265 passed across 9 binaries; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-config</code></td>
+<td style="text-align: left;">PASS: 265 passed (including 0 doctests); 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo test -p labwired-loader</code></td>
+<td style="text-align: left;">PASS: 57 passed across 4 binaries; 0 failed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo check -p labwired-cli -p labwired-wasm -p labwired-loader</code></td>
+<td style="text-align: left;">PASS</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cargo check --workspace --all-targets</code></td>
+<td style="text-align: left;">Blocked by a pre-existing unrelated failure: <code>firmware-semihost-smoke</code> uses host-invalid inline assembly registers <code>r0</code>/<code>r1</code></td>
+</tr>
+</tbody>
+</table>
+<p>The PIC18 tests cover reset and PC alignment, Access Bank vs BSR addressing,
+<code>INDF0/1/2</code> through their FSRs with a conflicting BSR, FSR1/FSR2 post-increment,
+<code>POSTINC</code> read/write and read-modify-write pointer movement, <code>POSTDEC</code>/<code>PREINC</code>
+ordering, <code>PLUSW</code> positive and negative signed offsets without pointer/WREG
+changes, 12-bit pointer wrap, indirect bit operations, reads/writes of all
+15 virtual operand aliases (<code>0x00</code> read, <code>NOP</code> write), the FSR-pair
+write/post-action suppression (including self-targeting <code>POSTDEC2</code>), exact
+<code>C</code>/<code>DC</code>/<code>Z</code>/<code>OV</code>/<code>N</code> cases, logic/<code>CLRF</code>/<code>MOVF</code> flag rules, <code>MOVFF</code> absolute
+addressing, two-word <code>GOTO</code>/<code>CALL</code>/<code>RETURN</code>, <code>LFSR</code>, conditional branches,
+<code>BTG</code>/<code>BTFSS</code>, <code>RCALL</code>/<code>RETLW</code>, skip over a two-word instruction, return-stack
+overflow/underflow, PCL latch writes, <code>MOVFF</code> to <code>PCL</code>, <code>ADDWF PCL</code> computed
+jumps with and without low-byte carry, unknown-opcode <code>DecodeError</code>, snapshot
+round-trip, program image loading, and a hand-assembled add/store/GOTO program.
+The interrupt tests cover GIE masking, <code>PEIE</code> gating of peripheral sources
+with <code>IPEN = 0</code>, the high/low vectors and <code>GIEH</code>/<code>GIEL</code> gating (including
+<code>GIEH = 0</code> masking low-priority sources), <code>INTCON</code> TMR0/INT0 sources, the
+<code>INTCON3</code> INT1/INT2 bits pinned to raw datasheet values, <code>PIR1</code>/<code>PIE1</code>/<code>IPR1</code>
+priority, <code>RETFIE</code> re-enabling, and <code>RETFIE FAST</code> restoring the context
+saved on interrupt entry (no hand-seeded shadow). <code>cpu_trace_conformance</code>
+covers <code>Pic18</code> like every other core. At that commit no catalogue part was
+onboarded; the PIC18F4520 L1 slice (<code>examples/pic18f4520</code>) now boots a real
+SDCC-built firmware image.</p>
+<p>Commit: <code>d6402f376</code> (<code>feat(core): add PIC18 vertical slice</code>).</p>
+<p>Follow-ups: <code>75f859ce9</code> (<code>fix(pic18): let MOVFF to PCL update the PC</code>),
+<code>7f81f318b</code> (progress note), <code>c718f35a8</code>
+(<code>test(pic18): cover PCL jumps and remaining bit/return ops</code>), and
+<code>d56049d17</code> (<code>feat(pic18): implement FSR indirect addressing</code>), plus
+<code>3fb236eec</code> (<code>fix(pic18): honor virtual indirect target rules</code>).</p>
+<h2 id="next-missing-pieces">Next missing pieces</h2>
+<ol>
+<li><strong>Loader / firmware toolchain.</strong> SDCC 4.4.0 + gputils HEX output is
+   wrapped byte for byte in an <code>EM_MCHP_PIC</code> ELF (<code>examples/pic18f4520/
+   firmware/hex2elf.py</code>) and loads through the <code>PT_LOAD</code> byte-address path,
+   CONFIG words included. A native XC8 ELF still needs verifying against a
+   pinned XC8 release.</li>
+<li><strong>Interrupts.</strong> The basic controller is in: vectors <code>0x0008</code>/<code>0x0018</code>,
+   <code>INTCON</code>/<code>INTCON2</code>/<code>INTCON3</code>, <code>PIR1</code>/<code>PIR2</code>/<code>PIE1</code>/<code>PIE2</code>/<code>IPR1</code>/<code>IPR2</code>,
+   <code>RCON.IPEN</code>, <code>GIE/GIEH/GIEL</code>/<code>PEIE</code>, <code>RETFIE</code>/<code>RETFIE FAST</code>, and the
+   fast register stack saved on entry. Still missing: peripherals that
+   raise <code>PIRx</code> flags, per-device vector remapping, interrupt latency/cycle accounting, and the
+   <code>RCON</code> reset-source/<code>STVREN</code> behavior tied to the vector path.</li>
+<li><strong>Peripherals.</strong> In: EUSART TX (<code>TXREG</code> to the console, read-only
+   <code>TRMT</code>/<code>TXIF</code>), <code>PORTA..E</code>/<code>LATx</code>/<code>TRISx</code> with reset directions (input pins
+   read 0), <code>SLEEP</code> wake, and <code>RCON.TO/PD</code>. Missing: pad masks and external
+   pin drive, analog/PPS, oscillator and <code>CONFIG</code> decoding, TMR0/1/2/3,
+   CCP/ECCP, MSSP, EUSART RX and baud timing, ADC, comparators, WDT, EEPROM,
+   and reset sources.</li>
+<li><strong>Full ISA.</strong> The standard set is complete. Still missing: the <code>XINST</code>
+   extended set and indexed-literal addressing, and per-instruction cycle
+   counts for skips over two-word instructions (counted as 2, not 3).</li>
+<li><strong>Data-memory completeness.</strong> Expanded (&gt;4 KiB) data memory and wider FSR
+   pointers, direct <code>FSRnH</code> field masking (indirect paths already wrap at 12
+   bits), unmodeled SFR reset values, indirect-target behavior for
+   <code>TOSL/H/U</code>, and <code>MOVFFL</code>. The per-device Access Bank split and flash
+   size come from the <code>PIC18_DEVICES</code> table (<code>Pic18::for_chip_name</code>;
+   <code>0x60</code> and 64 KiB for an unlisted name).</li>
+<li><strong>Device geometry and integration.</strong> The PIC18F4520 has a chip YAML,
+   geometry, console wiring (<code>labwired test</code> and the interactive run) and a
+   real end-to-end firmware run. <code>PIC18_DEVICES</code> adds the geometry of 157
+   more parts whose SFR map is identical to the PIC18F4520's for every
+   register and bit the model implements (checked per part against the
+   SDCC 4.4.0 device headers; flash from the gputils linker scripts, split
+   from SDCC <code>pic16devices.txt</code>; <code>scripts/pic18/check_sfr_map.py
+   --check-table</code> re-verifies every row given a local SDCC 4.4.0 and
+   gputils 1.4.0; neither is vendored, so CI does not run it). A table row is geometry only: a part
+   still needs its own descriptor and a firmware run before it counts as
+   supported, and support must not be inferred from a family label.
+   J11/J13/J50/J53, K40/Q10, 13K50/14K50 and 1220/1230/1320/1330 are left out
+   because their EUSART, IOC or port map differs. RAM/bank-count limits,
+   pins absent from smaller packages, and <code>STVREN</code> remain unmodelled.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
