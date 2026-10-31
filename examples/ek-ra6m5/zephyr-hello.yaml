@@ -1,0 +1,25 @@
+# LabWired - EK-RA6M5 stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v4.0.0 `samples/hello_world` for board
+# `ek_ra6m5`. Rebuild: crates/firmware-ek-ra6m5-zephyr/build.sh
+#
+# soc_early_init_hook clears the PSCU/CPSCU security attribution (declared
+# stubs). FSP's bsp_clock_init runs unpatched on the `ra6_sysc` model: the
+# FCACHE invalidate (FCACHEIV reads 0), the C-cache setup, MOSC start +
+# OSCSF.MOSCSF, PLL1 start + PLLSF, then the SCKSCR switch to the PLL.
+# FSP's r_sci_uart opens SCI0 in FIFO mode (FCR.FM with the RFRST/TFRST
+# reset handshake) and Zephyr's poll_out writes FTDRL.
+#
+# Stops once both lines are seen: after the banner Zephyr idles in WFI on the
+# SysTick system timer.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/r7fa6m5bh-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.0.0 ***"
+      - "Hello World! ek_ra6m5/r7fa6m5bh3cfc"

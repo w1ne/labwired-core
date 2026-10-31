@@ -145,11 +145,12 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
-        // Modelled: the RA PORT (ra_port), PmnPFS/PWPR (ra_pfs), SYSTEM
-        // HOCOCR/OSCSF (ra_sysc) and SCI0 on the sci layout, all reused from
-        // RA4M1 at the RA6M5 bases. MSTP, ICU and the listed timers/comms
-        // blocks are declared stubs; SCI1-9 and the rest are not mapped — see
-        // examples/ek-ra6m5/VALIDATION.md.
+        // Modelled: the RA PORT (ra_port) and PmnPFS/PWPR (ra_pfs) reused
+        // from RA4M1 at the RA6M5 bases, the full R_SYSTEM register file
+        // (ra6_sysc) and SCI0 on the sci layout with the classic SCI FIFO
+        // registers. MSTP, ICU, FCACHE, the C-cache, PSCU/CPSCU and the
+        // listed timers/comms blocks are declared stubs; SCI1-9 and the rest
+        // are not mapped — see examples/ek-ra6m5/VALIDATION.md.
         name: "r7fa6m5bh",
         yaml: "configs/chips/r7fa6m5bh.yaml",
         reset_oracle: None,

@@ -1667,7 +1667,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 7dd076381c79e0a1fac81d0f4e28283afe6ba0063cd2649af42cd8b72ec16eb1
+    drift_ack_digest: e6c2973b095eeed0e56e90b9ed7b213a674b430e3afa1fe5b86e53c7d7e1a5eb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2254,6 +2254,11 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
+    # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
+    # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
+    # shares its RaSyscRegs struct). No STM32 UART layout or model of this
+    # board changes. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -3687,7 +3692,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b52831d9f964f8b2858b2a3411dcf30460dad973634f5211c78de630676ace53
+    drift_ack_digest: c5b1df0c364921ad905b81a5508156fabf11a1384070d4837f21ed376e7d2ff4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4262,6 +4267,11 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
+    # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
+    # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
+    # shares its RaSyscRegs struct). No STM32 UART layout or model of this
+    # board changes. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -4665,7 +4675,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b383d86855b8079e1e7c9a2468a3a149d482c4b47fbaeefb54cd06eb068e4666
+    drift_ack_digest: 2a62badc377f585b189bdb618a3d74b44fc627b4939f8e85de8e98fe6fdf3cdf
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5173,6 +5183,11 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
+    # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
+    # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
+    # shares its RaSyscRegs struct). No STM32 UART layout or model of this
+    # board changes. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -5634,7 +5649,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b247b71e7e40bd9e97af345501fd7da46b6bca155e011c25f425daddb4c288e7
+    drift_ack_digest: 2ea6feba8308f7c9e1da45d895af2726d776a0f9b6c7a4de5aa3417a030ca3e0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6212,6 +6227,11 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
+    # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
+    # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
+    # shares its RaSyscRegs struct). No STM32 UART layout or model of this
+    # board changes. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -6636,7 +6656,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 23f61824a3fafccd373a01b5107aad2395dfaa9daaf7bfd819a8cfda4c047498
+    drift_ack_digest: 23a4b79d8ff5c8ed8fb39e99223a62349a10c28ebbe968d0686508b22b92e069
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7153,6 +7173,11 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
+    # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
+    # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
+    # shares its RaSyscRegs struct). No STM32 UART layout or model of this
+    # board changes. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -9536,16 +9561,27 @@ boards:
     # 2026-10-30: Renesas EK-RA6M5 (R7FA6M5BH, Cortex-M33; 2 MiB code flash
     # at 0x0, 512 KiB SRAM at 0x20000000). First RA6M5 part. Reuses the RA4M1
     # models at the RA6M5 bases: PORT0-B (ra_port), PmnPFS/PWPR (ra_pfs),
-    # SYSTEM HOCOCR/OSCSF (ra_sysc) and SCI0 on the sci layout. MSTP, ICU,
+    # SYSTEM (id ra_sysc, now the full ra6_sysc register file, see below)
+    # and SCI0 on the sci layout. MSTP, ICU,
     # DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS/USBHS, IIC, CANFD, AGT, ETHERC,
     # SPI, GPT, ADC12 and FACI are declared stubs; SCI1-9 and the remaining
-    # blocks are not mapped. SIM-DERIVED — no RA6M5 bench part. See
-    # docs/boards/ek-ra6m5.md and examples/ek-ra6m5/VALIDATION.md.
+    # blocks are not mapped.
+    # 2026-10-31: stock Zephyr v4.0.0 samples/hello_world and
+    # samples/synchronization for ek_ra6m5 boot (tests/fixtures/
+    # r7fa6m5bh-zephyr-{hello,sync}.elf, rebuilt byte-identical by
+    # crates/firmware-ek-ra6m5-zephyr/build.sh): ra6_sysc as a full
+    # R_SYSTEM register file (0x700 bytes) with derived OSCSF and the
+    # USB/OCTA/CANFD CKCR handshake, the classic SCI FIFO registers (FCR
+    # reset handshake, FTDRL/FRDRL, FDR) on the sci layout, and declared
+    # stubs for FCACHE, the C-cache and PSCU/CPSCU. SIM-DERIVED — no RA6M5
+    # bench part. See docs/boards/ek-ra6m5.md and
+    # examples/ek-ra6m5/VALIDATION.md.
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_ek_ra6m5_smoke_survival"
+      - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9560,6 +9596,7 @@ boards:
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
       - crates/firmware-ek-ra6m5-smoke
+      - crates/firmware-ek-ra6m5-zephyr
       - configs/chips/r7fa6m5bh.yaml
       - configs/systems/ek-ra6m5.yaml
   - id: r7fa8m1ah
