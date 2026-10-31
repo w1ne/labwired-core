@@ -1343,6 +1343,19 @@ fn pic18_arch_parses_with_its_serde_aliases() {
 }
 
 #[test]
+fn pic16_arch_parses_with_its_serde_aliases() {
+    for name in ["pic16", "pic16f"] {
+        let yaml = format!("\"{name}\"");
+        let arch: Arch = serde_yaml::from_str(&yaml).expect("PIC16 alias must parse");
+        assert_eq!(arch, Arch::Pic16, "alias {name:?} did not select PIC16");
+    }
+    assert_eq!(serde_yaml::to_string(&Arch::Pic16).unwrap().trim(), "pic16");
+    // PIC16 does not take over the PIC18 names.
+    let arch: Arch = serde_yaml::from_str("\"pic18\"").unwrap();
+    assert_eq!(arch, Arch::Pic18);
+}
+
+#[test]
 fn adding_pic18_leaves_existing_arch_aliases_unchanged() {
     for (name, want) in [
         ("arm", Arch::Arm),

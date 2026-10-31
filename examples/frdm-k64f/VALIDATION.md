@@ -61,7 +61,7 @@ cmp out/run1/snapshot.json out/run2/snapshot.json  # clean
 
 ### Stock Zephyr (verified 2026-10-30)
 
-Both fixtures are unmodified upstream Zephyr v3.7.0 (commit `36940db938a8`)
+All three fixtures are unmodified upstream Zephyr v3.7.0 (commit `36940db938a8`)
 for `frdm_k64f`, built with `arm-none-eabi-gcc` 13.2.1 (gnuarmemb) and
 debug-stripped.
 
@@ -69,7 +69,9 @@ debug-stripped.
 crates/firmware-frdm-k64f-zephyr/build.sh       # needs a Zephyr v3.7.0 west workspace
 #   b0b136f6…ea3993  tests/fixtures/mk64f12-zephyr-hello.elf
 #   6ea91e77…711f2e  tests/fixtures/mk64f12-zephyr-uart-basic-api.elf
-#   (two rebuilds, identical)
+#   8e56c2fc…b5275f  tests/fixtures/mk64f12-zephyr-sync.elf
+#   (two rebuilds, identical; build.sh pins ZEPHYR_MODULES so fetching
+#   more modules into the workspace does not change the bytes)
 
 ./target/release/labwired test --script examples/frdm-k64f/zephyr-hello.yaml
 #   *** Booting Zephyr OS build v3.7.0 ***
@@ -82,7 +84,16 @@ crates/firmware-frdm-k64f-zephyr/build.sh       # needs a Zephyr v3.7.0 west wor
 #   PROJECT EXECUTION SUCCESSFUL
 #   PASS  2/2 checks · zephyr-uart-basic-api · 45092621 steps · ~10 s
 
-# Determinism: both scripts run twice with --output-dir; uart.log and
+./target/release/labwired test --script examples/frdm-k64f/zephyr-sync.yaml
+#   *** Booting Zephyr OS build v3.7.0 ***
+#   thread_a: Hello World from cpu 0 on frdm_k64f!
+#   thread_b: Hello World from cpu 0 on frdm_k64f!
+#   thread_a: Hello World from cpu 0 on frdm_k64f!
+#   PASS  2/2 checks · zephyr-sync · 30000000 steps            (2026-10-31)
+#   negative control: max_steps 8000000 stops before the timeout round, FAIL 1/2
+#   unsupported_instruction_audit.sh over 30M steps: unsupported_total 0
+
+# Determinism: all scripts run twice with --output-dir; uart.log and
 # snapshot.json cmp clean.
 ```
 

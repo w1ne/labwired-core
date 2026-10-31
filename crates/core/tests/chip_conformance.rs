@@ -929,6 +929,17 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("pic18f4520_smoke::sdcc_firmware_boots_and_prints_the_banner"),
     },
+    // PIC16F877A (DS39582B), the first PIC16 part. The gate boots real SDCC
+    // 4.4.0 pic14 C firmware (bank switching, shared-RAM locals, computed
+    // PCL jumps into RETLW string tables, USART TX, PORTB latch). Timers,
+    // CCP, MSSP, ADC, EEPROM and USART RX are not exercised, so this is L1,
+    // not full-device parity.
+    ChipConf {
+        name: "pic16f877a",
+        yaml: "configs/chips/pic16f877a.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic16f877a_smoke::sdcc_firmware_boots_and_prints_the_banner"),
+    },
     // PIC24F KA family (DS30009937C / DS39927C). The modelled slice is the
     // package GPIO masks and UART1; each gate boots that part's own real
     // XC16 v1.70 image and checks `HI`. Data EEPROM, UART2, timers, ADC, SPI

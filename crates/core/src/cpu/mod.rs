@@ -29,6 +29,8 @@ pub mod cortex_a;
 #[deny(clippy::let_underscore_must_use)]
 pub mod cortex_m;
 #[deny(clippy::let_underscore_must_use)]
+pub mod pic16;
+#[deny(clippy::let_underscore_must_use)]
 pub mod pic18;
 #[deny(clippy::let_underscore_must_use)]
 pub mod pic24;
@@ -74,6 +76,7 @@ pub mod jit_framework;
 
 pub use avr::{Avr, AvrModel};
 pub use cortex_m::CortexM;
+pub use pic16::Pic16;
 pub use pic18::Pic18;
 pub use pic24::Pic24;
 pub use riscv::{RiscV, RiscVCoreProfile};

@@ -134,6 +134,7 @@ fn chip_with_arch(arch: Arch) -> ChipDescriptor {
             Arch::Avr => "avr",
             Arch::Pic24 => "pic24",
             Arch::Pic18 => "pic18",
+            Arch::Pic16 => "pic16",
             Arch::Unknown => "unknown",
         }
     );
@@ -160,6 +161,7 @@ fn each_declared_architecture_reaches_its_own_family() {
         (Arch::Avr, MachineFamily::Avr),
         (Arch::Pic24, MachineFamily::Pic24),
         (Arch::Pic18, MachineFamily::Pic18),
+        (Arch::Pic16, MachineFamily::Pic16),
     ] {
         let got = machine_family(&chip_with_arch(arch)).expect("declared arch must be accepted");
         assert_eq!(got, want, "chip arch {arch:?} reached the wrong family");
@@ -196,6 +198,20 @@ fn the_elf_machine_table_is_the_only_one() {
     assert_eq!(elf_arch(118), Some(crate::Arch::Pic24));
     // 204 is EM_MCHP_PIC, the registered Microchip 8-bit PIC machine value.
     assert_eq!(elf_arch(204), Some(crate::Arch::Pic18));
+    // EM_MCHP_PIC also covers PIC16; only a pic16 chip retargets it.
+    use crate::system::arch_policy::image_arch_for_chip;
+    assert_eq!(
+        image_arch_for_chip(crate::Arch::Pic18, Arch::Pic16),
+        crate::Arch::Pic16
+    );
+    assert_eq!(
+        image_arch_for_chip(crate::Arch::Pic18, Arch::Pic18),
+        crate::Arch::Pic18
+    );
+    assert_eq!(
+        image_arch_for_chip(crate::Arch::Arm, Arch::Pic16),
+        crate::Arch::Arm
+    );
     // An unrecognised machine has exactly one answer: None. Callers decide
     // whether that is fatal, but they no longer decide what it *means*.
     assert_eq!(elf_arch(0), None);

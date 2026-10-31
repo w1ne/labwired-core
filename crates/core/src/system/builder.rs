@@ -185,6 +185,7 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 mod arm;
 mod avr;
 mod cortex_a;
+mod pic16;
 mod pic18;
 mod pic24;
 mod riscv;
@@ -365,6 +366,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::Avr => avr::build(req, plugins),
         MachineFamily::Pic24 => pic24::build(req, plugins),
         MachineFamily::Pic18 => pic18::build(req, plugins),
+        MachineFamily::Pic16 => pic16::build(req, plugins),
     }
 }
 

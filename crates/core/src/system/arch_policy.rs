@@ -37,6 +37,7 @@ pub enum MachineFamily {
     Avr,
     Pic24,
     Pic18,
+    Pic16,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -59,8 +60,9 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Avr => Ok(MachineFamily::Avr),
         Arch::Pic24 => Ok(MachineFamily::Pic24),
         Arch::Pic18 => Ok(MachineFamily::Pic18),
+        Arch::Pic16 => Ok(MachineFamily::Pic16),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, or pic18)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, or pic16)",
             chip.name
         ),
     }
@@ -84,8 +86,24 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         118 => Some(crate::Arch::Pic24),
         // EM_MCHP_PIC (204), the registered ELF machine value for Microchip's
         // 8-bit PIC family (gABI). It is the only 8-bit PIC machine value
-        // available; PIC18 is the only 8-bit PIC core this engine models.
+        // available, so it names PIC18 here and the chip retargets a PIC16
+        // image ([`image_arch_for_chip`]).
         204 => Some(crate::Arch::Pic18),
         _ => None,
+    }
+}
+
+/// The architecture an image runs as on `chip_arch`.
+///
+/// EM_MCHP_PIC covers both 8-bit PIC families (PIC16 and PIC18 share it and
+/// the ELF header does not tell them apart), so [`elf_arch`] reports such an
+/// image as PIC18. When the chip declares `arch: pic16`, the chip is the one
+/// fact that says which core the bytes are for. Every other pairing is
+/// returned unchanged, so a real mismatch (an ARM image on a PIC chip) is
+/// still refused by the caller.
+pub fn image_arch_for_chip(image_arch: crate::Arch, chip_arch: Arch) -> crate::Arch {
+    match (image_arch, chip_arch) {
+        (crate::Arch::Pic18, Arch::Pic16) => crate::Arch::Pic16,
+        (arch, _) => arch,
     }
 }
