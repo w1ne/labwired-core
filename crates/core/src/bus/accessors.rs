@@ -451,6 +451,20 @@ impl SystemBus {
             None => None,
         }
     }
+
+    /// [`crate::Bus::plain_memory_slice`] without mirror translation.
+    fn plain_memory_slice_at(&self, addr: u64) -> Option<(u64, u64, &[u8])> {
+        for mem in std::iter::once(&self.ram)
+            .chain(std::iter::once(&self.flash))
+            .chain(self.extra_mem.iter())
+        {
+            let end = mem.base_addr + mem.data.len() as u64;
+            if addr >= mem.base_addr && addr < end {
+                return Some((mem.base_addr, end, &mem.data));
+            }
+        }
+        crate::Bus::fetch_slice(self, addr)
+    }
 }
 
 impl crate::Bus for SystemBus {
@@ -611,6 +625,7 @@ impl crate::Bus for SystemBus {
         self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
     }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        let addr = self.resolve_mem_alias(addr);
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
@@ -720,6 +735,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+        let addr = self.resolve_mem_alias(addr);
         self.batch_stop.note_store(addr, 1);
         // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
         // semantics across all four write widths — a store a gate rejects is
@@ -941,6 +957,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        let addr = self.resolve_mem_alias(addr);
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
@@ -1028,6 +1045,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        let addr = self.resolve_mem_alias(addr);
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
@@ -1185,6 +1203,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        let addr = self.resolve_mem_alias(addr);
         self.batch_stop.note_store(addr, 2);
         // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
         // semantics across all four write widths — a store a gate rejects is
@@ -1326,6 +1345,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        let addr = self.resolve_mem_alias(addr);
         self.batch_stop.note_store(addr, 4);
         // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
         // semantics across all four write widths — a store a gate rejects is
@@ -1541,16 +1561,22 @@ impl crate::Bus for SystemBus {
     /// `RomThunkBank`, GPIO, declarative peripherals) keep going
     /// through the slow path so side effects fire as before.
     fn plain_memory_slice(&self, addr: u64) -> Option<(u64, u64, &[u8])> {
-        for mem in std::iter::once(&self.ram)
-            .chain(std::iter::once(&self.flash))
-            .chain(self.extra_mem.iter())
-        {
-            let end = mem.base_addr + mem.data.len() as u64;
-            if addr >= mem.base_addr && addr < end {
-                return Some((mem.base_addr, end, &mem.data));
+        // A mirror serves its target's bytes, clipped to the mirror window and
+        // reported in the mirror's own address space.
+        if !self.mem_aliases.is_empty() {
+            if let Some(a) = self
+                .mem_aliases
+                .iter()
+                .find(|a| addr >= a.start && addr < a.end)
+            {
+                let (base, end, data) = self.plain_memory_slice_at(a.target + (addr - a.start))?;
+                let lo = base.max(a.target);
+                let hi = end.min(a.target + (a.end - a.start));
+                let slice = &data[(lo - base) as usize..(hi - base) as usize];
+                return Some((a.start + (lo - a.target), a.start + (hi - a.target), slice));
             }
         }
-        self.fetch_slice(addr)
+        self.plain_memory_slice_at(addr)
     }
 
     fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {

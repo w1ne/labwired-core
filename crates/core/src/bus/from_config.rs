@@ -33,6 +33,9 @@ fn embedded_region_image(env: &str) -> Option<&'static [u8]> {
         "LABWIRED_CC2538_ROM" => Some(include_bytes!("../../roms/cc2538/cc2538_rom.bin")),
         // CC2538 flash information page head: a fixed primary IEEE address
         // at +0x28 (roms/cc2538/build.sh), read by Contiki-NG ieee-addr.c.
+        // Clean-room i.MX RT500 boot-ROM API window (roms/rt500/rt500_rom.S):
+        // the three OTP entry points the SDK's FRO trim read calls.
+        "LABWIRED_RT500_ROM" => Some(include_bytes!("../../roms/rt500/rt500_rom.bin")),
         "LABWIRED_CC2538_INFO_PAGE" => {
             Some(include_bytes!("../../roms/cc2538/cc2538_info_page.bin"))
         }
@@ -288,8 +291,19 @@ impl SystemBus {
         let ram_size = chip.ram.size;
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
+        let mut mem_aliases = Vec::new();
         for region in &chip.memory_regions {
             let size = region.size;
+            // A mirror holds no bytes; the accessors translate into its target.
+            // See NamedMemoryRange::alias_of.
+            if let Some(target) = region.alias_of {
+                mem_aliases.push(super::MemAlias {
+                    start: region.base,
+                    end: region.base.saturating_add(size),
+                    target,
+                });
+                continue;
+            }
             // `erased` fills with 0xFF: a flash window's blank state is ones,
             // not zeros. See NamedMemoryRange::erased.
             let mut mem = if region.erased {
@@ -411,6 +425,7 @@ impl SystemBus {
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
             ns_alias_offset: chip.ns_alias_offset,
+            mem_aliases,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,

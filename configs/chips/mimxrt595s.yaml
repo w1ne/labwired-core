@@ -7,42 +7,55 @@
 #
 # Sources:
 # - The MCUXpresso SDK device header MIMXRT595S_cm33.h: every peripheral base
-#   below (the non-secure *_BASE values; the secure aliases at +0x1000_0000
-#   are not mapped), the IRQ numbers, and the FLEXCOMM/USART, GPIO, IOPCTL,
-#   CLKCTL/RSTCTL register layouts.
+#   below (the non-secure *_BASE values; the secure *_BASE_S values are the
+#   same + 0x1000_0000), the IRQ numbers, and the FLEXCOMM/USART, GPIO,
+#   IOPCTL, CLKCTL/RSTCTL, OSTIMER and FLEXSPI register layouts.
 # - The SDK evkmimxrt595 flash linker file (MIMXRT595Sxxxx_cm33_flash.ld):
 #   the FlexSPI configuration block (FCB) at 0x08000400, the vector table at
 #   0x08001000, code from 0x08001180, data at 0x20280000.
 # - The SDK evkmimxrt595 board.h: debug console on FLEXCOMM0 (USART0),
 #   RGB LED on P0_14 (red) / P1_0 (green) / P3_17 (blue), SW1 on P0_25,
 #   SW2 on P0_10.
+# - The SDK drivers fsl_clock.c / fsl_ostimer.c: the clock hand-shakes, the
+#   boot-ROM OTP API addresses and the OS timer's Gray-coded counter.
+# - Zephyr v3.7.0 nxp_rt5xx_common.dtsi / mimxrt595_evk board: the secure
+#   address map the stock board runs on, FLEXCOMM12 and the OS timer.
 # - Renode v1.17.0 platforms/cpus/imxrt500.repl as a cross-check of the
 #   FLEXCOMM0/12, CLKCTL0/1, OS timer and FlexSPI bases and the SRAM size.
 #
 # Boot: the RT500 boot ROM reads the FCB at FlexSPI0 + 0x400 and the image
 # header at FlexSPI0 + 0x1000, then jumps through the vector table there. The
-# simulator does not run the boot ROM and does not parse the FCB. The first
-# words of the FlexSPI window are erased (0xFFFFFFFF) on an SDK image, so
-# reset uses reset_vector_offset 0x1000 = 0x08001000, where the SDK linker
-# file (and the smoke) put the vector table.
+# simulator does not run the boot ROM's boot flow and does not parse the FCB.
+# The first words of the FlexSPI window are erased (0xFFFFFFFF) on an SDK
+# image, so reset uses reset_vector_offset 0x1000 = 0x08001000, where the SDK
+# linker file (and the smoke) put the vector table. A Zephyr image linked at
+# the secure alias 0x1800_0000 has the same table at the same offset.
 #
 # Memory: FlexSPI0 is mapped as a flat 8 MiB read-only array at 0x08000000
-# (the same size Renode maps; the EVK's MX25UM51345G is 64 MiB, and the
-# Octal-SPI controller, its LUTs and the CACHE64 are not modelled). The 5 MiB
-# SRAM is mapped once, at its data-bus address 0x20000000; its code-bus
-# alias at 0x00000000 and every secure alias are not mapped.
+# (the same size Renode maps; the EVK's MX25UM51345G is 64 MiB, and CACHE64
+# is not modelled). The 5 MiB SRAM is mapped at its data-bus address
+# 0x20000000; its non-secure code-bus alias at 0x00000000 is not mapped. The
+# secure views of FlexSPI, SRAM, the peripherals and the boot ROM are
+# same-backing mirrors (memory_regions below). The first 64 KiB of the boot
+# ROM hold LabWired's clean-room OTP API window.
 #
-# Modelled: FLEXCOMM0 in USART mode (`lpc_flexcomm_usart`), the high-speed
-# GPIO (`lpc_gpio`, ports 0-6), CLKCTL0/1 and RSTCTL0/1 (`rt5xx_ctl`, stored
-# words with SET/CLR aliases, no effect), IOPCTL (`rt5xx_iopctl`, stored only).
+# Modelled: FLEXCOMM0 and FLEXCOMM12 in USART mode (`lpc_flexcomm_usart`), the
+# high-speed GPIO (`lpc_gpio`, ports 0-6), CLKCTL0/1 (`rt5xx_clkctl0/1`:
+# stored words with SET/CLR aliases plus the clock-ready, divider REQFLAG,
+# PLL PFD CLKRDY and FRO-tuner status the SDK polls; no effect on any
+# frequency), RSTCTL0/1 (`rt5xx_ctl`, stored, no effect), IOPCTL
+# (`rt5xx_iopctl`, stored only), the OS event timer (`rt5xx_ostimer`) and the
+# FlexSPI0 controller (`imxrt_flexspi`, the RT1060 FlexSPI model).
 # Declared stubs (accept writes, read zero): SYSCTL0/1, PMC, CACHE64_CTRL0,
-# WWDT0, INPUTMUX, FlexSPI0 controller. Not mapped (access faults): FLEXCOMM1-
-# 16 (FLEXCOMM12 is not mapped either), CTIMER0-4, OS timer, MRT0, UTICK0,
-# SCT0, DMA0/1, SDIO, USB, ADC, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, OTP,
-# SECGPIO and the HiFi4 DSP.
+# WWDT0, INPUTMUX, PINT, the non-secure SCS bank at 0xE002E000. Not mapped
+# (access faults): FLEXCOMM1-11 and 13-16, CTIMER0-4, MRT0, UTICK0, SCT0,
+# DMA0/1, SDIO, USB, ADC, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, the OTP
+# controller, SECGPIO and the HiFi4 DSP. SAU/IDAU security attribution is
+# not checked: a secure and a non-secure access reach the same thing.
 #
 # Tier: L1 smoke — boot + FLEXCOMM0 USART console + GPIO LED/button path on
-# the MIMXRT595-EVK map. SIM-DERIVED (no MIMXRT595 bench part).
+# the MIMXRT595-EVK map — plus stock Zephyr v3.7.0 hello_world on the secure
+# map. SIM-DERIVED (no MIMXRT595 bench part).
 
 name: "mimxrt595s"
 arch: "arm"
@@ -69,6 +82,41 @@ flash_boot_alias: false
 # The vector table sits after the FCB page (see "Boot" above).
 reset_vector_offset: 0x1000
 
+# TrustZone secure aliases (IDAU: address bit 28 selects the secure view of
+# the same physical resource; RT500 RM UM11147 "Memory map", MIMXRT595S_cm33.h
+# *_BASE_S values, Zephyr v3.7.0 nxp_rt5xx_common.dtsi ranges). The stock
+# Zephyr board `mimxrt595_evk/mimxrt595s/cm33` runs secure: it links XIP code
+# at 0x1800_0000, data at 0x3018_0000 and addresses every peripheral at
+# 0x5xxx_xxxx. The mirrors share the non-secure backing (no separate secure
+# copy); SAU/AHB secure-access checks are not modelled. The secure code-bus
+# SRAM view at 0x1000_0000 is not mapped (nothing used here addresses it).
+memory_regions:
+  # Boot ROM, first 64 KiB of the window at 0x0300_0000. Filled with the
+  # in-tree clean-room image (crates/core/roms/rt500/rt500_rom.S — NOT an NXP
+  # dump): only the OTP API entry points the SDK calls at fixed addresses
+  # (fsl_clock.c CLOCK_EnableFroClkRange), every fuse reading 0. Set
+  # LABWIRED_RT500_ROM to a file to replace it, or to "" for zeros.
+  - name: "bootrom"
+    base: 0x03000000
+    size: "64KB"
+    image_env: "LABWIRED_RT500_ROM"
+  - name: "bootrom_s"
+    base: 0x13000000
+    size: "64KB"
+    alias_of: 0x03000000
+  - name: "flexspi0_s"
+    base: 0x18000000
+    size: "8192KB"
+    alias_of: 0x08000000
+  - name: "sram_s"
+    base: 0x30000000
+    size: "5120KB"
+    alias_of: 0x20000000
+  - name: "periph_s"
+    base: 0x50000000
+    size: 0x10000000
+    alias_of: 0x40000000
+
 pins:
   # Board-relevant pads (GPIO pin index = 32 * port + pin).
   P0_1: { gpio: "gpio", bit: 1 }
@@ -85,7 +133,7 @@ peripherals:
     base_address: 0x40000000
     size: "4KB"
   - id: "clkctl0"
-    type: "rt5xx_ctl"
+    type: "rt5xx_clkctl0"
     base_address: 0x40001000
     size: "4KB"
   - id: "sysctl0"
@@ -105,12 +153,19 @@ peripherals:
     base_address: 0x40020000
     size: "4KB"
   - id: "clkctl1"
-    type: "rt5xx_ctl"
+    type: "rt5xx_clkctl1"
     base_address: 0x40021000
     size: "4KB"
   - id: "sysctl1"
     type: "stub"
     base_address: 0x40022000
+    size: "4KB"
+  # Pin interrupt / pattern match (PINT). Zephyr's gpio_mcux_lpc driver runs
+  # PINT_Init at boot; no pin interrupt is modelled (stub: writes accepted,
+  # reads 0).
+  - id: "pint"
+    type: "stub"
+    base_address: 0x40025000
     size: "4KB"
   - id: "inputmux"
     type: "stub"
@@ -129,17 +184,54 @@ peripherals:
     base_address: 0x40106000
     size: "4KB"
     irq: 14
+  # FLEXCOMM12 in USART mode: the EVK's Arduino-header serial (Zephyr
+  # `arduino_serial`, enabled by the board). Same IP and model as FLEXCOMM0;
+  # nothing is wired to its pins.
+  - id: "flexcomm12"
+    type: "lpc_flexcomm_usart"
+    base_address: 0x4020D000
+    size: "4KB"
+    irq: 64
   # Cortex-M33 SysTick in the PPB (Armv8-M ARM, B11.2): every Cortex-M core
   # has it, and Zephyr/MCUXpresso firmware programs SYST_CSR at boot.
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
     size: "16B"
+  # FlexSPI0 controller: the same FlexSPI IP as the i.MX RT1060 (MCR0
+  # SWRESET, STS0 SEQIDLE/ARBIDLE, DLLCR/STS2 lock, IP command engine; the
+  # register map up to the LUT matches MIMXRT595S_cm33.h FLEXSPI_Type), driving
+  # the XIP window above as its NOR array. The device is the model's generic
+  # JEDEC serial NOR (W25Q command set) reporting the EVK part's ID
+  # (Macronix MX25UM51345G, 0xC2 0x81 0x3A); its octal-DDR (OPI) commands are
+  # not modelled, nor is the RT500-only part of the map past the LUT.
+  # OS event timer: the Zephyr system clock (nxp,os-timer, OS_EVENT_IRQn 41).
+  # 1 MHz LPOSC tick (the board's OSEVTFCLKSEL); bus cycles run at cpu_hz.
+  - id: "os_timer"
+    type: "rt5xx_ostimer"
+    base_address: 0x40113000
+    size: "4KB"
+    irq: 41
+    config:
+      clock_hz: 48000000
+      tick_hz: 1000000
   - id: "flexspi0"
-    type: "stub"
+    type: "imxrt_flexspi"
     base_address: 0x40134000
     size: "4KB"
+    config:
+      jedec_id: 0xC2813A
+      xip_base: 0x08000000
+      xip_size: 0x800000
   - id: "pmc"
     type: "stub"
     base_address: 0x40135000
+    size: "4KB"
+  # Non-secure banked System Control Space (Armv8-M ARM D1.2.2: the
+  # NS view of SCB/NVIC/SysTick at 0xE002_E000 seen from Secure state). The
+  # secure Zephyr SystemInit sets SCB_NS->CPACR; stored-nothing stub here, as
+  # no non-secure image runs.
+  - id: "scs_ns"
+    type: "stub"
+    base_address: 0xE002E000
     size: "4KB"

@@ -1,0 +1,28 @@
+# LabWired - MIMXRT595-EVK stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/hello_world` for board
+# `mimxrt595_evk/mimxrt595s/cm33`.
+# Rebuild: crates/firmware-mimxrt595-evk-zephyr/build.sh
+#
+# The image runs secure (FlexSPI XIP at 0x1800_0000, data at 0x3018_0000,
+# peripherals at 0x5xxx_xxxx), through the chip's secure-alias mirrors.
+# Zephyr's RT5xx clock bring-up runs unpatched: LPOSC/FRO ready, divider
+# REQFLAG and PLL PFD CLKRDY hand-shakes, the FRO trim read through the boot
+# ROM OTP API (LabWired's clean-room ROM window, fuses blank) and the FRO
+# tuner, the FlexSPI0 re-clock (MCR0 SWRESET, STS0 idle, DLL lock), then the
+# OS event timer as system clock and the FLEXCOMM0 console.
+#
+# Stops once both lines are seen: after the banner Zephyr idles in WFI with
+# the OS timer match ~365 days out (K_FOREVER), which the step budget would
+# otherwise spend in idle skips.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mimxrt595-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Hello World! mimxrt595_evk/mimxrt595s/cm33"

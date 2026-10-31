@@ -403,7 +403,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "lpc_flexcomm_usart",
     "lpc_gpio",
     "rt5xx_ctl",
+    "rt5xx_clkctl0",
+    "rt5xx_clkctl1",
     "rt5xx_iopctl",
+    "rt5xx_ostimer",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1532,7 +1535,19 @@ pub fn try_build(
         }
         "lpc_gpio" => Box::new(crate::peripherals::lpc::gpio::LpcGpio::new()),
         "rt5xx_ctl" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::new()),
+        "rt5xx_clkctl0" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::clkctl0()),
+        "rt5xx_clkctl1" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::clkctl1()),
         "rt5xx_iopctl" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::plain()),
+        "rt5xx_ostimer" => {
+            use crate::peripherals::lpc::ostimer::{
+                Rt5xxOsTimer, DEFAULT_CLOCK_HZ, DEFAULT_TICK_HZ,
+            };
+            let get = |k: &str, d: u64| p_cfg.config.get(k).and_then(|v| v.as_u64()).unwrap_or(d);
+            Box::new(Rt5xxOsTimer::new(
+                get("clock_hz", DEFAULT_CLOCK_HZ),
+                get("tick_hz", DEFAULT_TICK_HZ),
+            ))
+        }
         _ => return Ok(None),
     };
     Ok(Some(dev))

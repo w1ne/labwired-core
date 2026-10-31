@@ -75,7 +75,7 @@ bootloader from MRAM `0x0`, which validates and starts the application at
 `0x0001_8000`. The engine loads the ELF (whose lowest load address is
 `0x0001_8000`), finds no valid vector table at the flash base, and enters the
 one at `flash_base + reset_vector_offset` — SP `0x1006_0000`, PC `0x18400`
-from the firmware's own table. Neither the ROM nor the SBL is modelled.
+from the firmware's own table. The SBL is not modelled; the boot ROM is only the clean-room HAL helper table.
 
 ## Validation
 

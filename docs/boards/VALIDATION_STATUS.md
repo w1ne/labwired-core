@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `c679bef54e4df3f9` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `c06d24d3b4159e40` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `0436be8c8c26a0c0` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `4b58de544c7f2977` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `abb5e57e5761ffbd` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `0c720563e2ba148b` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `55c7b94466c1506b` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `cd5902334eb66dea` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `06a675116363ff81` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `369b627444c6dd97` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `7f924cc0dbf07e66` | no silicon capture |
 | `esp32` | ⚪ structural | — | `6111c36258f4950d` | no silicon capture |
@@ -49,21 +49,21 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `516a0c823d57b44f` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `54dbdae176964919` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `a7abab0f0e79d433` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `e720907b2b23e85c` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `5df3a15a2581daf2` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `b23429af426860f8` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `f32ace0561b36494` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `45fddafc179e207c` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `f033817578858da1` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `0a6faa06aae1f87c` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `d2e0e9ebb1ebec1b` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `3625244207bc2f67` | no silicon capture |
-| `s32k388` | 🟡 smoke-manual | — | `90fd2b02b7cdbacd` | no silicon capture |
-| `mimxrt595s` | 🟡 smoke-manual | — | `015a324c9b68ae59` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `26db18149a8f1586` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `d0119b08b1eb3a2e` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `d5810942e074e7b8` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `71749d6e07c20ba8` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `e35d39d1cc202bde` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `2598f5fdedf914ea` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `8c3e360b54929b3e` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `971bbd28adccc223` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `95dcb89ea00ecd7d` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `ccc7ee1ed0ef89ab` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `90312cd454ca81e1` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `cf9be5d19c9e5295` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `1082ee3e007ae27f` | no silicon capture |
+| `s32k388` | 🟡 smoke-manual | — | `c87044ff2bcb6626` | no silicon capture |
+| `mimxrt595s` | 🟡 smoke-manual | — | `f2c8ac279ddd7954` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `69975685d76cd252` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `0316a24d9a7ae2a9` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `9332b0096f8277ad` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `77f1546e89f78585` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -499,6 +499,8 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/mimxrt595-evk.md`](mimxrt595-evk.md)  ·  Chip: `configs/chips/mimxrt595s.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_mimxrt595_evk_smoke_survival
+  - offline (CI): firmware_survival::test_mimxrt595_evk_zephyr_survival (stock Zephyr hello)
+  - offline (CI): rt500_secure_map (secure aliases + boot-ROM OTP API)
 - Drift status: **no silicon capture**
 
 ## `sam4s16c` — 🟡 smoke-manual

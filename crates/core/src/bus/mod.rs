@@ -366,6 +366,14 @@ impl BatchStop {
     }
 }
 
+/// One mirror window `[start, end)` whose bytes are the bytes at `target..`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemAlias {
+    pub start: u64,
+    pub end: u64,
+    pub target: u64,
+}
+
 pub struct SystemBus {
     pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
     pub flash: LinearMemory,
@@ -469,6 +477,10 @@ pub struct SystemBus {
     /// `addr + offset`; the translated address is what both the range lookup
     /// and the `addr - base` offset math use. See [`Self::resolve_ns_alias`].
     pub ns_alias_offset: Option<u64>,
+    /// Same-backing address mirrors from `NamedMemoryRange::alias_of` (empty on
+    /// every chip that declares none). Every accessor first rewrites an
+    /// address inside a mirror onto its target. See [`Self::resolve_mem_alias`].
+    pub mem_aliases: Vec<MemAlias>,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
