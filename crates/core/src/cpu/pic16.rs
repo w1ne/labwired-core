@@ -228,6 +228,14 @@ pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
     osc_ready: Some((0x09A, 0x1F)),
 };
 
+/// The PIC16F145x/150x/151x: the F182x layout without the MFINTOSC, so
+/// OSCSTAT has no MFIOFR (bit 2) or HFIOFL (bit 3), which read 0
+/// (per the parts' SDCC 4.4.0 pic14 headers).
+pub const PIC16E_F151X_MAP: Pic16SfrMap = Pic16SfrMap {
+    osc_ready: Some((0x09A, 0x13)),
+    ..PIC16E_F182X_MAP
+};
+
 /// One mid-range part: core, program words, implemented port bits
 /// (PORTA..PORTE), SFR layout and the GPR address ranges that alias
 /// another range.
@@ -244,6 +252,12 @@ pub struct Pic16Device {
     /// 0x70-0x7F block on most parts; whole banks on the PIC16F873/874).
     /// The enhanced core's core registers and common RAM are built in.
     pub aliases: &'static [(u16, u16, u16)],
+    /// Classic core: the bank-2/3 SFR mirror addresses (`0x101` TMR0,
+    /// `0x106` PORTB, `0x181` OPTION_REG, `0x186` TRISB) at which this part
+    /// has a register of its own instead (the header defines one there,
+    /// e.g. ANSELB at `0x186` on the PIC16F72x). They are plain registers,
+    /// not mirrors.
+    pub own_sfrs: &'static [u16],
 }
 
 const fn dev(
@@ -259,6 +273,22 @@ const fn dev(
         port_masks,
         map: PIC16_CLASSIC_MAP,
         aliases,
+        own_sfrs: &[],
+    }
+}
+
+/// A classic row whose part has its own registers at some of the bank-2/3
+/// SFR mirror addresses (see [`Pic16Device::own_sfrs`]).
+const fn dev_own(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+    own_sfrs: &'static [u16],
+) -> Pic16Device {
+    Pic16Device {
+        own_sfrs,
+        ..dev(name, flash_words, port_masks, aliases)
     }
 }
 
@@ -276,6 +306,7 @@ const fn edev(
         port_masks,
         map,
         aliases: &[],
+        own_sfrs: &[],
     }
 }
 
@@ -286,10 +317,19 @@ const fn edev(
 /// groups. `scripts/pic16/check_sfr_map.py --check-table` regenerates and
 /// re-verifies every row. A row is geometry, not onboarding.
 ///
-/// Left out: the enhanced mid-range (PIC16F1xxx: BSR, linear memory, a
-/// different SFR map), parts without the USART at 0x18/0x19/0x98/0x99 or
-/// without PORTC (PIC16F6xx/8x/81x/84A and friends), and the OTP/EPROM
-/// PIC16C parts.
+/// Enhanced mid-range rows (`edev`) must match `PIC16E_F182X_MAP`
+/// (`--enhanced`): core registers, bank-31 shadows and stack, INTCON,
+/// OPTION_REG, PCON, PIR1-4/PIE1-4, PORT/TRIS/LAT A-E and the EUSART at
+/// 0x19A-0x19E, with any address the model touches either the same register
+/// or free. The OSCSTAT ready mask picks the map.
+///
+/// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99 or
+/// without PORTC (PIC16F6xx/8x/81x/84A and friends), the OTP/EPROM PIC16C
+/// parts; enhanced parts without an EUSART (PIC16F1503/1507/1613/1703/1707),
+/// with PIR1 at 0x010 (PIC16F161x), with comparator SFRs at LATD/LATE
+/// (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
+/// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
+/// entry for them, so no lkr cross-check or SDCC firmware build).
 const PIC16_DEVICES: &[Pic16Device] = &[
     dev(
         "pic16f687",
@@ -321,7 +361,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x1F0, 0x1FF, 0x070),
         ],
     ),
-    dev(
+    dev_own(
         "pic16f722a",
         2048,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -330,8 +370,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f723a",
         4096,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -340,8 +381,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f724",
         4096,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -350,8 +392,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f726",
         8192,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -360,8 +403,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f727",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -370,8 +414,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf722a",
         2048,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -380,8 +425,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf723a",
         4096,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -390,8 +436,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf724",
         4096,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -400,8 +447,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf726",
         8192,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -410,8 +458,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf727",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -420,6 +469,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
     dev(
         "pic16f870",
@@ -633,7 +683,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x1F0, 0x1FF, 0x070),
         ],
     ),
-    dev(
+    dev_own(
         "pic16f707",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -642,8 +692,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x106, 0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf707",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -652,13 +703,480 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x106, 0x186],
     ),
-    // Enhanced mid-range. PIC16F1829: 8K words, RA0-RA5, RB4-RB7, RC0-RC7
-    // (DS40001440E Table 1-1 / Figure 3-2).
+    // Enhanced mid-range (32 banks). Every row passes
+    // `check_sfr_map.py --enhanced` against PIC16E_F182X_MAP (OSCSTAT ready
+    // mask aside); flash words from SDCC's pic14devices.txt.
+    edev(
+        "pic16f1454",
+        8192,
+        [0x3B, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1455",
+        8192,
+        [0x3B, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1459",
+        8192,
+        [0x3B, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1508",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1509",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1516",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1517",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1518",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1519",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F151X_MAP,
+    ),
+    // SDCC 4.4.0's pic14devices.txt lacks `enhanced 1` for 16(L)F1704/1708,
+    // so SDCC emits classic code for them that gpasm rejects. Rebuilding
+    // firmware for these parts needs a locally patched device DB.
+    edev(
+        "pic16f1704",
+        4096,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1705",
+        8192,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1708",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1709",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1713",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1716",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1717",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1718",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1719",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1784",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1786",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1787",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1788",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1789",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1823",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1824",
+        4096,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1825",
+        8192,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1826",
+        2048,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1827",
+        4096,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1828",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
     edev(
         "pic16f1829",
         8192,
         [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1847",
+        8192,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1933",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1934",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1936",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1937",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1938",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1939",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1946",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16f1947",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1454",
+        8192,
+        [0x3B, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1455",
+        8192,
+        [0x3B, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1459",
+        8192,
+        [0x3B, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1508",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1509",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1516",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1517",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1518",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1519",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1704",
+        4096,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1705",
+        8192,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1708",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1709",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1713",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1716",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1717",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1718",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1719",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1784",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1786",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1787",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1788",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1789",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1823",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1824",
+        4096,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1825",
+        8192,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1826",
+        2048,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1827",
+        4096,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1828",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1829",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1847",
+        8192,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1933",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1934",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1936",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1937",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1938",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1939",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1946",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        PIC16E_F182X_MAP,
+    ),
+    edev(
+        "pic16lf1947",
+        16384,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
         PIC16E_F182X_MAP,
     ),
 ];
@@ -706,6 +1224,7 @@ pub struct Pic16 {
     latch: [u8; PIC16_PORT_COUNT as usize],
     port_masks: [u8; PIC16_PORT_COUNT as usize],
     aliases: &'static [(u16, u16, u16)],
+    own_sfrs: &'static [u16],
     stack: [u32; STACK_SLOTS],
     /// Classic: next free slot, modulo 8. Enhanced: `STKPTR`, the slot of
     /// the top of stack, with 0x1F meaning empty.
@@ -756,6 +1275,7 @@ impl Pic16 {
             latch: [0; PIC16_PORT_COUNT as usize],
             port_masks: device.port_masks,
             aliases: device.aliases,
+            own_sfrs: device.own_sfrs,
             stack: [0; STACK_SLOTS],
             stkptr: 0,
             pending_reset: None,
@@ -1032,6 +1552,9 @@ impl Pic16 {
                 Some(&(start, _, target)) => addr = target + (addr - start),
                 None => break,
             }
+        }
+        if self.own_sfrs.contains(&addr) {
+            return addr;
         }
         match addr {
             0x101 => SFR_TMR0,
@@ -2444,6 +2967,31 @@ mod tests {
         );
     }
 
+    /// On the PIC16F72x `0x186` is ANSELB and on the PIC16F707 `0x106` is
+    /// CPSBCON0: their own registers, not TRISB/PORTB mirrors. Clearing
+    /// ANSELB (as firmware must before reading RB digitally) must leave TRISB
+    /// alone; on the 877A `0x186` still is TRISB.
+    #[test]
+    fn own_registers_at_bank3_mirror_addresses_are_not_mirrors() {
+        for part in ["pic16f722a", "pic16lf727", "pic16f707"] {
+            let mut cpu = Pic16::for_chip_name(part);
+            cpu.write_data(0x86, 0xFE);
+            cpu.write_data(0x186, 0x00);
+            assert_eq!(cpu.read_data(0x86), 0xFE, "{part}: TRISB kept");
+            assert_eq!(cpu.read_data(0x186), 0x00, "{part}: ANSELB stored");
+            cpu.write_data(0x181, 0x07);
+            assert_eq!(cpu.read_data(0x81), 0x07, "{part}: OPTION_REG mirror");
+        }
+        let mut cpu = Pic16::for_chip_name("pic16f707");
+        cpu.write_data(0x106, 0x5A);
+        assert_eq!(cpu.read_data(0x106), 0x5A, "CPSBCON0 stored");
+        assert_ne!(cpu.read_data(0x06), 0x5A, "PORTB not written");
+        let mut cpu = Pic16::for_chip_name("pic16f877a");
+        cpu.write_data(0x86, 0xFE);
+        cpu.write_data(0x186, 0x00);
+        assert_eq!(cpu.read_data(0x86), 0x00, "877A: 0x186 is TRISB");
+    }
+
     #[test]
     #[should_panic(expected = "fixture exceeds PIC16 model flash")]
     fn bytes_past_flash_are_rejected() {
@@ -2454,6 +3002,7 @@ mod tests {
             port_masks: [0xFF; 5],
             map: PIC16_CLASSIC_MAP,
             aliases: &[],
+            own_sfrs: &[],
         });
         small.load_flash(32, &[0]);
     }
@@ -2507,10 +3056,35 @@ mod tests {
     fn device_table_knows_the_pic16f877a() {
         let d = pic16_device("PIC16F877A").expect("877A row");
         assert_eq!(d.flash_words, 8192);
-        assert!(pic16_device("pic16f1847").is_none());
         assert!(pic16_device("pic16f1829").is_some_and(|d| d.enhanced));
         assert!(check_pic16_entry(0).is_ok());
         assert!(check_pic16_entry(1).is_err());
+    }
+
+    #[test]
+    fn enhanced_rows_pick_the_core_flash_and_oscstat_map() {
+        // Left out: no EUSART, PIR1 at 0x010, 64 banks.
+        for name in ["pic16f1503", "pic16f1614", "pic16f18855"] {
+            assert!(pic16_device(name).is_none(), "{name}");
+        }
+        let names: Vec<_> = PIC16_DEVICES.iter().map(|d| d.name).collect();
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "duplicate rows");
+
+        let cpu = Pic16::for_chip_name("pic16lf1823");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        assert_eq!(cpu.read_data(0x09A) & 0x1F, 0x1F, "F182x OSCSTAT ready");
+
+        // PIC16F1519: 16K words, 40-pin ports, no MFINTOSC.
+        let cpu = Pic16::for_chip_name("pic16f1519");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 16384);
+        assert_eq!(cpu.read_data(0x09A) & 0x1F, 0x13, "no MFIOFR/HFIOFL");
+        let d = pic16_device("pic16f1519").unwrap();
+        assert_eq!(d.port_masks, [0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
     }
 
     // ---- Enhanced mid-range (PIC16F1829; DS40001440E Table 29-3) ----
