@@ -9351,6 +9351,10 @@ boards:
     # (tests/fixtures/stm32l552-zephyr-hello.elf, rebuilt byte-identical by
     # crates/firmware-l552ze-zephyr/build.sh) after mapping the ICACHE (the
     # U5 icache model, same IP) and the DBGMCU at 0xE0044000.
+    # 2026-10-31: stock Zephyr v3.7.0 samples/synchronization also runs
+    # (tests/fixtures/stm32l552-zephyr-sync.elf, same build script):
+    # SysTick k_msleep timeouts, semaphore hand-off and PendSV switches,
+    # asserted by examples/nucleo-l552ze-q/zephyr-sync.yaml in ci/test.sh.
     # SIM-DERIVED — no STM32L552 bench part. See
     # docs/boards/nucleo-l552ze-q.md and
     # examples/nucleo-l552ze-q/VALIDATION.md.

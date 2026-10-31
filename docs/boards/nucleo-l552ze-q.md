@@ -11,7 +11,9 @@ target: boot, the new L5 RCC clock gates, the LPUART1 console and the
 GPIO LED/button path (with `ODR` read-back) are proven by a committed smoke
 fixture and an `io-smoke.yaml`. Unmodified upstream **Zephyr v3.7.0
 `hello_world`** (the sample Renode's `ARMv8M.robot` boots) also runs through
-Zephyr's own L5 clock/ICACHE/DBGMCU bring-up and prints on LPUART1. There is
+Zephyr's own L5 clock/ICACHE/DBGMCU bring-up and prints on LPUART1, and
+stock `synchronization` runs its two-thread semaphore hand-off on SysTick
+timeouts and PendSV context switches. There is
 no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 
 !!! warning "Not claimed yet"
@@ -38,7 +40,7 @@ no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 | Reference firmware | [`crates/firmware-l552ze-smoke/`](../../crates/firmware-l552ze-smoke/) |
 | Example | [`examples/nucleo-l552ze-q/`](../../examples/nucleo-l552ze-q/) |
 | Committed artifact | `tests/fixtures/nucleo-l552ze-q-smoke.elf` (`NUCLEO-L552ZE-Q SMOKE`) |
-| Zephyr fixture | `tests/fixtures/stm32l552-zephyr-hello.elf` — stock Zephyr v3.7.0 `hello_world`, rebuilt by [`crates/firmware-l552ze-zephyr/build.sh`](../../crates/firmware-l552ze-zephyr/build.sh) |
+| Zephyr fixtures | `tests/fixtures/stm32l552-zephyr-hello.elf` / `stm32l552-zephyr-sync.elf` — stock Zephyr v3.7.0 `hello_world` / `synchronization`, rebuilt by [`crates/firmware-l552ze-zephyr/build.sh`](../../crates/firmware-l552ze-zephyr/build.sh) |
 | Build target | `thumbv8m.main-none-eabi` |
 | Tier (snapshot) | **L1** — smoke (CPU + memory + LPUART1 + GPIO); SIM-DERIVED |
 
@@ -81,8 +83,9 @@ secure-boot path are not modelled.
 # from the repository root
 cargo build -p firmware-l552ze-smoke --release --target thumbv8m.main-none-eabi
 ./target/release/labwired test --script examples/nucleo-l552ze-q/io-smoke.yaml --no-uart-stdout
-# stock Zephyr hello_world (committed fixture)
+# stock Zephyr hello_world + synchronization (committed fixtures)
 ./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-hello.yaml
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-sync.yaml
 ```
 
 See [`examples/nucleo-l552ze-q/VALIDATION.md`](../../examples/nucleo-l552ze-q/VALIDATION.md)
