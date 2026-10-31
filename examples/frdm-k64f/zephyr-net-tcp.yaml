@@ -1,0 +1,52 @@
+# LabWired - FRDM-K64F Zephyr tests/net/tcp
+#
+# The port of Renode's NXP-K64F.robot "Should Run Zephyr Tests for TCP":
+# unmodified upstream Zephyr v3.7.0 `tests/net/tcp` for `frdm_k64f` (rebuild:
+# crates/firmware-frdm-k64f-zephyr/build.sh). Renode waits for "PROJECT
+# EXECUTION SUCCESSFUL"; this script also pins all 19 ztest cases in order.
+#
+# The suite runs the full TCP state machine (IPv4 + IPv6 client/server,
+# SYN resend, FIN_WAIT_1/2, RST, out-of-order data) over the test's own dummy
+# L2 (CONFIG_NET_L2_DUMMY, CONFIG_NET_L2_ETHERNET=n), so no ENET model is
+# involved. What it does need from the board: the RNGA (`kinetis_rnga`) that
+# Zephyr's entropy_mcux_rnga driver spins on at boot and per sys_rand_get(),
+# and SysTick-driven timeouts for the retransmission and TIME_WAIT timers.
+#
+# The suite reports ~6.6 s of kernel time (~800M cycles at 120 MHz). Nearly
+# all of it is idle, which idle fast-forward skips, so the run takes ~2.9M
+# interpreted steps. `max_cycles` bounds it; `max_steps` alone would not,
+# because skipped WFI cycles are not steps.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/mk64f12-zephyr-net-tcp.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 50000000
+  max_cycles: 1000000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Running TESTSUITE net_tcp"
+      - " PASS - test_client_closing_failure_ipv6"
+      - " PASS - test_client_closing_ipv6"
+      - " PASS - test_client_data_during_fin_1_ipv4"
+      - " PASS - test_client_fin_ack_with_data"
+      - " PASS - test_client_fin_wait_1_retransmit_ipv4"
+      - " PASS - test_client_fin_wait_2_ipv4"
+      - " PASS - test_client_fin_wait_2_ipv4_failure"
+      - " PASS - test_client_invalid_rst"
+      - " PASS - test_client_ipv4"
+      - " PASS - test_client_ipv6"
+      - " PASS - test_client_rst_on_unexpected_ack_on_syn"
+      - " PASS - test_client_syn_resend"
+      - " PASS - test_client_syn_rst_ack"
+      - " PASS - test_server_ipv4"
+      - " PASS - test_server_ipv6"
+      - " PASS - test_server_out_of_order_data"
+      - " PASS - test_server_rst_on_closed_port"
+      - " PASS - test_server_rst_on_listening_port_no_active_connection"
+      - " PASS - test_server_with_options_ipv4"
+      - "TESTSUITE net_tcp succeeded"
+      - "SUITE PASS - 100.00% [net_tcp]: pass = 19, fail = 0, skip = 0, total = 19"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - expected_stop_reason: max_cycles

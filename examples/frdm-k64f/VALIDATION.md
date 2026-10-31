@@ -22,8 +22,10 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | MCG PLL0 (`k6x` profile): FBE → PBE → PEE | smoke-tested + unit | Zephyr's `CLOCK_BootToPeeMode` settles; `mcg::tests::k6x_*`. Lock is immediate and the 120 MHz output is not derived |
 | MCG FEE (the KW41Z FLL path) | unit-tested | unchanged; `mcg::tests` |
 | SYSMPU / PMC / OSC0 | register files (NXP SVD) | Zephyr's `nxp_mpu`, `k6x_init` and `CLOCK_InitOsc0` writes land and read back; **no MPU protection, LVD or oscillator is modelled** |
-| ENET + KSZ8081 PHY / TCP | **not modelled** | the Ethernet blocks are stubs; the Zephyr TCP test is deferred |
-| RNGA, FTFE | declared stubs | `configs/chips/mk64f12.yaml` (`type: "stub"`) |
+| Zephyr `tests/net/tcp` (Renode `NXP-K64F.robot` TCP case) | smoke-tested | `zephyr-net-tcp.yaml` 2/2: 19/19 ztest cases in order, `PROJECT EXECUTION SUCCESSFUL` |
+| RNGA (`kinetis_rnga`) | smoke-tested + unit | Zephyr's `entropy_mcux_rnga` init and every `sys_rand_get()` complete; `kinetis_rnga::tests` (6). OR refills instantly, samples are a fixed-seed xorshift32 perturbed by `ER` (not entropy), the error IRQ 23 and `SECV` are not modelled |
+| ENET + KSZ8081 PHY | **not modelled** | the Ethernet blocks are stubs. `tests/net/tcp` runs over its own dummy L2 (`CONFIG_NET_L2_ETHERNET=n`), so it does not touch them |
+| FTFE | declared stub | `configs/chips/mk64f12.yaml` (`type: "stub"`) |
 | eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN, SDHC | **not mapped** | no window in `configs/chips/mk64f12.yaml`; an access faults with a memory violation |
 
 ## Commands and evidence (verified 2026-10-30)
@@ -61,7 +63,7 @@ cmp out/run1/snapshot.json out/run2/snapshot.json  # clean
 
 ### Stock Zephyr (verified 2026-10-30)
 
-All three fixtures are unmodified upstream Zephyr v3.7.0 (commit `36940db938a8`)
+All four fixtures are unmodified upstream Zephyr v3.7.0 (commit `36940db938a8`)
 for `frdm_k64f`, built with `arm-none-eabi-gcc` 13.2.1 (gnuarmemb) and
 debug-stripped.
 
@@ -70,6 +72,7 @@ crates/firmware-frdm-k64f-zephyr/build.sh       # needs a Zephyr v3.7.0 west wor
 #   b0b136f6…ea3993  tests/fixtures/mk64f12-zephyr-hello.elf
 #   6ea91e77…711f2e  tests/fixtures/mk64f12-zephyr-uart-basic-api.elf
 #   8e56c2fc…b5275f  tests/fixtures/mk64f12-zephyr-sync.elf
+#   0fb62bc0…ac3600  tests/fixtures/mk64f12-zephyr-net-tcp.elf   (2026-10-31)
 #   (two rebuilds, identical; build.sh pins ZEPHYR_MODULES so fetching
 #   more modules into the workspace does not change the bytes)
 
@@ -93,6 +96,15 @@ crates/firmware-frdm-k64f-zephyr/build.sh       # needs a Zephyr v3.7.0 west wor
 #   negative control: max_steps 8000000 stops before the timeout round, FAIL 1/2
 #   unsupported_instruction_audit.sh over 30M steps: unsupported_total 0
 
+./target/release/labwired test --script examples/frdm-k64f/zephyr-net-tcp.yaml
+#   SUITE PASS - 100.00% [net_tcp]: pass = 19, fail = 0, skip = 0, total = 19
+#   PROJECT EXECUTION SUCCESSFUL
+#   PASS  2/2 checks · zephyr-net-tcp · 2855528 steps · 0.17s   (2026-10-31)
+#   negative control: RNGA back to `type: stub` hangs in RNGA_GetRandomData
+#   (OREG_LVL poll) before the banner, FAIL 0/2 at 50M steps
+#   max_cycles probes: 700M fails (suite still running), 800M passes
+#   unsupported_instruction_audit.sh over 2.8M steps: unsupported_total 0
+
 # Determinism: all scripts run twice with --output-dir; uart.log and
 # snapshot.json cmp clean.
 ```
@@ -113,6 +125,11 @@ How it differs from the Renode robot:
 
 Negative control: the same script on a build without the C2 interrupt
 enables fails at `test_uart_fifo_fill` (0/2).
+
+The TCP case matches Renode's robot directly: it waits for `PROJECT EXECUTION
+SUCCESSFUL` and needs no input. The script also pins the 19 case names in
+order. The suite's ~6.6 s of kernel time is nearly all idle, which idle
+fast-forward skips, so `max_cycles` (1e9) bounds the run.
 
 ## Notes
 

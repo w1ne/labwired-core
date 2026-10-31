@@ -413,6 +413,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "rt5xx_clkctl1",
     "rt5xx_iopctl",
     "rt5xx_ostimer",
+    // NXP Kinetis RNGA (K64F `RNG`), not the STM32 `rng` layout.
+    "kinetis_rnga",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1365,6 +1367,7 @@ pub fn try_build(
             Some(other) => anyhow::bail!("nxp_mcg: unknown profile '{other}' (expected k6x or kl)"),
         },
         "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
+        "kinetis_rnga" => Box::new(crate::peripherals::kinetis_rnga::KinetisRnga::new()),
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
