@@ -450,7 +450,8 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         system: "ek-ra6m5",
         fixture: "r7fa6m5bh-zephyr-hello.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
-        expected_uart_output: b"Hello World! ek_ra6m5/r7fa6m5bh3cfc",
+        expected_uart_output:
+            b"*** Booting Zephyr OS build v4.0.0 ***\r\nHello World! ek_ra6m5/r7fa6m5bh3cfc",
     },
     SurvivalCase {
         // EK-RA8M1: R7FA8M1AH (Cortex-M85), 2 MiB code flash at 0x02000000,

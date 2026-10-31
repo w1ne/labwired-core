@@ -52,7 +52,9 @@
 #   warns and drops them).
 # - SCI FIFO: FCR/FDR/FTDRL/FRDRL are modelled for the polled console; TX
 #   drains at once (FDR.T reads 0), and the trigger levels and FIFO
-#   interrupts are not modelled.
+#   interrupts are not modelled. In FIFO mode silicon reinterprets SSR as
+#   SSR_FIFO (TDFE/RDF); the model keeps the non-FIFO SSR bits (the Zephyr
+#   console polls FDR, not SSR_FIFO).
 # - DMAC/DTC, ELC, RTC, IWDT/WDT, AGT0-5, GPT, IIC0-2, SPI0/1, ADC12,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
@@ -84,7 +86,9 @@ pins:
   P004: { gpio: port0, bit: 4, functions: [{ type: gpio, peripheral: port0 }] }
 peripherals:
   # R_SYSTEM @ 0x4001E000 (the Renode SYSC tag spans 0x4001E000-0x4001E62B).
-  # Only HOCOCR (+0x36) and OSCSF (+0x3C) are modelled; see the header.
+  # Full R_SYSTEM register file (0x700 bytes, ends with VBTBKR[512] at
+  # +0x500) with derived OSCSF and the CKCR handshakes; see the header. The
+  # id keeps the RA4M1-era name.
   - id: "ra_sysc"
     type: "ra6_sysc"
     base_address: 0x4001E000

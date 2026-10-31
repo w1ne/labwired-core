@@ -1227,7 +1227,8 @@ impl Uart {
     /// Classic SCI FIFO register byte at `offset` (FCR, FDR, FRDRH), or
     /// `None` outside them (or on other layouts). FRDRL is popped by the
     /// caller. TX drains at once, so FDR.T is always 0; FDR.R is the RX
-    /// queue length capped at the 16-stage FIFO.
+    /// queue length capped at the 16-stage FIFO while FCR.FM is set, 0
+    /// otherwise.
     fn sci_fifo_byte(&self, offset: u64) -> Option<u8> {
         if !matches!(self.layout, UartRegisterLayout::Sci) {
             return None;
@@ -1235,6 +1236,9 @@ impl Uart {
         match offset {
             SCI_FCR => Some(self.sci_fcr as u8),
             o if o == SCI_FCR + 1 => Some((self.sci_fcr >> 8) as u8),
+            // FDR only counts in FIFO mode (FCR.FM = 1); on a FIFO-less
+            // channel or with FM = 0 there is no FIFO to report.
+            SCI_FDR if !self.sci_fifo_mode() => Some(0),
             SCI_FDR => {
                 let rx = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
                 Some(rx.min(SCI_FIFO_DEPTH) as u8)
@@ -2959,9 +2963,6 @@ mod tests {
         }
     }
 
-    /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while
-    /// CCR0.TE is set, CESR mirrors TE/RE, CSR@0x48 reports TDRE|TEND and
-    /// RDRF on RX data, control registers read back from their FSP reset.
     #[test]
     fn test_sci_classic_fifo_mode() {
         // FSP r_sci_uart (RA6M5 SCI0, 16-stage FIFO): FCR = FM | RFRST |
@@ -2975,6 +2976,7 @@ mod tests {
         u.write(0x0F, b'x').unwrap();
         assert!(sink.lock().unwrap().is_empty());
         u.rx_buffer().lock().unwrap().push_back(b'q');
+        assert_eq!(u.read(0x16).unwrap(), 0, "FDR.R is 0 with FM = 0");
         u.write(0x14, 0x07).unwrap();
         u.write(0x15, 0xF8).unwrap();
         assert_eq!(u.read(0x14).unwrap(), 0x01, "RFRST/TFRST read 0");
@@ -2999,6 +3001,9 @@ mod tests {
         assert_eq!(sink.lock().unwrap().as_slice(), b"ok!");
     }
 
+    /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while
+    /// CCR0.TE is set, CESR mirrors TE/RE, CSR@0x48 reports TDRE|TEND and
+    /// RDRF on RX data, control registers read back from their FSP reset.
     #[test]
     fn test_sci_b_tx_gate_status_and_readback() {
         let sink = Arc::new(Mutex::new(Vec::new()));
