@@ -85,5 +85,13 @@ Not validated, or not modelled, for this part:
 - The enhanced mid-range core is a separate mode of the same model, onboarded
   with the PIC16F1829 (`examples/pic16f1829`).
 
+Known engine gaps (tracked here until fixed):
+- `load_flash` still panics on an image larger than the part's flash, but
+  every loader path now goes through `try_load_flash`, so `labwired run`/`test`
+  report it as a config error (`EXIT_CONFIG_ERROR`) instead.
+- `build_pic16_node` (the multi-node builder) attaches no serial sink, so
+  USART output from a PIC16 node is not captured. Single-board `run`/`test`
+  and the Session/DAP builder do capture it.
+
 The CPU clock in the descriptor is the 5-MIPS maximum; this example's
 16 MHz crystal gives 4 MIPS, and nothing in the smoke depends on time.

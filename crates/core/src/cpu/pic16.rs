@@ -1258,7 +1258,10 @@ impl Pic16 {
     pub fn for_chip_name(name: &str) -> Self {
         match pic16_device(name) {
             Some(device) => Self::with_device(device),
-            None => Self::new(),
+            None => {
+                tracing::warn!("PIC16: no device row for chip {name:?}; using PIC16F877A geometry");
+                Self::new()
+            }
         }
     }
 
