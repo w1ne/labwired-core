@@ -83,6 +83,8 @@ pub enum Arch {
     Pic24,
     /// PIC18 8-bit MCU (16-bit instruction words, byte-addressed PC).
     Pic18,
+    /// PIC16 classic mid-range 8-bit MCU (14-bit words, word-addressed PC).
+    Pic16,
     Unknown,
 }
 

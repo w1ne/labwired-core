@@ -906,6 +906,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: pic16f877a
+    arch: pic16
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC16 part, on a new PIC16 classic mid-range core (35 instructions): exact PIC16F877A descriptor (DS39582B) with 8K words of flash, 368 B SRAM in four banks with the 0x70-0x7F shared block, and an 8-level circular stack. Real SDCC 4.4.0 pic14 C firmware boots through its C runtime: bank switching via STATUS.RP0, shared-RAM locals, and generic-pointer string reads as computed MOVWF PCLATH, MOVWF PCL jumps into RETLW tables. It prints a banner on the USART TXREG (0x19), sets RB0, reads it back and toggles it (crates/core/tests/pic16f877a_smoke.rs, examples/pic16f877a/io-smoke.yaml). USART RX and baud timing, TMR0/1/2, CCP, MSSP, ADC, comparators, data EEPROM, WDT, PSP and CONFIG decoding are not modelled."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: pic18f4520
     arch: pic18
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC18 part: exact PIC18F4520 descriptor (DS39631E) with 32 KB flash, a 31-level stack and the 0x80 Access Bank split. Real SDCC 4.4.0 C firmware boots through its C runtime: the FSR1/FSR2 software stack via MOVFF on the indirect aliases, TBLRD string reads and MULLW. It prints a banner on the EUSART TXREG (0xFAD), sets RB0 through LATB, reads it back and toggles it (crates/core/tests/pic18f4520_smoke.rs, examples/pic18f4520/io-smoke.yaml). EUSART RX and baud timing, timers, CCP/ECCP, MSSP, ADC, data EEPROM, WDT, CONFIG decoding and XINST are not modelled."

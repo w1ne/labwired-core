@@ -319,3 +319,53 @@ fn a_clean_pic18_run_still_exits_zero() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+// ── PIC16 interactive run ───────────────────────────────────────────────────
+//
+// Same contract on the PIC16 arm. The image is the PIC18 container (both
+// 8-bit PIC families are EM_MCHP_PIC); the pic16 chip retargets it.
+
+fn pic16_run(code: &[u8], name: &str) -> std::process::Output {
+    let root = workspace_root();
+    let dir = std::env::temp_dir().join(format!("lw-pic16-exit-{}-{name}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let fw = dir.join("fw.elf");
+    std::fs::write(&fw, pic18_elf(code)).expect("write elf");
+    let out = Command::new(labwired_bin())
+        .arg("--firmware")
+        .arg(&fw)
+        .arg("--system")
+        .arg(root.join("configs/systems/pic16f877a-demo.yaml"))
+        .arg("--max-steps")
+        .arg("1000")
+        .output()
+        .expect("spawn labwired");
+    let _ = std::fs::remove_dir_all(&dir);
+    out
+}
+
+#[test]
+fn a_pic16_run_that_ends_on_a_decode_error_exits_non_zero() {
+    // 0x3B00 is unassigned on the PIC16 mid-range (11 1011 xxxx xxxx) but a
+    // valid SWAPF on PIC18, so this exits 3 only if the run really used the
+    // PIC16 core.
+    let out = pic16_run(&[0x00, 0x3B], "decode");
+    assert_eq!(
+        out.status.code(),
+        Some(EXIT_RUNTIME_ERROR),
+        "an undecodable opcode must not report success; stderr was: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_clean_pic16_run_still_exits_zero() {
+    // `GOTO 0` (0x2800): spins on itself until max-steps.
+    let out = pic16_run(&[0x00, 0x28], "clean");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a max-steps run is not a fault; stderr was: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

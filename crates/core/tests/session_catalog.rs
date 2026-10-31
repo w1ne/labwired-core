@@ -52,6 +52,8 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
         common::committed("examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf");
     // PIC18 L1 fixture: SDCC 4.4.0 C firmware (see examples/pic18f4520).
     let pic18_fw = common::committed("examples/pic18f4520/firmware/pic18f4520-sdcc-uart-smoke.elf");
+    // PIC16 L1 fixture: SDCC 4.4.0 pic14 C firmware (see examples/pic16f877a).
+    let pic16_fw = common::committed("examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf");
     // Committed Tier-1 Xtensa fixtures (same ones session_builder_xtensa.rs
     // uses): esp32.elf for the classic dual-core part, esp32s3.elf for both
     // S3 SKUs (esp32s3 and esp32s3-zero share the same silicon).
@@ -80,6 +82,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
             labwired_config::Arch::Avr => &avr_fw,
             labwired_config::Arch::Pic24 => &pic24_fw,
             labwired_config::Arch::Pic18 => &pic18_fw,
+            labwired_config::Arch::Pic16 => &pic16_fw,
             labwired_config::Arch::Xtensa => {
                 if name == "esp32" {
                     &esp32_fw

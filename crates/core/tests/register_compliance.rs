@@ -122,6 +122,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Pic16 => {
+            // PIC16 SFRs are CPU-internal; there is no SVD-backed list.
+            println!(
+                "Skipping PIC16 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }

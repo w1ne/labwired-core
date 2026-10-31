@@ -196,6 +196,7 @@ pub fn build_node_with_options(
         MachineFamily::Avr => build_avr_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic18 => build_pic18_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Pic16 => build_pic16_node(id, chip, system, firmware, opts.plugins),
     }
 }
 
@@ -336,6 +337,42 @@ fn build_pic18_node(
     let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Pic18::for_chip_name(&chip.name);
+    cpu.load_program_image(&image);
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
+}
+
+/// PIC16 node: ELF in, CPU-local flash sized from the chip
+/// ([`crate::cpu::Pic16::for_chip_name`]). EM_MCHP_PIC images are retargeted
+/// to PIC16 by the chip's `arch:` ([`crate::system::arch_policy::image_arch_for_chip`]).
+fn build_pic16_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let mut image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    image.arch = crate::system::arch_policy::image_arch_for_chip(image.arch, chip.arch);
+    if image.arch != crate::Arch::Pic16 {
+        anyhow::bail!(
+            "node '{id}': firmware architecture {:?} is incompatible with PIC16 chip '{}'",
+            image.arch,
+            chip.name
+        );
+    }
+    crate::cpu::pic16::check_pic16_entry(image.entry_point)
+        .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Pic16::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))
