@@ -283,6 +283,7 @@ macro_rules! snapshot_impl {
     };
 }
 
+pub mod aes;
 pub mod flash_ctrl;
 pub mod rfcore;
 pub mod sleep_timer;

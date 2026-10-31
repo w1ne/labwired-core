@@ -31,6 +31,10 @@
 #   (crates/core/src/peripherals/cc2538/sleep_timer.rs).
 # - `cc2538_flash_ctrl`         — FLASH_CTRL page erase / word write, CCA
 #   lock bits, DIECFG0-2 (crates/core/src/peripherals/cc2538/flash_ctrl.rs).
+# - `cc2538_aes`                — AES/SHA-256 cryptoprocessor (SWRU319C §22.2,
+#   Table 22-103): two-channel DMA, key store, AES ECB/CBC/CTR/CBC-MAC/CCM/
+#   GCM at 128/192/256 bits, SHA-256, IRQ 143
+#   (crates/core/src/peripherals/cc2538/aes.rs).
 #
 # Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
 # GPIO_DATA readback and the five keys' reset pull-up levels — plus stock
@@ -54,7 +58,7 @@
 #   and sleep-timer capture.
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
-# - AES/PKA crypto, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
+# - PKA, SSI0/1, I2C, GPTimer0-3, USB, uDMA,
 #   SoC ADC/analog: declared stubs.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
@@ -262,10 +266,13 @@ peripherals:
     type: "stub"
     base_address: 0x40089000
     size: "4KB"
+  # AES/SHA-256 cryptoprocessor (Table 4-1: 0x4008_B000-0x4008_BFFF).
+  # AES interrupt, IRQ 143 in the regular map (Table 5-2).
   - id: "aes"
-    type: "stub"
+    type: "cc2538_aes"
     base_address: 0x4008B000
     size: "4KB"
+    irq: 143
   - id: "udma"
     type: "stub"
     base_address: 0x400FF000

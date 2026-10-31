@@ -42,3 +42,18 @@ done
   --max-steps 20000000 \
   --out-dir "$OUT/cfs-unsupported-audit" \
   --fail-on-unsupported
+# AES/SHA-256 cryptoprocessor: the unmodified Contiki-NG v4.9
+# cc2538-common/crypto suite. cbc, cbc-mac, ctr and ccm are the four cases of
+# Renode's cc2538_cryptoprocessor.robot; ecb, gcm and sha256 go beyond it.
+for t in ecb cbc ctr cbc-mac gcm ccm sha256; do
+  cargo run -q -p labwired-cli -- test \
+    --script "examples/cc2538dk/crypto-$t.yaml" \
+    --output-dir "$OUT/crypto-$t" \
+    --no-uart-stdout
+done
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/cc2538dk-contiki-crypto-ccm.elf \
+  --system configs/systems/cc2538dk.yaml \
+  --max-steps 30000000 \
+  --out-dir "$OUT/crypto-unsupported-audit" \
+  --fail-on-unsupported
