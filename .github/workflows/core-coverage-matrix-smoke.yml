@@ -428,11 +428,18 @@ jobs:
             system: examples/arty-litex-vexriscv/system.yaml
           # Vega board (RI5CY): LPUART0 console + a real multiply; SCG/PCC,
           # INTMUX and the low-power timers stay declared stubs.
+          #
+          # entry_zero_ok: the Vega SoC maps 1 MiB of flash at 0x0, so this
+          # firmware genuinely boots from 0x0 - its memory.x says so and so does
+          # examples/vegaboard-ri5cy/io-smoke.yaml ("boots from flash at 0x0").
+          # The generic guard exists to catch a linker script that failed to
+          # apply; here 0x0 is correct, so the cell declares it.
           - id: vegaboard-ri5cy-smoke
             target: riscv32imc-unknown-none-elf
             crate: firmware-vegaboard-ri5cy-smoke
             profile: release
             profile_dir: release
+            entry_zero_ok: true
             script: examples/vegaboard-ri5cy/io-smoke.yaml
             system: examples/vegaboard-ri5cy/system.yaml
           # One shared ARMv6-M spin image boots against every exact STM32
@@ -519,7 +526,7 @@ jobs:
       # A firmware that linked with entry 0x0 boots nowhere and prints nothing,
       # so the smoke below fails with an empty UART and no clue why. Say it here.
       - name: Firmware must not have linked with entry 0x0
-        if: matrix.crate != ''
+        if: matrix.crate != '' && matrix.entry_zero_ok != true
         run: |
           set -euo pipefail
           elf="target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}"
@@ -528,9 +535,23 @@ jobs:
             echo "::error::$elf linked with entry 0x0 — its linker script was not applied."
             echo "::error::Cargo reads .cargo/config.toml from the working directory, not the package."
             echo "::error::Set build_dir on this matrix cell to the crate's own directory."
+            echo "::error::If this board really boots at 0x0 (its memory map puts FLASH there), set entry_zero_ok: true on the cell instead."
             exit 1
           fi
           printf 'entry point 0x%08x\n' "$entry"
+
+      - name: Firmware boots at 0x0 by design (declared)
+        if: matrix.crate != '' && matrix.entry_zero_ok == true
+        run: |
+          set -euo pipefail
+          elf="target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}"
+          entry=$(python3 -c "import struct,sys;print(struct.unpack_from('<I',open(sys.argv[1],'rb').read(),0x18)[0])" "$elf")
+          if [ "$entry" -ne 0 ]; then
+            echo "::error::$elf declares entry_zero_ok but entry is 0x$(printf '%08x' "$entry")."
+            echo "::error::Its memory map moved, or the linker script now applies - drop entry_zero_ok from this cell."
+            exit 1
+          fi
+          printf 'entry point 0x00000000 (declared)\n'
 
       - name: Run matrix smoke
         if: matrix.id != 'stm32-exact-catalog'
