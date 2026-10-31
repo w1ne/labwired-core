@@ -135,19 +135,34 @@ def row(part: str) -> str:
     return (f'    dev("{part}", {flash_words}, [{m}], &[{a}]),')
 
 
-def committed_rows() -> list[str]:
-    return re.findall(r'^    dev\("pic\w+".*$', PIC16_RS.read_text(), re.M)
+def committed_rows() -> dict[str, tuple]:
+    """The `dev(...)` rows in `PIC16_DEVICES`, as (flash words, port masks,
+    aliases), whatever line breaks rustfmt gave them."""
+    src = PIC16_RS.read_text()
+    table = re.search(r"const PIC16_DEVICES: &\[Pic16Device\] = &\[(.*?)\n\];", src, re.S)
+    if not table:
+        sys.exit("error: PIC16_DEVICES not found in pic16.rs")
+    rows = {}
+    for m in re.finditer(
+            r'\bdev\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\],?\s*\)',
+            table[1], re.S):
+        masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[3])]
+        aliases = [tuple(int(x, 16) for x in t)
+                   for t in re.findall(r"\(0x(\w+),\s*0x(\w+),\s*0x(\w+)\)", m[4])]
+        rows[m[1]] = (int(m[2]), masks, aliases)
+    return rows
 
 
 def main() -> int:
     if "--check-table" in sys.argv:
         rows = committed_rows()
+        if not rows:
+            sys.exit("error: no dev(...) rows parsed from PIC16_DEVICES")
         bad = 0
-        for committed in rows:
-            part = re.match(r'    dev\("(\w+)"', committed)[1]
+        for part, committed in rows.items():
             mism = check(part)
-            want = row(part)
-            if mism or want != committed:
+            want = geometry(part)
+            if mism or tuple(want) != committed:
                 bad += 1
                 print(f"{part}: {mism or ''}\n  committed {committed}\n  derived   {want}")
         print(f"{len(rows)} rows, {bad} mismatches")
