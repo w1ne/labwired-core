@@ -180,6 +180,9 @@ pub struct Pic16SfrMap {
     pub pie: &'static [u16],
     pub tmr0: u16,
     pub option_reg: u16,
+    /// The part has the (E)USART below. Without one, the model leaves
+    /// those addresses (and PIR1.TXIF) as plain registers.
+    pub usart: bool,
     pub rcsta: u16,
     pub txreg: u16,
     pub txsta: u16,
@@ -200,12 +203,22 @@ pub const PIC16_CLASSIC_MAP: Pic16SfrMap = Pic16SfrMap {
     pie: &[SFR_PIE1, SFR_PIE2],
     tmr0: SFR_TMR0,
     option_reg: SFR_OPTION_REG,
+    usart: true,
     rcsta: SFR_RCSTA,
     txreg: SFR_TXREG,
     txsta: SFR_TXSTA,
     spbrg: SFR_SPBRG,
     pcon: None,
     osc_ready: None,
+};
+
+/// The classic layout on parts without a USART (PIC16F610/616/630/676/684,
+/// PIC16F631/677/685, PIC16F716, PIC16F785, PIC16F818/819): their own
+/// registers (VRCON, CMCON, SRCON, WDTCON, PWM1CON, ECCPAS, REFCON) or
+/// nothing sit at 0x18/0x19/0x98/0x99, per their SDCC 4.4.0 headers.
+pub const PIC16_CLASSIC_NO_USART_MAP: Pic16SfrMap = Pic16SfrMap {
+    usart: false,
+    ..PIC16_CLASSIC_MAP
 };
 
 /// The PIC16F182x/F193x enhanced mid-range layout (DS40001440E Table 3-8):
@@ -220,6 +233,7 @@ pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
     pie: &[0x091, 0x092, 0x093, 0x094],
     tmr0: 0x015,
     option_reg: 0x095,
+    usart: true,
     rcsta: 0x19D,
     txreg: 0x19A,
     txsta: 0x19E,
@@ -292,6 +306,20 @@ const fn dev_own(
     }
 }
 
+/// A classic row on another classic map ([`PIC16_CLASSIC_NO_USART_MAP`]).
+const fn dev_map(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+    map: Pic16SfrMap,
+) -> Pic16Device {
+    Pic16Device {
+        map,
+        ..dev(name, flash_words, port_masks, aliases)
+    }
+}
+
 /// An enhanced mid-range row.
 const fn edev(
     name: &'static str,
@@ -328,9 +356,16 @@ const fn edev(
 /// the address to be free in their header. The OTP/EPROM PIC16C63A/73B/74B
 /// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
 ///
-/// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F6xx/81x/84A/716 and friends); enhanced parts without an EUSART (PIC16F1503/1507/1613/1703/1707),
-/// with PIR1 at 0x010 (PIC16F161x), with comparator SFRs at LATD/LATE
+/// Classic parts with no USART at all (`dev_map` rows on
+/// [`PIC16_CLASSIC_NO_USART_MAP`]: PIC16F610/616/630/676/684, HV616,
+/// 631/677/685, 716, 785, 818/819) keep 0x18/0x19/0x98/0x99 and PIR1 bit 4 as
+/// plain registers; the 14-pin ones have no PORTB, so 0x06 reads 0 like a
+/// missing PORTC. The PIC16F630/676 count the factory OSCCAL word (0x3FF);
+/// its `retlw` is not preloaded.
+///
+/// Left out: classic parts with a USART elsewhere (PIC16F688) or without
+/// PIR1/PIE1 (PIC16F84A); enhanced parts without an EUSART
+/// (PIC16F1503/1507/1613/1703/1707), with PIR1 at 0x010 (PIC16F161x), with comparator SFRs at LATD/LATE
 /// (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
 /// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
 /// entry for them, so no lkr cross-check or SDCC firmware build).
@@ -765,6 +800,124 @@ const PIC16_DEVICES: &[Pic16Device] = &[
     // Enhanced mid-range (32 banks). Every row passes
     // `check_sfr_map.py --enhanced` against PIC16E_F182X_MAP (OSCSTAT ready
     // mask aside); flash words from SDCC's pic14devices.txt.
+    dev_map(
+        "pic16f610",
+        1024,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f616",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16hv616",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f630",
+        1024,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0A0, 0x0DF, 0x020), (0x0A0, 0x0DF, 0x020)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f631",
+        1024,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f676",
+        1024,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0A0, 0x0DF, 0x020), (0x0A0, 0x0DF, 0x020)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f677",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f684",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f685",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f716",
+        2048,
+        [0x1F, 0xFF, 0x00, 0x00, 0x00],
+        &[(0x0F0, 0x0FF, 0x070)],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f785",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f818",
+        1024,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0C0, 0x0FF, 0x040),
+            (0x120, 0x13F, 0x020),
+            (0x140, 0x17F, 0x040),
+            (0x1A0, 0x1BF, 0x020),
+            (0x1C0, 0x1FF, 0x040),
+        ],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
+    dev_map(
+        "pic16f819",
+        2048,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1EF, 0x020),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+        PIC16_CLASSIC_NO_USART_MAP,
+    ),
     edev(
         "pic16f1454",
         8192,
@@ -1489,9 +1642,11 @@ impl Pic16 {
             self.data[usize::from(SFR_TRISA + 4)] = 0x07;
             self.data[usize::from(SFR_ADCON1)] = 0;
         }
-        self.data[usize::from(map.txsta)] = TXSTA_TRMT;
-        self.data[usize::from(map.rcsta)] = 0;
-        self.data[usize::from(map.spbrg)] = 0;
+        if map.usart {
+            self.data[usize::from(map.txsta)] = TXSTA_TRMT;
+            self.data[usize::from(map.rcsta)] = 0;
+            self.data[usize::from(map.spbrg)] = 0;
+        }
     }
 
     /// Load 14-bit instruction words from the reset vector (test fixtures).
@@ -1747,7 +1902,7 @@ impl Pic16 {
             SFR_PCL => self.pc as u8,
             // TXIF is read-only and set while TXREG is empty; a byte leaves
             // the instant it is written here, so it follows TXEN.
-            a if a == map.pir[0] => {
+            a if map.usart && a == map.pir[0] => {
                 let pir1 = self.data[usize::from(a)] & !PIR1_TXIF;
                 if self.data[usize::from(map.txsta)] & TXSTA_TXEN != 0 {
                     pir1 | PIR1_TXIF
@@ -1814,15 +1969,15 @@ impl Pic16 {
                     (old & !STATUS_WRITABLE) | (value & STATUS_WRITABLE);
             }
             SFR_PCLATH => self.data[usize::from(SFR_PCLATH)] = value & self.pclath_mask(),
-            a if a == map.pir[0] => self.data[usize::from(a)] = value & !PIR1_TXIF,
+            a if map.usart && a == map.pir[0] => self.data[usize::from(a)] = value & !PIR1_TXIF,
             // A TMR0 write also clears the prescaler count.
             a if a == map.tmr0 => {
                 self.data[usize::from(a)] = value;
                 self.tmr0_prescale = 0;
             }
             // TRMT is read-only and stays set.
-            a if a == map.txsta => self.data[usize::from(a)] = value | TXSTA_TRMT,
-            a if a == map.txreg => {
+            a if map.usart && a == map.txsta => self.data[usize::from(a)] = value | TXSTA_TRMT,
+            a if map.usart && a == map.txreg => {
                 self.data[usize::from(a)] = value;
                 let txsta = self.data[usize::from(map.txsta)];
                 let rcsta = self.data[usize::from(map.rcsta)];
@@ -2530,6 +2685,12 @@ impl Cpu for Pic16 {
         Ok(())
     }
 
+    /// The banked data address (0x000-0x1FF classic, 0x000-0xFFF enhanced),
+    /// as [`Pic16::read_data`] sees it: SFRs, ports and GPR.
+    fn peek_data(&self, addr: u64) -> Option<u8> {
+        (addr < self.data.len() as u64).then(|| self.read_data(addr as u16))
+    }
+
     fn step(
         &mut self,
         bus: &mut dyn Bus,
@@ -3127,6 +3288,56 @@ mod tests {
         cpu.write_data(0x87, 0x00);
         cpu.write_data(0x07, 0xFF);
         assert_eq!(cpu.read_data(0x07), 0xFF);
+    }
+
+    #[test]
+    fn parts_without_a_usart_keep_its_addresses_as_registers() {
+        // PIC16F630 (DS40039F Table 2-1): CMCON at 0x19, VRCON at 0x99,
+        // 0x18/0x98 unimplemented, PIR1 bit 3 CMIF (bit 4 unimplemented);
+        // no PORTB (0x06 unimplemented).
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut cpu = Pic16::for_chip_name("pic16f630");
+        assert!(!cpu.sfr_map().usart);
+        assert_eq!(cpu.flash_words(), 1024, "incl. the OSCCAL word at 0x3FF");
+        cpu.set_serial_sink(sink.clone());
+        // What would be TXSTA.TXEN and RCSTA.SPEN on the 877A, then CMCON.
+        cpu.write_data(0x98, 0x20);
+        cpu.write_data(0x18, 0x80);
+        cpu.write_data(0x19, 0x07); // CMCON: comparators off
+        assert!(sink.lock().unwrap().is_empty(), "no USART, no TX");
+        assert_eq!(cpu.read_data(0x19), 0x07, "CMCON reads back");
+        assert_eq!(cpu.read_data(0x98), 0x20, "no TRMT forced in");
+        cpu.write_data(0x0C, 0x08);
+        assert_eq!(cpu.read_data(0x0C), 0x08, "PIR1.CMIF, no TXIF forced in");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0x00, "no PORTB");
+        // Reset leaves VRCON (877A SPBRG) alone.
+        cpu.write_data(0x99, 0xA5);
+        cpu.reset_core();
+        assert_eq!(cpu.read_data(0x99), 0xA5, "VRCON");
+    }
+
+    #[test]
+    fn peek_data_reads_the_banked_data_space() {
+        let mut cpu = Pic16::for_chip_name("pic16f684");
+        cpu.write_data(0x07, 0x00);
+        cpu.write_data(0x87, 0x00); // TRISC: outputs
+        cpu.write_data(0x07, 0x15);
+        cpu.write_data(0x20, 0xA5);
+        cpu.write_data(0x21, 0x5A);
+        assert_eq!(cpu.peek_data(0x07), Some(0x15), "PORTC pins");
+        assert_eq!(cpu.peek_data(0x20), Some(0xA5));
+        // 0xF0-0xFF is the 0x70 common block on the 684.
+        cpu.write_data(0x70, 0x3C);
+        assert_eq!(cpu.peek_data(0xF0), Some(0x3C));
+        assert_eq!(cpu.peek_data(0x1FF), cpu.peek_data(0x7F));
+        assert_eq!(cpu.peek_data(0x200), None, "past the classic data space");
+        let mut machine = crate::Machine::new(cpu, crate::bus::SystemBus::new());
+        assert_eq!(machine.read_value(0x20, 2).unwrap(), 0x5AA5);
+        assert!(machine.read_value(0x1FF, 2).is_err(), "straddles the end");
+        machine.cpu.write_data(0x7F, 0x11);
+        assert_eq!(machine.read_value(0x7F, 1).unwrap(), 0x11);
     }
 
     #[test]

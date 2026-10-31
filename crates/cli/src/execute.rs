@@ -1410,17 +1410,9 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 // the historical bit-width form. Defaults to a 32-bit (u32) word.
                 let size = a.memory_value.size.unwrap_or(32);
                 let result = match size {
-                    1 | 8 => ctx
-                        .machine
-                        .bus
-                        .read_u8(a.memory_value.address)
-                        .map(|v| v as u32),
-                    2 | 16 => ctx
-                        .machine
-                        .bus
-                        .read_u16(a.memory_value.address)
-                        .map(|v| v as u32),
-                    4 | 32 => ctx.machine.bus.read_u32(a.memory_value.address),
+                    1 | 8 => ctx.machine.read_value(a.memory_value.address, 1),
+                    2 | 16 => ctx.machine.read_value(a.memory_value.address, 2),
+                    4 | 32 => ctx.machine.read_value(a.memory_value.address, 4),
                     _ => {
                         error!(
                             "Unsupported memory assertion size: {} — use 1/2/4 (bytes) or 8/16/32 (bits)",

@@ -1642,19 +1642,13 @@ fn assertion_currently_passes(
         // it is not a runtime condition the early-stop logic can wait on.
         TestAssertion::FirmwareExit(_) => true,
         TestAssertion::MemoryValue(a) => {
-            let size = a.memory_value.size.unwrap_or(32);
-            let result = match size {
-                1 | 8 => machine
-                    .bus
-                    .read_u8(a.memory_value.address)
-                    .map(|v| v as u32),
-                2 | 16 => machine
-                    .bus
-                    .read_u16(a.memory_value.address)
-                    .map(|v| v as u32),
-                4 | 32 => machine.bus.read_u32(a.memory_value.address),
+            let width = match a.memory_value.size.unwrap_or(32) {
+                1 | 8 => 1,
+                2 | 16 => 2,
+                4 | 32 => 4,
                 _ => return false,
             };
+            let result = machine.read_value(a.memory_value.address, width);
             result.is_ok_and(|val| {
                 let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
                 let expected = a.memory_value.expected_value as u32;

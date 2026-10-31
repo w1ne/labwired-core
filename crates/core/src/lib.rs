@@ -940,6 +940,33 @@ impl<C: Cpu> Machine<C> {
     /// "has this pad toggled N times" evidence a stop condition can consult
     /// mid-run (the CLI's `gpio_edges` assertion).
     #[inline]
+    /// A `width`-byte (1, 2 or 4) little-endian value as a `memory_value`
+    /// check reads it: from the CPU's own data space when the core has one
+    /// at `addr` ([`Cpu::peek_data`], e.g. PIC16 banked data addresses),
+    /// otherwise from the bus.
+    pub fn read_value(&self, addr: u64, width: u8) -> SimResult<u32> {
+        if let Some(first) = self.cpu.peek_data(addr) {
+            let mut value = u32::from(first);
+            for offset in 1..u64::from(width) {
+                let byte = self.cpu.peek_data(addr + offset).ok_or_else(|| {
+                    SimulationError::Other(format!(
+                        "{width}-byte read at {addr:#x} leaves the CPU data space"
+                    ))
+                })?;
+                value |= u32::from(byte) << (8 * offset);
+            }
+            return Ok(value);
+        }
+        match width {
+            1 => self.bus.read_u8(addr).map(u32::from),
+            2 => self.bus.read_u16(addr).map(u32::from),
+            4 => self.bus.read_u32(addr),
+            _ => Err(SimulationError::Other(format!(
+                "unsupported read width {width}; use 1, 2 or 4 bytes"
+            ))),
+        }
+    }
+
     pub fn logic_channel_edge_counts(&self) -> &[u64] {
         self.logic_capture.channel_edge_counts()
     }

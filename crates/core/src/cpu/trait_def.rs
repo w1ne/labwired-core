@@ -508,6 +508,15 @@ pub trait Cpu: Send {
         false
     }
 
+    /// One byte of a data space the core keeps itself, read without side
+    /// effects: a Harvard core whose SFRs and data RAM are not on the bus
+    /// (PIC16: the banked data address). `None` (the default): the address
+    /// is not in such a space, so [`crate::Machine::read_value`] reads the
+    /// bus.
+    fn peek_data(&self, _addr: u64) -> Option<u8> {
+        None
+    }
+
     /// Walk SPI/I²C devices this CPU holds after a `take_*` (AVR TWI slaves,
     /// or SPI devices attached directly to the CPU). Default: nothing.
     ///
@@ -695,6 +704,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn supports_semihosting(&self) -> bool {
         (**self).supports_semihosting()
+    }
+    fn peek_data(&self, addr: u64) -> Option<u8> {
+        (**self).peek_data(addr)
     }
 
     fn for_each_attached_device(

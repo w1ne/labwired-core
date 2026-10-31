@@ -384,6 +384,8 @@ pub struct PeripheralLogAssertion {
 
 #[derive(Debug, Clone)]
 pub struct MemoryValueDetails {
+    /// A bus address, or on a core whose data space lives in the CPU (PIC16)
+    /// an address in that space (the banked data address: SFRs, ports, GPR).
     pub address: u64,
     pub expected_value: u64,
     pub mask: Option<u64>,

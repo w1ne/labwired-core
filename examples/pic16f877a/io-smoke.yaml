@@ -6,7 +6,8 @@
 #
 # L1 IO smoke: boot the SDCC 4.4.0 C firmware, receive the USART banner,
 # the RB0 LED latch read back after setting it, and the result of three
-# RB0 toggles. The program then spins, so the run ends at max_steps.
+# RB0 toggles, then the SFRs the firmware set. The program then spins, so
+# the run ends at max_steps.
 schema_version: "1.0"
 inputs:
   firmware: "./firmware/pic16f877a-sdcc-uart-smoke.elf"
@@ -18,4 +19,11 @@ assertions:
       - "PIC16F877A OK\r\n"
       - "LED=1\r\n"
       - "TOGGLE OK\r\n"
+  # The data space through memory_value (PIC16 banked addresses): SPBRG = 25,
+  # TXSTA = TXEN | BRGH with TRMT read-only set, RB0 low after three
+  # toggles of a high latch, TRISB0 an output.
+  - memory_value: {address: 0x99, size: 1, expected_value: 25}
+  - memory_value: {address: 0x98, size: 1, expected_value: 0x26}
+  - memory_value: {address: 0x06, size: 1, expected_value: 0x00, mask: 0x01}
+  - memory_value: {address: 0x86, size: 1, expected_value: 0xFE, mask: 0x01}
   - expected_stop_reason: max_steps

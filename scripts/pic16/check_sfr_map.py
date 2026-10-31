@@ -57,22 +57,27 @@ MIRRORS = (0x101, 0x106, 0x181, 0x186)
 
 SFRS = {
     "INDF": 0x00, "TMR0": 0x01, "PCL": 0x02, "STATUS": 0x03, "FSR": 0x04,
-    "PORTA": 0x05, "PORTB": 0x06,
+    "PORTA": 0x05,
     "PCLATH": 0x0A, "INTCON": 0x0B, "PIR1": 0x0C,
-    "RCSTA": 0x18, "TXREG": 0x19,
-    "OPTION_REG": 0x81, "TRISA": 0x85, "TRISB": 0x86,
-    "PIE1": 0x8C, "TXSTA": 0x98, "SPBRG": 0x99,
+    "OPTION_REG": 0x81, "TRISA": 0x85,
+    "PIE1": 0x8C,
 }
+# The USART (`PIC16_CLASSIC_MAP`). A part with none of these registers gets
+# `PIC16_CLASSIC_NO_USART_MAP`, which leaves 0x18/0x19/0x98/0x99 and PIR1.TXIF
+# as plain registers; a part with any of them must have all four here.
+USART_SFRS = {"RCSTA": 0x18, "TXREG": 0x19, "TXSTA": 0x98, "SPBRG": 0x99}
+USART_BITS = ("TXIF", "TXEN", "TRMT", "SPEN")
 # Optional SFRs: if the part has them they must be at these addresses.
 OPTIONAL_SFRS = {
     "PORTD": 0x08, "PORTE": 0x09, "TRISD": 0x88, "TRISE": 0x89,
     "PIR2": 0x0D, "PIE2": 0x8D,
 }
-# Optional ports the model always decodes (PORTC reads latch & !TRISC &
-# mask). A part without one (PIC16F627A/628A/648A, PIC16F87/88) gets a zero
-# port mask, so the port reads 0 and ignores writes, as on silicon; the
-# address must then be free in the header.
-OPTIONAL_FREE_SFRS = {"PORTC": 0x07, "TRISC": 0x87}
+# Optional ports the model always decodes (PORTx reads latch & !TRISx &
+# mask). A part without one (no PORTC: PIC16F627A/628A/648A, PIC16F87/88;
+# no PORTB: the 14-pin PIC16F610/616/630/676/684) gets a zero port mask, so
+# the port reads 0 and ignores writes, as on silicon; the address must then
+# be free in the header.
+OPTIONAL_FREE_SFRS = {"PORTB": 0x06, "PORTC": 0x07, "TRISB": 0x86, "TRISC": 0x87}
 # Bit masks the model decodes.
 BITS = {
     "C": 0x01, "DC": 0x02, "Z": 0x04, "NOT_PD": 0x08, "NOT_TO": 0x10,
@@ -80,6 +85,12 @@ BITS = {
     "GIE": 0x80, "PEIE": 0x40,
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
+# Classic map names in pic16.rs, by whether the part has the USART.
+MAPS = {True: "PIC16_CLASSIC_MAP", False: "PIC16_CLASSIC_NO_USART_MAP"}
+
+
+def has_usart(addrs: dict[str, int]) -> bool:
+    return any(name in addrs for name in USART_SFRS)
 
 
 # Enhanced mid-range (PIC16F1xxx, 32 banks): the PIC16F182x/F193x layout
@@ -158,7 +169,8 @@ def check(part: str) -> list[str]:
     bad = []
     if "BSR" in addrs:
         bad.append("enhanced mid-range (BSR)")
-    for name, want in SFRS.items():
+    usart = has_usart(addrs)
+    for name, want in {**SFRS, **(USART_SFRS if usart else {})}.items():
         if addrs.get(name) != want:
             bad.append(f"{name} at {addrs.get(name)!r}, model {want:#x}")
     for name, want in OPTIONAL_SFRS.items():
@@ -173,6 +185,8 @@ def check(part: str) -> list[str]:
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
     for name, want in BITS.items():
+        if not usart and name in USART_BITS:
+            continue
         found = re.search(rf"#define\s+_{name}\s+0x([0-9A-Fa-f]+)", h)
         if not found or int(found[1], 16) != want:
             bad.append(f"bit {name} {found[1] if found else None}, model {want:#x}")
@@ -253,10 +267,13 @@ def check_enhanced(part: str) -> list[str]:
 
 
 def geometry(part: str):
-    """(flash words, port masks, aliases) from the lkr and the header."""
+    """(flash words, port masks, aliases, own SFRs, map name) from the lkr
+    and the header. Flash includes the protected `oscval` page: on the
+    PIC16F630/676 the last word (0x3FF) holds the factory OSCCAL `retlw`,
+    and the datasheet counts it in the 1K words."""
     lkr = (lkr_dir() / f"{part[3:]}_g.lkr").read_text()
     pages = re.findall(
-        r"CODEPAGE\s+NAME=page\d*\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
+        r"CODEPAGE\s+NAME=(?:page\d*|oscval)\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
     flash_words = max(int(end, 16) for _, end in pages) + 1
     groups: dict[str, list[tuple[int, int]]] = {}
     for name, start, end in re.findall(
@@ -278,13 +295,19 @@ def geometry(part: str):
     defined = {int(a, 16)
                for a in re.findall(r"#define\s+\w+_ADDR\s+0x([0-9A-Fa-f]+)", h)}
     own = sorted(a for a in MIRRORS if a in defined)
-    return flash_words, masks, sorted(aliases), own
+    addrs = {m[0]: int(m[1], 16)
+             for m in re.findall(r"#define\s+(\w+)_ADDR\s+0x([0-9A-Fa-f]+)", h)}
+    return flash_words, masks, sorted(aliases), own, MAPS[has_usart(addrs)]
 
 
 def row(part: str) -> str:
-    flash_words, masks, aliases, own = geometry(part)
+    flash_words, masks, aliases, own, map_name = geometry(part)
     m = ", ".join(f"0x{x:02X}" for x in masks)
     a = ", ".join(f"(0x{s:03X}, 0x{e:03X}, 0x{t:03X})" for s, e, t in aliases)
+    if map_name != MAPS[True]:
+        if own:
+            sys.exit(f"error: {part}: no row form for own SFRs on {map_name}")
+        return f'    dev_map("{part}", {flash_words}, [{m}], &[{a}], {map_name}),'
     if own:
         o = ", ".join(f"0x{x:03X}" for x in own)
         return f'    dev_own("{part}", {flash_words}, [{m}], &[{a}], &[{o}]),'
@@ -359,14 +382,14 @@ def committed_rows() -> dict[str, tuple]:
         sys.exit("error: PIC16_DEVICES not found in pic16.rs")
     rows = {}
     for m in re.finditer(
-            r'\bdev(_own)?\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
-            r'(?:,\s*&\[([^\]]*)\])?,?\s*\)',
+            r'\bdev(_own|_map)?\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
+            r'(?:,\s*&\[([^\]]*)\])?(?:,\s*(PIC16_\w+))?,?\s*\)',
             table[1], re.S):
         masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[4])]
         aliases = [tuple(int(x, 16) for x in t)
                    for t in re.findall(r"\(0x(\w+),\s*0x(\w+),\s*0x(\w+)\)", m[5])]
         own = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[6] or "")]
-        rows[m[2]] = (int(m[3]), masks, aliases, own)
+        rows[m[2]] = (int(m[3]), masks, aliases, own, m[7] or MAPS[True])
     return rows
 
 
