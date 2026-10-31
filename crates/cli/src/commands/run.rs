@@ -1815,7 +1815,8 @@ pub(crate) fn run_interactive(
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
-    // Chip name for per-device CPU geometry (PIC18 flash size / Access Bank).
+    // Chip name for per-device CPU geometry (PIC18 flash size / Access Bank,
+    // PIC16 flash size).
     let mut chip_name = String::new();
     let cpu_arch = if let Some(sys_path) = &system_path {
         match labwired_config::SystemManifest::from_file(sys_path) {
@@ -1880,13 +1881,17 @@ pub(crate) fn run_interactive(
 
     if program.arch != labwired_core::Arch::Unknown {
         // Map core::Arch to config::Arch for comparison
-        let prog_arch = match program.arch {
+        // EM_MCHP_PIC images read as PIC18 until the chip names PIC16.
+        let image_arch =
+            labwired_core::system::arch_policy::image_arch_for_chip(program.arch, cpu_arch);
+        let prog_arch = match image_arch {
             labwired_core::Arch::Arm => labwired_config::Arch::Arm,
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
             labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
             labwired_core::Arch::Avr => labwired_config::Arch::Avr,
             labwired_core::Arch::Pic24 => labwired_config::Arch::Pic24,
             labwired_core::Arch::Pic18 => labwired_config::Arch::Pic18,
+            labwired_core::Arch::Pic16 => labwired_config::Arch::Pic16,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1906,6 +1911,9 @@ pub(crate) fn run_interactive(
         labwired_config::Arch::Pic24 => run_interactive_pic24(cli, bus, program, metrics),
         labwired_config::Arch::Pic18 => {
             run_interactive_pic18(cli, bus, program, metrics, &chip_name)
+        }
+        labwired_config::Arch::Pic16 => {
+            run_interactive_pic16(cli, bus, program, metrics, &chip_name)
         }
         _ => {
             emit_error(
@@ -2612,6 +2620,59 @@ pub(crate) fn run_interactive_pic18(
     machine.add_observer(metrics.clone());
 
     info!("Starting Simulation (PIC18)...");
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+    let faulted = pic_run_faulted(&result.stop_reason);
+
+    if !cli.json {
+        if let Ok(bytes) = uart_sink.lock() {
+            if !bytes.is_empty() {
+                println!("UART: {}", String::from_utf8_lossy(&bytes));
+            }
+        }
+    }
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    pic_run_exit_code(faulted)
+}
+
+/// PIC16 classic mid-range interactive run. Same shape as PIC18: the USART
+/// is CPU-internal and its bytes are kept for the console.
+pub(crate) fn run_interactive_pic16(
+    cli: Cli,
+    bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+    chip_name: &str,
+) -> ExitCode {
+    let mut cpu = labwired_core::cpu::Pic16::for_chip_name(chip_name);
+    cpu.load_program_image(&program);
+    // The USART TX register is on the CPU; keep the bytes for the console.
+    let uart_sink: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    cpu.set_serial_sink(uart_sink.clone());
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.add_observer(metrics.clone());
+
+    info!("Starting Simulation (PIC16)...");
 
     let result = run_simulation_loop(&cli, &mut machine, &metrics);
     let faulted = pic_run_faulted(&result.stop_reason);

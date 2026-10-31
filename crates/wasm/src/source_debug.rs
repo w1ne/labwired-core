@@ -181,6 +181,8 @@ impl WasmSimulator {
             MachineFamily::Pic24 => 18,
             // PIC18's modelled register block (see loader/source_step).
             MachineFamily::Pic18 => 8,
+            // PIC16: W, STATUS, FSR, PCLATH, SP, PC.
+            MachineFamily::Pic16 => 6,
         };
         let cpu = focused_cpu(machine);
         let locals: Vec<Local> = debug
@@ -255,6 +257,7 @@ impl WasmSimulator {
             MachineFamily::Pic24 => 15,
             // SP is the hardware return-stack pointer.
             MachineFamily::Pic18 => 6,
+            MachineFamily::Pic16 => 4,
         }
     }
 

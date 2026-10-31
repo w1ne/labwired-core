@@ -157,8 +157,9 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 ///   family is the documented exception: the 04KA200/201 have 512 B of data
 ///   SRAM (DS30009937C Table 1-1 and the §4.2 stack example ending at 0x09FF)
 ///   and the 08KA/16KA parts have 1536 B (DS39927C Table 1-1). The PIC18F4520
-///   also has 1536 B (six 256 B GPR banks, DS39631E device table). A
-///   whole-KiB rule can express none of these.
+///   also has 1536 B (six 256 B GPR banks, DS39631E device table), and the
+///   PIC16F877A 368 B (DS39582B device table). A whole-KiB rule can express
+///   none of these.
 ///
 /// This is the backstop for the mistake with no unit attached: `size: 4000000`
 /// spelled as a bare byte count reaches the same wrong number by hand.
@@ -211,7 +212,7 @@ fn declared_memory_sizes_are_real_part_sizes() {
     );
 }
 
-/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA and PIC18 parts.
+/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA, PIC18 and PIC16 parts.
 /// Everywhere else a non-KiB-aligned RAM size is still a transcription error.
 const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f04ka200", 512),  // DS30009937C Table 1-1, §4.2
@@ -221,6 +222,7 @@ const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f16ka101", 1536), // DS39927C Table 1-1
     ("pic24f16ka102", 1536), // DS39927C Table 1-1
     ("pic18f4520", 1536),    // DS39631E: GPR banks 0-5
+    ("pic16f877a", 368),     // DS39582B: 96 + 80 + 96 + 96 B GPR, 0x70-0x7F shared
 ];
 
 fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {

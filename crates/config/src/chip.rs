@@ -25,6 +25,9 @@ pub enum Arch {
     /// PIC18 8-bit MCU family (16-bit instruction words, byte-addressed PC).
     #[serde(alias = "pic18f")]
     Pic18,
+    /// PIC16 classic mid-range 8-bit MCU (14-bit instruction words).
+    #[serde(alias = "pic16f")]
+    Pic16,
     Unknown,
 }
 

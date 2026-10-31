@@ -53,6 +53,7 @@ pub enum CpuSnapshot {
     Avr(AvrCpuSnapshot),
     Pic24(Box<Pic24CpuSnapshot>),
     Pic18(Box<Pic18CpuSnapshot>),
+    Pic16(Box<Pic16CpuSnapshot>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -364,6 +365,23 @@ pub struct Pic18CpuSnapshot {
     pub stk_full: bool,
     #[serde(default)]
     pub stk_unf: bool,
+    #[serde(default)]
+    pub asleep: bool,
+}
+
+/// PIC16 visible architectural state (word-addressed PC, W, the STATUS/FSR/
+/// PCLATH core registers and the eight-level return stack). Data memory is
+/// the core's private file store and is not part of the CPU snapshot.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic16CpuSnapshot {
+    pub wreg: u8,
+    pub status: u8,
+    pub fsr: u8,
+    pub pclath: u8,
+    pub pc: u32,
+    pub cycles: u64,
+    pub stkptr: u8,
+    pub stack: Vec<u32>,
     #[serde(default)]
     pub asleep: bool,
 }

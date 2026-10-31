@@ -2438,7 +2438,16 @@ pub(crate) fn run_test(
         }};
     }
 
-    let exit_code = match program.arch {
+    // EM_MCHP_PIC images read as PIC18 until the chip names PIC16.
+    let program_arch = resolved_system
+        .as_ref()
+        .and_then(|s| {
+            s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                .ok()
+        })
+        .map(|c| labwired_core::system::arch_policy::image_arch_for_chip(program.arch, c.arch))
+        .unwrap_or(program.arch);
+    let exit_code = match program_arch {
         labwired_core::Arch::Arm => {
             use labwired_core::system::arch_policy::MachineFamily;
             let family = match arm_test_family(resolved_system.as_ref(), plugins) {
@@ -2687,8 +2696,26 @@ pub(crate) fn run_test(
             let machine = labwired_core::Machine::new(cpu, bus);
             run_machine!(machine)
         }
+        labwired_core::Arch::Pic16 => {
+            // PIC16 is Harvard as well: word-addressed program memory sized
+            // from the chip, USART TX on the CPU. Reaching this arm means the
+            // chip resolved (that is what retargeted the image).
+            let pic16_chip_name = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .map(|c| c.name)
+                .unwrap_or_default();
+            let mut cpu = labwired_core::cpu::Pic16::for_chip_name(&pic16_chip_name);
+            cpu.load_program_image(&program);
+            cpu.set_serial_sink(uart_tx.clone());
+            let machine = labwired_core::Machine::new(cpu, bus);
+            run_machine!(machine)
+        }
         _ => {
-            let msg = format!("Unsupported architecture: {:?}", program.arch);
+            let msg = format!("Unsupported architecture: {:?}", program_arch);
             error!("{}", msg);
             write_config_error_outputs(
                 &args,

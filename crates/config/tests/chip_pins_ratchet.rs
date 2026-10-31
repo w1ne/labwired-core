@@ -49,6 +49,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // PIC18F4520 L1: ports are CPU-internal SFRs and no package pad model
     // or `pins:` map exists yet, so nothing is parsed as a pad fact.
     "pic18f4520",
+    // PIC16F877A L1: same as PIC18F4520, ports are CPU-internal SFRs and there
+    // is no `pins:` map yet.
+    "pic16f877a",
     // EFR32 pin labels ARE the parse: Silicon Labs names GPIO pins P<bank><bit>
     // (PB2 = port B, bit 2) straight through the datasheet and UG594, so the
     // label-letter parse is the datasheet truth here, not a guess. There is no

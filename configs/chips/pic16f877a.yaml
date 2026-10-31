@@ -1,0 +1,37 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Microchip PIC16F877A (DS39582B): 8-bit PIC16 classic mid-range core, 8K x
+# 14-bit words of flash program memory, 368 B SRAM, 256 B data EEPROM,
+# 8-level hardware return stack, 20 MHz max Fosc (5 MIPS).
+#
+# L1 slice: boot + USART TX + PORTB latch. The USART, port and interrupt
+# SFRs are CPU-internal in the PIC16 model (crates/core/src/cpu/pic16.rs),
+# so no bus-side peripherals are declared. Not modelled: oscillator/CONFIG
+# decoding, TMR0/1/2, CCP, MSSP, ADC (PORTA/PORTE read as digital),
+# comparators, EEPROM, WDT, USART RX and baud timing, PSP and external pin
+# drive.
+#
+# - program memory: word-addressed (13-bit PC), reset vector 0x0000,
+#   interrupt vector 0x0004, four 2K-word pages via PCLATH<4:3>; the HEX/ELF
+#   image is byte-addressed (two bytes per word), so the 8K words span
+#   16 KB of image addresses; configuration word at word 0x2007 (byte 0x400E)
+# - data memory: four 128-byte banks (STATUS.RP1:RP0, IRP:FSR for INDF);
+#   GPR 0x20-0x7F, 0xA0-0xEF, 0x110-0x16F, 0x190-0x1EF, with 0x70-0x7F
+#   shared by every bank
+name: pic16f877a
+arch: pic16
+core: pic16
+# Instruction rate at the 20 MHz Fosc maximum (Fcy = Fosc / 4). Boards
+# override this via the system manifest.
+cpu_hz: 5000000
+flash:
+  base: 0x000000
+  size: "16KB"
+ram:
+  base: 0x000000
+  size: "368"
+peripherals: []
