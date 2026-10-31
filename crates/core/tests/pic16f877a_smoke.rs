@@ -54,7 +54,7 @@ fn boot(steps: usize) -> (Pic16, Vec<u8>) {
 
     let sink = Arc::new(Mutex::new(Vec::new()));
     let mut cpu = Pic16::for_chip_name(&chip.name);
-    cpu.load_program_image(&image);
+    cpu.load_program_image(&image).expect("image fits the part");
     cpu.set_serial_sink(sink.clone());
     cpu.reset(&mut bus).expect("reset");
 

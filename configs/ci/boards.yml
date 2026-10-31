@@ -58,6 +58,13 @@ boards:
     kind: sim-validate
     path: examples/pic16f877a
     gate: true
+  # PIC16F1829 L1 (first enhanced mid-range part): committed SDCC 4.4.0
+  # pic14 firmware (HEX->ELF wrap checked), the io-smoke with EUSART, LATA,
+  # software INT and TMR0 interrupts, and a clean 200k-step run.
+  - id: pic16f1829
+    kind: sim-validate
+    path: examples/pic16f1829
+    gate: true
   # Builds the real target source with avr-gcc and runs its committed ELF.
   - id: atmega1281-io
     kind: sim-validate

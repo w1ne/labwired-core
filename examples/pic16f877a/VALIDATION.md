@@ -74,18 +74,21 @@ bash examples/pic16f877a/ci/test.sh
 
 Not validated, or not modelled, for this part:
 - CONFIG decoding: the oscillator and `cpu_hz` come from the manifest.
-- TMR0/TMR1/TMR2, CCP1/2 and MSSP (SPI/I2C).
+- TMR1/TMR2, CCP1/2 and MSSP (SPI/I2C). TMR0 timer mode is modelled
+  (Fosc/4 through the prescaler; see `examples/pic16f1829/VALIDATION.md`)
+  but this smoke leaves it off.
 - ADC, comparators, voltage reference and data EEPROM / flash self-write.
 - WDT, USART RX and baud timing, PSP.
 - PORTB interrupt-on-change and external pin drive.
 - Unimplemented-register read-as-0 behaviour: unused file addresses are
   plain storage.
-- The enhanced mid-range (PIC16F1xxx) instruction set and SFR map.
+- The enhanced mid-range core is a separate mode of the same model, onboarded
+  with the PIC16F1829 (`examples/pic16f1829`).
 
 Known engine gaps (tracked here until fixed):
-- `load_flash` panics on an image larger than the part's flash instead of
-  returning an error. The follow-up PR #1569 turns this into a loader error
-  (`EXIT_CONFIG_ERROR` from `labwired run`/`test`).
+- `load_flash` still panics on an image larger than the part's flash, but
+  every loader path now goes through `try_load_flash`, so `labwired run`/`test`
+  report it as a config error (`EXIT_CONFIG_ERROR`) instead.
 - `build_pic16_node` (the multi-node builder) attaches no serial sink, so
   USART output from a PIC16 node is not captured. Single-board `run`/`test`
   and the Session/DAP builder do capture it.

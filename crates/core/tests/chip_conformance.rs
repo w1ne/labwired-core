@@ -941,6 +941,18 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("pic16f877a_smoke::sdcc_firmware_boots_and_prints_the_banner"),
     },
+    // PIC16F1829 (DS40001440E), the first enhanced mid-range part. The gate
+    // boots real SDCC 4.4.0 C firmware: BSR/MOVLB banking, MOVLP paging,
+    // FSR/MOVIW pointers, EUSART TX, LATA, and an ISR without software
+    // context save preempted into by TMR0, so the hardware shadows carry
+    // main's state. CCP, MSSP, ADC, EEPROM and EUSART RX are not exercised,
+    // so this is L1, not full-device parity.
+    ChipConf {
+        name: "pic16f1829",
+        yaml: "configs/chips/pic16f1829.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic16f1829_smoke::sdcc_firmware_boots_and_prints_the_banner"),
+    },
     // PIC24F KA family (DS30009937C / DS39927C). The modelled slice is the
     // package GPIO masks and UART1; each gate boots that part's own real
     // XC16 v1.70 image and checks `HI`. Data EEPROM, UART2, timers, ADC, SPI
