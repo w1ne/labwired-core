@@ -27,20 +27,34 @@
 #
 # Tier: L1 UART+LED smoke. Boot, the SCI0 console (P411 TXD0 / P410 RXD0,
 # the J-Link OB virtual COM port) and the three user LEDs with PODR readback.
+# Stock Zephyr v4.0.0 hello_world and synchronization for `ek_ra6m5` also
+# boot (crates/firmware-ek-ra6m5-zephyr): FSP's bsp_clock_init (FCACHE
+# invalidate, MOSC, PLL, SCKSCR), the SysTick system timer and the SCI0
+# console in FIFO mode.
 #
 # NOT modelled in this slice:
-# - Clock generation: the SYSTEM window (ra_sysc) models only HOCOCR/OSCSF.
-#   Every other SYSTEM register, including SCKDIVCR, SCKSCR and PRCR, reads 0
-#   and drops writes. The smoke stays on the reset MOCO (8 MHz) and only sets
-#   SCKDIVCR to /1, which the model accepts and ignores.
+# - Clock generation: `ra6_sysc` stores every R_SYSTEM register (0x700
+#   bytes) and derives OSCSF (HOCOSF/MOSCSF/PLLSF/PLL2SF from the stop bits)
+#   and CKSRDY on the USB/OCTA/CANFD CKCR switches; oscillators settle at
+#   once. No rate is derived from SCKSCR/SCKDIVCR/PLLCCR, and `cpu_hz` stays
+#   the reset MOCO 8 MHz even after Zephyr switches ICLK to the 200 MHz PLL
+#   (the SysTick-based Zephyr timebase counts cycles, so it is unaffected).
+#   The PRCR key is not checked.
 # - Module stop (MSTP): declared stub. MSTPCRB.MSTPB31 is cleared by the
 #   firmware as silicon requires, but SCI0 works whether or not it is.
 # - ICU/IELSR event linking: declared stub. No NVIC line is routed from a
-#   peripheral event, so the smoke is polled.
+#   peripheral event, so the smoke and the Zephyr console are polled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
 #   routing in the model.
-# - TrustZone (IDAU/SAU, the CPSCU/PSCU security attribution), flash
-#   programming (FACI), data flash, option-setting memory.
+# - TrustZone (IDAU/SAU, the CPSCU/PSCU security attribution; both are
+#   declared stubs), flash programming (FACI), data flash, option-setting
+#   memory (Zephyr's ELF carries OFS segments at 0x0100A100+; the loader
+#   warns and drops them).
+# - SCI FIFO: FCR/FDR/FTDRL/FRDRL are modelled for the polled console; TX
+#   drains at once (FDR.T reads 0), and the trigger levels and FIFO
+#   interrupts are not modelled. In FIFO mode silicon reinterprets SSR as
+#   SSR_FIFO (TDFE/RDF); the model keeps the non-FIFO SSR bits (the Zephyr
+#   console polls FDR, not SSR_FIFO).
 # - DMAC/DTC, ELC, RTC, IWDT/WDT, AGT0-5, GPT, IIC0-2, SPI0/1, ADC12,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
@@ -72,11 +86,13 @@ pins:
   P004: { gpio: port0, bit: 4, functions: [{ type: gpio, peripheral: port0 }] }
 peripherals:
   # R_SYSTEM @ 0x4001E000 (the Renode SYSC tag spans 0x4001E000-0x4001E62B).
-  # Only HOCOCR (+0x36) and OSCSF (+0x3C) are modelled; see the header.
+  # Full R_SYSTEM register file (0x700 bytes, ends with VBTBKR[512] at
+  # +0x500) with derived OSCSF and the CKCR handshakes; see the header. The
+  # id keeps the RA4M1-era name.
   - id: "ra_sysc"
-    type: "ra_sysc"
+    type: "ra6_sysc"
     base_address: 0x4001E000
-    size: "1584B"
+    size: "1792B"
   # R_MSTP @ 0x40084000: MSTPCRB +0x04 .. MSTPCRE +0x10 (R7FA6M5BH.h).
   - id: "mstp"
     type: "stub"
@@ -226,6 +242,32 @@ peripherals:
     type: "stub"
     base_address: 0x40170000
     size: "1KB"
+  # R_FCACHE (0x4001C000): bsp_clock_init invalidates the flash cache
+  # (FCACHEIV +0x104, polled until it reads 0) and sets the flash wait
+  # states (FLWT +0x11C) before the PLL switch. Declared stub: reads 0,
+  # which completes the invalidate; no flash timing is modelled.
+  - id: "fcache"
+    type: "stub"
+    base_address: 0x4001C000
+    size: "512B"
+  # R_CACHE (0x40007000, C-cache/S-cache control, CCACTL/CCAFCT +0x0/+0x8
+  # .. CAPRCR +0x204): bsp_clock_init flushes and enables the code cache
+  # before the clock switch. Declared stub: no cache is modelled.
+  - id: "cache"
+    type: "stub"
+    base_address: 0x40007000
+    size: "1KB"
+  # TrustZone security attribution (R_PSCU / R_CPSCU, R7FA6M5BH.h):
+  # Zephyr's soc_early_init_hook clears PSARB-E and ICUSARG-I for a flat
+  # secure project. Declared stubs: the simulator has no security state.
+  - id: "cpscu"
+    type: "stub"
+    base_address: 0x40008000
+    size: "2KB"
+  - id: "pscu"
+    type: "stub"
+    base_address: 0x400E0000
+    size: "64B"
   - id: "flash_ctrl"
     type: "stub"
     base_address: 0x407FE000
