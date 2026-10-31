@@ -57,3 +57,12 @@ done
   --max-steps 30000000 \
   --out-dir "$OUT/crypto-unsupported-audit" \
   --fail-on-unsupported
+# RPL-UDP: three nodes on a shared 802.15.4 air run in the PR scheduler lane
+# (crates/core/tests/cc2538_rpl_udp.rs); here, the instruction audit of the
+# client image (radio, uDMA and RPL boot on one node).
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/cc2538dk-contiki-udp-client.elf \
+  --system configs/systems/cc2538dk.yaml \
+  --max-steps 20000000 \
+  --out-dir "$OUT/rpl-udp-unsupported-audit" \
+  --fail-on-unsupported

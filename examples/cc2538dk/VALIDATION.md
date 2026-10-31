@@ -7,9 +7,11 @@ test ELF is a prebuilt binary run against a TI ROM dump); it is not a run of
 Renode's binary. The `crypto-*.yaml` scripts run the Contiki-NG v4.9
 `cc2538-common/crypto` tests, built here; their program names and messages
 are the ones Renode's `cc2538_cryptoprocessor.robot` waits for, and the
-scripts assert a superset of its milestones. Renode's prebuilt ELFs are not
-run. No
-wider Renode parity claim is made.
+scripts assert a superset of its milestones. `cc2538_rpl_udp` runs the
+Contiki-NG v4.9 `examples/rpl-udp` server and clients, built here, in the
+three-node topology of Renode's `cc2538_rpl-udp.robot` and asserts the same
+request/response lines (in Contiki-NG v4.9's wording). Renode's prebuilt
+ELFs are not run. No wider Renode parity claim is made.
 
 ## Tier status
 
@@ -50,14 +52,22 @@ wider Renode parity claim is made.
 | Sleep timer compare → SM Timer IRQ 145 → handler | integration-tested | `cc2538_sleep_timer_irq` on the descriptor-built bus, with and without `event-scheduler`. The stock hello-world never arms a compare: CSMA keeps the radio listening, so LPM stays in PM0 |
 | Instruction support for the Contiki image | audited | `unsupported_instruction_audit.sh`: 10,000,000 steps, 0 unsupported |
 | Determinism of the Contiki run | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
-| RF reception, RF interrupts, frame filtering, CSP, MAC-timer count | **not modelled** | empty channel; see `crates/core/src/peripherals/cc2538/rfcore.rs` |
+| Three nodes on a shared 802.15.4 air: stock Contiki-NG v4.9 `examples/rpl-udp` (one `udp-server` RPL root, two `udp-client`s on one ELF, per-node IEEE address in the info page as the Robot test writes it) | integration-tested | `cc2538_rpl_udp` (`--features event-scheduler`; PR lane "Scheduler-only fidelity lanes"): both clients join the DODAG and log `Sending request i` / `Received response 'hello i'` for i = 0..2, the server logs `Received request 'hello i' from fd00::200:0:0:{2,3}` + `Sending response.` for each, and hardware ACK frames cross the air. 27.6 s simulated, ~8 s release / ~11 s debug |
+| Renode `cc2538_rpl-udp.robot` milestones | matched | its 3 × 4 server lines and 3 × 2 lines per client, in Contiki-NG v4.9's wording (`Received request 'hello 0' from …`, `Sending response.`, `Received response 'hello 0' from …`) |
+| 802.15.4 air: FCS (CRC-16/KERMIT check value), SWRU319C §23.9.5.1 frame filtering, AUTOACK decision, broadcast delivery after the last bit, listen-from-first-bit | unit-tested | `cargo test -p labwired-core --lib ieee802154_air` (5 tests) |
+| RF core on the air: TX of the FIFO MPDU + FCS, RX FIFO layout (Figure 23-13: length, MPDU, RSSI, `CRC_OK`/correlation), FIFO/FIFOP/SFD/CCA, `RFIRQF0`/`RFIRQF1.TXDONE`, IRQ 141 level, own frames and other channels ignored, `ISFLUSHRX` | unit-tested | `cargo test -p labwired-core --lib cc2538::rfcore` (12 tests) |
+| µDMA: software-requested basic/auto transfers (fixed and incrementing pointers), `XFERMODE`/`XFERSIZE` write-back, `ENASET` clear, `CHIS` + IRQ 46, `MASTEN`/enable gating, bus error → `ERRCLR` | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::udma` (4 tests); Contiki-NG's cc2538-rf TX (into `RFDATA`) and RX (out of `RFDATA`) |
+| Negative controls (RPL-UDP) | fail | `udma` back to `type: stub` → no frame is ever sent; the air never acknowledges → the server never sees a request |
+| Determinism of the RPL-UDP run | integration-tested | two runs, identical consoles on all three nodes |
+| RF path loss, range, collisions, capture; the RF error interrupt; CSP; MAC-timer count; source matching / AUTOPEND; `FIFOPCTRL` thresholds | **not modelled** | lossless air: every node hears every other (Renode's range-11 topology puts the clients out of each other's range); see `crates/core/src/peripherals/ieee802154_air.rs` and `cc2538/rfcore.rs` |
+| µDMA peripheral requests, channel routing (`CHASGN`/`CHMAP`), ping-pong / scatter-gather, arbitration, transfer time, error IRQ | **not modelled** | `crates/core/src/peripherals/cc2538/udma.rs` |
 | ROM serial boot loader | **not modelled** | ROM parks in WFI |
 | Flash: CPU stall while executing from flash during an operation, flash DMA trigger, flash interrupt, the 8-writes-per-word limit, mass erase | **not modelled** | `crates/core/src/peripherals/cc2538/flash_ctrl.rs` |
 | Watchdog, sleep-timer capture | **not modelled** | `WDCTL`/`STCC`/`STCS` are storage |
 | IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
-| PKA, SSI, I2C, GPTimers, USB, uDMA, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| PKA, SSI, I2C, GPTimers, USB, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
 
 ## Commands and evidence (verified 2026-10-30)
 

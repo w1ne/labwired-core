@@ -1261,6 +1261,16 @@ impl SystemBus {
         }
     }
 
+    /// Put every IEEE 802.15.4 radio on this bus onto `air`.
+    pub fn attach_ieee802154_air(
+        &mut self,
+        air: crate::peripherals::ieee802154_air::Ieee802154AirBus,
+    ) {
+        for entry in &mut self.peripherals {
+            entry.dev.attach_ieee802154_air(air.clone());
+        }
+    }
+
     pub fn attach_lab_air(
         &mut self,
         node_id: &str,

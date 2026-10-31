@@ -6,8 +6,9 @@ The [CC2538DK](https://www.ti.com/tool/CC2538DK) development kit: a
 is the **UART+LED L1 slice**, plus **stock Contiki-NG v4.9 hello-world**
 booting through a clean-room boot ROM with the RF core and sleep timer
 modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
-cryptoprocessor (the Contiki-NG crypto suite). PKA, SSI, I2C, GPTimers, USB,
-uDMA and the ADC are declared stubs.
+cryptoprocessor (the Contiki-NG crypto suite), and a **three-node Contiki-NG
+RPL-UDP network** on a shared 802.15.4 air (RF core RX/TX, AUTOACK, µDMA).
+PKA, SSI, I2C, GPTimers, USB and the ADC are declared stubs.
 
 ## What runs here
 
@@ -89,6 +90,29 @@ on it, each test from its own fixture, every vector printing `... OK`:
 
 Renode's test loads a TI ROM dump and two flip-flop stubs; these run through
 LabWired's clean-room ROM and the SYS_CTRL model.
+
+### Network: three nodes running RPL-UDP
+
+The unmodified Contiki-NG v4.9 `examples/rpl-udp` runs on three CC2538DK
+nodes sharing one IEEE 802.15.4 air, the topology of Renode's
+`cc2538_rpl-udp.robot`: `server` (IEEE address `…:01`, the RPL root running
+`udp-server`) and `client-1`/`client-2` (`…:02`/`…:03`, both on the
+`udp-client` ELF; the address is written into the info page per node, as the
+Robot test does). Each client joins the DODAG and sends `hello <i>` every
+~10 s; the server echoes it back.
+
+```bash
+cargo test -p labwired-core --features event-scheduler --test cc2538_rpl_udp -- --nocapture
+```
+
+It asserts the Robot test's milestones for three rounds:
+`Received request 'hello <i>' from fd00::200:0:0:<2|3>` and `Sending
+response.` on the server, `Sending request <i> to fd00::200:0:0:1` and
+`Received response 'hello <i>' from fd00::200:0:0:1` on each client, plus
+hardware ACK frames on the air. The air is lossless: every node hears every
+other (Renode's range-11 layout keeps the two clients out of each other's
+range). A multi-node world is not yet a `labwired test` script, so this runs
+as a Rust integration test.
 
 ## Build and run
 
