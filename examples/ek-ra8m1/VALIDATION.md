@@ -24,10 +24,14 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | PORT `PCNTR1` PDR/PODR, `PCNTR3` POSR/PORR, `PCNTR2` PIDR on ports 0, 1, 4, 6 | smoke-tested | `led=blue on pin=1 port=6 podr=0001` … (one POSR/PORR store per LED; the whole-PODR read proves no other pin of that port moved) |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
-| ICU / IELSR event linking, SCI interrupts, SCI_B FIFO | **not modelled** | both ICU windows (`0x4000_6000`, `0x4000_C000` WUPEN/IELSR) are stubs; the smoke and the Zephyr console are polled |
+| Stock Zephyr v4.0.0 `samples/drivers/counter/alarm` (AGT0 compare match A through the ICU) | smoke-tested | `zephyr-counter-alarm.yaml` PASS 1/1: alarms at 2/6/14/30 s of guest time, then the 32 s (65536-tick) request refused; 1,380,716 steps, 14.4 G cycles mostly idle-skipped |
+| ICU `IELSRn` event link (`ra_icu`): event sets `IR`, line n follows `IR` as a level, `IR` write-0-to-clear | smoke-tested | the alarm above; `crates/core/tests/ra8m1_agt_icu.rs` (vectors through IELSR84, unlinked event pends nothing, clearing `IR` drops the pend); unit tests `peripherals::ra_icu` |
+| AGT0/AGT1 timer mode (`ra_agt`): LOCO/PCLKB count sources, `AGTMR2.CKS`, reload, underflow `TUNDF`, compare A/B, `TSTOP` | smoke-tested | the alarm above; unit tests `peripherals::ra_agt` |
+| ICU `IRQCRn`/NMI, `DTCE`, re-entry while `IR` stays set, SCI interrupts, SCI_B FIFO | **not modelled** | `IRQCRn` window (`0x4000_6000`) is a stub; only the AGT emits ELC events, SCI `irq:` is nominal, so the smoke and the Zephyr console are polled |
+| AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
-| SCI0-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
+| SCI0-2, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
 ## Stock Zephyr (verified 2026-10-31)
 
@@ -36,6 +40,7 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-hello.elf  sha256 e9d0146e44ab6f74...
 #   r7fa8m1ah-zephyr-sync.elf   sha256 686cf687fbfe5078...
+#   r7fa8m1ah-zephyr-counter-alarm.elf  sha256 e4bd93a4991e21ca... (Zephyr v4.0.0)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -47,8 +52,23 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   thread_a: Hello World from cpu 0 on ek_ra8m1!
 #   thread_b: Hello World from cpu 0 on ek_ra8m1!
 
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-counter-alarm.yaml --no-uart-stdout
+#   PASS  1/1 checks · zephyr-counter-alarm · 1380716 steps
+#   Set alarm in 2 sec (4096 ticks) / !!! Alarm !!! / Now: 2
+#   ... Now: 6 / Now: 14 / Now: 30
+#   Set alarm in 32 sec (65536 ticks) / Alarm could not be set
+
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
+
+The v4.0.0 `ek_ra8m1` board enables SCI3 (the mikroBUS UART, `&uart3`) as
+well as SCI9, and opens it at boot: without the `sci3` window the image
+BusFaults at `0x4035_8308` in `R_SCI_B_UART_Open`.
+
+Negative controls for `zephyr-counter-alarm.yaml` (each one fails it): AGT0
+as a stub (the console stops after "Counter alarm sample"), and the
+`icu_ielsr` window as a stub (the compare matches but no alarm line is
+printed, because no IELSR links the event to line 84).
 
 Negative controls (each one fails `zephyr-hello.yaml`):
 

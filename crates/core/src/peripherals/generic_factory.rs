@@ -345,6 +345,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
+    // Renesas RA ICU event-link registers (IELSRn) and the 16-bit AGT.
+    "ra_icu",
+    "ra_agt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1381,6 +1384,19 @@ pub fn try_build(
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
         "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
+        "ra_icu" => Box::new(crate::peripherals::ra_icu::RaIcu::new()),
+        // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB for
+        // the PCLKB count sources; `elc_event`: the channel's INT event
+        // (compare A/B are +1/+2).
+        "ra_agt" => {
+            use crate::peripherals::ra_agt as agt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(agt::RaAgt::new(
+                get("clock_hz").unwrap_or(agt::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(agt::DEFAULT_PCLKB_HZ),
+                get("elc_event").map_or(agt::DEFAULT_ELC_EVENT, |v| v as u32),
+            ))
+        }
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),
         "imxrt_ccm" => Box::new(crate::peripherals::imxrt::ccm::ImxrtCcm::new()),

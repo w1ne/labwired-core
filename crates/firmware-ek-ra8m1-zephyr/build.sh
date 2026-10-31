@@ -5,6 +5,10 @@
 #   tests/fixtures/r7fa8m1ah-zephyr-sync.elf — samples/synchronization
 #       (examples/ek-ra8m1/zephyr-sync.yaml: k_busy_wait on the SysTick
 #       cycle counter, k_msleep woken by the SysTick system timer)
+#   tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf —
+#       samples/drivers/counter/alarm from Zephyr v4.0.0 (see below;
+#       examples/ek-ra8m1/zephyr-counter-alarm.yaml: AGT0 compare-match
+#       alarms linked to the NVIC through the ICU IELSRn)
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `ek_ra8m1`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) at the
@@ -27,6 +31,15 @@
 # Requirements:
 #   - A Zephyr v3.7.0 west workspace (ZEPHYRPROJECT, default ~/zephyrproject)
 #     with the cmsis and hal_renesas modules.
+#   - For the counter alarm: a Zephyr v4.0.0 west workspace (ZEPHYRPROJECT_V4,
+#     default ~/zephyrproject-v4.0) with cmsis and hal_renesas. v3.7.0 has
+#     no Renesas AGT counter driver; v4.0.0 adds counter_renesas_ra_agt.c and
+#     the in-tree samples/drivers/counter/alarm/boards/ek_ra8m1.overlay that
+#     enables &agt0 (LOCO / 16 = 2048 Hz). Built UNMODIFIED from v4.0.0
+#     (commit 8469084dfae8; hal_renesas 10326518701e, cmsis 4b96cbb17467,
+#     the revisions its west.yml pins), with the same -U__ARM_FEATURE_PAUTH
+#     flags, and the module list pinned so a workspace that fetched more
+#     modules still rebuilds the same bytes.
 #   - arm-none-eabi-gcc on PATH (the gnuarmemb toolchain variant); no Zephyr SDK
 #     install needed.
 set -euo pipefail
@@ -46,10 +59,10 @@ echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/nu
 echo "Board:     $BOARD"
 echo "Toolchain: $ZEPHYR_TOOLCHAIN_VARIANT ($(arm-none-eabi-gcc -dumpfullversion))"
 
-build_one() { # <sample-dir> <fixture-name>
+build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
   local build; build="$(mktemp -d)"
   "$WEST" build -p always -b "$BOARD" "$ZEPHYR_BASE/$1" -d "$build" -- \
-    -DEXTRA_CFLAGS=-U__ARM_FEATURE_PAUTH -DEXTRA_AFLAGS=-U__ARM_FEATURE_PAUTH
+    -DEXTRA_CFLAGS=-U__ARM_FEATURE_PAUTH -DEXTRA_AFLAGS=-U__ARM_FEATURE_PAUTH "${@:3}"
   arm-none-eabi-strip --strip-debug -o "$FIXTURES/$2" "$build/zephyr/zephyr.elf"
   chmod 644 "$FIXTURES/$2"
   rm -rf "$build"
@@ -59,3 +72,10 @@ build_one() { # <sample-dir> <fixture-name>
 
 build_one "samples/hello_world" "r7fa8m1ah-zephyr-hello.elf"
 build_one "samples/synchronization" "r7fa8m1ah-zephyr-sync.elf"
+
+# Zephyr v4.0.0: samples/drivers/counter/alarm (AGT0 + ICU).
+ZEPHYRPROJECT_V4="${ZEPHYRPROJECT_V4:-$HOME/zephyrproject-v4.0}"
+export ZEPHYR_BASE="$ZEPHYRPROJECT_V4/zephyr"
+echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/null || echo '?'))"
+build_one "samples/drivers/counter/alarm" "r7fa8m1ah-zephyr-counter-alarm.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V4/modules/hal/cmsis;$ZEPHYRPROJECT_V4/modules/hal/renesas"

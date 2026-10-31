@@ -2444,7 +2444,16 @@ impl<C: Cpu> Machine<C> {
         // (`pend_irq_for_event` would mis-route it), so the NVIC fallthrough is
         // taken only when no matrix fabric claimed delivery (the Cortex-M /
         // nRF SysTick + own-line path).
-        if !self.bus.deliver_scheduled_irq_levels() {
+        if !result.explicit_irqs.is_empty()
+            && self.bus.peripherals[peripheral_idx]
+                .dev
+                .explicit_irqs_are_link_events()
+        {
+            // Event numbers (RA ELC), routed through the ICU.
+            for line in self.bus.link_events(&result.explicit_irqs) {
+                self.bus.pend_irq_for_event(line, &mut fallthrough);
+            }
+        } else if !self.bus.deliver_scheduled_irq_levels() {
             for irq in &result.explicit_irqs {
                 self.bus.pend_irq_for_event(*irq, &mut fallthrough);
             }
