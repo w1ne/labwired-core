@@ -100,27 +100,406 @@ const RCSTA_SPEN: u8 = 1 << 7;
 const PIR1_TXIF: u8 = 1 << 4;
 
 /// One classic mid-range part: program words, implemented port bits
-/// (PORTA..PORTE) and the shared GPR block every bank mirrors.
+/// (PORTA..PORTE) and the GPR address ranges that alias another range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pic16Device {
     pub name: &'static str,
     pub flash_words: usize,
     pub port_masks: [u8; PIC16_PORT_COUNT as usize],
-    pub shared_gpr: (u8, u8),
+    /// `(start, end, target)`: banked addresses `start..=end` are the same
+    /// bytes as `target..`. Taken from the gputils `SHAREBANK` groups (the
+    /// 0x70-0x7F block on most parts; whole banks on the PIC16F873/874).
+    pub aliases: &'static [(u16, u16, u16)],
 }
 
-/// The parts this model knows. A row means the SFR addresses and bits the
-/// model implements match the part's SDCC 4.4.0 `pic14` header; it is
-/// geometry, not onboarding.
-const PIC16_DEVICES: &[Pic16Device] = &[
-    // DS39582B: 8K words, RA0-RA5, RB/RC/RD 8 bits, RE0-RE2, shared
-    // 0x70-0x7F (gputils 16f877a_g.lkr `gprnobnk`).
+const fn dev(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+) -> Pic16Device {
     Pic16Device {
-        name: "pic16f877a",
-        flash_words: 8192,
-        port_masks: [0x3F, 0xFF, 0xFF, 0xFF, 0x07],
-        shared_gpr: (0x70, 0x7F),
-    },
+        name,
+        flash_words,
+        port_masks,
+        aliases,
+    }
+}
+
+/// The parts this model knows. A row means every SFR address and bit the
+/// model implements matches the part's SDCC 4.4.0 `pic14` header; flash
+/// words come from the gputils `<part>_g.lkr` code pages, port masks from
+/// the header's `R<port><bit>` fields and aliases from the lkr `SHAREBANK`
+/// groups. `scripts/pic16/check_sfr_map.py --check-table` regenerates and
+/// re-verifies every row. A row is geometry, not onboarding.
+///
+/// Left out: the enhanced mid-range (PIC16F1xxx: BSR, linear memory, a
+/// different SFR map), parts without the USART at 0x18/0x19/0x98/0x99 or
+/// without PORTC (PIC16F6xx/8x/81x/84A and friends), and the OTP/EPROM
+/// PIC16C parts.
+const PIC16_DEVICES: &[Pic16Device] = &[
+    dev(
+        "pic16f687",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f689",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f690",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f722a",
+        2048,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f723a",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f724",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f726",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f727",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16lf722a",
+        2048,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16lf723a",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16lf724",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16lf726",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16lf727",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f870",
+        2048,
+        [0x3F, 0xFF, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x120, 0x16F, 0x020),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1BF, 0x0A0),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f871",
+        2048,
+        [0x3F, 0xFF, 0xFF, 0xFF, 0x07],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x120, 0x16F, 0x020),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1BF, 0x0A0),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f873",
+        4096,
+        [0x3F, 0xFF, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x120, 0x17F, 0x020),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1FF, 0x0A0),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f873a",
+        4096,
+        [0x3F, 0xFF, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x120, 0x17F, 0x020),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1FF, 0x0A0),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f874",
+        4096,
+        [0x3F, 0xFF, 0xFF, 0xFF, 0x07],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x120, 0x17F, 0x020),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1FF, 0x0A0),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f874a",
+        4096,
+        [0x3F, 0xFF, 0xFF, 0xFF, 0x07],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x120, 0x17F, 0x020),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1FF, 0x0A0),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f876",
+        8192,
+        [0x3F, 0xFF, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f876a",
+        8192,
+        [0x3F, 0xFF, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f877",
+        8192,
+        [0x3F, 0xFF, 0xFF, 0xFF, 0x07],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f877a",
+        8192,
+        [0x3F, 0xFF, 0xFF, 0xFF, 0x07],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f882",
+        2048,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f883",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f884",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f886",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f887",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f913",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f914",
+        4096,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f916",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0x00, 0x08],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f917",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f946",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f707",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16lf707",
+        8192,
+        [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
 ];
 
 /// Geometry for a catalogue part, if this model knows it.
@@ -150,7 +529,7 @@ pub struct Pic16 {
     /// the pins.
     latch: [u8; PIC16_PORT_COUNT as usize],
     port_masks: [u8; PIC16_PORT_COUNT as usize],
-    shared_gpr: (u8, u8),
+    aliases: &'static [(u16, u16, u16)],
     stack: [u32; PIC16_STACK_DEPTH],
     /// Next free stack slot, modulo the depth.
     stkptr: u8,
@@ -173,7 +552,7 @@ impl Default for Pic16 {
 impl Pic16 {
     /// A PIC16F877A-shaped core with no catalogue name.
     pub fn new() -> Self {
-        Self::with_device(&PIC16_DEVICES[0])
+        Self::with_device(pic16_device("pic16f877a").expect("PIC16F877A row"))
     }
 
     pub fn with_device(device: &Pic16Device) -> Self {
@@ -186,7 +565,7 @@ impl Pic16 {
             data: vec![0; PIC16_DATA_BYTES],
             latch: [0; PIC16_PORT_COUNT as usize],
             port_masks: device.port_masks,
-            shared_gpr: device.shared_gpr,
+            aliases: device.aliases,
             stack: [0; PIC16_STACK_DEPTH],
             stkptr: 0,
             exception_pending: None,
@@ -339,8 +718,20 @@ impl Pic16 {
             0x00 | 0x02 | 0x03 | 0x04 | 0x0A | 0x0B => return u16::from(off),
             _ => {}
         }
-        if (self.shared_gpr.0..=self.shared_gpr.1).contains(&off) {
-            return u16::from(off);
+        // Follow the alias ranges to the backing store. They can chain (on
+        // the PIC16F873 0x1F0 aliases 0xF0, which aliases 0x70), so repeat
+        // until no range matches (bounded: a chain is at most one hop per
+        // bank).
+        let mut addr = addr;
+        for _ in 0..4 {
+            match self
+                .aliases
+                .iter()
+                .find(|(start, end, _)| (*start..=*end).contains(&addr))
+            {
+                Some(&(start, _, target)) => addr = target + (addr - start),
+                None => break,
+            }
         }
         match addr {
             0x101 => SFR_TMR0,
@@ -1250,7 +1641,7 @@ mod tests {
             name: "t",
             flash_words: 16,
             port_masks: [0xFF; 5],
-            shared_gpr: (0x70, 0x7F),
+            aliases: &[],
         });
         small.load_flash(32, &[0]);
     }
@@ -1265,6 +1656,39 @@ mod tests {
         assert_eq!(other.wreg(), 0x5A);
         assert_eq!(other.get_pc(), 1);
         assert_eq!(other.status(), cpu.status());
+    }
+
+    #[test]
+    fn pic16f873_banks_2_and_3_alias_banks_0_and_1() {
+        // DS30292 (PIC16F87X) Figure 2-4 / gputils 16f873_g.lkr: 192 B GPR,
+        // bank 2 is bank 0 and bank 3 is bank 1.
+        let mut cpu = Pic16::for_chip_name("pic16f873");
+        assert_eq!(cpu.flash_words(), 4096);
+        cpu.write_data(0x120, 0x11);
+        assert_eq!(cpu.read_data(0x20), 0x11);
+        cpu.write_data(0xA5, 0x22);
+        assert_eq!(cpu.read_data(0x1A5), 0x22);
+        // Chained: 0x1F0 -> 0xF0 -> 0x70.
+        cpu.write_data(0x1F0, 0x33);
+        assert_eq!(cpu.read_data(0x70), 0x33);
+        assert_eq!(cpu.read_data(0xF0), 0x33);
+        // The 877A keeps banks 2/3 separate.
+        let mut big = Pic16::for_chip_name("pic16f877a");
+        big.write_data(0x120, 0x11);
+        assert_eq!(big.read_data(0x20), 0);
+    }
+
+    #[test]
+    fn port_masks_follow_the_part() {
+        // PIC16F690: PORTB is RB4-RB7 only.
+        let mut cpu = Pic16::for_chip_name("pic16f690");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0);
+        // PIC16F887: PORTA is 8 bits, PORTE has RE0-RE3.
+        let d = pic16_device("pic16f887").expect("887 row");
+        assert_eq!(d.port_masks, [0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
+        assert_eq!(d.flash_words, 8192);
     }
 
     #[test]
