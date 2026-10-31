@@ -24,8 +24,8 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52832` | ⚪ structural | — | `4c4356eb879b432a` | no silicon capture |
 | `microbit-v1` | 🟡 smoke-manual | — | `df57ef9a816fad30` | no silicon capture |
 | `microbit-v2` | 🟡 smoke-manual | — | `ac0e2ecb1ec69aee` | no silicon capture |
-| `rp2040` | ⚪ structural | — | `37756b5182106f95` | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | `d8da24254a2ada27` | no silicon capture |
+| `rp2040` | ⚪ structural | — | `ff914ac8afaf4a95` | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | `8a4a09d9a2d0235f` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `8796461e79cce69c` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `d0452afd7d6c19a8` | no silicon capture |
 | `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `91ebc9a5e36d7f70` | no silicon capture |
