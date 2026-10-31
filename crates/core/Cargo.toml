@@ -269,6 +269,11 @@ required-features = ["event-scheduler"]
 name = "esp32c3_bt_event_residency_gate"
 required-features = ["event-scheduler"]
 
+# Three-node CC2538 RPL-UDP: needs idle fast-forward (no file-level cfg).
+[[test]]
+name = "cc2538_rpl_udp"
+required-features = ["event-scheduler"]
+
 # #![cfg(feature = "event-scheduler")]
 [[test]]
 name = "esp32c3_clamped_full_state_differential"

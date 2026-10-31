@@ -9,6 +9,8 @@
 #   tests/fixtures/cc2538dk-contiki-crypto-<t>.elf  UNMODIFIED
 #     examples/platform-specific/cc2538-common/crypto <t>-test, for
 #     t = ecb cbc ctr cbc-mac gcm ccm sha256
+#   tests/fixtures/cc2538dk-contiki-udp-{server,client}.elf  UNMODIFIED
+#     examples/rpl-udp (crates/core/tests/cc2538_rpl_udp.rs)
 # All but hello are --strip-debug'ed so no host path is embedded.
 #
 # Requirements:
@@ -73,7 +75,16 @@ for t in $CRYPTO_TESTS; do
     "build/cc2538dk/$t-test.elf"
 done
 
+cd "$CONTIKI_NG/examples/rpl-udp"
+make TARGET=cc2538dk clean >/dev/null
+make -j"$(nproc)" TARGET=cc2538dk WERROR=0
+for t in server client; do
+  arm-none-eabi-strip --strip-debug -o "$FIXTURES/cc2538dk-contiki-udp-$t.elf" \
+    "build/cc2538dk/udp-$t.elf"
+done
+
 cd "$FIXTURES"
 sha256sum cc2538dk-contiki-hello.elf cc2538dk-contiki-test-cfs.elf \
   cc2538dk-contiki-coffee.elf cc2538dk-contiki-flash-test.elf
 for t in $CRYPTO_TESTS; do sha256sum "cc2538dk-contiki-crypto-$t.elf"; done
+sha256sum cc2538dk-contiki-udp-server.elf cc2538dk-contiki-udp-client.elf
