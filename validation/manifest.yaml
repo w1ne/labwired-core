@@ -9768,6 +9768,11 @@ boards:
     # (tests/fixtures/mk64f12-zephyr-sync.elf, same build script, no model
     # change): SysTick k_msleep timeouts, semaphore hand-off and PendSV
     # switches, asserted by examples/frdm-k64f/zephyr-sync.yaml in ci/test.sh.
+    # 2026-10-31: stock Zephyr v3.7.0 tests/net/tcp (Renode NXP-K64F.robot's
+    # TCP case) passes 19/19 over its dummy L2
+    # (tests/fixtures/mk64f12-zephyr-net-tcp.elf, examples/frdm-k64f/zephyr-net-tcp.yaml).
+    # New: the RNGA is `kinetis_rnga` (instant refill, deterministic samples, no
+    # error IRQ), which Zephyr's entropy_mcux_rnga spins on. ENET is still a stub.
     # SIM-DERIVED — no K64F bench part. See
     # docs/boards/frdm-k64f.md and examples/frdm-k64f/VALIDATION.md.
     doc: docs/boards/frdm-k64f.md
@@ -9785,6 +9790,7 @@ boards:
       - crates/core/src/peripherals/mcg.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/kinetis_rnga.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs

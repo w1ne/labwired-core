@@ -6,12 +6,15 @@
 #       (examples/frdm-k64f/zephyr-uart-basic-api.yaml)
 #   tests/fixtures/mk64f12-zephyr-sync.elf           — samples/synchronization
 #       (examples/frdm-k64f/zephyr-sync.yaml)
+#   tests/fixtures/mk64f12-zephyr-net-tcp.elf        — tests/net/tcp
+#       (examples/frdm-k64f/zephyr-net-tcp.yaml)
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `frdm_k64f`. uart_basic_api is the ztest suite Renode's NXP-K64F.robot
 # "Should Run Zephyr Tests for UART" runs on this board: it types a line on
 # UART0 after each "Please send characters to serial console" prompt and waits
-# for "PROJECT EXECUTION SUCCESSFUL".
+# for "PROJECT EXECUTION SUCCESSFUL". tests/net/tcp is the suite its
+# "Should Run Zephyr Tests for TCP" runs; it uses a dummy L2, not the ENET.
 # The ELFs are debug-stripped (`--strip-debug`, symbols kept for fault
 # reports) so the build-host paths in DWARF do not leak in; that is also what
 # makes a rebuild byte-identical.
@@ -58,3 +61,4 @@ build_one() { # <sample-dir> <fixture-name>
 build_one "samples/hello_world"               "mk64f12-zephyr-hello.elf"
 build_one "tests/drivers/uart/uart_basic_api" "mk64f12-zephyr-uart-basic-api.elf"
 build_one "samples/synchronization"           "mk64f12-zephyr-sync.elf"
+build_one "tests/net/tcp"                      "mk64f12-zephyr-net-tcp.elf"

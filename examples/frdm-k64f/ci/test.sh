@@ -19,6 +19,12 @@ cargo run -q -p labwired-cli -- test \
   --script examples/frdm-k64f/zephyr-sync.yaml \
   --output-dir "$OUT/zephyr-sync" \
   --no-uart-stdout
+# Stock Zephyr v3.7.0 tests/net/tcp (Renode NXP-K64F.robot TCP case): 19/19
+# ztest cases over a dummy L2; needs the RNGA model.
+cargo run -q -p labwired-cli -- test \
+  --script examples/frdm-k64f/zephyr-net-tcp.yaml \
+  --output-dir "$OUT/zephyr-net-tcp" \
+  --no-uart-stdout
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv7em-none-eabi/release/firmware-frdm-k64f-smoke \
   --system configs/systems/frdm-k64f.yaml \
