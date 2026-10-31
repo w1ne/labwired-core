@@ -155,6 +155,19 @@ const CASES: &[Case] = &[
             route: None,
         },
     },
+    // RP2040 DW_apb_i2c. Attach and firmware reads always worked; the walk
+    // did not: `Rp2040I2c` never overrode `for_each_attached_sim_input`, so a
+    // BME280 on a Pico refused `temperature` ("no attached input device
+    // exposes channel") while `Wire` read it fine.
+    Case {
+        chip: "rp2040 (Rp2040I2c)",
+        system: "rp2040-pico.yaml",
+        controller: "i2c0",
+        attach: Attach::I2cAdxl345 {
+            address: 0x53,
+            route: None,
+        },
+    },
     Case {
         chip: "nrf52840 (Nrf52SerialInstance, SPIM half)",
         system: "nrf52840-dk.yaml",
@@ -257,6 +270,7 @@ fn with_adxl345<R>(bus: &mut SystemBus, f: impl FnOnce(&mut GenericI2cDevice) ->
     use labwired_core::peripherals::i2c::I2c;
     use labwired_core::peripherals::nrf52::serial_instance::Nrf52SerialInstance;
     use labwired_core::peripherals::nrf52::twim::Nrf52Twim;
+    use labwired_core::peripherals::rp2040::i2c::Rp2040I2c;
 
     for entry in bus.peripherals.iter_mut() {
         let Some(any) = entry.dev.as_any_mut() else {
@@ -291,6 +305,16 @@ fn with_adxl345<R>(bus: &mut SystemBus, f: impl FnOnce(&mut GenericI2cDevice) ->
                 }
             }
         } else if let Some(c) = any.downcast_ref::<Nrf52Twim>() {
+            for cell in c.attached_devices() {
+                let mut dev = cell.borrow_mut();
+                if let Some(a) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericI2cDevice>())
+                {
+                    return f(a);
+                }
+            }
+        } else if let Some(c) = any.downcast_ref::<Rp2040I2c>() {
             for cell in c.attached_devices() {
                 let mut dev = cell.borrow_mut();
                 if let Some(a) = dev
@@ -442,4 +466,32 @@ fn discovered_owner_is_addressable_by_set_input() {
             case.chip,
         );
     }
+}
+
+/// The reported case end to end through a MANIFEST, the way a hosted
+/// `labwired_verify` builds the board: a BME280 `s1` on the Pico's i2c0
+/// (GP4/GP5). Both `temperature` and the component-qualified `s1` form must be
+/// accepted; before `Rp2040I2c` walked its slaves both were refused with
+/// "no attached input device exposes channel 'temperature'".
+#[test]
+fn rp2040_manifest_bme280_accepts_temperature_stimulus() {
+    let chip_path = workspace_root().join("configs/chips/rp2040.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load rp2040 chip");
+    let yaml = format!(
+        "name: \"pico-bme280\"\nchip: \"{}\"\nexternal_devices:\n  - id: \"s1\"\n    type: \"bme280\"\n    connection: \"i2c0\"\n    route:\n      sda: \"GP4\"\n      scl: \"GP5\"\n    config:\n      i2c_address: 0x76\n",
+        chip_path.display()
+    );
+    let manifest = SystemManifest::from_yaml(&yaml).expect("manifest parses");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build pico + bme280");
+    let inputs = bus.list_inputs();
+    assert!(
+        inputs
+            .iter()
+            .any(|(owner, ch)| owner == "s1" && ch.key == "temperature"),
+        "s1/temperature not discoverable: {inputs:?}"
+    );
+    bus.set_input(None, "temperature", 30.0)
+        .expect("temperature stimulus accepted");
+    bus.set_input(Some("s1"), "temperature", 30.0)
+        .expect("s1/temperature stimulus accepted");
 }

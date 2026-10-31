@@ -364,6 +364,23 @@ impl Peripheral for Rp2040I2c {
         }
     }
 
+    /// Stimulus reachability: a BME280 on i2c0 must answer `set_input`
+    /// (`temperature`, ...) like it does on every other I2C controller. The
+    /// trait default returns false, which made every RP2040 I2C sensor
+    /// undrivable ("no attached input device exposes channel 'temperature'")
+    /// while firmware read it fine.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for cell in &self.attached_devices {
+            if cell.borrow_mut().for_each_sim_input(f) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         if self.net_mode() {
             let val = match offset {
