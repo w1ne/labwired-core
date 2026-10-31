@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: d598c88e444bae9f16d7ead310c002271e7d70b3c363b30829bd49c7d52ae297
+    drift_ack_digest: ea21c740e622474631565b199d1f47604ad7c10cf99617cd9d3227eb56355313
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -672,7 +672,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -982,7 +987,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: d598c88e444bae9f16d7ead310c002271e7d70b3c363b30829bd49c7d52ae297
+    drift_ack_digest: ea21c740e622474631565b199d1f47604ad7c10cf99617cd9d3227eb56355313
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1200,7 +1205,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -1657,7 +1667,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: cccc40a71955c8ebc979471f2eff658685864291c014b5eab60d6b9dc5011a65
+    drift_ack_digest: 7dd076381c79e0a1fac81d0f4e28283afe6ba0063cd2649af42cd8b72ec16eb1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2243,7 +2253,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-30
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -3672,7 +3687,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b3d4f8fbfcee3a28e150fef40e860aae26ce6847183853d2248fd79c3647dbe7
+    drift_ack_digest: b52831d9f964f8b2858b2a3411dcf30460dad973634f5211c78de630676ace53
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4246,7 +4261,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-30
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -4645,7 +4665,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b2a35a227c77304b6f20be335b770358d9cb87b3d1a2ba22815359fe5bdaff19
+    drift_ack_digest: b383d86855b8079e1e7c9a2468a3a149d482c4b47fbaeefb54cd06eb068e4666
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5152,7 +5172,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-30
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -5609,7 +5634,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: fd4e8f0ab37916a60c6137a5b22c8bf77670f0a365dcac942788fca5b5d7774c
+    drift_ack_digest: b247b71e7e40bd9e97af345501fd7da46b6bca155e011c25f425daddb4c288e7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6186,7 +6211,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-30
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -6606,7 +6636,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 1e50f79842c3adb2a6853d5111e2ccd31e89cfe9ce4e5527050ea52ec905a87b
+    drift_ack_digest: 23f61824a3fafccd373a01b5107aad2395dfaa9daaf7bfd819a8cfda4c047498
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7122,7 +7152,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-30
+    drift_ack: 2026-10-31
+    # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+    # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+    # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+    # instruction of this board changes; the generic_factory ra8_sysc arm moved
+    # to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
     # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
@@ -9506,14 +9541,23 @@ boards:
     # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP, ICU,
     # DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT,
     # ADC12, ETHERC, SPI and CANFD are declared stubs; SCI0-8 and the remaining
-    # blocks are not mapped. Helium/MVE, LOB and TrustZone are not modelled.
-    # SIM-DERIVED — no RA8M1 bench part. See docs/boards/ek-ra8m1.md and
+    # blocks are not mapped. Helium/MVE and TrustZone are not modelled.
+    # 2026-10-31: stock Zephyr v3.7.0 samples/hello_world and
+    # samples/synchronization for ek_ra8m1 boot (tests/fixtures/
+    # r7fa8m1ah-zephyr-{hello,sync}.elf, rebuilt byte-identical by
+    # crates/firmware-ek-ra8m1-zephyr/build.sh): Armv8.1-M DLS/WLS/LE
+    # low-overhead loops and CSEL/CSINC/CSINV/CSNEG in the Thumb-2 decoder,
+    # ra8_sysc as a full R_SYSTEM register file with derived OSCSF
+    # (HOCO/MOSC/PLL/PLL2) and the CKSREQ/CKSRDY handshake on every xxxCKCR,
+    # and the ICU WUPEN/IELSR window at 0x4000C000. SIM-DERIVED — no RA8M1
+    # bench part. See docs/boards/ek-ra8m1.md and
     # examples/ek-ra8m1/VALIDATION.md.
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_ek_ra8m1_smoke_survival"
+      - "firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9528,6 +9572,7 @@ boards:
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
       - crates/firmware-ek-ra8m1-smoke
+      - crates/firmware-ek-ra8m1-zephyr
       - configs/chips/r7fa8m1ah.yaml
       - configs/systems/ek-ra8m1.yaml
 
