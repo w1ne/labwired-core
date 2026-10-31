@@ -9508,6 +9508,8 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/cortex_m_fpu.rs
+      - crates/core/src/peripherals/armv8m_mpu.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
