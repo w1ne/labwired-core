@@ -30,6 +30,18 @@ The image is linked at `0x0001_8000`, after the secure bootloader, so the
 same ELF is laid out the way the Apollo4 Plus SBL expects. The simulator
 fast-boots it at that vector table.
 
+### Stock Zephyr hello_world
+
+`tests/fixtures/amap42kp-zephyr-hello.elf` is the **unmodified** upstream
+Zephyr v3.7.0 `samples/hello_world` for `apollo4p_evb` (rebuild:
+`crates/firmware-apollo4p-zephyr/build.sh`). `zephyr-hello.yaml` asserts the
+boot banner and `Hello World! apollo4p_evb/apollo4p`. On the way the
+AmbiqSuite HAL runs unpatched: `am_hal_pwrctrl_low_power_init` powers the
+domains through PWRCTRL, flushes and invalidates the DAXI (the `apollo4_cpu`
+block at `0x4800_0000`, polling `DAXIREADY`, with a `SYNC_READ` bus flush at
+`0x47FF_0000`), and `am_hal_delay_us` spins in the boot ROM's
+`br_util_delay_cycles` at `0x0800_009D`.
+
 ## Build and run
 
 ```bash
@@ -84,9 +96,12 @@ hb=1 led0=0 led1=1 led2=1
 
 ## Explicitly not claimed
 
-- The **boot ROM and secure bootloader** are not present; the engine enters
-  the ELF at its `0x0001_8000` vector table, which is where the SBL hands
-  over on silicon.
+- The **secure bootloader** is not present; the engine enters the ELF at
+  its `0x0001_8000` vector table, which is where the SBL hands over on
+  silicon. The **boot ROM** is only the HAL's helper table
+  (`crates/core/roms/apollo4`, clean-room): delay/read/write work, the MRAM
+  helpers return -1, and the delay loop is 2 cycles per iteration (3 on
+  silicon).
 - **Power domains** have no effect: `DEVPWRSTATUS` follows `DEVPWREN` on the
   same access and a peripheral works with its domain off.
 - The **UART clock selection** (`CR.CLKEN`/`CR.CLKSEL`) is written as on
