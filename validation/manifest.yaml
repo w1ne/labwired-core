@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: ea21c740e622474631565b199d1f47604ad7c10cf99617cd9d3227eb56355313
+    drift_ack_digest: 13740f226d51a531cbea0a259223edaf6bc0dfee867e951e4822a5d097f246df
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -673,6 +673,15 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -987,7 +996,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: ea21c740e622474631565b199d1f47604ad7c10cf99617cd9d3227eb56355313
+    drift_ack_digest: 13740f226d51a531cbea0a259223edaf6bc0dfee867e951e4822a5d097f246df
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1206,6 +1215,15 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
     # the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
     # on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
@@ -1667,7 +1685,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: e6c2973b095eeed0e56e90b9ed7b213a674b430e3afa1fe5b86e53c7d7e1a5eb
+    drift_ack_digest: f4cccca7964baf00cdff4d3a9efdf54e88f6cdeeca4419f8733e0ec3e2dae578
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2254,6 +2272,15 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
     # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
     # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
@@ -3692,7 +3719,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: c5b1df0c364921ad905b81a5508156fabf11a1384070d4837f21ed376e7d2ff4
+    drift_ack_digest: a1c838c3ba6a5d36997b110b1ead61545045bc29cd834c81f0dfce04e5587dad
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4267,6 +4294,15 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
     # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
     # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
@@ -4675,7 +4711,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 2a62badc377f585b189bdb618a3d74b44fc627b4939f8e85de8e98fe6fdf3cdf
+    drift_ack_digest: c05664ae944b4c736202acbbe3ccbff9e36ce9debee1a6c0f01cccb27c51beec
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5183,6 +5219,15 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
     # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
     # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
@@ -5649,7 +5694,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 2ea6feba8308f7c9e1da45d895af2726d776a0f9b6c7a4de5aa3417a030ca3e0
+    drift_ack_digest: 5338bdd51061703797518f9d8b9d67f56d1d10db9b5fcecb0c47dda20ae331b0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6227,6 +6272,15 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
     # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
     # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now
@@ -6656,7 +6710,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 23a4b79d8ff5c8ed8fb39e99223a62349a10c28ebbe968d0686508b22b92e069
+    drift_ack_digest: 0cce096d301d23e24e208b83b4c4912b504ebdb129cfecd2170b9a98d1be85dd
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7173,6 +7227,15 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-10-31
+    # 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+    # context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+    # file) blocks, and the Armv8-M TT instruction. This board declares
+    # neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+    # shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+    # Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+    # (only the FP-frame values E1/E9/ED, which this core never generates).
+    # No defined instruction of this board changes. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/ek-ra6m5-zephyr): uart.rs gained the classic Renesas
     # SCI FIFO registers (FCR/FDR/FTDRL/FRDRL), reached only on the `sci`
     # layout, and generic_factory gained the `ra6_sysc` arm (ra8_sysc now

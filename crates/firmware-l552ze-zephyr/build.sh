@@ -4,6 +4,10 @@
 #     (firmware_survival, examples/nucleo-l552ze-q/zephyr-hello.yaml)
 #   tests/fixtures/stm32l552-zephyr-sync.elf  — samples/synchronization
 #     (examples/nucleo-l552ze-q/zephyr-sync.yaml)
+#   tests/fixtures/stm32l552-zephyr-fpu-sharing.elf — tests/kernel/fpu_sharing/
+#     generic, twister scenario kernel.fpu_sharing.generic.arm
+#     (PI_NUM_ITERATIONS=70000); examples/nucleo-l552ze-q/zephyr-fpu-sharing.yaml
+#     = Renode ARMv8M.robot "Should Pass Zephyr FPU Sharing Test"
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `nucleo_l552ze_q` (the TrustZone-disabled board target, so the image runs
@@ -43,10 +47,10 @@ echo "Toolchain: $ZEPHYR_TOOLCHAIN_VARIANT ($(arm-none-eabi-gcc -dumpfullversion
 # the set the hello fixture was first built with.
 MODULES="$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/nxp;$ZEPHYRPROJECT/modules/hal/stm32;$ZEPHYRPROJECT/modules/hal/ti"
 
-build_one() { # <sample-dir> <fixture-name>
+build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
   local build; build="$(mktemp -d)"
   "$WEST" build -p always -b "$BOARD" "$ZEPHYR_BASE/$1" -d "$build" \
-    -- "-DZEPHYR_MODULES=$MODULES"
+    -- "-DZEPHYR_MODULES=$MODULES" "${@:3}"
   arm-none-eabi-strip --strip-debug -o "$FIXTURES/$2" "$build/zephyr/zephyr.elf"
   rm -rf "$build"
   arm-none-eabi-size "$FIXTURES/$2"
@@ -55,3 +59,5 @@ build_one() { # <sample-dir> <fixture-name>
 
 build_one "samples/hello_world"     "stm32l552-zephyr-hello.elf"
 build_one "samples/synchronization" "stm32l552-zephyr-sync.elf"
+build_one "tests/kernel/fpu_sharing/generic" "stm32l552-zephyr-fpu-sharing.elf" \
+  -DPI_NUM_ITERATIONS=70000

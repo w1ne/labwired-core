@@ -13,14 +13,18 @@ fixture and an `io-smoke.yaml`. Unmodified upstream **Zephyr v3.7.0
 `hello_world`** (the sample Renode's `ARMv8M.robot` boots) also runs through
 Zephyr's own L5 clock/ICACHE/DBGMCU bring-up and prints on LPUART1, and
 stock `synchronization` runs its two-thread semaphore hand-off on SysTick
-timeouts and PendSV context switches. There is
+timeouts and PendSV context switches. Stock **`tests/kernel/fpu_sharing/generic`**
+(Renode's `ARMv8M.robot` FPU sharing case) passes 2/2 on the modelled FP
+context (`CONTROL.FPCA`, extended exception frames) and the PMSAv8 MPU
+region file that `TT` reports from. There is
 no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 
 !!! warning "Not claimed yet"
-    TrustZone / SAU / GTZC and the secure/non-secure split, MPU/PMSAv8
-    enforcement and `TT`/`TTA` are **not modelled**. The Cortex-M33 core stores
-    the MPU registers but does not enforce them
-    ([ISA coverage](../isa_coverage.md)). The L5 non-secure FLASH controller,
+    TrustZone / SAU / GTZC and the secure/non-secure split and MPU
+    enforcement are **not modelled**. The PMSAv8 region file is stored and
+    `TT` reports regions from it, but no access is checked and MemManage is
+    never raised ([ISA coverage](../isa_coverage.md)). FP state is stacked
+    eagerly, not lazily (`FPCCR.LSPACT` reads 0). The L5 non-secure FLASH controller,
     EXTI, ADC, FDCAN and USB are declared stubs. Do not advertise the Zephyr
     protection/userspace test cases for this part.
 
@@ -67,7 +71,9 @@ no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 | ICACHE | `0x4003_0400` | modelled — the U5 `icache` model (same IP); Zephyr enables it |
 | DBGMCU | `0xE004_4000` | modelled — `IDCODE 0x2001_6472` (DEV_ID 0x472, rev Z) |
 | FLASH controller, EXTI, ADC1, FDCAN1, USB | see descriptor | `type: stub` — zeros (so `FLASH_ACR.LATENCY` does not read back) |
-| TrustZone / SAU / GTZC / MPU / TT | — | **not modelled** |
+| FP extension (FPCCR/FPCAR/FPDSCR/MVFR) | `0xE000_EF34` | modelled — `cortex_m_fpu`: `CONTROL.FPCA`, extended frames (eager) |
+| MPU (PMSAv8, 8 regions) | `0xE000_ED90` | stored + reported by `TT` — `armv8m_mpu`; **not enforced** |
+| TrustZone / SAU / GTZC | — | **not modelled** |
 
 ## Boot path
 

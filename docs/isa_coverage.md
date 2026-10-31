@@ -73,7 +73,9 @@ opcodes bubble up as `SimulationError::DecodeError`.
 | ARMv7E-M DSP      | `SMLAD`, `SMUAD`, packed SIMD family — entire DSP extension                 |
 | FPU (VFPv4)       | `VSQRT`, `VABS`, `VNEG`, `VCMP`, `VCVT`, double-precision Dn/Dm — partial   |
 | Exclusives        | `CLREX` (the LDREX/STREX/LDAEX/STLEX family is implemented)                 |
-| TT / security     | `TT`, `TTA`, ARMv8-M security extensions                                    |
+| TT / security     | ARMv8-M Security Extension (SAU/IDAU, secure state). `TT`/`TTT`/`TTA`/`TTAT` decode and report the MPU region (MREGION/MRVALID/R/RW) on chips that declare `armv8m_mpu`; the SAU/IDAU fields read 0 |
+| MPU enforcement   | No MPU (PMSAv7 or PMSAv8) checks accesses; MemManage is never raised        |
+| FP context        | Lazy FP state preservation (`FPCCR.LSPACT`): chips that declare `cortex_m_fpu` track `CONTROL.FPCA` and stack the extended frame eagerly; other chips never stack FP state |
 
 ---
 
