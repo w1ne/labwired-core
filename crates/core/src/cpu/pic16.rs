@@ -727,6 +727,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
         PIC16E_F151X_MAP,
     ),
+    // SDCC 4.4.0's pic14devices.txt lacks `enhanced 1` for 16(L)F1704/1708,
+    // so SDCC emits classic code for them that gpasm rejects. Rebuilding
+    // firmware for these parts needs a locally patched device DB.
     edev(
         "pic16f1704",
         4096,
