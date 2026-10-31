@@ -12,10 +12,18 @@ This is the **UART+LED L1 slice**, the first Ambiq part. Boot from the
 post-bootloader vector table, the PWRCTRL power-domain handshake, the UART0
 console and the GPIO LED path (single-bit `WTC`/`WTS` strobes with `RD`
 read-back) are proven by a committed smoke fixture and an `io-smoke.yaml`.
+**Unmodified upstream Zephyr v3.7.0 `samples/hello_world`** boots through
+the AmbiqSuite HAL (`zephyr-hello.yaml`): its low-power init, the CPU
+block's DAXI flush and the boot ROM's delay helper, which LabWired supplies
+as a clean-room table at `0x0800_0000` (`crates/core/roms/apollo4`, not an
+Ambiq dump).
 
 !!! warning "Not claimed yet"
-    The boot ROM and secure bootloader are not modelled (the engine
-    fast-boots the application vector table). Power domains have no effect on
+    The secure bootloader is not modelled (the engine fast-boots the
+    application vector table), and the boot ROM only as the HAL's helper
+    table: its MRAM helpers return an error, and `br_util_delay_cycles`
+    runs at 2 cycles per iteration instead of 3. Cache/DAXI buffering is
+    not modelled. Power domains have no effect on
     their peripherals. The PL011 UART model does not store `CR`, so the
     Ambiq `CLKEN`/`CLKSEL` UART clock selection is written but not checked.
     Non-GPIO pad functions (`FNCSEL` ≠ 3) are not routed, and GPIO interrupts
@@ -40,7 +48,7 @@ read-back) are proven by a committed smoke fixture and an `io-smoke.yaml`.
 | Example | [`examples/apollo4p-evb/`](../../examples/apollo4p-evb/) |
 | Committed artifact | `tests/fixtures/apollo4p-evb-smoke.elf` (`APOLLO4P EVB SMOKE`) |
 | Build target | `thumbv7em-none-eabi` |
-| Tier (snapshot) | **L1** — smoke (CPU + memory + PWRCTRL + UART0 + GPIO); SIM-DERIVED |
+| Tier (snapshot) | **L1** — smoke (CPU + memory + PWRCTRL + UART0 + GPIO) plus a stock Zephyr boot (boot-ROM helper table, CPU/DAXI block); SIM-DERIVED |
 
 ---
 
@@ -67,7 +75,7 @@ bootloader from MRAM `0x0`, which validates and starts the application at
 `0x0001_8000`. The engine loads the ELF (whose lowest load address is
 `0x0001_8000`), finds no valid vector table at the flash base, and enters the
 one at `flash_base + reset_vector_offset` — SP `0x1006_0000`, PC `0x18400`
-from the firmware's own table. Neither the ROM nor the SBL is modelled.
+from the firmware's own table. The SBL is not modelled; the boot ROM is only the clean-room HAL helper table.
 
 ## Validation
 
@@ -75,6 +83,7 @@ from the firmware's own table. Neither the ROM nor the SBL is modelled.
 # from the repository root
 cargo build -p firmware-apollo4p-evb-smoke --release --target thumbv7em-none-eabi
 ./target/release/labwired test --script examples/apollo4p-evb/io-smoke.yaml --no-uart-stdout
+./target/release/labwired test --script examples/apollo4p-evb/zephyr-hello.yaml --no-uart-stdout
 ```
 
 See [`examples/apollo4p-evb/VALIDATION.md`](../../examples/apollo4p-evb/VALIDATION.md)
