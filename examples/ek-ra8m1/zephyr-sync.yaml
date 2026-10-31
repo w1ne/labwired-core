@@ -1,0 +1,25 @@
+# LabWired - EK-RA8M1 stock Zephyr synchronization sample
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/synchronization` for board
+# `ek_ra8m1`. Rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# Two threads hand a semaphore back and forth. Each one prints, busy-waits
+# 100 ms (k_busy_wait, 48 M cycles at the 480 MHz Zephyr clock), then
+# k_msleep(500) on the SysTick system timer. thread_b's line therefore proves
+# the SysTick timeout wake, the semaphore give/take and the PendSV context
+# switch. The guest's own busy-wait dominates the step budget: one a -> b
+# round takes ~49.6 M steps, so the budget is 80 M, which needs
+# `wall_time_ms` to lift the CLI's 50 M-step default cap.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-sync.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 80000000
+  wall_time_ms: 300000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "thread_a: Hello World from cpu 0 on ek_ra8m1!"
+      - "thread_b: Hello World from cpu 0 on ek_ra8m1!"

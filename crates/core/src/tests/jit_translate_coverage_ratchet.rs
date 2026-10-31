@@ -205,6 +205,13 @@ const CORTEX_M: ArchCoverage = ArchCoverage {
         ("Bfc", "bitfield clear, not in the JIT ALU emit set"),
         ("Bfi", "bitfield insert, not in the JIT ALU emit set"),
         (
+            "Csel",
+            "Armv8.1-M conditional select, not in the JIT ALU emit set",
+        ),
+        ("Dls", "Armv8.1-M low-overhead loop start, not translated"),
+        ("Le", "Armv8.1-M loop end (branch), not translated"),
+        ("Wls", "Armv8.1-M while-loop start (branch), not translated"),
+        (
             "ExtendW",
             "32-bit sign/zero extend, not in the JIT ALU emit set",
         ),
