@@ -43,6 +43,15 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [Multiplexed LED matrix](led-matrix-mux.md) | `led-matrix-mux` | GPIO |
 | [74HC4051](74hc4051.md) | `74hc4051` | Analog mux (GPIO select) |
 | [NAU88L21 audio codec](nau88l21.md) | `nau88l21` | I²C |
+| [SHT40](sht40.md) | `sht40` | I²C |
+| [BME680](bme680.md) | `bme680` | I²C |
+| [ICM-42688-P](icm42688.md) | `icm42688` | I²C |
+| [ICM-20948](icm20948.md) | `icm20948` | I²C |
+| [SGP40](sgp40.md) | `sgp40` | I²C |
+| [TSL2591](tsl2591.md) | `tsl2591` | I²C |
+| [DHT20](dht20.md) | `dht20` | I²C |
+| [PMSA003I](pmsa003i.md) | `pmsa003i` | I²C |
+| [INA226](ina226.md) | `ina226` | I²C |
 
 More devices live under [`configs/devices/`](../../configs/devices/) and in the live catalog. If a part is missing from this table, `labwired_describe` still works when the id is registered.
 
