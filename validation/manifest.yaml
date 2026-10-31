@@ -9725,6 +9725,7 @@ boards:
       - crates/core/src/peripherals/mcg.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/kinetis_rnga.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
