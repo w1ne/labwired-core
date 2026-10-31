@@ -2709,10 +2709,27 @@ pub(crate) fn run_test(
                 .map(|c| c.name)
                 .unwrap_or_default();
             let mut cpu = labwired_core::cpu::Pic16::for_chip_name(&pic16_chip_name);
-            cpu.load_program_image(&program);
-            cpu.set_serial_sink(uart_tx.clone());
-            let machine = labwired_core::Machine::new(cpu, bus);
-            run_machine!(machine)
+            match cpu.load_program_image(&program) {
+                Ok(()) => {
+                    cpu.set_serial_sink(uart_tx.clone());
+                    let machine = labwired_core::Machine::new(cpu, bus);
+                    run_machine!(machine)
+                }
+                // Bytes the part has no home for (e.g. an enhanced mid-range
+                // image on a classic part) are a firmware/config mismatch.
+                Err(msg) => {
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    ExitCode::from(EXIT_CONFIG_ERROR)
+                }
+            }
         }
         _ => {
             let msg = format!("Unsupported architecture: {:?}", program_arch);

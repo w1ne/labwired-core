@@ -454,6 +454,10 @@
       "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
       "expect": "UART: HI"
     },
+    "pic16f1829": {
+      "how": "needs-build",
+      "why": "The PIC16 enhanced mid-range core is newer than the released CLI this gate installs. The committed examples/pic16f1829/firmware/pic16f1829-sdcc-uart-smoke.elf prints 'PIC16F1829 OK' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
     "pic16f877a": {
       "how": "needs-build",
       "why": "The PIC16 core and its run path are newer than the released CLI this gate installs. The committed examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf prints 'PIC16F877A OK' on a source-built CLI; switch to `committed` once a release carries the model"

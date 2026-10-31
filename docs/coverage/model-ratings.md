@@ -111,6 +111,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | dspic33fj32mc202 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic18f4520 | open | L1 | 0 | — | — | ≥1× (CI) | — |
 | pic16f877a | open | L1 | 0 | — | — | ≥1× (CI) | — |
+| pic16f1829 | open | L1 | 0 | — | — | ≥1× (CI) | — |
 | pic24f04ka200 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f04ka201 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f08ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |

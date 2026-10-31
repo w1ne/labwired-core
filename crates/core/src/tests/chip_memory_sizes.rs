@@ -222,7 +222,8 @@ const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f16ka101", 1536), // DS39927C Table 1-1
     ("pic24f16ka102", 1536), // DS39927C Table 1-1
     ("pic18f4520", 1536),    // DS39631E: GPR banks 0-5
-    ("pic16f877a", 368),     // DS39582B: 96 + 80 + 96 + 96 B GPR, 0x70-0x7F shared
+    ("pic16f877a", 368),
+    ("pic16f1829", 1024), // DS39582B: 96 + 80 + 96 + 96 B GPR, 0x70-0x7F shared
 ];
 
 fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {

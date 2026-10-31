@@ -74,13 +74,16 @@ bash examples/pic16f877a/ci/test.sh
 
 Not validated, or not modelled, for this part:
 - CONFIG decoding: the oscillator and `cpu_hz` come from the manifest.
-- TMR0/TMR1/TMR2, CCP1/2 and MSSP (SPI/I2C).
+- TMR1/TMR2, CCP1/2 and MSSP (SPI/I2C). TMR0 timer mode is modelled
+  (Fosc/4 through the prescaler; see `examples/pic16f1829/VALIDATION.md`)
+  but this smoke leaves it off.
 - ADC, comparators, voltage reference and data EEPROM / flash self-write.
 - WDT, USART RX and baud timing, PSP.
 - PORTB interrupt-on-change and external pin drive.
 - Unimplemented-register read-as-0 behaviour: unused file addresses are
   plain storage.
-- The enhanced mid-range (PIC16F1xxx) instruction set and SFR map.
+- The enhanced mid-range core is a separate mode of the same model, onboarded
+  with the PIC16F1829 (`examples/pic16f1829`).
 
 The CPU clock in the descriptor is the 5-MIPS maximum; this example's
 16 MHz crystal gives 4 MIPS, and nothing in the smoke depends on time.
