@@ -167,7 +167,11 @@ use std::path::{Path, PathBuf};
 /// the second one rather than leaving it uncounted.
 const MAX_AS_ANY: usize = 195;
 // GPIO schedule migration removes four concrete sensor downcasts.
-const MAX_DOWNCAST_REF: usize = 195;
+// 195 → 196: `tests/sim_input_reachability.rs` reads the ADXL345 back out of
+// `Rp2040I2c` by downcast, the same independent-witness reach every other
+// controller row in that table already pays (the walk under test cannot be
+// its own witness). Test-only; no production path gained a reach.
+const MAX_DOWNCAST_REF: usize = 196;
 
 /// The MUTABLE half of the same reach, counted from the day it started being
 /// counted. Until then the scan matched only `as_any()` and `downcast_ref`,
@@ -240,8 +244,11 @@ const MAX_DOWNCAST_REF: usize = 195;
 // the C3 GPIO model must be asked whether its layout numbers LEDC signals at
 // all (the C6 reuses it and numbers 45/46 as I²C). Three chips, one set of
 // reaches, instead of three.
-const MAX_AS_ANY_MUT: usize = 272;
-const MAX_DOWNCAST_MUT: usize = 338;
+// 272 → 273 / 338 → 339: the RP2040 row of `tests/sim_input_reachability.rs`
+// reads its ADXL345 back by `as_any_mut()` + `downcast_mut`, like every other
+// row's readback (see MAX_DOWNCAST_REF). Test-only.
+const MAX_AS_ANY_MUT: usize = 273;
+const MAX_DOWNCAST_MUT: usize = 339;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

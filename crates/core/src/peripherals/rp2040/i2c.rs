@@ -364,6 +364,23 @@ impl Peripheral for Rp2040I2c {
         }
     }
 
+    /// Stimulus reachability: a BME280 on i2c0 must answer `set_input`
+    /// (`temperature`, ...) like it does on every other I2C controller. The
+    /// trait default returns false, which made every RP2040 I2C sensor
+    /// undrivable ("no attached input device exposes channel 'temperature'")
+    /// while firmware read it fine.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for cell in &self.attached_devices {
+            if cell.borrow_mut().for_each_sim_input(f) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         if self.net_mode() {
             let val = match offset {
@@ -467,9 +484,17 @@ impl Peripheral for Rp2040I2c {
                             .set(self.tx_abrt_source.get() | ABRT_7B_ADDR_NOACK);
                         self.activity.set(false);
                         self.set_raw(INTR_TX_EMPTY);
-                        if stop {
-                            self.set_raw(INTR_STOP_DET);
-                        }
+                        // An abort ends the transfer: "the master aborts the
+                        // transfer by issuing a STOP condition" and flushes
+                        // its FIFOs, whether or not the command carried the
+                        // STOP bit (RP2040 datasheet §4.3, p.448 and the
+                        // IC_RAW_INTR_STAT.TX_ABRT note, p.480). pico-sdk's
+                        // `i2c_write_blocking_internal` waits for STOP_DET
+                        // after every abort, so without this a NACKed first
+                        // byte of a multi-byte or no-stop write spins on
+                        // IC_RAW_INTR_STAT forever (Arduino-Mbed
+                        // `Wire.endTransmission` to an absent 0x50).
+                        self.set_raw(INTR_STOP_DET);
                     }
                     Some(idx) => {
                         self.clr_raw(INTR_TX_ABRT);
@@ -503,8 +528,9 @@ impl Peripheral for Rp2040I2c {
                         }
                     }
                 }
-                if stop {
-                    // The transaction closed: put its waveform on the pads.
+                if stop || self.raw_intr.get() & INTR_TX_ABRT != 0 {
+                    // The transaction closed (STOP, or an abort's STOP): put
+                    // its waveform on the pads.
                     self.wire_flush();
                 }
             }
@@ -552,6 +578,70 @@ mod tests {
         let mut i2c = Rp2040I2c::new();
         i2c.write_u32(IC_ENABLE, ENABLE_ENABLE).unwrap();
         i2c
+    }
+
+    /// pico-sdk `i2c_write_blocking_internal`, register for register: write
+    /// a byte, spin on IC_RAW_INTR_STAT for TX_EMPTY, read TX_ABRT_SOURCE,
+    /// and on an abort spin again for STOP_DET. Returns the abort source, or
+    /// None when the STOP_DET spin did not end (the hang the twin had).
+    fn sdk_write_blocking(
+        i2c: &mut Rp2040I2c,
+        addr: u32,
+        bytes: &[u8],
+        nostop: bool,
+    ) -> Option<u32> {
+        const SPIN_CAP: usize = 10_000;
+        i2c.write_u32(IC_ENABLE, 0).unwrap();
+        i2c.write_u32(IC_TAR, addr).unwrap();
+        i2c.write_u32(IC_ENABLE, ENABLE_ENABLE).unwrap();
+        for (i, b) in bytes.iter().enumerate() {
+            let last = i == bytes.len() - 1;
+            let stop = if last && !nostop { DATA_CMD_STOP } else { 0 };
+            i2c.write_u32(IC_DATA_CMD, u32::from(*b) | stop).unwrap();
+            let mut spins = 0;
+            while i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_EMPTY == 0 {
+                spins += 1;
+                if spins > SPIN_CAP {
+                    return None;
+                }
+            }
+            let reason = i2c.read_u32(IC_TX_ABRT_SOURCE).unwrap();
+            if reason != 0 {
+                i2c.read_u32(IC_CLR_TX_ABRT).unwrap();
+            }
+            if reason != 0 || (last && !nostop) {
+                let mut spins = 0;
+                while i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_STOP_DET == 0 {
+                    spins += 1;
+                    if spins > SPIN_CAP {
+                        return None;
+                    }
+                }
+                i2c.read_u32(IC_CLR_STOP_DET).unwrap();
+            }
+            if reason != 0 {
+                return Some(reason);
+            }
+        }
+        Some(0)
+    }
+
+    #[test]
+    fn nacked_write_without_stop_bit_still_ends_with_stop_det() {
+        // Wire.beginTransmission(0x50); Wire.write(0); Wire.endTransmission()
+        // with nothing at 0x50: a multi-byte write NACKs on its first byte,
+        // which carries no STOP bit. Real silicon aborts and issues STOP.
+        let mut i2c = Rp2040I2c::new();
+        assert_eq!(
+            sdk_write_blocking(&mut i2c, 0x50, &[0x00, 0x01], false),
+            Some(ABRT_7B_ADDR_NOACK)
+        );
+        // A repeated-start (nostop) probe of one byte, likewise.
+        let mut i2c = Rp2040I2c::new();
+        assert_eq!(
+            sdk_write_blocking(&mut i2c, 0x50, &[0x00], true),
+            Some(ABRT_7B_ADDR_NOACK)
+        );
     }
 
     #[test]
