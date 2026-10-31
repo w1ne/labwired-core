@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `f52e6101d40e8ef0` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `53a1a04e6b9dea88` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `f5efb43bcb38845d` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `c75f8a1e61f6a187` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `9bb7127d20fd3c86` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `8bafc54530e5eeb5` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `25b5677bbbde9118` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `130f5cfcff85b0ab` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `f339c480eb2d1deb` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `c0a26ff4758dadd1` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `7f924cc0dbf07e66` | no silicon capture |
 | `esp32` | ⚪ structural | — | `6111c36258f4950d` | no silicon capture |
@@ -49,21 +49,21 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `870e4b7e19f99f69` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `e61e60ea5bd5de87` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `8f5cddd21d1f78ba` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `f4f21682e675645a` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `6c9f5e2cfb072b9f` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `a7144ebb5963ce5d` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `797822b4290718f3` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `ce17e4e7f4cb879b` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `462d65111a85e78f` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `56380d14500fd945` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `e9b444938d44fafd` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `b6d29efb49097ece` | no silicon capture |
-| `s32k388` | 🟡 smoke-manual | — | `e960b8b7f4d16022` | no silicon capture |
-| `mimxrt595s` | 🟡 smoke-manual | — | `7dfc240aadbab12a` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `327cd71b96b21d45` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `337c43913a740b1b` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `44a4d89228c423eb` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `e7b0a053eef16974` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `47a83a1905c03f37` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `ec3363026902012d` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `03ef659e4dc05088` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `a79431b3b0985ab9` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `1211efa9f23b1368` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `3f9312d70f4469d3` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `1242fa8075624e9d` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `a6867a4fac013d4b` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `b1e60375319cf99f` | no silicon capture |
+| `s32k388` | 🟡 smoke-manual | — | `0ae295f8f6a8825a` | no silicon capture |
+| `mimxrt595s` | 🟡 smoke-manual | — | `dbd3bbcc5548f84b` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `3e8a96de47eaa45c` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `16ad93b4f7106623` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `27f66df9bee0c190` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `49428725d9a2abb7` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -448,6 +448,7 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): firmware_survival::test_cc2538dk_contiki_crypto_sha256_survival
   - offline (CI): cc2538_rom (12 tests: ROM utility API incl. PageErase/ProgramFlash through FLASH_CTRL + CCA boot on the CPU model)
   - offline (CI): cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)
+  - offline (CI): cc2538_rpl_udp (3 nodes, stock Contiki-NG rpl-udp: 3 round trips per client; event-scheduler)
 - Drift status: **no silicon capture**
 
 ## `amap42kp` — 🟡 smoke-manual

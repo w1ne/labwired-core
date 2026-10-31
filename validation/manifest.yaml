@@ -9450,7 +9450,12 @@ boards:
     # store, ECB/CBC/CTR/CBC-MAC/CCM/GCM, SHA-256, IRQ 143): the unmodified
     # Contiki-NG cc2538-common/crypto suite, a superset of Renode's
     # cc2538_cryptoprocessor.robot.
-    # IOC, PKA, SSI, I2C, GPTimers, USB, uDMA and ADC are declared
+    # 2026-10-31: three nodes on a shared 802.15.4 air (ieee802154_air:
+    # timed broadcast, frame filtering, AUTOACK decided at push time) run the
+    # unmodified Contiki-NG v4.9 examples/rpl-udp, the topology of Renode's
+    # cc2538_rpl-udp.robot: the RF core's RX FIFO, FIFOP IRQ 141 and the
+    # µDMA (cc2538_udma: software basic/auto transfers, CHIS + IRQ 46).
+    # IOC, PKA, SSI, I2C, GPTimers, USB and ADC are declared
     # stubs. SIM-DERIVED — no CC2538 bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
@@ -9464,6 +9469,7 @@ boards:
       - "firmware_survival::test_cc2538dk_contiki_crypto_sha256_survival"
       - "cc2538_rom (12 tests: ROM utility API incl. PageErase/ProgramFlash through FLASH_CTRL + CCA boot on the CPU model)"
       - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
+      - "cc2538_rpl_udp (3 nodes, stock Contiki-NG rpl-udp: 3 round trips per client; event-scheduler)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9472,6 +9478,8 @@ boards:
       - crates/core/src/peripherals/cc2538/sleep_timer.rs
       - crates/core/src/peripherals/cc2538/flash_ctrl.rs
       - crates/core/src/peripherals/cc2538/aes.rs
+      - crates/core/src/peripherals/cc2538/udma.rs
+      - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs

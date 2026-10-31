@@ -133,9 +133,11 @@ const CHIPS: &[ChipConf] = &[
         // CC2538DK (CC2538SF53, Cortex-M3). SIM-DERIVED: no CC2538 bench part.
         // Modelled: SYS_CTRL (cc2538_sys_ctrl), the PL061-style GPIO A-D
         // (cc2538_pl061_gpio, address-masked GPIO_DATA) and UART0/1 on the
-        // pl011 layout. IOC, RF core, crypto, flash controller, SSI, I2C,
-        // GPTimers, USB, uDMA, WDT/sleep timer and ADC are declared stubs —
-        // see examples/cc2538dk/VALIDATION.md.
+        // pl011 layout, the RF core (cc2538_rfcore; on a shared 802.15.4 air,
+        // RX FIFO + AUTOACK), the sleep timer, the flash controller, the
+        // AES/SHA-256 engine and the µDMA (cc2538_udma). IOC, PKA, SSI, I2C,
+        // GPTimers, USB, WDT and ADC are declared stubs — see
+        // examples/cc2538dk/VALIDATION.md.
         name: "cc2538sf53",
         yaml: "configs/chips/cc2538sf53.yaml",
         reset_oracle: None,

@@ -1,5 +1,6 @@
-//! TI CC2538 2.4-GHz IEEE 802.15.4 RF core (`0x4008_8000`), radio alone in an
-//! empty channel.
+//! TI CC2538 2.4-GHz IEEE 802.15.4 RF core (`0x4008_8000`). Alone, a radio
+//! in an empty channel; on a shared [`Ieee802154AirBus`] (a world's 802.15.4
+//! medium), a transceiver that sends and receives frames.
 //!
 //! Source: SWRU319C §23 "Radio": Table 23-9 "RFCORE_XREG Register Summary"
 //! (reset values), Table 23-10 / Table 12-1 "RFCORE_SFR Register Summary",
@@ -33,28 +34,64 @@
 //!   with the last frame sent kept for inspection;
 //! - `MTCTRL.STATE` follows `MTCTRL.RUN` at once.
 //!
-//! NOT modelled: reception of any kind (there is no RF medium: `RXFIFOCNT`
-//! stays 0, `FIFO`/`FIFOP`/`SFD` never set, nothing is ever received, and a
-//! sent frame goes nowhere), frame filtering and source matching, the CSP
-//! (`RFST` program instructions other than the immediate strobes above), the
-//! MAC timer count (`MTM*`/`MTMOVF*` are storage), RF interrupts (no
-//! `RFIRQF*`/`RFERRF` flag raises an IRQ, and `TXDONE`/`RXPKTDONE` are never
-//! set), uDMA requests, the analog front end (`FREQCTRL`/`TXPOWER`/AGC are
-//! storage) and calibration failures.
+//!
+//! On a shared air (attached with `attach_ieee802154_air`; SWRU319C §23.9
+//! "Receive Mode", §23.9.5 frame filtering, §23.9.8 AUTOACK, §23.10 TX):
+//! - `ISTXON` puts the TX FIFO's MPDU (the bytes after the length byte, plus
+//!   the FCS when `FRMCTRL0.AUTOCRC`) on the air, its first bit 192 µs after
+//!   the strobe;
+//! - a frame from another radio on the same `FREQCTRL` channel, which started
+//!   after this receiver finished its RX calibration and did not overlap this
+//!   radio's own transmission, is filtered with `FRMFILT0/1` and the FFSM
+//!   `PAN_ID`/`SHORT_ADDR`/`EXT_ADDR` and, if accepted, appended to the
+//!   128-byte RX FIFO once its last bit has passed: length byte, MPDU, then
+//!   (AUTOCRC) RSSI and `CRC_OK | correlation` instead of the FCS, Figure
+//!   23-13. `RFDATA` pops it, `RXFIFOCNT`/`RXFIRST` report it, `FSMSTAT1`
+//!   `FIFO`/`FIFOP` follow it (a complete frame is always in the FIFO, so
+//!   `FIFOP` = `FIFO`), `ISFLUSHRX` empties it, and a frame that does not fit
+//!   sets `RFERRF.RXOVERF` and is dropped;
+//! - `RFIRQF0` `SFD | FIFOP | RXPKTDONE | FRAME_ACCEPTED` on reception and
+//!   `RFIRQF1.TXDONE` when a transmission ends; the RF TX/RX interrupt is the
+//!   level `RFIRQF0 & RFIRQM0 | RFIRQF1 & RFIRQM1`;
+//! - `FSMSTAT1.SFD` while another radio's frame is on the air past its SFD,
+//!   or this radio's own frame is past its SFD; `RSSI`/`CCA` see another
+//!   radio's frame on the channel as a -40 dBm signal (channel busy);
+//! - AUTOACK: the air sends the ACK on this radio's behalf from its published
+//!   filter settings (see [`crate::peripherals::ieee802154_air`]).
+//!
+//! NOT modelled: the CSP (`RFST` program instructions other than the
+//! immediate strobes above), the MAC timer count (`MTM*`/`MTMOVF*` are
+//! storage), the RF error interrupt (`RFERRF` flags are set but raise no
+//! IRQ), `RFIRQF0`/`RFIRQF1` sources other than the ones listed, source
+//! matching and AUTOPEND, `FIFOPCTRL` thresholds, uDMA requests (firmware
+//! triggers the uDMA by software), the analog front end (`TXPOWER`/AGC are
+//! storage) and calibration failures. Alone (no air), nothing is received and
+//! a sent frame goes nowhere.
 
 use super::{lane_merge, lane_read};
-use crate::{CycleClock, Peripheral, SimResult};
-use std::cell::Cell;
+use crate::peripherals::ieee802154_air::{self, Ieee802154AirBus, RxFilter};
+use crate::{Bus, CycleClock, Peripheral, SimResult};
+use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
 
 /// Window size (4 KiB block; the documented registers end at `0x83C`).
 pub const RFCORE_SIZE: usize = 0x1000;
 
+// FFSM local address information (Table 23-2).
+const EXT_ADDR0: u64 = 0x5A8;
+const PAN_ID0: u64 = 0x5C8;
+const PAN_ID1: u64 = 0x5CC;
+const SHORT_ADDR0: u64 = 0x5D0;
+const SHORT_ADDR1: u64 = 0x5D4;
 // XREG (Table 23-9), offsets in the 4-KiB window.
+const FRMFILT0: u64 = 0x600;
+const FRMFILT1: u64 = 0x604;
 const FRMCTRL0: u64 = 0x624;
 const FRMCTRL1: u64 = 0x628;
 const RXENABLE: u64 = 0x62C;
 const RXMASKSET: u64 = 0x630;
 const RXMASKCLR: u64 = 0x634;
+const FREQCTRL: u64 = 0x63C;
 const FSMSTAT0: u64 = 0x648;
 const FSMSTAT1: u64 = 0x64C;
 const CCACTRL0: u64 = 0x658;
@@ -63,12 +100,16 @@ const RSSISTAT: u64 = 0x664;
 const RXFIRST: u64 = 0x668;
 const RXFIFOCNT: u64 = 0x66C;
 const TXFIFOCNT: u64 = 0x670;
+const RFIRQM0: u64 = 0x68C;
+const RFIRQM1: u64 = 0x690;
 const RFRND: u64 = 0x69C;
 const FREQEST: u64 = 0x6A8;
 // SFR (Table 23-10 / 12-1).
 const MTCTRL: u64 = 0x804;
 const RFDATA: u64 = 0x828;
 const RFERRF: u64 = 0x82C;
+const RFIRQF1: u64 = 0x830;
+const RFIRQF0: u64 = 0x834;
 const RFST: u64 = 0x838;
 
 /// XREG reset values that are not 0 (Table 23-9).
@@ -111,9 +152,14 @@ const XREG_RESETS: &[(u64, u32)] = &[
 /// `CSPPROG0`-`CSPPROG23` (`0x700`-`0x75C`) reset to `0xD0`.
 const CSPPROG: std::ops::RangeInclusive<u64> = 0x700..=0x75C;
 
+const FRMCTRL0_AUTOACK: u32 = 1 << 5;
 const FRMCTRL0_AUTOCRC: u32 = 1 << 6;
 const FRMCTRL1_SET_RXENMASK_ON_TX: u32 = 1 << 0;
+const FRMCTRL1_PENDING_OR: u32 = 1 << 2;
 const FSMSTAT0_CAL_DONE: u32 = 1 << 7;
+const FSMSTAT1_FIFO: u32 = 1 << 7;
+const FSMSTAT1_FIFOP: u32 = 1 << 6;
+const FSMSTAT1_SFD: u32 = 1 << 5;
 const FSMSTAT1_CCA: u32 = 1 << 4;
 const FSMSTAT1_SAMPLED_CCA: u32 = 1 << 3;
 const FSMSTAT1_LOCK_STATUS: u32 = 1 << 2;
@@ -121,6 +167,12 @@ const FSMSTAT1_TX_ACTIVE: u32 = 1 << 1;
 const FSMSTAT1_RX_ACTIVE: u32 = 1 << 0;
 const RFERRF_TXUNDERF: u32 = 1 << 5;
 const RFERRF_TXOVERF: u32 = 1 << 4;
+const RFERRF_RXOVERF: u32 = 1 << 2;
+const RFIRQF0_SFD: u32 = 1 << 1;
+const RFIRQF0_FIFOP: u32 = 1 << 2;
+const RFIRQF0_FRAME_ACCEPTED: u32 = 1 << 5;
+const RFIRQF0_RXPKTDONE: u32 = 1 << 6;
+const RFIRQF1_TXDONE: u32 = 1 << 1;
 const MTCTRL_RUN: u32 = 1 << 0;
 const MTCTRL_STATE: u32 = 1 << 2;
 /// `MTCTRL` writable bits: RUN, SYNC, LATCH_MODE.
@@ -149,6 +201,11 @@ const BYTE_US: u64 = 32;
 const SHR_BYTES: u64 = 5;
 const FCS_BYTES: u64 = 2;
 const TXFIFO_BYTES: usize = 128;
+const RXFIFO_BYTES: usize = 128;
+/// RSSI of another radio's frame (a chosen strong in-range value), and the
+/// correlation value appended with `CRC_OK` (a typical good-link figure).
+const SIGNAL_DBM: i32 = -40;
+const RX_CORRELATION: u8 = 108;
 /// Noise floor reported when RSSI is valid (a chosen quiet-channel value),
 /// and the RSSI register offset (§23.10.3: "with an offset of 73 dB, reading
 /// an RSSI value of -10 ... means -83 dBm"; Contiki-NG `RSSI_OFFSET`).
@@ -175,11 +232,17 @@ pub struct Cc2538RfCore {
     /// Cycle at which the current RX calibration starts.
     rx_since: u64,
     tx: Option<TxBurst>,
+    /// `RFIRQF1.TXDONE` already raised for the current burst.
+    tx_done_flagged: bool,
     tx_fifo: Vec<u8>,
     last_tx_frame: Vec<u8>,
+    /// Received frames as Figure 23-13 lays them out; `RFDATA` reads pop.
+    rx_fifo: RefCell<VecDeque<u8>>,
     lfsr: Cell<u16>,
     #[serde(skip)]
     clock: Option<CycleClock>,
+    #[serde(skip)]
+    air: Option<(Ieee802154AirBus, usize)>,
 }
 
 impl Cc2538RfCore {
@@ -197,10 +260,13 @@ impl Cc2538RfCore {
             rxenable: 0,
             rx_since: 0,
             tx: None,
+            tx_done_flagged: false,
             tx_fifo: Vec::new(),
             last_tx_frame: Vec::new(),
+            rx_fifo: RefCell::new(VecDeque::new()),
             lfsr: Cell::new(LFSR_SEED),
             clock: None,
+            air: None,
         }
     }
 
@@ -216,6 +282,121 @@ impl Cc2538RfCore {
 
     fn now(&self) -> u64 {
         self.clock.as_ref().map_or(0, CycleClock::now)
+    }
+
+    /// `cycles` of this radio's clock in ns of world time.
+    fn ns(&self, cycles: u64) -> u64 {
+        (u128::from(cycles) * 1_000_000_000 / u128::from(self.clock_hz)) as u64
+    }
+
+    fn channel(&self) -> u32 {
+        self.reg(FREQCTRL) & 0x7F
+    }
+
+    /// Another radio's frame on this radio's channel at `now`, if any, as
+    /// world-time `(start_ns, end_ns)`.
+    fn air_signal(&self, now: u64) -> Option<(u64, u64)> {
+        let (air, node) = self.air.as_ref()?;
+        air.on_air(*node, self.channel(), self.ns(now))
+    }
+
+    /// This radio's receive settings as the air needs them for AUTOACK.
+    fn rx_filter(&self) -> RxFilter {
+        let f0 = self.reg(FRMFILT0);
+        let mut ext = [0u8; 8];
+        for (i, b) in ext.iter_mut().enumerate() {
+            *b = self.reg(EXT_ADDR0 + 4 * i as u64) as u8;
+        }
+        RxFilter {
+            listening: self.rxenable != 0,
+            channel: self.channel(),
+            frame_filter: f0 & 1 != 0,
+            pan_coordinator: f0 & 2 != 0,
+            max_frame_version: ((f0 >> 2) & 3) as u8,
+            fcf_reserved_mask: ((f0 >> 4) & 7) as u8,
+            // FRMFILT1 ACCEPT_FT_0..3 at bits 3..6; ACCEPT_FT_4TO7 is not
+            // modelled (reserved frame types are always rejected).
+            accept_types: ((self.reg(FRMFILT1) >> 3) & 0xF) as u8,
+            autoack: self.reg(FRMCTRL0) & FRMCTRL0_AUTOACK != 0,
+            ack_pending: self.reg(FRMCTRL1) & FRMCTRL1_PENDING_OR != 0,
+            pan_id: (self.reg(PAN_ID0) & 0xFF | (self.reg(PAN_ID1) & 0xFF) << 8) as u16,
+            short_addr: (self.reg(SHORT_ADDR0) & 0xFF | (self.reg(SHORT_ADDR1) & 0xFF) << 8) as u16,
+            ext_addr: ext,
+        }
+    }
+
+    fn publish_filter(&self) {
+        if let Some((air, node)) = &self.air {
+            air.set_filter(*node, &self.rx_filter());
+        }
+    }
+
+    /// Level of the RF TX/RX interrupt.
+    fn irq_level(&self) -> bool {
+        (self.reg(RFIRQF0) & self.reg(RFIRQM0)) | (self.reg(RFIRQF1) & self.reg(RFIRQM1)) != 0
+    }
+
+    /// Cycle from which a frame's first bit can be detected: RX on, the 192-µs
+    /// calibration done, and after this radio's own burst.
+    fn rx_ready_cycle(&self) -> Option<u64> {
+        if self.rxenable == 0 {
+            return None;
+        }
+        let start = match self.tx {
+            Some(b) => self.rx_since.max(b.end),
+            None => self.rx_since,
+        };
+        Some(start + self.cycles(TURNAROUND_US))
+    }
+
+    /// Take the frames whose last bit has passed and queue the accepted ones.
+    fn receive(&mut self, now: u64) {
+        let Some((air, node)) = self.air.clone() else {
+            return;
+        };
+        let frames = air.take_received(node, 0, self.ns(now));
+        if frames.is_empty() {
+            return;
+        }
+        let filter = self.rx_filter();
+        let own = self.tx.map(|b| {
+            (
+                self.ns(b.start + self.cycles(TURNAROUND_US)),
+                self.ns(b.end),
+            )
+        });
+        let ready = self.rx_ready_cycle().map(|c| self.ns(c));
+        for f in frames {
+            if f.channel != filter.channel || ready.is_none_or(|r| f.start_ns < r) {
+                continue;
+            }
+            if own.is_some_and(|(s, e)| f.start_ns < e && f.end_ns > s) {
+                continue;
+            }
+            if !ieee802154_air::filter(&filter, &f.mpdu).accepted {
+                continue;
+            }
+            let mut fifo = self.rx_fifo.borrow_mut();
+            if fifo.len() + 1 + f.mpdu.len() > RXFIFO_BYTES {
+                self.regs[(RFERRF / 4) as usize] |= RFERRF_RXOVERF;
+                continue;
+            }
+            let n = f.mpdu.len();
+            fifo.push_back(n as u8);
+            fifo.extend(&f.mpdu[..n.saturating_sub(2)]);
+            if self.reg(FRMCTRL0) & FRMCTRL0_AUTOCRC != 0 {
+                let (body, tail) = f.mpdu.split_at(n.saturating_sub(2));
+                let crc_ok = tail.len() == 2
+                    && ieee802154_air::fcs(body) == u16::from_le_bytes([tail[0], tail[1]]);
+                fifo.push_back((SIGNAL_DBM + RSSI_OFFSET_DB) as i8 as u8);
+                fifo.push_back(if crc_ok { 0x80 } else { 0 } | RX_CORRELATION);
+            } else {
+                fifo.extend(&f.mpdu[n.saturating_sub(2)..]);
+            }
+            drop(fifo);
+            self.regs[(RFIRQF0 / 4) as usize] |=
+                RFIRQF0_SFD | RFIRQF0_FIFOP | RFIRQF0_FRAME_ACCEPTED | RFIRQF0_RXPKTDONE;
+        }
     }
 
     /// `us` microseconds in CPU cycles. With no cycle clock attached, time
@@ -267,7 +448,12 @@ impl Cc2538RfCore {
 
     fn rssi_raw(&self, now: u64) -> u32 {
         if self.rssi_valid(now) {
-            ((NOISE_FLOOR_DBM + RSSI_OFFSET_DB) as i8 as u8).into()
+            let dbm = if self.air_signal(now).is_some() {
+                SIGNAL_DBM
+            } else {
+                NOISE_FLOOR_DBM
+            };
+            ((dbm + RSSI_OFFSET_DB) as i8 as u8).into()
         } else {
             RSSI_INVALID
         }
@@ -292,6 +478,19 @@ impl Cc2538RfCore {
         }
         if self.cca(now) {
             v |= FSMSTAT1_CCA | FSMSTAT1_SAMPLED_CCA;
+        }
+        if !self.rx_fifo.borrow().is_empty() {
+            v |= FSMSTAT1_FIFO | FSMSTAT1_FIFOP;
+        }
+        let own_sfd = self
+            .tx_at(now)
+            .is_some_and(|b| now >= b.start + self.cycles(TURNAROUND_US + SHR_BYTES * BYTE_US));
+        let rx_sfd = state == FSM_SFD_WAIT
+            && self
+                .air_signal(now)
+                .is_some_and(|(s, _)| self.ns(now) >= s + ieee802154_air::SFD_NS);
+        if own_sfd || rx_sfd {
+            v |= FSMSTAT1_SFD;
         }
         v
     }
@@ -323,7 +522,9 @@ impl Cc2538RfCore {
             RSSI => self.rssi_raw(now),
             RSSISTAT => u32::from(self.rssi_valid(now)),
             TXFIFOCNT => self.tx_fifo.len() as u32,
-            RXFIRST | RXFIFOCNT | FREQEST => 0,
+            RXFIFOCNT => self.rx_fifo.borrow().len() as u32,
+            RXFIRST => self.rx_fifo.borrow().front().copied().map_or(0, u32::from),
+            FREQEST => 0,
             RFRND => self.next_rnd(),
             MTCTRL => {
                 let v = self.reg(MTCTRL);
@@ -333,8 +534,8 @@ impl Cc2538RfCore {
                     v
                 }
             }
-            // The RX FIFO is always empty.
-            RFDATA => 0,
+            // Pops the RX FIFO (0 once empty; RX underflow is not flagged).
+            RFDATA => self.rx_fifo.borrow_mut().pop_front().map_or(0, u32::from),
             o if (o as usize) < RFCORE_SIZE => self.reg(o),
             _ => 0,
         }
@@ -354,7 +555,20 @@ impl Cc2538RfCore {
         let start = now;
         let end = start + self.cycles(TURNAROUND_US) + self.cycles(on_air);
         self.tx = Some(TxBurst { start, end });
+        self.tx_done_flagged = false;
         self.last_tx_frame = self.tx_fifo.clone();
+        if let Some((air, node)) = &self.air {
+            // The PHR length counts the FCS; the FIFO holds the rest.
+            let len = (self.tx_fifo[0] & 0x7F) as usize;
+            let body_len = len.saturating_sub(fcs as usize);
+            let mut mpdu: Vec<u8> = self.tx_fifo[1..].iter().take(body_len).copied().collect();
+            if fcs != 0 {
+                let c = ieee802154_air::fcs(&mpdu);
+                mpdu.extend_from_slice(&c.to_le_bytes());
+            }
+            let first_bit = self.ns(start + self.cycles(TURNAROUND_US));
+            air.transmit(*node, self.channel(), mpdu, first_bit);
+        }
         if self.reg(FRMCTRL1) & FRMCTRL1_SET_RXENMASK_ON_TX != 0 {
             self.rxenable |= 1 << 6;
         }
@@ -376,7 +590,7 @@ impl Cc2538RfCore {
                 self.tx = None;
             }
             ISFLUSHTX => self.tx_fifo.clear(),
-            ISFLUSHRX => {}
+            ISFLUSHRX => self.rx_fifo.borrow_mut().clear(),
             // CSP program instructions and the other strobes: not modelled.
             _ => {}
         }
@@ -399,6 +613,7 @@ impl Cc2538RfCore {
             RXMASKSET => self.rxenable |= byte,
             RXMASKCLR => self.rxenable &= !byte,
             MTCTRL => self.regs[(MTCTRL / 4) as usize] = byte & MTCTRL_RW,
+            RFIRQF0 | RFIRQF1 => self.regs[(off / 4) as usize] = byte,
             // Read-only status and computed registers.
             RXENABLE | FSMSTAT0 | FSMSTAT1 | RSSI | RSSISTAT | RXFIRST | RXFIFOCNT | TXFIFOCNT
             | RFRND | FREQEST => {}
@@ -430,6 +645,14 @@ impl Peripheral for Cc2538RfCore {
         Ok(lane_read(self.read_reg(offset & !3), offset))
     }
 
+    fn peek(&self, offset: u64) -> Option<u8> {
+        // A debugger read must not pop the RX FIFO.
+        if offset & !3 == RFDATA {
+            return Some(self.rx_fifo.borrow().front().copied().unwrap_or(0));
+        }
+        Some(lane_read(self.read_reg(offset & !3), offset))
+    }
+
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg = offset & !3;
         match reg {
@@ -441,6 +664,9 @@ impl Peripheral for Cc2538RfCore {
                 self.write_reg(reg, merged);
             }
         }
+        if reg != RFDATA {
+            self.publish_filter();
+        }
         Ok(())
     }
 
@@ -450,6 +676,9 @@ impl Peripheral for Cc2538RfCore {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         self.write_reg(offset & !3, value);
+        if offset & !3 != RFDATA {
+            self.publish_filter();
+        }
         Ok(())
     }
 
@@ -457,13 +686,52 @@ impl Peripheral for Cc2538RfCore {
         self.clock = Some(clock);
     }
 
-    fn on_node_reset(&mut self) {
-        let clock = self.clock.take();
-        *self = Self::new(self.clock_hz);
-        self.clock = clock;
+    fn attach_ieee802154_air(&mut self, air: Ieee802154AirBus) {
+        self.air = air.register().map(|node| (air, node));
+        self.publish_filter();
     }
 
-    snapshot_impl!(Cc2538RfCore, "Cc2538RfCore", keep[clock]);
+    /// On an air: receive frames and raise `TXDONE` while RX is on, a burst
+    /// is in flight or the RF interrupt is asserted.
+    fn needs_bus_tick(&self) -> bool {
+        self.air.is_some()
+            && (self.rxenable != 0
+                || (self.tx.is_some() && !self.tx_done_flagged)
+                || self.irq_level())
+    }
+
+    /// Frames from other nodes must keep arriving while the CPU sleeps in
+    /// WFI, so idle fast-forward is capped to the bus-tick poll quantum while
+    /// the receiver is on.
+    fn idle_poll_bus_tick(&self) -> bool {
+        self.air.is_some() && self.rxenable != 0
+    }
+
+    fn tick_with_bus(&mut self, _bus: &mut dyn Bus) {
+        let now = self.now();
+        if let Some(b) = self.tx {
+            if !self.tx_done_flagged && now >= b.end {
+                self.tx_done_flagged = true;
+                self.regs[(RFIRQF1 / 4) as usize] |= RFIRQF1_TXDONE;
+            }
+        }
+        self.receive(now);
+    }
+
+    fn irq_line_level(&self) -> Option<bool> {
+        self.air.as_ref().map(|_| self.irq_level())
+    }
+
+    fn on_node_reset(&mut self) {
+        let clock = self.clock.take();
+        let air = self.air.take();
+        *self = Self::new(self.clock_hz);
+        self.clock = clock;
+        self.air = air;
+        self.publish_filter();
+    }
+
+    snapshot_impl!(Cc2538RfCore, "Cc2538RfCore", keep[clock, air]);
 }
 
 #[cfg(test)]
@@ -599,6 +867,129 @@ mod tests {
         assert_eq!(sa, sb);
         assert!(sa.iter().any(|&v| v != sa[0]));
         assert!(sa.iter().all(|&v| v <= 0b11));
+    }
+
+    /// Two radios on one air with Contiki-NG's settings: PAN 0xABCD,
+    /// extended address `id`, AUTOCRC + AUTOACK, FIFOP unmasked, RX on.
+    fn on_air(air: &Ieee802154AirBus, clock: &CycleClock, id: u8) -> Cc2538RfCore {
+        let mut rf = Cc2538RfCore::new(DEFAULT_CLOCK_HZ);
+        rf.attach_cycle_clock(clock.clone());
+        rf.attach_ieee802154_air(air.clone());
+        rf.write_u32(FRMCTRL0, FRMCTRL0_AUTOCRC | FRMCTRL0_AUTOACK)
+            .unwrap();
+        rf.write_u32(PAN_ID0, 0xCD).unwrap();
+        rf.write_u32(PAN_ID1, 0xAB).unwrap();
+        rf.write_u32(EXT_ADDR0, u32::from(id)).unwrap();
+        rf.write_u32(RFIRQM0, RFIRQF0_FIFOP).unwrap();
+        rf.write_u32(RFST, u32::from(ISRXON)).unwrap();
+        rf
+    }
+
+    /// Data frame to `dst` from `src` (extended, PAN-ID compressed), AR set.
+    fn send(rf: &mut Cc2538RfCore, dst: u8, src: u8, seq: u8, payload: &[u8]) {
+        let fcf: u16 = 0x0001 | (1 << 5) | (1 << 6) | (3 << 10) | (1 << 12) | (3 << 14);
+        let mut mhr = fcf.to_le_bytes().to_vec();
+        mhr.push(seq);
+        mhr.extend_from_slice(&0xABCDu16.to_le_bytes());
+        mhr.extend_from_slice(&[dst, 0, 0, 0, 0, 0, 0, 0]);
+        mhr.extend_from_slice(&[src, 0, 0, 0, 0, 0, 0, 0]);
+        mhr.extend_from_slice(payload);
+        rf.write_u32(RFST, u32::from(ISFLUSHTX)).unwrap();
+        rf.write_u32(RFDATA, mhr.len() as u32 + 2).unwrap();
+        for b in mhr {
+            rf.write_u32(RFDATA, u32::from(b)).unwrap();
+        }
+        rf.write_u32(RFST, u32::from(ISTXON)).unwrap();
+    }
+
+    fn tick(rf: &mut Cc2538RfCore) {
+        let mut bus = crate::bus::SystemBus::new();
+        rf.tick_with_bus(&mut bus);
+    }
+
+    #[test]
+    fn a_unicast_frame_reaches_the_addressee_fifo_and_is_auto_acked() {
+        let air = Ieee802154AirBus::new();
+        let clock = CycleClock::default();
+        let mut a = on_air(&air, &clock, 1);
+        let mut b = on_air(&air, &clock, 2);
+        let mut c = on_air(&air, &clock, 3);
+        assert!(b.needs_bus_tick() && b.idle_poll_bus_tick());
+        clock.publish(1_000 * US);
+        send(&mut a, 2, 1, 0x5A, b"hi");
+        // MHR = FCF 2 + seq 1 + PAN 2 + dst 8 + src 8 = 21; MPDU = 21 + 2 + FCS 2.
+        let first_bit = 1_000 + 192;
+        let end = first_bit + (6 + 25) * 32;
+        clock.publish((first_bit + 5 * 32) * US);
+        assert_ne!(
+            b.read_u32(FSMSTAT1).unwrap() & FSMSTAT1_SFD,
+            0,
+            "SFD while the frame is on the air"
+        );
+        assert_eq!(b.read_u32(FSMSTAT1).unwrap() & FSMSTAT1_CCA, 0, "busy");
+        clock.publish(end * US - 1);
+        tick(&mut b);
+        assert_eq!(b.read_u32(RXFIFOCNT).unwrap(), 0, "not before the last bit");
+        clock.publish(end * US);
+        tick(&mut b);
+        tick(&mut c);
+        assert_eq!(c.read_u32(RXFIFOCNT).unwrap(), 0, "filtered: not for c");
+        // Length byte (MPDU incl. FCS), 23 body bytes, RSSI, CRC_OK|corr.
+        assert_eq!(b.read_u32(RXFIFOCNT).unwrap(), 1 + 23 + 2);
+        let s1 = b.read_u32(FSMSTAT1).unwrap();
+        assert_ne!(s1 & FSMSTAT1_FIFOP, 0);
+        assert_ne!(s1 & FSMSTAT1_FIFO, 0);
+        assert_eq!(b.irq_line_level(), Some(true), "FIFOP unmasked");
+        let frame: Vec<u8> = (0..26).map(|_| b.read_u32(RFDATA).unwrap() as u8).collect();
+        assert_eq!(frame[0], 25);
+        assert_eq!(frame[3], 0x5A, "sequence number");
+        assert_eq!(&frame[22..24], b"hi");
+        assert_eq!(frame[24] as i8, (SIGNAL_DBM + RSSI_OFFSET_DB) as i8);
+        assert_eq!(frame[25], 0x80 | RX_CORRELATION, "CRC_OK");
+        assert_eq!(b.read_u32(FSMSTAT1).unwrap() & FSMSTAT1_FIFOP, 0);
+        b.write_u32(RFIRQF0, 0).unwrap();
+        assert_eq!(b.irq_line_level(), Some(false));
+        // The ACK from b, 192 µs after the frame, back at a.
+        let ack_end = end + 192 + (6 + 5) * 32;
+        clock.publish(ack_end * US);
+        tick(&mut a);
+        assert_eq!(a.read_u32(RXFIFOCNT).unwrap(), 1 + 3 + 2);
+        let ack: Vec<u8> = (0..4).map(|_| a.read_u32(RFDATA).unwrap() as u8).collect();
+        assert_eq!(ack, vec![5, 0x02, 0x00, 0x5A]);
+        // a's own frame never comes back to a.
+        a.write_u32(RFST, u32::from(ISFLUSHRX)).unwrap();
+        assert_eq!(a.read_u32(RXFIFOCNT).unwrap(), 0);
+        assert_ne!(a.read_u32(RFIRQF1).unwrap() & RFIRQF1_TXDONE, 0);
+    }
+
+    #[test]
+    fn a_receiver_that_is_off_or_on_another_channel_hears_nothing() {
+        let air = Ieee802154AirBus::new();
+        let clock = CycleClock::default();
+        let mut a = on_air(&air, &clock, 1);
+        let mut b = on_air(&air, &clock, 2);
+        let mut c = on_air(&air, &clock, 3);
+        b.write_u32(RFST, u32::from(ISRFOFF)).unwrap();
+        assert!(!b.needs_bus_tick() && !b.idle_poll_bus_tick());
+        c.write_u32(FREQCTRL, 0x0B + 5).unwrap();
+        clock.publish(1_000 * US);
+        send(&mut a, 2, 1, 1, b"x");
+        send(&mut a, 3, 1, 2, b"x");
+        clock.publish(100_000 * US);
+        tick(&mut b);
+        tick(&mut c);
+        assert_eq!(b.read_u32(RXFIFOCNT).unwrap(), 0);
+        assert_eq!(c.read_u32(RXFIFOCNT).unwrap(), 0);
+        // No ACK either: nobody was listening on the channel.
+        tick(&mut a);
+        assert_eq!(a.read_u32(RXFIFOCNT).unwrap(), 0);
+    }
+
+    #[test]
+    fn without_an_air_no_irq_line_is_driven() {
+        let (rf, _) = radio();
+        assert_eq!(rf.irq_line_level(), None);
+        assert!(!rf.needs_bus_tick());
     }
 
     #[test]
