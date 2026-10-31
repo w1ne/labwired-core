@@ -299,6 +299,29 @@ pub enum Instruction {
     Bl {
         offset: i32,
     }, // BL <label> (32-bit T1+T2)
+    // Armv8.1-M low-overhead loops (no tail predication: DLSTP/WLSTP/LETP
+    // and LCTP need MVE and are not decoded).
+    Dls {
+        rn: u8,
+    }, // DLS LR, Rn
+    Wls {
+        rn: u8,
+        imm: u16,
+    }, // WLS LR, Rn, <label> (forward, PC + 4 + imm)
+    Le {
+        lr: bool,
+        imm: u16,
+    }, // LE LR, <label> / LE <label> (backward, PC + 4 - imm)
+    // Armv8.1-M conditional select: Rd = cond ? Rn : f(Rm) with f = id
+    // (CSEL), +1 (CSINC), NOT (CSINV), negate (CSNEG). Register 15 in Rn/Rm
+    // is the zero register (the CSET/CSETM/CINC/CINV/CNEG aliases).
+    Csel {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        cond: u8,
+        op: u8,
+    },
     Bx {
         rm: u8,
     }, // BX Rm
@@ -1446,6 +1469,9 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // `_early`/`_mid`/`_late` functions rather than reordered.
     // First: the FP encodings live in the coprocessor space (MCR/MRC for
     // VMOV-to-scalar and VMRS/VMSR), which `decode_system` would claim.
+    if let Some(i) = arm_thumb32::decode_v81m_csel(h1, h2) {
+        return i;
+    }
     if let Some(i) = arm_thumb32::decode_vfp_generic(h1, h2) {
         return i;
     }

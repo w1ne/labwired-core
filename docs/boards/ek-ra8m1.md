@@ -11,16 +11,40 @@ console and the GPIO LED path (with `PCNTR1` PODR read-back) are proven by a
 committed smoke fixture and an `io-smoke.yaml`. The RA8 SCI is the 32-bit
 **SCI_B** block, not the classic SCI of RA4M1/RA6M5, so this slice adds a
 `sci_b` UART layout, an RA8 PFS (`ra8_pfs`: `PWPR`/`PWPRS` moved) and an RA8
-SYSTEM window (`ra8_sysc`: the SCICKCR clock-switch handshake). PORT0–B reuse
-the RA `ra_port` model.
+SYSTEM window (`ra8_sysc`). PORT0–B reuse the RA `ra_port` model.
+
+**Stock Zephyr v3.7.0** `samples/hello_world` and `samples/synchronization`
+for board `ek_ra8m1` also boot, unmodified, from committed fixtures rebuilt
+byte-identical by
+[`crates/firmware-ek-ra8m1-zephyr/build.sh`](../../crates/firmware-ek-ra8m1-zephyr/build.sh).
+That needed three things:
+
+- **Armv8.1-M scalar instructions.** Zephyr builds for
+  `-mcpu=cortex-m85+nomve`, and GCC 13 emits a `DLS`/`LE` low-overhead loop
+  (`z_arm_interrupt_init`) and `CSINC` (`cbprintf`). The decoder now handles
+  `DLS`/`WLS`/`LE` and `CSEL`/`CSINC`/`CSINV`/`CSNEG`. Before this, `DLS`/`LE`
+  fell into a legacy fallback that skipped them, so such a loop silently ran
+  its body once.
+- **The FSP clock bring-up.** `ra8_sysc` is now a full `R_SYSTEM` register
+  file: `OSCSF` follows the HOCO/MOSC/PLL/PLL2 stop bits, and every
+  peripheral-clock switch register (`SCICKCR`, `SPICKCR`, … `I3CCKCR`)
+  answers the CKSREQ→CKSRDY handshake. `bsp_clock_init` starts the main
+  oscillator and both PLLs and moves ICLK to PLL1P.
+- **The ICU IELSR window.** `R_ICU_Type` runs 0x6480 bytes from
+  `0x4000_6000`, with `WUPEN`/`IELSR` at `0x4000_C000`+. Zephyr's SCI_B driver
+  clears `IELSRn.IR` at init. Only the first 2 KiB were mapped, so that store
+  hit a BusFault.
 
 !!! warning "Not claimed yet"
-    The core runs Armv8-M Mainline code only: **Helium/MVE**, the Armv8.1-M
-    low-overhead branches and PACBTI are not decoded, so firmware built with
-    `-mcpu=cortex-m85` auto-vectorisation will stop with a decode error.
+    The core decodes Armv8-M Mainline plus the scalar Armv8.1-M `DLS`/`WLS`/
+    `LE` and `CSEL` family. **Helium/MVE**, the tail-predicated loops, PACBTI
+    and `BF*` are not decoded, so firmware built with `-mcpu=cortex-m85`
+    and MVE enabled will stop with a decode error.
     **TrustZone** is not modelled (no security state, non-secure aliases not
-    mapped). Clock generation is not modelled beyond the SCICKCR handshake; no
-    rate is derived from it. Module stop (MSTP) and ICU event linking are
+    mapped). Clock generation is register-level only: oscillators and PLLs
+    settle at once, and no rate is derived from the selected sources
+    (`cpu_hz` stays 8 MHz after Zephyr moves ICLK to the 480 MHz PLL1P).
+    Module stop (MSTP) and ICU event linking are
     declared stubs, the PFS peripheral mux is stored only, and SCI_B runs
     polled async only (no FIFO, interrupts or wire timing). DMAC/DTC, FCACHE,
     FACI, ELC, RTC, IWDT/WDT, AGT, GPT, IIC, SPI, ADC12, USBFS/USBHS, ETHERC
@@ -41,11 +65,11 @@ the RA `ra_port` model.
 |--------|--------|
 | Chip descriptor | [`configs/chips/r7fa8m1ah.yaml`](../../configs/chips/r7fa8m1ah.yaml) |
 | Example system | [`configs/systems/ek-ra8m1.yaml`](../../configs/systems/ek-ra8m1.yaml) |
-| Reference firmware | [`crates/firmware-ek-ra8m1-smoke/`](../../crates/firmware-ek-ra8m1-smoke/) |
+| Reference firmware | [`crates/firmware-ek-ra8m1-smoke/`](../../crates/firmware-ek-ra8m1-smoke/), stock Zephyr via [`crates/firmware-ek-ra8m1-zephyr/`](../../crates/firmware-ek-ra8m1-zephyr/) |
 | Example | [`examples/ek-ra8m1/`](../../examples/ek-ra8m1/) |
-| Committed artifact | `tests/fixtures/ek-ra8m1-smoke.elf` (`EK-RA8M1 SMOKE`) |
+| Committed artifact | `tests/fixtures/ek-ra8m1-smoke.elf` (`EK-RA8M1 SMOKE`), `tests/fixtures/r7fa8m1ah-zephyr-{hello,sync}.elf` (stock Zephyr v3.7.0) |
 | Build target | `thumbv8m.main-none-eabi` |
-| Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI9); SIM-DERIVED |
+| Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI9) plus stock Zephyr hello_world/synchronization; SIM-DERIVED |
 
 ---
 
@@ -55,13 +79,13 @@ the RA `ra_port` model.
 |--------|------|-------|
 | ITCM | `0x0000_0000`, 64 KiB | mapped RAM (secure alias only) |
 | Code flash | `0x0200_0000`, 2 MiB | modelled — the smoke links and runs here |
-| Option-setting memory | `0x0300_A100`+ | not mapped — OFS0/OFS1 reset defaults are assumed |
+| Option-setting memory | `0x0300_A100`+ | not mapped — OFS0/OFS1 reset defaults are assumed; the Zephyr ELF's OFS segments are dropped with a loader warning |
 | DTCM | `0x2000_0000`, 64 KiB | mapped RAM (secure alias only) |
 | SRAM | `0x2200_0000`, 896 KiB | modelled — stack at the top |
 | Data flash | `0x2700_0000`, 12 KiB | mapped, erased (reads `0xFF`); no FACI programming |
-| SYSTEM | `0x4001_E000` | `ra8_sysc` — HOCOCR/OSCSF and SCICKDIVCR/SCICKCR (CKSREQ→CKSRDY); the rest reads 0, writes dropped |
+| SYSTEM | `0x4001_E000` | `ra8_sysc` — every `R_SYSTEM` register stored; `OSCSF` derived from HOCOCR/MOSCCR/PLLCR/PLL2CR; CKSREQ→CKSRDY on every xxxCKCR; no rates derived |
 | MSTP | `0x4020_3000` | `type: stub` — module stop not modelled |
-| ICU | `0x4000_6000` | `type: stub` — IELSR event linking not modelled |
+| ICU | `0x4000_6000` (IRQCR/NMI) and `0x4000_C000` (WUPEN/IELSR) | `type: stub` ×2 — IELSR event linking not modelled |
 | PORT0–B | `0x4040_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
 | PFS / PWPR / PWPRS | `0x4040_0800` / `0x4040_0D0C` / `0x4040_0D14` | modelled (`ra8_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
 | SCI9 (console) | `0x4035_8900` | modelled — SCI_B, async, polled |
@@ -84,6 +108,9 @@ separate region that this image does not program.
 # from the repository root
 cargo build -p firmware-ek-ra8m1-smoke --release --target thumbv8m.main-none-eabi
 ./target/release/labwired test --script examples/ek-ra8m1/io-smoke.yaml --no-uart-stdout
+# stock Zephyr v3.7.0 (fixtures committed; rebuild with crates/firmware-ek-ra8m1-zephyr/build.sh)
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-sync.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra8m1/VALIDATION.md`](../../examples/ek-ra8m1/VALIDATION.md)

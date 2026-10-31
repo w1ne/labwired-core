@@ -17,10 +17,10 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32l552 | open | L1 | 48 | 904.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
 | cc2538sf53 | open | L1 | 28 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
 | r7fa6m5bh | open | L1 | 33 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa6m5bh.md) |
-| r7fa8m1ah | open | L1 | 34 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |
+| r7fa8m1ah | open | L1 | 35 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |
 | amap42kp | open | L1 | 44 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/amap42kp.md) |
 | mk64f12 | open | L1 | 25 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/mk64f12.md) |
-| same70q21b | open | L1 | 22 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/same70q21b.md) |
+| same70q21b | open | L1 | 24 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/same70q21b.md) |
 | s32k388 | open | L1 | 38 | 907.8 | 1.4 | ≥1× (CI) | [doc](docs/boards/s32k388.md) |
 | mimxrt595s | open | L1 | 19 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/mimxrt595s.md) |
 | sam4s16c | open | L1 | 20 | — | — | ≥1× (CI) | [doc](docs/boards/sam4s16c.md) |
