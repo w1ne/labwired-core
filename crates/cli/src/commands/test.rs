@@ -2407,7 +2407,15 @@ pub(crate) fn run_test(
                                         );
                                     }
                                     // App image magic at start of factory partition.
-                                    if f.len() > factory_off {
+                                    // VA 0x4200_0000 maps here, so only stamp the
+                                    // 0x20-byte image-header slot when the ELF left
+                                    // it empty (IDF/Arduino). A bare-metal ELF
+                                    // linked at 0x4200_0000 owns it — stamping
+                                    // would clobber its first instruction.
+                                    let header_slot_free = !flash_page_has_payload(
+                                        &machine.bus.flash.data[..irom_len.min(0x20)],
+                                    );
+                                    if header_slot_free && f.len() > factory_off {
                                         f[factory_off] = 0xE9;
                                     }
                                 }
