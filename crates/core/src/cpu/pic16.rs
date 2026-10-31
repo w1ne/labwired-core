@@ -323,9 +323,13 @@ const fn edev(
 /// 0x19A-0x19E, with any address the model touches either the same register
 /// or free. The OSCSTAT ready mask picks the map.
 ///
-/// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99 or
-/// without PORTC (PIC16F6xx/8x/81x/84A and friends), the OTP/EPROM PIC16C
-/// parts; enhanced parts without an EUSART (PIC16F1503/1507/1613/1703/1707),
+/// Classic parts without PORTC (PIC16F627A/628A/648A, PIC16F87/88) have a
+/// zero PORTC mask, so 0x07 reads 0 and ignores writes; the checker requires
+/// the address to be free in their header. The OTP/EPROM PIC16C63A/73B/74B
+/// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
+///
+/// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
+/// (PIC16F6xx/81x/84A/716 and friends); enhanced parts without an EUSART (PIC16F1503/1507/1613/1703/1707),
 /// with PIR1 at 0x010 (PIC16F161x), with comparator SFRs at LATD/LATE
 /// (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
 /// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
@@ -677,6 +681,59 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         "pic16f946",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev("pic16c63a", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
+    dev("pic16c73b", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
+    dev("pic16c74b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
+    dev(
+        "pic16f627a",
+        1024,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f628a",
+        2048,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f648a",
+        4096,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f87",
+        4096,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev(
+        "pic16f88",
+        4096,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
         &[
             (0x0F0, 0x0FF, 0x070),
             (0x170, 0x17F, 0x070),
@@ -3050,6 +3107,26 @@ mod tests {
         let d = pic16_device("pic16f887").expect("887 row");
         assert_eq!(d.port_masks, [0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
         assert_eq!(d.flash_words, 8192);
+    }
+
+    #[test]
+    fn parts_without_portc_read_it_as_zero() {
+        // PIC16F628A / PIC16F88: PORTA and PORTB only; 0x07 is unimplemented
+        // (DS40044G, DS30487D) and reads 0 whatever is written to it.
+        for name in ["pic16f628a", "pic16f88"] {
+            let mut cpu = Pic16::for_chip_name(name);
+            cpu.write_data(0x87, 0x00);
+            cpu.write_data(0x07, 0xFF);
+            assert_eq!(cpu.read_data(0x07), 0x00, "{name} PORTC");
+            cpu.write_data(0x86, 0x00);
+            cpu.write_data(0x06, 0xA5);
+            assert_eq!(cpu.read_data(0x06), 0xA5, "{name} PORTB still works");
+        }
+        // The same write sequence on a part with PORTC drives the pins.
+        let mut cpu = Pic16::for_chip_name("pic16c73b");
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0xFF);
+        assert_eq!(cpu.read_data(0x07), 0xFF);
     }
 
     #[test]

@@ -57,10 +57,10 @@ MIRRORS = (0x101, 0x106, 0x181, 0x186)
 
 SFRS = {
     "INDF": 0x00, "TMR0": 0x01, "PCL": 0x02, "STATUS": 0x03, "FSR": 0x04,
-    "PORTA": 0x05, "PORTB": 0x06, "PORTC": 0x07,
+    "PORTA": 0x05, "PORTB": 0x06,
     "PCLATH": 0x0A, "INTCON": 0x0B, "PIR1": 0x0C,
     "RCSTA": 0x18, "TXREG": 0x19,
-    "OPTION_REG": 0x81, "TRISA": 0x85, "TRISB": 0x86, "TRISC": 0x87,
+    "OPTION_REG": 0x81, "TRISA": 0x85, "TRISB": 0x86,
     "PIE1": 0x8C, "TXSTA": 0x98, "SPBRG": 0x99,
 }
 # Optional SFRs: if the part has them they must be at these addresses.
@@ -68,6 +68,11 @@ OPTIONAL_SFRS = {
     "PORTD": 0x08, "PORTE": 0x09, "TRISD": 0x88, "TRISE": 0x89,
     "PIR2": 0x0D, "PIE2": 0x8D,
 }
+# Optional ports the model always decodes (PORTC reads latch & !TRISC &
+# mask). A part without one (PIC16F627A/628A/648A, PIC16F87/88) gets a zero
+# port mask, so the port reads 0 and ignores writes, as on silicon; the
+# address must then be free in the header.
+OPTIONAL_FREE_SFRS = {"PORTC": 0x07, "TRISC": 0x87}
 # Bit masks the model decodes.
 BITS = {
     "C": 0x01, "DC": 0x02, "Z": 0x04, "NOT_PD": 0x08, "NOT_TO": 0x10,
@@ -159,6 +164,14 @@ def check(part: str) -> list[str]:
     for name, want in OPTIONAL_SFRS.items():
         if name in addrs and addrs[name] != want:
             bad.append(f"{name} at {addrs[name]:#x}, model {want:#x}")
+    for name, want in OPTIONAL_FREE_SFRS.items():
+        if name in addrs:
+            if addrs[name] != want:
+                bad.append(f"{name} at {addrs[name]:#x}, model {want:#x}")
+        else:
+            others = sorted(n for n, a in addrs.items() if a == want)
+            if others:
+                bad.append(f"{want:#x} is {others[0]}, model {name}")
     for name, want in BITS.items():
         found = re.search(rf"#define\s+_{name}\s+0x([0-9A-Fa-f]+)", h)
         if not found or int(found[1], 16) != want:
