@@ -229,6 +229,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_mimxrt595_evk_smoke_survival"),
     },
     ChipConf {
+        // LPC1114FN28/102 (Cortex-M0, DIP-28). SIM-DERIVED: no LPC1114 bench
+        // part. Modelled: the UART (lpc11xx layout: DLAB/FDR/TER), GPIO0-3
+        // (lpc11xx_gpio: masked DATA, edge/level IRQs), SYSCON and IOCON
+        // (declarative, from the NXP SVD; PLL lock on power-up). I2C, WWDT,
+        // the counter/timers, ADC, PMU, flash controller and SSP0 are declared
+        // stubs — see examples/lpc1114fn28-dip/VALIDATION.md.
+        name: "lpc1114fn28",
+        yaml: "configs/chips/lpc1114fn28.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_lpc1114fn28_dip_smoke_survival"),
+    },
+    ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
         // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system

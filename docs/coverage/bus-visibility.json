@@ -143,6 +143,10 @@
   },
   {
     "buses": [],
+    "name": "lpc1114fn28"
+  },
+  {
+    "buses": [],
     "name": "mimxrt595s"
   },
   {

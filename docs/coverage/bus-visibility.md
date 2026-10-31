@@ -54,6 +54,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no edge bring-up path for i.MX LPUART in this gate yet
 * **litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the litex-vexriscv survival smoke
+* **lpc1114fn28**
+  * UART: no UART DLAB/divisor bring-up in this harness; bytes are proven by the lpc1114fn28-dip survival smoke
 * **mimxrt595s**
   * UART: no FLEXCOMM0 USART bring-up in this harness; bytes are proven by the mimxrt595-evk survival smoke
 * **mk64f12**
@@ -134,6 +136,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
+| lpc1114fn28 | — | — | — |
 | mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |

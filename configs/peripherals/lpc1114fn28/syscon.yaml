@@ -1,0 +1,244 @@
+# NXP LPC1114FN28/102 SYSCON (system configuration, 0x4004_8000).
+# Register offsets, access and reset values: NXP CMSIS-SVD LPC11xx_v6a.svd
+# (cmsis-svd-data, peripheral SYSCON), except:
+# - DEVICE_ID 0x1A40902B: LPC1114FN28/102 / LPC1114FDH28/102 (current silicon
+#   revision; lpc21isp lpcprog.c part table, which also lists 0x0A40902B for
+#   the earlier revision). The v6 SVD predates the /102 parts.
+# - SYSPLLSTAT.LOCK: set once firmware powers the PLL up (PDRUNCFG.SYSPLL_PD,
+#   bit 7, written 0) and cleared when it powers it down. The real lock time
+#   (and the MSEL/PSEL frequency) is not modelled: the core clock stays at
+#   the chip's cpu_hz whatever SYSPLLCTRL/MAINCLKSEL select.
+# The clock-source update registers (SYSPLLCLKUEN, MAINCLKUEN, ...) are plain
+# read-write: CMSIS SystemInit writes 1, 0, 1 and polls bit 0 back.
+peripheral: SYSCON
+version: 0.1.0
+registers:
+- id: SYSMEMREMAP
+  address_offset: 0x000
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000002
+  description: "System memory remap"
+- id: PRESETCTRL
+  address_offset: 0x004
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Peripheral reset control"
+- id: SYSPLLCTRL
+  address_offset: 0x008
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "System PLL control"
+- id: SYSPLLSTAT
+  address_offset: 0x00C
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  description: "System PLL status"
+- id: SYSOSCCTRL
+  address_offset: 0x020
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "System oscillator control"
+- id: WDTOSCCTRL
+  address_offset: 0x024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Watchdog oscillator control"
+- id: IRCCTRL
+  address_offset: 0x028
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000080
+  description: "IRC control"
+- id: SYSRSTSTAT
+  address_offset: 0x030
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  description: "System reset status register"
+- id: SYSPLLCLKSEL
+  address_offset: 0x040
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "System PLL clock source select"
+- id: SYSPLLCLKUEN
+  address_offset: 0x044
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "System PLL clock source update enable"
+- id: MAINCLKSEL
+  address_offset: 0x070
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Main clock source select"
+- id: MAINCLKUEN
+  address_offset: 0x074
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Main clock source update enable"
+- id: SYSAHBCLKDIV
+  address_offset: 0x078
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000001
+  description: "System AHB clock divider"
+- id: SYSAHBCLKCTRL
+  address_offset: 0x080
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0000085F
+  description: "System AHB clock control"
+- id: SSP0CLKDIV
+  address_offset: 0x094
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "SPI0 clock divider"
+- id: UARTCLKDIV
+  address_offset: 0x098
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "UART clock divder"
+- id: SSP1CLKDIV
+  address_offset: 0x09C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "SPI1 clock divder"
+- id: WDTCLKSEL
+  address_offset: 0x0D0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "WDT clock source select"
+- id: WDTCLKUEN
+  address_offset: 0x0D4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "WDT clock source update enable"
+- id: WDTCLKDIV
+  address_offset: 0x0D8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "WDT clock divider"
+- id: CLKOUTCLKSEL
+  address_offset: 0x0E0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "CLKOUT clock source select"
+- id: CLKOUTUEN
+  address_offset: 0x0E4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "CLKOUT clock source update enable"
+- id: CLKOUTCLKDIV
+  address_offset: 0x0E8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "CLKOUT clock divider"
+- id: PIOPORCAP0
+  address_offset: 0x100
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  description: "POR captured PIO status 0"
+- id: PIOPORCAP1
+  address_offset: 0x104
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  description: "POR captured PIO status 1"
+- id: BODCTRL
+  address_offset: 0x150
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "BOD control"
+- id: SYSTCKCAL
+  address_offset: 0x154
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000004
+  description: "System tick counter calibration"
+- id: NMISRC
+  address_offset: 0x174
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "NMI source selection"
+- id: STARTAPRP0
+  address_offset: 0x200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Start logic edge control register 0"
+- id: STARTERP0
+  address_offset: 0x204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Start logic signal enable register 0"
+- id: STARTRSRP0CLR
+  address_offset: 0x208
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0x00000000
+  description: "Start logic reset register 0"
+- id: STARTSRP0
+  address_offset: 0x20C
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x00000000
+  description: "Start logic status register 0"
+- id: PDSLEEPCFG
+  address_offset: 0x230
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "Power-down states in Deep-sleep mode"
+- id: PDAWAKECFG
+  address_offset: 0x234
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0000EDF0
+  description: "Power-down states after wake-up from Deep-sleep mode"
+- id: PDRUNCFG
+  address_offset: 0x238
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0000EDF0
+  description: "Power-down configuration register"
+- id: DEVICE_ID
+  address_offset: 0x3F4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x1A40902B
+  description: "Device ID register 0 for parts LPC1100, LPC1100C, LPC1100L."
+timing:
+- id: syspll_lock
+  trigger: !write
+    { register: PDRUNCFG, value: 0x00, mask: 0x80 }
+  delay_cycles: 1
+  action:
+    set_bits: { register: SYSPLLSTAT, bits: 0x1 }
+- id: syspll_unlock
+  trigger: !write
+    { register: PDRUNCFG, value: 0x80, mask: 0x80 }
+  delay_cycles: 1
+  action:
+    clear_bits: { register: SYSPLLSTAT, bits: 0x1 }

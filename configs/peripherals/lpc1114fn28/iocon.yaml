@@ -1,0 +1,328 @@
+# NXP LPC111x IOCON (I/O configuration, 0x4004_4000).
+# Register offsets and reset values: NXP CMSIS-SVD LPC11xx_v6a.svd
+# (cmsis-svd-data, peripheral IOCON): 0xD0 (FUNC 0, MODE pull-up,
+# hysteresis off) on the GPIO pads, 0x00 on the true open-drain I2C pads
+# PIO0_4/PIO0_5 and the *_LOC pin-location selects.
+# Stored only: pin function, pull and open-drain settings do not reach the
+# GPIO model (lpc11xx_gpio treats every pad as a GPIO with the reset pull-up).
+peripheral: IOCON
+version: 0.1.0
+registers:
+- id: PIO2_6
+  address_offset: 0x000
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_6/ CT32B0_MAT1"
+- id: PIO2_0
+  address_offset: 0x008
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_0/DTR/SSEL1"
+- id: RESET_PIO0_0
+  address_offset: 0x00C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin RESET/PIO0_0"
+- id: PIO0_1
+  address_offset: 0x010
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_1/CLKOUT/CT32B0_MAT2"
+- id: PIO1_8
+  address_offset: 0x014
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_8/CT16B1_CAP0"
+- id: SSEL1_LOC
+  address_offset: 0x018
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "SSEL1 pin location select register"
+- id: PIO0_2
+  address_offset: 0x01C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_2/SSEL0/CT16B0_CAP0"
+- id: PIO2_7
+  address_offset: 0x020
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_7/ CT32B0_MAT2/RXD"
+- id: PIO2_8
+  address_offset: 0x024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_8/ CT32B0_MAT3/TXD"
+- id: PIO2_1
+  address_offset: 0x028
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_1/DSR/SCK1"
+- id: PIO0_3
+  address_offset: 0x02C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_3"
+- id: PIO0_4
+  address_offset: 0x030
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "I/O configuration for pin PIO0_4/SCL"
+- id: PIO0_5
+  address_offset: 0x034
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "I/O configuration for pin PIO0_5/SDA"
+- id: PIO1_9
+  address_offset: 0x038
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_9/CT16B1_MAT0/ MOSI1"
+- id: PIO3_4
+  address_offset: 0x03C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO3_4/ CT16B0_CAP1/RXD"
+- id: PIO2_4
+  address_offset: 0x040
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_4/ CT16B1_MAT1/ SSEL1"
+- id: PIO2_5
+  address_offset: 0x044
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_5/ CT32B0_MAT0"
+- id: PIO3_5
+  address_offset: 0x048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO3_5/ CT16B1_CAP1/TXD"
+- id: PIO0_6
+  address_offset: 0x04C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_6/SCK0"
+- id: PIO0_7
+  address_offset: 0x050
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_7/CTS"
+- id: PIO2_9
+  address_offset: 0x054
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_9/ CT32B0_CAP0"
+- id: PIO2_10
+  address_offset: 0x058
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_10"
+- id: PIO2_2
+  address_offset: 0x05C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_2/DCD/MISO1"
+- id: PIO0_8
+  address_offset: 0x060
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_8/MISO0/CT16B0_MAT0"
+- id: PIO0_9
+  address_offset: 0x064
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO0_9/MOSI0/CT16B0_MAT1"
+- id: SWCLK_PIO0_10
+  address_offset: 0x068
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin SWCLK/PIO0_10/ SCK0/CT16B0_MAT2"
+- id: PIO1_10
+  address_offset: 0x06C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_10/AD6/CT16B1_MAT1/ MISO1"
+- id: PIO2_11
+  address_offset: 0x070
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_11/SCK0/ CT32B0_CAP1"
+- id: R_PIO0_11
+  address_offset: 0x074
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin R/PIO0_11/AD0/CT32B0_MAT3"
+- id: R_PIO1_0
+  address_offset: 0x078
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin R/PIO1_0/AD1/CT32B1_CAP0"
+- id: R_PIO1_1
+  address_offset: 0x07C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin R/PIO1_1/AD2/CT32B1_MAT0"
+- id: R_PIO1_2
+  address_offset: 0x080
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin R/PIO1_2/AD3/CT32B1_MAT1"
+- id: PIO3_0
+  address_offset: 0x084
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO3_0/DTR/CT16B0_MAT0/TXD"
+- id: PIO3_1
+  address_offset: 0x088
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO3_1/DSR/CT16B0_MAT1/RXD"
+- id: PIO2_3
+  address_offset: 0x08C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO2_3/RI/MOSI1"
+- id: SWDIO_PIO1_3
+  address_offset: 0x090
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin SWDIO/PIO1_3/AD4/CT32B1_MAT2"
+- id: PIO1_4
+  address_offset: 0x094
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_4/AD5/CT32B1_MAT3"
+- id: PIO1_11
+  address_offset: 0x098
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_11/AD7/CT32B1_CAP1"
+- id: PIO3_2
+  address_offset: 0x09C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO3_2/DCD/ CT16B0_MAT2/SCK1"
+- id: PIO1_5
+  address_offset: 0x0A0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_5/RTS/CT32B0_CAP0"
+- id: PIO1_6
+  address_offset: 0x0A4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_6/RXD/CT32B0_MAT0"
+- id: PIO1_7
+  address_offset: 0x0A8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO1_7/TXD/CT32B0_MAT1"
+- id: PIO3_3
+  address_offset: 0x0AC
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x000000D0
+  description: "I/O configuration for pin PIO3_3/RI/ CT16B0_CAP0"
+- id: SCK0_LOC
+  address_offset: 0x0B0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "SCK0 pin location select register"
+- id: DSR_LOC
+  address_offset: 0x0B4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "DSR pin location select register"
+- id: DCD_LOC
+  address_offset: 0x0B8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "DCD pin location select register"
+- id: RI_LOC
+  address_offset: 0x0BC
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "RI pin location select register"
+- id: CT16B0_CAP0_LOC
+  address_offset: 0x0C0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "CT16B0_CAP0 pin location select register"
+- id: SCK1_LOC
+  address_offset: 0x0C4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "SCK1 pin location select register"
+- id: MISO1_LOC
+  address_offset: 0x0C8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "MISO1 pin location select register"
+- id: MOSI1_LOC
+  address_offset: 0x0CC
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "MOSI1 pin location select register"
+- id: CT32B0_CAP0_LOC
+  address_offset: 0x0D0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "CT32B0_CAP0 pin location select register"
+- id: RXD_LOC
+  address_offset: 0x0D4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x00000000
+  description: "RXD pin location select register"

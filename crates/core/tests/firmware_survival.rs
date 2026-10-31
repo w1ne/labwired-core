@@ -621,6 +621,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"STM32F072B-DISCO SMOKE\n",
     },
     SurvivalCase {
+        // LPC1114FN28/102 (Cortex-M0, DIP-28): 32 KiB flash at 0x0, 4 KiB
+        // SRAM at 0x10000000. The smoke runs CMSIS SystemInit (IRC -> PLL,
+        // SYSPLLSTAT.LOCK), brings the UART up through LCR.DLAB/DLL/FDR on
+        // PIO1_6/PIO1_7, drives the PIO0_7 LED through the masked GPIO0 DATA
+        // window and takes three GPIO0 edge interrupts. SIM-DERIVED.
+        name: "lpc1114fn28_dip_smoke",
+        core: "cortex-m0",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "lpc1114fn28",
+        system: "lpc1114fn28-dip",
+        fixture: "lpc1114fn28-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0000_7FFF), (0x1000_0000, 0x1000_0FFF)],
+        expected_uart_output: b"LPC1114FN28 SMOKE\n",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -2544,6 +2560,8 @@ survival_gate!(
     test_stm32f072b_disco_smoke_survival,
     "stm32f072b_disco_smoke"
 );
+
+survival_gate!(test_lpc1114fn28_dip_smoke_survival, "lpc1114fn28_dip_smoke");
 
 survival_gate!(
     test_arduino_nano_33_ble_smoke_survival,

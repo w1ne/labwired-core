@@ -79,6 +79,14 @@ pub enum UartRegisterLayout {
     /// Synopsys DW_apb_uart: 16550 semantics, 4-byte register stride, LSR@0x14
     /// (Dialog/Renesas DA1469x).
     DwApbUart,
+    /// NXP LPC111x / LPC11Cxx / LPC13xx UART: a 16C550 with a 4-byte stride —
+    /// RBR/THR/DLL@0x00, IER/DLM@0x04, IIR/FCR@0x08, LCR@0x0C, MCR@0x10,
+    /// LSR@0x14, SCR@0x1C, ACR@0x20, FDR@0x28, TER@0x30, RS485@0x4C-0x54
+    /// (NXP CMSIS-SVD `LPC11xx_v6a.svd`, `UART`). Offsets 0x00/0x04 follow
+    /// LCR.DLAB, the divisor latch and fractional divider read back and set
+    /// the wire timebase, and TX is gated on TER.TXEN. The control registers
+    /// are kept in `Uart::lpc`.
+    Lpc11xx,
     /// ARM PrimeCell PL011 (DR@0x00, FR@0x18; RXFE set when empty).
     Pl011,
     /// Cadence UART (Xilinx Zynq) — FIFO@0x30, SR@0x2C.
@@ -170,6 +178,7 @@ impl FromStr for UartRegisterLayout {
             "lpuart" | "kinetis" | "nxp" => Ok(Self::Lpuart),
             "16550" | "ns16550" | "uart16550" => Ok(Self::Ns16550),
             "dw_apb_uart" | "dwapb" | "designware" => Ok(Self::DwApbUart),
+            "lpc11xx" | "lpc11xx_uart" | "lpc13xx" => Ok(Self::Lpc11xx),
             "pl011" | "primecell" | "rp2040" => Ok(Self::Pl011),
             "cadence" | "cdns" | "zynq" => Ok(Self::Cadence),
             "efm32" => Ok(Self::Efm32),
@@ -197,7 +206,7 @@ impl FromStr for UartRegisterLayout {
             "custom" | "generic" | "offsets" => Ok(Self::Custom),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
-                 lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
+                 lpuart, ns16550, dw_apb_uart, lpc11xx, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
                  sci_b, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
                  coreuart, k6xf, pulp, custom",
                 value
@@ -364,6 +373,22 @@ impl UartRegisterLayout {
                 tcie_mask: 0,
                 status_width: 4,
                 status_idle: 0x60, // THRE | TEMT
+                rx_present_set: 1 << 0,
+                rx_present_clear: 0,
+            },
+            // NXP LPC11xx UART: the same 16550-at-4-byte-stride map, LSR@0x14
+            // reset 0x60 (THRE | TEMT), DR(0) set on data. Everything else is
+            // in `Uart::lpc_byte` / `Uart::lpc_write`.
+            UartRegisterLayout::Lpc11xx => UartRegMap {
+                status: 0x14,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x60,
                 rx_present_set: 1 << 0,
                 rx_present_clear: 0,
             },
@@ -787,6 +812,47 @@ const SCI_B_RESET: [u32; SCI_B_REGS] = {
     r
 };
 
+/// LPC11xx UART control registers (see [`UartRegisterLayout::Lpc11xx`]),
+/// each the low byte of its word. Reset values from `LPC11xx_v6a.svd`: DLL
+/// 0x01, FDR 0x10 (MULVAL 1, DIVADDVAL 0), TER 0x80 (TXEN); the rest 0.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct Lpc11xxUartRegs {
+    dll: u8,
+    dlm: u8,
+    ier: u8,
+    lcr: u8,
+    mcr: u8,
+    scr: u8,
+    acr: u8,
+    fdr: u8,
+    ter: u8,
+    /// FCR.FIFOEN as last written; IIR\[7:6\] reads it back.
+    fifo_en: bool,
+    /// RS485CTRL, RS485ADRMATCH, RS485DLY: stored only.
+    rs485: [u8; 3],
+}
+
+impl Default for Lpc11xxUartRegs {
+    fn default() -> Self {
+        Self {
+            dll: 0x01,
+            dlm: 0,
+            ier: 0,
+            lcr: 0,
+            mcr: 0,
+            scr: 0,
+            acr: 0,
+            fdr: 0x10,
+            ter: 0x80,
+            fifo_en: false,
+            rs485: [0; 3],
+        }
+    }
+}
+
+const LPC_LCR_DLAB: u8 = 1 << 7;
+const LPC_TER_TXEN: u8 = 1 << 7;
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -1016,6 +1082,9 @@ pub struct Uart {
     /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
     /// stored; it reads CCR0.TE/RE back as TIST/RIST.
     sci_b_regs: [u32; SCI_B_REGS],
+    /// LPC11xx layout: the 16550 control registers as firmware last wrote
+    /// them. Unused on other layouts.
+    lpc: Lpc11xxUartRegs,
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
@@ -1104,6 +1173,7 @@ impl Uart {
             avr_ubrr: 0,
             avr_baud_set: false,
             sci_b_regs: SCI_B_RESET,
+            lpc: Lpc11xxUartRegs::default(),
             last_tx_on_bus: false,
         }
     }
@@ -1202,6 +1272,87 @@ impl Uart {
         }
         let reg = &mut self.sci_b_regs[index];
         *reg = (*reg & !(0xFFu32 << shift)) | v;
+        true
+    }
+
+    /// LPC11xx control-register byte at `offset`, or `None` where the
+    /// shared engine answers (LSR, and RBR at 0x00 while DLAB = 0) or on
+    /// other layouts. Bytes 1-3 of every word read 0.
+    fn lpc_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Lpc11xx) {
+            return None;
+        }
+        let r = &self.lpc;
+        let dlab = r.lcr & LPC_LCR_DLAB != 0;
+        let word = offset & !3;
+        if offset % 4 != 0 {
+            return (word != 0x14).then_some(0);
+        }
+        Some(match word {
+            0x00 if dlab => r.dll,
+            0x00 | 0x14 => return None,
+            0x04 if dlab => r.dlm,
+            0x04 => r.ier & 0x07,
+            // IIR: no interrupt pending (bit 0 = 1), or RDA (id 2) when RX
+            // holds data and IER.RBRIE is set. FIFOs-enabled reads 0b11 in
+            // [7:6]. THRE / line-status / timeout sources are not modelled.
+            0x08 => {
+                let rx = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+                let id = if rx && r.ier & 0x01 != 0 { 0x04 } else { 0x01 };
+                id | if r.fifo_en { 0xC0 } else { 0 }
+            }
+            0x0C => r.lcr,
+            0x10 => r.mcr,
+            0x18 => 0, // MSR: no modem lines
+            0x1C => r.scr,
+            0x20 => r.acr,
+            0x28 => r.fdr,
+            0x30 => r.ter,
+            0x4C => r.rs485[0],
+            0x50 => r.rs485[1],
+            0x54 => r.rs485[2],
+            _ => 0,
+        })
+    }
+
+    /// Store one byte of an LPC11xx control register. Returns false only for
+    /// a THR write the shared engine should transmit (offset 0, DLAB = 0,
+    /// TER.TXEN = 1); every other write on this layout is consumed here.
+    fn lpc_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Lpc11xx) {
+            return false;
+        }
+        if offset % 4 != 0 {
+            return true;
+        }
+        let r = &mut self.lpc;
+        let dlab = r.lcr & LPC_LCR_DLAB != 0;
+        match offset {
+            0x00 if dlab => r.dll = value,
+            0x00 => return r.ter & LPC_TER_TXEN == 0,
+            0x04 if dlab => r.dlm = value,
+            0x04 => r.ier = value & 0x07,
+            // FCR: FIFOEN stored; RXFIFORES (bit 1) empties the RX queue.
+            0x08 => {
+                r.fifo_en = value & 0x01 != 0;
+                if value & 0x02 != 0 {
+                    if let Ok(mut guard) = self.rx_buf.lock() {
+                        guard.clear();
+                    }
+                }
+            }
+            0x0C => r.lcr = value,
+            0x10 => r.mcr = value,
+            0x1C => r.scr = value,
+            0x20 => r.acr = value,
+            // FDR: MULVAL = 0 is reserved; the divider ignores it (UM10398).
+            0x28 => r.fdr = value,
+            0x30 => r.ter = value & LPC_TER_TXEN,
+            0x4C => r.rs485[0] = value,
+            0x50 => r.rs485[1] = value,
+            0x54 => r.rs485[2] = value,
+            _ => {}
+        }
         true
     }
 
@@ -1760,6 +1911,17 @@ impl Uart {
                 }
             }
             // AVR: one bit is 16 (or 8 with U2X) clocks per UBRR0 + 1.
+            // LPC11xx: baud = UART_PCLK / (16 × DL × (1 + DIVADDVAL/MULVAL)),
+            // so one bit is 16 × DL × (MULVAL + DIVADDVAL) / MULVAL clocks.
+            // DL = 0 disables the baud generator; MULVAL = 0 is reserved and
+            // treated as 1. UART_PCLK = main clock / UARTCLKDIV is taken as
+            // engine cycles (exact for UARTCLKDIV = SYSAHBCLKDIV = 1).
+            UartRegisterLayout::Lpc11xx => {
+                let dl = u64::from(self.lpc.dlm) << 8 | u64::from(self.lpc.dll);
+                let mul = u64::from(self.lpc.fdr >> 4).max(1);
+                let add = u64::from(self.lpc.fdr & 0x0F);
+                16 * dl * (mul + add) / mul
+            }
             UartRegisterLayout::Avr if self.avr_baud_set => {
                 let div = if self.avr_ucsra & 0x02 != 0 { 8 } else { 16 };
                 (u64::from(self.avr_ubrr) + 1) * div
@@ -2145,6 +2307,9 @@ impl crate::Peripheral for Uart {
             }
             return Ok(((word >> shift) & 0xFF) as u8);
         }
+        if let Some(byte) = self.lpc_byte(offset) {
+            return Ok(byte);
+        }
         if offset == self.rx_offset() {
             // Pop one byte from RX buffer
             if let Ok(mut guard) = self.rx_buf.lock() {
@@ -2274,7 +2439,7 @@ impl crate::Peripheral for Uart {
         let is_legacy_tx_alias =
             matches!(self.layout, UartRegisterLayout::Stm32F1) && offset == 0x00;
 
-        if self.sci_b_write(offset, value) {
+        if self.sci_b_write(offset, value) || self.lpc_write(offset, value) {
             return Ok(());
         }
         if matches!(self.layout, UartRegisterLayout::SciB) && offset != self.tx_offset() {
@@ -2554,6 +2719,9 @@ impl crate::Peripheral for Uart {
                 return Some(0);
             }
             return Some(((word >> shift) & 0xFF) as u8);
+        }
+        if let Some(byte) = self.lpc_byte(offset) {
+            return Some(byte);
         }
         if offset == self.rx_offset() {
             // Peek without consuming
@@ -2883,6 +3051,61 @@ mod tests {
                 "{layout:?}: idle status at {status:#x}"
             );
         }
+    }
+
+    /// LPC11xx UART (mbed `serial_api.c` sequence): with LCR.DLAB set, 0x00
+    /// and 0x04 are DLL/DLM and a write there is NOT a character; DLAB
+    /// clear restores THR/IER. FDR/TER read back from their SVD reset, TER
+    /// gates TX, FCR.RXFIFORES empties RX, and IIR reports RDA only with
+    /// IER.RBRIE.
+    #[test]
+    fn test_lpc11xx_dlab_divisor_fdr_ter_and_iir() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut u = Uart::new_with_layout(UartRegisterLayout::Lpc11xx);
+        u.set_sink(Some(sink.clone()), false);
+        assert_eq!(u.read_u32(0x14).unwrap(), 0x60, "LSR THRE|TEMT");
+        assert_eq!(u.read_u32(0x28).unwrap(), 0x10, "FDR reset");
+        assert_eq!(u.read_u32(0x30).unwrap(), 0x80, "TER reset");
+        assert_eq!(u.read_u32(0x08).unwrap(), 0x01, "IIR: none pending");
+        // 115200 from 48 MHz: DL = 17, DIVADDVAL 8 / MULVAL 15.
+        u.write_u32(0x0C, 0x83).unwrap();
+        u.write_u32(0x04, 0).unwrap();
+        u.write_u32(0x00, 17).unwrap();
+        u.write_u32(0x28, (15 << 4) | 8).unwrap();
+        assert!(sink.lock().unwrap().is_empty(), "DLL write is not TX");
+        assert_eq!(u.read_u32(0x00).unwrap(), 17, "DLL reads back");
+        assert_eq!(u.read_u32(0x04).unwrap(), 0, "DLM reads back");
+        assert_eq!(u.bit_time_cycles(), Some(16 * 17 * 23 / 15));
+        u.write_u32(0x0C, 0x03).unwrap();
+        assert_eq!(u.read_u32(0x0C).unwrap(), 0x03);
+        u.write_u32(0x00, u32::from(b'o')).unwrap();
+        u.write_u32(0x00, u32::from(b'k')).unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+        // DLAB = 0: 0x04 is IER (3 bits), the divisor is untouched.
+        u.write_u32(0x04, 0xFF).unwrap();
+        assert_eq!(u.read_u32(0x04).unwrap(), 0x07);
+        u.write_u32(0x0C, 0x83).unwrap();
+        assert_eq!(u.read_u32(0x04).unwrap(), 0, "DLM unchanged");
+        u.write_u32(0x0C, 0x03).unwrap();
+        // RX: LSR.DR, IIR RDA (id 2) with RBRIE, FIFOEN in IIR[7:6].
+        u.write_u32(0x08, 0x01).unwrap();
+        u.rx_buffer().lock().unwrap().push_back(b'r');
+        assert_eq!(u.read_u32(0x14).unwrap() & 1, 1, "LSR.DR");
+        assert_eq!(u.read_u32(0x08).unwrap(), 0xC4, "IIR RDA + FIFOs");
+        assert_eq!(u.read(0x00).unwrap(), b'r');
+        assert_eq!(u.read_u32(0x08).unwrap(), 0xC1);
+        // FCR.RXFIFORES empties the queue.
+        u.rx_buffer().lock().unwrap().push_back(b'z');
+        u.write_u32(0x08, 0x03).unwrap();
+        assert!(u.rx_buffer().lock().unwrap().is_empty());
+        // TER.TXEN = 0 drops characters.
+        u.write_u32(0x30, 0).unwrap();
+        u.write_u32(0x00, u32::from(b'!')).unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+        assert_eq!(
+            "lpc11xx".parse::<UartRegisterLayout>(),
+            Ok(UartRegisterLayout::Lpc11xx)
+        );
     }
 
     /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while

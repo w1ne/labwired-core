@@ -1,0 +1,33 @@
+# LabWired - LPC1114FN28/102 UART+LED IO smoke
+#
+# Build: cargo build -p firmware-lpc1114fn28-smoke --release --target thumbv6m-none-eabi
+#
+# The firmware runs NXP's CMSIS SystemInit clock sequence (IRC -> PLL 48 MHz,
+# waiting on SYSPLLSTAT.LOCK and the UEN handshakes), brings the UART up at
+# 115089 baud 8N1 through LCR.DLAB + DLL/DLM + FDR (mbed serial_api.c), reads
+# the divisor back through DLAB, drives the PIO0_7 LED through the
+# address-masked GPIO0 DATA window, and takes three GPIO0 rising-edge
+# interrupts that the pad raises on its own output.
+#
+# `ris=080` on the first three LED lines is the reset sense (IS = 0, IEV = 0:
+# falling edge): driving the pulled-up pad low latches it, as on silicon.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-lpc1114fn28-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "LPC1114FN28 SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m0 uart=uart pins=pio1_6/pio1_7 led=pio0_7"
+      - "device_id=1a40902b"
+      - "clk pllctrl=23 lock=1 mainclksel=3 ahbclkctrl=1185f"
+      - "uart lcr=03 dl=17 fdr=f8 ter=80 baud=115089"
+      - "led=off data=f7f led=0 ris=080"
+      - "mask6 data=f7f led=0 ris=080"
+      - "led=on data=fff led=1 ris=080"
+      - "irq gpio0 edges=3 mis=000"
+      - "hb=0 led=1"
+      - "hb=1 led=0"
+  - expected_stop_reason: max_steps

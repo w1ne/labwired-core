@@ -1,0 +1,7 @@
+/* NXP LPC1114FN28/102: 32 KiB flash at 0x0, 4 KiB SRAM at 0x1000_0000
+ * (lpc21isp part table; mbed-os TARGET_LPC11XX LPC1114.ld). */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 32K
+  RAM   : ORIGIN = 0x10000000, LENGTH = 4K
+}

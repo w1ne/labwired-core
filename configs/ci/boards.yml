@@ -106,6 +106,14 @@ boards:
     path: examples/s32k388-evb
     rust_targets: [thumbv7em-none-eabi]
     gate: true
+  # LPC1114FN28/102: the first NXP LPC11xx part (Cortex-M0, DIP-28). Builds
+  # the cortex-m-rt smoke for thumbv6m and runs the UART/GPIO io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: lpc1114fn28-dip
+    kind: sim-validate
+    path: examples/lpc1114fn28-dip
+    rust_targets: [thumbv6m-none-eabi]
+    gate: true
   # MIMXRT595-EVK: the first i.MX RT500 part. Builds the cortex-m-rt smoke
   # for thumbv8m.main (Cortex-M33) and runs the FLEXCOMM0/GPIO io-smoke plus
   # the unsupported-instruction audit through the CLI.

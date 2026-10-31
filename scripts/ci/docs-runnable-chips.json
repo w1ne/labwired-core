@@ -512,6 +512,10 @@
       "how": "needs-build",
       "why": "The AMAP42KP part (and the apollo4_gpio/apollo4_pwrctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/apollo4p-evb-smoke.elf prints 'APOLLO4P EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     },
+    "lpc1114fn28": {
+      "how": "needs-build",
+      "why": "The LPC1114FN28 part (and the lpc11xx_gpio model and lpc11xx UART layout) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/lpc1114fn28-smoke.elf prints 'LPC1114FN28 SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
+    },
     "cc2538sf53": {
       "how": "needs-build",
       "why": "The CC2538SF53 part (and the cc2538_pl061_gpio/cc2538_sys_ctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/cc2538dk-smoke.elf prints 'CC2538DK SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"

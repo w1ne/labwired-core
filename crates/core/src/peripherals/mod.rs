@@ -75,6 +75,7 @@ pub mod kit;
 pub mod litex_control_status;
 pub mod litex_timer;
 pub mod lpc;
+pub mod lpc11xx_gpio;
 pub mod lptim;
 pub mod mcg;
 pub mod miv;

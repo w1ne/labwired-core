@@ -191,6 +191,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no FLEXCOMM0 USART bring-up in this harness; bytes are proven by the \
          mimxrt595-evk survival smoke",
     ),
+    // LPC1114FN28: no UART (DLAB divisor) bring-up in this harness; bytes are
+    // proven by the lpc1114fn28-dip survival smoke.
+    (
+        "lpc1114fn28",
+        BusKind::Uart,
+        "no UART DLAB/divisor bring-up in this harness; bytes are proven by the \
+         lpc1114fn28-dip survival smoke",
+    ),
     // SAM4S Xplained: no UART0 bring-up in this harness; bytes are proven by
     // the sam4s-xplained survival smoke.
     (

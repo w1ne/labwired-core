@@ -1,0 +1,135 @@
+# LabWired - NXP LPC1114FN28/102 (Cortex-M0, DIP-28)
+#
+# Sources:
+# - Peripheral bases, IRQ lines, register offsets and reset values: NXP
+#   CMSIS-SVD LPC11xx_v6a.svd (cmsis-svd-data/data/NXP), "LPC111x_LPC11Cxx".
+# - Memory: 32 KiB flash at 0x0000_0000, 4 KiB SRAM at 0x1000_0000
+#   (lpc21isp lpcprog.c part table entry "1114.../102"; mbed-os
+#   TARGET_LPC11XX LPC1114.ld).
+# - DEVICE_ID 0x1A40902B (lpc21isp; see ../peripherals/lpc1114fn28/syscon.yaml).
+#
+# Modelled: SYSCON (declarative, PLL lock on power-up), IOCON (declarative,
+# stored only), the UART (16C550 at a 4-byte stride with DLAB, FDR and TER),
+# the four GPIO ports with edge/level interrupts, SysTick and the NVIC.
+# Declared stubs (read/write storage, no behaviour): I2C, WWDT, the four
+# counter/timers, ADC, PMU, the flash controller and SSP0. SSP1 and C_CAN are
+# not declared: the LPC1114FN28 has neither.
+# NOT modelled: the boot ROM at 0x1FFF_0000 (ISP, IAP and the vector-table
+# checksum check — lpc21isp/Flash Magic write the checksum when they program
+# the part; the engine boots the flash vector table directly), clock
+# frequencies (cpu_hz is fixed; SYSPLLCTRL/MAINCLKSEL do not change it),
+# IOCON pin functions and pulls, the start-logic wake-up interrupts, and the
+# UART interrupt sources.
+
+name: "lpc1114fn28"
+arch: "arm"
+core: "cortex-m0"
+# The 48 MHz main clock CMSIS SystemInit sets up (12 MHz IRC, PLL M = 4,
+# P = 2) — the part's maximum, and what the smoke runs at. The reset clock
+# is the 12 MHz IRC.
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x00000000
+  size: "32KB"
+ram:
+  base: 0x10000000
+  size: "4KB"
+
+pins:
+  PIO0_7: { gpio: "pio0", bit: 7 }  # high-drive pad (20 mA); LED1 on the mbed LPC1114FN28
+  PIO1_6: { gpio: "pio1", bit: 6 }  # RXD (IOCON FUNC 1)
+  PIO1_7: { gpio: "pio1", bit: 7 }  # TXD (IOCON FUNC 1)
+  PIO0_1: { gpio: "pio0", bit: 1 }  # ISP entry pin, sampled by the boot ROM at reset
+
+peripherals:
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  - id: "uart"
+    type: "uart"
+    base_address: 0x40008000
+    size: "16KB"
+    irq: 21
+    config:
+      profile: "lpc11xx"
+
+  # GPIO0..GPIO3 (LPC_GPIOn), named pio0..pio3 after NXP's PIOn_m pins. Not
+  # `gpio0`/`gpio1`: the bus reads those spellings as a Nordic GPIOTE port
+  # and runs its edge-service pass every cycle, which nothing here consumes.
+  - id: "pio0"
+    type: "lpc11xx_gpio"
+    base_address: 0x50000000
+    size: "64KB"
+    irq: 31
+  - id: "pio1"
+    type: "lpc11xx_gpio"
+    base_address: 0x50010000
+    size: "64KB"
+    irq: 30
+  - id: "pio2"
+    type: "lpc11xx_gpio"
+    base_address: 0x50020000
+    size: "64KB"
+    irq: 29
+  - id: "pio3"
+    type: "lpc11xx_gpio"
+    base_address: 0x50030000
+    size: "64KB"
+    irq: 28
+
+  - id: "syscon"
+    type: "declarative"
+    base_address: 0x40048000
+    size: "16KB"
+    config:
+      path: "../peripherals/lpc1114fn28/syscon.yaml"
+  - id: "iocon"
+    type: "declarative"
+    base_address: 0x40044000
+    size: "16KB"
+    config:
+      path: "../peripherals/lpc1114fn28/iocon.yaml"
+
+  - id: "i2c"
+    type: "stub"
+    base_address: 0x40000000
+    size: "16KB"
+  - id: "wwdt"
+    type: "stub"
+    base_address: 0x40004000
+    size: "16KB"
+  - id: "ct16b0"
+    type: "stub"
+    base_address: 0x4000C000
+    size: "16KB"
+  - id: "ct16b1"
+    type: "stub"
+    base_address: 0x40010000
+    size: "16KB"
+  - id: "ct32b0"
+    type: "stub"
+    base_address: 0x40014000
+    size: "16KB"
+  - id: "ct32b1"
+    type: "stub"
+    base_address: 0x40018000
+    size: "16KB"
+  - id: "adc"
+    type: "stub"
+    base_address: 0x4001C000
+    size: "16KB"
+  - id: "pmu"
+    type: "stub"
+    base_address: 0x40038000
+    size: "16KB"
+  - id: "flashctrl"
+    type: "stub"
+    base_address: 0x4003C000
+    size: "16KB"
+  - id: "ssp0"
+    type: "stub"
+    base_address: 0x40040000
+    size: "16KB"

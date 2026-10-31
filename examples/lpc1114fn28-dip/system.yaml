@@ -1,0 +1,24 @@
+# LabWired - NXP LPC1114FN28/102 on a breadboard (DIP-28)
+#
+# The LPC1114FN28 is sold as a bare DIP-28 part; there is no current NXP
+# evaluation board for it. This manifest is the minimal breadboard circuit
+# the smoke assumes: an LED (active high, through a resistor to GND) on
+# PIO0_7 — the 20 mA high-drive pad, and LED1 on the mbed LPC1114FN28 — and
+# a 3.3 V USB-UART adapter on PIO1_7 (TXD) / PIO1_6 (RXD), the pins NXP ISP
+# and mbed use. 48 MHz is the CMSIS SystemInit clock (IRC + PLL).
+#
+# Same manifest as configs/systems/lpc1114fn28-dip.yaml, kept beside the
+# example so the package is self-contained.
+
+name: "lpc1114fn28-dip"
+chip: "../../configs/chips/lpc1114fn28.yaml"
+cpu_hz: 48_000_000
+debug_uart: "uart"
+external_devices: []
+board_io:
+  - id: "led1"
+    kind: "led"
+    peripheral: "pio0"
+    pin: 7
+    signal: "output"
+    active_high: true

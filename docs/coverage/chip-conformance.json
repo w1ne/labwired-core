@@ -101,6 +101,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "lpc1114fn28",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "sam4s16c",
     "reg_match": 0
   },

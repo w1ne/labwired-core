@@ -409,6 +409,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "rt5xx_clkctl1",
     "rt5xx_iopctl",
     "rt5xx_ostimer",
+    // NXP LPC111x/LPC11Cxx/LPC13xx: the AHB GPIO port (12-bit address-masked
+    // DATA window, DIR/IS/IBE/IEV/IE/RIS/MIS/IC at 0x8000).
+    "lpc11xx_gpio",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1544,6 +1547,7 @@ pub fn try_build(
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
+        "lpc11xx_gpio" => Box::new(crate::peripherals::lpc11xx_gpio::Lpc11xxGpio::new()),
         "lpc_flexcomm_usart" => {
             // PSELID present bits: USART/SPI/I2C/I2S (0xF0) unless the yaml
             // narrows them for a FLEXCOMM without every function.
