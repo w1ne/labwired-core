@@ -252,6 +252,12 @@ pub struct Pic16Device {
     /// 0x70-0x7F block on most parts; whole banks on the PIC16F873/874).
     /// The enhanced core's core registers and common RAM are built in.
     pub aliases: &'static [(u16, u16, u16)],
+    /// Classic core: the bank-2/3 SFR mirror addresses (`0x101` TMR0,
+    /// `0x106` PORTB, `0x181` OPTION_REG, `0x186` TRISB) at which this part
+    /// has a register of its own instead (the header defines one there,
+    /// e.g. ANSELB at `0x186` on the PIC16F72x). They are plain registers,
+    /// not mirrors.
+    pub own_sfrs: &'static [u16],
 }
 
 const fn dev(
@@ -267,6 +273,22 @@ const fn dev(
         port_masks,
         map: PIC16_CLASSIC_MAP,
         aliases,
+        own_sfrs: &[],
+    }
+}
+
+/// A classic row whose part has its own registers at some of the bank-2/3
+/// SFR mirror addresses (see [`Pic16Device::own_sfrs`]).
+const fn dev_own(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+    own_sfrs: &'static [u16],
+) -> Pic16Device {
+    Pic16Device {
+        own_sfrs,
+        ..dev(name, flash_words, port_masks, aliases)
     }
 }
 
@@ -284,6 +306,7 @@ const fn edev(
         port_masks,
         map,
         aliases: &[],
+        own_sfrs: &[],
     }
 }
 
@@ -338,7 +361,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x1F0, 0x1FF, 0x070),
         ],
     ),
-    dev(
+    dev_own(
         "pic16f722a",
         2048,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -347,8 +370,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f723a",
         4096,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -357,8 +381,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f724",
         4096,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -367,8 +392,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f726",
         8192,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -377,8 +403,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16f727",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -387,8 +414,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf722a",
         2048,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -397,8 +425,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf723a",
         4096,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -407,8 +436,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf724",
         4096,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -417,8 +447,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf726",
         8192,
         [0xFF, 0xFF, 0xFF, 0x00, 0x08],
@@ -427,8 +458,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf727",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -437,6 +469,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x186],
     ),
     dev(
         "pic16f870",
@@ -650,7 +683,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x1F0, 0x1FF, 0x070),
         ],
     ),
-    dev(
+    dev_own(
         "pic16f707",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -659,8 +692,9 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x106, 0x186],
     ),
-    dev(
+    dev_own(
         "pic16lf707",
         8192,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
@@ -669,6 +703,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
         ],
+        &[0x106, 0x186],
     ),
     // Enhanced mid-range (32 banks). Every row passes
     // `check_sfr_map.py --enhanced` against PIC16E_F182X_MAP (OSCSTAT ready
@@ -1189,6 +1224,7 @@ pub struct Pic16 {
     latch: [u8; PIC16_PORT_COUNT as usize],
     port_masks: [u8; PIC16_PORT_COUNT as usize],
     aliases: &'static [(u16, u16, u16)],
+    own_sfrs: &'static [u16],
     stack: [u32; STACK_SLOTS],
     /// Classic: next free slot, modulo 8. Enhanced: `STKPTR`, the slot of
     /// the top of stack, with 0x1F meaning empty.
@@ -1239,6 +1275,7 @@ impl Pic16 {
             latch: [0; PIC16_PORT_COUNT as usize],
             port_masks: device.port_masks,
             aliases: device.aliases,
+            own_sfrs: device.own_sfrs,
             stack: [0; STACK_SLOTS],
             stkptr: 0,
             pending_reset: None,
@@ -1515,6 +1552,9 @@ impl Pic16 {
                 Some(&(start, _, target)) => addr = target + (addr - start),
                 None => break,
             }
+        }
+        if self.own_sfrs.contains(&addr) {
+            return addr;
         }
         match addr {
             0x101 => SFR_TMR0,
@@ -2927,6 +2967,31 @@ mod tests {
         );
     }
 
+    /// On the PIC16F72x `0x186` is ANSELB and on the PIC16F707 `0x106` is
+    /// CPSBCON0: their own registers, not TRISB/PORTB mirrors. Clearing
+    /// ANSELB (as firmware must before reading RB digitally) must leave TRISB
+    /// alone; on the 877A `0x186` still is TRISB.
+    #[test]
+    fn own_registers_at_bank3_mirror_addresses_are_not_mirrors() {
+        for part in ["pic16f722a", "pic16lf727", "pic16f707"] {
+            let mut cpu = Pic16::for_chip_name(part);
+            cpu.write_data(0x86, 0xFE);
+            cpu.write_data(0x186, 0x00);
+            assert_eq!(cpu.read_data(0x86), 0xFE, "{part}: TRISB kept");
+            assert_eq!(cpu.read_data(0x186), 0x00, "{part}: ANSELB stored");
+            cpu.write_data(0x181, 0x07);
+            assert_eq!(cpu.read_data(0x81), 0x07, "{part}: OPTION_REG mirror");
+        }
+        let mut cpu = Pic16::for_chip_name("pic16f707");
+        cpu.write_data(0x106, 0x5A);
+        assert_eq!(cpu.read_data(0x106), 0x5A, "CPSBCON0 stored");
+        assert_ne!(cpu.read_data(0x06), 0x5A, "PORTB not written");
+        let mut cpu = Pic16::for_chip_name("pic16f877a");
+        cpu.write_data(0x86, 0xFE);
+        cpu.write_data(0x186, 0x00);
+        assert_eq!(cpu.read_data(0x86), 0x00, "877A: 0x186 is TRISB");
+    }
+
     #[test]
     #[should_panic(expected = "fixture exceeds PIC16 model flash")]
     fn bytes_past_flash_are_rejected() {
@@ -2937,6 +3002,7 @@ mod tests {
             port_masks: [0xFF; 5],
             map: PIC16_CLASSIC_MAP,
             aliases: &[],
+            own_sfrs: &[],
         });
         small.load_flash(32, &[0]);
     }
