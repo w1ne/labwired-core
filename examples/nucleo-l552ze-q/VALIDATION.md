@@ -19,8 +19,10 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | ICACHE (`0x4003_0400`) | modelled — the U5 `icache` model, same IP (RM0438 §8 = RM0456 §8) | Zephyr's soc init polls `SR.BUSYF` and sets `CR.EN`; unmapped, it bus-faulted before `main` |
 | DBGMCU (`0xE004_4000`) | modelled — `IDCODE 0x2001_6472` (DEV_ID 0x472, rev Z; not silicon-captured) | Zephyr clears `DBG_STOP`/`DBG_STANDBY`; unmapped, it bus-faulted |
 | FLASH `ACR.LATENCY` read-back | **not modelled** — fidelity gap | the FLASH controller is a stub, so `LL_SetFlashLatency` reads 0 back, gives up after two reads and returns `ERROR`, which Zephyr ignores. Silicon latches 5 wait states for 110 MHz |
-| TrustZone / SAU / GTZC / secure aliasing | **not modelled** | core stores MPU registers but does not enforce them |
-| MPU / PMSAv8 / `TT`/`TTA` | **not modelled** | `docs/isa_coverage.md` known gap |
+| Stock Zephyr v3.7.0 `tests/kernel/fpu_sharing/generic` (Renode `ARMv8M.robot` FPU sharing case) | smoke-tested | `zephyr-fpu-sharing.yaml` 2/2: `test_load_store` + `test_pi` PASS, `PROJECT EXECUTION SUCCESSFUL` |
+| FP extension context (`CONTROL.FPCA`, FPCCR/FPCAR/FPDSCR/MVFR, extended exception frame, EXC_RETURN[4]) | modelled — `cortex_m_fpu` | eager, not lazy: the S0-S15/FPSCR slots are filled at entry and `FPCCR.LSPACT` reads 0. Unit tests in `cortex_m_tests.rs`; the Zephyr test fails when the unstacking is removed |
+| PMSAv8 MPU region file (RNR/RBAR/RLAR + aliases A1-A3, MAIR0/1, 8 regions) and `TT` | modelled, **not enforced** — `armv8m_mpu` | TT reports MREGION/MRVALID/R/RW from the stored regions (Zephyr's `get_region_index`); no access is checked, MemManage is never raised, so Zephyr `mem_protect` tests are not claimed |
+| TrustZone / SAU / GTZC / secure aliasing | **not modelled** | `TT`'s SAU/IDAU fields read 0 |
 | VDDIO2 isolation of PG[15:2] until `PWR_CR2.IOSV` | **not modelled** — fidelity gap | the sim drives port G whether or not IOSV is set, so a firmware that forgets IOSV passes here and stays silent on the board. The smoke sets IOSV (RM0438 PWR chapter; CMSIS `PWR_CR2_IOSV_Pos = 9`) |
 | L5 non-secure FLASH controller, EXTI, ADC, FDCAN, USB | declared stubs | `configs/chips/stm32l552.yaml` |
 | SPI/I2C/timers/DMA/RNG/RTC | modelled, **unexercised** | declared; no firmware path in this slice |
@@ -128,6 +130,54 @@ Path exercised by the unpatched Zephyr bring-up: ICACHE enable, DBGMCU,
 the L5 RCC MSI range 6 (4 MHz) -> PLL (`M=1 N=55 R=2`, 110 MHz) switch with
 the `SWS` handshake, `PWR_CR2.IOSV` (VDDIO2, written by Zephyr's GPIO
 driver for port G) and the LPUART1 console on PG7/PG8.
+
+### Stock Zephyr fpu_sharing (verified 2026-10-31)
+
+Unmodified upstream Zephyr v3.7.0 `tests/kernel/fpu_sharing/generic`, the
+twister scenario `kernel.fpu_sharing.generic.arm` (`PI_NUM_ITERATIONS=70000`),
+for the same board target and from the same build script. This is the test
+Renode's `ARMv8M.robot` "Should Pass Zephyr FPU Sharing Test" runs (Renode
+loads the `_ns` build behind TF-M; see the hello_world note).
+`test_load_store` runs a cooperative and a preemptible thread that each load
+a pattern into S0-S31 and check it after being preempted; `test_pi` has two
+threads compute pi in single precision and compares their results. Both need
+the FP context to survive every PendSV context switch and every interrupt.
+
+Three model changes were needed, all opt-in per chip YAML:
+
+- `cortex_m_fpu` at `0xE000_EF30`: FPCCR/FPCAR/FPDSCR/MVFR0-2. Without it
+  Zephyr's `z_arm_floating_point_init` BusFaults on FPCCR (`0xE000_EF34`).
+  It switches on `CONTROL.FPCA` (set by the first FP instruction with
+  `FPCCR.ASPEN`, which also loads FPSCR[26:22] from FPDSCR), the extended
+  0x68-byte exception frame with EXC_RETURN bit 4 clear, and the matching
+  unstacking. Zephyr's PendSV reads EXC_RETURN bit 4 to decide whether to
+  save S16-S31.
+- `armv8m_mpu` at `0xE000_ED90`: a per-region RBAR/RLAR file. With
+  `CONFIG_FPU_SHARING` the image marks the static MPU regions that hold
+  thread stacks. `get_region_index` finds a region with TT and asserts
+  before `main` when TT reports none.
+- The `TT` instruction, which used to decode as a STREX with Rt = PC.
+
+```bash
+crates/firmware-l552ze-zephyr/build.sh
+#   sha256 3e5339320de61065f29a22fa52a130ad3ef2eb7ae844cf3da29bdaa629d3b110
+#   (rebuild identical; hello and sync unchanged)
+
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-fpu-sharing.yaml
+#   Running TESTSUITE fpu_sharing_generic
+#    PASS - test_load_store in 0.552 seconds
+#   Pi calculation OK after 450 (high) + 893 (low) tests (computed 3.141611)
+#    PASS - test_pi in 7.616 seconds
+#   SUITE PASS - 100.00% [fpu_sharing_generic]: pass = 2, fail = 0, skip = 0, total = 2
+#   PROJECT EXECUTION SUCCESSFUL
+#   PASS  2/2 checks · zephyr-fpu-sharing · 898861233 steps · ~75 s
+
+# Negative controls:
+#   chip without cortex_m_fpu   -> precise BusFault at 0xE000_EF34 in z_prep_c
+#   chip without armv8m_mpu     -> __ASSERT in arm_core_mpu_mark_areas_for_dynamic_regions,
+#                                  no console output, FAIL 0/1
+#   S0-S15 not unstacked        -> "reference pi -1832.509277", calculate_pi_low assert, FAIL 1/2
+```
 
 ## Notes
 

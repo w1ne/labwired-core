@@ -20,6 +20,12 @@ cargo run -q -p labwired-cli -- test \
   --script examples/nucleo-l552ze-q/zephyr-sync.yaml \
   --output-dir "$OUT/zephyr-sync" \
   --no-uart-stdout
+# Zephyr tests/kernel/fpu_sharing/generic runs 899 M cycles (~75 s on a
+# release build, far longer on debug), so it gets a release CLI.
+cargo run -q --release -p labwired-cli -- test \
+  --script examples/nucleo-l552ze-q/zephyr-fpu-sharing.yaml \
+  --output-dir "$OUT/zephyr-fpu-sharing" \
+  --no-uart-stdout
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke \
   --system configs/systems/nucleo-l552ze-q.yaml \

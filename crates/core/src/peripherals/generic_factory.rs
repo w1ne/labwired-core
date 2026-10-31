@@ -380,6 +380,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam4s_pmc",
     // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
     "cortex_m7_cache",
+    // Cortex-M FP extension: FPCCR/FPCAR/FPDSCR/MVFR + FP context stacking.
+    "cortex_m_fpu",
+    // Armv8-M PMSAv8 MPU region file (RNR/RBAR/RLAR + aliases), shared with TT.
+    "armv8m_mpu",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
     // cryptoprocessor and the µDMA. Deliberately not `cc2538_gpio`: that
@@ -1506,6 +1510,32 @@ pub fn try_build(
             Box::new(crate::peripherals::cortex_m7_cache::CortexM7Cache::new(
                 geometry,
             ))
+        }
+        "armv8m_mpu" => {
+            let regions = p_cfg
+                .config
+                .get("regions")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8) as usize;
+            if regions > crate::peripherals::armv8m_mpu::MAX_REGIONS || regions % 4 != 0 {
+                anyhow::bail!("armv8m_mpu: config.regions = {regions} (0/4/8/12/16)");
+            }
+            Box::new(crate::peripherals::armv8m_mpu::Armv8mMpu::new(regions))
+        }
+        "cortex_m_fpu" => {
+            let reg = |key: &str, default: u32| -> u32 {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map_or(default, |v| v as u32)
+            };
+            use crate::peripherals::cortex_m_fpu as fpu;
+            Box::new(fpu::CortexMFpu::new([
+                reg("mvfr0", fpu::DEFAULT_MVFR0),
+                reg("mvfr1", fpu::DEFAULT_MVFR1),
+                reg("mvfr2", fpu::DEFAULT_MVFR2),
+            ]))
         }
         "cc2538_pl061_gpio" => {
             // Pads that carry the reset IOC pull-up (SWRU319C §9.2.3); port C

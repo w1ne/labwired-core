@@ -282,6 +282,7 @@ const CORTEX_M: ArchCoverage = ArchCoverage {
             "Umlal",
             "64-bit multiply-accumulate, not in the JIT ALU emit set",
         ),
+        ("Tt", "Armv8-M test target (MPU lookup), not translated"),
         ("Umull", "64-bit multiply, not in the JIT ALU emit set"),
         (
             "VaddF64",

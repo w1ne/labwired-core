@@ -1110,6 +1110,17 @@ pub(super) fn decode_ldst_dual_exclusive(h1: u16, h2: u16) -> Option<Instruction
     // prefix but have a specific bit pattern in h1[11:4]:
     //   STREX h1 = 0xE84_, LDREX h1 = 0xE85_  (Rn in low nibble).
     // The CPU's Unknown32 fallback handles the actual load/store.
+    // TT{T}{A} (Armv8-M T1): 1110 1000 0100 Rn | 1111 Rd A T 00 0000. It
+    // sits in STREX's space with Rt = 0b1111 (an UNPREDICTABLE STREX), so
+    // it must be picked out first.
+    if (h1 & 0xFFF0) == 0xE840 && (h2 & 0xF03F) == 0xF000 {
+        return Some(Instruction::Tt {
+            rd: ((h2 >> 8) & 0xF) as u8,
+            rn: (h1 & 0xF) as u8,
+            t: h2 & (1 << 6) != 0,
+            a: h2 & (1 << 7) != 0,
+        });
+    }
     if (h1 & 0xFFF0) == 0xE840 || (h1 & 0xFFF0) == 0xE850 {
         return Some(Instruction::Unknown32(h1, h2));
     }

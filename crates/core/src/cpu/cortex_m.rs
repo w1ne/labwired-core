@@ -173,6 +173,15 @@ pub struct CortexM {
     /// — no SCB means no fault registers to report through, so those keep the
     /// #880 abort contract unconditionally. See [`ScbFaultState`].
     pub faults: Option<Arc<ScbFaultState>>,
+    /// Shared with a `cortex_m_fpu` block: FPCCR/FPCAR/FPDSCR. `Some` makes
+    /// the core track CONTROL.FPCA and stack extended (FP) exception frames;
+    /// `None` (cores without the FP extension, hand-built buses) keeps the
+    /// basic 8-word frame and a CONTROL with only nPRIV/SPSEL.
+    /// See [`crate::peripherals::cortex_m_fpu`].
+    pub fp_ctx: Option<Arc<crate::peripherals::cortex_m_fpu::FpContextState>>,
+    /// Shared with an `armv8m_mpu` block: the PMSAv8 region file TT reports
+    /// from. `None`: TT reports no MPU region.
+    pub mpu_v8: Option<Arc<crate::peripherals::armv8m_mpu::MpuV8State>>,
     /// Address of the data-side access that just raised
     /// `SimulationError::MemoryViolation`, latched by [`CortexM::load`] /
     /// [`CortexM::store`] so `step_internal` can tell a **data** fault (which
@@ -313,6 +322,8 @@ impl Default for CortexM {
             sysreset_signal: None,
             debug_halt: None,
             faults: None,
+            fp_ctx: None,
+            mpu_v8: None,
             pending_data_fault: None,
             pending_undef_instruction: false,
             pending_div0: false,
@@ -1853,6 +1864,54 @@ impl CortexM {
         self.faults = Some(faults);
     }
 
+    /// Give the core the FP extension's context control state (see
+    /// [`CortexM::fp_ctx`]).
+    pub fn set_shared_fp_context(
+        &mut self,
+        fp: Arc<crate::peripherals::cortex_m_fpu::FpContextState>,
+    ) {
+        self.fp_ctx = Some(fp);
+    }
+
+    /// Give the core the Armv8-M MPU region file (see [`CortexM::mpu_v8`]).
+    pub fn set_shared_mpu_v8(&mut self, mpu: Arc<crate::peripherals::armv8m_mpu::MpuV8State>) {
+        self.mpu_v8 = Some(mpu);
+    }
+
+    /// CONTROL bits MRS/MSR see: FPCA (bit 2) only with the FP extension.
+    #[inline]
+    pub(crate) fn control_mask(&self) -> u32 {
+        if self.fp_ctx.is_some() {
+            0x7
+        } else {
+            0x3
+        }
+    }
+
+    /// The architecture's `ExecuteFPCheck`, run before every executed FP
+    /// instruction on a core with the FP extension: with FPCCR.ASPEN set, the
+    /// first FP instruction of a context sets CONTROL.FPCA and starts FPSCR's
+    /// AHP/DN/FZ/RMode from FPDSCR.
+    #[inline]
+    fn fp_execute_check(&mut self) {
+        if let Some(fp) = self.fp_ctx.as_ref() {
+            if self.control & 0x4 == 0 && fp.aspen() {
+                let m = crate::peripherals::cortex_m_fpu::FPDSCR_MASK;
+                self.fpscr = (self.fpscr & !m) | (fp.fpdscr() & m);
+                self.control |= 0x4;
+            }
+        }
+    }
+
+    /// The JIT does not run `ExecuteFPCheck`, so while a context could still
+    /// create its FP state (ASPEN set, FPCA clear) the core stays on the
+    /// interpreter.
+    #[cfg(feature = "jit")]
+    #[inline]
+    fn fp_context_pending(&self) -> bool {
+        self.control & 0x4 == 0 && self.fp_ctx.as_ref().is_some_and(|fp| fp.aspen())
+    }
+
     /// Turn ARMv7-M fault escalation (and the SCB fault register surface) on or
     /// off. The process default is **on** (`LABWIRED_CORTEXM_FAULTS` is the
     /// opt-out); this is the explicit per-core override, and the single switch
@@ -2157,8 +2216,9 @@ impl CortexM {
     }
 
     fn branch_to<B: Bus + ?Sized>(&mut self, addr: u32, bus: &mut B) -> SimResult<()> {
-        if (addr & 0xFFFFFFF0) == 0xFFFFFFF0 {
-            // EXC_RETURN: valid values are 0xFFFFFFF1/F9/FD (and FPU variants E1/E9/ED)
+        if (addr & 0xFFFFFFE0) == 0xFFFFFFE0 {
+            // EXC_RETURN: 0xFFFFFFF1/F9/FD, and the FP-frame variants E1/E9/ED
+            // (bit 4 clear) a core with the FP extension returns.
             self.exception_return(addr, bus)?;
         } else {
             self.pc = addr & !1;
@@ -2338,8 +2398,26 @@ impl CortexM {
         self.it_state = Self::itstate_from_xpsr(self.xpsr);
         self.it_state_restored = true;
 
+        // FP extension: EXC_RETURN[4] = 0 marks the extended frame (S0-S15 at
+        // +0x20, FPSCR at +0x60, a reserved word at +0x64), and CONTROL.FPCA
+        // takes NOT EXC_RETURN[4] (ARMv7-M B1.5.8 ExceptionReturn).
+        let mut frame_len = 32;
+        if self.fp_ctx.is_some() {
+            if exc_return & 0x10 == 0 {
+                for i in 0..16 {
+                    self.fpu_s[i] =
+                        bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                }
+                self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
+                frame_len = 0x68;
+                self.control |= 0x4;
+            } else {
+                self.control &= !0x4;
+            }
+        }
+
         // Advance the bank the frame was popped from.
-        let new_sp = frame_ptr.wrapping_add(32);
+        let new_sp = frame_ptr.wrapping_add(frame_len);
         if frame_on_psp {
             self.psp = new_sp;
         } else {
@@ -2540,7 +2618,7 @@ impl CortexM {
                 }
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
-            } else if self.it_state != 0 || self.waiting_for_event {
+            } else if self.it_state != 0 || self.waiting_for_event || self.fp_context_pending() {
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
             } else {
@@ -3768,9 +3846,12 @@ impl CortexM {
                     let entered_from_handler = self.active_exception != 0;
                     let entry_on_psp = self.use_psp();
 
-                    // Perform Stacking on the CURRENT (preempted) stack.
+                    // Perform Stacking on the CURRENT (preempted) stack. With
+                    // CONTROL.FPCA set (FP extension) the frame is the
+                    // extended one: S0-S15 and FPSCR above the basic eight.
                     let sp = self.sp;
-                    let frame_ptr = sp.wrapping_sub(32);
+                    let fp_frame = self.fp_ctx.is_some() && self.control & 0x4 != 0;
+                    let frame_ptr = sp.wrapping_sub(if fp_frame { 0x68 } else { 32 });
 
                     // Save the previous active_exception in xPSR IPSR bits [8:0] so that
                     // exception_return can restore the correct nesting level.
@@ -3801,6 +3882,27 @@ impl CortexM {
                         AccessWidth::Word,
                         save_xpsr,
                     )?;
+                    if fp_frame {
+                        // Eager, not lazy: the S0-S15/FPSCR slots are filled
+                        // now even with FPCCR.LSPEN set (LSPACT stays 0).
+                        for i in 0..16 {
+                            Self::bus_store(
+                                bus,
+                                frame_ptr.wrapping_add(0x20 + 4 * i as u32),
+                                AccessWidth::Word,
+                                self.fpu_s[i],
+                            )?;
+                        }
+                        Self::bus_store(
+                            bus,
+                            frame_ptr.wrapping_add(0x60),
+                            AccessWidth::Word,
+                            self.fpscr,
+                        )?;
+                        if let Some(fp) = self.fp_ctx.as_ref() {
+                            fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                        }
+                    }
 
                     // Bank the preempted stack pointer into its bank (PSP or MSP)
                     // BEFORE entering Handler mode, then switch the live `sp` to MSP.
@@ -3820,13 +3922,23 @@ impl CortexM {
                     //   0xFFFFFFF1 → return to Handler mode (nested), frame on MSP
                     //   0xFFFFFFF9 → return to Thread/MSP
                     //   0xFFFFFFFD → return to Thread/PSP
-                    self.lr = if entered_from_handler {
+                    // An extended (FP) frame clears bit 4 (0xFFFFFFE1/E9/ED),
+                    // and the handler starts without an FP context.
+                    let exc_return = if entered_from_handler {
                         0xFFFF_FFF1
                     } else if entry_on_psp {
                         0xFFFF_FFFD
                     } else {
                         0xFFFF_FFF9
                     };
+                    self.lr = if fp_frame {
+                        exc_return & !0x10
+                    } else {
+                        exc_return
+                    };
+                    if self.fp_ctx.is_some() {
+                        self.control &= !0x4;
+                    }
 
                     // Fault verdict: record the first fault-handler entry — the
                     // frame just stacked and the EXC_RETURN just built. Only
@@ -3954,6 +4066,10 @@ impl CortexM {
                 opcode,
                 instruction
             );
+
+            if self.fp_ctx.is_some() && instruction.is_vfp() {
+                self.fp_execute_check();
+            }
 
             // Execute
             match instruction {
@@ -4467,6 +4583,9 @@ impl CortexM {
                 }
                 Instruction::Mrs { rd, sysm } => {
                     pc_increment = self.exec_mrs(rd, sysm)?.apply(pc_increment);
+                }
+                Instruction::Tt { rd, rn, t, a } => {
+                    pc_increment = self.exec_tt(rd, rn, t, a)?.apply(pc_increment);
                 }
                 Instruction::Msr { sysm, rn } => {
                     pc_increment = self.exec_msr(sysm, rn)?.apply(pc_increment);

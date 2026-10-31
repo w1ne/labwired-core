@@ -101,6 +101,24 @@ peripherals:
     base_address: 0xE000E010
     size: "16B"
 
+  # Cortex-M33 FP extension (single-precision FPv5): FPCCR/FPCAR/FPDSCR and
+  # MVFR0-2 at 0xE000EF34..0xE000EF48 (ARMv8-M ARM DDI 0553 B11.1; Cortex-M33
+  # TRM 100230 MVFR values are the model defaults). Turns on CONTROL.FPCA and
+  # extended exception frames, which Zephyr CONFIG_FPU_SHARING relies on.
+  - id: "fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "28B"
+
+  # Cortex-M33 PMSAv8 MPU, 8 regions (RM0438 "Memory protection unit"; DDI
+  # 0553 B3.5): per-region RBAR/RLAR + aliases, stored and reported by TT, not
+  # enforced. Zephyr's Armv8-M MPU driver finds a stack's static region by TT.
+  - id: "mpu"
+    type: "armv8m_mpu"
+    base_address: 0xE000ED90
+    size: "56B"
+    config: { regions: 8 }
+
   # --- GPIO (AHB2 @ 0x42020000, one 1 KiB window per port) ------------------
   - id: "gpioa"
     type: "gpio"
