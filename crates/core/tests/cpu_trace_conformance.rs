@@ -20,7 +20,7 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{Avr, CortexM, Pic18, Pic24, RiscV, XtensaLx7};
+use labwired_core::cpu::{Avr, CortexM, Pic16, Pic18, Pic24, RiscV, XtensaLx7};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -152,8 +152,9 @@ struct CoreUnderTest {
     opcode_bytes: u32,
     /// The stack pointer `build` sets, which the trace trailer must report.
     /// `0x8000` for every core with a data-memory SP; PIC18's SP is the 5-bit
-    /// hardware return-stack index `STKPTR` (0..=31), so a data address
-    /// cannot be represented there and the row uses a stack depth instead.
+    /// hardware return-stack index `STKPTR` (0..=31) and PIC16's the 3-bit
+    /// one (0..=7), so a data address cannot be represented there and those
+    /// rows use a stack depth instead.
     sp: u32,
     /// Build the core with `program` already loaded at `entry`.
     ///
@@ -289,6 +290,28 @@ fn cores() -> Vec<CoreUnderTest> {
                 let mut cpu = Pic18::new();
                 // Harvard: instructions come from the CPU's own flash.
                 cpu.load_flash(entry, program);
+                cpu.set_sp(5);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Pic16",
+            entry: 0x100,
+            // `MOVLW 0x01` ×4 (one 14-bit word each, little-endian in flash).
+            program: std::iter::repeat_n(0x3001u16, 4)
+                .flat_map(u16::to_le_bytes)
+                .collect(),
+            // PIC16 PCs are word addresses: one instruction advances 1, and
+            // each word takes two bytes of the image.
+            step_len: 1,
+            opcode_bytes: 2,
+            // SP is the 3-bit hardware return-stack index (0..=7).
+            sp: 5,
+            build: |entry, program| {
+                let mut cpu = Pic16::new();
+                // Harvard: instructions come from the CPU's own flash, which
+                // is loaded at byte addresses (two per word).
+                cpu.load_flash(entry * 2, program);
                 cpu.set_sp(5);
                 Box::new(cpu)
             },

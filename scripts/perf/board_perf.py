@@ -395,6 +395,13 @@ WAIVED: dict[str, str] = {
         "XC16 image is not a representative perf-spin workload, and this gate "
         "has no XC16 fixture builder; no throughput claim is made for this part."
     ),
+    "pic16f877a": (
+        "PIC16 L1 bring-up: boot, USART TX and the PORTB latch, with the USART "
+        "modelled on the CPU (not a bus peripheral), so this gate's MMIO spin "
+        "fixture cannot represent it. The checked-in SDCC image is not a "
+        "representative perf-spin workload and this gate has no SDCC fixture "
+        "builder; no throughput claim is made for this part."
+    ),
     "pic18f4520": (
         "PIC18 L1 bring-up: boot, EUSART TX and the PORTB latch, with the "
         "EUSART modelled on the CPU (not a bus peripheral), so this gate's MMIO "

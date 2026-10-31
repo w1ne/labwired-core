@@ -351,6 +351,8 @@ impl SourceDebug {
             // WREG, STATUS, BSR, FSR0-2, SP, PC — provisional until XC8 DWARF
             // numbering is verified.
             MachineFamily::Pic18 => 8,
+            // W, STATUS, FSR, PCLATH, SP, PC — provisional, same caveat.
+            MachineFamily::Pic16 => 6,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -487,6 +489,16 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Pic16 => Abi {
+            // SP (register 4) is the hardware return-stack pointer; the PC
+            // is a word address, so no bit is masked off.
+            sp: 4,
+            callee_saved: Vec::new(),
+            code_mask: !0,
+            register_size: 1,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -502,6 +514,7 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         // W0-W15, PC (16), SR (17).
         MachineFamily::Pic24 => 18,
         MachineFamily::Pic18 => 8,
+        MachineFamily::Pic16 => 6,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
@@ -673,6 +686,7 @@ fn stack_register(family: MachineFamily) -> u8 {
         // W15 is the stack pointer.
         MachineFamily::Pic24 => 15,
         MachineFamily::Pic18 => 6,
+        MachineFamily::Pic16 => 4,
     }
 }
 

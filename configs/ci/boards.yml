@@ -51,6 +51,13 @@ boards:
     kind: sim-validate
     path: examples/pic18f4520
     gate: true
+  # PIC16F877A L1: committed SDCC 4.4.0 pic14 firmware (the pic14 port is not
+  # in distro packages either, so CI checks the HEX->ELF wrap), the USART/LED
+  # io-smoke and a clean 200k-step run.
+  - id: pic16f877a
+    kind: sim-validate
+    path: examples/pic16f877a
+    gate: true
   # Builds the real target source with avr-gcc and runs its committed ELF.
   - id: atmega1281-io
     kind: sim-validate
