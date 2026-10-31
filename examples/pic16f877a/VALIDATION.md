@@ -86,9 +86,9 @@ Not validated, or not modelled, for this part:
   with the PIC16F1829 (`examples/pic16f1829`).
 
 Known engine gaps (tracked here until fixed):
-- `load_flash` panics on an image larger than the part's flash instead of
-  returning an error. The follow-up PR #1569 turns this into a loader error
-  (`EXIT_CONFIG_ERROR` from `labwired run`/`test`).
+- `load_flash` still panics on an image larger than the part's flash, but
+  every loader path now goes through `try_load_flash`, so `labwired run`/`test`
+  report it as a config error (`EXIT_CONFIG_ERROR`) instead.
 - `build_pic16_node` (the multi-node builder) attaches no serial sink, so
   USART output from a PIC16 node is not captured. Single-board `run`/`test`
   and the Session/DAP builder do capture it.
