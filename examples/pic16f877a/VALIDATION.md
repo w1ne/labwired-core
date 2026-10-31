@@ -82,5 +82,13 @@ Not validated, or not modelled, for this part:
   plain storage.
 - The enhanced mid-range (PIC16F1xxx) instruction set and SFR map.
 
+Known engine gaps (tracked here until fixed):
+- `load_flash` panics on an image larger than the part's flash instead of
+  returning an error. The follow-up PR #1569 turns this into a loader error
+  (`EXIT_CONFIG_ERROR` from `labwired run`/`test`).
+- `build_pic16_node` (the multi-node builder) attaches no serial sink, so
+  USART output from a PIC16 node is not captured. Single-board `run`/`test`
+  and the Session/DAP builder do capture it.
+
 The CPU clock in the descriptor is the 5-MIPS maximum; this example's
 16 MHz crystal gives 4 MIPS, and nothing in the smoke depends on time.
