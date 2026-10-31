@@ -27,6 +27,22 @@ PCLKA. 115200 cannot be hit accurately from the 8-MHz MOCO without the SCI
 `MDDR` modulator, so this smoke uses **9600 8N1**. Set the J-Link OB virtual
 COM port to 9600 on silicon.
 
+## Stock Zephyr
+
+Unmodified upstream Zephyr v4.0.0 `samples/hello_world` and
+`samples/synchronization` for `ek_ra6m5` boot too. The fixtures are committed
+(`tests/fixtures/r7fa6m5bh-zephyr-{hello,sync}.elf`) and
+`crates/firmware-ek-ra6m5-zephyr/build.sh` rebuilds them byte-identical from a
+v4.0.0 west workspace:
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-hello.yaml --no-uart-stdout
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-sync.yaml --no-uart-stdout
+```
+
+They run FSP's clock bring-up (MOSC, PLL, `SCKSCR`) on `ra6_sysc` and the
+SCI0 console in FIFO mode. See [`VALIDATION.md`](VALIDATION.md).
+
 ## Build and run
 
 ```bash

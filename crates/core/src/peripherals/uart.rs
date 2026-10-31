@@ -787,6 +787,21 @@ const SCI_B_RESET: [u32; SCI_B_REGS] = {
     r
 };
 
+/// Classic SCI FIFO registers (RA6/RA4 SCI0-9 with a 16-stage FIFO,
+/// R01UH0891 "FIFO Control Register (FCR)"): FTDRH/FTDRL 0x0E/0x0F,
+/// FRDRH/FRDRL 0x10/0x11, FCR 0x14 (16-bit), FDR 0x16 (16-bit, R[4:0] in
+/// the low byte, T[4:0] in the high byte).
+const SCI_FTDRL: u64 = 0x0F;
+const SCI_FRDRH: u64 = 0x10;
+const SCI_FRDRL: u64 = 0x11;
+const SCI_FCR: u64 = 0x14;
+const SCI_FDR: u64 = 0x16;
+/// FCR: FM bit 0 (FIFO mode), RFRST bit 1 / TFRST bit 2 write-only resets.
+const SCI_FCR_FM: u16 = 1 << 0;
+const SCI_FCR_RFRST: u16 = 1 << 1;
+const SCI_FCR_TFRST: u16 = 1 << 2;
+const SCI_FIFO_DEPTH: usize = 16;
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -1016,6 +1031,9 @@ pub struct Uart {
     /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
     /// stored; it reads CCR0.TE/RE back as TIST/RIST.
     sci_b_regs: [u32; SCI_B_REGS],
+    /// Classic SCI layout: FCR as firmware last wrote it, without the
+    /// write-only RFRST/TFRST bits.
+    sci_fcr: u16,
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
@@ -1104,6 +1122,7 @@ impl Uart {
             avr_ubrr: 0,
             avr_baud_set: false,
             sci_b_regs: SCI_B_RESET,
+            sci_fcr: 0,
             last_tx_on_bus: false,
         }
     }
@@ -1202,6 +1221,54 @@ impl Uart {
         }
         let reg = &mut self.sci_b_regs[index];
         *reg = (*reg & !(0xFFu32 << shift)) | v;
+        true
+    }
+
+    /// Classic SCI FIFO register byte at `offset` (FCR, FDR, FRDRH), or
+    /// `None` outside them (or on other layouts). FRDRL is popped by the
+    /// caller. TX drains at once, so FDR.T is always 0; FDR.R is the RX
+    /// queue length capped at the 16-stage FIFO.
+    fn sci_fifo_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Sci) {
+            return None;
+        }
+        match offset {
+            SCI_FCR => Some(self.sci_fcr as u8),
+            o if o == SCI_FCR + 1 => Some((self.sci_fcr >> 8) as u8),
+            SCI_FDR => {
+                let rx = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+                Some(rx.min(SCI_FIFO_DEPTH) as u8)
+            }
+            o if o == SCI_FDR + 1 => Some(0),
+            SCI_FRDRH => Some(0),
+            _ => None,
+        }
+    }
+
+    fn sci_fifo_mode(&self) -> bool {
+        matches!(self.layout, UartRegisterLayout::Sci) && self.sci_fcr & SCI_FCR_FM != 0
+    }
+
+    /// Store one byte of the classic SCI FCR. Returns false for any other
+    /// offset. RFRST empties the RX queue; RFRST/TFRST read back 0, which
+    /// is what FSP's `r_sci_uart_fifo_cfg` waits for.
+    fn sci_fcr_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sci) {
+            return false;
+        }
+        let shift = match offset {
+            SCI_FCR => 0,
+            o if o == SCI_FCR + 1 => 8,
+            _ => return false,
+        };
+        let mut v = u16::from(value) << shift;
+        if v & SCI_FCR_RFRST != 0 {
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                guard.clear();
+            }
+        }
+        v &= !(SCI_FCR_RFRST | SCI_FCR_TFRST);
+        self.sci_fcr = (self.sci_fcr & !(0xFF << shift)) | v;
         true
     }
 
@@ -2145,7 +2212,7 @@ impl crate::Peripheral for Uart {
             }
             return Ok(((word >> shift) & 0xFF) as u8);
         }
-        if offset == self.rx_offset() {
+        if offset == self.rx_offset() || (offset == SCI_FRDRL && self.sci_fifo_mode()) {
             // Pop one byte from RX buffer
             if let Ok(mut guard) = self.rx_buf.lock() {
                 return Ok(guard.pop_front().unwrap_or(0x00));
@@ -2166,6 +2233,9 @@ impl crate::Peripheral for Uart {
             return Ok(byte);
         }
         if let Some(byte) = self.sci_b_byte(offset) {
+            return Ok(byte);
+        }
+        if let Some(byte) = self.sci_fifo_byte(offset) {
             return Ok(byte);
         }
         if matches!(self.layout, UartRegisterLayout::Stm32V2) && offset == 0x2C {
@@ -2274,7 +2344,7 @@ impl crate::Peripheral for Uart {
         let is_legacy_tx_alias =
             matches!(self.layout, UartRegisterLayout::Stm32F1) && offset == 0x00;
 
-        if self.sci_b_write(offset, value) {
+        if self.sci_b_write(offset, value) || self.sci_fcr_write(offset, value) {
             return Ok(());
         }
         if matches!(self.layout, UartRegisterLayout::SciB) && offset != self.tx_offset() {
@@ -2282,7 +2352,8 @@ impl crate::Peripheral for Uart {
             // registers: accepted, nothing stored.
             return Ok(());
         }
-        if offset == self.tx_offset() || is_legacy_tx_alias {
+        let is_sci_fifo_tx = offset == SCI_FTDRL && self.sci_fifo_mode();
+        if offset == self.tx_offset() || is_legacy_tx_alias || is_sci_fifo_tx {
             self.push_tx(value);
             // If DMAT bit is set, we might be in a DMA sequence.
             if (self.cr3 & (1 << 7)) != 0 {
@@ -2555,7 +2626,7 @@ impl crate::Peripheral for Uart {
             }
             return Some(((word >> shift) & 0xFF) as u8);
         }
-        if offset == self.rx_offset() {
+        if offset == self.rx_offset() || (offset == SCI_FRDRL && self.sci_fifo_mode()) {
             // Peek without consuming
             if let Ok(guard) = self.rx_buf.lock() {
                 return Some(*guard.front().unwrap_or(&0x00));
@@ -2571,6 +2642,9 @@ impl crate::Peripheral for Uart {
             return Some(byte);
         }
         if let Some(byte) = self.sci_b_byte(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sci_fifo_byte(offset) {
             return Some(byte);
         }
         if offset == self.cr3_offset() {
@@ -2888,6 +2962,43 @@ mod tests {
     /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while
     /// CCR0.TE is set, CESR mirrors TE/RE, CSR@0x48 reports TDRE|TEND and
     /// RDRF on RX data, control registers read back from their FSP reset.
+    #[test]
+    fn test_sci_classic_fifo_mode() {
+        // FSP r_sci_uart (RA6M5 SCI0, 16-stage FIFO): FCR = FM | RFRST |
+        // TFRST, wait until FCR reads back without the reset bits; Zephyr's
+        // poll_out waits FDR.T <= 8 and writes FTDRL; poll_in reads FDR.R
+        // and FRDRL.
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut u = Uart::new_with_layout(UartRegisterLayout::Sci);
+        u.set_sink(Some(sink.clone()), false);
+        // Non-FIFO mode: FTDRL is not a transmit register.
+        u.write(0x0F, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty());
+        u.rx_buffer().lock().unwrap().push_back(b'q');
+        u.write(0x14, 0x07).unwrap();
+        u.write(0x15, 0xF8).unwrap();
+        assert_eq!(u.read(0x14).unwrap(), 0x01, "RFRST/TFRST read 0");
+        assert_eq!(u.read(0x15).unwrap(), 0xF8);
+        assert!(u.rx_buffer().lock().unwrap().is_empty(), "RFRST");
+        // TX drains at once: FDR.T stays 0.
+        u.write(0x0F, b'o').unwrap();
+        u.write(0x0F, b'k').unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+        assert_eq!(u.read(0x17).unwrap(), 0, "FDR.T");
+        // RX: FDR.R counts the queue (capped at 16), FRDRL pops.
+        for b in 0..20u8 {
+            u.rx_buffer().lock().unwrap().push_back(b'a' + b);
+        }
+        assert_eq!(u.read(0x16).unwrap(), 16, "FDR.R");
+        assert_eq!(u.peek(0x11), Some(b'a'));
+        assert_eq!(u.read(0x11).unwrap(), b'a');
+        assert_eq!(u.read(0x11).unwrap(), b'b');
+        assert_eq!(u.read(0x10).unwrap(), 0, "FRDRH");
+        // The non-FIFO TDR/RDR path still works.
+        u.write(0x03, b'!').unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok!");
+    }
+
     #[test]
     fn test_sci_b_tx_gate_status_and_readback() {
         let sink = Arc::new(Mutex::new(Vec::new()));

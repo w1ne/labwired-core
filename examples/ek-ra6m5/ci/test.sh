@@ -15,3 +15,22 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 200000 \
   --out-dir "$OUT/unsupported-audit" \
   --fail-on-unsupported
+# Stock Zephyr v4.0.0 hello_world (tests/fixtures/r7fa6m5bh-zephyr-hello.elf):
+# PSCU/CPSCU attribution, FSP clock bring-up on ra6_sysc, SCI0 in FIFO mode,
+# then the full instruction-support audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra6m5/zephyr-hello.yaml \
+  --output-dir "$OUT/zephyr-hello" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa6m5bh-zephyr-hello.elf \
+  --system configs/systems/ek-ra6m5.yaml \
+  --max-steps 150000 \
+  --out-dir "$OUT/zephyr-unsupported-audit" \
+  --fail-on-unsupported
+# Stock Zephyr samples/synchronization: k_busy_wait on the SysTick cycle
+# counter and k_msleep woken by SysTick (tests/fixtures/r7fa6m5bh-zephyr-sync.elf).
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra6m5/zephyr-sync.yaml \
+  --output-dir "$OUT/zephyr-sync" \
+  --no-uart-stdout
