@@ -9647,6 +9647,10 @@ boards:
     # New for this: MCG `k6x` profile (PLL0 PLLST/LOCK0, PEE CLKST=11), the
     # Kinetis UART C2 TIE/TCIE/RIE interrupts, and SVD register files for
     # SYSMPU, PMC and OSC (no MPU protection modelled).
+    # 2026-10-31: stock Zephyr v3.7.0 samples/synchronization also runs
+    # (tests/fixtures/mk64f12-zephyr-sync.elf, same build script, no model
+    # change): SysTick k_msleep timeouts, semaphore hand-off and PendSV
+    # switches, asserted by examples/frdm-k64f/zephyr-sync.yaml in ci/test.sh.
     # SIM-DERIVED — no K64F bench part. See
     # docs/boards/frdm-k64f.md and examples/frdm-k64f/VALIDATION.md.
     doc: docs/boards/frdm-k64f.md

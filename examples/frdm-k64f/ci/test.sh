@@ -14,6 +14,11 @@ cargo run -q -p labwired-cli -- test \
   --script examples/frdm-k64f/zephyr-hello.yaml \
   --output-dir "$OUT/zephyr-hello" \
   --no-uart-stdout
+# Stock Zephyr v3.7.0 synchronization (SysTick timeouts + PendSV switches).
+cargo run -q -p labwired-cli -- test \
+  --script examples/frdm-k64f/zephyr-sync.yaml \
+  --output-dir "$OUT/zephyr-sync" \
+  --no-uart-stdout
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv7em-none-eabi/release/firmware-frdm-k64f-smoke \
   --system configs/systems/frdm-k64f.yaml \
