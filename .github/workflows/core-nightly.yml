@@ -714,3 +714,96 @@ jobs:
           -p labwired-core --features event-scheduler
           --test esp32c3_walk_differential
           -- --ignored --nocapture
+
+  # The chip list page (docs/coverage/chips.md) is generated from BOTH the
+  # public catalogue in this repo and the private catalogue in w1ne/labwired-ip.
+  # This job regenerates it nightly so the published page cannot drift.
+  #
+  # PRIVACY: this repo and docs.labwired.com are PUBLIC, and the private
+  # catalogue is marked NOT FOR PUBLICATION. The committed page therefore carries
+  # the PUBLIC catalogue only. With the LABWIRED_IP_TOKEN secret set, the job
+  # also builds the full public+private table as a job ARTIFACT (uploaded, never
+  # committed) so the private count can be reviewed before any decision to
+  # publish it. It never commits private model names.
+  #
+  # The private descriptors themselves are never written anywhere: only names
+  # and coverage levels leave generate_chip_catalog.py.
+  chip-catalog:
+    name: Chip list (public + private)
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Regenerate the public chip list
+        run: |
+          set -euo pipefail
+          python scripts/generate_chip_catalog.py
+          python scripts/generate_chip_catalog_page.py
+
+      - name: Fail if the committed chip list is stale
+        run: |
+          if ! git diff --quiet -- docs/coverage/chips.json docs/coverage/chips.md; then
+            echo "::error::docs/coverage/chips.{json,md} are stale — run" >&2
+            echo "  scripts/generate_chip_catalog.py && scripts/generate_chip_catalog_page.py" >&2
+            echo "and commit the result." >&2
+            git --no-pager diff --stat -- docs/coverage/chips.json docs/coverage/chips.md
+            exit 1
+          fi
+
+      - name: Check out the private catalogue
+        id: private
+        env:
+          LABWIRED_IP_TOKEN: ${{ secrets.LABWIRED_IP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LABWIRED_IP_TOKEN:-}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::LABWIRED_IP_TOKEN unset — skipping the private half."
+            exit 0
+          fi
+          git clone --depth 1 \
+            "https://x-access-token:${LABWIRED_IP_TOKEN}@github.com/w1ne/labwired-ip.git" \
+            ../labwired-ip
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build the full public + private table (artifact only)
+        if: ${{ steps.private.outputs.available == 'true' }}
+        env:
+          LABWIRED_IP_CHIPS: ../labwired-ip/crates/labwired-ip-chips/chips
+          LABWIRED_IP_TRACKER: ../labwired-ip/parity-data/tracker.yaml
+        run: |
+          set -euo pipefail
+          python scripts/generate_chip_catalog.py --publish-private \
+            --out ../out/coverage/chips-full.json
+          python scripts/generate_chip_catalog_page.py \
+            --data ../out/coverage/chips-full.json \
+            --out ../out/coverage/chips-full.md
+          python - <<'PY'
+          import json, pathlib
+          s = json.loads(pathlib.Path("../out/coverage/chips-full.json").read_text())["summary"]
+          print(f"public={s['public']} private={s['private']} excluded={s['excluded']}")
+          pathlib.Path("../out/coverage/SUMMARY.txt").write_text(
+              f"public={s['public']} private={s['private']} "
+              f"chips={s['chips']} excluded={s['excluded']}\n"
+          )
+          PY
+
+      - name: Upload the private-inclusive table for review
+        if: ${{ steps.private.outputs.available == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chip-catalog-private-review
+          path: ../out/coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+

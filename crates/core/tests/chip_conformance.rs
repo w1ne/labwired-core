@@ -2031,6 +2031,8 @@ fn chip_conformance_ratchet() {
          Reg match = verifiable cold-reset registers reproduced. \"Excluded\" = registers a cold \
          model can't reproduce from a warm capture (calibration / clock-gated / boot-console / live \
          status); see `dynamic_excludes`. A mismatch outside the excluded set is a real model gap.\n\n\
+         This page covers the public models. For every chip we model — public and private — see \
+         the [chip list](chips.md).\n\n\
          | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |\n\
          |------|-------|--------|-------------|------------------------|----------|---------------|\n",
     );
