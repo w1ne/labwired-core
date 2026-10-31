@@ -105,6 +105,9 @@ pub struct RaAgt {
     anchor_tick: u64,
     /// The next event: its count-source tick and what it raises.
     armed: Option<(u64, Due)>,
+    /// CPU cycle `armed` was queued for (detects a count-source change that
+    /// moves the same tick to another cycle).
+    armed_cycle_was: Option<u64>,
     /// Bumped whenever `armed` is recomputed; a stale scheduled event whose
     /// token no longer matches is dropped.
     generation: u32,
@@ -134,6 +137,7 @@ impl RaAgt {
             anchor_count: 0xFFFF,
             anchor_tick: 0,
             armed: None,
+            armed_cycle_was: None,
             generation: 0,
             pending_events: Vec::new(),
             clock: None,
@@ -210,15 +214,42 @@ impl RaAgt {
     }
 
     /// Recompute the next event from the anchor (anchor = now).
+    ///
+    /// A write that leaves the next edge where it was (a flag clear, a
+    /// compare-B change while B is off) keeps the queued event and its token:
+    /// re-arming it under a new token would leave the old one resident until
+    /// its deadline (the scheduler has no cancel), and Zephyr's alarm path
+    /// does several such writes per alarm while a 32 s underflow is pending.
     fn rearm(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
-        self.armed = None;
-        if !self.running() || self.clock.is_none() {
-            return;
+        let previous = self.armed.take().zip(self.armed_cycle_was);
+        self.armed_cycle_was = None;
+        let next = self.next_edge();
+        if let (Some((tick, due, hz)), Some(((ptick, pdue), pcycle))) = (next, previous) {
+            if (tick, due) == (ptick, pdue) && self.cycle_of_tick(tick, hz) == pcycle {
+                self.armed = Some((tick, due));
+                self.armed_cycle_was = Some(pcycle);
+                return;
+            }
         }
-        let Some(hz) = self.source_hz() else {
-            return;
-        };
+        self.generation = self.generation.wrapping_add(1);
+        let Some((tick, due, hz)) = next else { return };
+        self.armed = Some((tick, due));
+        let fire_cycle = self.cycle_of_tick(tick, hz);
+        self.armed_cycle_was = Some(fire_cycle);
+        if self.scheduler_mode() {
+            let now = self.now_cycle();
+            let fire = fire_cycle.max(now + 1);
+            self.pending_events.push((fire - now, self.generation));
+        }
+    }
+
+    /// The next count edge that raises something, from the anchor:
+    /// `(tick, what, source Hz)`; `None` when stopped or not counting.
+    fn next_edge(&self) -> Option<(u64, Due, u64)> {
+        if !self.running() || self.clock.is_none() {
+            return None;
+        }
+        let hz = self.source_hz()?;
         let c = self.anchor_count;
         let mut best: Option<(u64, Due)> = None;
         let mut consider = |d: Option<u64>, set: fn(&mut Due)| {
@@ -240,14 +271,8 @@ impl RaAgt {
         if self.agtcmsr & TCMEB != 0 {
             consider(self.edges_to(c, self.cmb), |d| d.cmb = true);
         }
-        let Some((d, due)) = best else { return };
-        let tick = self.anchor_tick + d;
-        self.armed = Some((tick, due));
-        if self.scheduler_mode() {
-            let now = self.now_cycle();
-            let fire = self.cycle_of_tick(tick, hz).max(now + 1);
-            self.pending_events.push((fire - now, self.generation));
-        }
+        let (d, due) = best?;
+        Some((self.anchor_tick + d, due, hz))
     }
 
     /// CPU cycle of the armed event.
@@ -662,6 +687,31 @@ mod tests {
             assert!(events.is_empty());
             assert!(t.legacy_tick_active());
         }
+    }
+
+    #[test]
+    fn a_write_that_keeps_the_next_edge_queues_nothing_new() {
+        let (mut t, clock) = agt_at(0);
+        loco(&mut t);
+        w16(&mut t, AGTCMA, 0xFFFF - 50);
+        t.write(AGTCMSR, TCMEA).unwrap();
+        t.write(AGTCR, TSTART).unwrap();
+        t.take_scheduled_events();
+        let token = t.generation;
+        clock.publish(t.cycle_of_tick(10, LOW_CLK_HZ));
+        // Zephyr's RMW flag clears and a compare-B write while B is off.
+        for _ in 0..20 {
+            let v = t.read(AGTCR).unwrap();
+            t.write(AGTCR, v & !TCMAF).unwrap();
+            w16(&mut t, AGTCMB, 0x1234);
+        }
+        assert!(t.take_scheduled_events().is_empty());
+        assert_eq!(t.generation, token, "the queued event keeps its token");
+        assert_eq!(t.armed_cycle(), Some(t.cycle_of_tick(50, LOW_CLK_HZ)));
+        // Moving compare A does re-arm.
+        w16(&mut t, AGTCMA, 0xFFFF - 30);
+        assert_ne!(t.generation, token);
+        assert_eq!(t.armed_cycle(), Some(t.cycle_of_tick(30, LOW_CLK_HZ)));
     }
 
     #[test]
