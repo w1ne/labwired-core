@@ -173,6 +173,10 @@ const PIR1_TXIF: u8 = 1 << 4;
 pub struct Pic16SfrMap {
     pub porta: u16,
     pub trisa: u16,
+    /// How many consecutive PORT/TRIS/LAT addresses from PORTA up the
+    /// layout has (at most [`PIC16_PORT_COUNT`]). The addresses after them
+    /// are other registers, not ports.
+    pub ports: u16,
     /// LATA; the classic core has no LAT registers.
     pub lata: Option<u16>,
     /// PIR1.. and the matching PIE1.. (same length).
@@ -195,6 +199,7 @@ pub struct Pic16SfrMap {
 pub const PIC16_CLASSIC_MAP: Pic16SfrMap = Pic16SfrMap {
     porta: SFR_PORTA,
     trisa: SFR_TRISA,
+    ports: PIC16_PORT_COUNT,
     lata: None,
     pir: &[SFR_PIR1, SFR_PIR2],
     pie: &[SFR_PIE1, SFR_PIE2],
@@ -215,6 +220,7 @@ pub const PIC16_CLASSIC_MAP: Pic16SfrMap = Pic16SfrMap {
 pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
     porta: 0x00C,
     trisa: 0x08C,
+    ports: PIC16_PORT_COUNT,
     lata: Some(0x10C),
     pir: &[0x011, 0x012, 0x013, 0x014],
     pie: &[0x091, 0x092, 0x093, 0x094],
@@ -233,6 +239,17 @@ pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
 /// (per the parts' SDCC 4.4.0 pic14 headers).
 pub const PIC16E_F151X_MAP: Pic16SfrMap = Pic16SfrMap {
     osc_ready: Some((0x09A, 0x13)),
+    ..PIC16E_F182X_MAP
+};
+
+/// The PIC16(L)F1614/1615/1618/1619 (DS40001769C and DS40001770D, Tables
+/// 3-2 and 3-3): only PORTA-PORTC, and the interrupt registers sit one
+/// address lower, PIR1-5 at 0x010 and PIE1-5 at 0x090. 0x00F/0x08F/0x10F are
+/// unimplemented (plain storage here, not a port).
+pub const PIC16E_F161X_MAP: Pic16SfrMap = Pic16SfrMap {
+    ports: 3,
+    pir: &[0x010, 0x011, 0x012, 0x013, 0x014],
+    pie: &[0x090, 0x091, 0x092, 0x093, 0x094],
     ..PIC16E_F182X_MAP
 };
 
@@ -317,21 +334,23 @@ const fn edev(
 /// groups. `scripts/pic16/check_sfr_map.py --check-table` regenerates and
 /// re-verifies every row. A row is geometry, not onboarding.
 ///
-/// Enhanced mid-range rows (`edev`) must match `PIC16E_F182X_MAP`
-/// (`--enhanced`): core registers, bank-31 shadows and stack, INTCON,
+/// Enhanced mid-range rows (`edev`) must match their map (`--enhanced`;
+/// `PIC16E_F182X_MAP` shown here): core registers, bank-31 shadows and stack, INTCON,
 /// OPTION_REG, PCON, PIR1-4/PIE1-4, PORT/TRIS/LAT A-E and the EUSART at
 /// 0x19A-0x19E, with any address the model touches either the same register
-/// or free. The OSCSTAT ready mask picks the map.
+/// or free. The PIR1 address and the OSCSTAT ready mask pick the map: PIR1 at
+/// 0x010 is the PIC16F161x layout (`PIC16E_F161X_MAP`, PORT/TRIS/LAT A-C and
+/// PIR1-5/PIE1-5).
 ///
 /// Classic parts without PORTC (PIC16F627A/628A/648A, PIC16F87/88) have a
 /// zero PORTC mask, so 0x07 reads 0 and ignores writes; the checker requires
-/// the address to be free in their header. The OTP/EPROM PIC16C63A/73B/74B
+/// the address to be free in their header. The OTP/EPROM PIC16C63A/65B/73B/74B
 /// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F6xx/81x/84A/716 and friends); enhanced parts without an EUSART (PIC16F1503/1507/1613/1703/1707),
-/// with PIR1 at 0x010 (PIC16F161x), with comparator SFRs at LATD/LATE
-/// (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
+/// (PIC16F630/676/684, 81x, 84A, 716 and friends); enhanced parts without
+/// an EUSART (PIC16F1503/1507/1613/1703/1707), with comparator SFRs at
+/// LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
 /// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
 /// entry for them, so no lkr cross-check or SDCC firmware build).
 const PIC16_DEVICES: &[Pic16Device] = &[
@@ -688,6 +707,7 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         ],
     ),
     dev("pic16c63a", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
+    dev("pic16c65b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
     dev("pic16c73b", 4096, [0x3F, 0xFF, 0xFF, 0x00, 0x00], &[]),
     dev("pic16c74b", 4096, [0x3F, 0xFF, 0xFF, 0xFF, 0x07], &[]),
     dev(
@@ -822,6 +842,30 @@ const PIC16_DEVICES: &[Pic16Device] = &[
     // SDCC 4.4.0's pic14devices.txt lacks `enhanced 1` for 16(L)F1704/1708,
     // so SDCC emits classic code for them that gpasm rejects. Rebuilding
     // firmware for these parts needs a locally patched device DB.
+    edev(
+        "pic16f1614",
+        4096,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16f1615",
+        8192,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16f1618",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16f1619",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
     edev(
         "pic16f1704",
         4096,
@@ -1055,6 +1099,30 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         16384,
         [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
         PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16lf1614",
+        4096,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16lf1615",
+        8192,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16lf1618",
+        4096,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16lf1619",
+        8192,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        PIC16E_F161X_MAP,
     ),
     edev(
         "pic16lf1704",
@@ -1481,7 +1549,7 @@ impl Pic16 {
             self.data[usize::from(pie)] = 0;
         }
         self.data[usize::from(map.option_reg)] = 0xFF;
-        for n in 0..PIC16_PORT_COUNT {
+        for n in 0..map.ports {
             self.data[usize::from(map.trisa + n)] = 0xFF;
         }
         if !self.enhanced {
@@ -1689,11 +1757,11 @@ impl Pic16 {
 
     /// The port index of a PORTx (`false`) or LATx (`true`) address.
     fn port_index(&self, addr: u16) -> Option<(usize, bool)> {
-        if (self.map.porta..self.map.porta + PIC16_PORT_COUNT).contains(&addr) {
+        if (self.map.porta..self.map.porta + self.map.ports).contains(&addr) {
             return Some((usize::from(addr - self.map.porta), false));
         }
         match self.map.lata {
-            Some(lata) if (lata..lata + PIC16_PORT_COUNT).contains(&addr) => {
+            Some(lata) if (lata..lata + self.map.ports).contains(&addr) => {
                 Some((usize::from(addr - lata), true))
             }
             _ => None,
@@ -3140,8 +3208,8 @@ mod tests {
 
     #[test]
     fn enhanced_rows_pick_the_core_flash_and_oscstat_map() {
-        // Left out: no EUSART, PIR1 at 0x010, 64 banks.
-        for name in ["pic16f1503", "pic16f1614", "pic16f18855"] {
+        // Left out: no EUSART, 64 banks.
+        for name in ["pic16f1503", "pic16f18855"] {
             assert!(pic16_device(name).is_none(), "{name}");
         }
         let names: Vec<_> = PIC16_DEVICES.iter().map(|d| d.name).collect();
@@ -3550,6 +3618,35 @@ mod tests {
         assert_eq!(cpu.read_data(0x10E), 0x01, "LATC");
         assert_eq!(cpu.read_data(0x00E), 0x01, "PORTC pin driven by LATC0");
         assert_eq!(cpu.port_latch(2), 0x01);
+    }
+
+    #[test]
+    fn f161x_map_has_pir_pie_one_address_lower_and_ports_a_to_c() {
+        // DS40001769C Table 3-3 (PIC16(L)F1618): PIR1 0x010, PIE1 0x090,
+        // PIR5/PIE5 0x014/0x094; 0x00F/0x08F/0x10F unimplemented.
+        let mut cpu = Pic16::for_chip_name("pic16f1618");
+        assert_eq!(cpu.flash_words(), 4096);
+        // Reset: PIE1 is cleared, not set like a TRISE, and no TRISD at 0x08F.
+        assert_eq!(cpu.read_data(0x090), 0x00, "PIE1 resets to 0");
+        assert_eq!(cpu.read_data(0x08F), 0x00, "0x08F is not a TRIS");
+        assert_eq!(cpu.read_data(0x08E), 0xFF, "TRISC resets to inputs");
+        // PIR1 is a register, not PORTE.
+        cpu.write_data(0x010, 0x01);
+        assert_eq!(cpu.read_data(0x010), 0x01, "PIR1.TMR1IF");
+        cpu.write_data(0x010, 0x00);
+        cpu.write_data(0x19E, TXSTA_TXEN);
+        assert_ne!(cpu.read_data(0x010) & PIR1_TXIF, 0, "TXIF in PIR1 at 0x010");
+        cpu.write_data(0x19E, 0);
+        // PORTC still follows LATC on output pins.
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x10E, 0x05);
+        assert_eq!(cpu.read_data(0x00E), 0x05, "PORTC");
+        // A PIR5/PIE5 source (the fifth pair) vectors with GIE | PEIE.
+        cpu.write_data(0x094, 0x01);
+        cpu.write_data(0x014, 0x01);
+        cpu.write_data(SFR_INTCON, INTCON_GIE | INTCON_PEIE);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), PIC16_INT_VECTOR, "PIR5 interrupt taken");
     }
 
     #[test]

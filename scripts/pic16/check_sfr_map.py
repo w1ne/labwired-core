@@ -30,7 +30,8 @@ script.
     python3 scripts/pic16/check_sfr_map.py --check-table
 
     # Print table rows for the parts on stdin (`pic16f877a`, one per line);
-    # add --enhanced for PIC16F1xxx parts (checked against PIC16E_F182X_MAP):
+    # add --enhanced for PIC16F1xxx parts (checked against the PIC16E_*_MAP
+    # that the part's PIR1 address and OSCSTAT ready bits pick):
     python3 scripts/pic16/check_sfr_map.py --table < parts.txt
     python3 scripts/pic16/check_sfr_map.py --enhanced --table < parts.txt
 
@@ -89,8 +90,8 @@ E_SFRS = {
     ("INDF0",): 0x000, ("INDF1",): 0x001, ("PCL",): 0x002, ("STATUS",): 0x003,
     ("FSR0L",): 0x004, ("FSR0H",): 0x005, ("FSR1L",): 0x006, ("FSR1H",): 0x007,
     ("BSR",): 0x008, ("WREG",): 0x009, ("PCLATH",): 0x00A, ("INTCON",): 0x00B,
-    ("PORTA",): 0x00C, ("PIR1",): 0x011, ("TMR0",): 0x015,
-    ("TRISA",): 0x08C, ("PIE1",): 0x091, ("OPTION_REG",): 0x095, ("PCON",): 0x096,
+    ("PORTA",): 0x00C, ("TMR0",): 0x015,
+    ("TRISA",): 0x08C, ("OPTION_REG",): 0x095, ("PCON",): 0x096,
     ("LATA",): 0x10C,
     ("TXREG", "TX1REG"): 0x19A, ("SPBRGL", "SPBRG", "SP1BRGL"): 0x19B,
     ("RCSTA", "RC1STA"): 0x19D, ("TXSTA", "TX1STA"): 0x19E,
@@ -102,13 +103,34 @@ E_SFRS = {
 # The model touches these addresses on every enhanced part (reset values,
 # the PIRx/PIEx interrupt scan, ports, OSCSTAT ready bits). A part may lack
 # the register, but then no other SFR may sit at the address.
-E_OPTIONAL_SFRS = {
-    "PORTB": 0x00D, "PORTC": 0x00E, "PORTD": 0x00F, "PORTE": 0x010,
-    "PIR2": 0x012, "PIR3": 0x013, "PIR4": 0x014,
-    "TRISB": 0x08D, "TRISC": 0x08E, "TRISD": 0x08F, "TRISE": 0x090,
-    "PIE2": 0x092, "PIE3": 0x093, "PIE4": 0x094, "OSCSTAT": 0x09A,
-    "LATB": 0x10D, "LATC": 0x10E, "LATD": 0x10F, "LATE": 0x110,
+E_OPTIONAL_SFRS = {"OSCSTAT": 0x09A}
+# The two enhanced layouts, keyed by where PIR1 sits: how many PORT/TRIS/LAT
+# addresses the model decodes from PORTA up (`Pic16SfrMap::ports`), and its
+# PIR/PIE list. PIC16F161x has PORTA-C only, so its PIR1-5/PIE1-5 start one
+# address lower than the F182x's PIR1-4/PIE1-4.
+E_LAYOUTS = {
+    0x011: {"ports": 5, "pir": 4},
+    0x010: {"ports": 3, "pir": 5},
 }
+
+
+def e_layout_sfrs(pir1: int) -> tuple[dict, dict]:
+    """(required, optional) layout-dependent SFRs for the layout with PIR1
+    at `pir1`: PIR1/PIE1 must be there; the other ports and PIRx/PIEx are
+    optional but nothing else may sit at their addresses."""
+    lay = E_LAYOUTS[pir1]
+    required = {("PIR1",): pir1, ("PIE1",): pir1 + 0x80}
+    optional = {}
+    for n in range(1, lay["ports"]):
+        port = "ABCDE"[n]
+        optional[f"PORT{port}"] = 0x00C + n
+        optional[f"TRIS{port}"] = 0x08C + n
+        optional[f"LAT{port}"] = 0x10C + n
+    for n in range(1, lay["pir"]):
+        optional[f"PIR{n + 1}"] = pir1 + n
+        optional[f"PIE{n + 1}"] = pir1 + 0x80 + n
+    return required, optional
+
 # (register names, bit names, position) the model decodes.
 E_BITS = [
     (("STATUS",), ("C",), 0), (("STATUS",), ("DC",), 1), (("STATUS",), ("Z",), 2),
@@ -130,9 +152,13 @@ E_BITS = [
 # OSCSTAT<4:0> read as "ready" (the `osc_ready` mask): each of those bits
 # must be one of these clock-ready/stable flags, or unimplemented.
 E_OSC_READY = {"HFIOFS": 0, "LFIOFR": 1, "MFIOFR": 2, "HFIOFL": 3, "HFIOFR": 4}
-# The enhanced maps in pic16.rs, by OSCSTAT ready mask. Parts without the
-# MFINTOSC (PIC16F145x/150x/151x) have no MFIOFR/HFIOFL.
-E_MAPS = {0x1F: "PIC16E_F182X_MAP", 0x13: "PIC16E_F151X_MAP"}
+# The enhanced maps in pic16.rs, by (PIR1 address, OSCSTAT ready mask).
+# Parts without the MFINTOSC (PIC16F145x/150x/151x) have no MFIOFR/HFIOFL.
+E_MAPS = {
+    (0x011, 0x1F): "PIC16E_F182X_MAP",
+    (0x011, 0x13): "PIC16E_F151X_MAP",
+    (0x010, 0x1F): "PIC16E_F161X_MAP",
+}
 
 
 def sdcc_include() -> pathlib.Path:
@@ -204,7 +230,7 @@ def osc_ready(h: str) -> int:
 
 
 def check_enhanced(part: str) -> list[str]:
-    """Mismatches between `PIC16E_F182X_MAP` and the part's header."""
+    """Mismatches between the enhanced model maps and the part's header."""
     h = header(part)
     addrs = {m[0]: int(m[1], 16)
              for m in re.findall(r"#define\s+(\w+)_ADDR\s+0x([0-9A-Fa-f]+)", h)}
@@ -214,10 +240,12 @@ def check_enhanced(part: str) -> list[str]:
         return ["classic mid-range (no BSR)"]
     if not (lkr_dir() / f"{part[3:]}_g.lkr").exists():
         bad.append("no gputils 1.4.0 linker script (cannot cross-check or build)")
-    for names, want in E_SFRS.items():
+    pir1 = addrs.get("PIR1") if addrs.get("PIR1") in E_LAYOUTS else 0x011
+    required, optional = e_layout_sfrs(pir1)
+    for names, want in {**E_SFRS, **required}.items():
         if not any(addrs.get(n) == want for n in names):
             bad.append(f"{names[0]} at {addrs.get(names[0])!r}, model {want:#x}")
-    for name, want in E_OPTIONAL_SFRS.items():
+    for name, want in {**E_OPTIONAL_SFRS, **optional}.items():
         if name in addrs:
             if addrs[name] != want:
                 bad.append(f"{name} at {addrs[name]:#x}, model {want:#x}")
@@ -238,8 +266,8 @@ def check_enhanced(part: str) -> list[str]:
         for name, pos in E_OSC_READY.items():
             if osc.get(pos) not in (name, None):
                 bad.append(f"OSCSTAT bit {pos} is {osc[pos]!r}, model {name}")
-        if osc_ready(h) not in E_MAPS:
-            bad.append(f"OSCSTAT ready mask {osc_ready(h):#04x} has no map")
+        if (pir1, osc_ready(h)) not in E_MAPS:
+            bad.append(f"PIR1 {pir1:#x} with OSCSTAT ready mask {osc_ready(h):#04x} has no map")
     cfg = {m[0]: int(m[1], 16)
            for m in re.findall(r"#define\s+(_CONFIG[12]|_STVREN_OFF|_STVREN_ON)\s+0x([0-9A-Fa-f]+)", h)}
     if cfg.get("_CONFIG1") != 0x8007 or cfg.get("_CONFIG2") != 0x8008:
@@ -331,7 +359,9 @@ def enhanced_geometry(part: str):
     lkr_words = max(int(end, 16) for _, end in pages) + 1
     if lkr_words != flash_words:
         sys.exit(f"error: {part}: pic14devices.txt {flash_words} words, lkr {lkr_words}")
-    return flash_words, port_masks(part), E_MAPS[osc_ready(header(part))]
+    h = header(part)
+    pir1 = int(re.search(r"#define\s+PIR1_ADDR\s+0x([0-9A-Fa-f]+)", h)[1], 16)
+    return flash_words, port_masks(part), E_MAPS[(pir1, osc_ready(h))]
 
 
 def enhanced_row(part: str) -> str:
