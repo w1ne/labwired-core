@@ -68,8 +68,11 @@ hb=0 odr=00000080 btn=0
 
 ## Explicitly not claimed
 
-TrustZone / SAU / GTZC, the secure/non-secure split, MPU/PMSAv8 enforcement
-and `TT`/`TTA` are **not modelled**. The L5 non-secure FLASH controller, EXTI,
+TrustZone / SAU / GTZC, the secure/non-secure split and MPU enforcement are
+**not modelled**: the PMSAv8 region file is stored and `TT` reports from it,
+but no access is checked. FP state is stacked eagerly, not lazily. Stock
+Zephyr `hello_world`, `synchronization` and `tests/kernel/fpu_sharing/generic`
+run from `zephyr-*.yaml` (see `VALIDATION.md`). The L5 non-secure FLASH controller, EXTI,
 ADC1, FDCAN1 and USB are declared stubs. SPI/I2C/timers/DMA/RNG/RTC are
 modelled but unexercised in this L1 slice. See `VALIDATION.md` for the tier
 table.

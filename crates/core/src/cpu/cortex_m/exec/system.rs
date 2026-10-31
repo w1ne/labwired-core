@@ -102,6 +102,43 @@ impl CortexM {
         Ok(__pc)
     }
 
+    /// TT{T}{A} (Armv8-M): report the MPU region of the address in Rn.
+    /// Result: MREGION[7:0], MRVALID[16], R[18], RW[19]. The core runs
+    /// without the Security Extension's state split, so SREGION/SRVALID
+    /// (SAU), IREGION/IRVALID (IDAU), S and NSR/NSRW read 0, and TTA
+    /// answers like TT.
+    pub(in crate::cpu::cortex_m) fn exec_tt(
+        &mut self,
+        rd: u8,
+        rn: u8,
+        t: bool,
+        _a: bool,
+    ) -> SimResult<PcAdvance> {
+        let addr = self.read_reg(rn);
+        let privileged = !t && (self.active_exception != 0 || self.control & 1 == 0);
+        let mut res = 0u32;
+        let lookup = self
+            .mpu_v8
+            .as_ref()
+            .map(|m| m.lookup(addr, privileged))
+            .unwrap_or(crate::peripherals::armv8m_mpu::MpuLookup {
+                region: None,
+                r: true,
+                rw: true,
+            });
+        if let Some(n) = lookup.region {
+            res |= u32::from(n) | (1 << 16);
+        }
+        if lookup.r {
+            res |= 1 << 18;
+        }
+        if lookup.rw {
+            res |= 1 << 19;
+        }
+        self.write_reg(rd, res);
+        Ok(PcAdvance::Add4)
+    }
+
     #[inline(always)]
     pub(in crate::cpu::cortex_m) fn exec_mrs(&mut self, rd: u8, sysm: u8) -> SimResult<PcAdvance> {
         let mut __pc = PcAdvance::Keep;
@@ -122,8 +159,8 @@ impl CortexM {
             0x10 => self.primask as u32,
             // BASEPRI (0x11) and BASEPRI_MAX (0x12) both read BASEPRI.
             0x11 | 0x12 => self.basepri as u32,
-            0x13 => self.faultmask as u32, // FAULTMASK
-            0x14 => self.control & 0x3,    // CONTROL
+            0x13 => self.faultmask as u32,              // FAULTMASK
+            0x14 => self.control & self.control_mask(), // CONTROL
             _ => 0,
         };
         self.write_reg(rd, val);
@@ -167,7 +204,9 @@ impl CortexM {
                 // Persist the live `sp` to its bank, change SPSEL/nPRIV,
                 // then re-point `sp` at the newly-selected bank.
                 self.sync_sp_to_bank();
-                self.control = (self.control & !0x3) | (val & 0x3);
+                // FPCA (bit 2) too, on a core with the FP extension.
+                let m = self.control_mask();
+                self.control = (self.control & !m) | (val & m);
                 self.sp = self.current_stack_value();
             }
             _ => {}

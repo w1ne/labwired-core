@@ -4019,3 +4019,210 @@ fn armv81m_csel_decode_leaves_orrs_w_alone() {
         Instruction::Csel { .. }
     ));
 }
+
+use crate::Peripheral as _;
+
+fn fp_core() -> (
+    CortexM,
+    MockBus,
+    Arc<crate::peripherals::cortex_m_fpu::FpContextState>,
+) {
+    let mut cpu = CortexM::new();
+    let fp = Arc::new(crate::peripherals::cortex_m_fpu::FpContextState::default());
+    cpu.set_shared_fp_context(fp.clone());
+    (cpu, MockBus::new(), fp)
+}
+
+/// `ExecuteFPCheck`: with FPCCR.ASPEN (reset value) the first FP instruction
+/// sets CONTROL.FPCA and starts FPSCR's mode bits from FPDSCR; a core without
+/// the FP extension block never sets FPCA.
+#[test]
+fn fp_instruction_sets_control_fpca_with_aspen() {
+    let (mut cpu, mut bus, _fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.fpscr = 0x8000_0000; // N flag, kept
+                             // MOV r0 is not an FP instruction: FPCA stays clear.
+    run_test_instr(&mut cpu, &mut bus, 0x0000_2000, false); // movs r0, #0
+    assert_eq!(cpu.control & 0x4, 0);
+    // VMOV.F32 s0, s1 = EEB0 0A60.
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(cpu.control & 0x4, 0x4, "first FP instruction sets FPCA");
+    assert_eq!(cpu.fpscr, 0x8000_0000, "FPDSCR (0) mode bits, flags kept");
+
+    // MRS r2, CONTROL (F3EF 8214) shows FPCA; MSR CONTROL, r0 (F380 8814)
+    // clears it.
+    run_test_instr(&mut cpu, &mut bus, 0xF3EF_8214, true);
+    assert_eq!(cpu.r2 & 0x4, 0x4);
+    cpu.r0 = 0;
+    run_test_instr(&mut cpu, &mut bus, 0xF380_8814, true);
+    assert_eq!(cpu.control & 0x4, 0, "MSR CONTROL writes FPCA");
+
+    // Without the FP extension block FPCA is never set nor visible.
+    let mut plain = CortexM::new();
+    let mut bus2 = MockBus::new();
+    plain.pc = 0x1000;
+    run_test_instr(&mut plain, &mut bus2, 0xEEB0_0A60, true);
+    assert_eq!(plain.control & 0x4, 0);
+    plain.r0 = 0x4;
+    run_test_instr(&mut plain, &mut bus2, 0xF380_8814, true);
+    assert_eq!(plain.control & 0x4, 0, "no FP extension: FPCA not writable");
+}
+
+/// ASPEN clear: FP instructions leave FPCA alone (software manages it).
+#[test]
+fn fp_instruction_without_aspen_leaves_fpca_clear() {
+    let (mut cpu, mut bus, _fp) = fp_core();
+    let mut dev = crate::peripherals::cortex_m_fpu::CortexMFpu::default();
+    // Share the device's state with the core, then clear ASPEN through MMIO.
+    cpu.set_shared_fp_context(dev.fp_context_state().unwrap());
+    dev.write_u32(0x04, 0).unwrap();
+    cpu.pc = 0x1000;
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(cpu.control & 0x4, 0);
+}
+
+/// The first FP instruction of a context takes FPSCR[26:22] from FPDSCR.
+#[test]
+fn new_fp_context_starts_from_fpdscr() {
+    let (mut cpu, mut bus, _fp) = fp_core();
+    let mut dev = crate::peripherals::cortex_m_fpu::CortexMFpu::default();
+    cpu.set_shared_fp_context(dev.fp_context_state().unwrap());
+    dev.write_u32(0x0C, 1 << 24).unwrap(); // FPDSCR.FZ
+    cpu.pc = 0x1000;
+    cpu.fpscr = 1 << 25; // DN, replaced
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(cpu.fpscr, 1 << 24);
+    // FPCA now set: a second FP instruction does not reload it.
+    cpu.fpscr = 1 << 25;
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(cpu.fpscr, 1 << 25);
+}
+
+/// With CONTROL.FPCA set, exception entry stacks the extended 0x68-byte frame
+/// (S0-S15 at +0x20, FPSCR at +0x60), returns EXC_RETURN with bit 4 clear,
+/// records FPCAR and clears FPCA; `bx lr` with that value unstacks S0-S15 and
+/// FPSCR and sets FPCA again.
+#[test]
+fn fp_context_extended_frame_round_trip() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000; // Thread/MSP
+    cpu.control = 0x4; // FPCA
+    cpu.r0 = 0x1111_1111;
+    for i in 0..32 {
+        cpu.fpu_s[i] = 0x3F80_0000 + i as u32;
+    }
+    cpu.fpscr = 0x0100_0000;
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+
+    assert_eq!(cpu.lr, 0xFFFF_FFE9, "Thread/MSP, extended frame");
+    assert_eq!(cpu.sp, 0x8000 - 0x68);
+    assert_eq!(cpu.control & 0x4, 0, "handler starts without FP context");
+    assert_eq!(bus.read_u32(0x8000 - 0x68).unwrap(), 0x1111_1111, "r0");
+    for i in 0..16u64 {
+        assert_eq!(
+            bus.read_u32(0x8000 - 0x68 + 0x20 + 4 * i).unwrap(),
+            0x3F80_0000 + i as u32,
+            "S{i} slot"
+        );
+    }
+    assert_eq!(bus.read_u32(0x8000 - 0x68 + 0x60).unwrap(), 0x0100_0000);
+    assert_eq!(fp.fpcar(), 0x8000 - 0x68 + 0x20);
+
+    // The handler clobbers caller-saved S0-S15 and FPSCR.
+    for i in 0..16 {
+        cpu.fpu_s[i] = 0;
+    }
+    cpu.fpu_s[20] = 0xAAAA_AAAA; // callee-saved: not part of the frame
+    cpu.fpscr = 0;
+
+    // bx lr (4770) with LR = 0xFFFFFFE9.
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false);
+    assert_eq!(cpu.active_exception, 0, "returned to Thread mode");
+    assert_eq!(cpu.pc, 0x1000);
+    assert_eq!(cpu.sp, 0x8000, "SP advanced by 0x68");
+    assert_eq!(cpu.r0, 0x1111_1111);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x3F80_0000 + i as u32, "S{i} restored");
+    }
+    assert_eq!(cpu.fpu_s[20], 0xAAAA_AAAA);
+    assert_eq!(cpu.fpscr, 0x0100_0000);
+    assert_eq!(cpu.control & 0x4, 0x4, "FPCA = NOT EXC_RETURN[4]");
+}
+
+/// FPCA clear on an FP-extension core: basic frame, EXC_RETURN bit 4 set, and
+/// returning with it leaves FPCA clear.
+#[test]
+fn fp_core_without_fp_context_stacks_basic_frame() {
+    let (mut cpu, mut bus, _fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_eq!(cpu.lr, 0xFFFF_FFF9);
+    assert_eq!(cpu.sp, 0x8000 - 32);
+    // An FP instruction in the handler gives it an FP context...
+    cpu.pc = 0x2000;
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    // ...which the return to a basic-frame context drops.
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false);
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0);
+}
+
+/// TT (Armv8-M) decodes out of STREX's space and reports the MPU region of
+/// the address: MREGION[7:0] + MRVALID[16], R[18], RW[19].
+#[test]
+fn tt_reports_the_mpu_region() {
+    use crate::peripherals::armv8m_mpu::Armv8mMpu;
+    assert_eq!(
+        crate::decoder::decode_thumb_32(0xE840, 0xF300),
+        crate::decoder::arm::Instruction::Tt {
+            rd: 3,
+            rn: 0,
+            t: false,
+            a: false
+        }
+    );
+    assert_eq!(
+        crate::decoder::decode_thumb_32(0xE841, 0xF2C0),
+        crate::decoder::arm::Instruction::Tt {
+            rd: 2,
+            rn: 1,
+            t: true,
+            a: true
+        }
+    );
+
+    let mut mpu = Armv8mMpu::new(8);
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.set_shared_mpu_v8(mpu.armv8m_mpu_state().unwrap());
+    cpu.pc = 0x1000;
+    cpu.r0 = 0x2000_0100;
+
+    // tt r3, r0 with the MPU off: no region, default map R/RW.
+    run_test_instr(&mut cpu, &mut bus, 0xE840_F300, true);
+    assert_eq!(cpu.r3, (1 << 18) | (1 << 19));
+
+    // Region 5 = 0x2000_0000..0x2000_FFFF, AP = RW any; MPU on.
+    mpu.write_u32(0x08, 5).unwrap(); // RNR
+    mpu.write_u32(0x0C, 0x2000_0002).unwrap(); // RBAR
+    mpu.write_u32(0x10, 0x2000_FFE1).unwrap(); // RLAR, EN
+    mpu.write_u32(0x04, 1).unwrap(); // CTRL.ENABLE
+    run_test_instr(&mut cpu, &mut bus, 0xE840_F300, true);
+    assert_eq!(cpu.r3, 5 | (1 << 16) | (1 << 18) | (1 << 19));
+
+    // Outside every region: MRVALID clear.
+    cpu.r0 = 0x3000_0000;
+    run_test_instr(&mut cpu, &mut bus, 0xE840_F300, true);
+    assert_eq!(cpu.r3 & ((1 << 16) | 0xFF), 0);
+
+    // No region file at all: TT never reports a region.
+    let mut plain = CortexM::new();
+    plain.pc = 0x1000;
+    plain.r0 = 0x2000_0100;
+    run_test_instr(&mut plain, &mut bus, 0xE840_F300, true);
+    assert_eq!(plain.r3 & (1 << 16), 0);
+}

@@ -627,6 +627,15 @@ pub enum Instruction {
     /// emit them routinely.
     Barrier,
 
+    /// TT{T}{A} Rd, Rn (Armv8-M T1) — Test Target: the MPU (and, with the
+    /// Security Extension, SAU/IDAU) attributes of the address in Rn.
+    /// `t`: ask for unprivileged; `a`: the alternate security state.
+    Tt {
+        rd: u8,
+        rn: u8,
+        t: bool,
+        a: bool,
+    },
     /// MRS Rd, <sysm> — read a system register into a GP register.
     /// Only PRIMASK (sysm = 0x10) is modelled; other sysm values are
     /// accepted and return 0 from the executor.
@@ -965,6 +974,48 @@ pub enum Instruction {
 
     Unknown(u16),
     Unknown32(u16, u16),
+}
+
+impl Instruction {
+    /// True for every floating-point (VFP / FP extension) instruction: the
+    /// ones whose execution runs the architecture's `ExecuteFPCheck`, which
+    /// sets CONTROL.FPCA (`crate::peripherals::cortex_m_fpu`). Every `V*`
+    /// variant of this enum must be listed here; `tests::is_vfp_covers_every_v_variant`
+    /// checks the list against the enum source.
+    pub fn is_vfp(&self) -> bool {
+        use Instruction::*;
+        matches!(
+            self,
+            VaddF32 { .. }
+                | VaddF64 { .. }
+                | VcvtF32FromInt { .. }
+                | VcvtIntFromF32 { .. }
+                | VdivF32 { .. }
+                | VdivF64 { .. }
+                | VfmaF32 { .. }
+                | VfmsF32 { .. }
+                | VfnmaF32 { .. }
+                | VfnmsF32 { .. }
+                | Vfp { .. }
+                | VfpLoadMultiple { .. }
+                | VfpStoreMultiple { .. }
+                | Vldr { .. }
+                | Vldr64 { .. }
+                | VmovDRtRt2 { .. }
+                | VmovF32Imm { .. }
+                | VmovF32Reg { .. }
+                | VmovF64Reg { .. }
+                | VmovRtRt2D { .. }
+                | VmovRtSn { .. }
+                | VmovSnRt { .. }
+                | VmulF32 { .. }
+                | VmulF64 { .. }
+                | Vstr { .. }
+                | Vstr64 { .. }
+                | VsubF32 { .. }
+                | VsubF64 { .. }
+        )
+    }
 }
 
 /// Low S-register indices (2*Dreg) of the three operands of a double-precision
@@ -1550,6 +1601,29 @@ mod tests {
     use super::*;
 
     // ... (existing tests)
+
+    #[test]
+    fn is_vfp_covers_every_v_variant() {
+        // Every `V*` variant of `Instruction` is an FP instruction, and
+        // `is_vfp` must name it or CONTROL.FPCA misses it.
+        let src = include_str!("arm.rs");
+        let start = src.find("pub enum Instruction {").unwrap();
+        let end = start + src[start..].find("\n}\n").unwrap();
+        let isvfp = &src[src.find("pub fn is_vfp").unwrap()..];
+        let isvfp = &isvfp[..isvfp.find("\n    }\n").unwrap()];
+        for line in src[start..end].lines() {
+            let t = line.trim_start();
+            if line.starts_with("    V") {
+                let name: String = t.chars().take_while(|c| c.is_alphanumeric()).collect();
+                assert!(
+                    isvfp.contains(&format!("{name} {{")),
+                    "Instruction::{name} is missing from is_vfp"
+                );
+            }
+        }
+        assert!(Instruction::Vfp { op: 0 }.is_vfp());
+        assert!(!Instruction::Nop.is_vfp());
+    }
 
     #[test]
     fn test_decode_bfi() {

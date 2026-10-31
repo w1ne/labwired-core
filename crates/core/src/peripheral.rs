@@ -455,6 +455,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Cortex-M FP extension capability: the FP context control state
+    /// (FPCCR/FPCAR/FPDSCR) of a `cortex_m_fpu` block. `configure_cortex_m`
+    /// hands it to the core, which then tracks CONTROL.FPCA and stacks
+    /// extended frames. `None` for every other peripheral, and on chips
+    /// without the FP extension.
+    fn fp_context_state(
+        &self,
+    ) -> Option<std::sync::Arc<crate::peripherals::cortex_m_fpu::FpContextState>> {
+        None
+    }
+
+    /// Armv8-M MPU capability: the PMSAv8 region file of an `armv8m_mpu`
+    /// block. `configure_cortex_m` ends the SCB window before it and hands it
+    /// to the core for TT. `None` for every other peripheral.
+    fn armv8m_mpu_state(
+        &self,
+    ) -> Option<std::sync::Arc<crate::peripherals::armv8m_mpu::MpuV8State>> {
+        None
+    }
+
     /// Bind a power controller's backup-domain write-enable signal to its
     /// clock controller. Models without that protection ignore the signal.
     fn bind_backup_domain_write_enable(
