@@ -52,7 +52,7 @@ The models column is a content digest over everything that board's `models` list
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `47a83a1905c03f37` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `ec3363026902012d` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `03ef659e4dc05088` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `a79431b3b0985ab9` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `7d6beedbccfe954d` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `1211efa9f23b1368` | no silicon capture |
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `3f9312d70f4469d3` | no silicon capture |
 | `r7fa8m1ah` | 🟡 smoke-manual | — | `1242fa8075624e9d` | no silicon capture |

@@ -11,6 +11,7 @@ TI **CC2538SF53** (CC2538DK: CC2538EM on a SmartRF06 EB, Cortex-M3):
 | `cc2538dk-contiki-coffee.elf`  | `examples/storage/cfs-coffee` `example-coffee` | Coffee file write, read, append and directory listing |
 | `cc2538dk-contiki-flash-test.elf` | `flash-test/` (this directory, MIT) | the steps of Renode's `cc2538_flash_controller.robot` on the ROM utility API |
 | `cc2538dk-contiki-crypto-<t>.elf`, t = `ecb` `cbc` `ctr` `cbc-mac` `gcm` `ccm` `sha256` | `examples/platform-specific/cc2538-common/crypto` `<t>-test` | every vector of the AES/SHA-256 suite through the key store, the cryptoprocessor DMA and the AES interrupt; cbc/cbc-mac/ctr/ccm print the lines Renode's `cc2538_cryptoprocessor.robot` waits for |
+| `cc2538dk-contiki-udp-server.elf`, `cc2538dk-contiki-udp-client.elf` | `examples/rpl-udp` | three nodes (one server, two clients on the client ELF) on a shared 802.15.4 air: RPL DODAG join, UDP request/response, through the RF core's TX/RX FIFOs, AUTOACK and FIFOP IRQ and the µDMA (`crates/core/tests/cc2538_rpl_udp.rs`, the topology of Renode's `cc2538_rpl-udp.robot`) |
 
 This is the binary the Renode `cc2538_single-node.robot` test runs (Renode
 fetches a prebuilt one and loads a TI ROM dump; LabWired runs its own
@@ -33,7 +34,7 @@ application). hello-world exercises:
 ## Build
 
 ```sh
-./build.sh          # -> tests/fixtures/cc2538dk-contiki-{hello,test-cfs,coffee,flash-test,crypto-*}.elf
+./build.sh          # -> tests/fixtures/cc2538dk-contiki-{hello,test-cfs,coffee,flash-test,crypto-*,udp-*}.elf
 ```
 
 Requirements: `arm-none-eabi-gcc` and git. The script clones Contiki-NG
