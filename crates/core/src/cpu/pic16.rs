@@ -784,7 +784,8 @@ impl Cpu for Pic16 {
     ) -> SimResult<()> {
         if self.asleep {
             // SLEEP idles until an enabled source raises its flag. Waking
-            // does not need GIE; with GIE set the vector is taken
+            // does not need GIE. The instruction after SLEEP was prefetched,
+            // so it runs first; with GIE set the vector is taken after it
             // (DS39582B section 14.14.1).
             self.cycles += 1;
             crate::advance_batch_cycle(bus, 1);
@@ -792,9 +793,6 @@ impl Cpu for Pic16 {
                 return Ok(());
             }
             self.asleep = false;
-            if self.interrupt_request() {
-                self.take_interrupt();
-            }
             return Ok(());
         }
 
@@ -1191,6 +1189,22 @@ mod tests {
         run(&mut cpu, 1);
         assert!(!cpu.is_asleep());
         assert_eq!(cpu.get_pc(), 1);
+    }
+
+    #[test]
+    fn wake_with_gie_runs_the_instruction_after_sleep_before_vectoring() {
+        // SLEEP; BSF 0x20,0; ...; the vector at 4 is a NOP.
+        let mut cpu = cpu_with(&[0x0063, 0x1420, 0x0000, 0x0000, 0x0000]);
+        run(&mut cpu, 1);
+        assert!(cpu.is_asleep());
+        // GIE | RBIE | RBIF.
+        cpu.write_data(SFR_INTCON, 0x80 | 0x08 | 0x01);
+        run(&mut cpu, 1);
+        assert!(!cpu.is_asleep());
+        assert_eq!(cpu.get_pc(), 1, "waking does not vector yet");
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(0x20) & 1, 1, "post-SLEEP instruction ran");
+        assert_eq!(cpu.get_pc(), 4, "then the vector was taken");
     }
 
     #[test]

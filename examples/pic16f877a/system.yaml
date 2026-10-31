@@ -8,3 +8,5 @@
 # an LED on RB0.
 name: "pic16f877a-demo"
 chip: "../../configs/chips/pic16f877a.yaml"
+# 16 MHz HS crystal = 4 MIPS (Fosc/4); the chip default is the 20 MHz maximum.
+cpu_hz: 4000000

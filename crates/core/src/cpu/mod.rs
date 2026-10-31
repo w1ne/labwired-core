@@ -30,6 +30,7 @@ pub mod cortex_a;
 pub mod cortex_m;
 #[deny(clippy::let_underscore_must_use)]
 pub mod pic16;
+#[deny(clippy::let_underscore_must_use)]
 pub mod pic18;
 #[deny(clippy::let_underscore_must_use)]
 pub mod pic24;
