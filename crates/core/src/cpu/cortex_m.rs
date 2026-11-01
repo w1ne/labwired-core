@@ -618,6 +618,12 @@ enum MemManageCause {
     Fetch,
 }
 
+/// Bit n set: the default memory map's 512 MiB block n is execute-never
+/// (ARMv8-M B3.1: Peripheral 0x4000_0000, Device 0xA000_0000-0xDFFF_FFFF and
+/// System 0xE000_0000+). The MPU-off fetch check in
+/// [`CortexM::mpu_allows`]; `armv8m_mpu::default_perms` is the same table.
+const DEFAULT_MAP_XN_BLOCKS: u32 = 0b1110_0100;
+
 /// One cached [`crate::peripherals::armv8m_mpu::MpuSpan`]; `generation` 0
 /// is "empty" (the MPU's counter starts at 1).
 #[derive(Debug, Clone, Copy, Default)]
@@ -3704,8 +3710,27 @@ impl CortexM {
     /// clear. A hit in the cached span costs four compares; anything else,
     /// and every access at a negative execution priority (where HFNMIENA
     /// decides whether the MPU applies at all), resolves the region file.
+    ///
+    /// With the MPU disabled (`CTRL.ENABLE` = 0) no region applies: the
+    /// default memory map decides (B3.1), and only the PPB depends on
+    /// privilege. That is decided here without the span cache, because the
+    /// cache check costs ~34 host instructions per step and almost every
+    /// image on an MPU-capable core runs with the MPU off.
     #[inline(always)]
     fn mpu_allows(&mut self, addr: u32, need: u8, fetch: bool) -> bool {
+        if !self.mpu_v8.as_deref().is_some_and(|m| m.enabled()) {
+            return if fetch {
+                // Execute-never in the default map: the Peripheral, Device
+                // and System blocks (2, 5, 6, 7), the PPB included.
+                (DEFAULT_MAP_XN_BLOCKS >> (addr >> 29)) & 1 == 0
+            } else {
+                // Every block is read/write; unprivileged code may not
+                // touch the PPB.
+                !(crate::peripherals::armv8m_mpu::is_ppb(addr)
+                    && self.active_exception == 0
+                    && self.control & 1 != 0)
+            };
+        }
         let privileged = self.active_exception != 0 || self.control & 1 == 0;
         let negative_priority = self.faultmask || matches!(self.active_exception, 2 | 3);
         let generation = self.mpu_v8.as_deref().map_or(0, |m| m.generation());
