@@ -1701,7 +1701,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3cc2682b50505e80068be3506c787a249a10ead8291a5461a3142898711f6996
+    drift_ack_digest: 9981477dc83c7a987e3c7f486d82be76eece708b0e4d4b506a47067dd524df2c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2287,6 +2287,13 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ra-icu-irq-pins): gpio.rs gives the RA `ra_port`
+    # layout a hex-numbered PortId (`port0`..`portb`) through a new
+    # `PinPort::port_id` hook; pins/mod.rs adds `PortId::from_hex_numbered_name`
+    # and routing.rs asks the port for its id. Every other family takes the
+    # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
+    # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -3312,7 +3319,14 @@ boards:
     # (shared RX source path) cannot drop the timeout bit. Register map and
     # reset values are unchanged; C3 UART is not in the asserted reset-oracle
     # set. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-29
+    # 2026-11-01 (feat/ra-icu-irq-pins): gpio.rs gives the RA `ra_port`
+    # layout a hex-numbered PortId (`port0`..`portb`) through a new
+    # `PinPort::port_id` hook; pins/mod.rs adds `PortId::from_hex_numbered_name`
+    # and routing.rs asks the port for its id. Every other family takes the
+    # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
+    # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-11-01
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -3748,7 +3762,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3e7051e344240b2031b81a000ab969e158c35c2dc1c624f9d356146d519aaaed
+    drift_ack_digest: 4d8d52c8c82cc59d56e18d8c11eabaf9f64a783e9f26521afcaafca77be4ade6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4322,6 +4336,13 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ra-icu-irq-pins): gpio.rs gives the RA `ra_port`
+    # layout a hex-numbered PortId (`port0`..`portb`) through a new
+    # `PinPort::port_id` hook; pins/mod.rs adds `PortId::from_hex_numbered_name`
+    # and routing.rs asks the port for its id. Every other family takes the
+    # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
+    # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -4753,7 +4774,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: e6574dcc70b078e7ccafb91f23d0e277f647e7220eee07a70f84620ad7d0782d
+    drift_ack_digest: 41cebec354a75bd07e7c159fc4da9b4d134b761ac8d53a6649990db757b2bad3
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5260,6 +5281,13 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ra-icu-irq-pins): gpio.rs gives the RA `ra_port`
+    # layout a hex-numbered PortId (`port0`..`portb`) through a new
+    # `PinPort::port_id` hook; pins/mod.rs adds `PortId::from_hex_numbered_name`
+    # and routing.rs asks the port for its id. Every other family takes the
+    # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
+    # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -5749,7 +5777,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 9f35ea926f8dd32d30695e4b048bdf2c48a805f96642bb5bacbc66d3d96e7137
+    drift_ack_digest: 5e566948d46b7ecebe061549ee3681bbe3c56f06ff8b3e3f33043934d3d6b13f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6326,6 +6354,13 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ra-icu-irq-pins): gpio.rs gives the RA `ra_port`
+    # layout a hex-numbered PortId (`port0`..`portb`) through a new
+    # `PinPort::port_id` hook; pins/mod.rs adds `PortId::from_hex_numbered_name`
+    # and routing.rs asks the port for its id. Every other family takes the
+    # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
+    # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -6778,7 +6813,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 898894f5bdad97673fe8d42d9917554777816598f2085b5eb200c23a0aa0adfd
+    drift_ack_digest: 360a5c493adc33981083ae9af1232556e6f548ae57aa8fc9e451c0bca0771593
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

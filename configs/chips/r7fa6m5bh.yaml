@@ -47,7 +47,10 @@
 # - ICU: the IELSR block is `ra_icu` (an ELC event sets IELSRn.IR of every
 #   line linked to it and drives NVIC line n as a level). SCI interrupts are
 #   not routed (`irq:` on sci0 is nominal), so the smoke and the Zephyr
-#   console are polled; IRQCRn/NMI and DTCE are stored only.
+#   console are polled; NMI and DTCE are stored only. The external IRQ
+#   pins raise ICU_IRQn on the IRQCRn edge from a pad whose PmnPFS.ISEL is
+#   set; the digital filter is not modelled (an edge is taken at once) and
+#   low-level mode raises on the falling edge only.
 # - AGT: timer mode only (`ra_agt`); pulse output, event counter and the
 #   measurement modes are not modelled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
@@ -107,12 +110,28 @@ peripherals:
   # ICU @ 0x40006000 (R7FA6M5BH.h R_ICU_Type): IRQCRn +0x000, NMI +0x100,
   # WUPEN +0x1A0, IELSR0-95 at +0x300 link ELC events to NVIC lines 0-95;
   # IELSRn.IR drives line n (ra_icu). Unlike the RA8M1 the whole block sits
-  # at R_ICU_BASE, so one 2 KiB ra_icu window covers it; IRQCRn/NMI are
-  # plain storage.
+  # at R_ICU_BASE, so one 2 KiB ra_icu window covers it. IRQCRn picks the
+  # edge on which a pad with PmnPFS.ISEL raises ELC event ICU_IRQn (n + 1);
+  # NMI is plain storage. irq_pins = [port, pin, IRQn], from Zephyr v4.1.0
+  # r7fa6m5xh.dtsi port-irqN-pins (S1 P005 = IRQ10, S2 P004 = IRQ9).
   - id: "icu"
     type: "ra_icu"
     base_address: 0x40006000
     size: "2KB"
+    config:
+      pfs_base: 0x40080800
+      irq_pins: [
+        [0, 0, 6], [0, 1, 7], [0, 2, 8], [0, 4, 9], [0, 5, 10], [0, 6, 11],
+        [0, 8, 12], [0, 9, 13], [0, 10, 14], [0, 15, 13], [1, 0, 2], [1, 1, 1],
+        [1, 4, 1], [1, 5, 0], [1, 10, 3], [1, 11, 4], [2, 2, 3], [2, 3, 2],
+        [2, 5, 1], [2, 6, 0], [2, 12, 3], [2, 13, 2], [3, 1, 6], [3, 2, 5],
+        [3, 4, 9], [3, 5, 8], [4, 0, 0], [4, 1, 5], [4, 2, 4], [4, 3, 14],
+        [4, 4, 15], [4, 8, 7], [4, 9, 6], [4, 10, 5], [4, 11, 4], [4, 14, 9],
+        [4, 15, 8], [5, 1, 11], [5, 2, 12], [5, 5, 14], [5, 6, 15], [5, 11, 15],
+        [5, 12, 14], [6, 15, 7], [7, 6, 7], [7, 7, 8], [7, 8, 11], [7, 9, 10],
+        [8, 2, 3], [8, 3, 2], [8, 4, 1], [8, 6, 0], [9, 5, 8], [9, 6, 9],
+        [9, 7, 10], [9, 8, 11], [10, 8, 6], [10, 9, 5], [10, 10, 4],
+      ]
   # PORT0-B @ 0x40080000 + n*0x20. Ports 0-9 link their pull-ups to PmnPFS.PCR.
   - id: "port0"
     type: "gpio"

@@ -219,6 +219,17 @@ impl PortId {
         let n = letter.checked_sub(b'a')?;
         (n < 16).then_some(Self(n))
     }
+
+    /// A port id that numbers its ports with one hex digit after `prefix`:
+    /// Renesas RA `port0` = 0 … `port9` = 9, `porta` = 10, `portb` = 11.
+    pub fn from_hex_numbered_name(name: &str, prefix: &str) -> Option<Self> {
+        let lower = name.to_ascii_lowercase();
+        let suffix = lower.strip_prefix(prefix)?;
+        let &[digit] = suffix.as_bytes() else {
+            return None;
+        };
+        (digit as char).to_digit(16).map(|n| Self(n as u8))
+    }
 }
 
 /// The one interface between a chip's pads and the world. Implemented by
@@ -235,6 +246,13 @@ pub trait PinPort {
     /// groups are `porta`, `portb`.
     fn port_name_prefix(&self) -> &'static str {
         "gpio"
+    }
+
+    /// The [`PortId`] the chip-yaml id `name` gives this port, `None` when the
+    /// id does not spell one. Default: [`port_name_prefix`](Self::port_name_prefix)
+    /// plus one letter.
+    fn port_id(&self, name: &str) -> Option<PortId> {
+        PortId::from_prefixed_name(name, self.port_name_prefix())
     }
 
     /// The chip's own drive on `pin`, decoded from registers only, `None`

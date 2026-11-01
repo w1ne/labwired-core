@@ -68,10 +68,13 @@
 #   (SCI9) as silicon requires, but SCI9 works whether or not it is.
 # - ICU: the IELSR window (0x4000C000) is `ra_icu`: an ELC event sets
 #   IELSRn.IR of every line linked to it and drives NVIC line n as a level
-#   (dropped when firmware clears IR). AGT0/AGT1 and SCI3/SCI9
-#   (RXI/TXI/TEI) emit events. IRQCRn/NMI (0x40006000)
-#   stays a stub, DTCE does not start the DTC, and a handler that returns
-#   with IR still set is not re-entered until the next event.
+#   (dropped when firmware clears IR). AGT0/AGT1, SCI3/SCI9
+#   (RXI/TXI/TEI) and the external IRQ pins emit events. The IRQ pins
+#   (IRQCRn at 0x40006000, a second `ra_icu`) take the IRQCRn edge from a
+#   pad whose PmnPFS.ISEL is set; the digital filter is not modelled (an
+#   edge is taken at once) and low-level mode raises on the falling edge
+#   only. NMI is storage, DTCE does not start the DTC, and a handler that
+#   returns with IR still set is not re-entered until the next event.
 # - AGT: timer mode only (`ra_agt`, see the model header); pulse output,
 #   event counter and measurement modes are not modelled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
@@ -215,6 +218,26 @@ peripherals:
   # bsp_elc.h: SCI3_RXI 0x139, SCI9_RXI 0x163). The TDRE/TEND edges are
   # timed at `baud` (the Zephyr board default, 115200 8N1) in `clock_hz`
   # cycles, the rate the guest believes its cycles run at (as for AGT below).
+  # SCI0 (PMOD1) and SCI2 (PMOD2) are enabled by the v4.1.0 `ek_ra8m1`
+  # board and opened at boot (RXI events from FSP ra8m1 bsp_elc.h).
+  - id: "sci0"
+    type: "uart"
+    base_address: 0x40358000
+    size: "256B"
+    config:
+      profile: "sci_b"
+      elc_event: 0x124
+      clock_hz: 480000000
+      baud: 115200
+  - id: "sci2"
+    type: "uart"
+    base_address: 0x40358200
+    size: "256B"
+    config:
+      profile: "sci_b"
+      elc_event: 0x132
+      clock_hz: 480000000
+      baud: 115200
   - id: "sci3"
     type: "uart"
     base_address: 0x40358300
@@ -233,14 +256,32 @@ peripherals:
       elc_event: 0x163
       clock_hz: 480000000
       baud: 115200
-  # Declared stubs (bases from R7FA8M1AH.h; reads 0, writes dropped).
   # ICU (R_ICU_Type is 0x6480 bytes from R_ICU_BASE, mostly reserved):
   # IRQCRn/NMI at +0x000, and WUPEN0/1 + IELSR0-95 at +0x6000 (IELSR at
   # +0x6300). Zephyr's SCI_B driver clears IELSRn.IR at init.
+  # IRQ-pin half (ra_icu, no IELSR lines here): IRQCRn picks the edge, a
+  # pad with PmnPFS.ISEL raises ELC event ICU_IRQn (n + 1), linked by
+  # icu_ielsr below. irq_pins = [port, pin, IRQn], from Zephyr v4.1.0
+  # r7fa8m1xh.dtsi port-irqN-pins (S1 P009 = IRQ13, S2 P008 = IRQ12).
   - id: "icu"
-    type: "stub"
+    type: "ra_icu"
     base_address: 0x40006000
     size: "2KB"
+    config:
+      ielsr_lines: 0
+      pfs_base: 0x40400800
+      irq_pins: [
+        [0, 0, 6], [0, 1, 7], [0, 2, 8], [0, 4, 9], [0, 5, 10], [0, 6, 11],
+        [0, 8, 12], [0, 9, 13], [0, 10, 14], [0, 15, 13], [1, 0, 2], [1, 1, 1],
+        [1, 4, 1], [1, 5, 0], [2, 2, 3], [2, 3, 2], [2, 5, 1], [2, 6, 0],
+        [2, 8, 3], [2, 12, 3], [2, 13, 2], [3, 0, 4], [3, 1, 6], [3, 2, 5],
+        [3, 4, 9], [3, 5, 8], [4, 0, 0], [4, 1, 5], [4, 2, 4], [4, 3, 14],
+        [4, 4, 15], [4, 8, 7], [4, 9, 6], [4, 10, 5], [4, 11, 4], [4, 14, 9],
+        [4, 15, 8], [5, 8, 1], [5, 9, 2], [5, 10, 3], [5, 11, 15], [5, 12, 14],
+        [6, 15, 7], [7, 6, 7], [7, 7, 8], [7, 8, 11], [7, 9, 10], [8, 0, 11],
+        [8, 1, 12], [8, 4, 14], [8, 6, 0], [8, 8, 15], [9, 5, 8], [9, 6, 9],
+        [9, 7, 10], [9, 8, 11], [10, 8, 6], [10, 9, 5], [10, 10, 4],
+      ]
   # ICU event-link half (R_ICU_BASE + 0x6000): IELSR0-95 at +0x300 link
   # ELC events to NVIC lines 0-95; IELSRn.IR drives line n (ra_icu).
   - id: "icu_ielsr"
