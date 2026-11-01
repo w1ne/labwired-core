@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Three displays as declarative `configs/devices/*.yaml` descriptors on the
+  existing `display` primitive, no engine change: `st7735` (Sitronix ST7735R,
+  128x160 RGB565, 4-wire SPI), `gc9a01` (GalaxyCore GC9A01A, round 240x240
+  RGB565, 4-wire SPI; the GC9A01A lists no SWRESET) and `oled-ssd1309`
+  (Solomon Systech SSD1309, 128x64 mono, I²C; no charge pump, resets to page
+  addressing). `crates/core/tests/everyday_display_set.rs` drives each through
+  a real CASET/RASET/RAMWR (or page/column pointer) sequence and checks the
+  exact frame-memory bytes. Its negative control requires every check to FAIL
+  against a panel that reads all 0x00 or 0xFF, including one with live flags
+  over mute memory. Each part has a `docs/parts/` page. SSD1327 (needs a
+  4-bit grayscale pixel format) and SK6812 (needs a 32-bit-per-LED strip
+  decoder) were not added.
 - Four more everyday I²C parts as declarative `configs/devices/*.yaml`
   descriptors: `mpu9250` (accel/gyro/temp; AK8963 magnetometer not modelled),
   `ens160` (TVOC/eCO2/AQI, live only in STANDARD mode), `ina260` (fixed-LSB
@@ -16,6 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `everyday_sensor_set.rs`, plus a `docs/parts/` page. AM2320 and VL53L5CX
   were evaluated and not added: the `i2c_device` primitive cannot model them
   truthfully.
+- Five more declarative parts on existing primitives, no Rust model:
+  `mcp23017` (16-bit I²C GPIO expander; IODIR-gated output pads), `pcf8575`
+  (16-bit quasi-bidirectional expander; byte-pair writes, alternating
+  port 0 / port 1 reads), `ads1015` (12-bit sibling of the ADS1115;
+  left-justified result, MUX + PGA), `uln2803` (8-channel inverting
+  Darlington sink, `logic_gate`) and `rfm95` (RFM95W / SX1276 SPI register
+  shell, no RF air link). Each is in `everyday_sensor_set.rs` with a smoke
+  check, a negative control and a stimulus test; the SPI and GPIO parts get
+  their own stand-ins. MCP3008 and ADS1256 are not included: their SPI
+  framings need engine support that does not exist yet.
 - Nine everyday I²C sensors as declarative `configs/devices/*.yaml` parts, no
   Rust model: `sht40`, `bme680` (T/P/H; gas not modelled), `icm42688`,
   `icm20948` (accel/gyro/temp; magnetometer not modelled), `sgp40`, `tsl2591`,
