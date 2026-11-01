@@ -1,0 +1,164 @@
+# TDK InvenSense MPU-9250 9-axis motion device — declarative I²C
+# register-pointer device. The MPU-9250 is two dies in one package: an
+# MPU-6500 (accel + gyro + temperature) and an AK8963 magnetometer. The
+# MPU-6500 half is modelled; the AK8963 is NOT (see the end of this header).
+# A fresh descriptor — `mpu6050.yaml` is a different part with a different
+# WHO_AM_I, power-on state and temperature transfer function.
+#
+# Register map: TDK InvenSense RM-MPU-9250A-00 ("MPU-9250 Register Map and
+# Descriptions", revision 1.4):
+#   §3 Table 1 "MPU-9250 mode register map for Gyroscope and Accelerometer" —
+#     every address below, and: "The reset value is 0x00 for all registers
+#     other than … Register 107 (0x01) Power Management 1, Register 117 (0x71)
+#     WHO_AM_I." ⚠️ So unlike the MPU-6050 (PWR_MGMT_1 = 0x40), the MPU-9250
+#     powers up AWAKE and its outputs are live from the first read.
+#   §4.6 GYRO_CONFIG (0x1B): GYRO_FS_SEL[4:3] = ±250/500/1000/2000 dps; bit 2
+#     reserved.
+#   §4.7 ACCEL_CONFIG (0x1C): ACCEL_FS_SEL[4:3] = ±2/4/8/16 g; bits 2:0
+#     reserved.
+#   §4.21 INT_STATUS (0x3A, "R/C"): RAW_DATA_RDY_INT is bit 0. With
+#     INT_PIN_CFG.INT_ANYRD_2CLEAR = 0 (reset) "Interrupt status is cleared
+#     only by reading INT_STATUS register".
+#   §4.22..4.24 output data: ACCEL_XOUT_H 0x3B / Y 0x3D / Z 0x3F, TEMP_OUT_H
+#     0x41, GYRO_XOUT_H 0x43 / Y 0x45 / Z 0x47, big-endian int16. The pointer
+#     auto-increments, so the common 14-byte burst from 0x3B works.
+#   §4.31 SIGNAL_PATH_RESET (0x68): GYRO_RST / ACCEL_RST / TEMP_RST, bits
+#     7:3 reserved. Stored; the paths it resets are not modelled.
+#   §4.33 USER_CTRL (0x6A): I2C_IF_DIS, FIFO_RST, I2C_MST_RST "auto clear",
+#     SIG_COND_RST is a one-clock pulse; bits 7 and 3 reserved.
+#   §4.34 PWR_MGMT_1 (0x6B): H_RESET (bit 7) "Reset the internal registers
+#     and restores the default settings … the bit will auto clear."
+#   §4.38 WHO_AM_I (0x75) = 0x71.
+#
+# Sensitivities and the temperature transfer: TDK InvenSense PS-MPU-9250A-01
+# (product specification, revision 1.0), §3.1 Gyroscope (131 / 65.5 / 32.8 /
+# 16.4 LSB/(°/s)), §3.2 Accelerometer (16384 / 8192 / 4096 / 2048 LSB/g), and
+# §3.4.2 A.C. Electrical Characteristics, temperature sensor (Sensitivity
+# 333.87 LSB/°C, Room Temp Offset 0 LSB at 21 °C). RM §4.23: TEMP_degC = ((TEMP_OUT − RoomTemp_Offset)/Temp_Sensitivity)
+# + 21 ⇒ raw = T × 333.87 − 7011.27.
+#
+# Full-scale SATURATION is the int16 itself at every setting (±2 g × 16384 =
+# 32768; ±250 dps × 131 = 32750), so no clamp is declared.
+#
+# ── Data ready ─────────────────────────────────────────────────────────────
+# A sample timer sets INT_STATUS.RAW_DATA_RDY_INT, and any read of INT_STATUS
+# clears it (`on_read: clear`).
+#
+# ⚠️ NOT modelled, named rather than faked:
+#   * The AK8963 MAGNETOMETER. On silicon it is reached either through the
+#     internal I²C master (I2C_SLV0_* config, results in EXT_SENS_DATA_00.. at
+#     0x49) or directly at address 0x0C once INT_PIN_CFG.BYPASS_EN is set
+#     (PS §4.11, "Pass-Through mode … the slave address for the AK8963 is
+#     0X0C").
+#     Neither path is modelled: INT_PIN_CFG.BYPASS_EN is stored and does
+#     nothing, the I2C_SLVx registers are not declared, EXT_SENS_DATA reads
+#     0x00, and nothing answers at 0x0C. A driver that requires the
+#     magnetometer (its WIA = 0x48 check) fails — as it should, because the
+#     twin cannot answer it truthfully.
+#   * THE SAMPLE RATE. The timer runs at 1 kHz: the Fs of DLPF_CFG 1..6 with
+#     SMPLRT_DIV = 0 (RM §4.5, Table 3), which is what the common drivers
+#     configure. At the reset DLPF_CFG = 0 / FCHOICE_B = 00 silicon samples at
+#     8 kHz; the timer period does not follow CONFIG, SMPLRT_DIV or FCHOICE_B.
+#   * SLEEP / CYCLE / standby, PWR_MGMT_2 per-axis disables: stored and echoed,
+#     the outputs keep flowing. (Silicon holds the last sample while asleep;
+#     that is not modelled either.)
+#   * The INT pin, the FIFO (FIFO_COUNT reads 0), wake-on-motion, FSYNC, the
+#     DMP, self-test, and the gyro / accel offset registers (0x13..0x18 and
+#     0x77..0x7E are not declared: they read 0x00 and drop writes; on silicon
+#     the accel offsets are factory-trimmed).
+#   * H_RESET restores every DECLARED register; nothing else exists to reset.
+type: mpu9250
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x68
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      - { name: SMPLRT_DIV, addr: 0x19, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: CONFIG, addr: 0x1A, width: 1, endian: be, access: rw, write_mask: 0x7F, reset: 0x00 }
+      - { name: GYRO_CONFIG, addr: 0x1B, width: 1, endian: be, access: rw, write_mask: 0xFB, reset: 0x00 }
+      - { name: ACCEL_CONFIG, addr: 0x1C, width: 1, endian: be, access: rw, write_mask: 0xF8, reset: 0x00 }
+      - { name: ACCEL_CONFIG_2, addr: 0x1D, width: 1, endian: be, access: rw, write_mask: 0x0F, reset: 0x00 }
+      - { name: LP_ACCEL_ODR, addr: 0x1E, width: 1, endian: be, access: rw, write_mask: 0x0F, reset: 0x00 }
+      - { name: WOM_THR, addr: 0x1F, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: FIFO_EN, addr: 0x23, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_MST_CTRL, addr: 0x24, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_MST_STATUS, addr: 0x36, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: INT_PIN_CFG, addr: 0x37, width: 1, endian: be, access: rw, write_mask: 0xFE, reset: 0x00 }
+      - { name: INT_ENABLE, addr: 0x38, width: 1, endian: be, access: rw, write_mask: 0x59, reset: 0x00 }
+      - name: INT_STATUS
+        addr: 0x3A
+        width: 1
+        endian: be
+        access: r
+        reset: 0x00
+        on_read: clear
+        bits:
+          - { name: RAW_DATA_RDY_INT, shift: 0 }
+          - { name: FSYNC_INT, shift: 3 }
+          - { name: FIFO_OVERFLOW_INT, shift: 4 }
+          - { name: WOM_INT, shift: 6 }
+      # ── The 14-byte measurement burst, 0x3B..0x48 ───────────────────────
+      - { name: ACCEL_XOUT, addr: 0x3B, width: 2, endian: be, access: r, signed: true, source: accel_x, scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 3, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      - { name: ACCEL_YOUT, addr: 0x3D, width: 2, endian: be, access: r, signed: true, source: accel_y, scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 3, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      - { name: ACCEL_ZOUT, addr: 0x3F, width: 2, endian: be, access: r, signed: true, source: accel_z, scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 3, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      # TEMP_degC = TEMP_OUT/333.87 + 21  ⇒  TEMP_OUT = T × 333.87 − 7011.27.
+      - { name: TEMP_OUT, addr: 0x41, width: 2, endian: be, access: r, signed: true, source: temperature, encode: { scale: 333.87, offset: -7011.27 } }
+      - { name: GYRO_XOUT, addr: 0x43, width: 2, endian: be, access: r, signed: true, source: gyro_x, scale_from: { register: GYRO_CONFIG, mask: 0x03, shift: 3, map: { 0: 131.0, 1: 65.5, 2: 32.8, 3: 16.4 } } }
+      - { name: GYRO_YOUT, addr: 0x45, width: 2, endian: be, access: r, signed: true, source: gyro_y, scale_from: { register: GYRO_CONFIG, mask: 0x03, shift: 3, map: { 0: 131.0, 1: 65.5, 2: 32.8, 3: 16.4 } } }
+      - { name: GYRO_ZOUT, addr: 0x47, width: 2, endian: be, access: r, signed: true, source: gyro_z, scale_from: { register: GYRO_CONFIG, mask: 0x03, shift: 3, map: { 0: 131.0, 1: 65.5, 2: 32.8, 3: 16.4 } } }
+      - { name: SIGNAL_PATH_RESET, addr: 0x68, width: 1, endian: be, access: rw, write_mask: 0x07, reset: 0x00 }
+      - { name: MOT_DETECT_CTRL, addr: 0x69, width: 1, endian: be, access: rw, write_mask: 0xC0, reset: 0x00 }
+      - { name: USER_CTRL, addr: 0x6A, width: 1, endian: be, access: rw, write_mask: 0x77, self_clearing: 0x17, reset: 0x00 }
+      # Power-on 0x01 (CLKSEL = 1, awake). H_RESET auto-clears.
+      - { name: PWR_MGMT_1, addr: 0x6B, width: 1, endian: be, access: rw, self_clearing: 0x80, reset: 0x01 }
+      - { name: PWR_MGMT_2, addr: 0x6C, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x00 }
+      - { name: FIFO_COUNT, addr: 0x72, width: 2, endian: be, access: r, reset: 0x0000 }
+      - { name: FIFO_R_W, addr: 0x74, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: WHO_AM_I, addr: 0x75, width: 1, endian: be, access: r, reset: 0x71 }
+
+  timers:
+    - { name: sample, period_us: 1000, start: on_reset }
+
+  rules:
+    - on: { timer: sample }
+      do: [ { set: INT_STATUS.RAW_DATA_RDY_INT } ]
+    # PWR_MGMT_1.H_RESET: every declared register back to its RM §3 reset.
+    - on: { write: PWR_MGMT_1 }
+      when: "written & 0x80"
+      do:
+        - { write: { register: PWR_MGMT_1, value: "0x01" } }
+        - { write: { register: PWR_MGMT_2, value: "0x00" } }
+        - { write: { register: SMPLRT_DIV, value: "0x00" } }
+        - { write: { register: CONFIG, value: "0x00" } }
+        - { write: { register: GYRO_CONFIG, value: "0x00" } }
+        - { write: { register: ACCEL_CONFIG, value: "0x00" } }
+        - { write: { register: ACCEL_CONFIG_2, value: "0x00" } }
+        - { write: { register: LP_ACCEL_ODR, value: "0x00" } }
+        - { write: { register: WOM_THR, value: "0x00" } }
+        - { write: { register: FIFO_EN, value: "0x00" } }
+        - { write: { register: I2C_MST_CTRL, value: "0x00" } }
+        - { write: { register: INT_PIN_CFG, value: "0x00" } }
+        - { write: { register: INT_ENABLE, value: "0x00" } }
+        - { write: { register: INT_STATUS, value: "0x00" } }
+        - { write: { register: MOT_DETECT_CTRL, value: "0x00" } }
+        - { write: { register: USER_CTRL, value: "0x00" } }
+        - { write: { register: FIFO_R_W, value: "0x00" } }
+
+metadata:
+  label: "MPU-9250 IMU"
+  summary: "TDK InvenSense MPU-9250 motion sensor (accel + gyro + temperature; AK8963 magnetometer not modelled) over I²C."
+  detail: "TDK InvenSense MPU-9250 at 0x68 (0x69 with AD0 high). WHO_AM_I (0x75) reads 0x71 and PWR_MGMT_1 powers up at 0x01, awake. The 14-byte burst at 0x3B carries accel, TEMP_OUT and gyro; ACCEL_CONFIG.ACCEL_FS_SEL and GYRO_CONFIG.GYRO_FS_SEL set the counts per g and per °/s at read time, and TEMP_OUT follows T × 333.87 − 7011.27. A 1 kHz sample timer raises INT_STATUS.RAW_DATA_RDY_INT, cleared by reading INT_STATUS. H_RESET restores the declared registers. The AK8963 magnetometer (internal I²C master and bypass at 0x0C), the FIFO, sleep gating and the programmable sample rate are NOT modelled."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x68 (AD0 low); 0x69 with AD0 high." }
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_y, label: "Accel Y", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_z, label: "Accel Z", unit: "g", min: -16, max: 16, default: 1 }
+    - { key: gyro_x, label: "Gyro X", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_y, label: "Gyro Y", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_z, label: "Gyro Z", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: temperature, label: "Die temperature", unit: "°C", min: -40, max: 85, default: 25 }

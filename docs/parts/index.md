@@ -52,6 +52,10 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [DHT20](dht20.md) | `dht20` | I²C |
 | [PMSA003I](pmsa003i.md) | `pmsa003i` | I²C |
 | [INA226](ina226.md) | `ina226` | I²C |
+| [INA260](ina260.md) | `ina260` | I²C |
+| [INA3221](ina3221.md) | `ina3221` | I²C |
+| [MPU-9250](mpu9250.md) | `mpu9250` | I²C |
+| [ENS160](ens160.md) | `ens160` | I²C |
 
 More devices live under [`configs/devices/`](../../configs/devices/) and in the live catalog. If a part is missing from this table, `labwired_describe` still works when the id is registered.
 
