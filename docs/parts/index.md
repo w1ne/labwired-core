@@ -64,6 +64,16 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [ADS1015](ads1015.md) | `ads1015` | I²C |
 | [ULN2803A](uln2803.md) | `uln2803` | GPIO |
 | [RFM95W](rfm95.md) | `rfm95` | SPI |
+| [SX1276](sx1276.md) | `sx1276` | SPI |
+| [SX1262](sx1262.md) | `sx1262` | SPI |
+| [SK6812 RGBW](sk6812.md) | `sk6812` | GPIO |
+| [MCP3008](mcp3008.md) | `mcp3008` | SPI |
+| [ADS1256](ads1256.md) | `ads1256` | SPI |
+| [BMI160](bmi160.md) | `bmi160` | I²C |
+| [BMM150](bmm150.md) | `bmm150` | I²C |
+| [VEML6075](veml6075.md) | `veml6075` | I²C |
+| [HT16K33](ht16k33.md) | `ht16k33` | I²C |
+| [TM1638](tm1638.md) | `tm1638` | GPIO |
 
 More devices live under [`configs/devices/`](../../configs/devices/) and in the live catalog. If a part is missing from this table, `labwired_describe` still works when the id is registered.
 

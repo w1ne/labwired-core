@@ -600,6 +600,10 @@ pub mod artifact_format {
     /// Emitted by BOTH tri-color e-paper models — see the module doc.
     pub const EPAPER_TRICOLOR_PLANES: &str = "epaper_tricolor_1bpp_planes";
     pub const TM1637_GRID: &str = "tm1637_grid";
+    /// The TM1638 "LED&KEY"-style module's eight digit bytes (the even
+    /// display addresses 00H, 02H … 0EH = GRID1..GRID8, SEG1..SEG8), leftmost
+    /// first. Its own name: a TM1637 reader expects at most six GRIDs.
+    pub const TM1638_GRID: &str = "tm1638_grid";
     pub const SEVEN_SEGMENT_MASK: &str = "seven_segment_mask";
     /// The chained-74HC595 4-digit module's latched segment bytes, one per
     /// digit, leftmost first. Its own name rather than `SEVEN_SEGMENT_MASK`
@@ -607,6 +611,11 @@ pub mod artifact_format {
     /// would get four.
     pub const HC595_7SEG_DIGITS: &str = "hc595_7seg_digits";
     pub const WS2812_GRB: &str = "ws2812_grb";
+    /// Four bytes per LED in WIRE order — R, G, B, W per the SK6812RGBW
+    /// datasheet's 32-bit structure. Its own name rather than `WS2812_GRB`,
+    /// because a reader that unpacked three bytes per LED would drift by one
+    /// byte per pixel.
+    pub const SK6812_RGBW: &str = "sk6812_rgbw";
     /// One brightness byte per pixel (0 = dark, 255 = full), row-major, top
     /// row first; `w`×`h` in the meta. The `led_matrix` primitive's picture.
     pub const GRAY8: &str = "gray8";
