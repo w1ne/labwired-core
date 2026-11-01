@@ -120,9 +120,10 @@ hb=0 podr=0040 s1=1 s2=1
   on them.
 - **TrustZone** (IDAU/SAU, CPSCU/PSCU), flash programming (FACI), the data
   flash and the option-setting memory.
-- **DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1, ADC12,
+- **DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1,
   USBFS/USBHS, ETHERC/EDMAC, CANFD, FACI** are declared stubs (reads return 0,
-  writes are dropped).
+  writes are dropped). ADC0/ADC1 are modelled since the stock Zephyr
+  `adc_api` slice (software-started scans only; see VALIDATION.md).
 - **SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC** and every other
   block are **not mapped**. Firmware that touches them faults with a memory
   violation.

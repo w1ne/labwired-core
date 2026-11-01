@@ -54,7 +54,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32l552` | 🟡 smoke-manual | — | `3f700d466078ffb8` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `8ba38aef99e04407` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `19d89e5de7f27822` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `47f6e59b768c5c02` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `97e6166078d9ed2f` | no silicon capture |
 | `r7fa8m1ah` | 🟡 smoke-manual | — | `03f837587da66e7f` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `b0e247b3b6c9d4de` | no silicon capture |
 | `mk64f12` | 🟡 smoke-manual | — | `c44bc1227bfc8521` | no silicon capture |
@@ -467,6 +467,7 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): firmware_survival::test_ek_ra6m5_smoke_survival
   - offline (CI): firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)
   - offline (CI): ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)
+  - offline (CI): ra6m5_adc12_icu (ADC1 scan end through ICU IELSR39)
 - Drift status: **no silicon capture**
 
 ## `r7fa8m1ah` — 🟡 smoke-manual

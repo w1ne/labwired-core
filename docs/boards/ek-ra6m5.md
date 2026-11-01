@@ -52,7 +52,8 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
     peripheral mux is stored only. The SCI FIFO has no TX occupancy (TX
     drains at once), no trigger levels and no FIFO interrupts. TrustZone,
     flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC, SPI,
-    ADC12, USBFS/USBHS, ETHERC and CANFD are declared stubs. SCI1–9 and the
+    USBFS/USBHS, ETHERC and CANFD are declared stubs; ADC0/ADC1 convert
+    software-started scans (stock Zephyr `adc_api` 6/6). SCI1–9 and the
     remaining blocks are **not mapped**: firmware that touches them faults
     with a memory violation. Option-setting memory is not mapped either; the
     loader warns and drops Zephyr's OFS segments. There is no silicon
@@ -101,7 +102,8 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |
 | Switches | S1 P005, S2 P004 | modelled GPIO input — active low, PFS pull-up |
 | SCI0 VCP | P411 (TXD0) / P410 (RXD0) | the simulator captures the SCI0 stream; the J-Link OB bridge is not modelled |
-| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, IIC0–2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI | see descriptor | `type: stub` |
+| ADC0 / ADC1 | `0x4017_0000` / `0x4017_0200` | modelled (`ra_adc12`) — software-started single/continuous scans, `ADDRn`, addition/averaging, scan end as ELC events 0x160 / 0x166; nominal 1 µs per channel; group scan, hardware triggers and the temperature sensor not modelled |
+| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, IIC0–2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, FACI | see descriptor | `type: stub` |
 
 ## Boot path
 

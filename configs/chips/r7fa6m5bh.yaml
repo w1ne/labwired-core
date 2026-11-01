@@ -68,7 +68,11 @@
 #   interrupts are not modelled. In FIFO mode silicon reinterprets SSR as
 #   SSR_FIFO (TDFE/RDF); the model keeps the non-FIFO SSR bits (the Zephyr
 #   console polls FDR, not SSR_FIFO).
-# - DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1, ADC12,
+# - ADC0/ADC1 (ra_adc12): software-started single/continuous scans only;
+#   conversion timing is a nominal 1 us per channel, and group scan,
+#   hardware/ELC triggers, the temperature sensor, window comparator, ADBUF
+#   and sample-and-hold are not modelled.
+# - DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
 # - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC and every block
@@ -328,10 +332,26 @@ peripherals:
     type: "stub"
     base_address: 0x40169000
     size: "4KB"
-  - id: "adc12"
-    type: "stub"
+  # ADC0/ADC1 (12-bit, R_ADC0_Type; FSP ra6m5 R_ADC0_BASE 0x40170000 /
+  # R_ADC1_BASE 0x40170200). Scan end is ELC_EVENT_ADC0_SCAN_END 0x160 /
+  # ADC1_SCAN_END 0x166 (FSP ra6m5 bsp_elc.h), linked to NVIC through
+  # IELSRn (ra_icu). `clock_hz` is the 200 MHz guest ICLK, as for the AGTs.
+  - id: "adc0"
+    type: "ra_adc12"
     base_address: 0x40170000
-    size: "1KB"
+    size: "512B"
+    config:
+      elc_event: 352
+      clock_hz: 200000000
+      vref_mv: 3300
+  - id: "adc1"
+    type: "ra_adc12"
+    base_address: 0x40170200
+    size: "512B"
+    config:
+      elc_event: 358
+      clock_hz: 200000000
+      vref_mv: 3300
   # R_FCACHE (0x4001C000): bsp_clock_init invalidates the flash cache
   # (FCACHEIV +0x104, polled until it reads 0) and sets the flash wait
   # states (FLWT +0x11C) before the PLL switch. Declared stub: reads 0,
