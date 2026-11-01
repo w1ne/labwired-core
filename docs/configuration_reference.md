@@ -406,6 +406,7 @@ canonical `type:`; the table below is rendered from that file by
 | `sim800l` | UART | SIM800L UART AT command shell (no cellular RF) |
 | `xy-md02` | UART | SHT20 RS-485 temperature and humidity transmitter speaking Modbus RTU |
 | `ydlidar-scanner` | UART | Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud |
+| `ads1015` | I²C | 4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115 |
 | `ads1115` | I²C | 4-channel 16-bit I²C ADC (TI ADS1115) |
 | `adxl345` | I²C | 3-axis ±2/4/8/16 g digital accelerometer over I2C |
 | `aht20` | I²C | Aosong AHT20 I²C temperature and humidity sensor |
@@ -435,6 +436,7 @@ canonical `type:`; the table below is rendered from that file by
 | `lsm303agr_mag` | I²C | ST LSM303AGR magnetometer half over I2C (address 0x1E) |
 | `max30102` | I²C | Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C |
 | `mcp9808` | I²C | ±0.25 °C I²C temperature sensor with seeded noise + thermal lag |
+| `mcp23017` | I²C | Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map) |
 | `mlx90614` | I²C | Single-point IR (non-contact) thermometer over SMBus/I2C |
 | `mlx90640` | I²C | Melexis MLX90640 32×24 far-IR thermal array over I2C |
 | `mma8451q` | I²C | 3-axis 14-bit accelerometer over I2C with standby/active gating |
@@ -444,9 +446,11 @@ canonical `type:`; the table below is rendered from that file by
 | `oled-sh1107` | I²C | 128×128 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306` | I²C | 128×64 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306-128x32` | I²C | 0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer |
+| `oled-ssd1309` | I²C | 2.42in 128×64 monochrome OLED on a Solomon Systech SSD1309, I2C, paged framebuffer |
 | `ov3660` | I²C | OmniVision 3 MP camera: SCCB control at 0x3C plus 8-bit DVP frames into the ESP32-S3 LCD_CAM |
 | `pca9685` | I²C | 16-channel 12-bit I²C PWM / servo controller |
 | `pcf8574` | I²C | NXP PCF8574 8-bit I²C quasi-bidirectional port expander |
+| `pcf8575` | I²C | 16-bit I²C quasi-bidirectional port expander (PCF8575) |
 | `pmsa003i` | I²C | Plantower PMSA003I particulate-matter sensor (PM1.0 / PM2.5 / PM10) over I²C |
 | `pn532` | I²C | NXP PN532 I²C NFC controller probe shell (no RF) |
 | `scd41` | I²C | Photoacoustic CO₂ + temperature + humidity sensor over I2C |
@@ -467,6 +471,7 @@ canonical `type:`; the table below is rendered from that file by
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
 | `inmp441` | SPI | Omnidirectional MEMS microphone, 24-bit I2S digital output |
@@ -478,8 +483,10 @@ canonical `type:`; the table below is rendered from that file by
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
 | `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |
+| `rfm95` | SPI | HopeRF RFM95W (Semtech SX1276) SPI LoRa register shell (no RF) |
 | `sn74hc165` | SPI | 8-bit parallel-in / serial-out shift register over SPI |
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
+| `st7735` | SPI | 1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
 | `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
 | `74cbtlv3257` | GPIO | Four 1-of-2 bus switches; S picks the A or B side, OE opens all four |
@@ -513,6 +520,7 @@ canonical `type:`; the table below is rendered from that file by
 | `seven-segment` | GPIO | Bare single-digit 7-segment LED display driven straight from nine GPIO pins |
 | `tm1637-7seg` | GPIO | 4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
+| `uln2803` | GPIO | Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay |
 | `gp2y0a21` | Analog | Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC) |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
