@@ -47,6 +47,32 @@ impl CortexM {
         h1: u16,
         h2: u16,
     ) -> SimResult<PcAdvance> {
+        // RP2350 DCP (p4/p5): only when the chip attached one; otherwise the
+        // instruction falls through to the UNDEFINED fault below.
+        if self.dcp.is_some() {
+            let decoded = super::super::rp2350_dcp::decode(h1, h2, |r| self.get_register(r));
+            if let Some((inst, op, rt, rt2)) = decoded {
+                let out = self.dcp.as_mut().and_then(|d| d.inst[inst].exec(op));
+                match out {
+                    Some(super::super::rp2350_dcp::DcpOut::None) => return Ok(PcAdvance::Add4),
+                    Some(super::super::rp2350_dcp::DcpOut::One(v)) => {
+                        if rt == 15 {
+                            // MRC to APSR_nzcv: flags from bits 31:28.
+                            self.xpsr = (self.xpsr & !0xF000_0000) | (v & 0xF000_0000);
+                        } else {
+                            self.set_register(rt, v);
+                        }
+                        return Ok(PcAdvance::Add4);
+                    }
+                    Some(super::super::rp2350_dcp::DcpOut::Two(lo, hi)) => {
+                        self.set_register(rt, lo);
+                        self.set_register(rt2, hi);
+                        return Ok(PcAdvance::Add4);
+                    }
+                    None => {}
+                }
+            }
+        }
         let mut __pc = PcAdvance::Keep;
         // Manual fallback for complex bit patterns not yet in Instruction enum.
         //

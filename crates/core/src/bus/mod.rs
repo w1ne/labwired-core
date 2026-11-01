@@ -465,6 +465,10 @@ pub struct SystemBus {
     /// into that memory would land in flash instead. See
     /// `ChipDescriptor::flash_boot_alias`.
     pub flash_boot_alias: bool,
+    /// Vendor coprocessors on the Cortex-M coprocessor interface, from
+    /// `ChipDescriptor::coprocessors`; `configure_cortex_m` attaches them to
+    /// the core. Empty for every chip that declares none.
+    pub cortex_m_coprocessors: Vec<labwired_config::CortexMCoprocessor>,
     /// Which family's atomic register aliases this chip implements (see
     /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
     /// in the peripheral window whose address has bits [13:12] set decode as a
