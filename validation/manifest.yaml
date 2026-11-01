@@ -8741,6 +8741,15 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/uart.rs
+      # 2026-11-01 (#1603 / #1607): models this board now registers or runs:
+      # the RP2040 USB controller on USBCTRL_IRQ 14, the BOOTRAM block, the
+      # clean-room boot ROM image, and the DCP coprocessor model. No silicon
+      # capture on this board, so no drift_ack is implied.
+      - crates/core/src/peripherals/rp2040/usb.rs
+      - crates/core/src/peripherals/rp2350_bootram.rs
+      - crates/core/roms/rp2350
+      - crates/core/src/cpu/cortex_m/rp2350_dcp.rs
+      - crates/core/src/cpu/cortex_m/exec/misc.rs
 
   - id: nrf5340
     doc: docs/boards/nrf5340.md
