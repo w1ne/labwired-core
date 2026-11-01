@@ -264,8 +264,9 @@ pub struct CortexM {
     sleeping: bool,
     waiting_for_event: bool,
     event_register: bool,
-    /// Local sub-word exclusive reservation: address, width and value
-    /// observed by LDREXB / LDREXH. Comparing the value at STREXB / STREXH
+    /// Local exclusive monitor (all widths): address, width and value
+    /// observed by any load-exclusive (LDREX{,B,H} / LDAEX{,B,H}). Comparing
+    /// the value at STREX{,B,H} / STLEX{,B,H}
     /// conservatively detects conflicting bus writes without requiring every
     /// bus implementation to expose epochs; an external write of the same
     /// value is therefore indistinguishable. A store whose width differs from
