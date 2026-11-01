@@ -28,11 +28,11 @@
 //! 5. Hang in hw_claim_lock — LDAEXB set no exclusive reservation, so the
 //!    paired STREXB always failed.
 //!
-//! The next gap (NOT fixed): `runtime_init_per_core_enable_coprocessors`
-//! executes `mrc p4,#0,r0,c0,c0,#1` (DCP RCMP, datasheet 3.6.2) — the
-//! RP2350 double-precision coprocessor is not modelled, so the core takes
-//! UsageFault there. After it, SCS ACTLR (0xE000E008) is not mapped either.
-//! `first_serial_output` is ignored until both exist.
+//! Then (fixed in the DCP change): `runtime_init_per_core_enable_coprocessors`
+//! executes `mrc p4,#0,r0,c0,c0,#1` (DCP RCMP, datasheet 3.6.2), and
+//! `spinlock_set_extexclall` writes SCS ACTLR (0xE000E008). With the DCP
+//! (`coprocessors: [rp2350_dcp]`) and ACTLR modelled, the sketch prints its
+//! banner on UART0 (`first_serial_output`).
 
 mod common;
 use common::root;
@@ -142,14 +142,19 @@ fn without_the_rom_the_lookup_hardfaults_in_the_flash_alias() {
     assert_ne!(r.stop_pc, DCP_RCMP_PC);
 }
 
-/// First serial output on UART0 (Serial1, GP0). Blocked on the DCP
-/// (coprocessor 4) and SCS ACTLR models; see the module docs.
+/// First serial output on UART0 (Serial1, GP0): the whole boot — OTA stage,
+/// boot ROM lookups, runtime_init (DCP enable, ACTLR, clocks, locks) and
+/// setup() — with no fault. The banner lands within ~200k instructions.
 #[test]
-#[ignore = "needs the RP2350 DCP coprocessor (p4) and SCS ACTLR models"]
 fn first_serial_output() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     std::env::remove_var("LABWIRED_RP2350_BOOTROM");
-    let r = run(None, 2_000_000);
+    let r = run(None, 1_000_000);
+    assert_eq!(r.cfsr, 0, "boot faulted (stopped at {:#x})", r.stop_pc);
+    assert_ne!(
+        r.stop_pc, HARDFAULT_HANDLER,
+        "boot entered the HardFault handler"
+    );
     let text = String::from_utf8_lossy(&r.uart);
     assert!(
         text.contains("RP2350_ARDUINO_BOOT"),
@@ -157,4 +162,14 @@ fn first_serial_output() {
         r.stop_pc,
         r.cfsr
     );
+}
+
+/// SYSINFO layout per RP2350 datasheet 12.15.1.2, Table 1306: PACKAGE_SEL at
+/// 0x04 (1 = QFN60, RP2350A), PLATFORM at 0x08 (ASIC = bit 1).
+#[test]
+fn sysinfo_package_sel_and_platform_offsets() {
+    let (chip, manifest) = load();
+    let bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("bus");
+    assert_eq!(bus.read_u32(0x4000_0004).unwrap(), 1, "PACKAGE_SEL = QFN60");
+    assert_eq!(bus.read_u32(0x4000_0008).unwrap(), 0b10, "PLATFORM = ASIC");
 }

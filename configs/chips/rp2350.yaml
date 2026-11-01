@@ -45,6 +45,11 @@ memory_regions:
     base: 0x00000000
     size: "32KB"
     image_env: "LABWIRED_RP2350_BOOTROM"
+# Double-precision coprocessor on the M33 coprocessor interface, p4 (current
+# security state) and p5 (Non-secure) — datasheet 3.6.2. pico-sdk enables
+# it in runtime_init_per_core_enable_coprocessors and routes double
+# arithmetic/conversions/compares through it (pico_double, dcp_canned).
+coprocessors: [rp2350_dcp]
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
@@ -198,6 +203,14 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+  # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
+  # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.
+  - id: "actlr"
+    type: "declarative"
+    base_address: 0xE000E008
+    size: "4B"
+    config:
+      path: "../peripherals/rp2350/actlr.yaml"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
