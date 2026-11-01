@@ -86,6 +86,8 @@ pub enum Arch {
     Pic18,
     /// PIC16 classic mid-range 8-bit MCU (14-bit words, word-addressed PC).
     Pic16,
+    /// AArch64 (Armv8-A, Cortex-A53 class).
+    Aarch64,
     /// Renesas RX (RXv3, RX261 class).
     Rx,
     Unknown,

@@ -719,6 +719,10 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, 
 
 _L1 + stock RTOS, SIM-DERIVED. First RV64 part: one PolarFire SoC U54 hart (RV64IMAC M-mode, CLINT in the core) runs unmodified Zephyr v4.1.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63) from the DDR window on the MMUART1 16550 console (examples/mpfs-disco-kit). PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox are declared stubs, so no advanced blocks exist to list._
 
+### `am6234`
+
+_L1 + stock RTOS, SIM-DERIVED. First AArch64 part: one Cortex-A53 PE (A64 Armv8.0, EL0-EL3, stage-1 MMU, GICv3 and generic timer in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63, user mode at EL0) for sk_am62/am6234/a53 from EL3, on the polled MAIN_UART0 16550 console with the virtual-timer tick (examples/sk-am62). Pad configuration and the mailbox are declared stubs and UART interrupts are not requested, so no advanced blocks exist to list._
+
 ### `r5f52618bgfp`
 
 _L1 + stock RTOS, SIM-DERIVED. First Renesas RX part: the RXv3 core (integer, DSP accumulators, single-precision FPU; ICU in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 61 pass + 1 skip) for ek_rx261 from the reset vector, on the polled SCI6 console with the CMT0 tick (examples/ek-rx261). PORT/MPC, DTC and BSC are declared stubs and SCI interrupts are not requested, so no advanced blocks exist to list._

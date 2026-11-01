@@ -10448,6 +10448,43 @@ boards:
       - configs/chips/mpfs095t.yaml
       - configs/systems/mpfs-disco-kit.yaml
 
+  - id: am6234
+    # 2026-11-01: TI SK-AM62B-P1 (AM6234, AM62x). First AArch64 part and
+    # LabWired's first AArch64 core (crates/core/src/cpu/aarch64.rs): one
+    # Cortex-A53 PE, Armv8.0-A A64 integer ISA, the SIMD&FP register file with
+    # every load/store form and FMOV/CNT/ADDV/ADD/ORR/DUP/UMOV/INS, EL0-EL3
+    # with the exception model and FP access traps, a stage-1 MMU (4 KB
+    # granule, AT/PAR, TLBI), and the GICv3 (distributor, redistributor, ICC
+    # system registers) plus the generic timer inside the core
+    # (crates/core/src/cpu/aarch64_gic.rs). MAIN_UART0-6 as 16550s (polled).
+    # Unmodified Zephyr v4.3.0 hello_world, synchronization and
+    # tests/kernel/common (12 suites, 63/63, user mode at EL0) for
+    # sk_am62/am6234/a53 start at the ELF entry at EL3. Pad configuration and
+    # the mailbox are declared stubs; cores 1-3, stage 2, 16/64 KB granules,
+    # Armv8.1+/crypto and most SIMD/FP arithmetic are not modelled.
+    # SIM-DERIVED — no AM62x bench part. See docs/boards/sk-am62.md and
+    # examples/sk-am62/VALIDATION.md.
+    doc: docs/boards/sk-am62.md
+    chip: configs/chips/am6234.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_sk_am62_zephyr_survival"
+      - "examples/sk-am62/ci/test.sh (synchronization on the virtual timer, kernel/common 12 suites 63/63)"
+      - "aarch64_tests (11 tests: data processing, loads/stores and the exclusive monitor, branches, SVC/UNDEFINED syndromes, ERET, FP traps, MMU permission faults, AT/PAR, timer IRQ through the GIC, WFI fast-forward, sysreg EL checks)"
+      - "aarch64_gic unit tests (SPI acknowledge/EOI, level timer PPI, redistributor wake, PMR)"
+    models:
+      - crates/core/src/cpu/aarch64.rs
+      - crates/core/src/cpu/aarch64_exec.rs
+      - crates/core/src/cpu/aarch64_gic.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/system/aarch64.rs
+      - crates/core/src/system/builder/aarch64.rs
+      - crates/firmware-sk-am62-zephyr
+      - configs/chips/am6234.yaml
+      - configs/systems/sk-am62.yaml
+
   - id: r5f52618bgfp
     # 2026-11-01: Renesas EK-RX261 (R5F52618BGFP, RX261). First Renesas RX
     # part and LabWired's first RX core (crates/core/src/cpu/rx.rs): the RXv3

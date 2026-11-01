@@ -11,6 +11,7 @@ use std::process::Command;
 /// Adding a new chip to this list is TEMPORARY. Update with a tracking comment
 /// and a GitHub issue number so the debt is visible.
 const SMOKE_LESS_ALLOWLIST: &[&str] = &[
+    "am6234", // SK-AM62: proven by stock Zephyr hello/sync/kernel-common (examples/sk-am62/ci/test.sh); no GPIO model for an io-smoke yet
     "stm32f401cdu6", // BlackPill variant; shared smoke with stm32f401 pending
     "stm32f401", // only example is the cosim-spice-rc analog lab; dedicated NUCLEO-F401RE smoke pending — see #1202
     "stm32g474re", // STM32G4 peripheral models in progress

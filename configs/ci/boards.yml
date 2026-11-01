@@ -86,6 +86,13 @@ boards:
     kind: sim-validate
     path: examples/mpfs-disco-kit
     gate: true
+  # SK-AM62: the first AArch64 part (TI AM6234, Cortex-A53). Committed stock
+  # Zephyr v4.3.0 fixtures (hello, synchronization, tests/kernel/common), plus
+  # the unsupported-instruction audit of each image.
+  - id: sk-am62
+    kind: sim-validate
+    path: examples/sk-am62
+    gate: true
   # EK-RX261: the first Renesas RX part (RXv3 core). Committed stock Zephyr
   # v4.3.0 fixtures (hello, synchronization, tests/kernel/common), plus the
   # unsupported-instruction audit of each image.

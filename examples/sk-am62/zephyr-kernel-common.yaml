@@ -1,0 +1,37 @@
+# LabWired - SK-AM62 stock Zephyr tests/kernel/common
+#
+# Unmodified upstream Zephyr v4.3.0 `tests/kernel/common` (ztest, 12 suites,
+# 63 cases) for `sk_am62/am6234/a53`: atomics (LDAXR/STLXR through libgcc's
+# outline atomics), bitarray (CNT/ADDV popcount on the SIMD unit, so the
+# lazy FP-sharing trap fires), byteorder, clock (virtual counter /
+# k_uptime), irq_offload (SVC into the EL1 synchronous vector), timeout
+# ordering, errno/TLS, printk and pow2. On arm64 this build turns on
+# CONFIG_USERSPACE, so the MMU runs per-thread page tables and the user-mode
+# cases run at EL0. CONFIG_BOOT_DELAY=500 busy-waits 500 ms (700 M
+# instructions) before the kernel starts, so this runs on a release CLI in
+# ci/test.sh. Rebuild: crates/firmware-sk-am62-zephyr/build.sh
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/sk-am62-zephyr-kernel-common.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000000
+  max_cycles: 6000000000
+  wall_time_ms: 240000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 (delayed boot 500ms) ***"
+      - "SUITE PASS - 100.00% [atomic]: pass = 3, fail = 0, skip = 0, total = 3"
+      - "SUITE PASS - 100.00% [bitarray]: pass = 8, fail = 0, skip = 0, total = 8"
+      - "SUITE PASS - 100.00% [boot_delay]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [byteorder]: pass = 37, fail = 0, skip = 0, total = 37"
+      - "SUITE PASS - 100.00% [clock]: pass = 4, fail = 0, skip = 0, total = 4"
+      - "SUITE PASS - 100.00% [common]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "SUITE PASS - 100.00% [common_1cpu]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "SUITE PASS - 100.00% [common_errno]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "SUITE PASS - 100.00% [irq_offload]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [multilib]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [pow2]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [printk]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - expected_stop_reason: max_cycles

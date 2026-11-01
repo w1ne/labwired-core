@@ -1398,6 +1398,26 @@
         "lane": "none"
       }
     },
+    "am6234": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_sk_am62_zephyr_survival",
+        "signal": "committed stock Zephyr v4.3.0 hello_world ELF tests/fixtures/sk-am62-zephyr-hello.elf booted in-sim on the AArch64 core; the survival gate asserts 'Hello World! sk_am62/am6234/a53' on the MAIN_UART0 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "MCSPI is not mapped on am6234 yet.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "MAIN_I2C is not mapped on am6234 yet.",
+        "lane": "none"
+      }
+    },
     "vegaboard-ri5cy": {
       "in_boards": false,
       "uart": {

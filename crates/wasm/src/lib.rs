@@ -578,6 +578,9 @@ impl WasmSimulator {
             MachineFamily::Pic16 => Err(JsValue::from_str(
                 "PIC16 is not available in the browser build yet",
             )),
+            MachineFamily::Aarch64 => Err(JsValue::from_str(
+                "AArch64 is not available in the browser build yet",
+            )),
             MachineFamily::Rx => Err(JsValue::from_str(
                 "RX is not available in the browser build yet",
             )),

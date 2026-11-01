@@ -17,6 +17,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32l552 | open | L1 | 50 | 904.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
 | cc2538sf53 | open | L1 | 28 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
 | mpfs095t | open | L1 | 14 | — | — | ≥1× (CI) | [doc](docs/boards/mpfs095t.md) |
+| am6234 | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/am6234.md) |
 | r5f52618bgfp | open | L1 | 10 | — | — | ≥1× (CI) | [doc](docs/boards/r5f52618bgfp.md) |
 | r7fa6m5bh | open | L1 | 48 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa6m5bh.md) |
 | r7fa8m1ah | open | L1 | 44 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |

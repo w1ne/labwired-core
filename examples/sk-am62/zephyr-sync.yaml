@@ -1,0 +1,24 @@
+# LabWired - SK-AM62 stock Zephyr synchronization
+#
+# Unmodified upstream Zephyr v4.3.0 `samples/synchronization`. Two threads
+# hand a semaphore back and forth; each prints, busy-waits 100 ms on the
+# virtual counter (k_busy_wait), then sleeps 500 ms on a virtual-timer
+# interrupt through the GICv3 (PPI 27). The alternation needs timer IRQs,
+# IAR1/EOIR1, context switches with lazy FP save, and ERET to work.
+# Rebuild: crates/firmware-sk-am62-zephyr/build.sh
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/sk-am62-zephyr-sync.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000000
+  max_cycles: 3000000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 ***"
+      - "thread_a: Hello World from cpu 0 on sk_am62!"
+      - "thread_b: Hello World from cpu 0 on sk_am62!"
+      - "thread_a: Hello World from cpu 0 on sk_am62!"
+      - "thread_b: Hello World from cpu 0 on sk_am62!"
+  - expected_stop_reason: max_cycles
