@@ -665,6 +665,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // committed fixtures and a survival gate; no catalog board, no silicon
         // capture and no executing-fidelity differential.
         "r5f52618bgfp",
+        // First MIPS part (Curiosity PIC32MZ EF 2.0, PIC32MZ2048EFM144,
+        // MIPS32r2 M5150): chip + system + example with stock upstream NuttX
+        // nsh/ostest, committed fixtures and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "pic32mz2048efm144",
         // First RA6M5 part (EK-RA6M5): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.

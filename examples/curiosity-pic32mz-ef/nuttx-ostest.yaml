@@ -1,0 +1,25 @@
+# LabWired - Curiosity PIC32MZ EF 2.0: stock upstream NuttX ostest
+#
+# Unmodified apache/nuttx 7956039dfd + nuttx-apps 1f8cac8b87 (2026-10-08)
+# `testing/ostest` as the init task, for the out-of-tree board in
+# crates/firmware-curiosity-pic32mz-nuttx (rebuild: build.sh ostest).
+#
+# 34 test groups: vfork, task_restart, waitpid, mutexes (timed, recursive,
+# robust), cancellation, semaphores (timed, named), condition variables,
+# pthread_exit/rwlock/cleanup, message queues, signals (nested handlers),
+# POSIX timers, spinlocks, watchdogs, round-robin scheduling, barriers,
+# priority inheritance and the scheduler lock.
+#
+# MANUAL, not in CI: the run is ~25 G guest instructions. ostest's priority
+# inheritance and round-robin tests spin the CPU by design (`hog_cpu()`
+# counts a volatile int to INT_MAX), which costs about two minutes on the
+# 200 MHz silicon and about nine on this interpreter.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/curiosity-pic32mz-ef-nuttx-ostest.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 40000000000
+  wall_time_ms: 1500000
+assertions:
+  - uart_contains: "ostest_main: Exiting with status 0"

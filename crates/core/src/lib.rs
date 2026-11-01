@@ -88,6 +88,8 @@ pub enum Arch {
     Pic16,
     /// Renesas RX (RXv3, RX261 class).
     Rx,
+    /// MIPS32r2 (PIC32MZ EF, M5150 class).
+    Mips,
     Unknown,
 }
 

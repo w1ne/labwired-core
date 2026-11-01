@@ -2074,6 +2074,7 @@ pub(crate) fn run_test(
             let hosted_fast = !jit_eligible
                 && (program.arch == labwired_core::Arch::Arm
                     || program.arch == labwired_core::Arch::Rx
+                    || program.arch == labwired_core::Arch::Mips
                     || rv64_chip)
                 && std::env::var("LABWIRED_HOSTED_FAST").as_deref() != Ok("0");
             if !jit_eligible && !hosted_fast {
@@ -2156,6 +2157,15 @@ pub(crate) fn run_test(
             if matches!(program.arch, labwired_core::Arch::Rx) {
                 match labwired_core::system::rx::reset_pc(&machine.bus) {
                     Ok(pc) => machine.cpu.set_pc(pc),
+                    Err(e) => error!("{e:#}"),
+                }
+            }
+            // MIPS starts at the reset vector 0xBFC00000 once the image's
+            // boot ISA has been checked.
+            if matches!(program.arch, labwired_core::Arch::Mips) {
+                use labwired_core::Cpu as _;
+                match machine.cpu.reset(&mut machine.bus) {
+                    Ok(()) => machine.cpu.set_pc(labwired_core::cpu::mips::RESET_VECTOR),
                     Err(e) => error!("{e:#}"),
                 }
             }
@@ -2804,6 +2814,11 @@ pub(crate) fn run_test(
             // RX is von Neumann: code flash and RAM are on the bus, and the
             // ICU is part of the core.
             setup_and_run!(labwired_core::cpu::Rx::new())
+        }
+        labwired_core::Arch::Mips => {
+            // PIC32MZ: physical bus (RAM, program and boot flash, SFRs); the
+            // EVIC is part of the core.
+            setup_and_run!(labwired_core::cpu::Mips32::new())
         }
         labwired_core::Arch::Pic16 => {
             // PIC16 is Harvard as well: word-addressed program memory sized

@@ -37,6 +37,8 @@ pub mod pic24;
 #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
 pub use cortex_a::CortexA7;
 #[deny(clippy::let_underscore_must_use)]
+pub mod mips;
+#[deny(clippy::let_underscore_must_use)]
 pub mod riscv;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv64;
@@ -80,6 +82,7 @@ pub mod jit_framework;
 
 pub use avr::{Avr, AvrModel};
 pub use cortex_m::CortexM;
+pub use mips::Mips32;
 pub use pic16::Pic16;
 pub use pic18::Pic18;
 pub use pic24::Pic24;

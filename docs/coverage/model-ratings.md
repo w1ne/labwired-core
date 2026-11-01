@@ -18,6 +18,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | cc2538sf53 | open | L1 | 28 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
 | mpfs095t | open | L1 | 14 | — | — | ≥1× (CI) | [doc](docs/boards/mpfs095t.md) |
 | r5f52618bgfp | open | L1 | 10 | — | — | ≥1× (CI) | [doc](docs/boards/r5f52618bgfp.md) |
+| pic32mz2048efm144 | open | L1 | 10 | — | — | ≥1× (CI) | [doc](docs/boards/pic32mz2048efm144.md) |
 | r7fa6m5bh | open | L1 | 48 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa6m5bh.md) |
 | r7fa8m1ah | open | L1 | 44 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |
 | amap42kp | open | L1 | 46 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/amap42kp.md) |

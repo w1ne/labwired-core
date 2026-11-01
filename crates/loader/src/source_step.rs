@@ -358,6 +358,8 @@ impl SourceDebug {
             MachineFamily::Pic16 => 6,
             // R0-R15 (GCC's RX DWARF numbering).
             MachineFamily::Rx => 16,
+            // $0-$31 (GCC's MIPS DWARF numbering).
+            MachineFamily::Mips => 32,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -514,6 +516,17 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Mips => Abi {
+            // $29 is the stack pointer; s0-s7 and s8/fp are callee-saved
+            // (o32). Frame 0 only until the MIPS CFI unwind has been checked
+            // against GCC output.
+            sp: 29,
+            callee_saved: (16..=23).chain(30..=30).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -534,6 +547,7 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::Pic18 => 8,
         MachineFamily::Pic16 => 6,
         MachineFamily::Rx => 16,
+        MachineFamily::Mips => 32,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
@@ -707,6 +721,7 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Pic18 => 6,
         MachineFamily::Pic16 => 4,
         MachineFamily::Rx => 0,
+        MachineFamily::Mips => 29,
     }
 }
 

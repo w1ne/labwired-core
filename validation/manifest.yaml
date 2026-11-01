@@ -10484,3 +10484,41 @@ boards:
       - crates/firmware-ek-rx261-zephyr
       - configs/chips/r5f52618bgfp.yaml
       - configs/systems/ek-rx261.yaml
+
+  - id: pic32mz2048efm144
+    # 2026-11-01: Microchip Curiosity PIC32MZ EF 2.0 (DM320209,
+    # PIC32MZ2048EFM144). First MIPS part and LabWired's first MIPS core
+    # (crates/core/src/cpu/mips.rs): the MIPS32r2 integer ISA with branch
+    # delay slots and branch-likely, CP0 (Status/Cause/EPC/Count/Compare/
+    # EBase/IntCtl/SRSCtl), eight shadow register sets, and the PIC32MZ EVIC
+    # (IFS/IEC/IPC/OFF, INTSTAT, PRISS) inside the core in EIC mode. The core
+    # timer and the core software interrupts feed the EVIC. Peripherals:
+    # UART2 (`pic32_uart`, interrupt driven both ways) and Timer1
+    # (`pic32_timer`). Unmodified upstream NuttX (apache/nuttx 7956039dfd,
+    # nuttx-apps 1f8cac8b87) for an out-of-tree board runs nsh with typed
+    # commands and the full ostest from the reset vector 0xBFC00000. Ports,
+    # PPS, OSC, CFG, flash controller, WDT, DMT and prefetch are declared
+    # stubs; the FPU, microMIPS, DSP ASE and TLB are not modelled.
+    # SIM-DERIVED — no PIC32MZ bench part. See
+    # docs/boards/curiosity-pic32mz-ef.md and
+    # examples/curiosity-pic32mz-ef/VALIDATION.md.
+    doc: docs/boards/curiosity-pic32mz-ef.md
+    chip: configs/chips/pic32mz2048efm144.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_curiosity_pic32mz_nuttx_survival"
+      - "curiosity_pic32mz_nuttx (nsh: hello, ps, ls /dev typed over UART2)"
+      - "mips_tests (17 tests: overflow trap, delay slots and branch-likely, LWL/LWR/SWL/SWR, mult/div/madd/clz/ext/ins/seb/wsbh/ror, BD in a delay slot, LL/SC and ERET, AdEL/TLB refill, shadow sets, DI/EI, EVIC single and multi vector, core timer, software interrupt edge, idle-loop proof, WAIT, boot ISA)"
+      - "pic32_uart, pic32_timer unit tests (TX drain flag, RX threshold, SET/CLR/INV aliases, Timer1 at PBCLK3/8, SOSC, Type B prescaler)"
+    models:
+      - crates/core/src/cpu/mips.rs
+      - crates/core/src/peripherals/pic32_uart.rs
+      - crates/core/src/peripherals/pic32_timer.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/mips.rs
+      - crates/core/src/system/builder/mips.rs
+      - crates/firmware-curiosity-pic32mz-nuttx
+      - configs/chips/pic32mz2048efm144.yaml
+      - configs/systems/curiosity-pic32mz-ef.yaml

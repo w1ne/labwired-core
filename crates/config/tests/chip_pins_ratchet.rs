@@ -80,6 +80,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // RX261 ports are a declared stub (no RX PORT/MPC model yet), so the
     // EK-RX261 LEDs and switch have no pads to read.
     "r5f52618bgfp",
+    // PIC32MZ ports and PPS are a declared stub (no PIC32 port model yet), so
+    // the Curiosity PIC32MZ EF 2.0 LEDs and switches have no pads to read.
+    "pic32mz2048efm144",
     "nrf52832",
     "nrf52833",
     "nrf52840",

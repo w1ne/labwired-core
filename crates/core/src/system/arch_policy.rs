@@ -41,6 +41,7 @@ pub enum MachineFamily {
     Pic18,
     Pic16,
     Rx,
+    Mips,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -70,8 +71,9 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Pic18 => Ok(MachineFamily::Pic18),
         Arch::Pic16 => Ok(MachineFamily::Pic16),
         Arch::Rx => Ok(MachineFamily::Rx),
+        Arch::Mips => Ok(MachineFamily::Mips),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, or rx)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, rx, or mips)",
             chip.name
         ),
     }
@@ -100,6 +102,8 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         204 => Some(crate::Arch::Pic18),
         // EM_RX (173), Renesas RX (gABI; binutils elf/common.h).
         173 => Some(crate::Arch::Rx),
+        // EM_MIPS (8): MIPS32 (o32) little-endian images from mips-*-elf GCC.
+        goblin::elf::header::EM_MIPS => Some(crate::Arch::Mips),
         _ => None,
     }
 }

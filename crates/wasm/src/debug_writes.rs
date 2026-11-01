@@ -96,6 +96,7 @@ pub(crate) fn decode_at(sim: &WasmSimulator, pc: u32) -> String {
         MachineFamily::Pic18 => "PIC18 (no wasm disassembly yet)".to_string(),
         MachineFamily::Pic16 => "PIC16 (no wasm disassembly yet)".to_string(),
         MachineFamily::Rx => "RX (no wasm disassembly yet)".to_string(),
+        MachineFamily::Mips => "MIPS (no wasm disassembly yet)".to_string(),
     }
 }
 

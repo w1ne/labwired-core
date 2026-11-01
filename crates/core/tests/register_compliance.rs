@@ -136,6 +136,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Mips => {
+            // No SVD-backed register list for the PIC32MZ parts yet.
+            println!(
+                "Skipping MIPS register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }

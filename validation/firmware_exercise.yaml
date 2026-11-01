@@ -1040,6 +1040,13 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+  - id: pic32mz2048efm144
+    arch: mips32r2
+    headline: "L1 + stock RTOS, SIM-DERIVED. First MIPS part: the MIPS32r2 M5150 core (integer ISA with delay slots, CP0, eight shadow register sets; the PIC32MZ EVIC in the core, EIC mode) runs unmodified upstream NuttX (apache/nuttx 7956039dfd) for an out-of-tree Curiosity PIC32MZ EF 2.0 board from the reset vector: nsh with typed commands over the interrupt-driven UART2, and the full ostest (34 test groups, 0 errors) on the Timer1 tick with software-interrupt context switches (examples/curiosity-pic32mz-ef). Ports/PPS, OSC and CFG are declared stubs, so no advanced blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
   - id: vegaboard-ri5cy
     arch: riscv32imc
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LPUART0 console are proven by tests/fixtures/vegaboard-ri5cy-smoke.elf and examples/vegaboard-ri5cy/io-smoke.yaml. The SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs (examples/vegaboard-ri5cy/VALIDATION.md), so no advanced blocks exist to list."

@@ -66,6 +66,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "pic32mz2048efm144",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "r7fa6m5bh",
     "reg_match": 0
   },

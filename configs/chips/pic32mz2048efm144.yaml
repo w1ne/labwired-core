@@ -1,0 +1,131 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Microchip PIC32MZ2048EFM144 (PIC32MZ EF, MIPS32 M5150 core with FPU,
+# 200 MHz, 2 MiB program flash, 512 KiB data RAM, 144-pin TQFP) on the
+# Curiosity PIC32MZ EF 2.0 development board (DM320209). SIM-DERIVED: no
+# PIC32MZ bench part.
+#
+# Sources:
+#   - PIC32MZ Embedded Connectivity with Floating Point Unit (EF) Family data
+#     sheet (DS60001320): memory map (data RAM 0x00000000, program flash
+#     0x1D000000, SFRs 0x1F800000, boot flash 0x1FC00000), interrupt vector
+#     table, UART chapter.
+#   - Apache NuttX 12.11.0 arch/mips/src/pic32mz/hardware/pic32mzef_memorymap.h
+#     and pic32mz_int.h / pic32mz_uart.h: SFR block bases and register
+#     offsets (CFG 0x1F800000, OSC 0x1F801200, PPS 0x1F801400, EVIC
+#     0x1F810000, UART1-6 0x1F822000 + 0x200*n, PORTA-K 0x1F860000,
+#     prefetch 0x1F8E0000); irq_pic32mzxxxef.h: UART2 fault/RX/TX =
+#     vectors 145/146/147.
+#   - Curiosity PIC32MZ EF 2.0 user guide (DS70005400): UART2 (TX RG9,
+#     RX RE9) is the PKoB4 virtual COM port; 12 MHz oscillator on OSC1.
+#
+# Tier: L1 boot + UART + stock RTOS. Stock Apache NuttX 12.11.0 (nsh,
+# ostest) built for an out-of-tree Curiosity board runs
+# (examples/curiosity-pic32mz-ef, crates/firmware-curiosity-pic32mz-nuttx).
+#
+# Core: `arch: mips` builds the MIPS machine family (crates/core/src/cpu/
+# mips.rs). The bus is physical: the core maps KSEG0 (0x80000000) and KSEG1
+# (0xA0000000) onto it. The EVIC (0x1F810000-0x1F810FFF) is part of the
+# core, so it is not listed below; a peripheral's explicit IRQ is the EVIC
+# vector number. The core starts at the reset vector 0xBFC00000.
+#
+# NOT modelled in this slice:
+# - The FPU, microMIPS, the DSP ASE, the TLB, caches and flash wait states
+#   (see the core's module docs).
+# - Ports (ANSEL/TRIS/PORT/LAT/ODC/CNPU/CNPD/CNCON/CNEN/CNSTAT), PPS:
+#   declared stubs, so the Curiosity LEDs (RJ7/RK7/RJ3) and switches are
+#   not reachable; UART2 needs no pad routing.
+# - Oscillator, configuration (CFGCON, SYSKEY unlock), flash controller,
+#   watchdog, deadman timer, prefetch module: stubs. No clock rate follows
+#   OSCCON/SPLLCON/PBxDIV; `cpu_hz` is the 200 MHz SYSCLK the board's DEVCFG
+#   selects.
+# - Timers 2-9, DMA, SPI, I2C, CAN, Ethernet, USB, ADC, crypto, RNG: not
+#   mapped.
+# - Boot flash 2, the upper boot alias and the sequence/configuration words
+#   other than the lower alias's DEVCFG/ADEVCFG.
+name: "pic32mz2048efm144"
+arch: "mips"
+core: "m5150"
+cpu_hz: 200_000_000
+# Data RAM sits at physical 0x0; there is no Cortex-M style flash mirror.
+flash_boot_alias: false
+flash:
+  # Program flash (KSEG0 0x9D000000, KSEG1 0xBD000000).
+  base: 0x1D000000
+  size: "2MB"
+ram:
+  # Data RAM (KSEG0 0x80000000, KSEG1 0xA0000000).
+  base: 0x00000000
+  size: "512KB"
+memory_regions:
+  # Lower boot alias (Boot Flash 1, 80 KiB): the reset and exception
+  # vectors, the startup code, and the configuration space at 0x1FC0FF00
+  # (ADEVCFG3-0 at 0x1FC0FF40, DEVCFG3-0 at 0x1FC0FFC0).
+  - name: "boot_flash"
+    base: 0x1FC00000
+    size: "80KB"
+peripherals:
+  # Configuration block: CFGCON, DEVID (+0x20), SYSKEY (+0x30), CFGEBIA/C,
+  # CFGPG.
+  - id: "cfg"
+    type: "stub"
+    base_address: 0x1F800000
+    size: "256B"
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x1F800600
+    size: "256B"
+  - id: "wdt"
+    type: "stub"
+    base_address: 0x1F800800
+    size: "256B"
+  - id: "dmt"
+    type: "stub"
+    base_address: 0x1F800A00
+    size: "256B"
+  # OSCCON, OSCTUN, SPLLCON, REFOxCON, PBxDIV (+0x100..+0x170), SLEWCON,
+  # CLKSTAT.
+  - id: "osc"
+    type: "stub"
+    base_address: 0x1F801200
+    size: "512B"
+  # Peripheral pin select input (+0x000) and output (+0x100) registers.
+  - id: "pps"
+    type: "stub"
+    base_address: 0x1F801400
+    size: "1KB"
+  # Timer1 (Type A), the NuttX system tick: T1 = vector 4. PBCLK3 is the
+  # 50 MHz the board's PB3DIV selects.
+  - id: "timer1"
+    type: "pic32_timer"
+    base_address: 0x1F840000
+    size: "512B"
+    config:
+      irq: 4
+      timer_type: "a"
+      clock_hz: 200000000
+      pbclk_hz: 50000000
+      sosc_hz: 32768
+  # UART2: the PKoB4 virtual COM port.
+  - id: "uart2"
+    type: "pic32_uart"
+    base_address: 0x1F822200
+    size: "512B"
+    config:
+      irqs: [145, 146, 147]
+      clock_hz: 200000000
+      # PBCLK2, the board's PB2DIV.
+      pbclk_hz: 100000000
+  # PORTA-PORTK, 0x100 apart.
+  - id: "ports"
+    type: "stub"
+    base_address: 0x1F860000
+    size: "4KB"
+  - id: "prefetch"
+    type: "stub"
+    base_address: 0x1F8E0000
+    size: "256B"
