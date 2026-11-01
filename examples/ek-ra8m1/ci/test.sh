@@ -60,3 +60,16 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 150000 \
   --out-dir "$OUT/zephyr-uart-basic-api-unsupported-audit" \
   --fail-on-unsupported
+# Stock Zephyr v3.7.0 samples/subsys/shell/shell_module: the shell's
+# interrupt-driven serial backend on SCI9 RXI/TXI/TEI through the ICU
+# (tests/fixtures/r7fa8m1ah-zephyr-shell.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-shell.yaml \
+  --output-dir "$OUT/zephyr-shell" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-shell.elf \
+  --system configs/systems/ek-ra8m1.yaml \
+  --max-steps 150000 \
+  --out-dir "$OUT/zephyr-shell-unsupported-audit" \
+  --fail-on-unsupported

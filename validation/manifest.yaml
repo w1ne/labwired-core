@@ -9784,6 +9784,10 @@ boards:
     # events through the ICU (uart/sci_b_irq.rs) and read FRSR.R; stock
     # Zephyr v3.7.0 tests/drivers/uart/uart_basic_api 7/7 on the
     # interrupt-driven SCI_B driver.
+    # 2026-11-01 (feat/ek-ra8m1-zephyr-shell): stock Zephyr v3.7.0
+    # samples/subsys/shell/shell_module (interrupt-driven shell backend on
+    # SCI9) answers typed commands, TAB completion and history recall
+    # (examples/ek-ra8m1/zephyr-shell.yaml). No model change.
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual

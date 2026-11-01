@@ -57,6 +57,14 @@ This is the stock-Zephyr counterpart of Renode's `Renesas_RA8M1.robot`
 "Should Read And Write On UART", which drives the same SCI_B interrupts from
 an FSP ELF.
 
+The stock Zephyr v3.7.0 shell (`samples/subsys/shell/shell_module`) runs on
+the same interrupt-driven SCI9: its serial backend is
+`CONFIG_SHELL_BACKEND_SERIAL_INTERRUPT_DRIVEN`, so the prompt, the echo and
+every reply leave on TXI/TEI and every typed byte arrives on RXI. The example
+types commands, arguments, TAB completion and history recall
+(`examples/ek-ra8m1/zephyr-shell.yaml`); without SCI9's `elc_event` the
+image prints nothing at all.
+
 !!! warning "Not claimed yet"
     The core decodes Armv8-M Mainline plus the scalar Armv8.1-M `DLS`/`WLS`/
     `LE` and `CSEL` family. **Helium/MVE**, the tail-predicated loops, PACBTI
@@ -92,9 +100,9 @@ an FSP ELF.
 | Example system | [`configs/systems/ek-ra8m1.yaml`](../../configs/systems/ek-ra8m1.yaml) |
 | Reference firmware | [`crates/firmware-ek-ra8m1-smoke/`](../../crates/firmware-ek-ra8m1-smoke/), stock Zephyr via [`crates/firmware-ek-ra8m1-zephyr/`](../../crates/firmware-ek-ra8m1-zephyr/) |
 | Example | [`examples/ek-ra8m1/`](../../examples/ek-ra8m1/) |
-| Committed artifact | `tests/fixtures/ek-ra8m1-smoke.elf` (`EK-RA8M1 SMOKE`), `tests/fixtures/r7fa8m1ah-zephyr-{hello,sync}.elf` (stock Zephyr v3.7.0), `tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf` (stock Zephyr v4.0.0), `tests/fixtures/r7fa8m1ah-zephyr-uart-basic-api.elf` (stock Zephyr v3.7.0) |
+| Committed artifact | `tests/fixtures/ek-ra8m1-smoke.elf` (`EK-RA8M1 SMOKE`), `tests/fixtures/r7fa8m1ah-zephyr-{hello,sync}.elf` (stock Zephyr v3.7.0), `tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf` (stock Zephyr v4.0.0), `tests/fixtures/r7fa8m1ah-zephyr-{uart-basic-api,shell}.elf` (stock Zephyr v3.7.0) |
 | Build target | `thumbv8m.main-none-eabi` |
-| Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI9) plus stock Zephyr hello_world/synchronization, the AGT counter alarm and uart_basic_api (SCI_B interrupts) through the ICU; SIM-DERIVED |
+| Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI9) plus stock Zephyr hello_world/synchronization, the AGT counter alarm, uart_basic_api and the shell (SCI_B interrupts) through the ICU; SIM-DERIVED |
 
 ---
 
@@ -142,6 +150,8 @@ cargo build -p firmware-ek-ra8m1-smoke --release --target thumbv8m.main-none-eab
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-counter-alarm.yaml --no-uart-stdout
 # stock Zephyr v3.7.0 uart_basic_api (SCI_B interrupts through the ICU)
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-uart-basic-api.yaml --no-uart-stdout
+# stock Zephyr v3.7.0 shell (interrupt-driven serial backend)
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-shell.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra8m1/VALIDATION.md`](../../examples/ek-ra8m1/VALIDATION.md)
