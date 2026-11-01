@@ -33,6 +33,11 @@ const NEEDS: &[(&str, &str)] = &[
         "rv1103",
         "Cortex-A7 construction needs a native build with --features qemu-arm",
     ),
+    #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
+    (
+        "xck26-rpu",
+        "Cortex-R5F construction needs a native build with --features qemu-arm-system",
+    ),
 ];
 
 #[test]
@@ -45,6 +50,8 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     );
 
     let arm_fw = common::committed("tests/fixtures/uart-ok-thumbv7m.elf");
+    // Cortex-R5F: stock Zephyr v4.1.0 hello_world for kv260_r5 (examples/kv260-r5).
+    let r5_fw = common::committed("tests/fixtures/kv260-r5-zephyr-hello.elf");
     let riscv_fw = common::committed("tests/fixtures/riscv-ci-fixture.elf");
     let avr_fw = common::committed("tests/fixtures/avr/arduino-nano-blinky.elf");
     // PIC24 M0 fixture: hand-assembled ELF (see examples/dspic33fj32mc204).
@@ -79,6 +86,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
         };
 
         let fw: &[u8] = match chip.arch {
+            labwired_config::Arch::Arm if name == "xck26-rpu" => &r5_fw,
             labwired_config::Arch::Arm => &arm_fw,
             labwired_config::Arch::RiscV => &riscv_fw,
             labwired_config::Arch::Avr => &avr_fw,

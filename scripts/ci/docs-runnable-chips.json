@@ -543,6 +543,10 @@
     "mk64f12": {
       "how": "needs-build",
       "why": "The MK64F12 descriptor is newer than the released CLI this gate installs. The committed smoke tests/fixtures/frdm-k64f-smoke.elf prints 'FRDM-K64F SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "xck26-rpu": {
+      "how": "needs-build",
+      "why": "The Cortex-R5F core runs only in a source build with --features qemu-arm-system, which the released CLI this gate installs does not carry. The committed tests/fixtures/kv260-r5-zephyr-hello.elf prints 'Hello World! kv260_r5' on such a build (examples/kv260-r5/ci/test.sh); switch to `committed` once a release ships the model"
     }
   }
 }
