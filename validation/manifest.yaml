@@ -9808,6 +9808,9 @@ boards:
     # IELSRn event link (ra_icu) and AGT0-5 are ra_agt (events 0x040 + 3n);
     # stock Zephyr v4.1.0 samples/drivers/counter/alarm (AGT0 compare match
     # through IELSR84).
+    # 2026-11-01 (feat/ra6m5-adc12): ADC0/ADC1 are ra_adc12 (scan-end events
+    # 0x160/0x166 through the ICU); stock Zephyr v4.1.0
+    # tests/drivers/adc/adc_api 6/6 with a potentiometer and a TMP36 on ADC1.
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
@@ -9815,6 +9818,7 @@ boards:
       - "firmware_survival::test_ek_ra6m5_smoke_survival"
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
+      - "ra6m5_adc12_icu (ADC1 scan end through ICU IELSR39)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9823,6 +9827,7 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
+      - crates/core/src/peripherals/ra_adc12.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs

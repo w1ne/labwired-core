@@ -20,6 +20,10 @@
 #       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-blinky.yaml: LED1 made an
 #       output through PmnPFS.PDR and toggled through PCNTR1.PODR), module
 #       list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-adc-api.elf — tests/drivers/adc/adc_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-adc-api.yaml: ADC1
+#       channels 0 and 2 through the ra_adc12 model, scan end linked by
+#       IELSR39), module list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -76,8 +80,12 @@ build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
   sha256sum "$FIXTURES/$2"
 }
 
-build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf"
-build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf"
+# The v4.0.0 fixtures were first built with only cmsis and hal_renesas; pin
+# that list so a workspace that has since fetched more modules (picolibc
+# swaps the C library) still rebuilds the same bytes.
+V40_MODULES="-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf" "$V40_MODULES"
+build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf" "$V40_MODULES"
 
 # Zephyr v4.1.0: samples/drivers/counter/alarm (AGT0 + ICU).
 ZEPHYRPROJECT_V41="${ZEPHYRPROJECT_V41:-$HOME/zephyrproject-v4.1}"
@@ -91,4 +99,9 @@ build_one "samples/basic/button" "r7fa6m5bh-zephyr-button.elf" \
 # samples/basic/blinky (LED1 P006: output via PmnPFS.PDR, toggled through
 # PCNTR1.PODR), same v4.1.0 tree.
 build_one "samples/basic/blinky" "r7fa6m5bh-zephyr-blinky.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/adc/adc_api (ADC1 channels 0 and 2 per the in-tree
+# boards/ek_ra6m5.overlay; scan end ADC1_SCAN_END 0x166 through IELSR39),
+# same v4.1.0 tree.
+build_one "tests/drivers/adc/adc_api" "r7fa6m5bh-zephyr-adc-api.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
