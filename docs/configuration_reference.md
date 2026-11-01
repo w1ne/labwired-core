@@ -444,6 +444,7 @@ canonical `type:`; the table below is rendered from that file by
 | `oled-sh1107` | I²C | 128×128 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306` | I²C | 128×64 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306-128x32` | I²C | 0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer |
+| `oled-ssd1309` | I²C | 2.42in 128×64 monochrome OLED on a Solomon Systech SSD1309, I2C, paged framebuffer |
 | `ov3660` | I²C | OmniVision 3 MP camera: SCCB control at 0x3C plus 8-bit DVP frames into the ESP32-S3 LCD_CAM |
 | `pca9685` | I²C | 16-channel 12-bit I²C PWM / servo controller |
 | `pcf8574` | I²C | NXP PCF8574 8-bit I²C quasi-bidirectional port expander |
@@ -467,6 +468,7 @@ canonical `type:`; the table below is rendered from that file by
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
 | `inmp441` | SPI | Omnidirectional MEMS microphone, 24-bit I2S digital output |
@@ -480,6 +482,7 @@ canonical `type:`; the table below is rendered from that file by
 | `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |
 | `sn74hc165` | SPI | 8-bit parallel-in / serial-out shift register over SPI |
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
+| `st7735` | SPI | 1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
 | `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
 | `74cbtlv3257` | GPIO | Four 1-of-2 bus switches; S picks the A or B side, OE opens all four |
