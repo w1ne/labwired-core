@@ -490,6 +490,27 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["ina3221"],
         include_str!("../../../configs/devices/ina3221.yaml"),
     ),
+    // ── Batch 4 interfaces: expanders, ADC, driver, LoRa shell ──────────────
+    (
+        &["mcp23017"],
+        include_str!("../../../configs/devices/mcp23017.yaml"),
+    ),
+    (
+        &["pcf8575"],
+        include_str!("../../../configs/devices/pcf8575.yaml"),
+    ),
+    (
+        &["ads1015"],
+        include_str!("../../../configs/devices/ads1015.yaml"),
+    ),
+    (
+        &["uln2803"],
+        include_str!("../../../configs/devices/uln2803.yaml"),
+    ),
+    (
+        &["rfm95"],
+        include_str!("../../../configs/devices/rfm95.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.

@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `everyday_sensor_set.rs`, plus a `docs/parts/` page. AM2320 and VL53L5CX
   were evaluated and not added: the `i2c_device` primitive cannot model them
   truthfully.
+- Five more declarative parts on existing primitives, no Rust model:
+  `mcp23017` (16-bit I²C GPIO expander; IODIR-gated output pads), `pcf8575`
+  (16-bit quasi-bidirectional expander; byte-pair writes, alternating
+  port 0 / port 1 reads), `ads1015` (12-bit sibling of the ADS1115;
+  left-justified result, MUX + PGA), `uln2803` (8-channel inverting
+  Darlington sink, `logic_gate`) and `rfm95` (RFM95W / SX1276 SPI register
+  shell, no RF air link). Each is in `everyday_sensor_set.rs` with a smoke
+  check, a negative control and a stimulus test; the SPI and GPIO parts get
+  their own stand-ins. MCP3008 and ADS1256 are not included: their SPI
+  framings need engine support that does not exist yet.
 - Nine everyday I²C sensors as declarative `configs/devices/*.yaml` parts, no
   Rust model: `sht40`, `bme680` (T/P/H; gas not modelled), `icm42688`,
   `icm20948` (accel/gyro/temp; magnetometer not modelled), `sgp40`, `tsl2591`,
