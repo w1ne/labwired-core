@@ -3776,6 +3776,77 @@
       ]
     },
     {
+      "device_type": "st7735",
+      "label": "ST7735R TFT 1.8″",
+      "summary": "1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI.",
+      "detail": "Sitronix ST7735R in the GM[1:0]=11 configuration: a 128x160 frame memory (datasheet V0.2 section 9.9.3, reset table 9.15.1). Command table SWRESET / SLPIN / SLPOUT / INVOFF / INVON / DISPOFF / DISPON / CASET / RASET / RAMWR / MADCTL / COLMOD, with MADCTL MY/MX/MV moving the address map and the window clamp. Reports `lit` (DISPON AND awake) beside the raw pixels, because a panel that never got SLPOUT is dark whatever is in memory. RGB565 throughout: COLMOD is consumed, not honoured.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select pin label."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes an init parameter byte 0x2C as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED. Only an explicit `false` darkens the panel: it then ignores the SPI bus and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "gc9a01",
+      "label": "GC9A01 round TFT 1.28″",
+      "summary": "1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI.",
+      "detail": "GalaxyCore GC9A01A against a 240x240 RGB565 frame memory (datasheet Rev 1.0 section 2). The round glass is a bezel over that square: the controller and this model address all 240x240 pixels, corners included. Command table SLPIN / SLPOUT / INVOFF / INVON / DISPOFF / DISPON / CASET / RASET / RAMWR / MADCTL / COLMOD / WRMEMC; the GC9A01A lists no SWRESET opcode. Reports `lit` (DISPON AND awake) beside the raw pixels. RGB565 throughout: COLMOD is consumed, not honoured.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select pin label."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because the GC9A01A's Level 2/3 init commands carry many parameter bytes and an inferring model decodes the first one that happens to be 0x2C as RAMWR."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED. Only an explicit `false` darkens the panel: it then ignores the SPI bus and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "oled-ssd1309",
+      "label": "SSD1309 OLED 2.42″",
+      "summary": "2.42in 128×64 monochrome OLED on a Solomon Systech SSD1309, I2C, paged framebuffer.",
+      "detail": "Solomon Systech SSD1309, the SSD1306's sibling on the larger 2.42in/2.4in 128x64 glass. Same eight-page GDDRAM, I2C control-byte framing and addressing commands as the SSD1306; no charge pump (external 7-16 V VCC, so no 8Dh), plus the SSD1309's command lock (FDh) and GPIO (DCh) consumed for their parameter bytes. Resets to page addressing mode, per its datasheet. 0x3C / 0x3D address pair.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0 (D/C# pin) = high variant."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "dc-motor",
       "label": "Brushed DC motor",
       "summary": "Configurable deterministic brushed DC motor plant",
