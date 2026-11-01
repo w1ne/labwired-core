@@ -184,6 +184,16 @@ nav:
     - ADS1015: parts/ads1015.md
     - ULN2803A: parts/uln2803.md
     - RFM95W: parts/rfm95.md
+    - SX1276: parts/sx1276.md
+    - SX1262: parts/sx1262.md
+    - SK6812 RGBW: parts/sk6812.md
+    - MCP3008: parts/mcp3008.md
+    - ADS1256: parts/ads1256.md
+    - BMI160: parts/bmi160.md
+    - BMM150: parts/bmm150.md
+    - VEML6075: parts/veml6075.md
+    - HT16K33: parts/ht16k33.md
+    - TM1638: parts/tm1638.md
 
   - Operations:
     - Release Strategy: release_strategy.md
