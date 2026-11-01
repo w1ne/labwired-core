@@ -806,7 +806,18 @@ const SCI_FDR: u64 = 0x16;
 const SCI_FCR_FM: u16 = 1 << 0;
 const SCI_FCR_RFRST: u16 = 1 << 1;
 const SCI_FCR_TFRST: u16 = 1 << 2;
+/// FCR.RTRG (bits 11:8): the receive count that sets SSR_FIFO.RDF.
+const SCI_FCR_RTRG_SHIFT: u16 = 8;
 const SCI_FIFO_DEPTH: usize = 16;
+/// Classic SCI SCR (serial control) at 0x02 and SSR at 0x04. In FIFO mode
+/// the SSR address reads as SSR_FIFO: TDFE bit 7, RDF bit 6, TEND bit 2,
+/// DR bit 0 (FSP `R_SCI0_SSR_FIFO_*_Pos`).
+const SCI_SCR: u64 = 0x02;
+const SCI_SSR: u64 = 0x04;
+const SCI_SSR_FIFO_TDFE: u8 = 1 << 7;
+const SCI_SSR_FIFO_RDF: u8 = 1 << 6;
+const SCI_SSR_FIFO_TEND: u8 = 1 << 2;
+const SCI_SSR_FIFO_DR: u8 = 1 << 0;
 
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
@@ -1037,13 +1048,17 @@ pub struct Uart {
     /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
     /// stored; it reads CCR0.TE/RE back as TIST/RIST.
     sci_b_regs: [u32; SCI_B_REGS],
-    /// SCI_B layout with `elc_event` configured: the RXI/TXI/TEI interrupt
-    /// events, linked to the NVIC through the RA ICU. `None` keeps the
-    /// polled-only SCI_B.
+    /// SCI_B or classic SCI layout with `elc_event` configured: the
+    /// RXI/TXI/TEI interrupt events, linked to the NVIC through the RA ICU.
+    /// `None` keeps the polled-only SCI.
     sci_b_irq: Option<Box<sci_b_irq::SciBIrq>>,
     /// Classic SCI layout: FCR as firmware last wrote it, without the
     /// write-only RFRST/TFRST bits.
     sci_fcr: u16,
+    /// Classic SCI layout: SCR as firmware last wrote it. Zephyr's
+    /// `uart_ra_sci` read-modify-writes it (`SCR |= TIE | TEIE`) and reads
+    /// TIE/RIE back in `irq_tx_ready` / `irq_rx_ready`.
+    sci_scr: u8,
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
@@ -1134,6 +1149,7 @@ impl Uart {
             sci_b_regs: SCI_B_RESET,
             sci_b_irq: None,
             sci_fcr: 0,
+            sci_scr: 0,
             last_tx_on_bus: false,
         }
     }
@@ -1161,11 +1177,14 @@ impl Uart {
     }
 
     /// Enable STM32U5-only USART status/register behavior (TXFE and AUTOCR).
-    /// SCI_B only: raise the RXI/TXI/TEI interrupt events (`rxi_event`,
-    /// then +1, +2) through the RA ICU, with the wire timed at `baud` in
-    /// `clock_hz` cycles. See [`sci_b_irq`].
-    pub fn set_sci_b_events(mut self, rxi_event: u32, clock_hz: u64, baud: u64) -> Self {
-        if matches!(self.layout, UartRegisterLayout::SciB) {
+    /// SCI_B and classic SCI only: raise the RXI/TXI/TEI interrupt events
+    /// (`rxi_event`, then +1, +2) through the RA ICU, with the wire timed at
+    /// `baud` in `clock_hz` cycles. See [`sci_b_irq`].
+    pub fn set_sci_events(mut self, rxi_event: u32, clock_hz: u64, baud: u64) -> Self {
+        if matches!(
+            self.layout,
+            UartRegisterLayout::SciB | UartRegisterLayout::Sci
+        ) {
             self.sci_b_irq = Some(Box::new(sci_b_irq::SciBIrq::new(rxi_event, clock_hz, baud)));
         }
         self
@@ -1176,13 +1195,22 @@ impl Uart {
         self.stream_clock.as_ref().map_or(0, |c| c.now())
     }
 
-    /// Raise the SCI_B interrupt events due now.
+    /// The interrupt enables in SCI_B CCR0 positions: CCR0 itself, or the
+    /// classic SCI's SCR moved there.
+    fn sci_irq_ctrl(&self) -> u32 {
+        match self.layout {
+            UartRegisterLayout::Sci => sci_b_irq::classic_scr_as_ccr0(self.sci_scr),
+            _ => self.sci_b_regs[0],
+        }
+    }
+
+    /// Raise the SCI interrupt events due now.
     fn sci_b_service(&mut self) -> Vec<u32> {
         if self.sci_b_irq.is_none() {
             return Vec::new();
         }
         let now = self.cycle_now();
-        let ccr0 = self.sci_b_regs[0];
+        let ccr0 = self.sci_irq_ctrl();
         let rx_waiting = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         match self.sci_b_irq.as_deref_mut() {
             Some(irq) => irq.service(now, ccr0, rx_waiting),
@@ -1287,6 +1315,7 @@ impl Uart {
             return None;
         }
         match offset {
+            SCI_SCR => Some(self.sci_scr),
             SCI_FCR => Some(self.sci_fcr as u8),
             o if o == SCI_FCR + 1 => Some((self.sci_fcr >> 8) as u8),
             // FDR only counts in FIFO mode (FCR.FM = 1); on a FIFO-less
@@ -1300,6 +1329,42 @@ impl Uart {
             SCI_FRDRH => Some(0),
             _ => None,
         }
+    }
+
+    /// SSR_FIFO, which the SSR address reads as in FIFO mode. TX drains at
+    /// once, so TDFE (count <= TTRG) and TEND read 1. RDF is the receive
+    /// count at or above FCR.RTRG (0 reads as 1); DR is a smaller count
+    /// still waiting — silicon sets it 15 ETU after the last stop bit, this
+    /// model at once. Both follow the queue, so the write-0 clears firmware
+    /// does after reading the FIFO out need no storing.
+    fn sci_ssr_fifo(&self) -> u8 {
+        let rx = self
+            .rx_buf
+            .lock()
+            .map(|g| g.len().min(SCI_FIFO_DEPTH))
+            .unwrap_or(0);
+        let rtrg = usize::from((self.sci_fcr >> SCI_FCR_RTRG_SHIFT) & 0xF).max(1);
+        let mut ssr = SCI_SSR_FIFO_TDFE | SCI_SSR_FIFO_TEND;
+        if rx >= rtrg {
+            ssr |= SCI_SSR_FIFO_RDF;
+        } else if rx > 0 {
+            ssr |= SCI_SSR_FIFO_DR;
+        }
+        ssr
+    }
+
+    /// Store the classic SCI SCR. Returns false for any other offset.
+    fn sci_scr_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sci) || offset != SCI_SCR {
+            return false;
+        }
+        let old = sci_b_irq::classic_scr_as_ccr0(self.sci_scr);
+        self.sci_scr = value;
+        let now = self.cycle_now();
+        if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+            irq.on_ccr0(old, sci_b_irq::classic_scr_as_ccr0(value), now);
+        }
+        true
     }
 
     fn sci_fifo_mode(&self) -> bool {
@@ -1475,7 +1540,7 @@ impl Uart {
         // the one being read. An empty queue needs no wake: injection
         // (`deliver_uart_rx_named`) and stream peers re-harvest this.
         let sci_b_rx_armed = self.sci_b_irq.is_some()
-            && sci_b_irq::SciBIrq::rx_armed(self.sci_b_regs[0])
+            && sci_b_irq::SciBIrq::rx_armed(self.sci_irq_ctrl())
             && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
             || sci_b_rx_armed
@@ -2266,6 +2331,9 @@ impl crate::Peripheral for Uart {
         if matches!(self.layout, UartRegisterLayout::Avr) && offset == 0x07 {
             return Ok(u8::from(self.last_tx_on_bus));
         }
+        if offset == SCI_SSR && self.sci_fifo_mode() {
+            return Ok(self.sci_ssr_fifo());
+        }
         let status = self.status_offset();
         if self.status_window_contains(offset) {
             let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
@@ -2411,7 +2479,10 @@ impl crate::Peripheral for Uart {
         let is_legacy_tx_alias =
             matches!(self.layout, UartRegisterLayout::Stm32F1) && offset == 0x00;
 
-        if self.sci_b_write(offset, value) || self.sci_fcr_write(offset, value) {
+        if self.sci_b_write(offset, value)
+            || self.sci_fcr_write(offset, value)
+            || self.sci_scr_write(offset, value)
+        {
             return Ok(());
         }
         if matches!(self.layout, UartRegisterLayout::SciB) && offset != self.tx_offset() {
@@ -2722,6 +2793,9 @@ impl crate::Peripheral for Uart {
     fn peek(&self, offset: u64) -> Option<u8> {
         if let Some(byte) = self.timed_peek(offset) {
             return Some(byte);
+        }
+        if offset == SCI_SSR && self.sci_fifo_mode() {
+            return Some(self.sci_ssr_fifo());
         }
         let status = self.status_offset();
         if self.status_window_contains(offset) {

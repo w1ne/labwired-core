@@ -23,7 +23,7 @@
 #     PIDR, PCNTR3 POSR[15:0]/PORR[31:16].
 #   - PmnPFS at 0x40080800 + 0x40*m + 4*n; PWPR at PFS + 0x503 (0x40080D03).
 #   - SCIn at 0x40118000 + 0x100*n: SMR +0, BRR +1, SCR +2, TDR +3, SSR +4,
-#     RDR +5, SEMR +7 (classic SCI, async, FIFO off).
+#     RDR +5, SEMR +7 (classic SCI, async; the FIFO registers follow).
 #
 # Tier: L1 UART+LED smoke. Boot, the SCI0 console (P411 TXD0 / P410 RXD0,
 # the J-Link OB virtual COM port) and the three user LEDs with PODR readback.
@@ -32,7 +32,8 @@
 # invalidate, MOSC, PLL, SCKSCR), the SysTick system timer and the SCI0
 # console in FIFO mode. Stock Zephyr v4.1.0 samples/drivers/counter/alarm
 # runs its AGT0 compare alarms through the ICU event link (`ra_icu`,
-# `ra_agt`).
+# `ra_agt`), and stock Zephyr v4.0.0 tests/drivers/uart/uart_basic_api runs
+# the interrupt-driven SCI0 driver (RXI/TXI/TEI through the same link).
 #
 # NOT modelled in this slice:
 # - Clock generation: `ra6_sysc` stores every R_SYSTEM register (0x700
@@ -45,9 +46,9 @@
 # - Module stop (MSTP): declared stub. MSTPCRB.MSTPB31 is cleared by the
 #   firmware as silicon requires, but SCI0 works whether or not it is.
 # - ICU: the IELSR block is `ra_icu` (an ELC event sets IELSRn.IR of every
-#   line linked to it and drives NVIC line n as a level). SCI interrupts are
-#   not routed (`irq:` on sci0 is nominal), so the smoke and the Zephyr
-#   console are polled; IRQCRn/NMI and DTCE are stored only.
+#   line linked to it and drives NVIC line n as a level). SCI0 RXI/TXI/TEI
+#   reach it as events (ERI is never raised); IRQCRn/NMI and DTCE are stored
+#   only.
 # - AGT: timer mode only (`ra_agt`); pulse output, event counter and the
 #   measurement modes are not modelled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
@@ -56,11 +57,13 @@
 #   declared stubs), flash programming (FACI), data flash, option-setting
 #   memory (Zephyr's ELF carries OFS segments at 0x0100A100+; the loader
 #   warns and drops them).
-# - SCI FIFO: FCR/FDR/FTDRL/FRDRL are modelled for the polled console; TX
-#   drains at once (FDR.T reads 0), and the trigger levels and FIFO
-#   interrupts are not modelled. In FIFO mode silicon reinterprets SSR as
-#   SSR_FIFO (TDFE/RDF); the model keeps the non-FIFO SSR bits (the Zephyr
-#   console polls FDR, not SSR_FIFO).
+# - SCI FIFO: FCR/FDR/FTDRL/FRDRL are modelled; TX drains at once (FDR.T
+#   reads 0, SSR_FIFO.TDFE/TEND read 1) while TXI/TEI follow a timed shift
+#   register, one 10-bit frame per byte at `baud`. SSR_FIFO.RDF is the RX
+#   count at FCR.RTRG; DR is set at once for a smaller count (silicon waits
+#   15 ETU). RXI comes once per character a frame apart rather than at
+#   RTRG / the DR timeout. ERI and the receive error flags are not raised;
+#   SMR/BRR/SEMR are not decoded.
 # - DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1, ADC12,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
@@ -184,16 +187,21 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
   # SCI0 @ 0x40118000: the EK-RA6M5 console (Zephyr `zephyr,console = &uart0`
-  # on sci0). Zephyr links SCI0 RXI/TXI/TEI/ERI to IEL0-3; SCI0 raises no
-  # ELC events through the ICU, so irq 1 (TXI) is nominal and the smoke
-  # polls SSR.TDRE.
+  # on sci0).
+  # SCI0 interrupts are ELC events linked through the ICU IELSRn: RXI 0x180
+  # (= 384), TXI +1, TEI +2, ERI +3 (FSP ra6m5 bsp_elc.h). Zephyr's
+  # ra6-cm33-common.dtsi links them to NVIC lines 0-3, so sci0 has no
+  # direct `irq:`. `clock_hz` (the 200 MHz ICLK the guest believes its cycles
+  # run at, as for the AGTs) and `baud` time the TDRE/TEND edges.
   - id: "sci0"
     type: "uart"
     base_address: 0x40118000
     size: "256B"
-    irq: 1
     config:
       profile: "sci"
+      elc_event: 384
+      clock_hz: 200000000
+      baud: 115200
   # Declared stubs (bases from R7FA6M5BH.h / Renode tags; reads 0, writes
   # dropped).
   - id: "dmac_dtc"

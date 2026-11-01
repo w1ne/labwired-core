@@ -17,7 +17,9 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.1.0 `samples/drivers/counter/alarm` (AGT0 compare match A → ELC event 0x041 → ICU IELSR84 → NVIC line 84) | sim-tested | `zephyr-counter-alarm.yaml` 1/1: four alarms (Now: 2/6/14/30), then the 65536-tick request refused, in 236,814 steps (6 G cycles, idle-skipped); `ra6m5_agt_icu` 3/3 |
 | ICU `IELSRn` event link (`ra_icu`: event → `IR` → line n as a level, `IR` W0C) | sim-tested | `ra6m5_agt_icu`: an unlinked event reaches no line; clearing `IR` drops the pend |
 | AGT0-5 16-bit timer mode (`ra_agt`: LOCO/PCLKB count source, underflow, compare A/B) | sim-tested | the counter alarm runs on AGT0 (LOCO / 16 = 2048 Hz); AGT1-5 share the model, unexercised by firmware |
-| SCI0 FIFO mode (`FCR` FM + RFRST/TFRST handshake, `FTDRL` TX, `FDR`, `FRDRL` RX) | sim-tested | FSP `r_sci_uart_fifo_cfg` completes; Zephyr's console writes `FTDRL`; `test_sci_classic_fifo_mode`. No TX occupancy, trigger levels or FIFO interrupts |
+| SCI0 FIFO mode (`FCR` FM + RFRST/TFRST handshake, `FTDRL` TX, `FDR`, `FRDRL` RX, `SSR_FIFO` TDFE/TEND/RDF/DR) | sim-tested | FSP `r_sci_uart_fifo_cfg` completes; Zephyr's console writes `FTDRL`; `test_sci_classic_fifo_mode`; `ra6m5_sci_icu` checks RDF at `RTRG` and DR below it. No TX occupancy (`FDR.T` reads 0); DR is set at once, not after 15 ETU |
+| Stock Zephyr v4.0.0 `tests/drivers/uart/uart_basic_api` (SCI0 RXI/TXI/TEI → ELC events 0x180-0x182 → ICU IELSR0-2 → NVIC lines 0-2) | sim-tested | `zephyr-uart-basic-api.yaml` 2/2: uart_basic_api 6/6 + uart_basic_api_pending 1/1 in 45,082,111 steps (300 M cycles, idle-skipped). Negative control: the same ELF with sci0 lacking `elc_event` fails fifo_fill and hangs in fifo_read |
+| SCI0 interrupt events (`SCR` TIE/RIE/TE/RE/TEIE; TXI on the TDRE edge of a timed shift register, TEI one frame after the last byte, RXI per character a frame apart) | sim-tested | `ra6m5_sci_icu` 6/6 in both scheduler modes; 5 mutations caught (SCR not stored, RIE or TIE/TEIE mis-mapped, SSR_FIFO off, RTRG ignored). No ERI or error flags; the frame time is the chip YAML `baud`, not `SMR`/`BRR`/`SEMR` |
 | `MSTPCRB.MSTPB31` release of SCI0 | declared only | `MSTP` is a stub; SCI0 runs with the bit set too |
 | SCI0 async TX at 9600 8N1 (`BRR 25` from 8 MHz) | smoke-tested | every console line, polled on `SSR.TDRE` |
 | `PWPR` unlock + `PmnPFS` write (S1/S2 `PCR` pull-up) | smoke-tested | `s1=1 s2=1`: the pads read high through the PFS pull-up link |
@@ -25,13 +27,13 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | PORT0 `PCNTR1` PDR/PODR, `PCNTR3` POSR/PORR, `PCNTR2` PIDR | smoke-tested | `led=blue on pin=1 podr=0040` … (one POSR/PORR store per LED; the whole-PODR read proves no other pin moved) |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
-| SCI interrupts (RXI/TXI/TEI/ERI as ELC events) | **not modelled** | SCI0 raises no events, so the smoke and the Zephyr console are polled |
+| SCI ERI and the receive error flags (`ORER`/`FER`/`PER`) | **not modelled** | ERI (event 0x183) is never raised; RXI/TXI/TEI are covered above |
 | ICU IRQ-pin half (`IRQCRn`, NMI), `DTCE`; AGT pulse output, event counter, measurement modes | **not modelled** | stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU) | **not modelled** | the image runs secure, as on silicon out of reset; `R_PSCU`/`R_CPSCU` are declared stubs so Zephyr's `soc_early_init_hook` can clear PSARB-E/ICUSARG-I; nothing checks attribution |
 | DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
 | SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
 
-## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm 2026-11-01)
+## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm and SCI interrupts 2026-11-01)
 
 ```bash
 # from the repository root
@@ -75,11 +77,19 @@ cargo test -p labwired-core --test firmware_survival ek_ra6m5
 cargo test -p labwired-core --test ra6m5_agt_icu
 #   3 passed
 
+# Stock Zephyr v4.0.0 tests/drivers/uart/uart_basic_api (SCI0 RXI/TXI/TEI + ICU)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-uart-basic-api · 45082111 steps
+#   Audit (150,000 instructions, boot only): unsupported_total: 0
+cargo test -p labwired-core --test ra6m5_sci_icu
+#   6 passed
+
 # Fixture rebuild: two runs of build.sh, byte-identical
 crates/firmware-ek-ra6m5-zephyr/build.sh
 #   cb8edcdbca022b61c35846d85699e56db400f52fb82c71a14ca2ab6b6ef9cd89  r7fa6m5bh-zephyr-hello.elf
 #   72d9e0071821238f251f1baa53e72bc1f58a940a086025cfa604014cd9557a15  r7fa6m5bh-zephyr-sync.elf
 #   5a2167b96f644d6f5c4706e940a00a3e8483eef7e5759525a4ac269fbe1b569e  r7fa6m5bh-zephyr-counter-alarm.elf
+#   4060e1969d11755f583079c69c9c7b2c85e36d4c8ade5168b256f0847a45def9  r7fa6m5bh-zephyr-uart-basic-api.elf
 
 # Determinism: two zephyr-hello runs and two zephyr-counter-alarm runs,
 # identical uart.log + snapshot.json

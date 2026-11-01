@@ -1713,7 +1713,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 83d01609c5354f288b131ac4f1d6ba73911c0549ae201afa329f9d34d9410106
+    drift_ack_digest: 6e025ee4553836b2e628cd65abe698c9ae73d336b17d01006f4de2f7c19e1d0f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2305,6 +2305,12 @@ boards:
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
     # for it. STM32 UART register maps, byte paths and IRQ timing are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ek-ra6m5-sci-irq): uart.rs stores the classic Renesas
+    # SCI's SCR, reads SSR as SSR_FIFO in SCI FIFO mode, and lets an `sci`
+    # UART with `elc_event` raise the same RXI/TXI/TEI events. Only the
+    # `sci` layout reaches any of it. STM32 UART register maps, byte paths
+    # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -3766,7 +3772,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: a4c8f1de9a74987609410b22fb60dc7a1223282175bbd72afa87d97e7a35a825
+    drift_ack_digest: 2f544c19f3702abfe78855756ba3b36b8402e4984eae22243e0965c80e0d1e6a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4346,6 +4352,12 @@ boards:
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
     # for it. STM32 UART register maps, byte paths and IRQ timing are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ek-ra6m5-sci-irq): uart.rs stores the classic Renesas
+    # SCI's SCR, reads SSR as SSR_FIFO in SCI FIFO mode, and lets an `sci`
+    # UART with `elc_event` raise the same RXI/TXI/TEI events. Only the
+    # `sci` layout reaches any of it. STM32 UART register maps, byte paths
+    # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -4777,7 +4789,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: d699f42f8b6e700a5c31a75561b82761a686037c23d3028303c74a699ef90517
+    drift_ack_digest: e58b049eaac574a24ece2d4d10d60684fe8a4a9dd5748320995268e2f00343f1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5290,6 +5302,12 @@ boards:
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
     # for it. STM32 UART register maps, byte paths and IRQ timing are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ek-ra6m5-sci-irq): uart.rs stores the classic Renesas
+    # SCI's SCR, reads SSR as SSR_FIFO in SCI FIFO mode, and lets an `sci`
+    # UART with `elc_event` raise the same RXI/TXI/TEI events. Only the
+    # `sci` layout reaches any of it. STM32 UART register maps, byte paths
+    # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -5779,7 +5797,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 4f781568c7cc8f4902bd72d8cecbbcd1a4a77446dc6f80d5947b08c724f5c426
+    drift_ack_digest: 69e86344f1038d1db8424adc2d3d0f00ef80511a1f98d68a813a32a20c9de5ca
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6362,6 +6380,12 @@ boards:
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
     # for it. STM32 UART register maps, byte paths and IRQ timing are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ek-ra6m5-sci-irq): uart.rs stores the classic Renesas
+    # SCI's SCR, reads SSR as SSR_FIFO in SCI FIFO mode, and lets an `sci`
+    # UART with `elc_event` raise the same RXI/TXI/TEI events. Only the
+    # `sci` layout reaches any of it. STM32 UART register maps, byte paths
+    # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -6814,7 +6838,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: bd7faa099de94971f324cdab2a3cb9a9be562bc8ebab54cf6926a669e65e5c77
+    drift_ack_digest: 3bb3695b3f44befadf55de1e4632659d46ca57017ca974be72928ae2788108cb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7336,6 +7360,12 @@ boards:
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
     # for it. STM32 UART register maps, byte paths and IRQ timing are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (feat/ek-ra6m5-sci-irq): uart.rs stores the classic Renesas
+    # SCI's SCR, reads SSR as SSR_FIFO in SCI FIFO mode, and lets an `sci`
+    # UART with `elc_event` raise the same RXI/TXI/TEI events. Only the
+    # `sci` layout reaches any of it. STM32 UART register maps, byte paths
+    # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -9775,6 +9805,11 @@ boards:
     # IELSRn event link (ra_icu) and AGT0-5 are ra_agt (events 0x040 + 3n);
     # stock Zephyr v4.1.0 samples/drivers/counter/alarm (AGT0 compare match
     # through IELSR84).
+    # 2026-11-01 (feat/ek-ra6m5-sci-irq): SCI0 raises RXI/TXI/TEI as ELC
+    # events 0x180-0x182 through the ICU (SCR stored; its enables drive
+    # uart/sci_b_irq.rs) and in FIFO mode SSR reads as SSR_FIFO; stock
+    # Zephyr v4.0.0 tests/drivers/uart/uart_basic_api 7/7 on the
+    # interrupt-driven classic SCI driver.
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
@@ -9782,6 +9817,7 @@ boards:
       - "firmware_survival::test_ek_ra6m5_smoke_survival"
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
+      - "ra6m5_sci_icu (SCI0 RXI/TXI/TEI through ICU IELSR0-2, SSR_FIFO)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
