@@ -68,19 +68,21 @@
 #   (SCI9) as silicon requires, but SCI9 works whether or not it is.
 # - ICU: the IELSR window (0x4000C000) is `ra_icu`: an ELC event sets
 #   IELSRn.IR of every line linked to it and drives NVIC line n as a level
-#   (dropped when firmware clears IR). Only AGT0/AGT1 emit events; SCI
-#   interrupts are still not routed (`irq:` on sci3/sci9 is nominal), so
-#   the smoke and the Zephyr console are polled. IRQCRn/NMI (0x40006000)
+#   (dropped when firmware clears IR). AGT0/AGT1 and SCI3/SCI9
+#   (RXI/TXI/TEI) emit events. IRQCRn/NMI (0x40006000)
 #   stays a stub, DTCE does not start the DTC, and a handler that returns
 #   with IR still set is not re-entered until the next event.
 # - AGT: timer mode only (`ra_agt`, see the model header); pulse output,
 #   event counter and measurement modes are not modelled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
 #   routing in the model.
-# - SCI_B: async polled TX/RX only. FIFO mode, the CCR0 TIE/TEIE/RIE
-#   interrupts, error flags, simple-SPI/I2C/LIN/Manchester modes and the
-#   baud generator (no wire timing) are not modelled; the control registers
-#   are stored and read back.
+# - SCI_B: async TX/RX with the RXI/TXI/TEI interrupt events (CCR0
+#   RIE/TIE/TEIE). TXI/TEI follow the TDRE/TEND edges of a timed shift
+#   register; CSR still reads TDRE = TEND = 1 and a byte reaches the console
+#   at the write. FIFO mode, ERI and the error flags, simple-SPI/I2C/LIN/
+#   Manchester modes and the baud generator (CCR2 is not decoded; the frame
+#   time comes from `baud`) are not modelled; the control registers are
+#   stored and read back.
 # - Option-setting memory (OFS0/OFS1 at 0x0300A100+), factory flash, flash
 #   programming (FACI), standby SRAM, OSPI/xSPI, SDRAM, Ethernet, USB, CAN
 #   FD, timers, ADC, DAC, crypto (RSIP-E51A), CEU and every block not listed
@@ -206,24 +208,31 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
   # SCI9 @ 0x40358900: the EK-RA8M1 console (Zephyr `zephyr,console =
-  # &uart9` on sci9). IELSR routing is not modelled (the ICU is a stub), so
-  # irq 1 is nominal and the smoke polls CSR.TDRE.
-  # SCI3 @ 0x40358300: the mikroBUS UART (Zephyr v4.0 `&uart3`, P310 TXD3 /
-  # P309 RXD3), which the v4.0 board enables and opens at boot.
+  # &uart9` on sci9). SCI3 @ 0x40358300: the mikroBUS UART (Zephyr v4.0
+  # `&uart3`, P310 TXD3 / P309 RXD3), which the v4.0 board opens at boot.
+  # Interrupts are ELC events linked through the ICU IELSRn, not NVIC lines:
+  # `elc_event` is the channel's RXI, and TXI/TEI/ERI follow it (FSP ra8m1
+  # bsp_elc.h: SCI3_RXI 0x139, SCI9_RXI 0x163). The TDRE/TEND edges are
+  # timed at `baud` (the Zephyr board default, 115200 8N1) in `clock_hz`
+  # cycles, the rate the guest believes its cycles run at (as for AGT below).
   - id: "sci3"
     type: "uart"
     base_address: 0x40358300
     size: "256B"
-    irq: 2
     config:
       profile: "sci_b"
+      elc_event: 0x139
+      clock_hz: 480000000
+      baud: 115200
   - id: "sci9"
     type: "uart"
     base_address: 0x40358900
     size: "256B"
-    irq: 1
     config:
       profile: "sci_b"
+      elc_event: 0x163
+      clock_hz: 480000000
+      baud: 115200
   # Declared stubs (bases from R7FA8M1AH.h; reads 0, writes dropped).
   # ICU (R_ICU_Type is 0x6480 bytes from R_ICU_BASE, mostly reserved):
   # IRQCRn/NMI at +0x000, and WUPEN0/1 + IELSR0-95 at +0x6000 (IELSR at
