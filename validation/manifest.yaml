@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 7ee67267bb0669a0b73074f335da30363bbd17d55d9fcec10c53d237c9bf579b
+    drift_ack_digest: a2ecdc7a0070f076d412b1e4c16ea9893a8525b753b927ba0260338f5c7370b5
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -672,7 +672,13 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -1004,7 +1010,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 7ee67267bb0669a0b73074f335da30363bbd17d55d9fcec10c53d237c9bf579b
+    drift_ack_digest: a2ecdc7a0070f076d412b1e4c16ea9893a8525b753b927ba0260338f5c7370b5
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1222,7 +1228,13 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -1701,7 +1713,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 91e6c6780a02ca88dc0bb2f4e6a5b9fdba4fc6b9c8389b9c17d26bf3612c8600
+    drift_ack_digest: 6e025ee4553836b2e628cd65abe698c9ae73d336b17d01006f4de2f7c19e1d0f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2299,6 +2311,12 @@ boards:
     # `sci` layout reaches any of it. STM32 UART register maps, byte paths
     # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -3754,7 +3772,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 2e6a8ce68ca947644430912e122b4cbcac2d5528c00840d8ecfafec1027cf543
+    drift_ack_digest: 2f544c19f3702abfe78855756ba3b36b8402e4984eae22243e0965c80e0d1e6a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4340,6 +4358,12 @@ boards:
     # `sci` layout reaches any of it. STM32 UART register maps, byte paths
     # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -4765,7 +4789,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 14420fc98a688314ddbe171842a88b3d914dda6146635693e02ca7d8f11b0940
+    drift_ack_digest: e58b049eaac574a24ece2d4d10d60684fe8a4a9dd5748320995268e2f00343f1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5284,6 +5308,12 @@ boards:
     # `sci` layout reaches any of it. STM32 UART register maps, byte paths
     # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -5767,7 +5797,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 08f77018f28cd0250cf80956432a4f4bb256da4e086d2bb37649d6295b9a5f92
+    drift_ack_digest: 69e86344f1038d1db8424adc2d3d0f00ef80511a1f98d68a813a32a20c9de5ca
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6356,6 +6386,12 @@ boards:
     # `sci` layout reaches any of it. STM32 UART register maps, byte paths
     # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -6802,7 +6838,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 8002e5611717e55488ecf7a3e6d09225e00d1c21f866361aed7cc336816f520e
+    drift_ack_digest: 3bb3695b3f44befadf55de1e4632659d46ca57017ca974be72928ae2788108cb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7330,6 +7366,12 @@ boards:
     # `sci` layout reaches any of it. STM32 UART register maps, byte paths
     # and IRQ timing are unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+    # an access with the Armv8-M MPU disabled from the default memory map
+    # without the span cache (same decisions: default-map XN for fetches, the
+    # unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+    # file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
