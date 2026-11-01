@@ -1989,6 +1989,16 @@ pub(crate) fn run_test(
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
+    // The RV64 hart has no per-instruction observer of its own to feed and
+    // no JIT, so it takes the same counter-metrics / exact-window path as a
+    // Cortex-M bare-ELF run (`hosted_fast` below).
+    let rv64_chip = resolved_system
+        .as_ref()
+        .and_then(|s| {
+            s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                .ok()
+        })
+        .is_some_and(|c| labwired_core::cpu::riscv64::is_rv64_chip(&c));
     macro_rules! run_machine {
         ($machine:expr) => {{
             let mut machine = $machine;
@@ -2026,7 +2036,7 @@ pub(crate) fn run_test(
             // result.json changes, to the machine clock. Opt out with
             // LABWIRED_HOSTED_FAST=0.
             let hosted_fast = !jit_eligible
-                && program.arch == labwired_core::Arch::Arm
+                && (program.arch == labwired_core::Arch::Arm || rv64_chip)
                 && std::env::var("LABWIRED_HOSTED_FAST").as_deref() != Ok("0");
             if !jit_eligible && !hosted_fast {
                 machine.add_observer(metrics.clone());
@@ -2624,6 +2634,16 @@ pub(crate) fn run_test(
                 };
                 crate::log_ts::set_hz(machine.bus.cpu_hz);
                 run_machine!(machine)
+            } else if let Some(chip) = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .filter(labwired_core::cpu::riscv64::is_rv64_chip)
+            {
+                // `core: rv64…` runs the 64-bit hart, not the RV32 core.
+                setup_and_run!(labwired_core::cpu::RiscV64::for_chip(&chip))
             } else {
                 let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
                 // C3 has no standard CLINT (line 7 is an ESP matrix line).
