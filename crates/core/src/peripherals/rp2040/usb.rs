@@ -92,7 +92,9 @@ const BUF_CTRL_FULL: u32 = 0x0000_8000;
 const BUF_CTRL_AVAIL: u32 = 0x0000_0400;
 const BUF_CTRL_LEN_MASK: u32 = 0x0000_03FF;
 
-// USBCTRL_IRQ is NVIC IRQ 5 on the RP2040.
+// USBCTRL_IRQ is NVIC IRQ 5 on the RP2040 (the default). The RP2350 keeps
+// the same controller at the same base but numbers it IRQ 14 (datasheet
+// 3.2, Table 95); its chip YAML passes `irq: 14`.
 const USBCTRL_IRQ: u32 = 5;
 
 // DPRAM offsets.
@@ -229,6 +231,8 @@ pub struct Rp2040Usb {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     /// True while a delay-1 host/IRQ event chain is live (event-scheduler).
     chain_live: bool,
+    /// NVIC line of USBCTRL_IRQ (5 on RP2040, 14 on RP2350).
+    irq: u32,
 }
 
 impl Default for Rp2040Usb {
@@ -250,7 +254,14 @@ impl Rp2040Usb {
             awaiting_idle: false,
             sink: None,
             chain_live: false,
+            irq: USBCTRL_IRQ,
         }
+    }
+
+    /// Same controller on another NVIC line (RP2350: USBCTRL_IRQ = 14).
+    pub fn with_irq(mut self, irq: u32) -> Self {
+        self.irq = irq;
+        self
     }
 
     /// True while the host state machine or a held IRQ level still needs ticks.
@@ -593,7 +604,7 @@ impl Peripheral for Rp2040Usb {
         if self.ints() != 0 {
             // Level-sensitive: re-pend USBCTRL_IRQ every tick until the driver
             // clears the underlying source, matching real NVIC level behaviour.
-            res.explicit_irqs = Some(vec![USBCTRL_IRQ]);
+            res.explicit_irqs = Some(vec![self.irq]);
         }
         res
     }

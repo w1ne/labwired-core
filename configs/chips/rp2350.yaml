@@ -33,6 +33,18 @@ ram:
 # RP2350 images carry IMAGE_DEF first. We fast-boot bare ELFs, so no
 # reset_vector_offset here (unlike the RP2040 descriptor's boot2 offset).
 reset_vector_offset: 0x0
+# Boot ROM @ 0x00000000, 32 KB (datasheet 2.2 address map). pico-sdk and the
+# arduino-pico OTA stage call bootrom APIs through the well-known pointers at
+# 0x14..0x19 (datasheet 5.4.1, Table 453). In-tree clean-room image
+# (crates/core/roms/rp2350/rp2350_bootrom.S — NOT a Raspberry Pi dump): the
+# table lookup plus the APIs the SDK boot path calls. Set
+# LABWIRED_RP2350_BOOTROM to a file to replace it, or to "" to drop the window
+# (address 0 then aliases flash again).
+memory_regions:
+  - name: "bootrom"
+    base: 0x00000000
+    size: "32KB"
+    image_env: "LABWIRED_RP2350_BOOTROM"
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
@@ -49,11 +61,12 @@ peripherals:
   # CLOCKS / RESETS / XOSC / PLL_SYS / PLL_USB — the shared clock-reset model
   # on the RP2350 address map (rp2350 profile: CLOCKS @0x40010000, RESETS
   # @0x40020000, XOSC @0x40048000, PLLs @0x40050000/0x40058000). Window ends
-  # before ACCESSCTRL (0x40060000).
+  # at ACCESSCTRL (0x40060000): 0x50000 = 320KB. (288KB stopped at
+  # 0x40058000 and cut PLL_USB off — pico-sdk pll_init(pll_usb) BusFaulted.)
   - id: "clk_rst"
     type: "rp2040_clkrst"
     base_address: 0x40010000
-    size: "288KB"
+    size: "320KB"
     config:
       debug_schema: "../peripherals/rp2350/clocks.yaml"
       profile: "rp2350"
@@ -153,6 +166,25 @@ peripherals:
     type: "pio"
     base_address: 0x50400000
     size: "4KB"
+  # BOOT RAM endpoint (datasheet 4.3): 1 KB boot RAM, WRITE_ONCE0/1 and the
+  # BOOTLOCK0..7 try-locks at +0x800. pico-sdk pre-main resets the boot locks
+  # and spins claiming BOOTLOCK7 (runtime_init_bootrom_locking_enable);
+  # unmapped, the first BOOTLOCK store BusFaulted at 0x400E080C.
+  - id: "bootram"
+    type: "rp2350_bootram"
+    base_address: 0x400E0000
+    size: "4KB"
+  # USB device controller: the RP2040 one at the same addresses — DPRAM
+  # 0x50100000 + register block 0x50110000 (datasheet 12.7, MAIN_CTRL @0x040,
+  # USB_MUXING @0x074 ...) — on USBCTRL_IRQ 14 (datasheet 3.2, Table 95).
+  # pico-sdk's pre-main runtime_init_usb_power_down writes it before any user
+  # code; unmapped, that store BusFaulted at 0x5011004C. Same behavioural
+  # model and simulated host as rp2040.yaml.
+  - id: "usbctrl"
+    type: "rp2040_usb"
+    base_address: 0x50100000
+    size: "80KB"
+    irq: 14
   # TBMAN — storage stub; PLATFORM reads 0 → ASIC path, correct for the sim.
   - id: "tbman"
     type: "stub"

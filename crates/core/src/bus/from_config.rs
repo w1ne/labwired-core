@@ -27,6 +27,12 @@ fn embedded_region_image(env: &str) -> Option<&'static [u8]> {
         // = 0x2100 on the W25Q080 stage 2) — and the lookup branches into
         // flash and BusFaults (PC just past that entry, e.g. 0x2106).
         "LABWIRED_RP2040_BOOTROM" => Some(include_bytes!("../../roms/rp2040/bootrom.bin")),
+        // Clean-room RP2350 boot-ROM API window (roms/rp2350/rp2350_bootrom.S).
+        // pico-sdk reads `rom_table_lookup` as the halfword at 0x16 (datasheet
+        // 5.4.1, Table 453). Without this window the flash alias serves the
+        // image's vector table there: 0x1000, the upper half of a 0x1000_xxxx
+        // vector, and the lookup branches into flash offset 0x1000.
+        "LABWIRED_RP2350_BOOTROM" => Some(include_bytes!("../../roms/rp2350/rp2350_bootrom.bin")),
         // Clean-room CC2538 ROM (roms/cc2538/cc2538_rom.S): the SWRU333A
         // start-up sequence (CCA -> VTOR/SP/PC) and the utility API table at
         // 0x48 that Contiki-NG's startup calls to copy .data and zero .bss.

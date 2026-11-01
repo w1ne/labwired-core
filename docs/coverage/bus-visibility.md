@@ -62,6 +62,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: Kinetis I2C publishes no line_names / wire_lines (honest empty)
   * SPI: no edge bring-up path for Kinetis DSPI in this gate yet
   * UART: no edge bring-up path for Kinetis LPUART in this gate yet
+* **mpfs095t**
+  * UART: no 16550 MMUART bring-up in this harness; bytes are proven by the mpfs_disco_kit_zephyr survival gate
 * **nrf51822**
   * I2C: no nRF51 legacy-TWI bring-up in this harness (the nRF52 arm drives TWIM)
   * UART: no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE EasyDMA); bytes are proven by the microbit-v1 survival smoke
@@ -137,6 +139,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
+| mpfs095t | — | — | — |
 | nrf51822 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |
 | nrf52833 | ✓ | ✓ | ✓ |

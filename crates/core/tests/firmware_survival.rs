@@ -1019,6 +1019,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"VEGABOARD RI5CY SMOKE\n",
     },
     SurvivalCase {
+        // PolarFire SoC Discovery Kit (MPFS095T): unmodified Zephyr v4.1.0
+        // hello_world for `mpfs_icicle/polarfire/u54` (same MSS) on the RV64
+        // hart — mhartid 1, CLINT machine timer, MMUART1 as a 16550 with the
+        // DLAB divisor latch. Code and stack in the DDR window at 0x8000_0000.
+        // Rebuild: crates/firmware-mpfs-zephyr/build.sh. SIM-DERIVED.
+        name: "mpfs_disco_kit_zephyr",
+        core: "rv64imac",
+        family: CpuFamily::RiscV,
+        hal: Hal::Zephyr,
+        chip: "mpfs095t",
+        system: "mpfs-disco-kit",
+        fixture: "mpfs-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x8000_0000, 0x807F_FFFF)],
+        expected_uart_output: b"Hello World! mpfs_icicle/polarfire/u54",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -2362,7 +2378,12 @@ fn run_riscv_firmware(
     // through the same one resolution the CLI, browser and debugger paths
     // use — a generic `rv32*` chip must not silently run the ESP32-C3's
     // vendor CSR set.
-    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    // A `core: rv64…` chip (PolarFire SoC U54) runs the 64-bit hart.
+    let cpu: Box<dyn Cpu> = if labwired_core::cpu::riscv64::is_rv64_chip(&chip) {
+        Box::new(labwired_core::cpu::RiscV64::for_chip(&chip))
+    } else {
+        Box::new(labwired_core::system::riscv::configure_riscv(&mut bus))
+    };
     let mut machine = Machine::new(cpu, bus);
     let trace = Arc::new(TraceObserver::new(5000));
     machine.add_observer(trace.clone());
@@ -3070,6 +3091,7 @@ survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 
 survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
+survival_gate!(test_mpfs_disco_kit_zephyr_survival, "mpfs_disco_kit_zephyr");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

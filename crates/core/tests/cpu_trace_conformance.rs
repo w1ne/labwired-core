@@ -20,7 +20,7 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{Avr, CortexM, Pic16, Pic18, Pic24, RiscV, XtensaLx7};
+use labwired_core::cpu::{Avr, CortexM, Pic16, Pic18, Pic24, RiscV, RiscV64, XtensaLx7};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -227,6 +227,22 @@ fn cores() -> Vec<CoreUnderTest> {
             sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = RiscV::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "RiscV64",
+            entry: 0x100,
+            // `addi x1, x1, 1` ×4 (4 bytes each), the same RV encoding.
+            program: std::iter::repeat_n(0x00108093u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = RiscV64::default();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },

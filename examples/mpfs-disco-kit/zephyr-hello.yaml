@@ -1,0 +1,22 @@
+# LabWired - PolarFire SoC Discovery Kit stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/hello_world` for board target
+# `mpfs_icicle/polarfire/u54` (the same PolarFire SoC MSS as the MPFS095T on
+# this kit). Rebuild: crates/firmware-mpfs-zephyr/build.sh
+#
+# The RV64 hart boots from the ELF entry (0x8000_0000, hart 1 = first U54),
+# Zephyr's machine-timer driver arms the CLINT, and the console is MMUART1 as
+# a 16550 (the driver programs the divisor through LCR.DLAB first).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mpfs-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  # The image idles in WFI after main() returns; idle time is not steps.
+  max_cycles: 60000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Hello World! mpfs_icicle/polarfire/u54"
+  - expected_stop_reason: max_cycles

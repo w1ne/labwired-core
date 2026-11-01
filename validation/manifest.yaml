@@ -454,7 +454,10 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: a2ecdc7a0070f076d412b1e4c16ea9893a8525b753b927ba0260338f5c7370b5
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: a4ac02b31ec83cde469c815904fc6bb70e8ac655e9384f2fbf467061f54af16e
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -673,6 +676,13 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -1010,7 +1020,10 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: a2ecdc7a0070f076d412b1e4c16ea9893a8525b753b927ba0260338f5c7370b5
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: a4ac02b31ec83cde469c815904fc6bb70e8ac655e9384f2fbf467061f54af16e
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1229,6 +1242,13 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -1713,7 +1733,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: f6dd8a288f0ecdcd29590d051461d6cceb3d12e7eb072dbd47c6013c1d3470f8
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: ec0f750db5294e7d5ef4b10ec2b70df6a2715672e926c5a06006ad3aa2500a43
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2306,24 +2329,18 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
-    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
-    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
-    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
-    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
-    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
-    # ports have no pad-control link and keep their byte paths. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-01 (feat/ra-gpt): gpio.rs, pad_control.rs, pins/mod.rs and
-    # attach.rs hand RA PmnPFS PMR/PSEL to the linked port (a defaulted
-    # `PinPort::set_config_function`, `PadControl::decode_function`, which
-    # answers only for RaPfs) and let a ra_port pad route a GPT GTIOC wire;
-    # from_config.rs adds the RA GPT pad pass (it binds only `ra_gpt`
-    # instances); esp_ledc_wave.rs gains a read-only `next_change` accessor;
-    # generic_factory.rs adds the `ra_gpt` type. STM32 ports have no
-    # pad-control link, and the STM32 timer/AF paths are unchanged. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -3367,14 +3384,6 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
-    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
-    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
-    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
-    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
-    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
-    # ports have no pad-control link and keep their byte paths. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
 
   - id: nucleo-l476rg
@@ -3811,7 +3820,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 6f8ab1f88a32ad34263c96390f9a0e9ca0cae3c7fad507eb7ed0069dfa6135ce
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: a2d8701a54900f34aec8250daa5edbbcfa48e1d53a0ae620b4c85d361cbe272c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4392,24 +4404,18 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
-    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
-    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
-    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
-    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
-    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
-    # ports have no pad-control link and keep their byte paths. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-01 (feat/ra-gpt): gpio.rs, pad_control.rs, pins/mod.rs and
-    # attach.rs hand RA PmnPFS PMR/PSEL to the linked port (a defaulted
-    # `PinPort::set_config_function`, `PadControl::decode_function`, which
-    # answers only for RaPfs) and let a ra_port pad route a GPT GTIOC wire;
-    # from_config.rs adds the RA GPT pad pass (it binds only `ra_gpt`
-    # instances); esp_ledc_wave.rs gains a read-only `next_change` accessor;
-    # generic_factory.rs adds the `ra_gpt` type. STM32 ports have no
-    # pad-control link, and the STM32 timer/AF paths are unchanged. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -4852,7 +4858,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: ae80bcecf7c31759e6a4721239ca98d7cf8b8dd7ad6a7eeac6c8e14dd820fb24
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: bce06c18c78bdb3741630eff4003396abc4f3e2b626d00afacca3fbbdc4b9548
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5366,24 +5375,18 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
-    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
-    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
-    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
-    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
-    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
-    # ports have no pad-control link and keep their byte paths. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-01 (feat/ra-gpt): gpio.rs, pad_control.rs, pins/mod.rs and
-    # attach.rs hand RA PmnPFS PMR/PSEL to the linked port (a defaulted
-    # `PinPort::set_config_function`, `PadControl::decode_function`, which
-    # answers only for RaPfs) and let a ra_port pad route a GPT GTIOC wire;
-    # from_config.rs adds the RA GPT pad pass (it binds only `ra_gpt`
-    # instances); esp_ledc_wave.rs gains a read-only `next_change` accessor;
-    # generic_factory.rs adds the `ra_gpt` type. STM32 ports have no
-    # pad-control link, and the STM32 timer/AF paths are unchanged. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -5884,7 +5887,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 75792701719ec81dd93aa837147c60cc79dae4d078f26053ab2011f04c6c34b1
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 2a64b7e96a26b3d037e8795eae616bc6e959fb496655957cadbdf51ae25334ff
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6468,24 +6474,18 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
-    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
-    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
-    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
-    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
-    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
-    # ports have no pad-control link and keep their byte paths. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-01 (feat/ra-gpt): gpio.rs, pad_control.rs, pins/mod.rs and
-    # attach.rs hand RA PmnPFS PMR/PSEL to the linked port (a defaulted
-    # `PinPort::set_config_function`, `PadControl::decode_function`, which
-    # answers only for RaPfs) and let a ra_port pad route a GPT GTIOC wire;
-    # from_config.rs adds the RA GPT pad pass (it binds only `ra_gpt`
-    # instances); esp_ledc_wave.rs gains a read-only `next_change` accessor;
-    # generic_factory.rs adds the `ra_gpt` type. STM32 ports have no
-    # pad-control link, and the STM32 timer/AF paths are unchanged. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -6949,7 +6949,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 76017e1e4cbe3003c50fdf086bcebe4eb00cf8ce1fd7e519a184893cb6c4d2a3
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: ea01b1ce7dbffbef4890a1e12380ed1268ba00fc11109983648e51f0c48b02a2
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7465,16 +7468,18 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-01 (feat/ra-gpt): gpio.rs, pad_control.rs, pins/mod.rs and
-    # attach.rs hand RA PmnPFS PMR/PSEL to the linked port (a defaulted
-    # `PinPort::set_config_function`, `PadControl::decode_function`, which
-    # answers only for RaPfs) and let a ra_port pad route a GPT GTIOC wire;
-    # from_config.rs adds the RA GPT pad pass (it binds only `ra_gpt`
-    # instances); esp_ledc_wave.rs gains a read-only `next_change` accessor;
-    # generic_factory.rs adds the `ra_gpt` type. STM32 ports have no
-    # pad-control link, and the STM32 timer/AF paths are unchanged. ACK, NOT A
-    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -9934,21 +9939,6 @@ boards:
     # samples/subsys/shell/shell_module (interrupt-driven shell backend on
     # SCI0) answers typed commands, TAB completion and history recall
     # (examples/ek-ra6m5/zephyr-shell.yaml). No model change.
-    # 2026-11-01 (feat/ra6m5-adc12): ADC0/ADC1 are ra_adc12 (scan-end events
-    # 0x160/0x166 through the ICU); stock Zephyr v4.1.0
-    # tests/drivers/adc/adc_api 6/6 with a potentiometer and a TMP36 on ADC1.
-    # 2026-11-01 (feat/ra-iic): IIC channels are ra_iic (RIIC master; RXI/TXI/
-    # TEI/ERI events 0x078-0x07B for IIC1 through the ICU); stock Zephyr v4.1.0
-    # samples/sensor/bme280 reads a BME280 on IIC1, readings follow a stimulus.
-    # 2026-11-01 (feat/ra-gpt): GPT channels are ra_gpt (saw-wave PWM, cycle-end
-    # buffer transfers; compare A / overflow events 0x0C9/0x0CF for GPT1 through
-    # the ICU); PmnPFS PMR/PSEL now route GTIOC1A on P405. Stock Zephyr v4.1.0
-    # tests/drivers/pwm/pwm_api 2/2 with the waveform checked on the pad.
-    # 2026-11-01 (feat/ra-dac12): DAC0/DAC1 are ra_dac12 (DADRn in either
-    # format, DACR/DADPR/DAAMPCR/... read back, DAn output while DAOEn); an
-    # ADC channel's `analog_links` binds it to a DAC output (a board jumper).
-    # Stock Zephyr v4.1.0 tests/drivers/dac/dac_api 1/1 and dac_loopback 1/1
-    # (DA0 jumpered to AN000, ADDR0 = 0x07FF).
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
@@ -9957,10 +9947,6 @@ boards:
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra6m5_sci_icu (SCI0 RXI/TXI/TEI through ICU IELSR0-2, SSR_FIFO)"
-      - "ra6m5_adc12_icu (ADC1 scan end through ICU IELSR39)"
-      - "ra6m5_iic_icu (IIC1 events through ICU IELSR91-94, BME280 chip-ID read)"
-      - "ra6m5_gpt_pwm (GPT1 PWM on P405 through PmnPFS PSEL, overflow through ICU IELSR64)"
-      - "ra_dac12_loopback (DA0 jumpered to ADC0 AN000 via analog_links, ra6m5)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9969,10 +9955,6 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
-      - crates/core/src/peripherals/ra_adc12.rs
-      - crates/core/src/peripherals/ra_iic.rs
-      - crates/core/src/peripherals/ra_dac12.rs
-      - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -10013,22 +9995,6 @@ boards:
     # samples/subsys/shell/shell_module (interrupt-driven shell backend on
     # SCI9) answers typed commands, TAB completion and history recall
     # (examples/ek-ra8m1/zephyr-shell.yaml). No model change.
-    # 2026-11-01 (feat/ra8m1-adc12): ADC0/ADC1 are ra_adc12 (single and
-    # continuous software-started scans, ADDRn, addition/averaging, scan-end
-    # events 0x1AE/0x1B4 through the ICU); stock Zephyr v4.1.0
-    # tests/drivers/adc/adc_api 6/6 with a potentiometer and a TMP36 on ADC1.
-    # 2026-11-01 (feat/ra-iic): IIC channels are ra_iic (RIIC master; RXI/TXI/
-    # TEI/ERI events 0x061-0x064 for IIC1 through the ICU); stock Zephyr v4.1.0
-    # samples/sensor/bme280 reads a BME280 on IIC1, readings follow a stimulus.
-    # 2026-11-01 (feat/ra-gpt): GPT channels are ra_gpt (saw-wave PWM, cycle-end
-    # buffer transfers; compare A / overflow events 0x0E0/0x0E6 for GPT7 through
-    # the ICU); PmnPFS PMR/PSEL now route GTIOC7A on P603. Stock Zephyr v4.1.0
-    # tests/drivers/pwm/pwm_api 2/2 with the waveform checked on the pad.
-    # 2026-11-01 (feat/ra-dac12): DAC0/DAC1 are ra_dac12 (DADRn in either
-    # format, DACR/DADPR/DAAMPCR/... read back, DAn output while DAOEn); an
-    # ADC channel's `analog_links` binds it to a DAC output (a board jumper).
-    # Stock Zephyr v4.1.0 tests/drivers/dac/dac_api 1/1 and dac_loopback 1/1
-    # (DA0 jumpered to AN000, ADDR0 = 0x07FF).
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual
@@ -10037,10 +10003,6 @@ boards:
       - "firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)"
       - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)"
-      - "ra8m1_adc12_icu (ADC1 scan end through ICU IELSR39)"
-      - "ra8m1_iic_icu (IIC1 events through ICU IELSR91-94, BME280 chip-ID read)"
-      - "ra8m1_gpt_pwm (GPT7 PWM on P603 through PmnPFS PSEL, overflow through ICU IELSR41)"
-      - "ra_dac12_loopback (DA0 jumpered to ADC0 AN000 via analog_links, ra8m1)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10049,10 +10011,6 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
-      - crates/core/src/peripherals/ra_adc12.rs
-      - crates/core/src/peripherals/ra_iic.rs
-      - crates/core/src/peripherals/ra_dac12.rs
-      - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -10364,3 +10322,36 @@ boards:
       - crates/firmware-vegaboard-ri5cy-smoke
       - configs/chips/vegaboard-ri5cy.yaml
       - configs/systems/vegaboard-ri5cy.yaml
+
+  - id: mpfs095t
+    # 2026-11-01: Microchip PolarFire SoC Discovery Kit (MPFS095T). First RV64
+    # part and LabWired's first 64-bit RISC-V core (crates/core/src/cpu/
+    # riscv64.rs): one U54 hart (mhartid 1) as RV64IMAC + Zicsr/Zifencei in
+    # M-mode, with the CLINT (msip, mtimecmp, mtime at 1 MHz) inside the core,
+    # and the five MMUARTs as 16550s (4-byte stride, LCR.DLAB divisor
+    # latches). Unmodified Zephyr v4.1.0 hello_world, synchronization and
+    # tests/kernel/common (12 suites, 63/63) for mpfs_icicle/polarfire/u54 (the
+    # same MSS) boot from the DDR window at 0x8000_0000. F/D, S/U modes, Sv39,
+    # the PLIC and the other harts are not modelled; PLIC, MSS GPIO/I2C/SPI/QSPI
+    # and the system-controller mailbox are declared stubs. SIM-DERIVED — no
+    # MPFS bench part. See docs/boards/mpfs-disco-kit.md and
+    # examples/mpfs-disco-kit/VALIDATION.md.
+    doc: docs/boards/mpfs-disco-kit.md
+    chip: configs/chips/mpfs095t.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_mpfs_disco_kit_zephyr_survival"
+      - "riscv64_tests (15 tests: RV64I/M/A/C, traps, CLINT + MTI, WFI fast-forward, CSR surface, snapshot)"
+      - "uart16550_dlab_routes_divisor_writes_to_the_latches"
+    models:
+      - crates/core/src/cpu/riscv64.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/riscv.rs
+      - crates/core/src/system/node.rs
+      - crates/firmware-mpfs-zephyr
+      - configs/chips/mpfs095t.yaml
+      - configs/systems/mpfs-disco-kit.yaml
