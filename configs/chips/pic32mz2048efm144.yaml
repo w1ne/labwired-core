@@ -56,7 +56,7 @@ flash_boot_alias: false
 flash:
   # Program flash (KSEG0 0x9D000000, KSEG1 0xBD000000).
   base: 0x1D000000
-  size: "2MB"
+  size: "2MiB"
 ram:
   # Data RAM (KSEG0 0x80000000, KSEG1 0xA0000000).
   base: 0x00000000
