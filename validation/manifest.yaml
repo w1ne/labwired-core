@@ -454,7 +454,10 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 848b888dab74ae2d95bfec3f003c4c4bd7b5df946a95c085da19d1b53167cf51
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: a4ac02b31ec83cde469c815904fc6bb70e8ac655e9384f2fbf467061f54af16e
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1017,7 +1020,10 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 848b888dab74ae2d95bfec3f003c4c4bd7b5df946a95c085da19d1b53167cf51
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: a4ac02b31ec83cde469c815904fc6bb70e8ac655e9384f2fbf467061f54af16e
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1727,7 +1733,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 687a885d7330c313495b9592535316ec5903a64201efe9a8e498d724d828599d
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 29d9c75f9115ec3418c4befda28f4fdd10f4006539fec2fbca960c2c60737192
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3807,7 +3816,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: ea879b940a01ffcfc70548a70b75eba78f4880275d96e8274704b07394ab7284
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: bbc8a29ed2a103ffef26fef5b6035cb2902a6a127c417f79234f5a369a78c434
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4838,7 +4850,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: c9d86e345779ee93acf7c8e8a634648f400a158026603e659ec31ec313aff136
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 10b0c5a9a895a6ee6c58e5d692679a75dbd5b5cdc76643d6e9eb6b79b5131dc2
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5860,7 +5875,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 0c9c556c8018a3b55f627a17fa505e0d19268000ba0ca3e042b44dd3e36c75e9
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: f7f8363768c4d4a4b25b4e98fb4717f3f09048a90debd20b7abf0adfce4f38b8
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6915,7 +6933,10 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: b500fab34c8d18fa01b1d73aa22a4524e69500bbe6e7f2629f81355b19b0fcd0
+    # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+    # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+    # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 3b934141a65a269973634eff19f013c5c86a64c47cc9a6e32454158b42634b7f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

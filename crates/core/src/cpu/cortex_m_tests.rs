@@ -269,6 +269,61 @@ fn armv8m_ldaexb_reservation_serves_strexb_and_stlexb() {
     }
 }
 
+/// Word exclusives share the one local monitor with the sub-word forms:
+/// every pairing of LDREX/LDAEX with STREX/STLEX succeeds and stores.
+#[test]
+fn armv8m_word_load_exclusive_serves_strex_and_stlex() {
+    let pairs = [
+        (0xE8D0_1FEFu32, 0xE8C0_1FE2u32, "ldaex -> stlex"),
+        (0xE8D0_1FEF, 0xE840_1200, "ldaex -> strex"),
+        (0xE850_1F00, 0xE8C0_1FE2, "ldrex -> stlex"),
+        (0xE850_1F00, 0xE840_1200, "ldrex -> strex"),
+    ];
+    for (load, store, name) in pairs {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x2000;
+        cpu.r0 = 0x3000;
+        bus.write_u32(0x3000, 0x1234_5678).unwrap();
+        run_test_instr(&mut cpu, &mut bus, load, true); // r1 = [r0]
+        assert_eq!(cpu.r1, 0x1234_5678, "{name}: load-exclusive reads the word");
+        cpu.r1 = 0xCAFE_F00D;
+        cpu.r2 = 0xFFFF_FFFF;
+        run_test_instr(&mut cpu, &mut bus, store, true); // r2 = status
+        assert_eq!(cpu.r2, 0, "{name}: store-exclusive must succeed");
+        assert_eq!(bus.read_u32(0x3000).unwrap(), 0xCAFE_F00D, "{name}: stored");
+    }
+}
+
+/// With no open reservation every store-exclusive form fails (Rd = 1) and
+/// leaves memory untouched: the monitor is in Open Access state.
+#[test]
+fn armv8m_store_exclusive_without_load_exclusive_fails_for_all_forms() {
+    let forms = [
+        (0xE840_1200u32, "strex"),
+        (0xE8C0_1F42, "strexb"),
+        (0xE8C0_1F52, "strexh"),
+        (0xE8C0_1FE2, "stlex"),
+        (0xE8C0_1FC2, "stlexb"),
+        (0xE8C0_1FD2, "stlexh"),
+    ];
+    for (store, name) in forms {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x2000;
+        cpu.r0 = 0x3000;
+        cpu.r1 = 0xA5A5_A5A5;
+        cpu.r2 = 0;
+        bus.write_u32(0x3000, 0).unwrap();
+        run_test_instr(&mut cpu, &mut bus, store, true);
+        assert_eq!(
+            cpu.r2, 1,
+            "{name} without a reservation must report failure"
+        );
+        assert_eq!(bus.read_u32(0x3000).unwrap(), 0, "{name} must not store");
+    }
+}
+
 /// STLEXB/STLEXH with no open reservation fail and store nothing, like
 /// STREXB/STREXH (the monitor is Open Access after reset).
 #[test]
