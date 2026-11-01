@@ -1,0 +1,85 @@
+# ULN2803A — eight-channel Darlington SINK driver (open collector, inverting).
+#
+# Datasheets: Toshiba ULN2803APG/AFWG (2010-12-03), the classic ULN2803A
+# source, and TI ULN2803C (SLRS076B, Sep 2024) for the pin names. TI's own
+# ULN2803A sheet (SLRS049) did not download from this machine; the A and C are
+# the same eight-Darlington, 2.7 kΩ-base-resistor function.
+#
+# ── What the part does, from the datasheet ─────────────────────────────────
+#
+# Eight independent channels, no enable, no supply pin for the logic: each
+# input drives the base of one NPN Darlington pair through 2.7 kΩ, and the
+# collector is the output (Toshiba "Schematics (each driver)"; TI §7.2
+# Functional Block Diagram).
+#
+#   input HIGH → Darlington ON  → output SINKS: pulled LOW, up to 500 mA
+#   input LOW  → Darlington OFF → output OFF:   open collector, the load pulls
+#                                                it up to its own supply
+#
+# So the logic function, read at the output pin of a loaded channel, is an
+# inverter: OUTn = !INn. That is the `table:` below, and it is the whole of what
+# a firmware-facing twin can observe of this part.
+#
+# Pin names: TI Table 4-1 calls the inputs 1B..8B and the outputs 1C..8C;
+# Toshiba labels them I1..I8 and O1..O8. A logic_gate role must be an
+# identifier, so the roles are IN1..IN8 and OUT1..OUT8 in the same order
+# (IN1 = 1B = pin 1, OUT1 = 1C = pin 18 on the 18-pin DIP / 20 on the SOIC-20).
+#
+# Timing: Toshiba "Electrical Characteristics" gives tON 0.1 µs and tOFF
+# 0.2 µs typical (RL = 125 Ω, VOUT = 50 V). The engine has ONE delay per part;
+# 200 ns is used, the slower of the two, so no output edge appears earlier than
+# silicon could deliver it. The turn-on edge therefore lands 100 ns late.
+#
+# ⚠️ NOT MODELLED:
+#   * **Open collector.** An OFF output is NOT driven on silicon; the load (a
+#     relay coil, an LED string, a pull-up) brings it high. This twin has no
+#     resistor network (see `LogicDrive` in crates/config/src/logic.rs), so an
+#     OFF channel DRIVES the pad HIGH, standing in for that load. A channel with
+#     nothing connected would float on a bench and reads high here.
+#   * Output current, the 500 mA per-channel / package limits, VCE(sat), the
+#     COM clamp diodes and inductive kickback — nothing electrical is modelled.
+#   * Input thresholds: Toshiba "Recommended Operating Conditions" asks for
+#     VIN(ON) ≥ 3.5 V on the ULN2803A, above a 3.3 V MCU's output-high level;
+#     this twin treats any logic-high pad as ON.
+#   * The separate tON / tOFF values (one delay, see above).
+type: uln2803
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [IN1, IN2, IN3, IN4, IN5, IN6, IN7, IN8]
+    outputs: [OUT1, OUT2, OUT3, OUT4, OUT5, OUT6, OUT7, OUT8]
+    table:
+      OUT1: "!IN1"
+      OUT2: "!IN2"
+      OUT3: "!IN3"
+      OUT4: "!IN4"
+      OUT5: "!IN5"
+      OUT6: "!IN6"
+      OUT7: "!IN7"
+      OUT8: "!IN8"
+    tprop_ns: 200
+
+metadata:
+  label: "ULN2803A Darlington Sink Driver"
+  summary: "Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay."
+  detail: "ULN2803A / ULN2803C eight-channel Darlington array. A logic-high input turns its Darlington on and pulls the matching output LOW (sinking the load); a logic-low input turns it off. Each OUTn reads !INn after 200 ns (the datasheet tOFF; tON is 100 ns). There is no enable and no shared state between channels. NOT modelled: the open collector itself - an OFF output is driven HIGH here, standing in for the load or pull-up that brings it high on a board - plus output current limits, saturation voltage, the COM flyback diodes and input thresholds."
+  category: gpio
+  config_keys:
+    - { name: in1_pin, ty: str, doc: "Input 1 (1B / I1, pin 1) - an MCU output (e.g. \"PA0\")." }
+    - { name: out1_pin, ty: str, doc: "Output 1 (1C / O1) - LOW while IN1 is high." }
+    - { name: in2_pin, ty: str, doc: "Input 2 (2B / I2)." }
+    - { name: out2_pin, ty: str, doc: "Output 2 (2C / O2)." }
+    - { name: in3_pin, ty: str, doc: "Input 3 (3B / I3)." }
+    - { name: out3_pin, ty: str, doc: "Output 3 (3C / O3)." }
+    - { name: in4_pin, ty: str, doc: "Input 4 (4B / I4)." }
+    - { name: out4_pin, ty: str, doc: "Output 4 (4C / O4)." }
+    - { name: in5_pin, ty: str, doc: "Input 5 (5B / I5)." }
+    - { name: out5_pin, ty: str, doc: "Output 5 (5C / O5)." }
+    - { name: in6_pin, ty: str, doc: "Input 6 (6B / I6)." }
+    - { name: out6_pin, ty: str, doc: "Output 6 (6C / O6)." }
+    - { name: in7_pin, ty: str, doc: "Input 7 (7B / I7)." }
+    - { name: out7_pin, ty: str, doc: "Output 7 (7C / O7)." }
+    - { name: in8_pin, ty: str, doc: "Input 8 (8B / I8)." }
+    - { name: out8_pin, ty: str, doc: "Output 8 (8C / O8)." }
+  inputs: []

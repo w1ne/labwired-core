@@ -1,0 +1,136 @@
+# GalaxyCore GC9A01A round 240x240 IPS TFT controller over 4-wire SPI —
+# declarative `display` primitive. Every constant here is read out of the
+# GalaxyCore "GC9A01A a-Si TFT LCD Single Chip Driver, 240RGBx240 Resolution"
+# datasheet, LCD-DST-3014 Rev 1.0 Preliminary (2019-07-02), Waveshare mirror
+# https://files.waveshare.com/upload/5/5e/GC9A01A.pdf (sha256 af8f6f0a...),
+# cited by section and page below.
+#
+# THE ROUND GLASS IS A MECHANICAL FACT, NOT A RAM PROPERTY. The controller holds
+# a rectangular RGB frame memory and addresses it by (page, column) like every
+# MIPI-DBI TFT; the circular bezel of the 1.28" module simply hides the corners
+# of a 240x240 square. Nothing in the command set knows the glass is round, so
+# this model publishes the full square and paints the corners like any other
+# pixel. A renderer that wants the circle masks it.
+#
+# 240x240, AND WHY NOT THE 320 THE DOCUMENT ALSO PRINTS. Rev 1.0 is internally
+# inconsistent. Section 2 (p.7) states "Display resolution: [240xRGB](H) x
+# 240(V)", and section 5.2 (p.71) maps a mirrored counter to
+# "(239-Physical Column Pointer)" — arithmetic that only holds for a 240-column
+# memory. Section 4.4 (p.45), 5.1 (p.70) and the CASET/RASET restriction notes
+# of 6.2.11/6.2.12 (p.111/113) instead print a 320x240 memory and an EC reset of
+# 013Fh, text that reads as inherited from a 240x320 sibling's template. This
+# model takes the resolution the part is sold and titled as, 240x240, and
+# CLAMPS CASET/RASET to it.
+#
+# NO SWRESET. The GC9A01A command list (section 6.1, p.91-93) has no 01h:
+# Level 1 starts at 04h. The default-value tables mention an "SW Reset" column,
+# but no opcode for one is listed anywhere in the document, so none is invented
+# here. A driver that sends 01h gets what this model does with every unlisted
+# opcode: consumed, stream closed, no state change.
+#
+# FRAMING comes from the D/C line ONLY (section 4.1.8 Serial Interface; the
+# command list gives D/CX = 0 for every opcode and D/CX = 1 for every parameter
+# and pixel byte). `dc_pin` is required; see st7789.yaml for why there is no
+# infer-framing-from-byte-values fallback. The GC9A01A matters here more than
+# most: its Level 2 / Level 3 command sets (sections 6.3 / 6.4, p.153 on) are
+# many multi-parameter opcodes, and an inferring model reads any parameter byte
+# that happens to be 2Ch as RAMWR.
+#
+# A CS RELEASE DOES NOT CLOSE THE PIXEL STREAM (`cs_select: keeps_stream`).
+# Section 4.1.12 (p.35), Data Transfer Pause: if CSX is released after a whole
+# byte of frame memory or parameter data, "GC9A01 will wait and continue the
+# frame memory data or parameter data transmission from the point where it was
+# paused."
+#
+# NOT modelled:
+#   - COLMOD (3Ah, 6.2.22) is consumed for its one argument and otherwise
+#     ignored. The reset value is 66h (18-bit, command list p.92); this model is
+#     RGB565 throughout.
+#   - MADCTL ML / BGR / MH (D4, D3, D2) are held in the `madctl` var but do not
+#     change the artifact; only MY / MX / MV move the address map.
+#   - Out-of-range CASET/RASET: the restriction notes say data out of range
+#     "will be ignored"; this model clamps to the last column/row, the same as
+#     st7789.yaml / ili9341.yaml.
+#   - WRMEMC (3Ch, 6.2.23) is decoded but, unlike the datasheet, does not stop
+#     after (EC-SC+1)*(EP-SP+1) pixels: it wraps the window like RAMWR does.
+#   - Inter Register Enable (FEh/EFh), gamma (F0h..F3h), power control (C1h..C9h,
+#     A7h), frame rate (E8h), display function (B6h), partial mode (12h/30h),
+#     vertical scroll (33h/37h), idle mode (38h/39h), tearing effect (34h/35h/44h),
+#     brightness (51h/53h), every read command, and the 5 ms / 120 ms SLPOUT/SLPIN
+#     waits. None carry parameter counts: an unlisted opcode is consumed and
+#     CLOSES the stream, and its parameter bytes arrive with nothing open and are
+#     dropped, so no unmodelled init command can corrupt frame memory.
+type: gc9a01
+
+behavior:
+  primitive: display
+  display:
+    width: 240
+    height: 240
+    pixel_format: rgb565
+    artifact_format: rgb565_be
+    ram: { bytes: 115200, layout: row_major, stream: command }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    cs_select: keeps_stream
+    addressing: { modes: [horizontal], default: horizontal }
+    # 6.2.18 (p.127) MADCTL: D7 MY row address order, D6 MX column address
+    # order, D5 MV row/column exchange — "These 3 bits control MCU to memory
+    # write/read direction" (table in 5.2, p.71). Power-on / HW reset 00h, SW
+    # reset "No change".
+    vars: { madctl: 0 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    supply_gated: true
+    artifact_meta:
+      [display_on, lit, awake, powered, inverted, painted_bytes, total_bytes,
+       top_colour, top_colour_pixels]
+    commands:
+      - { opcode: 0x10, name: SLPIN,  do: [ { awake: false } ] }     # 6.2.3 p.101
+      - { opcode: 0x11, name: SLPOUT, do: [ { awake: true } ] }      # 6.2.4 p.103
+      - { opcode: 0x13, name: NORON }                                # 6.2.6 p.106
+      - { opcode: 0x20, name: INVOFF, do: [ { invert: false } ] }    # 6.2.7 p.107
+      - { opcode: 0x21, name: INVON,  do: [ { invert: true } ] }     # 6.2.8 p.108
+      - { opcode: 0x28, name: DISPOFF, do: [ { display_on: false } ] }  # 6.2.9 p.109
+      - { opcode: 0x29, name: DISPON,  do: [ { display_on: true } ] }   # 6.2.10 p.110
+      # 6.2.11 (p.111) CASET SC[15:8] SC[7:0] EC[15:8] EC[7:0]; 6.2.12 (p.113)
+      # RASET SP/EP likewise. 16-bit big-endian, clamped (see header).
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - opcode: 0x2B
+        name: RASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      # 6.2.13 (p.115): "When this command is accepted, the column register and
+      # the page register are reset to the Start Column/Start Page positions."
+      # Memory is "not cleared" by SW or HW reset.
+      - { opcode: 0x2C, name: RAMWR, do: [ { ram_write: { reset_cursor: true } } ] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [ { set_var: { name: madctl, value: { args: [0] } } } ] }
+      - { opcode: 0x3A, name: COLMOD, args: 1 }                      # 6.2.22 p.135
+      # 6.2.23 (p.137): "continuing from the pixel location following the
+      # previous write_memory_continue or write_memory_start" — no rewind.
+      - { opcode: 0x3C, name: WRMEMC, do: [ { ram_write: { reset_cursor: false } } ] }
+
+metadata:
+  label: "GC9A01 round TFT 1.28″"
+  summary: "1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI."
+  detail: "GalaxyCore GC9A01A against a 240x240 RGB565 frame memory (datasheet Rev 1.0 section 2). The round glass is a bezel over that square: the controller and this model address all 240x240 pixels, corners included. Command table SLPIN / SLPOUT / INVOFF / INVON / DISPOFF / DISPON / CASET / RASET / RAMWR / MADCTL / COLMOD / WRMEMC; the GC9A01A lists no SWRESET opcode. Reports `lit` (DISPON AND awake) beside the raw pixels. RGB565 throughout: COLMOD is consumed, not honoured."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select pin label."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because the GC9A01A's Level 2/3 init commands carry many parameter bytes and an inferring model decodes the first one that happens to be 0x2C as RAMWR."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED. Only an explicit `false` darkens the panel: it then ignores the SPI bus and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`."
