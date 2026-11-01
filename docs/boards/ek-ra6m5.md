@@ -73,8 +73,14 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
     drains at once, so `FDR.T` reads 0); `DR` is set at once rather than
     15 ETU after the last stop bit, and RXI comes per character rather
     than at `RTRG` or the `DR` timeout. TrustZone,
-    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC, SPI,
-    ADC12, USBFS/USBHS, ETHERC and CANFD are declared stubs. SCI1–9 and the
+    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, SPI,
+    USBFS/USBHS, ETHERC and CANFD are declared stubs; ADC0/ADC1 convert
+    software-started scans (stock Zephyr `adc_api` 6/6), IIC0-2 are I2C
+    masters (stock Zephyr `samples/sensor/bme280` reads a BME280 on IIC1),
+    GPT0-9 generate saw-wave PWM (stock Zephyr `pwm_api` 2/2, the
+    GTIOC1A waveform checked on P405) and DAC0/DAC1 drive their DAn pins
+    (stock Zephyr `dac_api` 1/1, and `dac_loopback` 1/1 with DA0 jumpered
+    to AN000). SCI1–9 and the
     remaining blocks are **not mapped**: firmware that touches them faults
     with a memory violation. Option-setting memory is not mapped either; the
     loader warns and drops Zephyr's OFS segments. There is no silicon
@@ -116,14 +122,18 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | MSTP | `0x4008_4000` | `type: stub` — module stop not modelled |
 | ICU | `0x4000_6000` | `ra_icu` — IELSR0–95 link ELC events to NVIC lines 0–95 (`IR` level, W0C); IRQCRn/NMI stored only |
 | AGT0–5 | `0x400E_8000` + `0x100`×n | `ra_agt` — 16-bit timer mode, underflow and compare A/B as ELC events (`0x040 + 3n`) |
-| PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
-| PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
+| PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3; 16-bit aliases upper half first (PODR +0x0, PDR +0x2, as `R7FA6M5BH.h`) |
+| PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PMR/PSEL route a pad to the GPT (GTIOC1A/B on P405/P406) and are stored only for other peripherals |
 | SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`, `SSR_FIFO`); RXI/TXI/TEI as ICU events |
 | SCI1–9 | `0x4011_8100` + `0x100`×n | not mapped |
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |
 | Switches | S1 P005, S2 P004 | modelled GPIO input — active low, PFS pull-up |
 | SCI0 VCP | P411 (TXD0) / P410 (RXD0) | the simulator captures the SCI0 stream; the J-Link OB bridge is not modelled |
-| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, IIC0–2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI | see descriptor | `type: stub` |
+| ADC0 / ADC1 | `0x4017_0000` / `0x4017_0200` | modelled (`ra_adc12`) — software-started single/continuous scans, `ADDRn`, addition/averaging, scan end as ELC events 0x160 / 0x166; nominal 1 µs per channel; group scan, hardware triggers and the temperature sensor not modelled |
+| DAC0 / DAC1 | `0x4017_1000` | modelled (`ra_dac12`) — `DADRn` (12 bits, right- or left-justified per `DADPR.DPSEL`) and the control registers read back; DAn = code × 3.3 V / 4096 while `DACR.DAOEn` = 1, at once; an ADC channel's `analog_links` (a board jumper) converts that level; conversion time, amplifier wait, reference select and D/A-A/D sync not modelled |
+| IIC0 / IIC1 / IIC2 | `0x4009_F000` + `0x100`×n | modelled (`ra_iic`) — RIIC master transmit/receive, 7-bit addresses, start/restart/stop, address NACK, RXI/TXI/TEI/ERI as ELC events 0x073 + 5n .. +3, wire time from `ICBRL`/`ICBRH`/`CKS`; slave mode, 10-bit addresses, arbitration loss, timeout and SMBus not modelled |
+| GPT0-9 | `0x4016_9000` + `0x100`×n | modelled (`ra_gpt`) — saw-wave PWM counting PCLKD / 2^`TPCS`, cycle-end buffer transfers (`GTPBR`, `GTCCRC`/`GTCCRE`), compare A/B and overflow as ELC events 0x0C0 + 9n (+0/+1/+6), GTIOCnA/B from `GTIOR` and `GTUDDTYC` 0%/100% on the pads `gtioc_pads` names; triangle/one-shot modes, input capture, hardware sources, dead time and POEG not modelled |
+| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, FACI | see descriptor | `type: stub` |
 
 ## Boot path
 
