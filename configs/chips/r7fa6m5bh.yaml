@@ -30,7 +30,9 @@
 # Stock Zephyr v4.0.0 hello_world and synchronization for `ek_ra6m5` also
 # boot (crates/firmware-ek-ra6m5-zephyr): FSP's bsp_clock_init (FCACHE
 # invalidate, MOSC, PLL, SCKSCR), the SysTick system timer and the SCI0
-# console in FIFO mode.
+# console in FIFO mode. Stock Zephyr v4.1.0 samples/drivers/counter/alarm
+# runs its AGT0 compare alarms through the ICU event link (`ra_icu`,
+# `ra_agt`).
 #
 # NOT modelled in this slice:
 # - Clock generation: `ra6_sysc` stores every R_SYSTEM register (0x700
@@ -42,8 +44,12 @@
 #   The PRCR key is not checked.
 # - Module stop (MSTP): declared stub. MSTPCRB.MSTPB31 is cleared by the
 #   firmware as silicon requires, but SCI0 works whether or not it is.
-# - ICU/IELSR event linking: declared stub. No NVIC line is routed from a
-#   peripheral event, so the smoke and the Zephyr console are polled.
+# - ICU: the IELSR block is `ra_icu` (an ELC event sets IELSRn.IR of every
+#   line linked to it and drives NVIC line n as a level). SCI interrupts are
+#   not routed (`irq:` on sci0 is nominal), so the smoke and the Zephyr
+#   console are polled; IRQCRn/NMI and DTCE are stored only.
+# - AGT: timer mode only (`ra_agt`); pulse output, event counter and the
+#   measurement modes are not modelled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
 #   routing in the model.
 # - TrustZone (IDAU/SAU, the CPSCU/PSCU security attribution; both are
@@ -55,7 +61,7 @@
 #   interrupts are not modelled. In FIFO mode silicon reinterprets SSR as
 #   SSR_FIFO (TDFE/RDF); the model keeps the non-FIFO SSR bits (the Zephyr
 #   console polls FDR, not SSR_FIFO).
-# - DMAC/DTC, ELC, RTC, IWDT/WDT, AGT0-5, GPT, IIC0-2, SPI0/1, ADC12,
+# - DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1, ADC12,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
 # - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC and every block
@@ -98,9 +104,13 @@ peripherals:
     type: "stub"
     base_address: 0x40084000
     size: "64B"
-  # ICU @ 0x40006000: IRQCRn, NMI, WUPEN, IELSR0-95 at +0x300.
+  # ICU @ 0x40006000 (R7FA6M5BH.h R_ICU_Type): IRQCRn +0x000, NMI +0x100,
+  # WUPEN +0x1A0, IELSR0-95 at +0x300 link ELC events to NVIC lines 0-95;
+  # IELSRn.IR drives line n (ra_icu). Unlike the RA8M1 the whole block sits
+  # at R_ICU_BASE, so one 2 KiB ra_icu window covers it; IRQCRn/NMI are
+  # plain storage.
   - id: "icu"
-    type: "stub"
+    type: "ra_icu"
     base_address: 0x40006000
     size: "2KB"
   # PORT0-B @ 0x40080000 + n*0x20. Ports 0-9 link their pull-ups to PmnPFS.PCR.
@@ -174,8 +184,8 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
   # SCI0 @ 0x40118000: the EK-RA6M5 console (Zephyr `zephyr,console = &uart0`
-  # on sci0). Zephyr links SCI0 RXI/TXI/TEI/ERI to IEL0-3; IELSR routing is
-  # not modelled (the ICU is a stub), so irq 1 (TXI) is nominal and the smoke
+  # on sci0). Zephyr links SCI0 RXI/TXI/TEI/ERI to IEL0-3; SCI0 raises no
+  # ELC events through the ICU, so irq 1 (TXI) is nominal and the smoke
   # polls SSR.TDRE.
   - id: "sci0"
     type: "uart"
@@ -218,10 +228,67 @@ peripherals:
     type: "stub"
     base_address: 0x400B0000
     size: "96KB"
-  - id: "agt"
-    type: "stub"
+  # AGT0-5, the RA6M5's six 16-bit AGT channels (FSP ra6m5 bsp_feature.h:
+  # BSP_FEATURE_AGT_VALID_CHANNEL_MASK 0x3F, no AGTW; R_AGTX0-5_BASE
+  # 0x400E8000 + n*0x100). Interrupts are ELC events linked through the ICU
+  # IELSRn: AGTn INT 0x040 + 3n (= 64 + 3n) / COMPARE_A +1 / COMPARE_B +2
+  # (FSP ra6m5 bsp_elc.h). `clock_hz` is the rate the guest believes its
+  # cycles run at (Zephyr's 200 MHz ICLK = 24 MHz XTAL / 3 * 25, the SysTick
+  # timebase), so AGT time and k_uptime agree; PCLKB is ICLK / 4 = 50 MHz
+  # (r7fa6m5xh.dtsi). The bare-metal smoke never starts an AGT.
+  - id: "agt0"
+    type: "ra_agt"
     base_address: 0x400E8000
-    size: "2KB"
+    size: "256B"
+    config:
+      elc_event: 64
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "agt1"
+    type: "ra_agt"
+    base_address: 0x400E8100
+    size: "256B"
+    config:
+      elc_event: 67
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "agt2"
+    type: "ra_agt"
+    base_address: 0x400E8200
+    size: "256B"
+    config:
+      elc_event: 70
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "agt3"
+    type: "ra_agt"
+    base_address: 0x400E8300
+    size: "256B"
+    config:
+      elc_event: 73
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "agt4"
+    type: "ra_agt"
+    base_address: 0x400E8400
+    size: "256B"
+    config:
+      elc_event: 76
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "agt5"
+    type: "ra_agt"
+    base_address: 0x400E8500
+    size: "256B"
+    config:
+      elc_event: 79
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  # AGTX6-9 window (no channels on the RA6M5).
+  - id: "agt_rsvd"
+    type: "stub"
+    base_address: 0x400E8600
+    size: "1KB"
   - id: "usbhs"
     type: "stub"
     base_address: 0x40111000
