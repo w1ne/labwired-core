@@ -172,6 +172,10 @@ nav:
     - DHT20: parts/dht20.md
     - PMSA003I: parts/pmsa003i.md
     - INA226: parts/ina226.md
+    - INA260: parts/ina260.md
+    - INA3221: parts/ina3221.md
+    - MPU-9250: parts/mpu9250.md
+    - ENS160: parts/ens160.md
 
   - Operations:
     - Release Strategy: release_strategy.md
