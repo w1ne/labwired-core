@@ -85,4 +85,4 @@ pub use xtensa_lx7::XtensaLx7;
 #[cfg(feature = "qemu-arm-system")]
 pub mod cortex_a_system;
 #[cfg(feature = "qemu-arm-system")]
-pub use cortex_a_system::CortexA7System;
+pub use cortex_a_system::{ArmModel, CortexA7System};

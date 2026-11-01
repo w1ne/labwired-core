@@ -178,6 +178,17 @@ fn cortex_a7_never_routes_to_cortex_m() {
 }
 
 #[test]
+fn cortex_r_never_routes_to_cortex_m() {
+    let mut chip = chip_with_arch(Arch::Arm);
+    chip.core = Some("cortex-r5f".into());
+    assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexR);
+    for unsupported in ["cortex-r5", "cortex-r52", "cortex-r8"] {
+        chip.core = Some(unsupported.into());
+        assert!(machine_family(&chip).is_err(), "{unsupported}");
+    }
+}
+
+#[test]
 fn the_elf_machine_table_is_the_only_one() {
     assert_eq!(
         elf_arch(goblin::elf::header::EM_ARM),

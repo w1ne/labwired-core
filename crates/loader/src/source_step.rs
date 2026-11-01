@@ -343,7 +343,10 @@ impl SourceDebug {
         // DWARF numbers these files from 0 in register order: r0-r15,
         // x0-x31, the current window's a0-a15, AVR r0-r31.
         let reg_count: u16 = match family {
-            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
+            MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
             // W0-W15, PC (16), SR (17) — provisional until XC16 DWARF numbers
             // are verified.
@@ -439,7 +442,7 @@ impl TargetMemory for BusMemory<'_> {
 /// unwind with CFI; Xtensa (register windows) and AVR show frame 0 only.
 fn abi(family: MachineFamily) -> Abi {
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => Abi {
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Abi {
             sp: 13,
             callee_saved: (4..=11).collect(),
             code_mask: !1,
@@ -508,7 +511,10 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
     let cpu = target.debug_cpu();
     let mut regs = RegisterSet::default();
     let count: u8 = match family {
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
+        MachineFamily::CortexM
+        | MachineFamily::CortexA
+        | MachineFamily::CortexR
+        | MachineFamily::Xtensa => 16,
         MachineFamily::RiscV => 32,
         MachineFamily::Avr => 33,
         // W0-W15, PC (16), SR (17).
@@ -520,7 +526,7 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
     }
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => {
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => {
             regs.set(15, Some(u64::from(cpu.get_pc())));
         }
         MachineFamily::RiscV => regs.set(0, Some(0)),
@@ -677,7 +683,7 @@ impl SourceDebug {
 /// The stack pointer's id for `get_register`.
 fn stack_register(family: MachineFamily) -> u8 {
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => 13,
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => 13,
         MachineFamily::RiscV => 2,
         // a1 of the current register window.
         MachineFamily::Xtensa => 1,
@@ -837,7 +843,7 @@ pub fn step_source_line(
     let sp_id = stack_register(family);
     // Cortex-M and RISC-V find a call by its return-address register.
     let ra_id = match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => Some(14),
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Some(14),
         MachineFamily::RiscV => Some(1),
         _ => None,
     };

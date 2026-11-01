@@ -658,5 +658,9 @@
   {
     "buses": [],
     "name": "vegaboard-ri5cy"
+  },
+  {
+    "buses": [],
+    "name": "xck26-rpu"
   }
 ]

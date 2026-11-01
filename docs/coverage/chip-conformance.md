@@ -123,3 +123,4 @@ These descriptors carry declarations only. They receive no estate checkmark, con
 | Chip | State | Evidence boundary |
 |------|-------|-------------------|
 | rv1103 | Declared only | Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate. |
+| xck26-rpu | Declared only | Generic descriptor is CPU/memory only. The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification. |

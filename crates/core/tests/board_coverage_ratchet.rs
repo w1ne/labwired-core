@@ -233,16 +233,26 @@ const KNOWN_GAPS: &[(&str, Class)] = &[
 
 /// Platform declarations are not modeled boards or coverage-gap waivers.
 /// Promotion to a modeled board must remove this entry and classify coverage.
-const DECLARED_ONLY: &[(&str, &str)] = &[(
-    "rv1103",
-    "CPU/memory declaration only; no RV1103 firmware/platform CI gate. Peripherals, boot chain and Linux/BSP execution are unimplemented. Generic Cortex-A7 CPU subset tests supply no RV1103 board coverage.",
-)];
+const DECLARED_ONLY: &[(&str, &str)] = &[
+    (
+        "rv1103",
+        "CPU/memory declaration only; no RV1103 firmware/platform CI gate. Peripherals, boot chain and Linux/BSP execution are unimplemented. Generic Cortex-A7 CPU subset tests supply no RV1103 board coverage.",
+    ),
+    (
+        "xck26-rpu",
+        "CPU/memory declaration; the RPU platform (GIC, Cadence UART, TTC) exists only on the native qemu-arm-system Cortex-R5F path, gated in core-qemu-arm (kv260_r5_zephyr, examples/kv260-r5), not the default board CI. No GPIO/I2C/SPI or other PS peripherals are modelled, so there is no board I/O coverage to classify.",
+    ),
+];
 
 fn is_declared_only_platform(stem: &str, chip: &ChipDescriptor) -> bool {
-    stem == "rv1103"
-        && chip.name == "rv1103"
+    let core = match stem {
+        "rv1103" => "cortex-a7",
+        "xck26-rpu" => "cortex-r5f",
+        _ => return false,
+    };
+    chip.name == stem
         && chip.arch == Arch::Arm
-        && chip.core.as_deref() == Some("cortex-a7")
+        && chip.core.as_deref() == Some(core)
         && chip.peripherals.is_empty()
         && chip.flash.size == 0
         && chip.flash.base == 0
@@ -250,8 +260,14 @@ fn is_declared_only_platform(stem: &str, chip: &ChipDescriptor) -> bool {
 
 #[test]
 fn declared_only_classification_rejects_other_or_modeled_platforms() {
-    assert_eq!(DECLARED_ONLY.len(), 1);
+    assert_eq!(DECLARED_ONLY.len(), 2);
     assert_eq!(DECLARED_ONLY[0].0, "rv1103");
+    assert_eq!(DECLARED_ONLY[1].0, "xck26-rpu");
+    let rpu =
+        ChipDescriptor::from_file(core_crate_root().join("../../configs/chips/xck26-rpu.yaml"))
+            .unwrap();
+    assert!(is_declared_only_platform("xck26-rpu", &rpu));
+    assert!(!is_declared_only_platform("rv1103", &rpu));
     assert!(!SHIPPED.iter().any(|board| board.yaml_stem == "rv1103"));
     let chip = ChipDescriptor::from_file(core_crate_root().join("../../configs/chips/rv1103.yaml"))
         .unwrap();

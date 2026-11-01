@@ -144,12 +144,17 @@ fn declares_pins(chip: &str) -> bool {
         .is_some_and(|m| !m.is_empty())
 }
 
-/// A classification of this exact unmodeled SoC, not modeled-pin coverage.
+/// A classification of these exact unmodeled-pin SoCs (RV1103; the XCK26 RPU,
+/// whose MIO pins belong to the PS, not the R5F), not modeled-pin coverage.
 fn declared_only(chip: &str, doc: &serde_yaml::Value) -> bool {
-    chip == "rv1103"
-        && doc.get("name").and_then(|v| v.as_str()) == Some("rv1103")
+    let core = match chip {
+        "rv1103" => "cortex-a7",
+        "xck26-rpu" => "cortex-r5f",
+        _ => return false,
+    };
+    doc.get("name").and_then(|v| v.as_str()) == Some(chip)
         && doc.get("arch").and_then(|v| v.as_str()) == Some("arm")
-        && doc.get("core").and_then(|v| v.as_str()) == Some("cortex-a7")
+        && doc.get("core").and_then(|v| v.as_str()) == Some(core)
         && doc
             .get("peripherals")
             .and_then(|v| v.as_sequence())

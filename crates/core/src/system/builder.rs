@@ -185,6 +185,7 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 mod arm;
 mod avr;
 mod cortex_a;
+mod cortex_r;
 mod pic16;
 mod pic18;
 mod pic24;
@@ -361,6 +362,7 @@ pub fn build_machine_with_plugins(
     match machine_family(req.chip)? {
         MachineFamily::CortexM => arm::build(req, plugins),
         MachineFamily::CortexA => cortex_a::build(req, plugins),
+        MachineFamily::CortexR => cortex_r::build(req, plugins),
         MachineFamily::RiscV => riscv::build(req, plugins),
         MachineFamily::Xtensa => xtensa::build(req, plugins),
         MachineFamily::Avr => avr::build(req, plugins),

@@ -212,3 +212,4 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |
 | vegaboard-ri5cy | — | — | — |
+| xck26-rpu | — | — | — |
