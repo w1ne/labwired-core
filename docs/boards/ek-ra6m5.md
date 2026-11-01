@@ -26,6 +26,15 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
   waits for the `RFRST`/`TFRST` reset bits to read back 0; Zephyr's
   `poll_out` waits for `FDR.T` ≤ 8 and writes `FTDRL`. The `sci` UART layout
   now has `FCR`, `FDR`, `FTDRL` and `FRDRL`.
+- **AGT through the ICU event link** (stock Zephyr v4.1.0
+  `samples/drivers/counter/alarm`, `tests/fixtures/r7fa6m5bh-zephyr-counter-alarm.elf`;
+  v4.0.0 has no RA6 `agt` nodes). The ICU at `0x4000_6000` is `ra_icu`: an
+  ELC event sets `IELSRn.IR` of every line linked to it and drives NVIC
+  line n as a level that drops when firmware clears `IR`. AGT0–5 are
+  `ra_agt` (16-bit, timer mode; events `0x040 + 3n` INT / `+1` compare A /
+  `+2` compare B, FSP ra6m5 `bsp_elc.h`). The sample's four AGT0 compare
+  alarms (Now: 2/6/14/30 s) arrive on IELSR84, then the 65536-tick request
+  is refused. Same models as the EK-RA8M1, at the RA6M5 bases.
 - **Declared stubs** for `R_FCACHE` (the FCACHEIV invalidate completes on a
   0 read), the C-cache (`R_CACHE`) and the TrustZone attribution
   (`R_PSCU`/`R_CPSCU`), which Zephyr's `soc_early_init_hook` and
@@ -35,11 +44,14 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
     No clock rate is derived from `SCKSCR`/`SCKDIVCR`/`PLLCCR`: oscillators
     settle at once and `cpu_hz` stays the reset MOCO 8 MHz after Zephyr
     switches ICLK to the 200 MHz PLL (the SysTick-based Zephyr timebase
-    counts cycles, so it is unaffected). Module stop (MSTP) and ICU event
-    linking are declared stubs, so the Zephyr console is polled, and the PFS
+    counts cycles, so it is unaffected). Module stop (MSTP) is a declared
+    stub. SCI interrupts are not routed through the ICU (`irq:` on sci0 is
+    nominal), so the Zephyr console is polled; the ICU `IRQCRn`/NMI pin half
+    and `DTCE` are stored only. The AGT pulse output, event counter and
+    measurement modes are not modelled. The PFS
     peripheral mux is stored only. The SCI FIFO has no TX occupancy (TX
     drains at once), no trigger levels and no FIFO interrupts. TrustZone,
-    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, AGT, GPT, IIC, SPI,
+    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC, SPI,
     ADC12, USBFS/USBHS, ETHERC and CANFD are declared stubs. SCI1–9 and the
     remaining blocks are **not mapped**: firmware that touches them faults
     with a memory violation. Option-setting memory is not mapped either; the
@@ -59,9 +71,9 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 |--------|--------|
 | Chip descriptor | [`configs/chips/r7fa6m5bh.yaml`](../../configs/chips/r7fa6m5bh.yaml) |
 | Example system | [`configs/systems/ek-ra6m5.yaml`](../../configs/systems/ek-ra6m5.yaml) |
-| Reference firmware | [`crates/firmware-ek-ra6m5-smoke/`](../../crates/firmware-ek-ra6m5-smoke/); stock Zephyr v4.0.0 via [`crates/firmware-ek-ra6m5-zephyr/`](../../crates/firmware-ek-ra6m5-zephyr/) |
+| Reference firmware | [`crates/firmware-ek-ra6m5-smoke/`](../../crates/firmware-ek-ra6m5-smoke/); stock Zephyr v4.0.0 / v4.1.0 via [`crates/firmware-ek-ra6m5-zephyr/`](../../crates/firmware-ek-ra6m5-zephyr/) |
 | Example | [`examples/ek-ra6m5/`](../../examples/ek-ra6m5/) |
-| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf` |
+| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf`, `r7fa6m5bh-zephyr-counter-alarm.elf` |
 | Build target | `thumbv8m.main-none-eabi` |
 | Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI0); SIM-DERIVED |
 
@@ -80,7 +92,8 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | C-cache | `0x4000_7000` | `type: stub` — no cache modelled |
 | CPSCU / PSCU | `0x4000_8000` / `0x400E_0000` | `type: stub` — no security attribution |
 | MSTP | `0x4008_4000` | `type: stub` — module stop not modelled |
-| ICU | `0x4000_6000` | `type: stub` — IELSR event linking not modelled |
+| ICU | `0x4000_6000` | `ra_icu` — IELSR0–95 link ELC events to NVIC lines 0–95 (`IR` level, W0C); IRQCRn/NMI stored only |
+| AGT0–5 | `0x400E_8000` + `0x100`×n | `ra_agt` — 16-bit timer mode, underflow and compare A/B as ELC events (`0x040 + 3n`) |
 | PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
 | PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
 | SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async, polled; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`) for the FSP driver |
@@ -88,7 +101,7 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |
 | Switches | S1 P005, S2 P004 | modelled GPIO input — active low, PFS pull-up |
 | SCI0 VCP | P411 (TXD0) / P410 (RXD0) | the simulator captures the SCI0 stream; the J-Link OB bridge is not modelled |
-| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, IIC0–2, CANFD, AGT0–5, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI | see descriptor | `type: stub` |
+| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, IIC0–2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI | see descriptor | `type: stub` |
 
 ## Boot path
 
@@ -106,6 +119,8 @@ cargo build -p firmware-ek-ra6m5-smoke --release --target thumbv8m.main-none-eab
 # stock Zephyr v4.0.0 (committed fixtures)
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-hello.yaml --no-uart-stdout
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-sync.yaml --no-uart-stdout
+# stock Zephyr v4.1.0 counter alarm (AGT0 compare match through ICU IELSR84)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-counter-alarm.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra6m5/VALIDATION.md`](../../examples/ek-ra6m5/VALIDATION.md)

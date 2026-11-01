@@ -41,7 +41,18 @@ v4.0.0 west workspace:
 ```
 
 They run FSP's clock bring-up (MOSC, PLL, `SCKSCR`) on `ra6_sysc` and the
-SCI0 console in FIFO mode. See [`VALIDATION.md`](VALIDATION.md).
+SCI0 console in FIFO mode.
+
+Stock Zephyr v4.1.0 `samples/drivers/counter/alarm` (the first release with
+RA6 `agt` nodes; `tests/fixtures/r7fa6m5bh-zephyr-counter-alarm.elf`, same
+build script, a v4.1.0 workspace) runs four AGT0 compare-match alarms, each
+delivered through ICU IELSR84 (`ra_icu`, `ra_agt`):
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-counter-alarm.yaml --no-uart-stdout
+```
+
+See [`VALIDATION.md`](VALIDATION.md).
 
 ## Build and run
 
@@ -99,13 +110,17 @@ hb=0 podr=0040 s1=1 s2=1
   neither checks the PRCR key nor applies the divider.
 - **Module stop.** `MSTP` is a stub: SCI0 runs whether or not `MSTPB31` is
   cleared.
-- **ICU / IELSR.** The ICU is a stub, so no peripheral event reaches the NVIC;
-  the smoke polls `SSR.TDRE`.
+- **SCI interrupts.** The ICU (`ra_icu`) links AGT events to the NVIC, but
+  SCI0 raises no ELC events, so the smoke polls `SSR.TDRE` and the Zephyr
+  console polls `FDR`. The ICU IRQ-pin half (`IRQCRn`/NMI) and `DTCE` are
+  stored only.
+- **AGT modes.** Timer mode only: no pulse output, event counter or pulse
+  width / period measurement, and AGT1 does not count AGT0 underflows.
 - **PFS peripheral mux.** `PSEL`/`PMR` are stored only; SCI0 TX does not depend
   on them.
 - **TrustZone** (IDAU/SAU, CPSCU/PSCU), flash programming (FACI), the data
   flash and the option-setting memory.
-- **DMAC/DTC, ELC, RTC, IWDT/WDT, AGT0-5, GPT, IIC0-2, SPI0/1, ADC12,
+- **DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1, ADC12,
   USBFS/USBHS, ETHERC/EDMAC, CANFD, FACI** are declared stubs (reads return 0,
   writes are dropped).
 - **SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC** and every other

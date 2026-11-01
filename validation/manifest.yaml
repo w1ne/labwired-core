@@ -9729,18 +9729,25 @@ boards:
     # stubs for FCACHE, the C-cache and PSCU/CPSCU. SIM-DERIVED — no RA6M5
     # bench part. See docs/boards/ek-ra6m5.md and
     # examples/ek-ra6m5/VALIDATION.md.
+    # 2026-11-01 (feat/ek-ra6m5-agt-icu): the ICU at 0x40006000 is the RA ICU
+    # IELSRn event link (ra_icu) and AGT0-5 are ra_agt (events 0x040 + 3n);
+    # stock Zephyr v4.1.0 samples/drivers/counter/alarm (AGT0 compare match
+    # through IELSR84).
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_ek_ra6m5_smoke_survival"
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
+      - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/ra_pfs.rs
       - crates/core/src/peripherals/ra_clock.rs
+      - crates/core/src/peripherals/ra_icu.rs
+      - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
