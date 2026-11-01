@@ -1,0 +1,209 @@
+# PCF8575 — 16-bit quasi-bidirectional I²C I/O expander (the 16-bit PCF8574).
+#
+# Datasheet: TI PCF8575, SCPS121I (Jan 2005, rev. Aug 2024). NXP's PCF8575
+# sheet did not download from this machine; TI's describes the same part,
+# pin-for-pin and byte-for-byte.
+#
+# Like `pcf8574.yaml` this is a TIER-2 part: an I²C write moves PINS. What is
+# new is that the port is TWO bytes, and the engine's pointerless mode
+# (`pointer_bytes: 0`) is one byte wide. The pairing is therefore written as a
+# frame plus rules, and every piece of it is a datasheet sentence.
+#
+# ── The wire, exactly (§8.1 Overview, §8.4 Figures 8-6 / 8-7) ──────────────
+#
+# There is no register pointer: "This device does not have internal
+# configuration or status registers. Instead, read or write to the device I/Os
+# directly after sending the device address."
+#
+# WRITE: "Every data transmission to or from the PCF8575 must consist of an
+# even number of bytes. The first data byte in every pair refers to port 0
+# (P07–P00), and the second data byte in every pair refers to port 1
+# (P17–P10)… after which this 16-bit data is presented on the port lines. The
+# number of data bytes that can be sent successively is not limited. After
+# every two bytes, the previous data is overwritten."
+#
+#   → `frames: { length: 2 }`: every two bytes close a frame, and the `frame`
+#     rule stores `frame_byte(0) | frame_byte(1) << 8` into PORT and moves all
+#     sixteen pads. Nothing changes after the FIRST byte of a pair — the port is
+#     presented after the second. An odd trailing byte never completes a pair,
+#     and `discard_partial` drops it at STOP rather than applying half a word.
+#
+# READ: "The data bytes that follow on the SDA are the values on the ports",
+# again in pairs, port 0 first (Figure 8-7: P07…P00, then P17…P10, repeating).
+#
+#   → The wire-visible register is SERVE, the byte the NEXT read clocks out.
+#     START and STOP aim it at port 0; every read of it (the engine raises
+#     `read: SERVE` as each byte latches) flips `var(hi)` and re-aims it at the
+#     other half. So a two-byte read is P0x, P1x, and a longer one keeps
+#     alternating — the datasheet's pairing, with no pointer anywhere.
+#
+# Power-on (§8.1): "At power on, the I/Os are high" — PORT resets to 0xFFFF.
+#
+# Address (§8.3.3): 0x20..0x27 by A2/A1/A0 (8-bit 0x40..0x4F).
+#
+# ── Quasi-bidirectional (§8.1) ──────────────────────────────────────────────
+#
+# Same pin structure as the PCF8574: a written 0 drives the pin hard low; a
+# written 1 turns on a brief strong pull-up and then leaves a weak current
+# source to VCC, so the pin reads high unless something external pulls it low.
+# "The I/Os should be high before being used as inputs." The rules drive each
+# pad to the bit written, which is right for every pin nothing external
+# contends.
+#
+# ⚠️ NOT MODELLED — the same half pcf8574.yaml declares:
+#   * The INPUT half: an external level on a pad does NOT reach the readable
+#     port. A read returns the last pair firmware wrote, or the 16-bit value the
+#     host drove through the `port` stimulus channel. Firmware that writes
+#     0xFFFF and expects to read a button pulling P04 low reads 0xFFFF here.
+#   * The open-drain INT output (asserted on any input change, reset by a read
+#     or write of the port).
+#   * The strong-pull-up pulse (IOHT) and every electrical limit.
+type: pcf8575
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x20
+    # §8.1: no pointer; every byte is port data.
+    pointer_bytes: 0
+    registers:
+      # The byte the next read clocks out. Read-only on the wire, so a write
+      # byte is never stored here — writes land through the `frame` rule.
+      - { name: SERVE, addr: 0x00, width: 1, endian: be, access: r, reset: 0xFF }
+      # The 16-bit port: P07..P00 in bits 7:0, P17..P10 in bits 15:8. Not
+      # addressable on the wire (there is no pointer); the rules own it.
+      - name: PORT
+        addr: 0x01
+        width: 2
+        endian: le
+        access: rw
+        reset: 0xFFFF
+        bits:
+          - { name: P00, shift: 0 }
+          - { name: P01, shift: 1 }
+          - { name: P02, shift: 2 }
+          - { name: P03, shift: 3 }
+          - { name: P04, shift: 4 }
+          - { name: P05, shift: 5 }
+          - { name: P06, shift: 6 }
+          - { name: P07, shift: 7 }
+          - { name: P10, shift: 8 }
+          - { name: P11, shift: 9 }
+          - { name: P12, shift: 10 }
+          - { name: P13, shift: 11 }
+          - { name: P14, shift: 12 }
+          - { name: P15, shift: 13 }
+          - { name: P16, shift: 14 }
+          - { name: P17, shift: 15 }
+
+  frames:
+    # One port write = one pair of bytes (§8.1).
+    length: 2
+    discard_partial: true
+
+  vars:
+    # 0 → the next read byte is port 0 (P07..P00); 1 → port 1 (P17..P10).
+    hi: 0
+
+  outputs: [P00, P01, P02, P03, P04, P05, P06, P07, P10, P11, P12, P13, P14, P15, P16, P17]
+  output_pins:
+    P00: p00_pin
+    P01: p01_pin
+    P02: p02_pin
+    P03: p03_pin
+    P04: p04_pin
+    P05: p05_pin
+    P06: p06_pin
+    P07: p07_pin
+    P10: p10_pin
+    P11: p11_pin
+    P12: p12_pin
+    P13: p13_pin
+    P14: p14_pin
+    P15: p15_pin
+    P16: p16_pin
+    P17: p17_pin
+
+  rules:
+    # ── read pairing: START/STOP aim at port 0; each byte read flips halves ──
+    - { on: start, do: [ { var: { name: hi, value: "0" } }, { write: { register: SERVE, value: "reg(PORT) & 0xFF" } } ] }
+    - { on: stop, do: [ { var: { name: hi, value: "0" } }, { write: { register: SERVE, value: "reg(PORT) & 0xFF" } } ] }
+    - on: { read: SERVE }
+      do:
+        - { var: { name: hi, value: "1 - var(hi)" } }
+        - { write: { register: SERVE, value: "(reg(PORT) >> (8 * var(hi))) & 0xFF" } }
+
+    # ── write pairing: the second byte of a pair presents the 16-bit word ───
+    - on: frame
+      do:
+        - { write: { register: PORT, value: "frame_byte(0) | (frame_byte(1) << 8)" } }
+        - { write: { register: SERVE, value: "(reg(PORT) >> (8 * var(hi))) & 0xFF" } }
+    - { on: frame, do: [ { pin: P00, level: "field(PORT.P00)" } ] }
+    - { on: frame, do: [ { pin: P01, level: "field(PORT.P01)" } ] }
+    - { on: frame, do: [ { pin: P02, level: "field(PORT.P02)" } ] }
+    - { on: frame, do: [ { pin: P03, level: "field(PORT.P03)" } ] }
+    - { on: frame, do: [ { pin: P04, level: "field(PORT.P04)" } ] }
+    - { on: frame, do: [ { pin: P05, level: "field(PORT.P05)" } ] }
+    - { on: frame, do: [ { pin: P06, level: "field(PORT.P06)" } ] }
+    - { on: frame, do: [ { pin: P07, level: "field(PORT.P07)" } ] }
+    - { on: frame, do: [ { pin: P10, level: "field(PORT.P10)" } ] }
+    - { on: frame, do: [ { pin: P11, level: "field(PORT.P11)" } ] }
+    - { on: frame, do: [ { pin: P12, level: "field(PORT.P12)" } ] }
+    - { on: frame, do: [ { pin: P13, level: "field(PORT.P13)" } ] }
+    - { on: frame, do: [ { pin: P14, level: "field(PORT.P14)" } ] }
+    - { on: frame, do: [ { pin: P15, level: "field(PORT.P15)" } ] }
+    - { on: frame, do: [ { pin: P16, level: "field(PORT.P16)" } ] }
+    - { on: frame, do: [ { pin: P17, level: "field(PORT.P17)" } ] }
+
+    # ── the `port` stimulus: the host poses the whole 16-bit port ───────────
+    - on: { input: port }
+      do:
+        - { write: { register: PORT, value: "input(port) & 0xFFFF" } }
+        - { write: { register: SERVE, value: "(reg(PORT) >> (8 * var(hi))) & 0xFF" } }
+    - { on: { input: port }, do: [ { pin: P00, level: "field(PORT.P00)" } ] }
+    - { on: { input: port }, do: [ { pin: P01, level: "field(PORT.P01)" } ] }
+    - { on: { input: port }, do: [ { pin: P02, level: "field(PORT.P02)" } ] }
+    - { on: { input: port }, do: [ { pin: P03, level: "field(PORT.P03)" } ] }
+    - { on: { input: port }, do: [ { pin: P04, level: "field(PORT.P04)" } ] }
+    - { on: { input: port }, do: [ { pin: P05, level: "field(PORT.P05)" } ] }
+    - { on: { input: port }, do: [ { pin: P06, level: "field(PORT.P06)" } ] }
+    - { on: { input: port }, do: [ { pin: P07, level: "field(PORT.P07)" } ] }
+    - { on: { input: port }, do: [ { pin: P10, level: "field(PORT.P10)" } ] }
+    - { on: { input: port }, do: [ { pin: P11, level: "field(PORT.P11)" } ] }
+    - { on: { input: port }, do: [ { pin: P12, level: "field(PORT.P12)" } ] }
+    - { on: { input: port }, do: [ { pin: P13, level: "field(PORT.P13)" } ] }
+    - { on: { input: port }, do: [ { pin: P14, level: "field(PORT.P14)" } ] }
+    - { on: { input: port }, do: [ { pin: P15, level: "field(PORT.P15)" } ] }
+    - { on: { input: port }, do: [ { pin: P16, level: "field(PORT.P16)" } ] }
+    - { on: { input: port }, do: [ { pin: P17, level: "field(PORT.P17)" } ] }
+
+metadata:
+  label: "PCF8575 I/O Expander"
+  summary: "16-bit I²C quasi-bidirectional port expander (PCF8575)."
+  detail: "PCF8575 at 0x20 (A2/A1/A0 select 0x20-0x27). There is no register pointer: data moves in pairs of bytes, the first for port 0 (P07-P00) and the second for port 1 (P17-P10), and the 16-bit word reaches the pins after the second byte of each pair. A read returns port 0 then port 1, alternating for as long as the master clocks. The port powers up at 0xFFFF, every pin released high. Writing a bit low drives that pad hard low; writing it high releases it, which is also how a pin is used as an input. The sixteen pads bind through the optional p00_pin..p17_pin config keys. NOT modelled: the input direction (an external level on a pad does not reach the readable port), the open-drain INT output, and electrical limits; a read returns the last pair written or the value driven through the `port` stimulus channel."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27."
+    - name: port
+      ty: float
+      doc: "Initial 16-bit port (0-65535; P07-P00 in the low byte). Default 65535, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+    - { name: p00_pin, ty: str, doc: "Pad P00 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing." }
+    - { name: p01_pin, ty: str, doc: "Pad P01 drives. Optional." }
+    - { name: p02_pin, ty: str, doc: "Pad P02 drives. Optional." }
+    - { name: p03_pin, ty: str, doc: "Pad P03 drives. Optional." }
+    - { name: p04_pin, ty: str, doc: "Pad P04 drives. Optional." }
+    - { name: p05_pin, ty: str, doc: "Pad P05 drives. Optional." }
+    - { name: p06_pin, ty: str, doc: "Pad P06 drives. Optional." }
+    - { name: p07_pin, ty: str, doc: "Pad P07 drives. Optional." }
+    - { name: p10_pin, ty: str, doc: "Pad P10 drives. Optional." }
+    - { name: p11_pin, ty: str, doc: "Pad P11 drives. Optional." }
+    - { name: p12_pin, ty: str, doc: "Pad P12 drives. Optional." }
+    - { name: p13_pin, ty: str, doc: "Pad P13 drives. Optional." }
+    - { name: p14_pin, ty: str, doc: "Pad P14 drives. Optional." }
+    - { name: p15_pin, ty: str, doc: "Pad P15 drives. Optional." }
+    - { name: p16_pin, ty: str, doc: "Pad P16 drives. Optional." }
+    - { name: p17_pin, ty: str, doc: "Pad P17 drives. Optional." }
+  inputs:
+    - { key: port, label: "Port", unit: word, min: 0, max: 65535, default: 65535 }
