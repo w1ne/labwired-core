@@ -465,6 +465,12 @@ pub struct SystemBus {
     /// into that memory would land in flash instead. See
     /// `ChipDescriptor::flash_boot_alias`.
     pub flash_boot_alias: bool,
+    /// RP2350 double-precision coprocessor state (p4/p5), present only when
+    /// the chip descriptor lists `coprocessors: [rp2350_dcp]`. Held here, not
+    /// in `CortexM`, so a core without one carries nothing extra on its step
+    /// path; the core reaches it through `Bus::rp2350_dcp_mut` only from the
+    /// cold coprocessor-instruction path.
+    pub rp2350_dcp: Option<Box<crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp>>,
     /// Which family's atomic register aliases this chip implements (see
     /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
     /// in the peripheral window whose address has bits [13:12] set decode as a

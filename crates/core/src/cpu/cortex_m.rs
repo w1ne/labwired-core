@@ -30,6 +30,9 @@ pub mod semihost;
 #[path = "cortex_m/poll_loop.rs"]
 mod poll_loop;
 
+#[path = "cortex_m/rp2350_dcp.rs"]
+pub mod rp2350_dcp;
+
 /// How an executed arm advances PC relative to the decoded default. Returned
 /// by every `exec_*` method instead of mutating a `&mut` out-parameter: the
 /// hot `Keep` case costs nothing once the method is inlined.

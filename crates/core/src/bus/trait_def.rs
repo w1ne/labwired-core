@@ -34,6 +34,12 @@ pub enum FetchPermission {
 }
 
 pub trait Bus {
+    /// The RP2350 double-precision coprocessor attached to this core, if the
+    /// chip has one (`coprocessors: [rp2350_dcp]`). Called only when a p4/p5
+    /// coprocessor instruction executes. `None` keeps it UNDEFINED.
+    fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
+        None
+    }
     /// ARM application-core interrupt levels, including deassertion.
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
         None
