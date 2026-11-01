@@ -9,7 +9,7 @@ hand: rp2040/esp32s3/nrf52832 were all silently absent while their chip YAMLs
 referenced them. The embedded_descriptor_registry_is_complete test (native, has
 fs) fails the build when this file goes stale.
 
-REFERENCED, not "every file on disk". These YAMLs are `include_str!`d into every
+REFERENCED, not "every file on disk". These YAMLs ride along in every
 binary, wasm included, and configs/peripherals holds far more than any chip
 loads: an SVD import emits a descriptor per vendor peripheral, while a chip YAML
 wires only the blocks it models. Embedding the whole tree put megabytes of YAML
@@ -20,6 +20,11 @@ it just does not ride along in the wasm.
 Two keys count as a reference, and they are not interchangeable:
   config.path         -- a `type: declarative` peripheral's real MODEL
   config.debug_schema -- decode metadata only, for a native peripheral
+
+PACKED, not raw. The table names each descriptor with `packed!(key)`; build.rs
+zlib-compresses exactly those files into OUT_DIR and `lookup` inflates one on
+first use. The referenced YAML is ~14 MiB raw and ~1.3 MiB compressed, and the
+raw text had pushed the wasm engine past Cloudflare Pages' 25 MiB per-file cap.
 
 Usage: python3 scripts/gen_embedded_descriptors.py   (from the repo root)
 """
@@ -39,10 +44,15 @@ HEADER = '''\
 // std::fs). Native builds still fall back to from_file for any path not
 // embedded here. Keyed by the suffix after 'peripherals/'.
 //
-// Referenced, not every file on disk: these are include_str!'d into the wasm
-// download, and an SVD import emits a descriptor per vendor peripheral while a
-// chip wires only the blocks it models. Embedding the unreferenced remainder
-// shipped megabytes of YAML nothing could ever look up.
+// Referenced, not every file on disk: these ride along in the wasm download,
+// and an SVD import emits a descriptor per vendor peripheral while a chip wires
+// only the blocks it models. Embedding the unreferenced remainder shipped
+// megabytes of YAML nothing could ever look up.
+//
+// Packed, not raw: build.rs zlib-compresses each `packed!(key)` file into
+// OUT_DIR and `lookup` inflates it once, on first use. The referenced YAML is
+// ~14 MiB raw and ~1.3 MiB packed; the raw text had pushed the wasm engine past
+// Cloudflare Pages' 25 MiB per-file cap and blocked every Playground deploy.
 //
 // Refresh: python3 scripts/gen_embedded_descriptors.py
 // Guard: embedded_descriptor_registry_is_complete (native) fails when a
@@ -50,8 +60,22 @@ HEADER = '''\
 // referenced by nothing — the first breaks a lab, the second bloats every
 // browser download.
 
+use std::sync::OnceLock;
+
+/// The zlib stream build.rs wrote for one descriptor key.
+macro_rules! packed {
+    ($key:literal) => {
+        include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/embedded_descriptors/",
+            $key,
+            ".z"
+        ))
+    };
+}
+
 /// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
-static DESCRIPTORS: &[(&str, &str)] = &[
+static DESCRIPTORS: &[(&str, &[u8])] = &[
 '''
 
 FOOTER = '''\
@@ -65,10 +89,23 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         .rsplit_once("peripherals/")
         .map(|(_, k)| k)
         .unwrap_or(descriptor_path);
-    DESCRIPTORS
-        .binary_search_by(|(k, _)| k.cmp(&key))
-        .ok()
-        .map(|i| DESCRIPTORS[i].1)
+    let index = DESCRIPTORS.binary_search_by(|(k, _)| k.cmp(&key)).ok()?;
+    Some(unpacked(index))
+}
+
+/// Inflate descriptor `index` once and keep it for the life of the process,
+/// so callers still get the `&'static str` the raw `include_str!` gave them.
+fn unpacked(index: usize) -> &'static str {
+    static CACHE: OnceLock<Box<[OnceLock<&'static str>]>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| DESCRIPTORS.iter().map(|_| OnceLock::new()).collect());
+    cache[index].get_or_init(|| {
+        let (key, packed) = DESCRIPTORS[index];
+        let bytes = miniz_oxide::inflate::decompress_to_vec_zlib(packed)
+            .unwrap_or_else(|e| panic!("embedded descriptor {key} does not inflate: {e:?}"));
+        let text = String::from_utf8(bytes)
+            .unwrap_or_else(|e| panic!("embedded descriptor {key} is not UTF-8: {e}"));
+        Box::leak(text.into_boxed_str())
+    })
 }
 
 #[cfg(test)]
@@ -86,6 +123,19 @@ mod tests {
                 "embedded descriptor table is not sorted/unique at {key:?}"
             );
             previous = Some(key);
+        }
+    }
+
+    /// Packing must be lossless: every embedded descriptor inflates to exactly
+    /// the bytes of its source file, so the browser parses what the CLI parses.
+    #[test]
+    fn embedded_descriptors_inflate_to_their_source_files() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/peripherals");
+        for (key, _) in DESCRIPTORS {
+            let on_disk = std::fs::read_to_string(root.join(key))
+                .unwrap_or_else(|e| panic!("read embedded descriptor {key}: {e}"));
+            assert_eq!(lookup(key), Some(on_disk.as_str()), "{key} did not round-trip");
         }
     }
 
@@ -137,8 +187,8 @@ mod tests {
         );
     }
 
-    /// ...and nothing else may be embedded. These YAMLs are `include_str!`d
-    /// into every binary including wasm, and configs/peripherals holds far more
+    /// ...and nothing else may be embedded. These YAMLs ride along in every
+    /// binary including wasm, and configs/peripherals holds far more
     /// than any chip loads — an SVD import emits a descriptor per vendor
     /// peripheral, a chip YAML wires only the blocks it models. Embedding the
     /// remainder put megabytes of YAML that nothing can ever look up into the
@@ -201,20 +251,15 @@ def main() -> None:
     on_disk = {p.relative_to(PERIPHERALS).as_posix() for p in PERIPHERALS.rglob("*.yaml")}
     wanted = referenced_keys()
     # A reference with no file is the failure this script exists to prevent, and
-    # it must not be papered over: include_str! on a missing path fails the build
-    # loudly, which is the right outcome, but say which chip is broken first.
+    # it must not be papered over: build.rs fails the build loudly on a missing
+    # path, which is the right outcome, but say which chip is broken first.
     missing = sorted(wanted - on_disk)
     if missing:
         raise SystemExit(
             "chip YAML references descriptors that do not exist: " + ", ".join(missing)
         )
     keys = sorted(wanted)
-    entries = [
-        f'    ("{key}", include_str!(\n'
-        f'        "../../../../configs/peripherals/{key}"\n'
-        f"    )),"
-        for key in keys
-    ]
+    entries = [f'    ("{key}", packed!("{key}")),' for key in keys]
     OUT.write_text(HEADER + "\n".join(entries) + "\n" + FOOTER)
     # rustfmt owns the final shape (line collapsing etc.) so the emitted file
     # is byte-stable under `cargo fmt --check` regardless of fmt config.
