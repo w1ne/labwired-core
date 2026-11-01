@@ -246,7 +246,11 @@ fn check_ina260(d: &mut dyn I2cDevice) -> Result<(), String> {
         0x6127u16,
         "INA260 configuration POR value"
     );
-    ensure_eq!(be16(&rd(d, 0x01, 2)), 800u16, "INA260 current (1.25 mA/LSB)");
+    ensure_eq!(
+        be16(&rd(d, 0x01, 2)),
+        800u16,
+        "INA260 current (1.25 mA/LSB)"
+    );
     ensure_eq!(
         be16(&rd(d, 0x02, 2)),
         4_000u16,
@@ -283,7 +287,11 @@ fn check_ina3221(d: &mut dyn I2cDevice) -> Result<(), String> {
         625u16 << 3,
         "INA3221 CH1 bus voltage (8 mV/LSB, D2:D0 = 0)"
     );
-    ensure_eq!(be16(&rd(d, 0x06, 2)), 1_500u16 << 3, "INA3221 CH3 bus at 12 V");
+    ensure_eq!(
+        be16(&rd(d, 0x06, 2)),
+        1_500u16 << 3,
+        "INA3221 CH3 bus at 12 V"
+    );
     Ok(())
 }
 
@@ -827,7 +835,8 @@ fn ina226_current_and_power_follow_calibration() {
 fn ina260_tracks_stimulus_with_fixed_lsbs() {
     let mut d = dev("ina260", 0x40);
     advance(&mut d, 1); // start the device clock (see the TSL2591 test)
-                        // SBOS656 Table 1, the datasheet's own worked example: 12.5 A at 11.98 V.
+
+    // SBOS656 Table 1, the datasheet's own worked example: 12.5 A at 11.98 V.
     run_i2c(
         &mut d,
         &[
@@ -836,7 +845,11 @@ fn ina260_tracks_stimulus_with_fixed_lsbs() {
         ],
     );
     assert_eq!(be16(&rd(&mut d, 0x01, 2)), 0x2710, "Current 10000 counts");
-    assert_eq!(be16(&rd(&mut d, 0x02, 2)), 0x2570, "Bus voltage 9584 counts");
+    assert_eq!(
+        be16(&rd(&mut d, 0x02, 2)),
+        0x2570,
+        "Bus voltage 9584 counts"
+    );
     assert_eq!(be16(&rd(&mut d, 0x03, 2)), 0x3A7F, "Power 14975 counts");
     // Negative current: two's complement in CURRENT, |I| in POWER.
     run_i2c(&mut d, &[Step::Input("current", -2.5)]);
@@ -850,7 +863,11 @@ fn ina260_tracks_stimulus_with_fixed_lsbs() {
     assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0x0008, 0);
     advance(&mut d, 2_200);
     assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0x0008, 0x0008);
-    assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0x0008, 0, "cleared by the read");
+    assert_eq!(
+        be16(&rd(&mut d, 0x06, 2)) & 0x0008,
+        0,
+        "cleared by the read"
+    );
     // Mask/Enable: the flag bits are the part's.
     wr(&mut d, 0x06, &[0xFF, 0xFF]);
     assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0xFFF7, 0xFC03);
@@ -864,8 +881,9 @@ fn ina260_tracks_stimulus_with_fixed_lsbs() {
 fn ina3221_left_aligns_saturates_and_sums() {
     let mut d = dev("ina3221", 0x40);
     advance(&mut d, 1); // start the device clock (see the TSL2591 test)
-                        // SBOS576 §8.2.2's worked example: −80 mV → 2000 counts → 0xC180. At
-                        // 0.1 Ω that is −0.8 A.
+
+    // SBOS576 §8.2.2's worked example: −80 mV → 2000 counts → 0xC180. At
+    // 0.1 Ω that is −0.8 A.
     run_i2c(&mut d, &[Step::Input("ch1_current", -0.8)]);
     assert_eq!(be16(&rd(&mut d, 0x01, 2)), 0xC180);
     // Rounded to a whole count BEFORE the shift: 0.12345 A → 308.625 → 309
@@ -922,10 +940,18 @@ fn ina3221_left_aligns_saturates_and_sums() {
 fn mpu9250_scales_tracks_data_ready_and_resets() {
     let mut d = dev("mpu9250", 0x68);
     advance(&mut d, 1); // start the device clock (see the TSL2591 test)
-    assert_eq!(rd(&mut d, 0x3A, 1)[0] & 1, 0, "RAW_DATA_RDY before a sample");
+    assert_eq!(
+        rd(&mut d, 0x3A, 1)[0] & 1,
+        0,
+        "RAW_DATA_RDY before a sample"
+    );
     advance(&mut d, 1_000);
     assert_eq!(rd(&mut d, 0x3A, 1)[0] & 1, 1, "RAW_DATA_RDY after 1 ms");
-    assert_eq!(rd(&mut d, 0x3A, 1)[0] & 1, 0, "…cleared by reading INT_STATUS");
+    assert_eq!(
+        rd(&mut d, 0x3A, 1)[0] & 1,
+        0,
+        "…cleared by reading INT_STATUS"
+    );
     // ±16 g (ACCEL_FS_SEL = 3): 1 g → 2048; −3 g → −6144.
     wr(&mut d, 0x1C, &[0x18]);
     assert_eq!(be16(&rd(&mut d, 0x3F, 2)), 2_048);
@@ -938,10 +964,7 @@ fn mpu9250_scales_tracks_data_ready_and_resets() {
     wr(&mut d, 0x1B, &[0x08]);
     run_i2c(
         &mut d,
-        &[
-            Step::Input("gyro_x", 100.0),
-            Step::Input("gyro_y", -250.0),
-        ],
+        &[Step::Input("gyro_x", 100.0), Step::Input("gyro_y", -250.0)],
     );
     let g = rd(&mut d, 0x43, 4);
     assert_eq!(be16(&g[0..2]), 6_550);
@@ -966,11 +989,20 @@ fn mpu9250_scales_tracks_data_ready_and_resets() {
 fn ens160_gates_on_standard_mode_and_tracks_stimulus() {
     let mut d = dev("ens160", 0x52);
     advance(&mut d, 1); // start the device clock (see the TSL2591 test)
-                        // IDLE: no measurement yet; DATA_x hold their datasheet defaults.
+
+    // IDLE: no measurement yet; DATA_x hold their datasheet defaults.
     assert_eq!(rd(&mut d, 0x20, 1), vec![0x00], "DEVICE_STATUS in IDLE");
-    assert_eq!(rd(&mut d, 0x21, 5), vec![0x01, 0, 0, 0, 0], "AQI 1, TVOC 0, eCO2 0");
+    assert_eq!(
+        rd(&mut d, 0x21, 5),
+        vec![0x01, 0, 0, 0, 0],
+        "AQI 1, TVOC 0, eCO2 0"
+    );
     assert_eq!(le16(&rd(&mut d, 0x30, 2)), 0x4A8A, "DATA_T default (25 °C)");
-    assert_eq!(le16(&rd(&mut d, 0x32, 2)), 0x6400, "DATA_RH default (50 %RH)");
+    assert_eq!(
+        le16(&rd(&mut d, 0x32, 2)),
+        0x6400,
+        "DATA_RH default (50 %RH)"
+    );
     // STANDARD: STATAS and NEWDAT rise, the outputs follow the stimulus.
     wr(&mut d, 0x10, &[0x02]);
     assert_eq!(rd(&mut d, 0x20, 1)[0] & 0x82, 0x82, "STATAS | NEWDAT");
