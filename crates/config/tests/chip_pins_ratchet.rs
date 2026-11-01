@@ -74,6 +74,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // The Vega board's SoC models UARTs and timers and no GPIO bank, so there
     // are no pads to read, by parse or by map.
     "vegaboard-ri5cy",
+    // The PolarFire SoC MSS GPIO_0..2 are declared stubs (no GPIO model), and
+    // the kit's LEDs/buttons sit behind the FPGA fabric; no pads to read yet.
+    "mpfs095t",
     "nrf52832",
     "nrf52833",
     "nrf52840",

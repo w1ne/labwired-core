@@ -505,6 +505,16 @@ fn build_riscv_node(
             let image = parse_elf_image(&bytes)
                 .with_context(|| format!("node '{id}': parse firmware ELF"))?;
             use crate::Cpu as _;
+            // A `core: rv64…` chip runs the 64-bit hart. Nothing ESP-specific
+            // applies, and the image sets up its own stack from reset.
+            if crate::cpu::riscv64::is_rv64_chip(chip) {
+                let mut machine = Machine::new(crate::cpu::RiscV64::for_chip(chip), bus);
+                machine
+                    .load_firmware(&image)
+                    .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+                machine.cpu.set_pc(image.entry_point as u32);
+                return Ok(Box::new(machine));
+            }
             // The single-chip engine's C3 bare-ELF path, step for step
             // (`builder::riscv`, the browser's `new_from_config_riscv`): the
             // real mask ROM in its windows, its reset-time `.data` copy

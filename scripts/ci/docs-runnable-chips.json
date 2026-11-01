@@ -441,6 +441,10 @@
       "how": "needs-build",
       "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     },
+    "mpfs095t": {
+      "how": "needs-build",
+      "why": "The RV64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/mpfs-zephyr-hello.elf prints 'Hello World! mpfs_icicle/polarfire/u54' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
     "vegaboard-ri5cy": {
       "how": "needs-build",
       "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"

@@ -16,6 +16,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |
 | stm32l552 | open | L1 | 50 | 904.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
 | cc2538sf53 | open | L1 | 28 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
+| mpfs095t | open | L1 | 14 | — | — | ≥1× (CI) | [doc](docs/boards/mpfs095t.md) |
 | r7fa6m5bh | open | L1 | 43 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa6m5bh.md) |
 | r7fa8m1ah | open | L1 | 40 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |
 | amap42kp | open | L1 | 46 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/amap42kp.md) |
@@ -75,7 +76,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f401ve | open | L0 | 24 | 935.8 | 1.5 | ≥1× (CI) | — |
 | stm32f405 | open | L1 | 22 | 936.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f405.md) |
 | stm32f767 | open | L1 | 36 | 936.7 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f767.md) |
-| rp2350 | open | L1 | 23 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
+| rp2350 | open | L1 | 25 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
 | stm32f407 | open | L1 | 34 | 936.8 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f407.md) |
 | stm32f407ie | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32f407ig | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |

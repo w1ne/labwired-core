@@ -905,6 +905,16 @@ pub struct Uart {
     #[serde(default)]
     stm32_lpuart: bool,
     dma_tx_pending: bool,
+    /// 16550 line control register (Ns16550 / DwApbUart layouts). Bit 7 is
+    /// DLAB: while set, offsets 0 and 1 (times the register stride) are the
+    /// baud divisor latches DLL/DLM instead of RBR/THR and IER (PC16550D
+    /// Table II). Without it a driver's divisor write went out as a TX byte.
+    #[serde(default)]
+    lcr16550: u8,
+    #[serde(default)]
+    dll16550: u8,
+    #[serde(default)]
+    dlm16550: u8,
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
     pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
@@ -1119,6 +1129,9 @@ impl Uart {
             autocr: 0x8000_0000,
             stm32_lpuart: false,
             dma_tx_pending: false,
+            lcr16550: 0,
+            dll16550: 0,
+            dlm16550: 0,
             attached_streams: Vec::new(),
             trace: crate::bus::bus_trace::BusTrace::new(),
             trace_name: String::new(),
@@ -1737,6 +1750,43 @@ impl Uart {
 
     // The 7 accessors below all read from the single per-family `regmap()`
     // descriptor, so a family's register map lives in exactly one place.
+    /// Register stride of the 16550-family layouts, `None` for every other map.
+    fn uart16550_stride(&self) -> Option<u64> {
+        match self.layout {
+            UartRegisterLayout::Ns16550 => Some(1),
+            UartRegisterLayout::DwApbUart => Some(4),
+            _ => None,
+        }
+    }
+
+    /// LCR, and DLL/DLM while LCR.DLAB is set (16550 family only).
+    fn lcr_dlab_read(&self, offset: u64) -> Option<u8> {
+        let stride = self.uart16550_stride()?;
+        let dlab = self.lcr16550 & 0x80 != 0;
+        match offset {
+            o if o == 3 * stride => Some(self.lcr16550),
+            0 if dlab => Some(self.dll16550),
+            o if dlab && o == stride => Some(self.dlm16550),
+            _ => None,
+        }
+    }
+
+    /// Capture an LCR write, or a DLL/DLM write while DLAB is set. `true`
+    /// when the byte was consumed (it must not reach THR or IER).
+    fn lcr_dlab_write(&mut self, offset: u64, value: u8) -> bool {
+        let Some(stride) = self.uart16550_stride() else {
+            return false;
+        };
+        let dlab = self.lcr16550 & 0x80 != 0;
+        match offset {
+            o if o == 3 * stride => self.lcr16550 = value,
+            0 if dlab => self.dll16550 = value,
+            o if dlab && o == stride => self.dlm16550 = value,
+            _ => return false,
+        }
+        true
+    }
+
     fn status_offset(&self) -> u64 {
         self.effective_regmap().status
     }
@@ -2328,6 +2378,9 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.timed_read(offset) {
             return Ok(byte);
         }
+        if let Some(byte) = self.lcr_dlab_read(offset) {
+            return Ok(byte);
+        }
         if matches!(self.layout, UartRegisterLayout::Avr) && offset == 0x07 {
             return Ok(u8::from(self.last_tx_on_bus));
         }
@@ -2466,6 +2519,9 @@ impl crate::Peripheral for Uart {
                 0x06 => self.push_tx(value),
                 _ => {}
             }
+            return Ok(());
+        }
+        if self.lcr_dlab_write(offset, value) {
             return Ok(());
         }
         if let Some(en_off) = self.enable_offset {
@@ -3084,6 +3140,29 @@ mod tests {
         uart.write(0x0C, b'K').unwrap();
 
         assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
+    }
+
+    /// 16550 family (PC16550D): with LCR.DLAB set, offsets 0 and 1 (times the
+    /// register stride) are the divisor latches DLL/DLM, so the baud divisor a
+    /// driver programs never reaches THR; clearing DLAB restores THR. Zephyr's
+    /// ns16550 driver does exactly this before its first byte (MPFS MMUART,
+    /// `reg-shift = <2>`, divisor 81 = 'Q' at 150 MHz / 115200).
+    #[test]
+    fn uart16550_dlab_routes_divisor_writes_to_the_latches() {
+        use super::UartRegisterLayout::{DwApbUart, Ns16550};
+        for (layout, stride) in [(Ns16550, 1u64), (DwApbUart, 4)] {
+            let mut uart = Uart::new_with_layout(layout);
+            let sink = Arc::new(Mutex::new(Vec::new()));
+            uart.set_sink(Some(sink.clone()), false);
+            uart.write(3 * stride, 0x83).unwrap(); // LCR: DLAB | 8N1
+            uart.write(0, 81).unwrap(); // DLL
+            uart.write(stride, 0).unwrap(); // DLM
+            assert_eq!(uart.read(0).unwrap(), 81, "{layout:?} DLL reads back");
+            assert_eq!(uart.read(3 * stride).unwrap(), 0x83);
+            uart.write(3 * stride, 0x03).unwrap(); // DLAB off
+            uart.write(0, b'Z').unwrap();
+            assert_eq!(sink.lock().unwrap().clone(), vec![b'Z'], "{layout:?}");
+        }
     }
 
     /// Every vendor layout: a write to its TX data offset reaches the sink, and

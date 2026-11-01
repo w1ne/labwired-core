@@ -79,6 +79,13 @@ boards:
     path: examples/cc2538dk
     rust_targets: [thumbv7m-none-eabi]
     gate: true
+  # PolarFire SoC Discovery Kit: the first RV64 part. Committed stock Zephyr
+  # v4.1.0 fixtures (hello, synchronization, tests/kernel/common) on one U54
+  # hart, plus the unsupported-instruction audit of each image.
+  - id: mpfs-disco-kit
+    kind: sim-validate
+    path: examples/mpfs-disco-kit
+    gate: true
   # EK-RA6M5: the first RA6M5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main (the RA6M5 is a Cortex-M33) and runs the SCI0/LED io-smoke
   # plus the unsupported-instruction audit through the CLI.
