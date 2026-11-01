@@ -50,7 +50,8 @@ cargo run -q -p labwired-cli -- test \
 # Stock Zephyr v4.0.0 tests/drivers/uart/uart_basic_api: the interrupt-driven
 # SCI0 driver, RXI/TXI/TEI linked to NVIC lines 0-2 through ICU IELSRn, with
 # the 16-stage FIFO (tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf),
-# then its audit.
+# then its audit. The audit's 150,000 steps cover boot only; the full
+# ~45M-step run above is what exercises the interrupt paths.
 cargo run -q -p labwired-cli -- test \
   --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml \
   --output-dir "$OUT/zephyr-uart-basic-api" \

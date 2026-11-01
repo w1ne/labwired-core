@@ -187,9 +187,7 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
   # SCI0 @ 0x40118000: the EK-RA6M5 console (Zephyr `zephyr,console = &uart0`
-  # on sci0). Zephyr links SCI0 RXI/TXI/TEI/ERI to IEL0-3; SCI0 raises no
-  # ELC events through the ICU, so irq 1 (TXI) is nominal and the smoke
-  # polls SSR.TDRE.
+  # on sci0).
   # SCI0 interrupts are ELC events linked through the ICU IELSRn: RXI 0x180
   # (= 384), TXI +1, TEI +2, ERI +3 (FSP ra6m5 bsp_elc.h). Zephyr's
   # ra6-cm33-common.dtsi links them to NVIC lines 0-3, so sci0 has no

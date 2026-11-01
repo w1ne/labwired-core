@@ -27,13 +27,13 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | PORT0 `PCNTR1` PDR/PODR, `PCNTR3` POSR/PORR, `PCNTR2` PIDR | smoke-tested | `led=blue on pin=1 podr=0040` … (one POSR/PORR store per LED; the whole-PODR read proves no other pin moved) |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
-| SCI interrupts (RXI/TXI/TEI/ERI as ELC events) | **not modelled** | SCI0 raises no events, so the smoke and the Zephyr console are polled |
+| SCI ERI and the receive error flags (`ORER`/`FER`/`PER`) | **not modelled** | ERI (event 0x183) is never raised; RXI/TXI/TEI are covered above |
 | ICU IRQ-pin half (`IRQCRn`, NMI), `DTCE`; AGT pulse output, event counter, measurement modes | **not modelled** | stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU) | **not modelled** | the image runs secure, as on silicon out of reset; `R_PSCU`/`R_CPSCU` are declared stubs so Zephyr's `soc_early_init_hook` can clear PSARB-E/ICUSARG-I; nothing checks attribution |
 | DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
 | SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
 
-## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm 2026-11-01)
+## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm and SCI interrupts 2026-11-01)
 
 ```bash
 # from the repository root
@@ -77,11 +77,19 @@ cargo test -p labwired-core --test firmware_survival ek_ra6m5
 cargo test -p labwired-core --test ra6m5_agt_icu
 #   3 passed
 
+# Stock Zephyr v4.0.0 tests/drivers/uart/uart_basic_api (SCI0 RXI/TXI/TEI + ICU)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-uart-basic-api · 45082111 steps
+#   Audit (150,000 instructions, boot only): unsupported_total: 0
+cargo test -p labwired-core --test ra6m5_sci_icu
+#   6 passed
+
 # Fixture rebuild: two runs of build.sh, byte-identical
 crates/firmware-ek-ra6m5-zephyr/build.sh
 #   cb8edcdbca022b61c35846d85699e56db400f52fb82c71a14ca2ab6b6ef9cd89  r7fa6m5bh-zephyr-hello.elf
 #   72d9e0071821238f251f1baa53e72bc1f58a940a086025cfa604014cd9557a15  r7fa6m5bh-zephyr-sync.elf
 #   5a2167b96f644d6f5c4706e940a00a3e8483eef7e5759525a4ac269fbe1b569e  r7fa6m5bh-zephyr-counter-alarm.elf
+#   4060e1969d11755f583079c69c9c7b2c85e36d4c8ade5168b256f0847a45def9  r7fa6m5bh-zephyr-uart-basic-api.elf
 
 # Determinism: two zephyr-hello runs and two zephyr-counter-alarm runs,
 # identical uart.log + snapshot.json
