@@ -1,0 +1,126 @@
+# Sensirion SHT40 temperature + humidity sensor — declarative I²C command
+# device. Same shape as `sht30.yaml` / `sht31.yaml` (command opcode → delayed
+# response of 16-bit big-endian words, each followed by a Sensirion CRC-8), but
+# NOT the same protocol, which is why it is its own descriptor:
+#
+#   * SHT4x opcodes are ONE byte (`code_width: 1`). The SHT3x family uses
+#     16-bit opcodes (0x2400, 0x2C06…). A driver for one cannot talk to the
+#     other.
+#   * The humidity conversion has an offset. SHT3x: RH = 100·S/65535. SHT4x:
+#     RH = −6 + 125·S/65535.
+#   * There is no status register, no periodic mode and no ADDR pin; the part
+#     is ordered per address (SHT40-AD1B 0x44, -BD1B 0x45, -CD1B 0x46).
+#
+# Datasheet: Sensirion "Datasheet SHT4x" (version 6.x, 2021-2023):
+#   §"I2C commands" command overview — the opcode table used below.
+#   §"Conversion of signal output":
+#       T  = −45 + 175 · S_T  / 65535   ⇒ raw_T  = (T + 45) · 65535/175
+#       RH =  −6 + 125 · S_RH / 65535   ⇒ raw_RH = (RH + 6) · 65535/125
+#     so `encode` is  scale 374.4857142857143, offset 16851.857142857145  (T),
+#                     scale 524.28,            offset 3145.68             (RH).
+#     The T literal is the same double `sht30.yaml` pins, for the same
+#     multiply-then-add rounding reason.
+#   §"Data type & length": every read returns [T_msb, T_lsb, CRC, RH_msb,
+#     RH_lsb, CRC]; CRC-8 poly 0x31, init 0xFF, no final XOR, over each word.
+#   Table "System timing specifications" — MAXIMUM measurement duration per
+#     repeatability: high 8.3 ms, medium 4.5 ms, low 1.6 ms. The heater
+#     commands run the heater for 1 s or 0.1 s and then measure: 1.1 s / 0.11 s
+#     maximum. `delay_us` uses the maximum — the "guaranteed complete" bound —
+#     so a driver that reads sooner gets 0xFF, as the part NACKs on silicon.
+#
+# ⚠️ NOT modelled, named rather than faked:
+#   * The heater's effect. The six heater opcodes take the datasheet heater
+#     time and then answer the current stimulus; nothing warms up.
+#   * The serial number is a CONSTANT (data, not behaviour), CRC-framed like
+#     every other word.
+#   * Soft reset (0x94) is accepted and changes nothing: the part holds no
+#     state the twin models.
+#   * Repeatability noise. All three precisions answer the same value; only
+#     the measurement duration differs.
+type: sht40
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x44
+    code_width: 1
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      # ── Measurement (no heater) ──────────────────────────────────────────
+      - name: measure_high_precision
+        code: 0xFD
+        delay_us: 8300
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: measure_medium_precision
+        code: 0xF6
+        delay_us: 4500
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: measure_low_precision
+        code: 0xE0
+        delay_us: 1600
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      # ── Heater, then high-precision measurement ──────────────────────────
+      # 200 mW / 110 mW / 20 mW for 1 s or 0.1 s. Heating is not modelled.
+      - name: heater_200mw_1s
+        code: 0x39
+        delay_us: 1100000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: heater_200mw_100ms
+        code: 0x32
+        delay_us: 110000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: heater_110mw_1s
+        code: 0x2F
+        delay_us: 1100000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: heater_110mw_100ms
+        code: 0x24
+        delay_us: 110000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: heater_20mw_1s
+        code: 0x1E
+        delay_us: 1100000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      - name: heater_20mw_100ms
+        code: 0x15
+        delay_us: 110000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145, clamp_min: 0, clamp_max: 65535 } }
+          - { source: humidity, width: 2, encode: { scale: 524.28, offset: 3145.68, clamp_min: 0, clamp_max: 65535 } }
+      # ── Housekeeping ─────────────────────────────────────────────────────
+      # Serial number: two CRC-framed words. A constant — a serial is data.
+      - name: read_serial
+        code: 0x89
+        response:
+          - { const: 0x0F4E, width: 2 }
+          - { const: 0x2A71, width: 2 }
+      - { name: soft_reset, code: 0x94 }
+
+metadata:
+  label: "SHT40 Temp/Humidity"
+  summary: "Sensirion SHT40 I²C temperature and humidity sensor (single-byte commands, CRC-8)."
+  detail: "Sensirion SHT40 at default address 0x44 (0x45 / 0x46 for the -BD1B / -CD1B variants). Single-byte commands: 0xFD / 0xF6 / 0xE0 measure at high / medium / low precision and answer after the datasheet's maximum duration (8.3 / 4.5 / 1.6 ms) with a temperature word and a humidity word, each 16-bit big-endian plus a Sensirion CRC-8. 0x89 reads a constant serial number; 0x94 is a soft reset. A read issued before the measurement completes returns 0xFF. The heater commands take their datasheet time but do not heat."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x44 (SHT40-AD1B); 0x45 / 0x46 for the -BD1B / -CD1B variants."
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 125, default: 25 }
+    - { key: humidity, label: "Relative humidity", unit: "%", min: 0, max: 100, default: 50 }

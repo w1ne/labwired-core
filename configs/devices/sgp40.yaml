@@ -1,0 +1,68 @@
+# Sensirion SGP40 VOC sensor — declarative I²C command device. The SGP41's
+# single-channel sibling: the same command framing (`sgp41.yaml`), one raw
+# signal (VOC) instead of two, and a different measurement opcode.
+#
+# Datasheet: Sensirion "Datasheet SGP40 — Indoor Air Quality Sensor for VOC
+# Measurements" (version 1.x):
+#   §"I2C commands" (command overview):
+#     0x260F sgp40_measure_raw_signal   2 parameter words in (RH, T, each with
+#                                       CRC), 1 word out (SRAW_VOC), 30 ms max
+#     0x280E sgp40_execute_self_test    1 word out, 320 ms max; 0xD400 = all
+#                                       tests passed, 0x4B00 = one or more failed
+#     0x3615 sgp4x_turn_heater_off      no response
+#     0x3682 sgp4x_get_serial_number    3 words out
+#   §"Communication / data format": 16-bit big-endian opcodes; every response
+#     word is followed by CRC-8 poly 0x31, init 0xFF.
+#   7-bit address 0x59, fixed.
+#
+# The SGP40's native output IS the raw tick (SRAW_VOC). The VOC Index is
+# computed on the HOST by Sensirion's Gas Index Algorithm, exactly as on real
+# hardware; the model does not invent it.
+#
+# ⚠️ NOT modelled, named rather than faked: the MOx hotplate physics, the RH/T
+# compensation the two parameter words carry (accepted and discarded, as in
+# `sgp41.yaml`), drift and warm-up. The serial number is a CONSTANT and the
+# self-test always passes.
+type: sgp40
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x59
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      - name: measure_raw_signal
+        code: 0x260F
+        params_words: 2
+        delay_us: 30000
+        response:
+          - { source: voc_sraw, width: 2, encode: { clamp_min: 0, clamp_max: 65535 } }
+      - name: execute_self_test
+        code: 0x280E
+        delay_us: 320000
+        response:
+          - { const: 0xD400, width: 2 }
+      - { name: turn_heater_off, code: 0x3615 }
+      - name: get_serial_number
+        code: 0x3682
+        response:
+          - { const: 0x0000, width: 2 }
+          - { const: 0x0A3D, width: 2 }
+          - { const: 0x5F40, width: 2 }
+
+metadata:
+  label: "Sensirion SGP40 VOC"
+  summary: "MOx VOC sensor returning the raw SRAW_VOC signal over I²C."
+  detail: >-
+    Sensirion SGP40 at fixed address 0x59, speaking the Sensirion command
+    protocol with CRC-8 (poly 0x31). 0x260F (with RH/T compensation words)
+    answers the raw SRAW_VOC tick after the datasheet's 30 ms; the host's Gas
+    Index Algorithm turns it into a VOC Index. Self-test (0x280E) answers
+    0xD400 after 320 ms. The raw signal is an externally driven input
+    (channel voc_sraw).
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to the SGP40 fixed address 0x59." }
+    - { name: voc_sraw, ty: float, doc: "Initial raw VOC tick (~20000..40000). Default 28000. Drive it at runtime with the `voc_sraw` input channel." }
+  inputs:
+    - { key: voc_sraw, label: "VOC raw", unit: ticks, min: 0, max: 65535, default: 28000 }

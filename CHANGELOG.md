@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Nine everyday I²C sensors as declarative `configs/devices/*.yaml` parts, no
+  Rust model: `sht40`, `bme680` (T/P/H; gas not modelled), `icm42688`,
+  `icm20948` (accel/gyro/temp; magnetometer not modelled), `sgp40`, `tsl2591`,
+  `dht20`, `pmsa003i`, `ina226`. Each file header cites its datasheet
+  sections, and each part has a page under `docs/parts/`.
+  `crates/core/tests/everyday_sensor_set.rs` runs a register-level smoke check
+  per part (device IDs, measurement words, CRC / check codes). It also runs a
+  negative control that requires every check to FAIL against a part that
+  answers only `0x00` or only `0xFF`. The BME680 is checked against a
+  line-for-line port of Bosch's integer compensation over 480 T/P/H points.
 - GDB watchpoints (`Z2`/`Z3`/`Z4`, write/read/access) on the RSP server,
   software-tracked by the bus accessors: ranges up to 4 KiB (a single 2 KiB
   object fits one request) and 16 concurrent ranges, debugger `M`/`m` never

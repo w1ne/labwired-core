@@ -414,14 +414,19 @@ canonical `type:`; the table below is rendered from that file by
 | `atecc608a` | I²C | I²C secure element: P-256 sign/verify, RNG, key slots (HSM/TPM role) |
 | `bh1750` | I²C | Ambient-light sensor over I²C (single-byte opcodes) |
 | `bme280` | I²C | Bosch BME280 temp + humidity + pressure sensor over I2C |
+| `bme680` | I²C | Bosch BME680 temperature / pressure / humidity sensor over I²C (gas channel not modelled) |
 | `bmi270` | I²C | Bosch BMI270 low-power IMU with hardware step counter over I2C |
 | `bmp280` | I²C | Bosch BMP280 I²C pressure + temperature sensor (no humidity) |
 | `bno055` | I²C | 9-DoF absolute orientation sensor (Bosch BNO055) over I²C |
 | `cap1188` | I²C | Microchip CAP1188 8-channel capacitive touch controller over I2C |
+| `dht20` | I²C | Aosong DHT20 I²C temperature and humidity module (AHT20-based) |
 | `drv2605` | I²C | TI DRV2605 haptic motor driver over I2C |
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
+| `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
+| `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
 | `ina219` | I²C | High-side current and bus voltage sensor over I²C |
+| `ina226` | I²C | TI INA226 bidirectional current / power monitor over I²C (36 V, 16-bit) |
 | `lcd1602` | I²C | 16×2 HD44780 character LCD behind a PCF8574 I2C backpack |
 | `lsm303agr_accel` | I²C | ST LSM303AGR accelerometer half over I2C (address 0x19) |
 | `lsm303agr_mag` | I²C | ST LSM303AGR magnetometer half over I2C (address 0x1E) |
@@ -438,14 +443,18 @@ canonical `type:`; the table below is rendered from that file by
 | `ov3660` | I²C | OmniVision 3 MP camera: SCCB control at 0x3C plus 8-bit DVP frames into the ESP32-S3 LCD_CAM |
 | `pca9685` | I²C | 16-channel 12-bit I²C PWM / servo controller |
 | `pcf8574` | I²C | NXP PCF8574 8-bit I²C quasi-bidirectional port expander |
+| `pmsa003i` | I²C | Plantower PMSA003I particulate-matter sensor (PM1.0 / PM2.5 / PM10) over I²C |
 | `pn532` | I²C | NXP PN532 I²C NFC controller probe shell (no RF) |
 | `scd41` | I²C | Photoacoustic CO₂ + temperature + humidity sensor over I2C |
+| `sgp40` | I²C | MOx VOC sensor returning the raw SRAW_VOC signal over I²C |
 | `sgp41` | I²C | MOx gas sensor returning raw VOC/NOx signals over I2C |
 | `sht30` | I²C | Sensirion SHT30 I²C temperature and humidity sensor |
 | `sht31` | I²C | Temperature + humidity sensor over I²C (Sensirion CRC-8) |
+| `sht40` | I²C | Sensirion SHT40 I²C temperature and humidity sensor (single-byte commands, CRC-8) |
 | `sps30` | I²C | Laser particulate-matter sensor (PM1/2.5/4/10) over I2C |
 | `tmp102` | I²C | 12-bit I²C temperature sensor (self-drifting demo) |
 | `tmp117` | I²C | TI TMP117 high-accuracy digital temperature sensor over I2C |
+| `tsl2591` | I²C | ams TSL2591 high-dynamic-range light sensor (full-spectrum + IR channels) over I²C |
 | `vcnl4010` | I²C | Proximity + ambient-light sensor over I2C (fixed address 0x13) |
 | `veml7700` | I²C | Ambient-light sensor (lux) over I2C |
 | `vl53l0x` | I²C | Laser time-of-flight distance sensor over I²C (ST VL53L0X) |

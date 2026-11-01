@@ -169,6 +169,15 @@ nav:
     - 74HC4051: parts/74hc4051.md
     - MAX485: parts/max485.md
     - XY-MD02: parts/xy-md02.md
+    - SHT40: parts/sht40.md
+    - BME680: parts/bme680.md
+    - ICM-42688-P: parts/icm42688.md
+    - ICM-20948: parts/icm20948.md
+    - SGP40: parts/sgp40.md
+    - TSL2591: parts/tsl2591.md
+    - DHT20: parts/dht20.md
+    - PMSA003I: parts/pmsa003i.md
+    - INA226: parts/ina226.md
 
   - Operations:
     - Release Strategy: release_strategy.md
