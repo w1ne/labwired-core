@@ -55,7 +55,7 @@ The models column is a content digest over everything that board's `models` list
 | `cc2538sf53` | 🟡 smoke-manual | — | `c7ed0fd80a2f9c81` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `fd5bc02350900e5c` | no silicon capture |
 | `r7fa6m5bh` | 🟡 smoke-manual | — | `15d2e072341250e4` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `aeeb932887bb14fd` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `10301071763ec800` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `92b4c7fbfea4292b` | no silicon capture |
 | `mk64f12` | 🟡 smoke-manual | — | `ff7b72a22219631c` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `d86bcafac8c1a139` | no silicon capture |
@@ -474,6 +474,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_ek_ra8m1_smoke_survival
   - offline (CI): firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)
+  - offline (CI): ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)
 - Drift status: **no silicon capture**
 
 ## `same70q21b` — 🟡 smoke-manual

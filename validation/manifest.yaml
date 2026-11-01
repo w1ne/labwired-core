@@ -9745,18 +9745,24 @@ boards:
     # and the ICU WUPEN/IELSR window at 0x4000C000. SIM-DERIVED — no RA8M1
     # bench part. See docs/boards/ek-ra8m1.md and
     # examples/ek-ra8m1/VALIDATION.md.
+    # 2026-10-31 (feat/ek-ra8m1-agt-counter): the ICU IELSRn event link
+    # (ra_icu) and AGT0/AGT1 (ra_agt); stock Zephyr v4.0.0
+    # samples/drivers/counter/alarm (AGT0 compare match through IELSR84).
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_ek_ra8m1_smoke_survival"
       - "firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)"
+      - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/ra_pfs.rs
       - crates/core/src/peripherals/ra_clock.rs
+      - crates/core/src/peripherals/ra_icu.rs
+      - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
