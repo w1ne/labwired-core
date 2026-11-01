@@ -10,6 +10,10 @@
 #       zephyr-uart-basic-api.yaml: the interrupt-driven SCI_B driver, its
 #       RXI/TXI/TEI linked to the NVIC through the ICU IELSRn, with the
 #       driver's default receive FIFO)
+#   tests/fixtures/r7fa8m1ah-zephyr-shell.elf —
+#       samples/subsys/shell/shell_module (examples/ek-ra8m1/
+#       zephyr-shell.yaml: the shell's interrupt-driven serial backend on
+#       the same SCI_B RXI/TXI/TEI)
 #   tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf —
 #       samples/drivers/counter/alarm from Zephyr v4.0.0 (see below;
 #       examples/ek-ra8m1/zephyr-counter-alarm.yaml: AGT0 compare-match
@@ -87,6 +91,8 @@ build_one "samples/synchronization" "r7fa8m1ah-zephyr-sync.elf"
 # Module list pinned (as for the counter alarm) so a workspace that fetched
 # more modules still rebuilds the same bytes.
 build_one "tests/drivers/uart/uart_basic_api" "r7fa8m1ah-zephyr-uart-basic-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+build_one "samples/subsys/shell/shell_module" "r7fa8m1ah-zephyr-shell.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
 
 # Zephyr v4.0.0: samples/drivers/counter/alarm (AGT0 + ICU).

@@ -62,6 +62,11 @@ Stock Zephyr v3.7.0 `tests/drivers/uart/uart_basic_api`
 interrupt-driven SCI_B driver: SCI9's RXI/TXI/TEI reach the core through
 `IELSR24-26`.
 
+Stock Zephyr v3.7.0 `samples/subsys/shell/shell_module` (`zephyr-shell.yaml`,
+fixture `tests/fixtures/r7fa8m1ah-zephyr-shell.elf`) answers typed commands
+on the same interrupt-driven SCI9: `demo ping`, `kernel version`,
+`device list`, arguments, TAB completion and history recall.
+
 ## Build and run
 
 ```bash
