@@ -130,6 +130,7 @@ fn old_apa_pixels(old: &OldApa102) -> Vec<LedPixel> {
         .map(|(rgb, brightness)| LedPixel {
             wire: *rgb,
             brightness: *brightness,
+            white: None,
         })
         .collect()
 }
@@ -144,6 +145,7 @@ fn old_ws_pixels(old: &OldWs2812) -> Vec<LedPixel> {
         .map(|grb| LedPixel {
             wire: *grb,
             brightness: 0,
+            white: None,
         })
         .collect()
 }
@@ -302,7 +304,8 @@ fn apa102_a_ones_end_frame_decodes_as_a_phantom_led_in_both_models() {
         px[1],
         LedPixel {
             wire: [0xFF, 0xFF, 0xFF],
-            brightness: 0x1F
+            brightness: 0x1F,
+            white: None,
         },
         "and it is white at full brightness"
     );

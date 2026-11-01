@@ -1,0 +1,356 @@
+# Semtech SX1262 sub-GHz LoRa transceiver — declarative SPI MESSAGE device.
+# Datasheet: Semtech SX1261/2 Data Sheet Rev. 1.2 (June 2019),
+# DS.SX1261-2.W.APP — §8.3.1 "BUSY Control Line", §11 "List of Commands"
+# (Tables 11-1..11-5), §12 "Register Map" Table 12-1, §13 command details:
+# Table 13-29 "IRQ Registers", Table 13-76 "Status Bytes Definition" and the
+# per-command "SPI Transaction" tables cited below.
+#
+# Unlike the SX1276 the SX126x has NO register-addressed SPI map: everything is
+# a COMMAND — an opcode then its parameters, one command per NSS-low
+# transaction — and "the device returns status information also on command
+# bytes" (§13.5.1). That is a message part: `frames: { length: 1 }` and
+# `spi.miso_var`, with the rules below decoding the opcode in byte 0 and
+# answering each following byte.
+#
+# ── Status byte (Table 13-76) ───────────────────────────────────────────────
+#   bit 7 reserved | ChipMode[6:4] | CommandStatus[3:1] | bit 0 reserved
+#   ChipMode: 0x2 STBY_RC, 0x3 STBY_XOSC, 0x4 FS, 0x5 RX, 0x6 TX
+#   CommandStatus: 0x2 data available, 0x3 timeout, 0x4 processing error,
+#                  0x5 failure to execute, 0x6 command TX done
+# The part powers up in STBY_RC with no command status: 0x20. The status is
+# returned on every byte the datasheet does not give to data (its "RFU" first
+# bytes included — RFU is "any value").
+#
+# ── Commands modelled ───────────────────────────────────────────────────────
+#   0x80 SetStandby(cfg)        (Table 13-3)  cfg 0 → STBY_RC, 1 → STBY_XOSC
+#   0xC1 SetFs                  (Table 13-5)  → FS
+#   0x82 SetRx(timeout)         (Table 13-8)  → RX (nothing is ever received)
+#   0x83 SetTx(timeout)         (Table 13-6)  completes at once: TxDone IRQ,
+#                                             command status 0x6, back to STBY_RC
+#                                             (the default fallback mode)
+#   0x84 SetSleep(cfg)          (Table 13-1)  BUSY high; the next NSS↓ wakes the
+#                                             part into STBY_RC (warm start)
+#   0x0D WriteRegister(a16, d…) (Table 13-24) auto-incrementing
+#   0x1D ReadRegister(a16)      (Table 13-25) RFU, Status, Status, Status, data…
+#   0x8A SetPacketType / 0x11 GetPacketType (Tables 13-37 / 13-39); POR 0x00 GFSK
+#   0x08 SetDioIrqParams(irqMask, dio1Mask, …)    (Table 13-28)
+#   0x12 GetIrqStatus  → RFU, Status, Irq[15:8], Irq[7:0]   (Table 13-30)
+#   0x02 ClearIrqStatus(mask16)                             (Table 13-31)
+#   0x15 GetRssiInst   → RFU, Status, RssiInst; dBm = −RssiInst/2 (Table 13-81)
+#   0x14 GetPacketStatus (LoRa) → RFU, Status, RssiPkt, SnrPkt, SignalRssiPkt
+#   0x13 GetRxBufferStatus → RFU, Status, 0, 0   (no packet received)
+#   0x17 GetDeviceErrors → RFU, Status, OpError[15:8], [7:0] (Table 13-84); 0
+#   0x07 ClearDeviceErrors                                   (Table 13-86)
+#   0xC0 GetStatus     → RFU, Status                         (Table 13-77)
+#   0x1E ReadBuffer    → RFU, Status, Status, 0x00…  (the buffer is not modelled)
+# Every other opcode (SetRfFrequency, SetModulationParams, SetPacketParams,
+# SetPaConfig, SetTxParams, Calibrate, WriteBuffer …) is accepted and its
+# parameters dropped — the radio has no RF to configure.
+#
+# ── Registers (Table 12-1) ──────────────────────────────────────────────────
+# The documented registers are served with their reset values, e.g. LoRa Sync
+# Word 0x0740/0x0741 = 0x14 0x24 (private network), OCP 0x08E7 = 0x38 (the
+# SX1262's 140 mA), Rx Gain 0x08AC = 0x94, XTA/XTB trim 0x0911/0x0912 = 0x05.
+# The whitening MSB's undefined "X" nibble reads 0, the FSK sync word (no reset
+# value) reads 0. An undocumented address reads 0x00 and ignores writes.
+#
+# ── Pins ────────────────────────────────────────────────────────────────────
+# BUSY (§8.3.1) is driven LOW once the part is up and stays low — a command
+# completes instantly here — except in Sleep, where it is held high. DIO1 is
+# driven high while (IRQ & IrqMask & DIO1Mask) ≠ 0, so an interrupt-driven
+# driver sees TxDone.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * THE RF AIR LINK: RX never receives (no RxDone, no Timeout either — the
+#     RX timeout timer is not run), the 256-byte data buffer, CAD.
+#   * Time: BUSY never pulses, TX has no time-on-air, no TSW.
+#   * DIO2/DIO3 masks and functions, RTC, image calibration, PA / OCP effects.
+#   * RssiInst, RssiPkt and SnrPkt come from the `rssi_dbm`,
+#     `packet_rssi_dbm` and `snr_db` inputs in WHOLE units (the rule arithmetic
+#     is integer), so a half-dB step is not reachable.
+#   * The SX1261 (its OCP reset is 0x18): this descriptor is the SX1262.
+type: sx1262
+
+behavior:
+  primitive: spi_device
+  spi:
+    miso_var: miso
+  frames:
+    length: 1
+    discard_partial: true
+  outputs: [BUSY, DIO1]
+  output_pins:
+    BUSY: busy_pin
+    DIO1: dio1_pin
+  vars:
+    idx: 0        # byte index in this NSS-low transaction
+    op: 0         # opcode (byte 0)
+    mode: 2       # Table 13-76 ChipMode: STBY_RC at power-on
+    cmdst: 0      # Table 13-76 CommandStatus
+    sleeping: 0
+    pkt: 0        # packet type: 0x00 GFSK at power-on
+    irq: 0        # IRQ_reg (Table 13-29)
+    irqmask: 0
+    dio1mask: 0
+    hold: 0       # first byte of a two-byte parameter
+    addr: 0       # register address for Read/WriteRegister
+    err: 0        # OpError
+    miso: 0
+    r0580: 0x00   # DIOx output enable
+    r0583: 0x00   # DIOx input enable
+    r0584: 0x00   # DIOx pull-up control
+    r0585: 0x00   # DIOx pull-down control
+    r06B8: 0x01   # Whitening initial value MSB (0xX1)
+    r06B9: 0x00   # Whitening initial value LSB
+    r06BC: 0x1D   # CRC MSB Initial Value
+    r06BD: 0x0F   # CRC LSB Initial Value
+    r06BE: 0x10   # CRC MSB polynomial
+    r06BF: 0x21   # CRC LSB polynomial
+    r06C0: 0x00   # SyncWord[0] (no reset value)
+    r06C1: 0x00   # SyncWord[1] (no reset value)
+    r06C2: 0x00   # SyncWord[2] (no reset value)
+    r06C3: 0x00   # SyncWord[3] (no reset value)
+    r06C4: 0x00   # SyncWord[4] (no reset value)
+    r06C5: 0x00   # SyncWord[5] (no reset value)
+    r06C6: 0x00   # SyncWord[6] (no reset value)
+    r06C7: 0x00   # SyncWord[7] (no reset value)
+    r06CD: 0x00   # Node Address
+    r06CE: 0x00   # Broadcast Address
+    r0736: 0x0D   # IQ Polarity Setup
+    r0740: 0x14   # LoRa Sync Word MSB
+    r0741: 0x24   # LoRa Sync Word LSB
+    r0889: 0x01   # TxModulation
+    r08AC: 0x94   # Rx Gain
+    r08D8: 0xC8   # TxClampConfig
+    r08E7: 0x38   # OCP Configuration (SX1262)
+    r0902: 0x00   # RTC Control2
+    r0911: 0x05   # XTA trim
+    r0912: 0x05   # XTB trim
+    r0920: 0x01   # DIO3 output voltage control
+    r0944: 0x00   # Event Mask
+  timers:
+    # Power-on: the part is up and BUSY drops.
+    - { name: por, after_us: 1, start: on_reset }
+  rules:
+    - on: { timer: por }
+      do: [ { pin: BUSY, level: "0" }, { pin: DIO1, level: "(var(irq) & var(irqmask) & var(dio1mask)) != 0" } ]
+    # NSS↓ starts a command; it also wakes a sleeping part into STBY_RC.
+    - on: cs_select
+      do:
+        - { var: { name: idx, value: "0" } }
+        - { var: { name: mode, value: "var(mode) * !var(sleeping) + 2 * var(sleeping)" } }
+        - { pin: BUSY, level: "0" }
+        - { var: { name: sleeping, value: "0" } }
+    # Default answer: the status byte.
+    - on: frame
+      do: [ { var: { name: miso, value: "(var(mode) << 4) | (var(cmdst) << 1)" } } ]
+    # ── byte 0: the opcode, and the commands with no parameter to wait for ──
+    - on: frame
+      when: "var(idx) == 0"
+      do: [ { var: { name: op, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(idx) == 0 && var(op) == 0xC1"
+      do:
+        - { var: { name: mode, value: "4" } }
+        - { var: { name: cmdst, value: "0" } }
+    - on: frame
+      when: "var(idx) == 0 && var(op) == 0x82"
+      do:
+        - { var: { name: mode, value: "5" } }
+        - { var: { name: cmdst, value: "0" } }
+    - on: frame
+      when: "var(idx) == 0 && var(op) == 0x83"
+      do:
+        - { var: { name: mode, value: "2" } }
+        - { var: { name: cmdst, value: "6" } }
+        - { var: { name: irq, value: "var(irq) | 0x0001" } }
+        - { pin: DIO1, level: "(var(irq) & var(irqmask) & var(dio1mask)) != 0" }
+    - on: frame
+      when: "var(idx) == 0 && var(op) == 0x84"
+      do:
+        - { var: { name: sleeping, value: "1" } }
+        - { pin: BUSY, level: "1" }
+    - on: frame
+      when: "var(idx) == 0 && var(op) == 0x07"
+      do: [ { var: { name: err, value: "0" } } ]
+    # ── parameters ──────────────────────────────────────────────────────────
+    - on: frame
+      when: "var(idx) == 1 && var(op) == 0x80"
+      do:
+        - { var: { name: mode, value: "2 + (frame_byte(0) & 1)" } }
+        - { var: { name: cmdst, value: "0" } }
+    - on: frame
+      when: "var(idx) == 1 && var(op) == 0x8A"
+      do: [ { var: { name: pkt, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(idx) == 1 && (var(op) == 0x02 || var(op) == 0x08 || var(op) == 0x0D || var(op) == 0x1D)"
+      do: [ { var: { name: hold, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(idx) == 2 && var(op) == 0x02"
+      do:
+        - { var: { name: irq, value: "var(irq) & ~((var(hold) << 8) | frame_byte(0))" } }
+        - { pin: DIO1, level: "(var(irq) & var(irqmask) & var(dio1mask)) != 0" }
+    - on: frame
+      when: "var(idx) == 2 && var(op) == 0x08"
+      do: [ { var: { name: irqmask, value: "(var(hold) << 8) | frame_byte(0)" } } ]
+    - on: frame
+      when: "var(idx) == 3 && var(op) == 0x08"
+      do: [ { var: { name: hold, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(idx) == 4 && var(op) == 0x08"
+      do:
+        - { var: { name: dio1mask, value: "(var(hold) << 8) | frame_byte(0)" } }
+        - { pin: DIO1, level: "(var(irq) & var(irqmask) & var(dio1mask)) != 0" }
+    - on: frame
+      when: "var(idx) == 2 && (var(op) == 0x0D || var(op) == 0x1D)"
+      do: [ { var: { name: addr, value: "(var(hold) << 8) | frame_byte(0)" } } ]
+    # ── WriteRegister data: one documented register per byte ───────────────
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0580"
+      do: [ { var: { name: r0580, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0583"
+      do: [ { var: { name: r0583, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0584"
+      do: [ { var: { name: r0584, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0585"
+      do: [ { var: { name: r0585, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06B8"
+      do: [ { var: { name: r06B8, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06B9"
+      do: [ { var: { name: r06B9, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06BC"
+      do: [ { var: { name: r06BC, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06BD"
+      do: [ { var: { name: r06BD, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06BE"
+      do: [ { var: { name: r06BE, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06BF"
+      do: [ { var: { name: r06BF, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C0"
+      do: [ { var: { name: r06C0, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C1"
+      do: [ { var: { name: r06C1, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C2"
+      do: [ { var: { name: r06C2, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C3"
+      do: [ { var: { name: r06C3, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C4"
+      do: [ { var: { name: r06C4, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C5"
+      do: [ { var: { name: r06C5, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C6"
+      do: [ { var: { name: r06C6, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06C7"
+      do: [ { var: { name: r06C7, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06CD"
+      do: [ { var: { name: r06CD, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x06CE"
+      do: [ { var: { name: r06CE, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0736"
+      do: [ { var: { name: r0736, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0740"
+      do: [ { var: { name: r0740, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0741"
+      do: [ { var: { name: r0741, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0889"
+      do: [ { var: { name: r0889, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x08AC"
+      do: [ { var: { name: r08AC, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x08D8"
+      do: [ { var: { name: r08D8, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x08E7"
+      do: [ { var: { name: r08E7, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0902"
+      do: [ { var: { name: r0902, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0911"
+      do: [ { var: { name: r0911, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0912"
+      do: [ { var: { name: r0912, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0920"
+      do: [ { var: { name: r0920, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3 && var(addr) == 0x0944"
+      do: [ { var: { name: r0944, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(op) == 0x0D && var(idx) >= 3"
+      do: [ { var: { name: addr, value: "var(addr) + 1" } } ]
+    # ── answers ─────────────────────────────────────────────────────────────
+    - on: frame
+      when: "var(op) == 0x1D && var(idx) >= 4"
+      do:
+        - { var: { name: miso, value: "(var(addr) == 0x0580) * var(r0580) + (var(addr) == 0x0583) * var(r0583) + (var(addr) == 0x0584) * var(r0584) + (var(addr) == 0x0585) * var(r0585) + (var(addr) == 0x06B8) * var(r06B8) + (var(addr) == 0x06B9) * var(r06B9) + (var(addr) == 0x06BC) * var(r06BC) + (var(addr) == 0x06BD) * var(r06BD) + (var(addr) == 0x06BE) * var(r06BE) + (var(addr) == 0x06BF) * var(r06BF) + (var(addr) == 0x06C0) * var(r06C0) + (var(addr) == 0x06C1) * var(r06C1) + (var(addr) == 0x06C2) * var(r06C2) + (var(addr) == 0x06C3) * var(r06C3) + (var(addr) == 0x06C4) * var(r06C4) + (var(addr) == 0x06C5) * var(r06C5) + (var(addr) == 0x06C6) * var(r06C6) + (var(addr) == 0x06C7) * var(r06C7) + (var(addr) == 0x06CD) * var(r06CD) + (var(addr) == 0x06CE) * var(r06CE) + (var(addr) == 0x0736) * var(r0736) + (var(addr) == 0x0740) * var(r0740) + (var(addr) == 0x0741) * var(r0741) + (var(addr) == 0x0889) * var(r0889) + (var(addr) == 0x08AC) * var(r08AC) + (var(addr) == 0x08D8) * var(r08D8) + (var(addr) == 0x08E7) * var(r08E7) + (var(addr) == 0x0902) * var(r0902) + (var(addr) == 0x0911) * var(r0911) + (var(addr) == 0x0912) * var(r0912) + (var(addr) == 0x0920) * var(r0920) + (var(addr) == 0x0944) * var(r0944)" } }
+        - { var: { name: addr, value: "var(addr) + 1" } }
+    - on: frame
+      when: "var(op) == 0x12 && var(idx) == 2"
+      do: [ { var: { name: miso, value: "(var(irq) >> 8) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x12 && var(idx) == 3"
+      do: [ { var: { name: miso, value: "var(irq) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x11 && var(idx) == 2"
+      do: [ { var: { name: miso, value: "var(pkt)" } } ]
+    - on: frame
+      when: "var(op) == 0x15 && var(idx) == 2"
+      do: [ { var: { name: miso, value: "(0 - 2 * input(rssi_dbm)) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x14 && (var(idx) == 2 || var(idx) == 4)"
+      do: [ { var: { name: miso, value: "(0 - 2 * input(packet_rssi_dbm)) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x14 && var(idx) == 3"
+      do: [ { var: { name: miso, value: "(4 * input(snr_db)) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x17 && var(idx) == 2"
+      do: [ { var: { name: miso, value: "(var(err) >> 8) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x17 && var(idx) == 3"
+      do: [ { var: { name: miso, value: "var(err) & 0xFF" } } ]
+    - on: frame
+      when: "var(op) == 0x13 && var(idx) >= 2 || var(op) == 0x1E && var(idx) >= 3"
+      do: [ { var: { name: miso, value: "0" } } ]
+    # Declared LAST: every rule above reads this byte's index.
+    - on: frame
+      do: [ { var: { name: idx, value: "var(idx) + 1" } } ]
+
+metadata:
+  label: "Semtech SX1262 LoRa"
+  summary: "Semtech SX1262 LoRa transceiver, SPI command interface (status, standby/RX/TX, registers, IRQ) — no RF air link."
+  detail: "Semtech SX1262 over SPI: one command per NSS-low transaction, status returned on command bytes (Table 13-76, 0x20 = STBY_RC at power-on). SetStandby (0x80), SetFs (0xC1), SetRx (0x82), SetTx (0x83, completes at once with TxDone), SetSleep (0x84), GetStatus (0xC0), Read/WriteRegister (0x1D/0x0D) over the Table 12-1 registers (LoRa sync word 0x0740 = 0x14 0x24, OCP 0x08E7 = 0x38), Set/GetPacketType, SetDioIrqParams, Get/ClearIrqStatus, GetRssiInst, GetPacketStatus, Get/ClearDeviceErrors. BUSY is driven low (high in Sleep); DIO1 follows IRQ & IrqMask & DIO1Mask. NOT modelled: the RF air link (nothing is received), the data buffer, timing, DIO2/DIO3."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "SPI NSS GPIO pin. Defaults to PA4." }
+    - { name: busy_pin, ty: str, doc: "GPIO the BUSY output drives." }
+    - { name: dio1_pin, ty: str, doc: "GPIO the DIO1 interrupt output drives." }
+  inputs:
+    - { key: rssi_dbm, label: "Instantaneous RSSI", unit: "dBm", min: -127, max: 0, default: -95 }
+    - { key: packet_rssi_dbm, label: "Last packet RSSI", unit: "dBm", min: -127, max: 0, default: -88 }
+    - { key: snr_db, label: "Last packet SNR", unit: "dB", min: -32, max: 31, default: 7 }

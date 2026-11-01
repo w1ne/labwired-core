@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
+  `sx1276` (the LoRa register page with §6.4 reset values, RSSI / packet RSSI /
+  SNR from stimulus, write-1-to-clear RegIrqFlags, TX → TxDone) and `sx1262`
+  (the SX126x command interface: status byte, SetStandby/Fs/Rx/Tx/Sleep,
+  Read/WriteRegister over Table 12-1, packet type, IRQ status with a DIO1 pin,
+  RSSI, BUSY); neither has an RF air link. ADCs: `mcp3008` (Figure 6-1 SPI
+  read, single-ended and differential) and `ads1256` (RREG/WREG/RDATA, MUX,
+  PGA, DRDY pin). Sensors: `bmi160` (accel/gyro/temperature with CMD power
+  modes), `bmm150` (suspend-mode Chip ID, data through a reference trim unit
+  that Bosch's compensation recovers exactly) and `veml6075` (UVA/UVB).
+  Drivers: `ht16k33` (I²C display RAM and setup commands), `sk6812` (RGBW,
+  32 bits per LED) and `tm1638` (STB/CLK/DIO bit-bang, 8-digit artifact).
+  `crates/core/tests/parts_batch5.rs` gives each a register-level smoke check
+  and a negative control that must fail against a part answering only 0x00
+  or 0xFF (a 24-bit decoder / deaf strip for the SK6812, a TM1637 / deaf
+  panel for the TM1638), plus a stimulus test per part. Each part has a
+  `docs/parts/` page.
+- `behavior.spi.miso_var` for `spi_device` message parts: the reply byte is a
+  variable read after that byte's `frame` rules ran, so MISO may depend on
+  the byte being clocked in (the MCP3008's B9:B8) or on earlier command bytes
+  (the ADS1256's two-byte RREG, the SX1262's ReadRegister). Validated at load:
+  frames-only parts, a declared variable.
+- `led_strip` `nrz_gpio` accepts `timing.bits_per_pixel: 32`: an RGBW part
+  shifts four bytes per LED and carries the fourth as `LedPixel::white`;
+  three-colour strips are unchanged. New artifact formats `sk6812_rgbw` and
+  `tm1638_grid`.
 - Three displays as declarative `configs/devices/*.yaml` descriptors on the
   existing `display` primitive, no engine change: `st7735` (Sitronix ST7735R,
   128x160 RGB565, 4-wire SPI), `gc9a01` (GalaxyCore GC9A01A, round 240x240
