@@ -6,12 +6,20 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 OUT=out/boards/ek-rx261
-for t in hello sync kernel-common; do
-  cargo run -q -p labwired-cli -- test \
-    --script "examples/ek-rx261/zephyr-$t.yaml" \
-    --output-dir "$OUT/zephyr-$t" \
-    --no-uart-stdout
-done
+# Literal --script paths: scripts/ci/chip_coverage.py only credits a chip for
+# a script path it can read verbatim, not one assembled in a loop.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-rx261/zephyr-hello.yaml \
+  --output-dir "$OUT/zephyr-hello" \
+  --no-uart-stdout
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-rx261/zephyr-sync.yaml \
+  --output-dir "$OUT/zephyr-sync" \
+  --no-uart-stdout
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-rx261/zephyr-kernel-common.yaml \
+  --output-dir "$OUT/zephyr-kernel-common" \
+  --no-uart-stdout
 for f in hello sync kernel-common; do
   ./scripts/unsupported_instruction_audit.sh \
     --firmware "tests/fixtures/ek-rx261-zephyr-$f.elf" \
