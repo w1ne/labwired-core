@@ -2072,7 +2072,9 @@ pub(crate) fn run_test(
             // result.json changes, to the machine clock. Opt out with
             // LABWIRED_HOSTED_FAST=0.
             let hosted_fast = !jit_eligible
-                && (program.arch == labwired_core::Arch::Arm || rv64_chip)
+                && (program.arch == labwired_core::Arch::Arm
+                    || program.arch == labwired_core::Arch::Rx
+                    || rv64_chip)
                 && std::env::var("LABWIRED_HOSTED_FAST").as_deref() != Ok("0");
             if !jit_eligible && !hosted_fast {
                 machine.add_observer(metrics.clone());
@@ -2149,6 +2151,13 @@ pub(crate) fn run_test(
                     system_path.as_ref(),
                     e,
                 );
+            }
+            // RX starts at the fixed reset vector, as the silicon does.
+            if matches!(program.arch, labwired_core::Arch::Rx) {
+                match labwired_core::system::rx::reset_pc(&machine.bus) {
+                    Ok(pc) => machine.cpu.set_pc(pc),
+                    Err(e) => error!("{e:#}"),
+                }
             }
             // RISC-V Arduino-ESP32 images enter at `call_start_cpu0`, which
             // assumes the second-stage bootloader already left a DRAM stack.
@@ -2790,6 +2799,11 @@ pub(crate) fn run_test(
             cpu.set_serial_sink(uart_tx.clone());
             let machine = labwired_core::Machine::new(cpu, bus);
             run_machine!(machine)
+        }
+        labwired_core::Arch::Rx => {
+            // RX is von Neumann: code flash and RAM are on the bus, and the
+            // ICU is part of the core.
+            setup_and_run!(labwired_core::cpu::Rx::new())
         }
         labwired_core::Arch::Pic16 => {
             // PIC16 is Harvard as well: word-addressed program memory sized

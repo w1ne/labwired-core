@@ -719,6 +719,10 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, 
 
 _L1 + stock RTOS, SIM-DERIVED. First RV64 part: one PolarFire SoC U54 hart (RV64IMAC M-mode, CLINT in the core) runs unmodified Zephyr v4.1.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63) from the DDR window on the MMUART1 16550 console (examples/mpfs-disco-kit). PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox are declared stubs, so no advanced blocks exist to list._
 
+### `r5f52618bgfp`
+
+_L1 + stock RTOS, SIM-DERIVED. First Renesas RX part: the RXv3 core (integer, DSP accumulators, single-precision FPU; ICU in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 61 pass + 1 skip) for ek_rx261 from the reset vector, on the polled SCI6 console with the CMT0 tick (examples/ek-rx261). PORT/MPC, DTC and BSC are declared stubs and SCI interrupts are not requested, so no advanced blocks exist to list._
+
 ### `vegaboard-ri5cy`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LPUART0 console are proven by tests/fixtures/vegaboard-ri5cy-smoke.elf and examples/vegaboard-ri5cy/io-smoke.yaml. The SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs (examples/vegaboard-ri5cy/VALIDATION.md), so no advanced blocks exist to list._

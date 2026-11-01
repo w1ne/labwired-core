@@ -79,6 +79,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * SPI: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * UART: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
+* **r5f52618bgfp**
+  * UART: no RX core bring-up in this harness; bytes are proven by the ek_rx261_zephyr survival gate
 * **r7fa6m5bh**
   * UART: no SCI0 bring-up in this harness; bytes are proven by the ek-ra6m5 survival smoke
 * **r7fa8m1ah**
@@ -156,6 +158,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | pic24f08ka102 | — | — | — |
 | pic24f16ka101 | — | — | — |
 | pic24f16ka102 | — | — | — |
+| r5f52618bgfp | — | — | — |
 | r7fa6m5bh | — | — | — |
 | r7fa8m1ah | — | — | — |
 | ra4m1 | — | — | — |

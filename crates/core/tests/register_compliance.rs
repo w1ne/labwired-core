@@ -129,6 +129,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Rx => {
+            // No SVD-backed register list for the RX parts yet.
+            println!(
+                "Skipping RX register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }

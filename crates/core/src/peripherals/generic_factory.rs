@@ -342,6 +342,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // xxxCKCR handshake).
     "ra8_sysc",
     "ra6_sysc",
+    // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
+    "rx_sysc",
+    // Renesas RX FLASH control registers (0xAA-keyed word writes).
+    "rx_flash",
+    // Renesas RX RTC registers as read-back storage.
+    "rx_rtc",
+    // Renesas RX compare match timer unit (CMSTR + two channels).
+    "rx_cmt",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1391,6 +1399,32 @@ pub fn try_build(
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
+        "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
+        "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
+        // `vectors`: the two channels' CMI vectors; `clock_hz`: the CPU
+        // cycle rate; `pclkb_hz`: the CMT count source before CKS.
+        "rx_cmt" => {
+            use crate::peripherals::rx_cmt as cmt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let vectors = p_cfg
+                .config
+                .get("vectors")
+                .and_then(|v| v.as_sequence())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(|v| v as u32)
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| v.len() == 2)
+                .map_or([28, 29], |v| [v[0], v[1]]);
+            Box::new(cmt::RxCmt::new(
+                get("clock_hz").unwrap_or(cmt::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(cmt::DEFAULT_PCLKB_HZ),
+                vectors,
+            ))
+        }
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
         "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
         // `ielsr_lines`: IELSRn count (default 96; 0 = only the IRQ-pin half);

@@ -186,6 +186,8 @@ impl WasmSimulator {
             MachineFamily::Pic18 => 8,
             // PIC16: W, STATUS, FSR, PCLATH, SP, PC.
             MachineFamily::Pic16 => 6,
+            // RX: R0-R15.
+            MachineFamily::Rx => 16,
         };
         let cpu = focused_cpu(machine);
         let locals: Vec<Local> = debug
@@ -261,6 +263,7 @@ impl WasmSimulator {
             // SP is the hardware return-stack pointer.
             MachineFamily::Pic18 => 6,
             MachineFamily::Pic16 => 4,
+            MachineFamily::Rx => 0,
         }
     }
 

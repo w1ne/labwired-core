@@ -40,6 +40,8 @@ pub use cortex_a::CortexA7;
 pub mod riscv;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv64;
+#[deny(clippy::let_underscore_must_use)]
+pub mod rx;
 pub mod xtensa_lockstep;
 pub mod xtensa_lx7;
 pub mod xtensa_regs;
@@ -83,6 +85,7 @@ pub use pic18::Pic18;
 pub use pic24::Pic24;
 pub use riscv::{RiscV, RiscVCoreProfile};
 pub use riscv64::RiscV64;
+pub use rx::Rx;
 pub use xtensa_lx7::XtensaLx7;
 
 #[cfg(feature = "qemu-arm-system")]
