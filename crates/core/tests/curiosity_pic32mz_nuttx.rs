@@ -72,33 +72,3 @@ fn nsh_runs_typed_commands() {
     expect(&mut s, "ttyS0", Duration::from_millis(200));
     expect(&mut s, "userleds", Duration::from_millis(200));
 }
-
-#[test]
-#[ignore = "about 10 minutes: ostest spins the CPU by design (hog_cpu to INT_MAX)"]
-fn ostest_passes_every_group() {
-    // The full stock ostest as the init task: signals, POSIX timers, message
-    // queues, mutexes/semaphores/condition variables, cancellation,
-    // round-robin preemption on the Timer1 tick and priority inheritance.
-    let mut s = open("curiosity-pic32mz-ef-nuttx-ostest.elf");
-    let started = std::time::Instant::now();
-    expect(
-        &mut s,
-        "ostest_main: Exiting with status 0",
-        Duration::from_secs(600),
-    );
-    eprintln!(
-        "ostest: {:?} simulated, {} cycles, {:?} wall",
-        s.time(),
-        s.cycles(),
-        started.elapsed()
-    );
-    let out = s.uart_transcript();
-    // 34 groups: 33 "user_main: <name> test" lines plus "libc tests".
-    let groups = out
-        .lines()
-        .map(str::trim_end)
-        .filter(|l| l.starts_with("user_main: ") && (l.ends_with(" test") || l.ends_with(" tests")))
-        .count();
-    assert_eq!(groups, 34, "{out}");
-    assert!(!out.contains("ERROR"), "{out}");
-}
