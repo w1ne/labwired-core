@@ -416,7 +416,9 @@ canonical `type:`; the table below is rendered from that file by
 | `bh1750` | I²C | Ambient-light sensor over I²C (single-byte opcodes) |
 | `bme280` | I²C | Bosch BME280 temp + humidity + pressure sensor over I2C |
 | `bme680` | I²C | Bosch BME680 temperature / pressure / humidity sensor over I²C (gas channel not modelled) |
+| `bmi160` | I²C | Bosch BMI160 6-axis IMU (accel + gyro + temperature) over I²C |
 | `bmi270` | I²C | Bosch BMI270 low-power IMU with hardware step counter over I2C |
+| `bmm150` | I²C | Bosch BMM150 3-axis geomagnetic sensor over I²C (chip ID 0x32, trim block) |
 | `bmp280` | I²C | Bosch BMP280 I²C pressure + temperature sensor (no humidity) |
 | `bno055` | I²C | 9-DoF absolute orientation sensor (Bosch BNO055) over I²C |
 | `cap1188` | I²C | Microchip CAP1188 8-channel capacitive touch controller over I2C |
@@ -425,6 +427,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
+| `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
 | `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
 | `ina219` | I²C | High-side current and bus voltage sensor over I²C |
@@ -464,10 +467,12 @@ canonical `type:`; the table below is rendered from that file by
 | `tmp117` | I²C | TI TMP117 high-accuracy digital temperature sensor over I2C |
 | `tsl2591` | I²C | ams TSL2591 high-dynamic-range light sensor (full-spectrum + IR channels) over I²C |
 | `vcnl4010` | I²C | Proximity + ambient-light sensor over I2C (fixed address 0x13) |
+| `veml6075` | I²C | UVA / UVB light sensor over I²C (16-bit counts, ID 0x0026) |
 | `veml7700` | I²C | Ambient-light sensor (lux) over I2C |
 | `vl53l0x` | I²C | Laser time-of-flight distance sensor over I²C (ST VL53L0X) |
 | `vl53l1x` | I²C | Laser time-of-flight distance sensor over I2C |
 | `74hc595` | SPI | 8-bit serial-in / parallel-out shift register over SPI |
+| `ads1256` | SPI | 8-channel 24-bit delta-sigma SPI ADC (RREG/WREG/RDATA, PGA, DRDY) |
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
@@ -479,6 +484,7 @@ canonical `type:`; the table below is rendered from that file by
 | `lora-sx1278` | SPI | Semtech SX1278 SPI LoRa register shell (no RF) |
 | `max31855` | SPI | K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame) |
 | `mcp2515` | SPI | Functional SPI classical CAN controller for standard 11-bit data frames |
+| `mcp3008` | SPI | 8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing) |
 | `microsd` | SPI | SPI SD card command shell (init + single-block read zeros) |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
@@ -488,6 +494,8 @@ canonical `type:`; the table below is rendered from that file by
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
 | `st7735` | SPI | 1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
+| `sx1262` | SPI | Semtech SX1262 LoRa transceiver, SPI command interface (status, standby/RX/TX, registers, IRQ) — no RF air link |
+| `sx1276` | SPI | Semtech SX1276 LoRa transceiver, SPI register model of the LoRa page (no RF air link) |
 | `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
 | `74cbtlv3257` | GPIO | Four 1-of-2 bus switches; S picks the A or B side, OE opens all four |
 | `74hc00` | GPIO | Four independent 2-input NAND gates, 9 ns propagation delay |
@@ -518,7 +526,9 @@ canonical `type:`; the table below is rendered from that file by
 | `segment-display-mux` | GPIO | N-digit 7/14/16-segment LED display, multiplexed by GPIO segment and digit-select lines |
 | `servo` | GPIO | RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty) |
 | `seven-segment` | GPIO | Bare single-digit 7-segment LED display driven straight from nine GPIO pins |
+| `sk6812` | GPIO | Addressable RGBW LED strip on one data pin (32-bit edge-timed frames) |
 | `tm1637-7seg` | GPIO | 4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver |
+| `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
 | `uln2803` | GPIO | Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay |
 | `gp2y0a21` | Analog | Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC) |

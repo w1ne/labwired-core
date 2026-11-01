@@ -523,6 +523,47 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["rfm95"],
         include_str!("../../../configs/devices/rfm95.yaml"),
     ),
+    // ── Batch 5: LoRa, ADCs, IMU / magnetometer, UV, LED drivers ────────────
+    (
+        &["sx1276"],
+        include_str!("../../../configs/devices/sx1276.yaml"),
+    ),
+    (
+        &["sx1262"],
+        include_str!("../../../configs/devices/sx1262.yaml"),
+    ),
+    (
+        &["mcp3008"],
+        include_str!("../../../configs/devices/mcp3008.yaml"),
+    ),
+    (
+        &["ads1256"],
+        include_str!("../../../configs/devices/ads1256.yaml"),
+    ),
+    (
+        &["bmi160"],
+        include_str!("../../../configs/devices/bmi160.yaml"),
+    ),
+    (
+        &["bmm150"],
+        include_str!("../../../configs/devices/bmm150.yaml"),
+    ),
+    (
+        &["veml6075"],
+        include_str!("../../../configs/devices/veml6075.yaml"),
+    ),
+    (
+        &["ht16k33"],
+        include_str!("../../../configs/devices/ht16k33.yaml"),
+    ),
+    (
+        &["sk6812"],
+        include_str!("../../../configs/devices/sk6812.yaml"),
+    ),
+    (
+        &["tm1638"],
+        include_str!("../../../configs/devices/tm1638.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.
