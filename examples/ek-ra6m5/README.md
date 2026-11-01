@@ -63,6 +63,16 @@ answered by cycle-timed injections:
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
 ```
 
+Stock Zephyr v4.0.0 `samples/subsys/shell/shell_module`
+(`tests/fixtures/r7fa6m5bh-zephyr-shell.elf`, same build script) answers
+typed commands on the same interrupt-driven SCI0: `demo ping`,
+`kernel version`, `device list`, arguments, TAB completion and history
+recall:
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-shell.yaml --no-uart-stdout
+```
+
 See [`VALIDATION.md`](VALIDATION.md).
 
 ## Build and run
