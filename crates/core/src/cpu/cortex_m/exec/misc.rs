@@ -335,15 +335,21 @@ impl CortexM {
             // LDAEXB/LDAEXH/LDAEX.
             //   h1 = 0xE8D0 | Rn, h2 = Rt<<12 | 0xF<<8 | sz<<4 | 0xF
             //   sz: 8=B, 9=H, A=word (acquire), C=EXB, D=EXH, E=EX
-            // Acquire ordering and the exclusive monitor are
-            // no-ops in this single-threaded sim (same rationale
-            // as LDREX above). Rust atomics on thumbv8m compile
-            // to these — embassy's executor run-queue lives on
-            // LDAEX/STLEX.
+            // Acquire ordering is a no-op in this single-threaded
+            // sim. Rust atomics on thumbv8m compile to these —
+            // embassy's executor run-queue lives on LDAEX/STLEX.
+            // LDAEXB/LDAEXH open the same local exclusive monitor as
+            // LDREXB/LDREXH (Armv8-M ARM B9.2: one monitor per PE, set
+            // by every load-exclusive, acquire or not), so a following
+            // STREXB/STREXH or STLEXB/STLEXH sees the reservation.
+            // pico-sdk's RP2350 hw_claim_lock pairs LDAEXB with a plain
+            // STREXB; without the reservation that STREXB always
+            // reported failure and the claim loop spun forever.
             let rn = (h1 & 0xF) as u8;
             let rt = ((h2 >> 12) & 0xF) as u8;
             let addr = self.get_register(rn);
-            let width = match (h2 >> 4) & 0xF {
+            let sz = (h2 >> 4) & 0xF;
+            let width = match sz {
                 0x8 | 0xC => Some(AccessWidth::Byte),
                 0x9 | 0xD => Some(AccessWidth::Half),
                 0xA | 0xE => Some(AccessWidth::Word),
@@ -352,12 +358,17 @@ impl CortexM {
             if let Some(width) = width {
                 let val = self.load(bus, addr, width)?;
                 self.set_register(rt, val);
+                if matches!(sz, 0xC | 0xD) {
+                    self.exclusive_subword = Some((addr, width, val));
+                }
             }
             __pc = PcAdvance::Add4;
         } else if (h1 & 0xFFF0) == 0xE8C0 && (h2 & 0x0F00) == 0x0F00 {
             // Store-release family: STLB/STLH/STL ([3:0]=0xF, no
-            // status register) and STLEXB/STLEXH/STLEX ([3:0]=Rd,
-            // always-success monitor → Rd = 0).
+            // status register) and STLEXB/STLEXH/STLEX ([3:0]=Rd).
+            // STLEXB/STLEXH check the sub-word reservation exactly like
+            // STREXB/STREXH above (it is one monitor); STLEX (word)
+            // keeps the word path's always-success model, like STREX.
             //   h1 = 0xE8C0 | Rn, h2 = Rt<<12 | 0xF<<8 | sz<<4 | Rd/0xF
             let rn = (h1 & 0xF) as u8;
             let rt = ((h2 >> 12) & 0xF) as u8;
@@ -370,12 +381,23 @@ impl CortexM {
                 0xA | 0xE => Some(AccessWidth::Word),
                 _ => None,
             };
-            if let Some(width) = width {
+            let succeeds = match (sz, width) {
+                (0xC | 0xD, Some(width)) => match self.exclusive_subword.take() {
+                    Some((reserved, reserved_width, value))
+                        if reserved == addr && reserved_width == width =>
+                    {
+                        self.load(bus, addr, width)? == value
+                    }
+                    _ => false,
+                },
+                _ => true,
+            };
+            if let (true, Some(width)) = (succeeds, width) {
                 self.store(bus, addr, width, val)?;
             }
             if matches!(sz, 0xC..=0xE) {
                 let rd = (h2 & 0xF) as u8;
-                self.set_register(rd, 0); // success
+                self.set_register(rd, if succeeds { 0 } else { 1 });
             }
             __pc = PcAdvance::Add4;
         } else if (h1 & 0xFE00) == 0xE800 {

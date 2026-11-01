@@ -240,6 +240,50 @@ fn armv7m_strexb_fails_without_matching_unchanged_reservation() {
     }
 }
 
+/// LDAEXB opens the same exclusive monitor as LDREXB (Armv8-M ARM B9.2:
+/// one local monitor per PE). pico-sdk's RP2350 `hw_claim_lock` is
+///
+/// ```text
+///   ldaexb r1, [r3] ; movs r2, #1 ; cmp r1, #0 ; bne ; strexb r1, r2, [r3]
+/// ```
+///
+/// LDAEXB used to load without a reservation, so the STREXB always reported
+/// failure and arduino-pico on rp2350-zero spun in this loop before main.
+#[test]
+fn armv8m_ldaexb_reservation_serves_strexb_and_stlexb() {
+    for (store, name) in [
+        (0xE8C3_2F41u32, "strexb r1,r2,[r3]"),
+        (0xE8C3_2FC1, "stlexb r1,r2,[r3]"),
+    ] {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x2000;
+        cpu.r3 = 0x3000;
+        cpu.r2 = 1;
+        bus.write_u8(0x3000, 0).unwrap();
+        run_test_instr(&mut cpu, &mut bus, 0xE8D3_1FCF, true); // ldaexb r1, [r3]
+        assert_eq!(cpu.r1, 0, "LDAEXB loads one byte");
+        run_test_instr(&mut cpu, &mut bus, store, true);
+        assert_eq!(cpu.r1, 0, "{name} after LDAEXB must succeed");
+        assert_eq!(bus.read_u8(0x3000).unwrap(), 1, "{name} stores the byte");
+    }
+}
+
+/// STLEXB/STLEXH with no open reservation fail and store nothing, like
+/// STREXB/STREXH (the monitor is Open Access after reset).
+#[test]
+fn armv8m_stlexb_fails_without_reservation() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x2000;
+    cpu.r3 = 0x3000;
+    cpu.r2 = 1;
+    bus.write_u8(0x3000, 0).unwrap();
+    run_test_instr(&mut cpu, &mut bus, 0xE8C3_2FC1, true); // stlexb r1, r2, [r3]
+    assert_eq!(cpu.r1, 1, "no reservation: STLEXB reports failure");
+    assert_eq!(bus.read_u8(0x3000).unwrap(), 0, "and does not store");
+}
+
 /// LDREXH/STREXH (ARMv7-M A7.7.54 / A7.7.169, T1). CODAL's reference
 /// counter (`RefCounted::incr`, micro:bit V2) is the retry loop
 ///
