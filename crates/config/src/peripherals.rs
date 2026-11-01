@@ -1250,6 +1250,23 @@ pub struct SpiSpec {
     /// the other twenty-three addresses are storage.
     #[serde(default)]
     pub register_file: Option<SpiRegisterFile>,
+    /// **The reply byte of a MESSAGE part**: the name of a `vars:` entry whose
+    /// low byte is clocked out on MISO for every byte of a `frames:`-only part
+    /// (no `registers:`, no `register_file:`). Absent ⇒ such a part answers
+    /// `0x00`, which is what the shift-register display drivers it was built
+    /// for do.
+    ///
+    /// The variable is read AFTER the byte's own `frame` rules have run, so a
+    /// part declaring `frames: { length: 1 }` can answer a byte with bits that
+    /// depend on that SAME byte's MOSI. A byte-level SPI model is handed MOSI
+    /// before it returns MISO, and that is the only way to say what a
+    /// successive-approximation ADC does on the wire: the MCP3008 (DS21295D
+    /// Figure 6-1) clocks its null bit and B9:B8 out in the low three bits of
+    /// the byte whose high nibble carries the channel select. A command part
+    /// whose reply is a function of an earlier byte (ADS1256 RREG, SX1262
+    /// ReadRegister) uses the same hook with a byte counter in a variable.
+    #[serde(default)]
+    pub miso_var: Option<String>,
 }
 
 /// Flat byte storage backing an SPI part's undeclared addresses
