@@ -1,0 +1,141 @@
+# Solomon Systech SSD1309 128x64 OLED controller — declarative `display`
+# primitive, I2C. Every constant here is read out of the Solomon Systech SSD1309
+# datasheet, Advance Information Rev 1.1 (Jul 2011), cited by section and page.
+# (Copy used: https://www.hpinfotech.ro/SSD1309.pdf, sha256 7946195c...)
+#
+# THE SSD1306'S SIBLING, AND WHAT ACTUALLY DIFFERS. The SSD1309 is the
+# controller on the 2.42"/2.4" 128x64 OLED modules, a physically larger glass
+# than the 0.96" SSD1306 module. Its GDDRAM, I2C framing and addressing commands
+# are the SSD1306's, so this file is `ssd1306.yaml` with the following
+# datasheet-sourced differences, each stated where it lands:
+#   - NO CHARGE PUMP. The panel supply is external, VCC = 7.0..16.0 V
+#     (section 2 Features, p.7), and 8Dh is not in any SSD1309 command table.
+#     It is therefore NOT declared here. Firmware written for the SSD1306 that
+#     sends `8D 14` gets 8Dh consumed as an unlisted opcode and its argument 14h
+#     decoded as what the SSD1309 table says 14h is: Set Higher Column Start
+#     Address (Table 9-3). The datasheet says only that an unlisted pattern gives
+#     "unexpected results" (note under Table 9-6); this model takes the
+#     documented decoding of the byte rather than inventing an 8Dh.
+#   - FDh SET COMMAND LOCK and DCh SET GPIO exist (Tables 9-1, 9-4), each with
+#     one parameter byte, and are declared for that count.
+#   - The scroll setup commands carry SEVEN parameter bytes (Table 9-2, p.28-31)
+#     and are declared for that count.
+#   - Set Memory Addressing Mode resets to PAGE addressing (Table 9-3, p.32:
+#     "A[1:0] = 10b, Page Addressing Mode (RESET)"), so `default: page`. Note
+#     that `ssd1306.yaml` defaults to horizontal; this file follows its own
+#     datasheet's reset value.
+#   - Set Column Address (21h) takes A[7:0] / B[7:0] with "range : 0-127d"
+#     (Table 9-3), not the SSD1306's seven-bit field, so a value past 127 is
+#     CLAMPED to the edge rather than masked. Set Page Address (22h) is A[2:0] /
+#     B[2:0] and stays masked.
+#
+# FRAMING. The first byte of every I2C transaction is the control byte (Co /
+# D/C#, section 8.1.5.2 and Figure 8-7, p.19-20): 0x00 opens the command stream
+# for the rest of the transaction, 0x40 the data stream. A START re-arms it, for
+# the reason `ssd1306.yaml` gives. Slave address 0111100b or 0111101b, the D/C#
+# pin acting as SA0 (section 8.1.5 a), p.19-20) — 0x3C / 0x3D.
+#
+# GDDRAM (section 8.6, p.24) is 128 x 64 bits in eight pages, PAGE0..PAGE7; one
+# data byte is 8 vertically stacked pixels of one page, D0 the top row. Every
+# data-stream byte IS frame memory; there is no RAMWR.
+#
+# PAGE-MODE WRAP. Section 10.3 (p.36): in page addressing mode, when the column
+# pointer reaches the column end "the column address pointer is reset to column
+# start address and page address pointer is not changed"; Figure 10-1 draws it
+# returning from COL127 to COL0. Hence `page_wrap: wrap`.
+#
+# NOT modelled:
+#   - The 4-wire / 3-wire SPI and 6800/8080 parallel interfaces (section 8.1).
+#     This descriptor is the I2C strap only; an SSD1309 module jumpered for SPI
+#     is not this part.
+#   - The command lock itself (FDh with A[2] = 1 makes the MCU interface ignore
+#     every command but FDh). The byte is consumed and the lock is not applied.
+#   - Contrast (81h), entire display on (A4h/A5h), normal/inverse (A6h/A7h),
+#     segment remap (A0h/A1h), COM scan direction (C0h/C8h), display start line
+#     (40h..7Fh), multiplex (A8h), display offset (D3h), COM pins (DAh), GPIO
+#     (DCh), clock divide (D5h), pre-charge (D9h), VCOMH (DBh), and every scroll
+#     command (26h/27h, 29h/2Ah, 2Ch/2Dh, 2Eh/2Fh, A3h). Those with parameters
+#     are listed with their parameter COUNT so the arguments are consumed rather
+#     than mis-decoded as opcodes; each then does nothing, because they change
+#     how the glass looks, not what is in GDDRAM, and this model reports GDDRAM.
+#   - The status-register read (Table 9-6): this model is write-only over I2C.
+type: oled-ssd1309
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 64
+    pixel_format: mono_page
+    artifact_format: ssd1306_page
+    ram: { pages: 8, bytes: 1024, layout: page_major, stream: always }
+    dc: { source: control_byte, command_value: 0x00 }
+    default_address: 0x3C
+    addressing:
+      modes: [horizontal, vertical, page]
+      default: page
+      page_wrap: wrap
+    artifact_meta: [ink_bytes, lit_pixels]
+    commands:
+      # 20h SET MEMORY ADDRESSING MODE (Table 9-3). A[1:0]: 00b horizontal, 01b
+      # vertical, 10b page (RESET), 11b invalid; the engine holds the last
+      # declared mode for it.
+      - { opcode: 0x20, name: SETMEMORYMODE, args: 1, do: [ { set_mode: { args: [0], mask: 0x03 } } ] }
+      # 21h SET COLUMN ADDRESS: start (RESET 0), end (RESET 127), range 0-127d.
+      - opcode: 0x21
+        name: SETCOLUMNADDR
+        args: 2
+        do:
+          - set_window: { axis: col, start: { args: [0], clamp_axis_max: true }, end: { args: [1], clamp_axis_max: true } }
+      # 22h SET PAGE ADDRESS: start (RESET 0), end (RESET 7), A[2:0] / B[2:0].
+      - opcode: 0x22
+        name: SETPAGEADDR
+        args: 2
+        do:
+          - set_window: { axis: page, start: { args: [0], mask: 0x07 }, end: { args: [1], mask: 0x07 } }
+      # AEh / AFh (Table 9-1): "Display OFF (sleep mode) (RESET)" / "Display ON
+      # in normal mode".
+      - { opcode: 0xAE, name: DISPLAYOFF, do: [ { display_on: false } ] }
+      - { opcode: 0xAF, name: DISPLAYON,  do: [ { display_on: true } ] }
+      # B0h..B7h SET PAGE START ADDRESS for page addressing mode, X[2:0].
+      - opcode: 0xB0
+        opcode_end: 0xB7
+        name: SETPAGESTART
+        do:
+          - set_cursor: { axis: page, value: { opcode_mask: 0x07 } }
+      # 00h..0Fh / 10h..1Fh SET LOWER / HIGHER COLUMN START ADDRESS for page
+      # addressing mode: one nibble each, read-modify-written.
+      - opcode: 0x00
+        opcode_end: 0x0F
+        name: SETLOWCOLUMN
+        do:
+          - set_cursor: { axis: col, part: low_nibble, value: { opcode_mask: 0x0F } }
+      - opcode: 0x10
+        opcode_end: 0x1F
+        name: SETHIGHCOLUMN
+        do:
+          - set_cursor: { axis: col, part: high_nibble, value: { opcode_mask: 0x0F } }
+      # Declared for their PARAMETER COUNTS only (see NOT modelled).
+      - { opcode: 0x81, name: SETCONTRAST, args: 1 }                 # Table 9-1
+      - { opcode: 0xFD, name: SETCOMMANDLOCK, args: 1 }              # Table 9-1
+      - { opcode: 0x26, opcode_end: 0x27, name: HSCROLLSETUP, args: 7 }       # Table 9-2
+      - { opcode: 0x29, opcode_end: 0x2A, name: VHSCROLLSETUP, args: 7 }      # Table 9-2
+      - { opcode: 0x2C, opcode_end: 0x2D, name: CONTENTSCROLLSETUP, args: 7 } # Table 9-2
+      - { opcode: 0xA3, name: SETVSCROLLAREA, args: 2 }              # Table 9-2
+      - { opcode: 0xA8, name: SETMULTIPLEX, args: 1 }                # Table 9-4
+      - { opcode: 0xD3, name: SETDISPLAYOFFSET, args: 1 }            # Table 9-4
+      - { opcode: 0xDA, name: SETCOMPINS, args: 1 }                  # Table 9-4
+      - { opcode: 0xDC, name: SETGPIO, args: 1 }                     # Table 9-4
+      - { opcode: 0xD5, name: SETDISPLAYCLOCKDIV, args: 1 }          # Table 9-5
+      - { opcode: 0xD9, name: SETPRECHARGE, args: 1 }                # Table 9-5
+      - { opcode: 0xDB, name: SETVCOMDETECT, args: 1 }               # Table 9-5
+
+metadata:
+  label: "SSD1309 OLED 2.42″"
+  summary: "2.42in 128×64 monochrome OLED on a Solomon Systech SSD1309, I2C, paged framebuffer."
+  detail: "Solomon Systech SSD1309, the SSD1306's sibling on the larger 2.42in/2.4in 128x64 glass. Same eight-page GDDRAM, I2C control-byte framing and addressing commands as the SSD1306; no charge pump (external 7-16 V VCC, so no 8Dh), plus the SSD1309's command lock (FDh) and GPIO (DCh) consumed for their parameter bytes. Resets to page addressing mode, per its datasheet. 0x3C / 0x3D address pair."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0 (D/C# pin) = high variant."
