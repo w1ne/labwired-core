@@ -140,6 +140,12 @@ impl crate::Peripheral for RaDac12 {
         false
     }
 
+    // `tick` is the trait's no-op and nothing leaves the walk (no IRQ, DMA or
+    // event), so deleting the walk cannot change what firmware sees.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         Ok(self.regs.get(offset as usize).copied().unwrap_or(0))
     }
