@@ -27,7 +27,11 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.0.0 `samples/drivers/counter/alarm` (AGT0 compare match A through the ICU) | smoke-tested | `zephyr-counter-alarm.yaml` PASS 1/1: alarms at 2/6/14/30 s of guest time, then the 32 s (65536-tick) request refused; 1,380,716 steps, 14.4 G cycles mostly idle-skipped |
 | ICU `IELSRn` event link (`ra_icu`): event sets `IR`, line n follows `IR` as a level, `IR` write-0-to-clear | smoke-tested | the alarm above; `crates/core/tests/ra8m1_agt_icu.rs` (vectors through IELSR84, unlinked event pends nothing, clearing `IR` drops the pend); unit tests `peripherals::ra_icu` |
 | AGT0/AGT1 timer mode (`ra_agt`): LOCO/PCLKB count sources, `AGTMR2.CKS`, reload, underflow `TUNDF`, compare A/B, `TSTOP` | smoke-tested | the alarm above; unit tests `peripherals::ra_agt` |
-| ICU `IRQCRn`/NMI, `DTCE`, re-entry while `IR` stays set, SCI interrupts, SCI_B FIFO | **not modelled** | `IRQCRn` window (`0x4000_6000`) is a stub; only the AGT emits ELC events, SCI `irq:` is nominal, so the smoke and the Zephyr console are polled |
+| Stock Zephyr v3.7.0 `tests/drivers/uart/uart_basic_api` (interrupt-driven SCI_B driver, RXI/TXI/TEI through the ICU) | smoke-tested | `zephyr-uart-basic-api.yaml` PASS 2/2: `uart_basic_api` 6/6 (`fifo_fill` on TXI/TEI, `fifo_read` on RXI with the driver's default receive FIFO, `poll_in`, `poll_out`) and `uart_basic_api_pending` 1/1; 35,125,173 steps, 2.8 s |
+| SCI_B RXI/TXI/TEI as ELC events (`elc_event` on sci3/sci9): TXI on TDRE rising or TIE set with TDRE = 1, TEI on TEND rising or TEIE set with TEND = 1, RXI once per character a frame apart; frames of 10 bits at `baud` in `clock_hz` cycles | smoke-tested | the test above; `crates/core/tests/ra8m1_sci_icu.rs` (TXI vectors through IELSR25, TEI one frame after the last byte, RXI per character a frame apart, no RXI without RIE) in both scheduler modes; unit tests `peripherals::uart::sci_b_irq` |
+| SCI_B `FRSR.R` receive-FIFO count | smoke-tested | Zephyr's `fifo_read` reads it (`CONFIG_UART_RA_SCI_B_UART_FIFO_ENABLE=y` is the default); integration test above |
+| SCI_B FIFO trigger levels (`FCR.RTRG`, `FRSR.DR` 15-ETU timeout), ERI and the error flags, `CCR2` baud decode, TX FIFO occupancy | **not modelled** | RXI is raised per character instead of at RTRG; `FRSR.DR` and `FTSR` read 0 (a written byte leaves at once); the frame time comes from YAML `baud`, not `CCR2` |
+| ICU `IRQCRn`/NMI, `DTCE`, re-entry while `IR` stays set | **not modelled** | `IRQCRn` window (`0x4000_6000`) is a stub |
 | AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
 | DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
@@ -41,6 +45,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-hello.elf  sha256 e9d0146e44ab6f74...
 #   r7fa8m1ah-zephyr-sync.elf   sha256 686cf687fbfe5078...
 #   r7fa8m1ah-zephyr-counter-alarm.elf  sha256 e4bd93a4991e21ca... (Zephyr v4.0.0)
+#   r7fa8m1ah-zephyr-uart-basic-api.elf  sha256 9c0328041125498b...
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -58,8 +63,21 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   ... Now: 6 / Now: 14 / Now: 30
 #   Set alarm in 32 sec (65536 ticks) / Alarm could not be set
 
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-uart-basic-api.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-uart-basic-api · 35125173 steps
+#   SUITE PASS - 100.00% [uart_basic_api]: pass = 6, fail = 0, skip = 0, total = 6
+#   SUITE PASS - 100.00% [uart_basic_api_pending]: pass = 1, fail = 0, skip = 0, total = 1
+
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
+
+Negative controls for `zephyr-uart-basic-api.yaml` (each one fails it):
+without `elc_event` on sci9 (the polled SCI_B of the earlier slices),
+`test_uart_fifo_fill` fails its assertion and `test_uart_fifo_read` never
+gets a character; without `FRSR.R`, the driver's FIFO read takes nothing and
+prints a NUL; without the one-frame RXI spacing, the second character's RXI
+lands while the first handler runs, before it clears `IELSR24.IR`, and is
+lost with it (`fifo_read` stops after "T").
 
 The v4.0.0 `ek_ra8m1` board enables SCI3 (the mikroBUS UART, `&uart3`) as
 well as SCI9, and opens it at boot: without the `sci3` window the image

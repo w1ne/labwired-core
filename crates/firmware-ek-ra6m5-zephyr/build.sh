@@ -5,6 +5,10 @@
 #   tests/fixtures/r7fa6m5bh-zephyr-sync.elf — samples/synchronization
 #       (examples/ek-ra6m5/zephyr-sync.yaml: k_busy_wait on the SysTick
 #       cycle counter, k_msleep woken by the SysTick system timer)
+#   tests/fixtures/r7fa6m5bh-zephyr-counter-alarm.elf —
+#       samples/drivers/counter/alarm from Zephyr v4.1.0 (see below;
+#       examples/ek-ra6m5/zephyr-counter-alarm.yaml: AGT0 compare-match
+#       alarms linked to the NVIC through the ICU IELSRn)
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -22,6 +26,16 @@
 #     ~/zephyrproject-v4.0) with the cmsis and hal_renesas modules:
 #       west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.0.0
 #       west update cmsis hal_renesas
+#   - For the counter alarm: a Zephyr v4.1.0 west workspace
+#     (ZEPHYRPROJECT_V41, default ~/zephyrproject-v4.1) with cmsis and
+#     hal_renesas. v4.0.0 has the AGT counter driver but no RA6 `agt` nodes;
+#     v4.1.0 adds them to ra6-cm33-common.dtsi along with the in-tree
+#     samples/drivers/counter/alarm/boards/ek_ra6m5.overlay that enables
+#     &agt0 (LOCO / 16 = 2048 Hz, agtcmai on IELSR84). Built UNMODIFIED from
+#     v4.1.0 (commit 7823374e8721; hal_renesas 3204903bdc5e, cmsis
+#     d1b8b20b6278, the revisions its west.yml pins), with the module list
+#     pinned so a workspace that fetched more modules still rebuilds the same
+#     bytes.
 #   - arm-none-eabi-gcc on PATH (the gnuarmemb toolchain variant); no Zephyr SDK
 #     install needed.
 set -euo pipefail
@@ -41,9 +55,9 @@ echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/nu
 echo "Board:     $BOARD"
 echo "Toolchain: $ZEPHYR_TOOLCHAIN_VARIANT ($(arm-none-eabi-gcc -dumpfullversion))"
 
-build_one() { # <sample-dir> <fixture-name>
+build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
   local build; build="$(mktemp -d)"
-  "$WEST" build -p always -b "$BOARD" "$ZEPHYR_BASE/$1" -d "$build"
+  "$WEST" build -p always -b "$BOARD" "$ZEPHYR_BASE/$1" -d "$build" -- "${@:3}"
   arm-none-eabi-strip --strip-debug -o "$FIXTURES/$2" "$build/zephyr/zephyr.elf"
   chmod 644 "$FIXTURES/$2"
   rm -rf "$build"
@@ -53,3 +67,10 @@ build_one() { # <sample-dir> <fixture-name>
 
 build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf"
 build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf"
+
+# Zephyr v4.1.0: samples/drivers/counter/alarm (AGT0 + ICU).
+ZEPHYRPROJECT_V41="${ZEPHYRPROJECT_V41:-$HOME/zephyrproject-v4.1}"
+export ZEPHYR_BASE="$ZEPHYRPROJECT_V41/zephyr"
+echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/null || echo '?'))"
+build_one "samples/drivers/counter/alarm" "r7fa6m5bh-zephyr-counter-alarm.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"

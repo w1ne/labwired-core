@@ -5,6 +5,11 @@
 #   tests/fixtures/r7fa8m1ah-zephyr-sync.elf — samples/synchronization
 #       (examples/ek-ra8m1/zephyr-sync.yaml: k_busy_wait on the SysTick
 #       cycle counter, k_msleep woken by the SysTick system timer)
+#   tests/fixtures/r7fa8m1ah-zephyr-uart-basic-api.elf —
+#       tests/drivers/uart/uart_basic_api (examples/ek-ra8m1/
+#       zephyr-uart-basic-api.yaml: the interrupt-driven SCI_B driver, its
+#       RXI/TXI/TEI linked to the NVIC through the ICU IELSRn, with the
+#       driver's default receive FIFO)
 #   tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf —
 #       samples/drivers/counter/alarm from Zephyr v4.0.0 (see below;
 #       examples/ek-ra8m1/zephyr-counter-alarm.yaml: AGT0 compare-match
@@ -72,6 +77,10 @@ build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
 
 build_one "samples/hello_world" "r7fa8m1ah-zephyr-hello.elf"
 build_one "samples/synchronization" "r7fa8m1ah-zephyr-sync.elf"
+# Module list pinned (as for the counter alarm) so a workspace that fetched
+# more modules still rebuilds the same bytes.
+build_one "tests/drivers/uart/uart_basic_api" "r7fa8m1ah-zephyr-uart-basic-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
 
 # Zephyr v4.0.0: samples/drivers/counter/alarm (AGT0 + ICU).
 ZEPHYRPROJECT_V4="${ZEPHYRPROJECT_V4:-$HOME/zephyrproject-v4.0}"

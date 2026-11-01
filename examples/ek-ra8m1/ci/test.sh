@@ -47,3 +47,16 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 150000 \
   --out-dir "$OUT/zephyr-counter-alarm-unsupported-audit" \
   --fail-on-unsupported
+# Stock Zephyr v3.7.0 tests/drivers/uart/uart_basic_api: the interrupt-driven
+# SCI_B driver, RXI/TXI/TEI linked through ICU IELSR24-26
+# (tests/fixtures/r7fa8m1ah-zephyr-uart-basic-api.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-uart-basic-api.yaml \
+  --output-dir "$OUT/zephyr-uart-basic-api" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-uart-basic-api.elf \
+  --system configs/systems/ek-ra8m1.yaml \
+  --max-steps 150000 \
+  --out-dir "$OUT/zephyr-uart-basic-api-unsupported-audit" \
+  --fail-on-unsupported

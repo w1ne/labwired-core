@@ -46,6 +46,17 @@ mapped. This is the AGT-period evidence of Renode's
 `Renesas_RA8M1.robot` "Should Run Periodically Blink LED", on stock Zephyr
 instead of an FSP ELF.
 
+**Stock Zephyr v3.7.0** `tests/drivers/uart/uart_basic_api` passes too,
+7/7 across its two suites, on the interrupt-driven SCI_B driver. Every SCI
+interrupt is an ICU event: SCI9's RXI/TXI/TEI (ELC events 0x163-0x165) are
+linked to NVIC lines 24-26 by `IELSRn` (`elc_event` on sci3/sci9). TXI
+follows the TDRE edge and TEI the TEND edge of a timed shift register (10-bit
+frames at 115200 baud in the 480 MHz guest clock), and RXI is raised once per
+character, a frame apart. The driver's default receive FIFO reads `FRSR.R`.
+This is the stock-Zephyr counterpart of Renode's `Renesas_RA8M1.robot`
+"Should Read And Write On UART", which drives the same SCI_B interrupts from
+an FSP ELF.
+
 !!! warning "Not claimed yet"
     The core decodes Armv8-M Mainline plus the scalar Armv8.1-M `DLS`/`WLS`/
     `LE` and `CSEL` family. **Helium/MVE**, the tail-predicated loops, PACBTI
@@ -56,9 +67,11 @@ instead of an FSP ELF.
     settle at once, and no rate is derived from the selected sources
     (`cpu_hz` stays 8 MHz after Zephyr moves ICLK to the 480 MHz PLL1P).
     Module stop (MSTP) and the ICU `IRQCRn`/NMI half are declared stubs;
-    only the AGT raises ELC events (SCI interrupts are not routed), the PFS
-    peripheral mux is stored only, and SCI_B runs polled async only (no FIFO,
-    interrupts or wire timing). The AGT models timer mode only. DMAC/DTC,
+    the AGT and SCI3/SCI9 raise ELC events, the PFS peripheral mux is stored
+    only, and SCI_B is async only: the FIFO trigger levels (`RTRG`, the
+    `FRSR.DR` timeout), ERI and the error flags, and the `CCR2` baud decode
+    are not modelled (RXI comes per character; the frame time is YAML
+    `baud`). The AGT models timer mode only. DMAC/DTC,
     FCACHE, FACI, ELC, RTC, IWDT/WDT, GPT, IIC, SPI, ADC12, USBFS/USBHS,
     ETHERC and CANFD are declared stubs. SCI0–2, SCI4–8 and the remaining
     blocks are **not mapped**: firmware that touches them faults with a memory violation. There
@@ -79,9 +92,9 @@ instead of an FSP ELF.
 | Example system | [`configs/systems/ek-ra8m1.yaml`](../../configs/systems/ek-ra8m1.yaml) |
 | Reference firmware | [`crates/firmware-ek-ra8m1-smoke/`](../../crates/firmware-ek-ra8m1-smoke/), stock Zephyr via [`crates/firmware-ek-ra8m1-zephyr/`](../../crates/firmware-ek-ra8m1-zephyr/) |
 | Example | [`examples/ek-ra8m1/`](../../examples/ek-ra8m1/) |
-| Committed artifact | `tests/fixtures/ek-ra8m1-smoke.elf` (`EK-RA8M1 SMOKE`), `tests/fixtures/r7fa8m1ah-zephyr-{hello,sync}.elf` (stock Zephyr v3.7.0), `tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf` (stock Zephyr v4.0.0) |
+| Committed artifact | `tests/fixtures/ek-ra8m1-smoke.elf` (`EK-RA8M1 SMOKE`), `tests/fixtures/r7fa8m1ah-zephyr-{hello,sync}.elf` (stock Zephyr v3.7.0), `tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf` (stock Zephyr v4.0.0), `tests/fixtures/r7fa8m1ah-zephyr-uart-basic-api.elf` (stock Zephyr v3.7.0) |
 | Build target | `thumbv8m.main-none-eabi` |
-| Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI9) plus stock Zephyr hello_world/synchronization and the AGT counter alarm through the ICU; SIM-DERIVED |
+| Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI9) plus stock Zephyr hello_world/synchronization, the AGT counter alarm and uart_basic_api (SCI_B interrupts) through the ICU; SIM-DERIVED |
 
 ---
 
@@ -101,8 +114,8 @@ instead of an FSP ELF.
 | AGT0 / AGT1 | `0x4022_1000` / `0x4022_1100` | modelled (`ra_agt`) — 16-bit timer mode, LOCO/PCLKB sources, underflow + compare A/B as ELC events 0x046–0x04B |
 | PORT0–B | `0x4040_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
 | PFS / PWPR / PWPRS | `0x4040_0800` / `0x4040_0D0C` / `0x4040_0D14` | modelled (`ra8_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
-| SCI9 (console) | `0x4035_8900` | modelled — SCI_B, async, polled |
-| SCI3 (mikroBUS) | `0x4035_8300` | modelled — SCI_B, async, polled |
+| SCI9 (console) | `0x4035_8900` | modelled — SCI_B, async; RXI/TXI/TEI as ELC events 0x163-0x165; `FRSR.R` |
+| SCI3 (mikroBUS) | `0x4035_8300` | modelled — SCI_B, async; RXI/TXI/TEI as ELC events 0x139-0x13B; `FRSR.R` |
 | SCI0–2, SCI4–8 | `0x4035_8000` + `0x100`×n | not mapped |
 | LEDs | LED1 blue P600, LED2 green P414, LED3 red P107 | modelled GPIO — active high |
 | Switches | S1 P009, S2 P008 | modelled GPIO input — active low, PFS pull-up |
@@ -127,6 +140,8 @@ cargo build -p firmware-ek-ra8m1-smoke --release --target thumbv8m.main-none-eab
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-sync.yaml --no-uart-stdout
 # stock Zephyr v4.0.0 counter alarm (AGT0 through the ICU)
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-counter-alarm.yaml --no-uart-stdout
+# stock Zephyr v3.7.0 uart_basic_api (SCI_B interrupts through the ICU)
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-uart-basic-api.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra8m1/VALIDATION.md`](../../examples/ek-ra8m1/VALIDATION.md)

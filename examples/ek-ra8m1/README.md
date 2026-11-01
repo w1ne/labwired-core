@@ -56,6 +56,12 @@ Stock Zephyr v4.0.0 `samples/drivers/counter/alarm`
 compare-match alarms; each one reaches the core through the ICU `IELSRn`
 event link (`ra_icu` + `ra_agt`).
 
+Stock Zephyr v3.7.0 `tests/drivers/uart/uart_basic_api`
+(`zephyr-uart-basic-api.yaml`, fixture
+`tests/fixtures/r7fa8m1ah-zephyr-uart-basic-api.elf`) passes 7/7 on the
+interrupt-driven SCI_B driver: SCI9's RXI/TXI/TEI reach the core through
+`IELSR24-26`.
+
 ## Build and run
 
 ```bash
