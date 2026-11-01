@@ -160,8 +160,8 @@ const CHIPS: &[ChipConf] = &[
         // EK-RA8M1 (R7FA8M1AH, Cortex-M85). SIM-DERIVED: no RA8M1 bench part.
         // Modelled: the RA PORT (ra_port), the RA8 PmnPFS/PWPR/PWPRS
         // (ra8_pfs), SYSTEM HOCOCR/OSCSF + the SCICKCR handshake (ra8_sysc)
-        // and SCI3/SCI9 on the new sci_b UART layout, the ICU IELSR event
-        // link (ra_icu) and AGT0/AGT1 (ra_agt). MSTP, the ICU IRQCR half and
+        // and SCI3/SCI9 on the new sci_b UART layout (RXI/TXI/TEI as ELC
+        // events), the ICU IELSR event link (ra_icu) and AGT0/AGT1 (ra_agt). MSTP, the ICU IRQCR half and
         // the listed timers/comms blocks are declared stubs; the other SCIs
         // and the rest are not mapped — see examples/ek-ra8m1/VALIDATION.md.
         name: "r7fa8m1ah",

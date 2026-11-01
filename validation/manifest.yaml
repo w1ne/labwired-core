@@ -1701,7 +1701,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: e0bfa3c5c58665d26e5bdd215056efb1f293c2ad54f60de98efa5a09fdfefbbb
+    drift_ack_digest: 3cc2682b50505e80068be3506c787a249a10ead8291a5461a3142898711f6996
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2287,7 +2287,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
+    # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
+    # for a `sci_b` UART with `elc_event`; from_config reads those keys only
+    # for it. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -3743,7 +3748,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: e6de21e9848adbf16a198cd243e9b3b236dd639cd406156760e8ef7a1f1c6235
+    drift_ack_digest: 3e7051e344240b2031b81a000ab969e158c35c2dc1c624f9d356146d519aaaed
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4317,7 +4322,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
+    # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
+    # for a `sci_b` UART with `elc_event`; from_config reads those keys only
+    # for it. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -4743,7 +4753,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 5b1bc1d5eab97acc545160db765ef1a8e65973b42241670ecbd31a1c6e3ca9b0
+    drift_ack_digest: e6574dcc70b078e7ccafb91f23d0e277f647e7220eee07a70f84620ad7d0782d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5250,7 +5260,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
+    # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
+    # for a `sci_b` UART with `elc_event`; from_config reads those keys only
+    # for it. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -5734,7 +5749,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 938c027a69b2f3a06df21fef11cd05e143c2418b946be26bf1690c0553e2c88b
+    drift_ack_digest: 9f35ea926f8dd32d30695e4b048bdf2c48a805f96642bb5bacbc66d3d96e7137
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6311,7 +6326,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
+    # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
+    # for a `sci_b` UART with `elc_event`; from_config reads those keys only
+    # for it. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -6758,7 +6778,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3948bffd85cf7a3ca1642fb983b5664da1cd82d4d4157377edc9590f54031c63
+    drift_ack_digest: 898894f5bdad97673fe8d42d9917554777816598f2085b5eb200c23a0aa0adfd
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7274,7 +7294,12 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-10-31
+    drift_ack: 2026-11-01
+    # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
+    # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
+    # for a `sci_b` UART with `elc_event`; from_config reads those keys only
+    # for it. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
     # Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
     # cores given an `armv8m_mpu` region file. This board declares none, so
@@ -9745,18 +9770,29 @@ boards:
     # and the ICU WUPEN/IELSR window at 0x4000C000. SIM-DERIVED — no RA8M1
     # bench part. See docs/boards/ek-ra8m1.md and
     # examples/ek-ra8m1/VALIDATION.md.
+    # 2026-10-31 (feat/ek-ra8m1-agt-counter): the ICU IELSRn event link
+    # (ra_icu) and AGT0/AGT1 (ra_agt); stock Zephyr v4.0.0
+    # samples/drivers/counter/alarm (AGT0 compare match through IELSR84).
+    # 2026-11-01 (feat/ek-ra8m1-sci-irq): SCI3/SCI9 raise RXI/TXI/TEI as ELC
+    # events through the ICU (uart/sci_b_irq.rs) and read FRSR.R; stock
+    # Zephyr v3.7.0 tests/drivers/uart/uart_basic_api 7/7 on the
+    # interrupt-driven SCI_B driver.
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_ek_ra8m1_smoke_survival"
       - "firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)"
+      - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
+      - "ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/ra_pfs.rs
       - crates/core/src/peripherals/ra_clock.rs
+      - crates/core/src/peripherals/ra_icu.rs
+      - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
