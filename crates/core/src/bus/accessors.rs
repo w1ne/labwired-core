@@ -468,6 +468,9 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
+        self.rp2350_dcp.as_deref_mut()
+    }
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
         // Watched like every other width: a 64-bit load is a CPU access on
         // cores that have one (Cortex-A7 `w=8`), so the latch is uniform.

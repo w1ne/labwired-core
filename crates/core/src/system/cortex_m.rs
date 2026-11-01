@@ -92,13 +92,6 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         cpu.set_shared_mpu_v8(mpu);
     }
 
-    if bus
-        .cortex_m_coprocessors
-        .contains(&labwired_config::CortexMCoprocessor::Rp2350Dcp)
-    {
-        cpu.enable_rp2350_dcp();
-    }
-
     bus.nvic = Some(nvic_state.clone());
 
     // Ensure SCB exists (VTOR relocation, ICSR.VECTACTIVE mirror, SHPR1/2/3).

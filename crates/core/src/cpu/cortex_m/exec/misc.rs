@@ -40,6 +40,36 @@ impl CortexM {
         })
     }
 
+    /// Execute a p4/p5 coprocessor instruction on the attached RP2350 DCP.
+    /// `None` = not a DCP instruction (or not modelled): the caller faults.
+    #[cold]
+    #[inline(never)]
+    fn exec_rp2350_dcp<B: Bus + ?Sized>(
+        &mut self,
+        bus: &mut B,
+        h1: u16,
+        h2: u16,
+    ) -> Option<PcAdvance> {
+        use super::super::rp2350_dcp::{decode, DcpOut};
+        let (inst, op, rt, rt2) = decode(h1, h2, |r| self.get_register(r))?;
+        match bus.rp2350_dcp_mut()?.inst[inst].exec(op)? {
+            DcpOut::None => {}
+            DcpOut::One(v) => {
+                if rt == 15 {
+                    // MRC to APSR_nzcv: flags from bits 31:28.
+                    self.xpsr = (self.xpsr & !0xF000_0000) | (v & 0xF000_0000);
+                } else {
+                    self.set_register(rt, v);
+                }
+            }
+            DcpOut::Two(lo, hi) => {
+                self.set_register(rt, lo);
+                self.set_register(rt2, hi);
+            }
+        }
+        Some(PcAdvance::Add4)
+    }
+
     #[inline(always)]
     pub(in crate::cpu::cortex_m) fn exec_unknown32<B: Bus + ?Sized>(
         &mut self,
@@ -47,30 +77,13 @@ impl CortexM {
         h1: u16,
         h2: u16,
     ) -> SimResult<PcAdvance> {
-        // RP2350 DCP (p4/p5): only when the chip attached one; otherwise the
-        // instruction falls through to the UNDEFINED fault below.
-        if self.dcp.is_some() {
-            let decoded = super::super::rp2350_dcp::decode(h1, h2, |r| self.get_register(r));
-            if let Some((inst, op, rt, rt2)) = decoded {
-                let out = self.dcp.as_mut().and_then(|d| d.inst[inst].exec(op));
-                match out {
-                    Some(super::super::rp2350_dcp::DcpOut::None) => return Ok(PcAdvance::Add4),
-                    Some(super::super::rp2350_dcp::DcpOut::One(v)) => {
-                        if rt == 15 {
-                            // MRC to APSR_nzcv: flags from bits 31:28.
-                            self.xpsr = (self.xpsr & !0xF000_0000) | (v & 0xF000_0000);
-                        } else {
-                            self.set_register(rt, v);
-                        }
-                        return Ok(PcAdvance::Add4);
-                    }
-                    Some(super::super::rp2350_dcp::DcpOut::Two(lo, hi)) => {
-                        self.set_register(rt, lo);
-                        self.set_register(rt2, hi);
-                        return Ok(PcAdvance::Add4);
-                    }
-                    None => {}
-                }
+        // RP2350 DCP: a coprocessor-space word naming p4/p5, on a bus that
+        // has one; otherwise it falls through to the UNDEFINED fault below.
+        // The body is out of line and cold (this function is inlined into the
+        // step dispatcher), and the state lives on the bus, not in CortexM.
+        if (h1 & 0xEC00) == 0xEC00 && (h2 >> 9) & 0x7 == 2 {
+            if let Some(adv) = self.exec_rp2350_dcp(bus, h1, h2) {
+                return Ok(adv);
             }
         }
         let mut __pc = PcAdvance::Keep;

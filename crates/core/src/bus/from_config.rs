@@ -430,7 +430,10 @@ impl SystemBus {
             reset_vector_offset: chip.reset_vector_offset,
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
-            cortex_m_coprocessors: chip.coprocessors.clone(),
+            rp2350_dcp: chip
+                .coprocessors
+                .contains(&labwired_config::CortexMCoprocessor::Rp2350Dcp)
+                .then(Box::default),
             ns_alias_offset: chip.ns_alias_offset,
             mem_aliases,
             pending_cpu_irqs: [0; 2],

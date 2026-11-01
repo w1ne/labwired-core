@@ -276,11 +276,6 @@ pub struct CortexM {
     /// the reservation's fails (the architecture leaves that case
     /// IMPLEMENTATION DEFINED; failing is always safe for a retry loop).
     exclusive_subword: Option<(u32, AccessWidth, u32)>,
-    /// RP2350 double-precision coprocessor (p4/p5), present only on a chip
-    /// whose descriptor lists `coprocessors: [rp2350_dcp]`. `None` keeps
-    /// every p4/p5 instruction UNDEFINED, as on every other Cortex-M.
-    /// Transient: not snapshotted (state lives inside one canned sequence).
-    pub dcp: Option<Box<rp2350_dcp::Rp2350Dcp>>,
     /// Latched by semihosting `SYS_EXIT`. Taken once by `take_firmware_exit`.
     /// Not snapshotted: the advance loop drains it at the next instruction boundary.
     firmware_exit: Option<u32>,
@@ -370,7 +365,6 @@ impl Default for CortexM {
             waiting_for_event: false,
             event_register: false,
             exclusive_subword: None,
-            dcp: None,
             firmware_exit: None,
             trace_insn: trace_insn_enabled(),
             #[cfg(feature = "jit")]
@@ -1764,11 +1758,6 @@ impl CortexM {
 
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Attach the RP2350 DCP (datasheet 3.6.2) to this core.
-    pub fn enable_rp2350_dcp(&mut self) {
-        self.dcp = Some(Box::default());
     }
 
     pub fn clear_exclusive_monitor(&mut self) {

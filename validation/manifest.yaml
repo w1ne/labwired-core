@@ -462,7 +462,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c246810992bc6d163463ec24ddc9f3c8fbe1626ee763ceebf182f9e760e1a891
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 18b383d8fdb752886eb8303c36bf5353777b01a217ea1fab9d11a18f54004f48
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1033,7 +1036,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c246810992bc6d163463ec24ddc9f3c8fbe1626ee763ceebf182f9e760e1a891
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 18b383d8fdb752886eb8303c36bf5353777b01a217ea1fab9d11a18f54004f48
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1754,7 +1760,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ddff23d2f72d02c6d4b8b33f08ba2f7fb1ad84b88d370a4fb3fc406a6fec1bf9
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 1bfd8e4fa585789281e3721fc80764a48753bea35c6ad3859714f6edc4b210f8
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3849,7 +3858,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 0be426a655a079a0473923ddea3425693ec28044557a4776eb6c92eee5d41edf
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 025ac97301ba2774c0887173efe6fb7268a313b16112b75a4ae4f44ab208cc60
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4895,7 +4907,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 602753008a3fb2a8ebaa9e6ddbdad12ccbd237b9346d5b1097909b505c064da7
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 0691e299f2d26b66c52b93beb66a04f1fb00b05d17cc0c445a2721f2d909c241
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5932,7 +5947,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 0560b67cc53f0d3d064fd5bac7b310030a6dfa5a903947ea715b54ffc74bc2f2
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 8d885a96620113ce20a8d9e06701edb0665a856fc476ad0d43038e82232b9743
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7002,7 +7020,10 @@ boards:
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: a19cf6f44b3499fa6594d68f03744a2a62ee96ff4fbc7999f3789eacde789609
+    # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+    # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+    # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: f05f35b3a044cbc9d5c845d29b33548eedf4c77825b6835b4e51ce44476f5cb9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
