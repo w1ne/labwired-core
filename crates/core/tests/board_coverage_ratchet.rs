@@ -644,6 +644,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // committed fixtures and a survival gate; no catalog board, no silicon
         // capture and no executing-fidelity differential.
         "mpfs095t",
+        // First RX part (EK-RX261, R5F52618BGFP, RXv3): chip + system +
+        // example with stock Zephyr v4.3.0 hello/sync/kernel-common,
+        // committed fixtures and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "r5f52618bgfp",
         // First RA6M5 part (EK-RA6M5): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.

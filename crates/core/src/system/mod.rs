@@ -6,6 +6,7 @@ pub mod cortex_m;
 pub mod efuse;
 pub mod node;
 pub mod riscv;
+pub mod rx;
 pub mod wifi;
 pub mod xtensa;
 

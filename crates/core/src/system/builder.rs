@@ -189,6 +189,7 @@ mod pic16;
 mod pic18;
 mod pic24;
 mod riscv;
+mod rx;
 mod xtensa;
 
 pub use xtensa::esp32s3_flash_backing_size;
@@ -367,6 +368,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::Pic24 => pic24::build(req, plugins),
         MachineFamily::Pic18 => pic18::build(req, plugins),
         MachineFamily::Pic16 => pic16::build(req, plugins),
+        MachineFamily::Rx => rx::build(req, plugins),
     }
 }
 
