@@ -172,6 +172,11 @@ nav:
     - DHT20: parts/dht20.md
     - PMSA003I: parts/pmsa003i.md
     - INA226: parts/ina226.md
+    - MCP23017: parts/mcp23017.md
+    - PCF8575: parts/pcf8575.md
+    - ADS1015: parts/ads1015.md
+    - ULN2803A: parts/uln2803.md
+    - RFM95W: parts/rfm95.md
 
   - Operations:
     - Release Strategy: release_strategy.md
