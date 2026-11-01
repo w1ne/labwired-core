@@ -281,4 +281,63 @@ mod tests {
         assert_eq!(m.cpu.get_pc(), CODE + 2);
         assert_eq!(m.bus.read_u32(CFSR).unwrap(), 0);
     }
+    /// MPU disabled: the default map's execute-never blocks still fault an
+    /// instruction fetch (Peripheral, 0x4000_0000), and SRAM still executes.
+    #[test]
+    fn disabled_mpu_keeps_the_default_map_xn() {
+        let mut m = mpu_machine(BLX_R1);
+        m.bus.write_u32(MPU_CTRL, 0).unwrap();
+        m.bus.write_u32(SHCSR, SHCSR_MEMFAULTENA).unwrap();
+        m.cpu.set_register(1, 0x4000_0000 | 1);
+        m.step().unwrap(); // BLX: pc -> the Peripheral block
+        m.step().unwrap(); // the fetch faults
+        m.step().unwrap();
+        assert_eq!(m.cpu.get_pc(), MEMMANAGE_HANDLER);
+        assert_eq!(m.bus.read_u32(CFSR).unwrap(), IACCVIOL);
+
+        // SRAM (block 1) is executable in the default map: the XN region
+        // programmed in `mpu_machine` no longer applies.
+        let mut m = mpu_machine(BLX_R1);
+        m.bus.write_u32(MPU_CTRL, 0).unwrap();
+        m.cpu.set_register(1, XN_RAM | 1);
+        m.step().unwrap();
+        m.step().unwrap(); // NOP at XN_RAM
+        assert_eq!(m.cpu.get_pc(), XN_RAM + 2);
+        assert_eq!(m.bus.read_u32(CFSR).unwrap(), 0);
+    }
+
+    /// MPU disabled: unprivileged code still may not touch the PPB, and may
+    /// read and write everything else.
+    #[test]
+    fn disabled_mpu_keeps_the_unprivileged_ppb_rule() {
+        const SHCSR_BUSFAULTENA: u32 = 1 << 17;
+        const PRECISERR_BFARVALID: u32 = (1 << 9) | (1 << 15);
+        let mut m = mpu_machine(STR_R0_R1);
+        m.bus.write_u32(MPU_CTRL, 0).unwrap();
+        m.bus
+            .write_u32(SHCSR, SHCSR_MEMFAULTENA | SHCSR_BUSFAULTENA)
+            .unwrap();
+        m.bus.write_u32(0x14, MEMMANAGE_HANDLER | 1).unwrap(); // BusFault -> same B .
+        m.cpu.control |= 1;
+        m.cpu.set_register(0, CTRL_ENABLE);
+        m.cpu.set_register(1, MPU_CTRL as u32);
+        m.step().unwrap();
+        m.step().unwrap();
+        assert_eq!(m.cpu.get_pc(), MEMMANAGE_HANDLER);
+        assert_eq!(m.bus.read_u32(CFSR).unwrap(), PRECISERR_BFARVALID);
+        assert_eq!(
+            m.bus.read_u32(MPU_CTRL).unwrap(),
+            0,
+            "the write did not land"
+        );
+
+        let mut m = mpu_machine(STR_R0_R1);
+        m.bus.write_u32(MPU_CTRL, 0).unwrap();
+        m.cpu.control |= 1;
+        m.cpu.set_register(0, 0x55);
+        m.cpu.set_register(1, XN_RAM + 0x100);
+        m.step().unwrap();
+        assert_eq!(m.cpu.get_pc(), CODE + 2);
+        assert_eq!(m.bus.read_u32(u64::from(XN_RAM + 0x100)).unwrap(), 0x55);
+    }
 }
