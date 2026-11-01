@@ -9811,6 +9811,9 @@ boards:
     # 2026-11-01 (feat/ra6m5-adc12): ADC0/ADC1 are ra_adc12 (scan-end events
     # 0x160/0x166 through the ICU); stock Zephyr v4.1.0
     # tests/drivers/adc/adc_api 6/6 with a potentiometer and a TMP36 on ADC1.
+    # 2026-11-01 (feat/ra-iic): IIC channels are ra_iic (RIIC master; RXI/TXI/
+    # TEI/ERI events 0x078-0x07B for IIC1 through the ICU); stock Zephyr v4.1.0
+    # samples/sensor/bme280 reads a BME280 on IIC1, readings follow a stimulus.
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
@@ -9819,6 +9822,7 @@ boards:
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra6m5_adc12_icu (ADC1 scan end through ICU IELSR39)"
+      - "ra6m5_iic_icu (IIC1 events through ICU IELSR91-94, BME280 chip-ID read)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9828,6 +9832,7 @@ boards:
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/ra_adc12.rs
+      - crates/core/src/peripherals/ra_iic.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -9868,6 +9873,9 @@ boards:
     # continuous software-started scans, ADDRn, addition/averaging, scan-end
     # events 0x1AE/0x1B4 through the ICU); stock Zephyr v4.1.0
     # tests/drivers/adc/adc_api 6/6 with a potentiometer and a TMP36 on ADC1.
+    # 2026-11-01 (feat/ra-iic): IIC channels are ra_iic (RIIC master; RXI/TXI/
+    # TEI/ERI events 0x061-0x064 for IIC1 through the ICU); stock Zephyr v4.1.0
+    # samples/sensor/bme280 reads a BME280 on IIC1, readings follow a stimulus.
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual
@@ -9877,6 +9885,7 @@ boards:
       - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)"
       - "ra8m1_adc12_icu (ADC1 scan end through ICU IELSR39)"
+      - "ra8m1_iic_icu (IIC1 events through ICU IELSR91-94, BME280 chip-ID read)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9886,6 +9895,7 @@ boards:
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/ra_adc12.rs
+      - crates/core/src/peripherals/ra_iic.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
