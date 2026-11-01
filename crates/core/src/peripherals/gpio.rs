@@ -2419,6 +2419,14 @@ impl crate::pins::PinPort for GpioPort {
         }
     }
 
+    fn port_id(&self, name: &str) -> Option<crate::pins::PortId> {
+        match self.family {
+            // RA ports are numbered: `port0` .. `portb`.
+            GpioFamily::RaPort(_) => crate::pins::PortId::from_hex_numbered_name(name, "port"),
+            _ => crate::pins::PortId::from_prefixed_name(name, self.port_name_prefix()),
+        }
+    }
+
     fn pin_count(&self) -> u8 {
         match &self.family {
             GpioFamily::Stm32F1(_)

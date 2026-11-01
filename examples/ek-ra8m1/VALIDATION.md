@@ -29,16 +29,19 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | AGT0/AGT1 timer mode (`ra_agt`): LOCO/PCLKB count sources, `AGTMR2.CKS`, reload, underflow `TUNDF`, compare A/B, `TSTOP` | smoke-tested | the alarm above; unit tests `peripherals::ra_agt` |
 | Stock Zephyr v3.7.0 `tests/drivers/uart/uart_basic_api` (interrupt-driven SCI_B driver, RXI/TXI/TEI through the ICU) | smoke-tested | `zephyr-uart-basic-api.yaml` PASS 2/2: `uart_basic_api` 6/6 (`fifo_fill` on TXI/TEI, `fifo_read` on RXI with the driver's default receive FIFO, `poll_in`, `poll_out`) and `uart_basic_api_pending` 1/1; 35,125,173 steps, 2.8 s |
 | Stock Zephyr v3.7.0 `samples/subsys/shell/shell_module` (interrupt-driven shell serial backend on SCI9) | smoke-tested | `zephyr-shell.yaml` PASS 2/2: typed `demo ping` → `pong`, `kernel version`, `device list`, `demo params a b` (argc/argv), TAB completion (`kern<TAB>up<TAB>` → `kernel uptime`, `Uptime: 519 ms`) and history recall (4× ESC [ A → `kernel version`); 1,143,616 steps |
-| SCI_B RXI/TXI/TEI as ELC events (`elc_event` on sci3/sci9): TXI on TDRE rising or TIE set with TDRE = 1, TEI on TEND rising or TEIE set with TEND = 1, RXI once per character a frame apart; frames of 10 bits at `baud` in `clock_hz` cycles | smoke-tested | the test above; `crates/core/tests/ra8m1_sci_icu.rs` (TXI vectors through IELSR25, TEI one frame after the last byte, RXI per character a frame apart, no RXI without RIE) in both scheduler modes; unit tests `peripherals::uart::sci_b_irq` |
+| SCI_B RXI/TXI/TEI as ELC events (`elc_event` on sci0/sci2/sci3/sci9): TXI on TDRE rising or TIE set with TDRE = 1, TEI on TEND rising or TEIE set with TEND = 1, RXI once per character a frame apart; frames of 10 bits at `baud` in `clock_hz` cycles | smoke-tested | the test above; `crates/core/tests/ra8m1_sci_icu.rs` (TXI vectors through IELSR25, TEI one frame after the last byte, RXI per character a frame apart, no RXI without RIE) in both scheduler modes; unit tests `peripherals::uart::sci_b_irq` |
 | SCI_B `FRSR.R` receive-FIFO count | smoke-tested | Zephyr's `fifo_read` reads it (`CONFIG_UART_RA_SCI_B_UART_FIFO_ENABLE=y` is the default); integration test above |
 | SCI_B FIFO trigger levels (`FCR.RTRG`, `FRSR.DR` 15-ETU timeout), ERI and the error flags, `CCR2` baud decode, TX FIFO occupancy | **not modelled** | RXI is raised per character instead of at RTRG; `FRSR.DR` and `FTSR` read 0 (a written byte leaves at once); the frame time comes from YAML `baud`, not `CCR2` |
-| ICU `IRQCRn`/NMI, `DTCE`, re-entry while `IR` stays set | **not modelled** | `IRQCRn` window (`0x4000_6000`) is a stub |
+| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P009 → IRQ13 → ELC event 0x00E → ICU IELSR89 → NVIC line 89) | smoke-tested | `zephyr-button.yaml` PASS 3/3: two presses give exactly two `Button pressed at` lines (cycles 498,960,451 and 1,498,992,451), the releases none; 5,369,263 steps, 0.27 s; audit 2,000,000 steps, 0 unsupported |
+| ICU IRQ-pin half (`ra_icu` at `0x4000_6000`, `ielsr_lines: 0`): `IRQCRn.IRQMD` falling/rising/both/low edge, `PmnPFS.ISEL` gate, `ICU_IRQn` = event n + 1 linked by `icu_ielsr`; pad → IRQn table from Zephyr `r7fa8m1xh.dtsi` | smoke-tested | the button above; unit tests `peripherals::ra_icu` (`irqmd_selects_the_edge_that_raises_icu_irqn`, `a_pad_without_isel_raises_nothing`, `the_irq_pin_half_alone_is_not_an_event_link_controller`) |
+| ICU NMI, `IRQCRn` digital filter (`FLTEN`/`FCLKSEL`), low-level re-raise while the pad stays low, `DTCE`, re-entry while `IR` stays set | **not modelled** | NMI registers stored only; an edge is taken at once; low-level mode raises on the falling edge only |
+| `PmnPFS` `PDR`/`PODR` (the same flip-flops as `PCNTR1` on silicon) | stored only | Zephyr's GPIO driver sets pin direction through PmnPFS, so the button sample's LED1 (P600) stays an input and its mirror of S1 is not checked |
 | AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
 | DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
-| SCI0-2, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
+| SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
-## Stock Zephyr (verified 2026-10-31)
+## Stock Zephyr (verified 2026-10-31, button 2026-11-01)
 
 ```bash
 # fixtures are committed; rebuild (byte-identical) with:
@@ -48,6 +51,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-counter-alarm.elf  sha256 e4bd93a4991e21ca... (Zephyr v4.0.0)
 #   r7fa8m1ah-zephyr-uart-basic-api.elf  sha256 9c0328041125498b...
 #   r7fa8m1ah-zephyr-shell.elf  sha256 c658de4cfb2a4686...
+#   r7fa8m1ah-zephyr-button.elf  sha256 ffbfe48e747d292e... (Zephyr v4.1.0)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -76,6 +80,14 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   uart:~$ kernel version / Zephyr version 3.7.0
 #   uart:~$ kernel uptime / Uptime: 519 ms
 
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-button.yaml --no-uart-stdout
+#   PASS  3/3 checks · zephyr-button · 5369263 steps
+#   *** Booting Zephyr OS build v4.1.0 ***
+#   Set up button at gpio@40400000 pin 9 / Set up LED at gpio@404000c0 pin 0
+#   Press the button
+#   Button pressed at 498960451
+#   Button pressed at 1498992451
+
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
 
@@ -90,6 +102,14 @@ lost with it (`fifo_read` stops after "T").
 The v4.0.0 `ek_ra8m1` board enables SCI3 (the mikroBUS UART, `&uart3`) as
 well as SCI9, and opens it at boot: without the `sci3` window the image
 BusFaults at `0x4035_8308` in `R_SCI_B_UART_Open`.
+
+The v4.1.0 `ek_ra8m1` board also opens SCI0 (PMOD1) and SCI2 (PMOD2) at
+boot: without the `sci0` window the image BusFaults at `0x4035_8008` in
+`R_SCI_B_UART_Open`.
+
+Negative control for `zephyr-button.yaml`: the `icu` window without its
+`irq_pins` (the IRQ-pin half inert, as the old stub was) prints "Press the
+button" and then nothing, and the regex fails.
 
 Negative controls for `zephyr-counter-alarm.yaml` (each one fails it): AGT0
 as a stub (the console stops after "Counter alarm sample"), and the

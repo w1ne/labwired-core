@@ -19,6 +19,13 @@
 #       samples/drivers/counter/alarm from Zephyr v4.1.0 (see below;
 #       examples/ek-ra6m5/zephyr-counter-alarm.yaml: AGT0 compare-match
 #       alarms linked to the NVIC through the ICU IELSRn)
+#   tests/fixtures/r7fa6m5bh-zephyr-button.elf — samples/basic/button from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-button.yaml: S1 through the ICU
+#       IRQ-pin half, PmnPFS.ISEL + IRQCRn, linked by IELSRn). v4.1.0 is the
+#       first release whose RA GPIO driver supports pin interrupts
+#       (renesas_ra_external_interrupt). Built UNMODIFIED from v4.1.0 (commit
+#       7823374e8721; hal_renesas 3204903bdc5e, cmsis d1b8b20b6278) with the
+#       module list pinned.
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -101,4 +108,7 @@ ZEPHYRPROJECT_V41="${ZEPHYRPROJECT_V41:-$HOME/zephyrproject-v4.1}"
 export ZEPHYR_BASE="$ZEPHYRPROJECT_V41/zephyr"
 echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/null || echo '?'))"
 build_one "samples/drivers/counter/alarm" "r7fa6m5bh-zephyr-counter-alarm.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/basic/button (IRQ10 on P005 through the ICU), same v4.1.0 tree.
+build_one "samples/basic/button" "r7fa6m5bh-zephyr-button.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"

@@ -47,6 +47,22 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 150000 \
   --out-dir "$OUT/zephyr-counter-alarm-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 samples/basic/button: two S1 presses (P005, IRQ10 on the
+# falling edge, linked to NVIC line 42 through ICU IELSR42) print exactly two
+# "Button pressed" lines (tests/fixtures/r7fa6m5bh-zephyr-button.elf), then its
+# audit, run past both presses.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra6m5/zephyr-button.yaml \
+  --output-dir "$OUT/zephyr-button" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa6m5bh-zephyr-button.elf \
+  --system configs/systems/ek-ra6m5.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-button-unsupported-audit" \
+  --fail-on-unsupported
+
 # Stock Zephyr v4.0.0 tests/drivers/uart/uart_basic_api: the interrupt-driven
 # SCI0 driver, RXI/TXI/TEI linked to NVIC lines 0-2 through ICU IELSRn, with
 # the 16-stage FIFO (tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf),

@@ -1384,7 +1384,32 @@ pub fn try_build(
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
         "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
-        "ra_icu" => Box::new(crate::peripherals::ra_icu::RaIcu::new()),
+        // `ielsr_lines`: IELSRn count (default 96; 0 = only the IRQ-pin half);
+        // `irq_pins`: `[port, pin, IRQn]` per IRQ pad; `pfs_base`: PmnPFS base.
+        "ra_icu" => {
+            use crate::peripherals::ra_icu as icu;
+            let lines = p_cfg
+                .config
+                .get("ielsr_lines")
+                .and_then(|v| v.as_u64())
+                .map_or(icu::LINES, |v| v as u32);
+            let irq_pins = p_cfg
+                .config
+                .get("irq_pins")
+                .and_then(|v| v.as_sequence())
+                .map(|rows| {
+                    rows.iter()
+                        .filter_map(|row| {
+                            let row = row.as_sequence()?;
+                            let get = |i: usize| row.get(i)?.as_u64().map(|v| v as u8);
+                            (row.len() == 3).then_some((get(0)?, get(1)?, get(2)?))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let pfs_base = p_cfg.config.get("pfs_base").and_then(|v| v.as_u64());
+            Box::new(icu::RaIcu::with_irq_pins(lines, irq_pins, pfs_base))
+        }
         // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB for
         // the PCLKB count sources; `elc_event`: the channel's INT event
         // (compare A/B are +1/+2).

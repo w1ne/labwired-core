@@ -73,3 +73,18 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 150000 \
   --out-dir "$OUT/zephyr-shell-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 samples/basic/button: two S1 presses (P009, IRQ13 on the
+# falling edge, linked to NVIC line 89 through ICU IELSR89) print exactly two
+# "Button pressed" lines (tests/fixtures/r7fa8m1ah-zephyr-button.elf), then its
+# audit, run past both presses.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-button.yaml \
+  --output-dir "$OUT/zephyr-button" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-button.elf \
+  --system configs/systems/ek-ra8m1.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-button-unsupported-audit" \
+  --fail-on-unsupported

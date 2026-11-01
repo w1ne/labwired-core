@@ -1,0 +1,49 @@
+# LabWired - EK-RA8M1 stock Zephyr button sample (IRQ13 through the ICU)
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/basic/button` for board
+# `ek_ra8m1`. Rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# S1 is P009 (active low, pull-up). Zephyr's gpio_renesas_ra_ioport.c sets
+# P009's PmnPFS.ISEL, and renesas_ra_external_interrupt.c sets IRQCR13 to
+# falling edge and links ELC_EVENT_ICU_IRQ13 (0x00E) to NVIC line 89 through
+# IELSR89. So every "Button pressed at" line is a pad edge delivered
+# through the ICU's IRQ-pin half and event link. The value printed is
+# k_cycle_get_32() in the ISR.
+#
+# Two press/release pairs: only the presses (falling edges) print, so the
+# regex demands exactly two lines, the first within 1% of cycle 500 M and
+# the second within 1% of cycle 1.5 G. The release edges must not print.
+#
+# Not checked: the sample's main loop also mirrors S1 onto LED1 (P600), but
+# Zephyr makes P600 an output through PmnPFS.PDR, which `ra_pfs` stores
+# without moving the port (see configs/chips/r7fa8m1ah.yaml), so the pad
+# stays an input here.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-button.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+  max_cycles: 2000000000
+  wall_time_ms: 120000
+stimuli:
+  - target: { component: "s1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 500000000 }
+    value: 1.0
+  - target: { component: "s1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1000000000 }
+    value: 0.0
+  - target: { component: "s1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1500000000 }
+    value: 1.0
+  - target: { component: "s1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1800000000 }
+    value: 0.0
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Set up button at gpio@40400000 pin 9"
+      - "Set up LED at gpio@404000c0 pin 0"
+      - "Press the button"
+  - uart_regex: "Press the button\\r?\\nButton pressed at (49[5-9]|50[0-4])\\d{6}\\r?\\nButton pressed at 1(49[5-9]|50[0-4])\\d{6}\\r?\\n$"
+  - expected_stop_reason: max_cycles
