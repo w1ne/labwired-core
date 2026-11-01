@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod sci_b_irq;
 mod timed;
 
 use super::pad_lines::PadLines;
@@ -777,6 +778,11 @@ const SCI_B_CESR_INDEX: usize = 5;
 /// FCR (index 7, 0x24): TFRST bit 15 and RFRST bit 23 are write-only.
 const SCI_B_FCR_INDEX: usize = 7;
 const SCI_B_FCR_WO: u32 = (1 << 15) | (1 << 23);
+/// FRSR (0x50): FIFO receive status. R (bits 13:8) is the RX queue length
+/// capped at the 16-stage FIFO (FSP ra8m1 `BSP_FEATURE_SCI_UART_FIFO_DEPTH`;
+/// SCI0-4 and SCI9 have the FIFO). DR (bit 0), PNUM and FNUM read 0. FTSR
+/// (0x54) reads 0: a written byte leaves at once, so the TX FIFO is empty.
+const SCI_B_FRSR: u64 = 0x50;
 /// Reset values: CCR2 0xFF00FF04 (MDDR 0xFF, BRR 0xFF, BCP 4) and FCR
 /// 0x1F1F0000, the FSP `r_sci_b_uart.c` `SCI_B_UART_CCR2_DEFAULT_VALUE` /
 /// `SCI_B_UART_FCR_DEFAULT_VALUE`. Every other stored register resets to 0.
@@ -1031,6 +1037,10 @@ pub struct Uart {
     /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
     /// stored; it reads CCR0.TE/RE back as TIST/RIST.
     sci_b_regs: [u32; SCI_B_REGS],
+    /// SCI_B layout with `elc_event` configured: the RXI/TXI/TEI interrupt
+    /// events, linked to the NVIC through the RA ICU. `None` keeps the
+    /// polled-only SCI_B.
+    sci_b_irq: Option<Box<sci_b_irq::SciBIrq>>,
     /// Classic SCI layout: FCR as firmware last wrote it, without the
     /// write-only RFRST/TFRST bits.
     sci_fcr: u16,
@@ -1122,6 +1132,7 @@ impl Uart {
             avr_ubrr: 0,
             avr_baud_set: false,
             sci_b_regs: SCI_B_RESET,
+            sci_b_irq: None,
             sci_fcr: 0,
             last_tx_on_bus: false,
         }
@@ -1150,6 +1161,35 @@ impl Uart {
     }
 
     /// Enable STM32U5-only USART status/register behavior (TXFE and AUTOCR).
+    /// SCI_B only: raise the RXI/TXI/TEI interrupt events (`rxi_event`,
+    /// then +1, +2) through the RA ICU, with the wire timed at `baud` in
+    /// `clock_hz` cycles. See [`sci_b_irq`].
+    pub fn set_sci_b_events(mut self, rxi_event: u32, clock_hz: u64, baud: u64) -> Self {
+        if matches!(self.layout, UartRegisterLayout::SciB) {
+            self.sci_b_irq = Some(Box::new(sci_b_irq::SciBIrq::new(rxi_event, clock_hz, baud)));
+        }
+        self
+    }
+
+    /// Bus cycle for the SCI_B event timing (0 on a bus without a clock).
+    fn cycle_now(&self) -> u64 {
+        self.stream_clock.as_ref().map_or(0, |c| c.now())
+    }
+
+    /// Raise the SCI_B interrupt events due now.
+    fn sci_b_service(&mut self) -> Vec<u32> {
+        if self.sci_b_irq.is_none() {
+            return Vec::new();
+        }
+        let now = self.cycle_now();
+        let ccr0 = self.sci_b_regs[0];
+        let rx_waiting = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+        match self.sci_b_irq.as_deref_mut() {
+            Some(irq) => irq.service(now, ccr0, rx_waiting),
+            None => Vec::new(),
+        }
+    }
+
     pub fn set_u5_features(mut self, yes: bool) -> Self {
         self.u5_features = yes;
         self
@@ -1178,6 +1218,12 @@ impl Uart {
     fn sci_b_byte(&self, offset: u64) -> Option<u8> {
         if !matches!(self.layout, UartRegisterLayout::SciB) {
             return None;
+        }
+        if (SCI_B_FRSR..SCI_B_FRSR + 4).contains(&offset) {
+            // FRSR.R (bits 13:8): characters in the receive FIFO.
+            let len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+            let word = (len.min(SCI_FIFO_DEPTH) as u32) << 8;
+            return Some((word >> ((offset - SCI_B_FRSR) * 8)) as u8);
         }
         let rel = offset.checked_sub(SCI_B_CTRL_BASE)?;
         let index = (rel / 4) as usize;
@@ -1219,8 +1265,15 @@ impl Uart {
             }
             v &= !SCI_B_FCR_WO;
         }
-        let reg = &mut self.sci_b_regs[index];
-        *reg = (*reg & !(0xFFu32 << shift)) | v;
+        let old = self.sci_b_regs[index];
+        let new = (old & !(0xFFu32 << shift)) | v;
+        self.sci_b_regs[index] = new;
+        if index == 0 {
+            let now = self.cycle_now();
+            if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+                irq.on_ccr0(old, new, now);
+            }
+        }
         true
     }
 
@@ -1418,7 +1471,14 @@ impl Uart {
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
+        // SCI_B RXI: wake while a character waits for its RXI or behind
+        // the one being read. An empty queue needs no wake: injection
+        // (`deliver_uart_rx_named`) and stream peers re-harvest this.
+        let sci_b_rx_armed = self.sci_b_irq.is_some()
+            && sci_b_irq::SciBIrq::rx_armed(self.sci_b_regs[0])
+            && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
+            || sci_b_rx_armed
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
             || !self.wire_chars.is_empty()
@@ -2218,6 +2278,9 @@ impl crate::Peripheral for Uart {
         }
         if offset == self.rx_offset() || (offset == SCI_FRDRL && self.sci_fifo_mode()) {
             // Pop one byte from RX buffer
+            if let Some(irq) = self.sci_b_irq.as_deref() {
+                irq.note_rx_pop();
+            }
             if let Ok(mut guard) = self.rx_buf.lock() {
                 return Ok(guard.pop_front().unwrap_or(0x00));
             }
@@ -2358,6 +2421,12 @@ impl crate::Peripheral for Uart {
         }
         let is_sci_fifo_tx = offset == SCI_FTDRL && self.sci_fifo_mode();
         if offset == self.tx_offset() || is_legacy_tx_alias || is_sci_fifo_tx {
+            if self.sci_b_irq.is_some() && self.tx_enabled() {
+                let now = self.cycle_now();
+                if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+                    irq.on_tdr_write(now);
+                }
+            }
             self.push_tx(value);
             // If DMAT bit is set, we might be in a DMA sequence.
             if (self.cr3 & (1 << 7)) != 0 {
@@ -2427,11 +2496,18 @@ impl crate::Peripheral for Uart {
             };
         }
         let (irq, dma_signals) = self.advance_one_tick();
+        let events = self.sci_b_service();
         crate::PeripheralTickResult {
             irq,
             dma_signals: (!dma_signals.is_empty()).then_some(dma_signals),
+            explicit_irqs: (!events.is_empty()).then_some(events),
             ..Default::default()
         }
+    }
+
+    /// SCI_B with interrupt events: its explicit IRQs are ELC event numbers.
+    fn explicit_irqs_are_link_events(&self) -> bool {
+        self.sci_b_irq.is_some()
     }
 
     /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event
@@ -2458,6 +2534,9 @@ impl crate::Peripheral for Uart {
     fn on_node_reset(&mut self) {
         if self.timed.is_some() {
             self.timed_reset();
+        }
+        if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+            irq.reset();
         }
     }
 
@@ -2511,12 +2590,18 @@ impl crate::Peripheral for Uart {
                 .map(|t| vec![(t.saturating_sub(now + 1), UART_WAKE_TOKEN)])
                 .unwrap_or_default();
         }
+        let mut wakes = Vec::new();
+        if self.sci_b_irq.is_some() {
+            let now = self.cycle_now();
+            if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+                wakes.extend(irq.take_edge_wake(now));
+            }
+        }
         if self.has_active_work() && !self.scheduled {
             self.scheduled = true;
-            vec![(0, UART_WAKE_TOKEN)]
-        } else {
-            Vec::new()
+            wakes.push((0, UART_WAKE_TOKEN));
         }
+        wakes
     }
 
     /// Fire one tick-equivalent of work and re-arm while there's still work.
@@ -2526,10 +2611,26 @@ impl crate::Peripheral for Uart {
     /// (and stream pacing) going at one event per tick until work drains.
     fn on_event(
         &mut self,
-        _event_token: u32,
+        event_token: u32,
         _sched: &mut crate::sched::EventScheduler,
         bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if sci_b_irq::SciBIrq::is_edge_token(event_token) && self.sci_b_irq.is_some() {
+            // A TDRE/TEND edge wake: raise what is due, then re-arm the
+            // same token for the next edge (or for this one, if the clock
+            // has not reached it yet).
+            let explicit_irqs = self.sci_b_service();
+            let now = self.cycle_now();
+            let reschedule_delay = self
+                .sci_b_irq
+                .as_deref_mut()
+                .and_then(|irq| irq.on_edge_wake(event_token, now));
+            return crate::sched::EventResult {
+                explicit_irqs,
+                reschedule_delay,
+                ..Default::default()
+            };
+        }
         if self.timed.is_some() {
             let now = bus.current_cycle();
             let raise = self.timed_service(now);
@@ -2608,9 +2709,11 @@ impl crate::Peripheral for Uart {
         } else {
             interval.max(1)
         };
+        let explicit_irqs = self.sci_b_service();
         crate::sched::EventResult {
             raise_own_irq: irq,
             dma_signals,
+            explicit_irqs,
             reschedule_delay: keep_going.then_some(u64::from(delay)),
             ..Default::default()
         }

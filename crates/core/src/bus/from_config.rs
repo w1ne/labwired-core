@@ -824,6 +824,19 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
+                    // Renesas SCI_B: `elc_event` is the channel's RXI event
+                    // (TXI/TEI follow); the events reach the NVIC through the
+                    // RA ICU. `clock_hz` is the rate the guest believes its
+                    // cycles run at and `baud` the line rate, which time the
+                    // TDRE/TEND edges. Without `elc_event` the SCI_B is polled.
+                    if let Some(event) = p_cfg.config.get("elc_event").and_then(|v| v.as_u64()) {
+                        let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+                        uart = uart.set_sci_b_events(
+                            event as u32,
+                            get("clock_hz").unwrap_or(manifest.cpu_hz.unwrap_or(chip.cpu_hz)),
+                            get("baud").unwrap_or(115_200),
+                        );
+                    }
                     if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
                         // Vendor-neutral YAML map. `tx_offset` is required;
                         // status/rx/ready/enable keys are optional. The status
