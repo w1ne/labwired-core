@@ -12,6 +12,15 @@
 //! stimulus, and the protocol's own integrity bytes (Sensirion CRC-8, the
 //! Plantower check code).
 //!
+//! Batch 1b adds the MPU-9250 (accel/gyro/temperature; its AK8963
+//! magnetometer is not modelled), the ENS160 (whose outputs are only live in
+//! STANDARD mode), the INA260 (fixed-LSB current and power) and the INA3221
+//! (13-bit words left-aligned by three bits). Two parts asked for in that
+//! batch are absent on purpose, because the `i2c_device` primitive cannot
+//! model them truthfully: the AM2320 (CRC-16 frames whose length follows the
+//! request's register count) and the VL53L5CX (a firmware-upload boot sequence
+//! whose registers no ST document publishes).
+//!
 //! The negative control is the reason the checks are functions rather than
 //! inline asserts. [`negative_control_a_silent_part_fails_every_check`] runs
 //! each check against a stand-in that answers every read with `0x00`, and
@@ -25,6 +34,7 @@
 
 use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
 use labwired_core::peripherals::i2c::I2cDevice;
+use labwired_core::sim_input::SimInput;
 
 mod common;
 use common::transcript::{read_reg, read_stream, run_i2c, script, write_reg, Step};
@@ -221,6 +231,104 @@ fn check_ina226(d: &mut dyn I2cDevice) -> Result<(), String> {
         4_000u16,
         "INA226 bus voltage (1.25 mV/LSB)"
     );
+    Ok(())
+}
+
+/// INA260: the ID registers, the power-on configuration, and the fixed-LSB
+/// measurement words at 5 V / 1 A through the internal shunt: current 800
+/// counts (1.25 mA), bus 4000 counts (1.25 mV), power 800 × 4000 / 6400 = 500
+/// counts (10 mW) = 5 W.
+fn check_ina260(d: &mut dyn I2cDevice) -> Result<(), String> {
+    ensure_eq!(be16(&rd(d, 0xFE, 2)), 0x5449u16, "INA260 manufacturer ID");
+    ensure_eq!(be16(&rd(d, 0xFF, 2)), 0x2270u16, "INA260 die ID");
+    ensure_eq!(
+        be16(&rd(d, 0x00, 2)),
+        0x6127u16,
+        "INA260 configuration POR value"
+    );
+    ensure_eq!(
+        be16(&rd(d, 0x01, 2)),
+        800u16,
+        "INA260 current (1.25 mA/LSB)"
+    );
+    ensure_eq!(
+        be16(&rd(d, 0x02, 2)),
+        4_000u16,
+        "INA260 bus voltage (1.25 mV/LSB)"
+    );
+    ensure_eq!(be16(&rd(d, 0x03, 2)), 500u16, "INA260 power (10 mW/LSB)");
+    Ok(())
+}
+
+/// INA3221: the ID registers, the power-on configuration and Mask/Enable (TCF
+/// set), and channel 1 at 0.2 A through 0.1 Ω / 5 V: 500 shunt counts and 625
+/// bus counts, each LEFT-ALIGNED by three bits.
+fn check_ina3221(d: &mut dyn I2cDevice) -> Result<(), String> {
+    ensure_eq!(be16(&rd(d, 0xFE, 2)), 0x5449u16, "INA3221 manufacturer ID");
+    ensure_eq!(be16(&rd(d, 0xFF, 2)), 0x3220u16, "INA3221 die ID");
+    ensure_eq!(
+        be16(&rd(d, 0x00, 2)),
+        0x7127u16,
+        "INA3221 configuration POR value"
+    );
+    // CVRF masked: with no device clock the engine reads data-ready as set.
+    ensure_eq!(
+        be16(&rd(d, 0x0F, 2)) & 0xFFFE,
+        0x0002u16,
+        "INA3221 Mask/Enable POR value (TCF)"
+    );
+    ensure_eq!(
+        be16(&rd(d, 0x01, 2)),
+        500u16 << 3,
+        "INA3221 CH1 shunt voltage (40 µV/LSB, D2:D0 = 0)"
+    );
+    ensure_eq!(
+        be16(&rd(d, 0x02, 2)),
+        625u16 << 3,
+        "INA3221 CH1 bus voltage (8 mV/LSB, D2:D0 = 0)"
+    );
+    ensure_eq!(
+        be16(&rd(d, 0x06, 2)),
+        1_500u16 << 3,
+        "INA3221 CH3 bus at 12 V"
+    );
+    Ok(())
+}
+
+/// MPU-9250: WHO_AM_I, the power-on PWR_MGMT_1 (awake, unlike the MPU-6050),
+/// and the standard 14-byte burst from 0x3B: accel Z at 1 g on ±2 g = 16384,
+/// TEMP_OUT at 25 °C = 4 × 333.87 = 1335.48 → 1335, gyro at rest = 0.
+fn check_mpu9250(d: &mut dyn I2cDevice) -> Result<(), String> {
+    ensure_eq!(rd(d, 0x75, 1), vec![0x71u8], "MPU-9250 WHO_AM_I");
+    ensure_eq!(
+        rd(d, 0x6B, 1),
+        vec![0x01u8],
+        "MPU-9250 PWR_MGMT_1 reset (CLKSEL = 1, awake)"
+    );
+    let b = rd(d, 0x3B, 14);
+    ensure_eq!(be16(&b[0..2]), 0u16, "MPU-9250 accel X at rest");
+    ensure_eq!(be16(&b[4..6]), 16_384u16, "MPU-9250 accel Z at 1 g, ±2 g");
+    ensure_eq!(be16(&b[6..8]), 1_335u16, "MPU-9250 TEMP_OUT at 25 °C");
+    ensure_eq!(be16(&b[8..10]), 0u16, "MPU-9250 gyro X at rest");
+    Ok(())
+}
+
+/// ENS160: PART_ID (little-endian 0x0160), OPMODE powering up in IDLE, then
+/// STANDARD mode and the AQI / TVOC / eCO2 burst from 0x21 at the default
+/// stimulus (AQI 2, 100 ppb, 600 ppm), with STATAS set and VALIDITY normal.
+fn check_ens160(d: &mut dyn I2cDevice) -> Result<(), String> {
+    ensure_eq!(rd(d, 0x00, 2), vec![0x60u8, 0x01], "ENS160 PART_ID");
+    ensure_eq!(rd(d, 0x10, 1), vec![0x01u8], "ENS160 OPMODE reset (IDLE)");
+    wr(d, 0x10, &[0x02]); // STANDARD
+    ensure_eq!(
+        rd(d, 0x20, 1)[0] & 0x8C,
+        0x80u8,
+        "ENS160 DEVICE_STATUS: STATAS, VALIDITY = normal"
+    );
+    let b = rd(d, 0x21, 5);
+    ensure_eq!(b[0], 2u8, "ENS160 DATA_AQI");
+    ensure_eq!(le16(&b[1..3]), 100u16, "ENS160 DATA_TVOC (ppb)");
+    ensure_eq!(le16(&b[3..5]), 600u16, "ENS160 DATA_ECO2 (ppm)");
     Ok(())
 }
 
@@ -502,6 +610,10 @@ const PARTS: &[(&str, u8, Check)] = &[
     ("dht20", 0x38, check_dht20),
     ("pmsa003i", 0x12, check_pmsa003i),
     ("ina226", 0x40, check_ina226),
+    ("mpu9250", 0x68, check_mpu9250),
+    ("ens160", 0x52, check_ens160),
+    ("ina260", 0x40, check_ina260),
+    ("ina3221", 0x40, check_ina3221),
 ];
 
 // ─── smoke + negative control ──────────────────────────────────────────────
@@ -717,6 +829,216 @@ fn ina226_current_and_power_follow_calibration() {
     wr(&mut d, 0x00, &[0x80, 0x00]);
     assert_eq!(be16(&rd(&mut d, 0x00, 2)), 0x4127);
     assert_eq!(be16(&rd(&mut d, 0x05, 2)), 0);
+}
+
+#[test]
+fn ina260_tracks_stimulus_with_fixed_lsbs() {
+    let mut d = dev("ina260", 0x40);
+    advance(&mut d, 1); // start the device clock (see the TSL2591 test)
+
+    // SBOS656 Table 1, the datasheet's own worked example: 12.5 A at 11.98 V.
+    run_i2c(
+        &mut d,
+        &[
+            Step::Input("current", 12.5),
+            Step::Input("bus_voltage", 11.98),
+        ],
+    );
+    assert_eq!(be16(&rd(&mut d, 0x01, 2)), 0x2710, "Current 10000 counts");
+    assert_eq!(
+        be16(&rd(&mut d, 0x02, 2)),
+        0x2570,
+        "Bus voltage 9584 counts"
+    );
+    assert_eq!(be16(&rd(&mut d, 0x03, 2)), 0x3A7F, "Power 14975 counts");
+    // Negative current: two's complement in CURRENT, |I| in POWER.
+    run_i2c(&mut d, &[Step::Input("current", -2.5)]);
+    assert_eq!(be16(&rd(&mut d, 0x01, 2)), (-2_000i16) as u16);
+    // 2000 × 9584 / 6400 = 2995.
+    assert_eq!(be16(&rd(&mut d, 0x03, 2)), 2_995);
+    // Configuration write mask: D14:D12 stay 110, RST is not stored.
+    wr(&mut d, 0x00, &[0x0D, 0x27]);
+    assert_eq!(be16(&rd(&mut d, 0x00, 2)), 0x6D27);
+    // CVRF rises 2.2 ms after that write, and clears when Mask/Enable is read.
+    assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0x0008, 0);
+    advance(&mut d, 2_200);
+    assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0x0008, 0x0008);
+    assert_eq!(
+        be16(&rd(&mut d, 0x06, 2)) & 0x0008,
+        0,
+        "cleared by the read"
+    );
+    // Mask/Enable: the flag bits are the part's.
+    wr(&mut d, 0x06, &[0xFF, 0xFF]);
+    assert_eq!(be16(&rd(&mut d, 0x06, 2)) & 0xFFF7, 0xFC03);
+    // RST: back to power-on values.
+    wr(&mut d, 0x00, &[0x80, 0x00]);
+    assert_eq!(be16(&rd(&mut d, 0x00, 2)), 0x6127);
+    assert_eq!(be16(&rd(&mut d, 0x06, 2)), 0);
+}
+
+#[test]
+fn ina3221_left_aligns_saturates_and_sums() {
+    let mut d = dev("ina3221", 0x40);
+    advance(&mut d, 1); // start the device clock (see the TSL2591 test)
+
+    // SBOS576 §8.2.2's worked example: −80 mV → 2000 counts → 0xC180. At
+    // 0.1 Ω that is −0.8 A.
+    run_i2c(&mut d, &[Step::Input("ch1_current", -0.8)]);
+    assert_eq!(be16(&rd(&mut d, 0x01, 2)), 0xC180);
+    // Rounded to a whole count BEFORE the shift: 0.12345 A → 308.625 → 309
+    // counts → 2472, and D2:D0 are zero.
+    run_i2c(&mut d, &[Step::Input("ch2_current", 0.12345)]);
+    let w = be16(&rd(&mut d, 0x03, 2));
+    assert_eq!(w, 309 << 3);
+    assert_eq!(w & 0x7, 0);
+    // Shunt full scale, 163.8 mV, is 0x7FF8 (§8.2.2); 2 A × 0.1 Ω saturates.
+    run_i2c(&mut d, &[Step::Input("ch3_current", 2.0)]);
+    assert_eq!(be16(&rd(&mut d, 0x05, 2)), 0x7FF8);
+    run_i2c(&mut d, &[Step::Input("ch3_current", -2.0)]);
+    assert_eq!(be16(&rd(&mut d, 0x05, 2)), 0x8000);
+    // Bus 12.0 V → 1500 counts → 0x2EE0.
+    run_i2c(&mut d, &[Step::Input("ch3_bus_voltage", 12.0)]);
+    assert_eq!(be16(&rd(&mut d, 0x06, 2)), 0x2EE0);
+    // Shunt-voltage sum: 0 until SCC is set, then Σ counts in D14:D1.
+    assert_eq!(be16(&rd(&mut d, 0x0D, 2)), 0);
+    run_i2c(
+        &mut d,
+        &[
+            Step::Input("ch1_current", 0.2), // 500
+            Step::Input("ch2_current", 0.1), // 250
+            Step::Input("ch3_current", 0.5), // 1250
+        ],
+    );
+    wr(&mut d, 0x0F, &[0x70, 0x00]); // SCC1 | SCC2 | SCC3
+    assert_eq!(be16(&rd(&mut d, 0x0F, 2)), 0x7002, "SCC stored, TCF kept");
+    assert_eq!(be16(&rd(&mut d, 0x0D, 2)), 2_000 << 1);
+    wr(&mut d, 0x0F, &[0x40, 0x00]); // SCC1 only
+    assert_eq!(be16(&rd(&mut d, 0x0D, 2)), 500 << 1);
+    // A negative channel sums as two's complement.
+    run_i2c(&mut d, &[Step::Input("ch1_current", -0.2)]);
+    assert_eq!(be16(&rd(&mut d, 0x0D, 2)), (-1_000i16) as u16);
+    // CVRF: three channels × (1.1 ms + 1.1 ms) = 6.6 ms after a Configuration
+    // write, cleared by reading Mask/Enable.
+    wr(&mut d, 0x00, &[0x71, 0x27]);
+    assert_eq!(be16(&rd(&mut d, 0x0F, 2)) & 1, 0);
+    advance(&mut d, 6_600);
+    assert_eq!(be16(&rd(&mut d, 0x0F, 2)) & 1, 1);
+    assert_eq!(be16(&rd(&mut d, 0x0F, 2)) & 1, 0, "cleared by the read");
+    // Limit registers: reserved D2:D0 read 0; RST restores the POR values.
+    wr(&mut d, 0x07, &[0x12, 0x3F]);
+    assert_eq!(be16(&rd(&mut d, 0x07, 2)), 0x1238);
+    wr(&mut d, 0x00, &[0x80, 0x00]);
+    assert_eq!(be16(&rd(&mut d, 0x00, 2)), 0x7127);
+    assert_eq!(be16(&rd(&mut d, 0x07, 2)), 0x7FF8);
+    assert_eq!(be16(&rd(&mut d, 0x0F, 2)), 0x0002);
+    assert_eq!(be16(&rd(&mut d, 0x10, 2)), 0x2710);
+    assert_eq!(be16(&rd(&mut d, 0x11, 2)), 0x2328);
+}
+
+#[test]
+fn mpu9250_scales_tracks_data_ready_and_resets() {
+    let mut d = dev("mpu9250", 0x68);
+    advance(&mut d, 1); // start the device clock (see the TSL2591 test)
+    assert_eq!(
+        rd(&mut d, 0x3A, 1)[0] & 1,
+        0,
+        "RAW_DATA_RDY before a sample"
+    );
+    advance(&mut d, 1_000);
+    assert_eq!(rd(&mut d, 0x3A, 1)[0] & 1, 1, "RAW_DATA_RDY after 1 ms");
+    assert_eq!(
+        rd(&mut d, 0x3A, 1)[0] & 1,
+        0,
+        "…cleared by reading INT_STATUS"
+    );
+    // ±16 g (ACCEL_FS_SEL = 3): 1 g → 2048; −3 g → −6144.
+    wr(&mut d, 0x1C, &[0x18]);
+    assert_eq!(be16(&rd(&mut d, 0x3F, 2)), 2_048);
+    run_i2c(&mut d, &[Step::Input("accel_z", -3.0)]);
+    assert_eq!(be16(&rd(&mut d, 0x3F, 2)), (-6_144i16) as u16);
+    // Reserved ACCEL_CONFIG bits 2:0 do not store.
+    wr(&mut d, 0x1C, &[0xFF]);
+    assert_eq!(rd(&mut d, 0x1C, 1), vec![0xF8]);
+    // ±500 dps (GYRO_FS_SEL = 1): 100 dps → 6550; −250 dps → −16375.
+    wr(&mut d, 0x1B, &[0x08]);
+    run_i2c(
+        &mut d,
+        &[Step::Input("gyro_x", 100.0), Step::Input("gyro_y", -250.0)],
+    );
+    let g = rd(&mut d, 0x43, 4);
+    assert_eq!(be16(&g[0..2]), 6_550);
+    assert_eq!(be16(&g[2..4]), (-16_375i16) as u16);
+    // TEMP_OUT = (T − 21) × 333.87: 30 °C → 3004.83 → 3005; −10 °C → −10350.
+    run_i2c(&mut d, &[Step::Input("temperature", 30.0)]);
+    assert_eq!(be16(&rd(&mut d, 0x41, 2)), 3_005);
+    run_i2c(&mut d, &[Step::Input("temperature", -10.0)]);
+    assert_eq!(be16(&rd(&mut d, 0x41, 2)), (-10_350i16) as u16);
+    // H_RESET: PWR_MGMT_1 back to 0x01 and the full-scale selects to ±2 g /
+    // ±250 dps.
+    wr(&mut d, 0x6B, &[0x80]);
+    assert_eq!(rd(&mut d, 0x6B, 1), vec![0x01]);
+    assert_eq!(rd(&mut d, 0x1C, 1), vec![0x00]);
+    assert_eq!(rd(&mut d, 0x1B, 1), vec![0x00]);
+    // −3 g on ±2 g saturates at the end of the int16.
+    assert_eq!(be16(&rd(&mut d, 0x3F, 2)), 0x8000);
+    assert_eq!(be16(&rd(&mut d, 0x43, 2)), 13_100, "100 dps at ±250 dps");
+}
+
+#[test]
+fn ens160_gates_on_standard_mode_and_tracks_stimulus() {
+    let mut d = dev("ens160", 0x52);
+    advance(&mut d, 1); // start the device clock (see the TSL2591 test)
+
+    // IDLE: no measurement yet; DATA_x hold their datasheet defaults.
+    assert_eq!(rd(&mut d, 0x20, 1), vec![0x00], "DEVICE_STATUS in IDLE");
+    assert_eq!(
+        rd(&mut d, 0x21, 5),
+        vec![0x01, 0, 0, 0, 0],
+        "AQI 1, TVOC 0, eCO2 0"
+    );
+    assert_eq!(le16(&rd(&mut d, 0x30, 2)), 0x4A8A, "DATA_T default (25 °C)");
+    assert_eq!(
+        le16(&rd(&mut d, 0x32, 2)),
+        0x6400,
+        "DATA_RH default (50 %RH)"
+    );
+    // STANDARD: STATAS and NEWDAT rise, the outputs follow the stimulus.
+    wr(&mut d, 0x10, &[0x02]);
+    assert_eq!(rd(&mut d, 0x20, 1)[0] & 0x82, 0x82, "STATAS | NEWDAT");
+    run_i2c(
+        &mut d,
+        &[
+            Step::Input("eco2", 1_234.7),
+            Step::Input("tvoc", 65_000.0),
+            Step::Input("aqi", 4.0),
+        ],
+    );
+    let b = rd(&mut d, 0x21, 5);
+    assert_eq!(b[0], 4);
+    assert_eq!(le16(&b[1..3]), 65_000, "TVOC at its 65000 ppb ceiling");
+    assert_eq!(le16(&b[3..5]), 1_234, "eCO2 truncates to whole ppm");
+    // Outside the datasheet's output range the host cannot pose a value.
+    assert!(d.set_input("eco2", 100.0).is_err(), "eCO2 below 400 ppm");
+    // The validity flag is the host's: warm-up reads VALIDITY = 1.
+    run_i2c(&mut d, &[Step::Input("validity", 1.0)]);
+    assert_eq!(rd(&mut d, 0x20, 1)[0] & 0x0C, 0x04);
+    // Back to IDLE: STATAS clears and the last result is held.
+    wr(&mut d, 0x10, &[0x01]);
+    run_i2c(&mut d, &[Step::Input("eco2", 900.0)]);
+    assert_eq!(rd(&mut d, 0x20, 1)[0] & 0x80, 0);
+    assert_eq!(le16(&rd(&mut d, 0x24, 2)), 1_234);
+    // TEMP_IN (Kelvin × 64, LSB first) is what DATA_T reports. 30 °C → 0x4BCA.
+    wr(&mut d, 0x13, &[0xCA, 0x4B]);
+    assert_eq!(rd(&mut d, 0x13, 2), vec![0xCA, 0x4B]);
+    assert_eq!(le16(&rd(&mut d, 0x30, 2)), 0x4BCA);
+    // RH_IN → DATA_RH: 40 %RH × 512 = 0x5000.
+    wr(&mut d, 0x15, &[0x00, 0x50]);
+    assert_eq!(le16(&rd(&mut d, 0x32, 2)), 0x5000);
+    // RESET returns to IDLE.
+    wr(&mut d, 0x10, &[0x02]);
+    wr(&mut d, 0x10, &[0xF0]);
+    assert_eq!(rd(&mut d, 0x10, 1), vec![0x01]);
 }
 
 #[test]
