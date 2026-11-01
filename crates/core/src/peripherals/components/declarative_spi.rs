@@ -129,6 +129,9 @@ pub struct GenericSpiDevice {
     /// accumulation and the `frame` event in [`Self::transfer`] are its whole
     /// wire behaviour.
     frame_only: bool,
+    /// `behavior.spi.miso_var`: the variable a `frame_only` part answers each
+    /// byte with, read after that byte's rules ran. `None` ⇒ `0x00`.
+    miso_var: Option<String>,
     /// **Whether the module's supply pins are connected in the design.**
     ///
     /// ⚠️ NOT any power-down MODE the part itself has (the MAX7219's
@@ -294,6 +297,27 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
     // variable has to be DECLARED: inventing one no descriptor mentions would
     // make `var(opcode)` readable in a part that never asked for it, and would
     // hide the typo in a part that meant to ask and misspelled the key.
+    // `miso_var` only means something on a message part, and only if the
+    // variable exists: on a register part the command/data phases own MISO,
+    // and an undeclared variable would read 0 forever — a part that answers
+    // zeros while looking configured.
+    if let Some(var) = &spec.miso_var {
+        if !spec.registers.is_empty() || spec.register_file.is_some() {
+            bail!(
+                "behavior.spi miso_var '{var}' on a part with a register map — the command and \
+                 data phases already decide MISO there"
+            );
+        }
+        if descriptor.behavior.frames.is_none() {
+            bail!(
+                "behavior.spi miso_var '{var}' without `frames:` — no rule would ever run to set \
+                 it"
+            );
+        }
+        if !descriptor.behavior.vars.contains_key(var) {
+            bail!("behavior.spi miso_var '{var}' is not declared in `vars:`");
+        }
+    }
     if let Some(frames) = &descriptor.behavior.frames {
         if frames.opcode_byte && !descriptor.behavior.vars.contains_key("opcode") {
             bail!(
@@ -386,6 +410,7 @@ impl GenericSpiDevice {
             frame_only: spec.registers.is_empty()
                 && spec.register_file.is_none()
                 && descriptor.behavior.frames.is_some(),
+            miso_var: spec.miso_var.clone(),
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
             frame_buf: Vec::new(),
@@ -1051,6 +1076,14 @@ impl SpiDevice for GenericSpiDevice {
         if close_frame {
             self.close_frame(i64::from(mosi));
         }
+        // A message part with a `miso_var` answers AFTER this byte's rules,
+        // so the reply may depend on the byte being clocked in.
+        if let (true, Some(var)) = (self.frame_only, self.miso_var.as_deref()) {
+            return self
+                .rules
+                .as_ref()
+                .map_or(0x00, |m| (m.var(var) & 0xFF) as u8);
+        }
         miso
     }
 
@@ -1487,6 +1520,54 @@ behavior:
     registers:
       - {name: VALUE, addr: 0, width: 1, endian: be, access: r, source: quotient}
 "#;
+
+    /// A message part that echoes each MOSI byte + 1 in the SAME byte: only
+    /// possible because `miso_var` is read after the byte's rules ran.
+    const MISO_VAR_FIXTURE: &str = r#"
+type: miso_var_echo
+behavior:
+  primitive: spi_device
+  spi: { miso_var: reply }
+  frames: { length: 1, discard_partial: true }
+  vars: { reply: 0 }
+  rules:
+    - on: frame
+      do: [ { var: { name: reply, value: "frame_byte(0) + 1" } } ]
+"#;
+
+    #[test]
+    fn miso_var_answers_with_the_rules_view_of_this_byte() {
+        let mut d = GenericSpiDevice::from_yaml(MISO_VAR_FIXTURE, "PA4").unwrap();
+        d.cs_select();
+        assert_eq!(
+            [d.transfer(0x10), d.transfer(0x41), d.transfer(0xFF)],
+            [0x11, 0x42, 0x00]
+        );
+        d.cs_release();
+        // Without the key the same part answers 0x00, as frame-only parts did.
+        let plain = MISO_VAR_FIXTURE.replace("spi: { miso_var: reply }", "spi: {}");
+        let mut d = GenericSpiDevice::from_yaml(&plain, "PA4").unwrap();
+        d.cs_select();
+        assert_eq!(d.transfer(0x10), 0x00);
+    }
+
+    #[test]
+    fn miso_var_is_rejected_where_it_could_not_mean_anything() {
+        // An undeclared variable would read 0 forever.
+        let undeclared = MISO_VAR_FIXTURE.replace("miso_var: reply", "miso_var: nope");
+        let e = GenericSpiDevice::from_yaml(&undeclared, "PA4").unwrap_err();
+        assert!(
+            format!("{e:#}").contains("not declared in `vars:`"),
+            "{e:#}"
+        );
+        // On a register part the command/data phases own MISO.
+        let registered = MISO_VAR_FIXTURE.replace(
+            "spi: { miso_var: reply }",
+            "spi: { miso_var: reply, register_file: { size: 4 } }",
+        );
+        let e = GenericSpiDevice::from_yaml(&registered, "PA4").unwrap_err();
+        assert!(format!("{e:#}").contains("register map"), "{e:#}");
+    }
 
     #[test]
     fn exact_fault_defaults_and_inputs_are_rejected() {
