@@ -148,3 +148,31 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 2000000 \
   --out-dir "$OUT/zephyr-pwm-api-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 tests/drivers/dac/dac_api: DAC0 half scale through
+# ra_dac12, DADR0/DACR checked as well as the suite
+# (tests/fixtures/r7fa8m1ah-zephyr-dac-api.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-dac-api.yaml \
+  --output-dir "$OUT/zephyr-dac-api" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-dac-api.elf \
+  --system examples/ek-ra8m1/system.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-dac-api-unsupported-audit" \
+  --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 tests/drivers/dac/dac_loopback: DA0 jumpered to AN000
+# (dac-loopback-system.yaml), ADC0 must convert the DAC's 1650 mV to 0x07FF
+# (tests/fixtures/r7fa8m1ah-zephyr-dac-loopback.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-dac-loopback.yaml \
+  --output-dir "$OUT/zephyr-dac-loopback" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-dac-loopback.elf \
+  --system examples/ek-ra8m1/dac-loopback-system.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-dac-loopback-unsupported-audit" \
+  --fail-on-unsupported

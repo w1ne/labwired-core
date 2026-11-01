@@ -1443,6 +1443,8 @@ impl SystemBus {
         bus.wire_samd51_tc_output_pads();
         // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
         bus.wire_ra_gpt_output_pads();
+        // Board wires from an analog output (a DAC pin) to an ADC input.
+        bus.wire_analog_links();
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
         // name. Unlike the four above this is not a datasheet AF table — the
         // pad has no function register on this family, so the peripherals

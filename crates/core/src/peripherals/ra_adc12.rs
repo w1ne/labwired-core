@@ -29,7 +29,11 @@
 //!   `ADADC.ADC` count 1/2/3/4/16, `ADADC.AVEE`): addition sums the
 //!   (identical) samples, averaging leaves the single-sample code;
 //! - channel levels come from `input_mv` in the chip config or
-//!   [`Peripheral::set_adc_channel_input`]; an undriven channel reads 0.
+//!   [`Peripheral::set_adc_channel_input`]; an undriven channel reads 0. A
+//!   channel the board wires to an analog output (`analog_links: { <ch>:
+//!   "<peripheral>:<output>" }`, e.g. a jumper from DA0 to AN000) converts
+//!   that output's level at scan end while it is driven
+//!   ([`Peripheral::bind_adc_channel_probe`]), and the held level otherwise.
 //!
 //! The scan-end interrupt is an ELC event (`ELC_EVENT_ADC0_SCAN_END` 0x1AE,
 //! `ELC_EVENT_ADC1_SCAN_END` 0x1B4 on the RA8M1, FSP `bsp_elc.h`). It leaves
@@ -107,6 +111,21 @@ pub struct RaAdc12 {
     pending_events: Vec<(u64, u32)>,
     #[serde(skip)]
     clock: Option<CycleClock>,
+    /// `analog_links` from the config, for the bus to bind.
+    #[serde(skip)]
+    links: Vec<(u8, String, u8)>,
+    #[serde(skip)]
+    probes: Probes,
+}
+
+/// Bound [`crate::AnalogProbe`]s by channel.
+#[derive(Default)]
+struct Probes(BTreeMap<u8, crate::AnalogProbe>);
+
+impl std::fmt::Debug for Probes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.0.keys()).finish()
+    }
 }
 
 impl RaAdc12 {
@@ -125,7 +144,14 @@ impl RaAdc12 {
             generation: 0,
             pending_events: Vec::new(),
             clock: None,
+            links: Vec::new(),
+            probes: Probes::default(),
         }
+    }
+
+    /// Ask the bus to wire `channel` to output `output` of `source`.
+    pub fn add_analog_link(&mut self, channel: u8, source: String, output: u8) {
+        self.links.push((channel, source, output));
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -185,7 +211,9 @@ impl RaAdc12 {
     fn convert(&self, channel: usize) -> u16 {
         let bits = self.resolution_bits();
         let full = (1u32 << bits) - 1;
-        let mv = u32::from(*self.inputs.get(&(channel as u8)).unwrap_or(&0));
+        let ch = channel as u8;
+        let probed = self.probes.0.get(&ch).and_then(|probe| probe());
+        let mv = u32::from(probed.unwrap_or_else(|| *self.inputs.get(&ch).unwrap_or(&0)));
         let code = (mv * full / u32::from(self.vref_mv)).min(full);
         let adadc = self.regs[ADADC as usize];
         let n = self.addition_count();
@@ -366,11 +394,27 @@ impl Peripheral for RaAdc12 {
     fn on_node_reset(&mut self) {
         let clock = self.clock.take();
         let inputs = std::mem::take(&mut self.inputs);
+        let links = std::mem::take(&mut self.links);
+        let probes = std::mem::take(&mut self.probes);
         let conversion_cycles = self.conversion_cycles;
         *self = Self::new(DEFAULT_CLOCK_HZ, self.elc_event, self.vref_mv);
         self.conversion_cycles = conversion_cycles;
         self.inputs = inputs;
         self.clock = clock;
+        self.links = links;
+        self.probes = probes;
+    }
+
+    fn bind_adc_channel_probe(&mut self, channel: u8, probe: crate::AnalogProbe) -> bool {
+        if usize::from(channel) >= CHANNELS {
+            return false;
+        }
+        self.probes.0.insert(channel, probe);
+        true
+    }
+
+    fn analog_input_links(&self) -> Vec<(u8, String, u8)> {
+        self.links.clone()
     }
 
     fn set_adc_channel_input(&mut self, channel: u8, millivolts: u16) -> bool {
@@ -402,6 +446,8 @@ impl Peripheral for RaAdc12 {
             crate::SimulationError::NotImplemented(format!("RaAdc12 snapshot decode: {error}"))
         })?;
         restored.clock = self.clock.take();
+        restored.links = std::mem::take(&mut self.links);
+        restored.probes = std::mem::take(&mut self.probes);
         *self = restored;
         Ok(())
     }

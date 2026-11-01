@@ -47,6 +47,13 @@
 #       from Zephyr v4.1.0 (examples/ek-ra8m1/zephyr-pwm-api.yaml: pwm7 is
 #       GPT7 through the ra_gpt model, its GTIOC7A on P603 checked on
 #       the pad), module list pinned like the button.
+#   tests/fixtures/r7fa8m1ah-zephyr-dac-api.elf — tests/drivers/dac/dac_api
+#       from Zephyr v4.1.0 (examples/ek-ra8m1/zephyr-dac-api.yaml: DAC0
+#       through the ra_dac12 model), module list pinned like the button.
+#   tests/fixtures/r7fa8m1ah-zephyr-dac-loopback.elf —
+#       tests/drivers/dac/dac_loopback from Zephyr v4.1.0, no overlay (the
+#       test reads ADC0 channel 0; examples/ek-ra8m1/zephyr-dac-loopback.yaml
+#       jumpers DA0 to AN000), module list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `ek_ra8m1`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) at the
@@ -146,4 +153,10 @@ build_one "samples/sensor/bme280" "r7fa8m1ah-zephyr-bme280.elf" \
   -DCONFIG_PICOLIBC_USE_MODULE=y "-DEXTRA_DTC_OVERLAY_FILE=$HERE/bme280-iic1.overlay"
 # tests/drivers/pwm/pwm_api (pwm7 = GPT7, GTIOC7A on P603), same v4.1.0 tree.
 build_one "tests/drivers/pwm/pwm_api" "r7fa8m1ah-zephyr-pwm-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/dac/dac_api and dac_loopback (DAC0; the loopback reads ADC0
+# channel 0), same v4.1.0 tree.
+build_one "tests/drivers/dac/dac_api" "r7fa8m1ah-zephyr-dac-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+build_one "tests/drivers/dac/dac_loopback" "r7fa8m1ah-zephyr-dac-loopback.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"

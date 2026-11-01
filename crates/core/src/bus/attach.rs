@@ -2759,6 +2759,42 @@ impl SystemBus {
         }
     }
 
+    /// Bind each ADC channel a board wires to an analog output (the ADC's
+    /// `analog_links`, e.g. a jumper from a DAC pin to an ADC input) to a
+    /// live probe of that output, so a conversion reads what the source
+    /// drives at that moment.
+    pub(crate) fn wire_analog_links(&mut self) {
+        for adc_idx in 0..self.peripherals.len() {
+            let links = self.peripherals[adc_idx].dev.analog_input_links();
+            for (channel, source, output) in links {
+                let adc = &self.peripherals[adc_idx].name;
+                let Some(src_idx) = self.find_peripheral_index_by_name(&source) else {
+                    tracing::warn!(
+                        "'{adc}': analog_links channel {channel} names '{source}', \
+                         which is not on the bus"
+                    );
+                    continue;
+                };
+                let Some(probe) = self.peripherals[src_idx].dev.analog_output_probe(output) else {
+                    tracing::warn!(
+                        "'{adc}': analog_links channel {channel} names {source}:{output}, \
+                         which is not an analog output"
+                    );
+                    continue;
+                };
+                if !self.peripherals[adc_idx]
+                    .dev
+                    .bind_adc_channel_probe(channel, probe)
+                {
+                    tracing::warn!(
+                        "'{}': analog_links channel {channel} is not an input it has",
+                        self.peripherals[adc_idx].name
+                    );
+                }
+            }
+        }
+    }
+
     /// Bind every nRF52 bus controller's wire to every pad its `PSEL` can name,
     /// so a probe shows the bus instead of the GPIO output latch.
     ///

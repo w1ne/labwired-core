@@ -83,9 +83,11 @@ image prints nothing at all.
     FCACHE, FACI, ELC, RTC, IWDT/WDT, SPI, USBFS/USBHS,
     ETHERC and CANFD are declared stubs; ADC0/ADC1 convert software-started
     scans (stock Zephyr `adc_api` 6/6), IIC0/IIC1 are I2C masters (stock
-    Zephyr `samples/sensor/bme280` reads a BME280 on IIC1) and GPT0-13
+    Zephyr `samples/sensor/bme280` reads a BME280 on IIC1), GPT0-13
     generate saw-wave PWM (stock Zephyr `pwm_api` 2/2, the GTIOC7A waveform
-    checked on P603). SCI0–2, SCI4–8 and the remaining
+    checked on P603) and DAC0/DAC1 drive their DAn pins (stock Zephyr
+    `dac_api` 1/1, and `dac_loopback` 1/1 with DA0 jumpered to AN000).
+    SCI0–2, SCI4–8 and the remaining
     blocks are **not mapped**: firmware that touches them faults with a memory violation. There
     is no silicon capture: **SIM-DERIVED**.
 
@@ -133,6 +135,7 @@ image prints nothing at all.
 | Switches | S1 P009, S2 P008 | modelled GPIO input — active low, PFS pull-up |
 | SCI9 VCP | PA14 (TXD9) / PA15 (RXD9) | the simulator captures the SCI9 stream; the J-Link OB bridge is not modelled |
 | ADC0 / ADC1 | `0x4033_2000` / `0x4033_2200` | modelled (`ra_adc12`) — software-started single/continuous scans, `ADDRn`, addition/averaging, scan end as ELC events 0x1AE / 0x1B4; nominal 1 µs per channel; group scan, hardware triggers and the temperature sensor not modelled |
+| DAC0 / DAC1 | `0x4033_3000` | modelled (`ra_dac12`) — `DADRn` (12 bits, right- or left-justified per `DADPR.DPSEL`) and the control registers read back; DAn = code × 3.3 V / 4096 while `DACR.DAOEn` = 1, at once; an ADC channel's `analog_links` (a board jumper) converts that level; conversion time, amplifier wait, reference select and D/A-A/D sync not modelled |
 | IIC0 / IIC1 | `0x4025_E000` / `0x4025_E100` | modelled (`ra_iic`) — RIIC master transmit/receive, 7-bit addresses, start/restart/stop, address NACK, RXI/TXI/TEI/ERI as ELC events 0x05C-0x05F / 0x061-0x064, wire time from `ICBRL`/`ICBRH`/`CKS`; slave mode, 10-bit addresses, arbitration loss, timeout and SMBus not modelled |
 | GPT0-13 | `0x4032_2000` + `0x100`×n | modelled (`ra_gpt`) — saw-wave PWM counting PCLKD / 2^`TPCS`, cycle-end buffer transfers (`GTPBR`, `GTCCRC`/`GTCCRE`), compare A/B and overflow as ELC events 0x0A1 + 9n (+0/+1/+6), GTIOCnA/B from `GTIOR` and `GTUDDTYC` 0%/100% on the pads `gtioc_pads` names; triangle/one-shot modes, input capture, hardware sources, dead time and POEG not modelled |
 | DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT, WDT, USBFS, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | see descriptor | `type: stub` |
