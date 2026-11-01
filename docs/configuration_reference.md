@@ -422,11 +422,14 @@ canonical `type:`; the table below is rendered from that file by
 | `dht20` | I²C | Aosong DHT20 I²C temperature and humidity module (AHT20-based) |
 | `drv2605` | I²C | TI DRV2605 haptic motor driver over I2C |
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
+| `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
 | `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
 | `ina219` | I²C | High-side current and bus voltage sensor over I²C |
 | `ina226` | I²C | TI INA226 bidirectional current / power monitor over I²C (36 V, 16-bit) |
+| `ina260` | I²C | TI INA260 current / voltage / power monitor with an integrated 2 mΩ shunt over I²C (36 V, 15 A) |
+| `ina3221` | I²C | TI INA3221 three-channel shunt and bus voltage monitor over I²C (26 V) |
 | `lcd1602` | I²C | 16×2 HD44780 character LCD behind a PCF8574 I2C backpack |
 | `lsm303agr_accel` | I²C | ST LSM303AGR accelerometer half over I2C (address 0x19) |
 | `lsm303agr_mag` | I²C | ST LSM303AGR magnetometer half over I2C (address 0x1E) |
@@ -436,6 +439,7 @@ canonical `type:`; the table below is rendered from that file by
 | `mlx90640` | I²C | Melexis MLX90640 32×24 far-IR thermal array over I2C |
 | `mma8451q` | I²C | 3-axis 14-bit accelerometer over I2C with standby/active gating |
 | `mpu6050` | I²C | 6-axis gyro + accelerometer over I2C |
+| `mpu9250` | I²C | TDK InvenSense MPU-9250 motion sensor (accel + gyro + temperature; AK8963 magnetometer not modelled) over I²C |
 | `nau88l21` | I²C | Nuvoton NAU88L21 stereo audio codec: I2C control port and register file |
 | `oled-sh1107` | I²C | 128×128 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306` | I²C | 128×64 monochrome OLED display over I2C with a paged framebuffer |

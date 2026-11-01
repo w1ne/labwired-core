@@ -473,6 +473,23 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["ina226"],
         include_str!("../../../configs/devices/ina226.yaml"),
     ),
+    // ── Batch 1b ───────────────────────────────────────────────────────────
+    (
+        &["mpu9250"],
+        include_str!("../../../configs/devices/mpu9250.yaml"),
+    ),
+    (
+        &["ens160"],
+        include_str!("../../../configs/devices/ens160.yaml"),
+    ),
+    (
+        &["ina260"],
+        include_str!("../../../configs/devices/ina260.yaml"),
+    ),
+    (
+        &["ina3221"],
+        include_str!("../../../configs/devices/ina3221.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.
