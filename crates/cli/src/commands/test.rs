@@ -26,7 +26,10 @@ fn arm_test_family(
     };
     let chip = system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))?;
     let family = machine_family(&chip)?;
-    if !matches!(family, MachineFamily::CortexM | MachineFamily::CortexA) {
+    if !matches!(
+        family,
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR
+    ) {
         anyhow::bail!("ARM ELF does not match chip '{}' ({family:?})", chip.name);
     }
     Ok(family)
@@ -1836,6 +1839,38 @@ pub(crate) fn run_test(
     // resolves peripherals by name to the FIRST match — misroutes the 512-entry
     // blob onto the 128-entry stub and fails ("snapshot has 512 entries, table
     // has 128"). Only install the fast-boot stubs on the plain ELF path.
+    // Cortex-R5F: the RPU platform (GIC, UARTs, TTC) must be on the bus before
+    // the console sink attaches below; the prepared CPU is consumed by the ARM
+    // arm of the run dispatch.
+    #[cfg(feature = "qemu-arm-system")]
+    let mut cortex_r_cpu = None;
+    if let Some(chip) = resolved_system
+        .as_ref()
+        .and_then(|s| s.chip_with_plugins(&crate::plugin_chip_yaml(plugins)).ok())
+        .filter(|chip| {
+            labwired_core::system::arch_policy::machine_family(chip).ok()
+                == Some(labwired_core::system::arch_policy::MachineFamily::CortexR)
+        })
+    {
+        #[cfg(feature = "qemu-arm-system")]
+        match labwired_core::system::cortex_r::attach(&mut bus, &chip) {
+            Ok(cpu) => cortex_r_cpu = Some(cpu),
+            Err(error) => {
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    format!("{error:#}"),
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+        #[cfg(not(feature = "qemu-arm-system"))]
+        let _ = chip;
+    }
+
     let rom_boot_path =
         args.rom_boot || args.capture_app_entry.is_some() || args.resume_snapshot.is_some();
     if !rom_boot_path {
@@ -1959,9 +1994,10 @@ pub(crate) fn run_test(
             .chip_with_plugins(&crate::plugin_chip_yaml(plugins))
             .and_then(|chip| labwired_core::system::arch_policy::machine_family(&chip));
         match declaration {
-            Ok(labwired_core::system::arch_policy::MachineFamily::CortexA)
-                if program.arch != labwired_core::Arch::Arm =>
-            {
+            Ok(
+                labwired_core::system::arch_policy::MachineFamily::CortexA
+                | labwired_core::system::arch_policy::MachineFamily::CortexR,
+            ) if program.arch != labwired_core::Arch::Arm => {
                 write_config_error_outputs(
                     &args,
                     Some(&firmware_path),
@@ -2037,6 +2073,7 @@ pub(crate) fn run_test(
             // LABWIRED_HOSTED_FAST=0.
             let hosted_fast = !jit_eligible
                 && (program.arch == labwired_core::Arch::Arm
+                    || program.arch == labwired_core::Arch::Rx
                     || program.arch == labwired_core::Arch::Aarch64
                     || rv64_chip)
                 && std::env::var("LABWIRED_HOSTED_FAST").as_deref() != Ok("0");
@@ -2115,6 +2152,13 @@ pub(crate) fn run_test(
                     system_path.as_ref(),
                     e,
                 );
+            }
+            // RX starts at the fixed reset vector, as the silicon does.
+            if matches!(program.arch, labwired_core::Arch::Rx) {
+                match labwired_core::system::rx::reset_pc(&machine.bus) {
+                    Ok(pc) => machine.cpu.set_pc(pc),
+                    Err(e) => error!("{e:#}"),
+                }
             }
             // RISC-V Arduino-ESP32 images enter at `call_start_cpu0`, which
             // assumes the second-stage bootloader already left a DRAM stack.
@@ -2484,7 +2528,38 @@ pub(crate) fn run_test(
                     return ExitCode::from(EXIT_CONFIG_ERROR);
                 }
             };
-            if family == MachineFamily::CortexA {
+            if family == MachineFamily::CortexR {
+                if args.rom_boot || args.resume_snapshot.is_some() {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "Cortex-R5F boot ROM/FSBL boot and snapshot resume are not implemented; use an initialized-memory ELF without --rom-boot or --resume-snapshot".into(),
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                #[cfg(feature = "qemu-arm-system")]
+                {
+                    let cpu = cortex_r_cpu
+                        .take()
+                        .expect("Cortex-R5F CPU is prepared with the bus");
+                    setup_and_run!(cpu)
+                }
+                #[cfg(not(feature = "qemu-arm-system"))]
+                {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "Cortex-R5F needs a native build with --features qemu-arm-system".into(),
+                    );
+                    ExitCode::from(EXIT_CONFIG_ERROR)
+                }
+            } else if family == MachineFamily::CortexA {
                 if args.rom_boot || args.resume_snapshot.is_some() {
                     write_config_error_outputs(
                         &args,
@@ -2725,6 +2800,11 @@ pub(crate) fn run_test(
             cpu.set_serial_sink(uart_tx.clone());
             let machine = labwired_core::Machine::new(cpu, bus);
             run_machine!(machine)
+        }
+        labwired_core::Arch::Rx => {
+            // RX is von Neumann: code flash and RAM are on the bus, and the
+            // ICU is part of the core.
+            setup_and_run!(labwired_core::cpu::Rx::new())
         }
         labwired_core::Arch::Aarch64 => {
             // The PE's GICv3 and generic timer are part of the core; its

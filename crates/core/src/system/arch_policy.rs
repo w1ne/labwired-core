@@ -32,6 +32,8 @@ use labwired_config::{Arch, ChipDescriptor};
 pub enum MachineFamily {
     CortexM,
     CortexA,
+    /// ARMv7-R real-time profile (Cortex-R5F) on the native system backend.
+    CortexR,
     RiscV,
     Xtensa,
     Avr,
@@ -39,6 +41,7 @@ pub enum MachineFamily {
     Pic18,
     Pic16,
     Aarch64,
+    Rx,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -50,6 +53,11 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
     match chip.arch {
         Arch::Arm => match chip.core.as_deref().map(|core| core.trim().to_ascii_lowercase()) {
             Some(core) if core == "cortex-a7" => Ok(MachineFamily::CortexA),
+            Some(core) if core == "cortex-r5f" => Ok(MachineFamily::CortexR),
+            Some(core) if core.starts_with("cortex-r") => anyhow::bail!(
+                "chip '{}': unsupported ARM real-time core '{core}'; only cortex-r5f has a native adapter",
+                chip.name
+            ),
             Some(core) if core.starts_with("cortex-a") => anyhow::bail!(
                 "chip '{}': unsupported ARM application core '{core}'; only cortex-a7 has an experimental native adapter",
                 chip.name
@@ -62,9 +70,10 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Pic24 => Ok(MachineFamily::Pic24),
         Arch::Pic18 => Ok(MachineFamily::Pic18),
         Arch::Pic16 => Ok(MachineFamily::Pic16),
+        Arch::Rx => Ok(MachineFamily::Rx),
         Arch::Aarch64 => Ok(MachineFamily::Aarch64),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, or aarch64)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, rx, or aarch64)",
             chip.name
         ),
     }
@@ -92,6 +101,8 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         // image ([`image_arch_for_chip`]).
         204 => Some(crate::Arch::Pic18),
         goblin::elf::header::EM_AARCH64 => Some(crate::Arch::Aarch64),
+        // EM_RX (173), Renesas RX (gABI; binutils elf/common.h).
+        173 => Some(crate::Arch::Rx),
         _ => None,
     }
 }

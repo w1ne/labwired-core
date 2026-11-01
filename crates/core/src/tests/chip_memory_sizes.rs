@@ -245,9 +245,12 @@ fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     if chip.flash.size != 0 {
         return chip.flash.size % SECTOR == 0;
     }
-    chip.name == "rv1103"
+    // RV1103 boots from MicroSD; the XCK26 RPU runs from TCM/DDR the FSBL
+    // loads. Neither has internal flash.
+    [("rv1103", "cortex-a7"), ("xck26-rpu", "cortex-r5f")]
+        .iter()
+        .any(|(name, core)| chip.name == *name && chip.core.as_deref() == Some(*core))
         && chip.arch == Arch::Arm
-        && chip.core.as_deref() == Some("cortex-a7")
         && chip.flash.base == 0
 }
 
@@ -274,7 +277,13 @@ fn non_kib_ram_exception_is_exactly_the_listed_pic_parts() {
 }
 
 #[test]
-fn zero_internal_flash_is_only_allowed_for_the_declared_rv1103_soc() {
+fn zero_internal_flash_is_only_allowed_for_the_declared_socs() {
+    let rpu = ChipDescriptor::from_file(chips_dir().join("xck26-rpu.yaml")).unwrap();
+    assert!(flash_geometry_is_valid(&rpu));
+    let mut wrong_core = rpu.clone();
+    wrong_core.core = Some("cortex-a7".into());
+    assert!(!flash_geometry_is_valid(&wrong_core));
+
     let chip = ChipDescriptor::from_file(chips_dir().join("rv1103.yaml")).unwrap();
     assert_eq!(chip.flash.size, 0);
     assert_eq!(chip.flash.base, 0);

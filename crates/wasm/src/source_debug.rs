@@ -175,7 +175,10 @@ impl WasmSimulator {
         // DWARF numbers these files from 0 in register order: r0-r15,
         // x0-x31, the current window's a0-a15, AVR r0-r31.
         let reg_count: u16 = match self.arch {
-            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
+            MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
             // W0-W15, PC (16), SR (17) — provisional (see loader).
             MachineFamily::Pic24 => 18,
@@ -185,6 +188,8 @@ impl WasmSimulator {
             MachineFamily::Pic16 => 6,
             // AArch64: X0-X30, SP.
             MachineFamily::Aarch64 => 32,
+            // RX: R0-R15.
+            MachineFamily::Rx => 16,
         };
         let cpu = focused_cpu(machine);
         let locals: Vec<Local> = debug
@@ -249,7 +254,7 @@ impl WasmSimulator {
     /// The stack pointer's id for `get_register`.
     fn stack_register(&self) -> u8 {
         match self.arch {
-            MachineFamily::CortexM | MachineFamily::CortexA => 13,
+            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => 13,
             MachineFamily::RiscV => 2,
             // a1 of the current register window.
             MachineFamily::Xtensa => 1,
@@ -261,6 +266,7 @@ impl WasmSimulator {
             MachineFamily::Pic18 => 6,
             MachineFamily::Pic16 => 4,
             MachineFamily::Aarch64 => 31,
+            MachineFamily::Rx => 0,
         }
     }
 
@@ -433,7 +439,7 @@ impl WasmSimulator {
         let sp_id = self.stack_register();
         // Cortex-M and RISC-V find a call by its return-address register.
         let ra_id = match arch {
-            MachineFamily::CortexM | MachineFamily::CortexA => Some(14),
+            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Some(14),
             MachineFamily::RiscV => Some(1),
             _ => None,
         };

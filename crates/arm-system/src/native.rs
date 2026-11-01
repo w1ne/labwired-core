@@ -75,10 +75,14 @@ pub struct ArmCpu {
     poisoned: bool,
     ranges: Vec<(u64, u64)>,
     bus_identity: Option<u64>,
+    model: crate::ArmModel,
     not_sync: PhantomData<Cell<()>>,
 }
 impl ArmCpu {
     pub fn new() -> Result<Self, String> {
+        Self::with_model(crate::ArmModel::CortexA7)
+    }
+    pub fn with_model(model: crate::ArmModel) -> Result<Self, String> {
         let directory = tempfile::Builder::new()
             .prefix("labwired-arm-")
             .tempdir()
@@ -114,9 +118,10 @@ impl ArmCpu {
             poisoned: false,
             ranges: vec![],
             bus_identity: None,
+            model,
             not_sync: PhantomData,
         };
-        cpu.invoke(0, 0, 0)?;
+        cpu.invoke(0, model as u64, 0)?;
         cpu.initialized = true;
         cpu.page_size = cpu.invoke(9, 0, 0)?.0;
         if !cpu.page_size.is_power_of_two() {
@@ -239,7 +244,7 @@ impl ArmCpu {
     }
     pub fn reset(&mut self) -> Result<(), String> {
         // Recreate after faults rather than reuse partially unwound translator state.
-        let mut replacement = Self::new()?;
+        let mut replacement = Self::with_model(self.model)?;
         for &(start, length) in &self.ranges {
             replacement.executable_range(start, length)?;
         }

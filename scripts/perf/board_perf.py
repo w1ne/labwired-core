@@ -437,6 +437,12 @@ WAIVED: dict[str, str] = {
         "fixtures are not representative perf-spin workloads. No throughput "
         "claim is made for this part (docs/boards/sk-am62.md)."
     ),
+    "r5f52618bgfp": (
+        "First Renesas RX part (EK-RX261, RXv3). This gate's perf-spin "
+        "fixtures are ARM/RISC-V images and no RX spin is built; the Zephyr "
+        "fixtures are not representative perf-spin workloads. No throughput "
+        "claim is made for this part (docs/boards/ek-rx261.md)."
+    ),
     "mpfs095t": (
         "First RV64 part (PolarFire SoC U54 hart, RV64IMAC). This gate's RISC-V "
         "perf-spin fixture is an RV32 image and no RV64 spin is built; the "
@@ -455,6 +461,13 @@ WAIVED: dict[str, str] = {
         "executing-fidelity differential. No perf fixture is built for the "
         "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
         "is made for this board (docs/boards/sam4s-xplained.md)."
+    ),
+    "xck26-rpu": (
+        "First Cortex-R part (Zynq UltraScale+ RPU, Cortex-R5F) on the optional "
+        "native qemu-arm-system engine, which single-steps the pinned tlib core "
+        "through the bus; the default CLI this gate builds cannot run it, and the "
+        "Zephyr fixtures are not representative perf-spin workloads. No "
+        "throughput claim is made for this part."
     ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "

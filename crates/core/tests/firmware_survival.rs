@@ -1052,6 +1052,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"Hello World! sk_am62/am6234/a53",
     },
     SurvivalCase {
+        // EK-RX261 (R5F52618BGFP): unmodified Zephyr v4.3.0 hello_world for
+        // `ek_rx261` on the RX core — reset vector, RDP clock setup against
+        // `rx_sysc`/`rx_flash`, the SCI6 console. Runs through the Session
+        // builder, the RX machine family's only build path.
+        // Rebuild: crates/firmware-ek-rx261-zephyr/build.sh. SIM-DERIVED.
+        name: "ek_rx261_zephyr",
+        core: "rxv3",
+        family: CpuFamily::Session,
+        hal: Hal::Zephyr,
+        chip: "r5f52618bgfp",
+        system: "ek-rx261",
+        fixture: "ek-rx261-zephyr-hello.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"Hello World! ek_rx261/r5f52618bgfp",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -3110,6 +3126,7 @@ survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 survival_gate!(test_mpfs_disco_kit_zephyr_survival, "mpfs_disco_kit_zephyr");
 survival_gate!(test_sk_am62_zephyr_survival, "sk_am62_zephyr");
+survival_gate!(test_ek_rx261_zephyr_survival, "ek_rx261_zephyr");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

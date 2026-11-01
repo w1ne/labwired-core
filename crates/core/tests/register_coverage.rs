@@ -328,13 +328,16 @@ fn measure_chip(name: &str, yaml: &str, svd: &str) -> (usize, usize, usize, usiz
         | Arch::Pic24
         | Arch::Pic18
         | Arch::Pic16
+        | Arch::Rx
         | Arch::Aarch64
-        | Arch::Unknown) => panic!(
-            "{name}: arch {arch:?} has no register probe path, so its coverage would \
+        | Arch::Unknown) => {
+            panic!(
+                "{name}: arch {arch:?} has no register probe path, so its coverage would \
              measure 0 and ratchet against 0 — a gate that can never fail. Remove it \
              from CHIPS (and from docs/coverage/register-modeling.json) until a probe \
              exists, or add one here."
-        ),
+            )
+        }
     };
     (total, mapped, reset_ok, modeled)
 }

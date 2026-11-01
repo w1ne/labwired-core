@@ -88,6 +88,8 @@ pub enum Arch {
     Pic16,
     /// AArch64 (Armv8-A, Cortex-A53 class).
     Aarch64,
+    /// Renesas RX (RXv3, RX261 class).
+    Rx,
     Unknown,
 }
 

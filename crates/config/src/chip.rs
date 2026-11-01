@@ -31,6 +31,9 @@ pub enum Arch {
     /// AArch64 application cores (Armv8-A, Cortex-A53 class).
     #[serde(alias = "arm64", alias = "armv8-a")]
     Aarch64,
+    /// Renesas RX 32-bit MCU family (RXv1/v2/v3 CISC, variable-length).
+    #[serde(alias = "rxv3", alias = "renesas-rx")]
+    Rx,
     Unknown,
 }
 

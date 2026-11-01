@@ -239,6 +239,10 @@
   },
   {
     "buses": [],
+    "name": "r5f52618bgfp"
+  },
+  {
+    "buses": [],
     "name": "r7fa6m5bh"
   },
   {
@@ -666,5 +670,9 @@
   {
     "buses": [],
     "name": "vegaboard-ri5cy"
+  },
+  {
+    "buses": [],
+    "name": "xck26-rpu"
   }
 ]

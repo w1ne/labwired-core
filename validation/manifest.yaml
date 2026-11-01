@@ -10484,3 +10484,40 @@ boards:
       - crates/firmware-sk-am62-zephyr
       - configs/chips/am6234.yaml
       - configs/systems/sk-am62.yaml
+
+  - id: r5f52618bgfp
+    # 2026-11-01: Renesas EK-RX261 (R5F52618BGFP, RX261). First Renesas RX
+    # part and LabWired's first RX core (crates/core/src/cpu/rx.rs): the RXv3
+    # integer ISA (every RXv1 form plus the RXv2/v3 additions), the A0/A1
+    # 72-bit DSP accumulators and the single-precision FPU, with the ICU
+    # (IR/IER/IPR/SWINTR/FIR) inside the core and USP/ISP switching on PSW.U.
+    # Peripherals: SCI6 as the classic SCI (polled), CMT0-3 (`rx_cmt`), the
+    # SYSTEM clock handshakes (`rx_sysc`) and the 0xAA-keyed FLASH MEMWAITR
+    # (`rx_flash`). Unmodified Zephyr v4.3.0 hello_world, synchronization and
+    # tests/kernel/common (12 suites, 61 pass + 1 skip) for ek_rx261 start at
+    # the fixed reset vector. PORT/MPC, DTC, BSC and the reset-status block
+    # are declared stubs; SCI interrupts, user-mode privilege checks, the
+    # register banks and FPU exceptions are not modelled. SIM-DERIVED — no
+    # RX261 bench part. See docs/boards/ek-rx261.md and
+    # examples/ek-rx261/VALIDATION.md.
+    doc: docs/boards/ek-rx261.md
+    chip: configs/chips/r5f52618bgfp.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_ek_rx261_zephyr_survival"
+      - "ek_rx261_zephyr (synchronization on the CMT0 tick, kernel/common 12 suites)"
+      - "rx_tests (25 tests: integer forms and flags, memex sizes, string ops, INT/RTE stack switch, ICU priority/IPL, accumulators, FPU, BFMOV, MOVLI/MOVCO, undefined-instruction trap, snapshot)"
+      - "rx_cmt, rx_sysc unit tests (compare match, one live wake, OSCOVFSR, keyed MEMWAITR)"
+    models:
+      - crates/core/src/cpu/rx.rs
+      - crates/core/src/peripherals/rx_cmt.rs
+      - crates/core/src/peripherals/rx_sysc.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/rx.rs
+      - crates/core/src/system/builder/rx.rs
+      - crates/firmware-ek-rx261-zephyr
+      - configs/chips/r5f52618bgfp.yaml
+      - configs/systems/ek-rx261.yaml

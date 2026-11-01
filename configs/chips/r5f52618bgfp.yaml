@@ -1,0 +1,122 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Renesas R5F52618BGFP (RX261, RXv3 core with single-precision FPU, 64 MHz,
+# 512 KiB code flash, 128 KiB RAM, 100-pin LFQFP) on the EK-RX261 evaluation
+# kit (RTK5EK2610S00001BE). SIM-DERIVED: no RX261 bench part.
+#
+# Sources:
+#   - RX261 Group User's Manual: Hardware (R01UH1045): memory map, ICU, CMT,
+#     SCI, clock generation, FLASH.
+#   - Renesas RX Driver Package (hal_renesas a279c14e196c)
+#     r_bsp/mcu/rx261/register_access/gnuc/iodefine.h: peripheral bases and
+#     register offsets (SYSTEM 0x00080000, ICU 0x00087000, CMT 0x00088000,
+#     SCI6 0x0008A0C0, PORT0 0x0008C000, MPC 0x0008C11F, RTC 0x0008C400,
+#     FLASH 0x007FC090).
+#   - Zephyr v4.3.0 dts/rx/renesas/{rx261-common,r5f52618bgfp}.dtsi and
+#     boards/renesas/ek_rx261: console on SCI6 (RXI6/TXI6/TEI6/ERI6 =
+#     vectors 227/228/229/226), CMT0 system tick (CMI0 = vector 28), CMT1
+#     cycle counter (CMI1 = vector 29), CMT at PCLKB/8 = 4 MHz.
+#
+# Tier: L1 boot + UART + stock RTOS. Stock Zephyr v4.3.0 hello_world,
+# synchronization and tests/kernel/common for `ek_rx261` run
+# (examples/ek-rx261, crates/firmware-ek-rx261-zephyr).
+#
+# Core: `arch: rx` builds the RX machine family (crates/core/src/cpu/rx.rs).
+# The ICU (IR/DTCER/IER/SWINTR/FIR/IPR, 0x00087000-0x000876FF) is part of the
+# core, so it is not listed below; a peripheral's `irq`/explicit IRQ is the
+# ICU vector number. The core starts at the fixed reset vector 0xFFFFFFFC.
+#
+# NOT modelled in this slice:
+# - PORT/MPC (pin direction/output/input, PmnPFS): declared stub, so the
+#   EK-RX261 LEDs and switch are not reachable; SCI6 needs no pad routing.
+# - SCI6 interrupts: the classic SCI is polled (TDRE/TEND/RDRF); RXI/TXI/TEI/
+#   ERI are never requested.
+# - DTC, BSC, the reset/LVD status block at 0x0008C280: declared stubs.
+# - FLASH programming/erase (FACI): `rx_flash` stores the control registers
+#   with the 0xAA key convention only. RTC: plain storage (`rx_rtc`), no
+#   counting.
+# - Clock rates: `rx_sysc` derives the oscillator stable flags and the
+#   clock-switch handshakes; no rate follows SCKCR/PLL settings. `cpu_hz` is
+#   the 64 MHz ICLK Zephyr's board selects; the CMT counts the 32 MHz PCLKB.
+# - Data flash (0x00100000), option-setting memory and the trusted memory
+#   area: not mapped. Zephyr's ELF carries a zero-filled `.ofsm` NOBITS
+#   section over the vector table's reserved words, which loads as zeros.
+name: "r5f52618bgfp"
+arch: "rx"
+core: "rxv3"
+cpu_hz: 64_000_000
+# RAM sits at 0x0; the RX has no Cortex-M style flash mirror there.
+flash_boot_alias: false
+flash:
+  # Code flash at the top of the address space; the fixed vector table and
+  # the reset vector are its last 128 bytes.
+  base: 0xFFF80000
+  size: "512KB"
+ram:
+  base: 0x00000000
+  size: "128KB"
+peripherals:
+  # RTC registers, held as storage: the RDP sub-clock setup writes RCR1/RCR2
+  # and waits to read START/CNTMD/RESET back. No counting.
+  - id: "rtc"
+    type: "rx_rtc"
+    base_address: 0x0008C400
+    size: "256B"
+  # SCI6 (classic SCI, async): SMR +0, BRR +1, SCR +2, TDR +3, SSR +4,
+  # RDR +5, SCMR +6, SEMR +7 — the RA4M1/RA6M5 `sci` layout.
+  - id: "sci6"
+    type: "uart"
+    base_address: 0x0008A0C0
+    size: "32B"
+    config:
+      profile: "sci"
+  # FLASH control registers (FLASH 0x007FC090; MEMWAITR at 0x007FFFC0).
+  - id: "flash_regs"
+    type: "rx_flash"
+    base_address: 0x007FC000
+    size: "16KB"
+  # SYSTEM: MSTPCRx, SCKCR/SCKCR3, oscillator and PLL control, OSCOVFSR,
+  # OPCCR, the USB/CANFD clock switches, PRCR (+0x3FE).
+  - id: "system"
+    type: "rx_sysc"
+    base_address: 0x00080000
+    size: "1KB"
+  - id: "bsc"
+    type: "stub"
+    base_address: 0x00081300
+    size: "256B"
+  - id: "dtc"
+    type: "stub"
+    base_address: 0x00082400
+    size: "64B"
+  # CMT unit 0 (CMSTR0, CMT0, CMT1) and unit 1 (CMSTR1, CMT2, CMT3).
+  - id: "cmt0"
+    type: "rx_cmt"
+    base_address: 0x00088000
+    size: "16B"
+    config:
+      vectors: [28, 29]
+      clock_hz: 64000000
+      pclkb_hz: 32000000
+  - id: "cmt1"
+    type: "rx_cmt"
+    base_address: 0x00088010
+    size: "16B"
+    config:
+      vectors: [30, 31]
+      clock_hz: 64000000
+      pclkb_hz: 32000000
+  # PORT0-J (PDR/PODR/PIDR/PMR/ODR/PCR/DSCR), MPC PmnPFS/PWPR.
+  - id: "port"
+    type: "stub"
+    base_address: 0x0008C000
+    size: "640B"
+  # Reset status (RSTSR0/2), LVD, FWEPROR (part of the SYSTEM struct).
+  - id: "system_rst"
+    type: "stub"
+    base_address: 0x0008C280
+    size: "128B"

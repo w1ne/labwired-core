@@ -61,6 +61,8 @@ impl Isa {
             crate::Arch::Pic16 => None,
             // AArch64 has no lockstep-backend ISA yet (interpreter only).
             crate::Arch::Aarch64 => None,
+            // RX has no lockstep-backend ISA yet (interpreter only).
+            crate::Arch::Rx => None,
             crate::Arch::Unknown => None,
         }
     }
@@ -70,7 +72,8 @@ impl Isa {
         use crate::system::arch_policy::MachineFamily;
         match family {
             MachineFamily::CortexM => Some(Isa::Thumb),
-            MachineFamily::CortexA => None, // ARM/Thumb state needs a mode-aware fault decoder.
+            // ARM/Thumb state needs a mode-aware fault decoder.
+            MachineFamily::CortexA | MachineFamily::CortexR => None,
             MachineFamily::RiscV => Some(Isa::RiscV),
             MachineFamily::Xtensa => Some(Isa::Xtensa),
             MachineFamily::Avr => Some(Isa::Avr),
@@ -82,6 +85,8 @@ impl Isa {
             MachineFamily::Pic16 => None,
             // AArch64 has no lockstep-backend ISA yet (interpreter only).
             MachineFamily::Aarch64 => None,
+            // RX has no lockstep-backend ISA yet (interpreter only).
+            MachineFamily::Rx => None,
         }
     }
 
