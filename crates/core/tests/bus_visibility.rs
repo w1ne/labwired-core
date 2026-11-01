@@ -135,6 +135,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LPUART bring-up in this harness; bytes are proven by the \
          vegaboard-ri5cy survival smoke",
     ),
+    // PolarFire SoC Discovery Kit: this harness has no 16550 bring-up; the
+    // MMUART1 bytes are proven by the mpfs_disco_kit_zephyr survival gate.
+    (
+        "mpfs095t",
+        BusKind::Uart,
+        "no 16550 MMUART bring-up in this harness; bytes are proven by the \
+         mpfs_disco_kit_zephyr survival gate",
+    ),
     // CC2538DK: no UART0 bring-up in this harness; bytes are proven by the
     // cc2538dk survival smoke.
     (

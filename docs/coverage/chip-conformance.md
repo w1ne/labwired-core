@@ -13,6 +13,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
 | stm32l552 | **L1** | ✓ | 50 | — | — | firmware_survival::test_nucleo_l552ze_q_smoke_survival |
 | cc2538sf53 | **L1** | ✓ | 28 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
+| mpfs095t | **L1** | ✓ | 14 | — | — | firmware_survival::test_mpfs_disco_kit_zephyr_survival |
 | r7fa6m5bh | **L1** | ✓ | 43 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
 | r7fa8m1ah | **L1** | ✓ | 40 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
 | amap42kp | **L1** | ✓ | 46 | — | — | firmware_survival::test_apollo4p_evb_smoke_survival |

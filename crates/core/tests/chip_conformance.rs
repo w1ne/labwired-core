@@ -144,6 +144,17 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
     },
     ChipConf {
+        // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
+        // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
+        // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
+        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
+        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        name: "mpfs095t",
+        yaml: "configs/chips/mpfs095t.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_mpfs_disco_kit_zephyr_survival"),
+    },
+    ChipConf {
         // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
         // Modelled: the RA PORT (ra_port) and PmnPFS/PWPR (ra_pfs) reused
         // from RA4M1 at the RA6M5 bases, the full R_SYSTEM register file
