@@ -1555,7 +1555,9 @@ behavior:
     fn miso_var_is_rejected_where_it_could_not_mean_anything() {
         // An undeclared variable would read 0 forever.
         let undeclared = MISO_VAR_FIXTURE.replace("miso_var: reply", "miso_var: nope");
-        let e = GenericSpiDevice::from_yaml(&undeclared, "PA4").unwrap_err();
+        let Err(e) = GenericSpiDevice::from_yaml(&undeclared, "PA4") else {
+            panic!("an undeclared miso_var must be refused");
+        };
         assert!(
             format!("{e:#}").contains("not declared in `vars:`"),
             "{e:#}"
@@ -1565,7 +1567,9 @@ behavior:
             "spi: { miso_var: reply }",
             "spi: { miso_var: reply, register_file: { size: 4 } }",
         );
-        let e = GenericSpiDevice::from_yaml(&registered, "PA4").unwrap_err();
+        let Err(e) = GenericSpiDevice::from_yaml(&registered, "PA4") else {
+            panic!("miso_var on a register part must be refused");
+        };
         assert!(format!("{e:#}").contains("register map"), "{e:#}");
     }
 

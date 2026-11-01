@@ -159,7 +159,7 @@ fn bmm150_compensate(trim: &[u8], data: &[u8]) -> (i32, i32, i32) {
         let val = prevalue.wrapping_sub(0x4000) as i16 as i32;
         let temp1 = xy2 * ((val * val) >> 7);
         let temp2 = val * (xy1 << 7);
-        let temp3 = (((temp1 + temp2) >> 9) + 0x100000) * (t2 + 0xA0) >> 12;
+        let temp3 = ((((temp1 + temp2) >> 9) + 0x100000) * (t2 + 0xA0)) >> 12;
         (((raw * temp3) >> 13) as i16 as i32) + (t1 << 3)
     };
     let temp1 = (raw_z - z4) << 15;
