@@ -9810,6 +9810,10 @@ boards:
     # uart/sci_b_irq.rs) and in FIFO mode SSR reads as SSR_FIFO; stock
     # Zephyr v4.0.0 tests/drivers/uart/uart_basic_api 7/7 on the
     # interrupt-driven classic SCI driver.
+    # 2026-11-01 (feat/ek-ra6m5-zephyr-shell): stock Zephyr v4.0.0
+    # samples/subsys/shell/shell_module (interrupt-driven shell backend on
+    # SCI0) answers typed commands, TAB completion and history recall
+    # (examples/ek-ra6m5/zephyr-shell.yaml). No model change.
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
