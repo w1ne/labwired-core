@@ -370,11 +370,25 @@ peripherals:
     type: "stub"
     base_address: 0x40322000
     size: "8KB"
-  # ADC0/ADC1.
-  - id: "adc12"
-    type: "stub"
+  # ADC0/ADC1 (12-bit, R_ADC0_Type; FSP R_ADC0_BASE/R_ADC1_BASE). Scan end
+  # is ELC_EVENT_ADC0_SCAN_END 0x1AE / ADC1_SCAN_END 0x1B4 (bsp_elc.h),
+  # linked to NVIC through IELSRn (ra_icu).
+  - id: "adc0"
+    type: "ra_adc12"
     base_address: 0x40332000
-    size: "1KB"
+    size: "512B"
+    config:
+      elc_event: 430
+      clock_hz: 480000000
+      vref_mv: 3300
+  - id: "adc1"
+    type: "ra_adc12"
+    base_address: 0x40332200
+    size: "512B"
+    config:
+      elc_event: 436
+      clock_hz: 480000000
+      vref_mv: 3300
   # USBHS0.
   - id: "usbhs"
     type: "stub"

@@ -89,3 +89,18 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 1000000 \
   --out-dir "$OUT/zephyr-blinky-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 tests/drivers/adc/adc_api: ADC1 channels 0 and 2 (a
+# potentiometer and a TMP36 in adc-system.yaml), every scan end linked to NVIC
+# line 39 through ICU IELSR39 (tests/fixtures/r7fa8m1ah-zephyr-adc-api.elf),
+# 6/6, then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-adc-api.yaml \
+  --output-dir "$OUT/zephyr-adc-api" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-adc-api.elf \
+  --system examples/ek-ra8m1/adc-system.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-adc-api-unsupported-audit" \
+  --fail-on-unsupported

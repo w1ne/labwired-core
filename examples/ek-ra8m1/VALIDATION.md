@@ -36,12 +36,15 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | ICU NMI, `IRQCRn` digital filter (`FLTEN`/`FCLKSEL`), low-level re-raise while the pad stays low, `DTCE`, re-entry while `IR` stays set | **not modelled** | NMI registers stored only; an edge is taken at once; low-level mode raises on the falling edge only |
 | `PmnPFS` `PDR`/`PODR` → `PCNTR1` (the same flip-flops on silicon) | sim-tested | Stock Zephyr v4.1.0 `samples/basic/blinky` (`zephyr-blinky.yaml` PASS 4/4): P600 made an output by its PmnPFS store and toggled five times through the 16-bit `PCNTR1.PODR` alias, exactly five `LED state` lines ending OFF, 6 edges on `port6:0`, `PCNTR1` ends PDR set / PODR clear; 1,304,065 steps; audit 1,000,000 steps, 0 unsupported; fixture sha256 `671464cdd92a9b4b…`. The button sample's LED1 mirror of S1 now shows 4 edges and ends low (5,369,263 steps). Without the PFS → port hand-over both scripts fail. Unit test `pins::pad_control::tests::ra_pfs_low_byte_stores_write_the_port_output`, `peripherals::gpio::tests::ra_port_16_bit_aliases_follow_the_part`; integration `pad_control_pulls::ra_pfs_pdr_podr_are_the_port_output_flip_flops` |
 | `PmnPFS` read-back of PDR/PODR after `PCNTR1`/`PCNTR3` writes; `PmnPFS.PIDR` | **not modelled** | PmnPFS returns the last store; PIDR there reads 0 |
+| Stock Zephyr v4.1.0 `tests/drivers/adc/adc_api` (ADC1 channels 0 and 2, scan end → ELC event 0x1B4 → ICU IELSR39 → NVIC line 39) | smoke-tested | `zephyr-adc-api.yaml` PASS 2/2: `adc_basic` 6/6 (`asynchronous_call`, `invalid_request`, `repeated_samplings`, `sample_one_channel`, `sample_two_channels`, `sample_with_interval`), the buffers holding `0x07ff` (potentiometer, 1650 mV) and `0x03a2` (TMP36 at 25 °C, 750 mV) from `adc-system.yaml`; 1,995,488 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `e949897baec2ee7c…` |
+| ADC0/ADC1 (`ra_adc12`): software-started single and continuous scans of `ADANSA0/1`, `ADDRn`, `ADST` clear on scan end, `ADCER.ADPRC` 12/10/8-bit and `ADRFMT` left-justify, `ADADS`/`ADADC` addition and averaging, scan-end ELC events 0x1AE/0x1B4 | sim-tested | the test above; `crates/core/tests/ra8m1_adc12_icu.rs` (vectors through IELSR39 with the converted codes, an unlinked scan end pends nothing) in both scheduler modes; unit tests `peripherals::ra_adc12` |
+| ADC12 conversion time, group scan (`ADCS` = 1, `ADANSB`, group-B scan end), double trigger, hardware/ELC start triggers (`TRGE`/`ADSTRGR`), temperature sensor and internal reference, window comparator, `ADBUF`, sample-and-hold, `ADCER.ACE` clear-after-read | **not modelled** | each channel converts in a nominal 1 µs at 480 MHz, not the manual's state count; a group-scan start converts nothing; `ADSSTRn`/`ADSHCR`/`ADEXICR` are stored only; `ADDRn` keep their value after a read |
 | AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
 | SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
-## Stock Zephyr (verified 2026-10-31, button and blinky 2026-11-01)
+## Stock Zephyr (verified 2026-10-31, button, blinky and adc_api 2026-11-01)
 
 ```bash
 # fixtures are committed; rebuild (byte-identical) with:
@@ -52,6 +55,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-uart-basic-api.elf  sha256 9c0328041125498b...
 #   r7fa8m1ah-zephyr-button.elf  sha256 ffbfe48e747d292e... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-blinky.elf  sha256 671464cdd92a9b4b... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-adc-api.elf  sha256 e949897baec2ee7c... (Zephyr v4.1.0)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -88,6 +92,12 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   LED state: OFF / ON / OFF / ON / OFF; 6 edges on port6:0
 #   Audit (1,000,000 instructions): unsupported_total: 0
 
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-adc-api.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-adc-api · 1995488 steps
+#   Samples read: 0x07ff 0x03a2 0x8000 0x8000 0x8000 0x8000
+#   SUITE PASS - 100.00% [adc_basic]: pass = 6, fail = 0, skip = 0, total = 6
+#   Audit (2,000,000 instructions): unsupported_total: 0
+
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
 
@@ -106,6 +116,12 @@ BusFaults at `0x4035_8308` in `R_SCI_B_UART_Open`.
 The v4.1.0 `ek_ra8m1` board also opens SCI0 (PMOD1) and SCI2 (PMOD2) at
 boot: without the `sci0` window the image BusFaults at `0x4035_8008` in
 `R_SCI_B_UART_Open`.
+
+Negative control for `zephyr-adc-api.yaml`: with the old `adc12` stub
+window, ADC1 never raises its scan end, so `test_adc_asynchronous_call`
+fails (`k_poll failed with error -11`) and the run never reaches the
+sample checks. Without the potentiometer and TMP36 in `adc-system.yaml` the
+suite still passes 6/6 but reads `0x0000`, and the sample assertions fail.
 
 Negative control for `zephyr-blinky.yaml` and the LED half of
 `zephyr-button.yaml`: with the port ignoring PmnPFS PDR/PODR stores (as

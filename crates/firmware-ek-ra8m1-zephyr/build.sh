@@ -25,6 +25,10 @@
 #       Zephyr v4.1.0 (examples/ek-ra8m1/zephyr-blinky.yaml: LED1 made an
 #       output through PmnPFS.PDR and toggled through PCNTR1.PODR), module
 #       list pinned like the button.
+#   tests/fixtures/r7fa8m1ah-zephyr-adc-api.elf — tests/drivers/adc/adc_api
+#       from Zephyr v4.1.0 (examples/ek-ra8m1/zephyr-adc-api.yaml: ADC1
+#       channels 0 and 2 through the ra_adc12 model, scan end linked by
+#       IELSR39), module list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `ek_ra8m1`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) at the
@@ -109,4 +113,9 @@ build_one "samples/basic/button" "r7fa8m1ah-zephyr-button.elf" \
 # samples/basic/blinky (LED1 P600: output via PmnPFS.PDR, toggled through
 # PCNTR1.PODR), same v4.1.0 tree.
 build_one "samples/basic/blinky" "r7fa8m1ah-zephyr-blinky.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/adc/adc_api (ADC1 channels 0 and 2 per the in-tree
+# boards/ek_ra8m1.overlay; scan end ADC1_SCAN_END through IELSR39), same
+# v4.1.0 tree.
+build_one "tests/drivers/adc/adc_api" "r7fa8m1ah-zephyr-adc-api.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
