@@ -345,11 +345,12 @@ pub const MODEL_TYPES: &[&str] = &[
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
-    // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT and the
-    // 12-bit ADC.
+    // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
+    // 12-bit ADC and the IIC (RIIC) master.
     "ra_icu",
     "ra_agt",
     "ra_adc12",
+    "ra_iic",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1427,6 +1428,18 @@ pub fn try_build(
         // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
         // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
         // board-level static channel levels.
+        // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
+        // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
+        // are +1/+2/+3).
+        "ra_iic" => {
+            use crate::peripherals::ra_iic as iic;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(iic::RaIic::new(
+                get("clock_hz").unwrap_or(iic::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(iic::DEFAULT_PCLKB_HZ),
+                get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
+            ))
+        }
         "ra_adc12" => {
             use crate::peripherals::ra_adc12 as adc;
             let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

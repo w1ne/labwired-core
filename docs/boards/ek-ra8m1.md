@@ -80,9 +80,10 @@ image prints nothing at all.
     `FRSR.DR` timeout), ERI and the error flags, and the `CCR2` baud decode
     are not modelled (RXI comes per character; the frame time is YAML
     `baud`). The AGT models timer mode only. DMAC/DTC,
-    FCACHE, FACI, ELC, RTC, IWDT/WDT, GPT, IIC, SPI, USBFS/USBHS,
+    FCACHE, FACI, ELC, RTC, IWDT/WDT, GPT, SPI, USBFS/USBHS,
     ETHERC and CANFD are declared stubs; ADC0/ADC1 convert software-started
-    scans (stock Zephyr `adc_api` 6/6). SCI0–2, SCI4–8 and the remaining
+    scans (stock Zephyr `adc_api` 6/6) and IIC0/IIC1 are I2C masters (stock
+    Zephyr `samples/sensor/bme280` reads a BME280 on IIC1). SCI0–2, SCI4–8 and the remaining
     blocks are **not mapped**: firmware that touches them faults with a memory violation. There
     is no silicon capture: **SIM-DERIVED**.
 
@@ -130,7 +131,8 @@ image prints nothing at all.
 | Switches | S1 P009, S2 P008 | modelled GPIO input — active low, PFS pull-up |
 | SCI9 VCP | PA14 (TXD9) / PA15 (RXD9) | the simulator captures the SCI9 stream; the J-Link OB bridge is not modelled |
 | ADC0 / ADC1 | `0x4033_2000` / `0x4033_2200` | modelled (`ra_adc12`) — software-started single/continuous scans, `ADDRn`, addition/averaging, scan end as ELC events 0x1AE / 0x1B4; nominal 1 µs per channel; group scan, hardware triggers and the temperature sensor not modelled |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT, WDT, USBFS, IIC0–2, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | see descriptor | `type: stub` |
+| IIC0 / IIC1 | `0x4025_E000` / `0x4025_E100` | modelled (`ra_iic`) — RIIC master transmit/receive, 7-bit addresses, start/restart/stop, address NACK, RXI/TXI/TEI/ERI as ELC events 0x05C-0x05F / 0x061-0x064, wire time from `ICBRL`/`ICBRH`/`CKS`; slave mode, 10-bit addresses, arbitration loss, timeout and SMBus not modelled |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT, WDT, USBFS, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | see descriptor | `type: stub` |
 
 ## Boot path
 

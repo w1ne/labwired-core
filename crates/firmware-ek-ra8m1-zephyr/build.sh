@@ -33,6 +33,16 @@
 #       from Zephyr v4.1.0 (examples/ek-ra8m1/zephyr-adc-api.yaml: ADC1
 #       channels 0 and 2 through the ra_adc12 model, scan end linked by
 #       IELSR39), module list pinned like the button.
+#   tests/fixtures/r7fa8m1ah-zephyr-bme280.elf — samples/sensor/bme280 from
+#       Zephyr v4.1.0 (examples/ek-ra8m1/zephyr-bme280.yaml: a BME280 on
+#       IIC1 through the ra_iic model, RXI/TXI/TEI/ERI linked by
+#       IELSR91-94). Two build inputs beyond the module pin: bme280-iic1.overlay
+#       (next to this script) puts the BME280 at 0x76 on &iic1 (the sample's
+#       own overlays need an `arduino_i2c` label ek_ra8m1 lacks), and the
+#       picolibc module (82d62ed1ac55, CONFIG_PICOLIBC_USE_MODULE): the RA IIC
+#       driver calls ceil() and the BME280 decoder pow(), which Zephyr's
+#       minimal libc lacks, and the distro newlib has no retargetable locking.
+#       `west update picolibc` in the v4.1.0 workspace fetches it.
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `ek_ra8m1`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) at the
@@ -125,3 +135,8 @@ build_one "samples/basic/blinky" "r7fa8m1ah-zephyr-blinky.elf" \
 # v4.1.0 tree.
 build_one "tests/drivers/adc/adc_api" "r7fa8m1ah-zephyr-adc-api.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/sensor/bme280 (BME280 at 0x76 on IIC1, see the header), same
+# v4.1.0 tree plus picolibc.
+build_one "samples/sensor/bme280" "r7fa8m1ah-zephyr-bme280.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas;$ZEPHYRPROJECT_V41/modules/lib/picolibc" \
+  -DCONFIG_PICOLIBC_USE_MODULE=y "-DEXTRA_DTC_OVERLAY_FILE=$HERE/bme280-iic1.overlay"

@@ -79,6 +79,10 @@
 #   returns with IR still set is not re-entered until the next event.
 # - AGT: timer mode only (`ra_agt`, see the model header); pulse output,
 #   event counter and measurement modes are not modelled.
+# - IIC0/IIC1 (`ra_iic`): master transmit/receive with 7-bit addresses and
+#   the RXI/TXI/TEI/ERI events, timed from ICBRL/ICBRH/CKS; slave mode,
+#   10-bit addresses, a NACKed data byte, arbitration loss, the SCL-low
+#   timeout, SMBus and DTC transfers are not modelled (see the model header).
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
 #   routing in the model. A PmnPFS store sets the port's PCNTR1 PDR/PODR
 #   (the same flip-flops), but reading PmnPFS back returns the last store,
@@ -360,11 +364,30 @@ peripherals:
     type: "stub"
     base_address: 0x40250000
     size: "8KB"
-  # IIC0-2.
-  - id: "iic"
-    type: "stub"
+  # IIC0/IIC1 (RIIC master, `ra_iic`; R_IIC0_BASE 0x4025E000 + n*0x100).
+  # Interrupts are ELC events linked through the ICU IELSRn: IICn RXI
+  # 0x05C + 5n (= 92 + 5n), TXI +1, TEI +2, ERI +3 (FSP ra8m1 bsp_elc.h; no
+  # IIC2 events on the RA8M1). `clock_hz` / `pclkb_hz` as for the AGT.
+  - id: "iic0"
+    type: "ra_iic"
     base_address: 0x4025E000
-    size: "1KB"
+    size: "256B"
+    config:
+      elc_event: 92
+      clock_hz: 480000000
+      pclkb_hz: 60000000
+  - id: "iic1"
+    type: "ra_iic"
+    base_address: 0x4025E100
+    size: "256B"
+    config:
+      elc_event: 97
+      clock_hz: 480000000
+      pclkb_hz: 60000000
+  - id: "iic_rsvd"
+    type: "stub"
+    base_address: 0x4025E200
+    size: "512B"
   # GPT0-13 + GPT_OPS.
   - id: "gpt"
     type: "stub"

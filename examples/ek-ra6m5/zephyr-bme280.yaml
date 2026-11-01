@@ -1,0 +1,52 @@
+# LabWired - EK-RA6M5 stock Zephyr BME280 sample (IIC1 through the ICU)
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/sensor/bme280` for board
+# `ek_ra6m5`, with crates/firmware-ek-ra6m5-zephyr/bme280-iic1.overlay (a
+# BME280 at 0x76 on IIC1; the sample's own overlays need an `arduino_i2c`
+# label the board does not define) and picolibc (the RA IIC driver needs
+# ceil(), the decoder pow()). Rebuild: crates/firmware-ek-ra6m5-zephyr/build.sh
+#
+# IIC1 is enabled by the in-tree board (status okay, IRQs 91-94).
+#
+# Zephyr's i2c_renesas_ra_iic.c drives FSP r_iic_master: start, address,
+# data and stop/restart are sequenced from the RXI/TXI/TEI/ERI handlers,
+# which IELSR91-94 link to ELC_EVENT_IIC1_RXI..ERI (0x078-0x07B). Every
+# register burst read (i2c_burst_read: a 1-byte write, restart, read) and
+# write (i2c_reg_write_byte) of the driver's chip ID check, calibration
+# load and RTIO sample fetch runs through ra_iic and the ICU. With the old
+# `stub` window the driver's first transfer never completes and the
+# console stops after the boot banner.
+#
+# bme280-system.yaml starts the BME280 at 25 C / 50 %RH / 1013.25 hPa; the
+# stimuli move it to 21.5 C / 40 %RH / 990 hPa 1.5 s in (300 M cycles at
+# the 200 MHz ICLK), between the second and third once-a-second samples.
+# The sample prints pressure in kPa; the decoded values differ from the
+# stimulus in the last digits by the BME280's 0.01 C / 1/256 Pa / 1/1024
+# %RH quantization.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa6m5bh-zephyr-bme280.elf"
+  system: "./bme280-system.yaml"
+limits:
+  max_steps: 40000000
+  max_cycles: 1000000000
+  wall_time_ms: 120000
+stimuli:
+  - target: { component: "bme", channel: "temperature" }
+    trigger: !after_cycles { cycles: 300000000 }
+    value: 21.5
+  - target: { component: "bme", channel: "humidity" }
+    trigger: !after_cycles { cycles: 300000000 }
+    value: 40
+  - target: { component: "bme", channel: "pressure" }
+    trigger: !after_cycles { cycles: 300000000 }
+    value: 990
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Found device \"bme280@76\", getting sensor data"
+      - "temp: 25.0; press: 101.324218; humidity: 50.3906"
+      - "temp: 25.0; press: 101.324218; humidity: 50.3906"
+      - "temp: 21.500000; press: 98.996093; humidity: 39.995117"
+      - "temp: 21.500000; press: 98.996093; humidity: 39.995117"
+  - expected_stop_reason: max_cycles

@@ -35,10 +35,13 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.1.0 `tests/drivers/adc/adc_api` (ADC1 channels 0 and 2, scan end → ELC event 0x166 → ICU IELSR39 → NVIC line 39) | smoke-tested | `zephyr-adc-api.yaml` PASS 2/2: `adc_basic` 6/6 (`asynchronous_call`, `invalid_request`, `repeated_samplings`, `sample_one_channel`, `sample_two_channels`, `sample_with_interval`), the buffers holding `0x07ff` (potentiometer, 1650 mV) and `0x03a2` (TMP36 at 25 °C, 750 mV) from `adc-system.yaml`; 316,024 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `9a1ad5b6c1622…` |
 | ADC0/ADC1 (`ra_adc12`, the RA8M1 model at the RA6M5 bases 0x4017_0000 / 0x4017_0200): software-started single and continuous scans, `ADDRn`, `ADCER.ADPRC`/`ADRFMT`, addition/averaging, scan-end ELC events 0x160/0x166 (FSP ra6m5 `bsp_elc.h`) | sim-tested | the test above; `crates/core/tests/ra6m5_adc12_icu.rs` (vectors through IELSR39 with the converted codes, an unlinked scan end pends nothing) in both scheduler modes; unit tests `peripherals::ra_adc12` |
 | ADC12 conversion time, group scan, double trigger, hardware/ELC start triggers, temperature sensor and internal reference, window comparator, `ADBUF`, sample-and-hold, `ADCER.ACE` clear-after-read | **not modelled** | each channel converts in a nominal 1 µs at the 200 MHz guest clock; a group-scan start converts nothing; `ADDRn` keep their value after a read |
-| DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
+| Stock Zephyr v4.1.0 `samples/sensor/bme280` (BME280 at 0x76 on IIC1; RXI/TXI/TEI/ERI → ELC events 0x078-0x07B → ICU IELSR91-94) | smoke-tested | `zephyr-bme280.yaml` PASS 2/2: the driver's chip-ID check, calibration load and once-a-second RTIO fetches (register burst reads with a restart, register writes) all complete; `temp: 25.0; press: 101.324218; humidity: 50.3906` twice from `bme280-system.yaml`'s defaults, then `temp: 21.500000; press: 98.996093; humidity: 39.995117` twice after the 1.5 s stimulus to 21.5 °C / 990 hPa / 40 %RH; 296,579 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `4a406198ff35036e…` |
+| IIC0-2 (`ra_iic`): RIIC master transmit/receive, 7-bit addresses, `ST`/`RS`/`SP` conditions with `BBSY`/`MST`/`TRS`, `ICDRT` holding register behind the shifter, read turn-around with the dummy `ICDRR` read, stop/restart deferred until the last byte is read, address NACK (`NACKF`/`ACKBR`), `ACKBT` behind `ACKWP`, `IICRST` resets; events on the rising edge of flag & enable; wire time from `ICBRL`/`ICBRH`/`CKS` | sim-tested | the sample above; `crates/core/tests/ra6m5_iic_icu.rs` (the start's TXI vectors through IELSR92; the BME280 chip-ID read 0xD0 → 0x60 step by step on the ICU events; an absent device NACKed through ERI) in both scheduler modes; unit tests `peripherals::ra_iic` |
+| RIIC slave mode (`SARLn`/`SARUn`/`ICSER`), 10-bit addresses, a NACKed data byte, arbitration loss, SCL-low timeout (`TMOF`), SMBus, wake-up (`ICWUR`), `RDRFS`, `WAIT` hold timing, `ICCR1` SCL/SDA overrides and `CLO`, `ICMR1.BC`, DTC transfers | **not modelled** | slave registers stored only; devices ACK every data byte; rise/fall times are not added to the SCL period |
+| DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
 | SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
 
-## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, button, blinky and adc_api 2026-11-01)
+## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, button, blinky, adc_api and bme280 2026-11-01)
 
 ```bash
 # from the repository root
@@ -108,6 +111,15 @@ cargo test -p labwired-core --test pad_control_pulls
 cargo test -p labwired-core --test ra6m5_adc12_icu   # also --features event-scheduler
 #   2 passed
 
+# Stock Zephyr v4.1.0 samples/sensor/bme280 (BME280 at 0x76 on IIC1, IELSR91-94)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-bme280.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-bme280 · 296579 steps
+#   temp: 25.0; press: 101.324218; humidity: 50.3906                 (x2)
+#   temp: 21.500000; press: 98.996093; humidity: 39.995117           (after the stimulus)
+#   Audit (2,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test ra6m5_iic_icu   # also --features event-scheduler
+#   3 passed
+
 # Fixture rebuild: two runs of build.sh, byte-identical
 crates/firmware-ek-ra6m5-zephyr/build.sh
 #   cb8edcdbca022b61c35846d85699e56db400f52fb82c71a14ca2ab6b6ef9cd89  r7fa6m5bh-zephyr-hello.elf
@@ -116,10 +128,11 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 #   f2041b1a3a59371236ac58f3ab65d14cd34b922f53683e1ab528667419bc6ce2  r7fa6m5bh-zephyr-button.elf
 #   f6826f74e095d97eacfc160c57b6574e3e4f4143572e1d2743079a5432ce2627  r7fa6m5bh-zephyr-blinky.elf
 #   9a1ad5b6c16223c3a8f94008721265398046b66143d9b0ea2ba6e785781d5c82  r7fa6m5bh-zephyr-adc-api.elf
+#   4a406198ff35036e14562b8a330703a5eae91d22a3b5eca05e4a3166b0eb8698  r7fa6m5bh-zephyr-bme280.elf
 
 # Determinism: two zephyr-hello runs, two zephyr-counter-alarm runs and two
 # zephyr-button runs, two zephyr-blinky runs, two zephyr-adc-api runs,
-# identical uart.log + snapshot.json
+# two zephyr-bme280 runs, identical uart.log + snapshot.json
 
 # Negative controls (each makes test_ek_ra6m5_zephyr_survival fail):
 #   - FCR keeps RFRST/TFRST set on read-back -> r_sci_uart_fifo_cfg spins
@@ -137,6 +150,9 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 #     has no edges and PCNTR1 reads 0, the button LED none (both FAIL)
 #   - natural 16-bit half order (PDR at +0x0) -> blinky toggles PDR and ends
 #     with P006 an input (memory_value FAILs); the button LED never lights
+# Negative control for zephyr-bme280.yaml: no BME280 on IIC1 -> address
+# NACK, FSP abort, `ID read failed: -5`, `Device "bme280@76" is not ready`
+# (FAIL)
 # Negative control for zephyr-adc-api.yaml: ADC0/ADC1 back to the old
 # `stub` window -> no scan end, test_adc_asynchronous_call fails
 # (`k_poll failed with error -11`)
