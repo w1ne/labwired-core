@@ -345,9 +345,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
-    // Renesas RA ICU event-link registers (IELSRn) and the 16-bit AGT.
+    // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT and the
+    // 12-bit ADC.
     "ra_icu",
     "ra_agt",
+    "ra_adc12",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1421,6 +1423,26 @@ pub fn try_build(
                 get("pclkb_hz").unwrap_or(agt::DEFAULT_PCLKB_HZ),
                 get("elc_event").map_or(agt::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
+        }
+        // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
+        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
+        // board-level static channel levels.
+        "ra_adc12" => {
+            use crate::peripherals::ra_adc12 as adc;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let mut unit = adc::RaAdc12::new(
+                get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
+                get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
+                get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            );
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    if let (Some(ch), Some(mv)) = (k.as_u64(), v.as_u64()) {
+                        unit.set_channel_input(ch as u8, mv as u16);
+                    }
+                }
+            }
+            Box::new(unit)
         }
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),

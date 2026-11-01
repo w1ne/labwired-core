@@ -93,6 +93,7 @@ pub mod pic24_gpio;
 pub mod pio;
 pub mod pwr;
 pub mod quadspi;
+pub mod ra_adc12;
 pub mod ra_agt;
 pub mod ra_clock;
 pub mod ra_icu;
