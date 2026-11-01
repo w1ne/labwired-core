@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Three displays as declarative `configs/devices/*.yaml` descriptors on the
+  existing `display` primitive, no engine change: `st7735` (Sitronix ST7735R,
+  128x160 RGB565, 4-wire SPI), `gc9a01` (GalaxyCore GC9A01A, round 240x240
+  RGB565, 4-wire SPI; the GC9A01A lists no SWRESET) and `oled-ssd1309`
+  (Solomon Systech SSD1309, 128x64 mono, I²C; no charge pump, resets to page
+  addressing). `crates/core/tests/everyday_display_set.rs` drives each through
+  a real CASET/RASET/RAMWR (or page/column pointer) sequence and checks the
+  exact frame-memory bytes. Its negative control requires every check to FAIL
+  against a panel that reads all 0x00 or 0xFF, including one with live flags
+  over mute memory. Each part has a `docs/parts/` page. SSD1327 (needs a
+  4-bit grayscale pixel format) and SK6812 (needs a 32-bit-per-LED strip
+  decoder) were not added.
 - Four more everyday I²C parts as declarative `configs/devices/*.yaml`
   descriptors: `mpu9250` (accel/gyro/temp; AK8963 magnetometer not modelled),
   `ens160` (TVOC/eCO2/AQI, live only in STANDARD mode), `ina260` (fixed-LSB
