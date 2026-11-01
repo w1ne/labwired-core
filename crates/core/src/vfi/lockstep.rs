@@ -59,6 +59,8 @@ impl Isa {
             crate::Arch::Pic18 => None,
             // PIC16 has no lockstep-backend ISA yet (interpreter only).
             crate::Arch::Pic16 => None,
+            // AArch64 has no lockstep-backend ISA yet (interpreter only).
+            crate::Arch::Aarch64 => None,
             crate::Arch::Unknown => None,
         }
     }
@@ -78,6 +80,8 @@ impl Isa {
             MachineFamily::Pic18 => None,
             // PIC16 has no lockstep-backend ISA yet (interpreter only).
             MachineFamily::Pic16 => None,
+            // AArch64 has no lockstep-backend ISA yet (interpreter only).
+            MachineFamily::Aarch64 => None,
         }
     }
 

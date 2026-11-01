@@ -22,6 +22,10 @@ pub(crate) use trait_def::{advance_batch_cycle, default_step_batch, default_step
 pub use trait_def::{Cpu, CpuJitStats, SecondaryExecutionState};
 
 #[deny(clippy::let_underscore_must_use)]
+pub mod aarch64;
+#[deny(clippy::let_underscore_must_use)]
+pub mod aarch64_gic;
+#[deny(clippy::let_underscore_must_use)]
 pub mod avr;
 #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
 #[deny(clippy::let_underscore_must_use)]
@@ -76,6 +80,7 @@ pub mod xtensa_jit_bytes;
 #[cfg(any(feature = "jit", feature = "jit-framework"))]
 pub mod jit_framework;
 
+pub use aarch64::Aarch64;
 pub use avr::{Avr, AvrModel};
 pub use cortex_m::CortexM;
 pub use pic16::Pic16;

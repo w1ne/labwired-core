@@ -182,6 +182,7 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 // copy-pasted into the browser crate and the CLI; they move here one family at
 // a time, each ported verbatim from the browser constructor.
 
+mod aarch64;
 mod arm;
 mod avr;
 mod cortex_a;
@@ -367,6 +368,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::Pic24 => pic24::build(req, plugins),
         MachineFamily::Pic18 => pic18::build(req, plugins),
         MachineFamily::Pic16 => pic16::build(req, plugins),
+        MachineFamily::Aarch64 => aarch64::build(req, plugins),
     }
 }
 

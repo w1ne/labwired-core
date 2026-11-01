@@ -86,6 +86,13 @@ boards:
     kind: sim-validate
     path: examples/mpfs-disco-kit
     gate: true
+  # SK-AM62: the first AArch64 part (TI AM6234, Cortex-A53). Committed stock
+  # Zephyr v4.3.0 fixtures (hello, synchronization, tests/kernel/common), plus
+  # the unsupported-instruction audit of each image.
+  - id: sk-am62
+    kind: sim-validate
+    path: examples/sk-am62
+    gate: true
   # EK-RA6M5: the first RA6M5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main (the RA6M5 is a Cortex-M33) and runs the SCI0/LED io-smoke
   # plus the unsupported-instruction audit through the CLI.

@@ -644,6 +644,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // committed fixtures and a survival gate; no catalog board, no silicon
         // capture and no executing-fidelity differential.
         "mpfs095t",
+        // First AArch64 part (SK-AM62, TI AM6234, Cortex-A53): chip + system
+        // + example with stock Zephyr v4.3.0 hello/sync/kernel-common,
+        // committed fixtures and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "am6234",
         // First RA6M5 part (EK-RA6M5): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.

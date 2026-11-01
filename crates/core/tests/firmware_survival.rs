@@ -1035,6 +1035,23 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"Hello World! mpfs_icicle/polarfire/u54",
     },
     SurvivalCase {
+        // SK-AM62 (TI AM6234): unmodified Zephyr v4.3.0 hello_world for
+        // `sk_am62/am6234/a53` on the AArch64 core — EL3 reset, ERET to EL1,
+        // MMU on, GICv3 and generic-timer bring-up, MAIN_UART0 as a 16550.
+        // Runs through the Session builder, the AArch64 machine family's only
+        // build path. Rebuild: crates/firmware-sk-am62-zephyr/build.sh.
+        // SIM-DERIVED.
+        name: "sk_am62_zephyr",
+        core: "cortex-a53",
+        family: CpuFamily::Session,
+        hal: Hal::Zephyr,
+        chip: "am6234",
+        system: "sk-am62",
+        fixture: "sk-am62-zephyr-hello.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"Hello World! sk_am62/am6234/a53",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -3092,6 +3109,7 @@ survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 survival_gate!(test_mpfs_disco_kit_zephyr_survival, "mpfs_disco_kit_zephyr");
+survival_gate!(test_sk_am62_zephyr_survival, "sk_am62_zephyr");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

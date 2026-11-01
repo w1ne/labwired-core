@@ -38,6 +38,7 @@ pub enum MachineFamily {
     Pic24,
     Pic18,
     Pic16,
+    Aarch64,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -61,8 +62,9 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Pic24 => Ok(MachineFamily::Pic24),
         Arch::Pic18 => Ok(MachineFamily::Pic18),
         Arch::Pic16 => Ok(MachineFamily::Pic16),
+        Arch::Aarch64 => Ok(MachineFamily::Aarch64),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, or pic16)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, or aarch64)",
             chip.name
         ),
     }
@@ -89,6 +91,7 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         // available, so it names PIC18 here and the chip retargets a PIC16
         // image ([`image_arch_for_chip`]).
         204 => Some(crate::Arch::Pic18),
+        goblin::elf::header::EM_AARCH64 => Some(crate::Arch::Aarch64),
         _ => None,
     }
 }

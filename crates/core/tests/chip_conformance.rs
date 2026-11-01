@@ -155,6 +155,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_mpfs_disco_kit_zephyr_survival"),
     },
     ChipConf {
+        // TI AM6234 (SK-AM62), first AArch64 part: one Cortex-A53 with its
+        // GICv3 and generic timer in the core. SIM-DERIVED: no AM62x bench
+        // part. Modelled: MAIN_UART0-6 (16550, polled). Pad config and the
+        // mailbox are declared stubs — see examples/sk-am62/VALIDATION.md.
+        name: "am6234",
+        yaml: "configs/chips/am6234.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_sk_am62_zephyr_survival"),
+    },
+    ChipConf {
         // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
         // Modelled: the RA PORT (ra_port) and PmnPFS/PWPR (ra_pfs) reused
         // from RA4M1 at the RA6M5 bases, the full R_SYSTEM register file

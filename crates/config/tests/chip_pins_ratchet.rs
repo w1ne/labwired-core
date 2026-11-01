@@ -77,6 +77,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // The PolarFire SoC MSS GPIO_0..2 are declared stubs (no GPIO model), and
     // the kit's LEDs/buttons sit behind the FPGA fabric; no pads to read yet.
     "mpfs095t",
+    // The SK-AM62 LEDs and button are on I2C GPIO expanders / MAIN GPIO, and
+    // neither is modelled; the pad configuration is a declared stub.
+    "am6234",
     "nrf52832",
     "nrf52833",
     "nrf52840",

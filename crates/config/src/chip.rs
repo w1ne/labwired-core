@@ -28,6 +28,9 @@ pub enum Arch {
     /// PIC16 classic mid-range 8-bit MCU (14-bit instruction words).
     #[serde(alias = "pic16f")]
     Pic16,
+    /// AArch64 application cores (Armv8-A, Cortex-A53 class).
+    #[serde(alias = "arm64", alias = "armv8-a")]
+    Aarch64,
     Unknown,
 }
 

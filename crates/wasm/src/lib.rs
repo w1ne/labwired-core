@@ -575,6 +575,9 @@ impl WasmSimulator {
             MachineFamily::Pic16 => Err(JsValue::from_str(
                 "PIC16 is not available in the browser build yet",
             )),
+            MachineFamily::Aarch64 => Err(JsValue::from_str(
+                "AArch64 is not available in the browser build yet",
+            )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.

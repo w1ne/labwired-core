@@ -197,6 +197,15 @@ pub fn build_node_with_options(
         MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic18 => build_pic18_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic16 => build_pic16_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Aarch64 => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': AArch64 takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::aarch64::load_elf(
+                bus, chip, &bytes,
+            )?))
+        }
     }
 }
 

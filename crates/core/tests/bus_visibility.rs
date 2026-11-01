@@ -135,6 +135,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LPUART bring-up in this harness; bytes are proven by the \
          vegaboard-ri5cy survival smoke",
     ),
+    // SK-AM62: this harness has no AArch64 bring-up (the A53 is not one of
+    // its CPU families); the MAIN_UART0 bytes are proven by the
+    // sk_am62_zephyr survival gate.
+    (
+        "am6234",
+        BusKind::Uart,
+        "no AArch64 core bring-up in this harness; bytes are proven by the \
+         sk_am62_zephyr survival gate",
+    ),
     // PolarFire SoC Discovery Kit: this harness has no 16550 bring-up; the
     // MMUART1 bytes are proven by the mpfs_disco_kit_zephyr survival gate.
     (

@@ -353,6 +353,8 @@ impl SourceDebug {
             MachineFamily::Pic18 => 8,
             // W, STATUS, FSR, PCLATH, SP, PC — provisional, same caveat.
             MachineFamily::Pic16 => 6,
+            // X0-X30, SP (31).
+            MachineFamily::Aarch64 => 32,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -439,6 +441,16 @@ impl TargetMemory for BusMemory<'_> {
 /// unwind with CFI; Xtensa (register windows) and AVR show frame 0 only.
 fn abi(family: MachineFamily) -> Abi {
     match family {
+        MachineFamily::Aarch64 => Abi {
+            // DWARF 31 is SP. Frame 0 only until the AArch64 CFI unwind has
+            // been checked against GCC output (registers read as 32 bits).
+            sp: 31,
+            callee_saved: (19..=29).collect(),
+            code_mask: !0,
+            register_size: 8,
+            unwind: false,
+            exc_return: false,
+        },
         MachineFamily::CortexM | MachineFamily::CortexA => Abi {
             sp: 13,
             callee_saved: (4..=11).collect(),
@@ -515,6 +527,8 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::Pic24 => 18,
         MachineFamily::Pic18 => 8,
         MachineFamily::Pic16 => 6,
+        // X0-X30, SP.
+        MachineFamily::Aarch64 => 32,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
@@ -687,6 +701,7 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Pic24 => 15,
         MachineFamily::Pic18 => 6,
         MachineFamily::Pic16 => 4,
+        MachineFamily::Aarch64 => 31,
     }
 }
 
