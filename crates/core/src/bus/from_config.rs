@@ -1084,6 +1084,25 @@ impl SystemBus {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)
                     };
+                    // RA4/RA6 PORT: 16-bit PCNTRn aliases with the halves
+                    // swapped (FSP R7FA6M5BH.h; see `RaPortGpio`).
+                    let port = if p_cfg
+                        .config
+                        .get("swapped_half_aliases")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        if layout != crate::peripherals::gpio::GpioRegisterLayout::RaPort {
+                            anyhow::bail!(
+                                "GPIO peripheral '{}': `swapped_half_aliases` applies to \
+                                 ra_port only",
+                                p_cfg.id
+                            );
+                        }
+                        port.with_ra_swapped_half_aliases()
+                    } else {
+                        port
+                    };
                     // Optional `pad_control`: the id of the block that keeps
                     // this port's pulls (Kinetis PORTx, RA PFS, i.MX RT
                     // IOMUXC). See `crate::pins::PadControl`.
@@ -1429,6 +1448,10 @@ impl SystemBus {
         bus.wire_stm32_timer_output_pads();
         // SAMD51 TC waveform outputs onto their PMUX-E pads (samd51_tc only).
         bus.wire_samd51_tc_output_pads();
+        // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
+        bus.wire_ra_gpt_output_pads();
+        // Board wires from an analog output (a DAC pin) to an ADC input.
+        bus.wire_analog_links();
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
         // name. Unlike the four above this is not a datasheet AF table — the
         // pad has no function register on this family, so the peripherals

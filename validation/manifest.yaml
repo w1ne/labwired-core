@@ -1746,12 +1746,15 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
     # 2026-11-01 (feat/rp2350-dcp): cortex_m.rs/exec/misc.rs dispatch p4/p5
     # coprocessor instructions to the RP2350 DCP model ONLY when the chip
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: e1879dd2022c6adaae3d49f71d58f9818556815d66dd9cb11d2152b8950189a2
+    drift_ack_digest: ddff23d2f72d02c6d4b8b33f08ba2f7fb1ad84b88d370a4fb3fc406a6fec1bf9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3838,12 +3841,15 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
     # 2026-11-01 (feat/rp2350-dcp): cortex_m.rs/exec/misc.rs dispatch p4/p5
     # coprocessor instructions to the RP2350 DCP model ONLY when the chip
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 783f9bf0d130e1e8e4c95b4b0946130bb4f37e6927dc2204139117c9f72360f4
+    drift_ack_digest: 0be426a655a079a0473923ddea3425693ec28044557a4776eb6c92eee5d41edf
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4881,12 +4887,15 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
     # 2026-11-01 (feat/rp2350-dcp): cortex_m.rs/exec/misc.rs dispatch p4/p5
     # coprocessor instructions to the RP2350 DCP model ONLY when the chip
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2220d1708d026873932e2ab8f1022d16a60c5622c626db7506c473b182eaab42
+    drift_ack_digest: 602753008a3fb2a8ebaa9e6ddbdad12ccbd237b9346d5b1097909b505c064da7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5915,12 +5924,15 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
     # 2026-11-01 (feat/rp2350-dcp): cortex_m.rs/exec/misc.rs dispatch p4/p5
     # coprocessor instructions to the RP2350 DCP model ONLY when the chip
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8e977128b20e2989f6c30bcf663dcc6ca632bbe79ebca5763b1b3419ecd91e15
+    drift_ack_digest: 0560b67cc53f0d3d064fd5bac7b310030a6dfa5a903947ea715b54ffc74bc2f2
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6982,12 +6994,15 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
     # 2026-11-01 (feat/rp2350-dcp): cortex_m.rs/exec/misc.rs dispatch p4/p5
     # coprocessor instructions to the RP2350 DCP model ONLY when the chip
     # declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
     # here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
     # the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 6e9a0b33a5594b06ea204bce22617e900daee95f662df25133f459310e95343e
+    drift_ack_digest: a19cf6f44b3499fa6594d68f03744a2a62ee96ff4fbc7999f3789eacde789609
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -10009,6 +10024,12 @@ boards:
       - crates/firmware-ek-ra6m5-smoke
       - crates/firmware-ek-ra6m5-zephyr
       - configs/chips/r7fa6m5bh.yaml
+      # 2026-11-01 (#1607 main merge): #1597 registered these on this board but
+      # left them out of the list (model_paths_drift_gate red on main 5c950855d).
+      - crates/core/src/peripherals/ra_adc12.rs
+      - crates/core/src/peripherals/ra_dac12.rs
+      - crates/core/src/peripherals/ra_gpt.rs
+      - crates/core/src/peripherals/ra_iic.rs
       - configs/systems/ek-ra6m5.yaml
   - id: r7fa8m1ah
     # 2026-10-30: Renesas EK-RA8M1 (R7FA8M1AH, Cortex-M85; 2 MiB code flash
@@ -10065,6 +10086,12 @@ boards:
       - crates/firmware-ek-ra8m1-smoke
       - crates/firmware-ek-ra8m1-zephyr
       - configs/chips/r7fa8m1ah.yaml
+      # 2026-11-01 (#1607 main merge): #1597 registered these on this board but
+      # left them out of the list (model_paths_drift_gate red on main 5c950855d).
+      - crates/core/src/peripherals/ra_adc12.rs
+      - crates/core/src/peripherals/ra_dac12.rs
+      - crates/core/src/peripherals/ra_gpt.rs
+      - crates/core/src/peripherals/ra_iic.rs
       - configs/systems/ek-ra8m1.yaml
 
   - id: same70q21b

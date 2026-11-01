@@ -1184,6 +1184,9 @@ impl ImxrtGpio {
     }
 }
 
+/// `PmnPFS.PSEL` of the GPT GTIOCnA/B pin functions.
+const RA_PSEL_GPT: u32 = 0b00011;
+
 // ── Renesas RA PORT (RA4M1 / R7FA4M1, R01UH0887 §19) ─────────────────────────
 // Port n @ 0x40040000 + n*0x20. 16 pins. FSP IOPORT v1 uses 32-bit PCNTR*:
 //   PCNTR1 @0x00: PDR[15:0] direction, PODR[31:16] output data
@@ -1192,9 +1195,21 @@ impl ImxrtGpio {
 //
 // The input pull-up is PmnPFS.PCR, outside this block; the bus hands it over
 // (`crate::pins::PadControl::RaPfs`) and PIDR reads it on an input pad nothing
-// outside holds.
+// outside holds. PmnPFS PDR/PODR are the same flip-flops as PCNTR1's, so a
+// PmnPFS store sets them too (`PadControl::output_write`).
+//
+// The 16-bit aliases of each PCNTRn are NOT in little-endian half order on
+// every RA part. FSP `R7FA4M1AB.h` / `R7FA6M5BH.h` put PODR at +0x0 and PDR
+// at +0x2 (EIDR +0x4 / PIDR +0x6, PORR +0x8 / POSR +0xA, EORR +0xC / EOSR
+// +0xE): the upper half of the 32-bit word answers at the lower address.
+// `R7FA8M1AH.h` has the natural order (PDR +0x0, PODR +0x2, ...). Chip
+// YAML picks the RA4/RA6 order with `swapped_half_aliases: true`; byte
+// accesses follow the 16-bit alias they fall in.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct RaPortGpio {
+    /// RA4/RA6 16-bit alias order (see above). Not a register.
+    #[serde(skip)]
+    swapped_halves: bool,
     pdr: u16,  // direction (1 = output)
     podr: u16, // output data
     pidr: u16, // input latch (host/button injection)
@@ -1204,6 +1219,12 @@ pub struct RaPortGpio {
     /// The PFS pull-ups, as the bus last handed them over.
     #[serde(skip)]
     pulls: ConfigPulls,
+    /// Pads `PmnPFS.PMR` hands to a peripheral, and each one's PSEL, as the
+    /// bus last handed them over.
+    #[serde(skip)]
+    pmr: u16,
+    #[serde(skip)]
+    psel: [u8; 16],
 }
 
 impl RaPortGpio {
@@ -1406,6 +1427,42 @@ impl GpioFamily {
             _ => return false,
         }
         true
+    }
+
+    /// Take PDR/PODR from a `PmnPFS` store (RA only: the same flip-flops as
+    /// `PCNTR1`, see [`crate::pins::PinPort::set_config_output`]).
+    fn set_config_output(&mut self, pin: u8, output: bool, high: bool) -> bool {
+        let Self::RaPort(g) = self else {
+            return false;
+        };
+        if pin >= 16 {
+            return false;
+        }
+        let bit = 1u16 << pin;
+        g.pdr = if output { g.pdr | bit } else { g.pdr & !bit };
+        g.podr = if high { g.podr | bit } else { g.podr & !bit };
+        true
+    }
+
+    /// Take the `PmnPFS` PMR/PSEL peripheral function (RA only, see
+    /// [`crate::pins::PinPort::set_config_function`]). `true` when it changed.
+    fn set_config_function(&mut self, pin: u8, function: Option<u8>) -> bool {
+        let Self::RaPort(g) = self else {
+            return false;
+        };
+        if pin >= 16 {
+            return false;
+        }
+        let bit = 1u16 << pin;
+        let before = (g.pmr & bit != 0).then_some(g.psel[usize::from(pin)]);
+        match function {
+            Some(psel) => {
+                g.pmr |= bit;
+                g.psel[usize::from(pin)] = psel;
+            }
+            None => g.pmr &= !bit,
+        }
+        before != function
     }
 
     /// The pull a pad-control block configures on `pin`, for the families
@@ -1705,7 +1762,9 @@ impl GpioPort {
                 if pin >= 16 {
                     return None;
                 }
-                if (g.pdr & (1u16 << pin)) != 0 {
+                if (g.pmr & (1u16 << pin)) != 0 {
+                    GpioMode::Af
+                } else if (g.pdr & (1u16 << pin)) != 0 {
                     GpioMode::Output
                 } else {
                     GpioMode::Input
@@ -2283,6 +2342,10 @@ impl GpioPort {
             // SAM PORT: PINCFG.PMUXEN hands the pad to the PMUX function
             // (A = 0 .. N = 13); only pads with a bound route ever ask.
             GpioFamily::SamPort(g) => g.pmux_of(pin).map(u32::from),
+            // RA: `PmnPFS.PMR` hands the pad to the peripheral PSEL names.
+            GpioFamily::RaPort(g) => {
+                (pin < 16 && g.pmr & (1 << pin) != 0).then(|| u32::from(g.psel[usize::from(pin)]))
+            }
             _ => None,
         }
     }
@@ -2572,6 +2635,52 @@ impl crate::pins::PinPort for GpioPort {
         }
         taken
     }
+
+    /// RA ports take PDR/PODR from their `PmnPFS` stores; the others ignore it.
+    fn set_config_output(&mut self, pin: u8, output: bool, high: bool) -> bool {
+        if pin >= self.pin_count() {
+            return false;
+        }
+        let taken = self.family.set_config_output(pin, output, high);
+        if taken {
+            self.sync_pin_cells();
+        }
+        taken
+    }
+
+    /// RA ports take the `PmnPFS` PMR/PSEL function; the others ignore it.
+    fn set_config_function(&mut self, pin: u8, function: Option<u8>) -> bool {
+        if pin >= self.pin_count() {
+            return false;
+        }
+        let changed = self.family.set_config_function(pin, function);
+        if changed {
+            self.sync_pad_line_taps();
+            self.sync_pin_cells();
+        }
+        changed
+    }
+}
+
+impl GpioPort {
+    /// RA4/RA6 ports: the 16-bit PCNTRn aliases in FSP `R7FA6M5BH.h` order
+    /// (PODR at +0x0, PDR at +0x2, ...; see [`RaPortGpio`]). Other layouts
+    /// ignore it.
+    pub fn with_ra_swapped_half_aliases(mut self) -> Self {
+        if let GpioFamily::RaPort(g) = &mut self.family {
+            g.swapped_halves = true;
+        }
+        self
+    }
+
+    /// Where a byte (or a byte of a 16-bit access) at `offset` lands in the
+    /// 32-bit register file: the other half of the word on a RA4/RA6 port.
+    fn sub_word_offset(&self, offset: u64) -> u64 {
+        match &self.family {
+            GpioFamily::RaPort(g) if g.swapped_halves => offset ^ 2,
+            _ => offset,
+        }
+    }
 }
 
 impl crate::Peripheral for GpioPort {
@@ -2602,6 +2711,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        let offset = self.sub_word_offset(offset);
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
@@ -2609,6 +2719,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let offset = self.sub_word_offset(offset);
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
@@ -2807,6 +2918,13 @@ impl crate::Peripheral for GpioPort {
             // SAM TC waveform outputs are PMUX function E (DS60001507F 6.1).
             GpioFamily::SamPort(_) if pin < 32 => {
                 self.pad_routes.bind(cell, pin, Some(4), line, func);
+                true
+            }
+            // RA GPT GTIOCnA/B are PmnPFS PSEL 00011 (Zephyr
+            // `RA_PSEL_GPT1`, the EK-RA8M1/EK-RA6M5 pinctrl's GTIOC pads).
+            GpioFamily::RaPort(_) if pin < 16 => {
+                self.pad_routes
+                    .bind(cell, pin, Some(RA_PSEL_GPT), line, func);
                 true
             }
             _ => false,
@@ -3091,6 +3209,36 @@ mod routing_tests {
         assert_eq!(p.read_u32(0x04).unwrap() & bit, 0);
         p.write_u32(0x08, bit).unwrap(); // PCNTR3 POSR sets PODR
         assert_eq!(p.read_u32(0x04).unwrap() & bit, bit);
+    }
+
+    #[test]
+    fn ra_port_16_bit_aliases_follow_the_part() {
+        // RA8 (FSP R7FA8M1AH.h): PDR +0x0, PODR +0x2, PIDR +0x4, POSR +0x8.
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::RaPort);
+        p.write_u16(0x00, 1 << 6).unwrap();
+        p.write_u16(0x02, 1 << 6).unwrap();
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0040_0040);
+        assert_eq!(p.read_u16(0x04).unwrap(), 1 << 6, "PIDR");
+        p.write_u16(0x0A, 1 << 6).unwrap(); // PORR
+        assert_eq!(p.read_u16(0x02).unwrap(), 0, "PODR");
+        // RA4/RA6 (R7FA6M5BH.h): PODR +0x0, PDR +0x2, EIDR +0x4, PIDR +0x6,
+        // PORR +0x8, POSR +0xA. The 32-bit words keep the same halves.
+        let mut p =
+            GpioPort::new_with_layout(GpioRegisterLayout::RaPort).with_ra_swapped_half_aliases();
+        p.write_u16(0x02, 1 << 6).unwrap(); // PDR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0000_0040);
+        p.write_u16(0x00, 1 << 6).unwrap(); // PODR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0040_0040);
+        assert_eq!(p.read_u16(0x00).unwrap(), 1 << 6, "PODR");
+        assert_eq!(p.read_u16(0x06).unwrap(), 1 << 6, "PIDR");
+        assert_eq!(p.read_u16(0x04).unwrap(), 0, "EIDR");
+        p.write_u16(0x08, 1 << 6).unwrap(); // PORR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0000_0040);
+        p.write_u16(0x0A, 1 << 6).unwrap(); // POSR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0040_0040);
+        // A byte falls in its 16-bit alias: +0x0 is PODR[7:0].
+        p.write(0x00, 0).unwrap();
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0000_0040);
     }
 
     #[test]

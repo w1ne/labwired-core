@@ -34,7 +34,9 @@
 #     0x40400D14 (`ra8_pfs`). PmnPFS keeps the RA layout, for ports 0-B.
 #   - The SCI kernel clock is its own SCICLK (SYSTEM SCICKDIVCR +0x54 /
 #     SCICKCR +0x55, with a CKSREQ/CKSRDY switch handshake: `ra8_sysc`).
-# PORTn keeps the RA PCNTR1-4 layout at 0x40400000 + 0x20*n.
+# PORTn keeps the RA PCNTR1-4 layout at 0x40400000 + 0x20*n, with the 16-bit
+# aliases in natural half order (FSP R7FA8M1AH.h: PDR +0x0, PODR +0x2), unlike
+# RA4M1/RA6M5.
 #
 # Tier: L1 UART+LED smoke. Boot from code flash, the SCI9 console (PA14
 # TXD9 / PA15 RXD9, the J-Link OB virtual COM port) and the three user LEDs
@@ -77,8 +79,18 @@
 #   returns with IR still set is not re-entered until the next event.
 # - AGT: timer mode only (`ra_agt`, see the model header); pulse output,
 #   event counter and measurement modes are not modelled.
-# - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
-#   routing in the model.
+# - GPT0-13 (`ra_gpt`): saw-wave PWM counting up, the cycle-end buffer
+#   transfers, compare A/B and overflow events, GTIOC7A/B on P603/P602;
+#   triangle/one-shot modes, input capture, hardware start sources, dead
+#   time and POEG are not modelled (see the model header).
+# - IIC0/IIC1 (`ra_iic`): master transmit/receive with 7-bit addresses and
+#   the RXI/TXI/TEI/ERI events, timed from ICBRL/ICBRH/CKS; slave mode,
+#   10-bit addresses, a NACKed data byte, arbitration loss, the SCL-low
+#   timeout, SMBus and DTC transfers are not modelled (see the model header).
+# - PmnPFS PSEL/PMR (peripheral mux) routes a pad only to the GPT (GTIOC7A/B
+#   on P603/P602, `gtioc_pads`); SCI9 TX/RX need no pad routing in the model. A PmnPFS store sets the port's PCNTR1 PDR/PODR
+#   (the same flip-flops), but reading PmnPFS back returns the last store,
+#   not PCNTR1, and PIDR there reads 0.
 # - SCI_B: async TX/RX with the RXI/TXI/TEI interrupt events (CCR0
 #   RIE/TIE/TEIE). TXI/TEI follow the TDRE/TEND edges of a timed shift
 #   register; CSR still reads TDRE = TEND = 1 and a byte reaches the console
@@ -86,9 +98,13 @@
 #   Manchester modes and the baud generator (CCR2 is not decoded; the frame
 #   time comes from `baud`) are not modelled; the control registers are
 #   stored and read back.
+# - DAC12 (`ra_dac12`): DADR0/1 and the control registers read back; DAn
+#   outputs code * 3.3 V / 4096 while DACR.DAOEn = 1, at once. Conversion
+#   time, the amplifier wait, the reference / charge-pump selection and
+#   D/A-A/D synchronous start are not modelled (see the model header).
 # - Option-setting memory (OFS0/OFS1 at 0x0300A100+), factory flash, flash
 #   programming (FACI), standby SRAM, OSPI/xSPI, SDRAM, Ethernet, USB, CAN
-#   FD, timers, ADC, DAC, crypto (RSIP-E51A), CEU and every block not listed
+#   FD, crypto (RSIP-E51A), CEU and every block not listed
 #   below are not mapped or are declared stubs.
 
 name: "r7fa8m1ah"
@@ -356,21 +372,77 @@ peripherals:
     type: "stub"
     base_address: 0x40250000
     size: "8KB"
-  # IIC0-2.
-  - id: "iic"
-    type: "stub"
+  # IIC0/IIC1 (RIIC master, `ra_iic`; R_IIC0_BASE 0x4025E000 + n*0x100).
+  # Interrupts are ELC events linked through the ICU IELSRn: IICn RXI
+  # 0x05C + 5n (= 92 + 5n), TXI +1, TEI +2, ERI +3 (FSP ra8m1 bsp_elc.h; no
+  # IIC2 events on the RA8M1). `clock_hz` / `pclkb_hz` as for the AGT.
+  - id: "iic0"
+    type: "ra_iic"
     base_address: 0x4025E000
-    size: "1KB"
-  # GPT0-13 + GPT_OPS.
-  - id: "gpt"
+    size: "256B"
+    config:
+      elc_event: 92
+      clock_hz: 480000000
+      pclkb_hz: 60000000
+  - id: "iic1"
+    type: "ra_iic"
+    base_address: 0x4025E100
+    size: "256B"
+    config:
+      elc_event: 97
+      clock_hz: 480000000
+      pclkb_hz: 60000000
+  - id: "iic_rsvd"
     type: "stub"
+    base_address: 0x4025E200
+    size: "512B"
+  # GPT0-13 (R_GPT0_BASE 0x40322000, 0x100 per channel; GPT0-7 32-bit per
+  # BSP_FEATURE_GPT_32BIT_CHANNEL_MASK 0xFF) + GPT_OPS at +0xF00. Counts
+  # PCLKD (PLL1P 480 MHz / 4 = 120 MHz on Zephyr's EK-RA8M1 clock tree).
+  # Events: ELC_EVENT_GPT0_CAPTURE_COMPARE_A 0x0A1, nine per channel
+  # (bsp_elc.h). GTIOC7A/B on P603/P602 (Zephyr ek_ra8m1-pinctrl.dtsi
+  # pwm7_default, RA_PSEL_GPT1).
+  - id: "gpt"
+    type: "ra_gpt"
     base_address: 0x40322000
     size: "8KB"
-  # ADC0/ADC1.
-  - id: "adc12"
-    type: "stub"
+    config:
+      channels: 14
+      clock_hz: 480000000
+      pclkd_hz: 120000000
+      elc_event: 161
+      wide_channels: 0xFF
+      gtioc_pads:
+        GTIOC7A: "P603"
+        GTIOC7B: "P602"
+  # ADC0/ADC1 (12-bit, R_ADC0_Type; FSP R_ADC0_BASE/R_ADC1_BASE). Scan end
+  # is ELC_EVENT_ADC0_SCAN_END 0x1AE / ADC1_SCAN_END 0x1B4 (bsp_elc.h),
+  # linked to NVIC through IELSRn (ra_icu).
+  - id: "adc0"
+    type: "ra_adc12"
     base_address: 0x40332000
-    size: "1KB"
+    size: "512B"
+    config:
+      elc_event: 430
+      clock_hz: 480000000
+      vref_mv: 3300
+  - id: "adc1"
+    type: "ra_adc12"
+    base_address: 0x40332200
+    size: "512B"
+    config:
+      elc_event: 436
+      clock_hz: 480000000
+      vref_mv: 3300
+  # DAC12 (R_DAC_Type, 0x10C4 bytes; FSP R_DAC_BASE 0x40333000): two
+  # channels, DA0 on P014 (Zephyr pinctrl dac0_default). No interrupts.
+  # `vref_mv` scales RaDac12::output_mv (AVCC0 = VREFH0 = 3.3 V on the EK-RA8M1).
+  - id: "dac"
+    type: "ra_dac12"
+    base_address: 0x40333000
+    size: "4292"
+    config:
+      vref_mv: 3300
   # USBHS0.
   - id: "usbhs"
     type: "stub"

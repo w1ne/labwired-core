@@ -134,11 +134,14 @@ hb=0 podr6=0001 s1=1 s2=1
   the NVIC; the smoke polls `CSR.TDRE` and the Zephyr console is polled too.
 - **SCI_B beyond polled async.** FIFO mode, `CCR0` interrupt enables, error
   flags, the simple SPI/I2C/LIN/Manchester modes and wire timing.
-- **PFS peripheral mux.** `PSEL`/`PMR` are stored only; SCI9 TX does not depend
-  on them.
-- **DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC0-2, GPT,
-  ADC12, ETHERC/EDMAC, SPI0/1, CANFD** are declared stubs (reads return 0,
-  writes are dropped).
+- **PFS peripheral mux.** `PSEL`/`PMR` route a pad only to the GPT (GTIOC7A/B
+  on P603/P602); for the other peripherals they are stored only, and SCI9 TX
+  does not depend on them.
+- **DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS,
+  ETHERC/EDMAC, SPI0/1, CANFD** are declared stubs (ADC0/ADC1 are modelled
+  since the stock Zephyr `adc_api` slice, IIC0/IIC1 since the stock Zephyr
+  `bme280` slice and GPT0-13 since the stock Zephyr `pwm_api` slice; see
+  VALIDATION.md) (reads return 0, writes are dropped).
 - **SCI0-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP-E51A,
   option-setting memory, standby SRAM** and every other block are **not
   mapped**. Firmware that touches them faults with a memory violation.

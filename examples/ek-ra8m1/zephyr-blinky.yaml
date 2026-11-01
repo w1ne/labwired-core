@@ -1,0 +1,32 @@
+# LabWired - EK-RA8M1 stock Zephyr blinky (LED1 through PmnPFS.PDR)
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/basic/blinky` for board
+# `ek_ra8m1`. Rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# led0 is LED1 (blue, P600, active high). Zephyr's gpio_renesas_ra_ioport.c
+# makes P600 an output by storing PDR|PODR (GPIO_OUTPUT_ACTIVE) in P600PFS,
+# not PCNTR1, and gpio_pin_toggle_dt then flips PCNTR1.PODR with a 16-bit
+# read-modify-write. PmnPFS PDR/PODR are the port's PCNTR1 flip-flops, so
+# the pad goes high on the PFS store and then follows each toggle.
+#
+# One second at the 480 MHz ICLK is 480 M cycles. In 2.2 G cycles the sample
+# toggles five times (t = 0..4 s), so the regex demands exactly five lines
+# ending OFF, and the pad shows six edges: input -> high on the PFS store,
+# then the five toggles.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-blinky.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+  max_cycles: 2200000000
+  wall_time_ms: 120000
+assertions:
+  - uart_regex: "\\*\\*\\* Booting Zephyr OS build v4\\.1\\.0 \\*\\*\\*\\r?\\n(LED state: OFF\\r?\\nLED state: ON\\r?\\n){2}LED state: OFF\\r?\\n$"
+  - gpio_edges:
+      pin: "port6:0"
+      min_edges: 6
+  # The fifth toggle leaves LED1 an output (PDR) driving low (PODR). An odd
+  # count is what tells a PODR toggle from a PDR one.
+  - memory_value: { address: 0x404000C0, expected_value: 0x00000001, mask: 0x00010001, size: 4 }
+  - expected_stop_reason: max_cycles

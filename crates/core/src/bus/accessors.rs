@@ -99,7 +99,7 @@ impl SystemBus {
         if matches!(r, Ok(true)) && brackets {
             self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-            self.finish_pad_control_write(idx, pad_control_capture);
+            self.finish_pad_control_write(idx, pad_control_capture, off, 1, u32::from(value));
             self.finish_pad_claim_write(pad_claim_capture);
         }
         if matches!(r, Ok(true)) {
@@ -1307,7 +1307,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 2, u32::from(value));
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {
@@ -1507,7 +1507,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 4, value);
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {

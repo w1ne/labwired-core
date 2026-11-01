@@ -17,8 +17,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32l552 | open | L1 | 50 | 904.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
 | cc2538sf53 | open | L1 | 28 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/cc2538sf53.md) |
 | mpfs095t | open | L1 | 14 | — | — | ≥1× (CI) | [doc](docs/boards/mpfs095t.md) |
-| r7fa6m5bh | open | L1 | 43 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa6m5bh.md) |
-| r7fa8m1ah | open | L1 | 40 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |
+| r7fa6m5bh | open | L1 | 48 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa6m5bh.md) |
+| r7fa8m1ah | open | L1 | 44 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/r7fa8m1ah.md) |
 | amap42kp | open | L1 | 46 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/amap42kp.md) |
 | mk64f12 | open | L1 | 25 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/mk64f12.md) |
 | same70q21b | open | L1 | 24 | 892.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/same70q21b.md) |
