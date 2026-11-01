@@ -1184,6 +1184,9 @@ impl ImxrtGpio {
     }
 }
 
+/// `PmnPFS.PSEL` of the GPT GTIOCnA/B pin functions.
+const RA_PSEL_GPT: u32 = 0b00011;
+
 // ── Renesas RA PORT (RA4M1 / R7FA4M1, R01UH0887 §19) ─────────────────────────
 // Port n @ 0x40040000 + n*0x20. 16 pins. FSP IOPORT v1 uses 32-bit PCNTR*:
 //   PCNTR1 @0x00: PDR[15:0] direction, PODR[31:16] output data
@@ -1216,6 +1219,12 @@ pub struct RaPortGpio {
     /// The PFS pull-ups, as the bus last handed them over.
     #[serde(skip)]
     pulls: ConfigPulls,
+    /// Pads `PmnPFS.PMR` hands to a peripheral, and each one's PSEL, as the
+    /// bus last handed them over.
+    #[serde(skip)]
+    pmr: u16,
+    #[serde(skip)]
+    psel: [u8; 16],
 }
 
 impl RaPortGpio {
@@ -1433,6 +1442,27 @@ impl GpioFamily {
         g.pdr = if output { g.pdr | bit } else { g.pdr & !bit };
         g.podr = if high { g.podr | bit } else { g.podr & !bit };
         true
+    }
+
+    /// Take the `PmnPFS` PMR/PSEL peripheral function (RA only, see
+    /// [`crate::pins::PinPort::set_config_function`]). `true` when it changed.
+    fn set_config_function(&mut self, pin: u8, function: Option<u8>) -> bool {
+        let Self::RaPort(g) = self else {
+            return false;
+        };
+        if pin >= 16 {
+            return false;
+        }
+        let bit = 1u16 << pin;
+        let before = (g.pmr & bit != 0).then_some(g.psel[usize::from(pin)]);
+        match function {
+            Some(psel) => {
+                g.pmr |= bit;
+                g.psel[usize::from(pin)] = psel;
+            }
+            None => g.pmr &= !bit,
+        }
+        before != function
     }
 
     /// The pull a pad-control block configures on `pin`, for the families
@@ -1732,7 +1762,9 @@ impl GpioPort {
                 if pin >= 16 {
                     return None;
                 }
-                if (g.pdr & (1u16 << pin)) != 0 {
+                if (g.pmr & (1u16 << pin)) != 0 {
+                    GpioMode::Af
+                } else if (g.pdr & (1u16 << pin)) != 0 {
                     GpioMode::Output
                 } else {
                     GpioMode::Input
@@ -2310,6 +2342,10 @@ impl GpioPort {
             // SAM PORT: PINCFG.PMUXEN hands the pad to the PMUX function
             // (A = 0 .. N = 13); only pads with a bound route ever ask.
             GpioFamily::SamPort(g) => g.pmux_of(pin).map(u32::from),
+            // RA: `PmnPFS.PMR` hands the pad to the peripheral PSEL names.
+            GpioFamily::RaPort(g) => {
+                (pin < 16 && g.pmr & (1 << pin) != 0).then(|| u32::from(g.psel[usize::from(pin)]))
+            }
             _ => None,
         }
     }
@@ -2611,6 +2647,19 @@ impl crate::pins::PinPort for GpioPort {
         }
         taken
     }
+
+    /// RA ports take the `PmnPFS` PMR/PSEL function; the others ignore it.
+    fn set_config_function(&mut self, pin: u8, function: Option<u8>) -> bool {
+        if pin >= self.pin_count() {
+            return false;
+        }
+        let changed = self.family.set_config_function(pin, function);
+        if changed {
+            self.sync_pad_line_taps();
+            self.sync_pin_cells();
+        }
+        changed
+    }
 }
 
 impl GpioPort {
@@ -2869,6 +2918,13 @@ impl crate::Peripheral for GpioPort {
             // SAM TC waveform outputs are PMUX function E (DS60001507F 6.1).
             GpioFamily::SamPort(_) if pin < 32 => {
                 self.pad_routes.bind(cell, pin, Some(4), line, func);
+                true
+            }
+            // RA GPT GTIOCnA/B are PmnPFS PSEL 00011 (Zephyr
+            // `RA_PSEL_GPT1`, the EK-RA8M1/EK-RA6M5 pinctrl's GTIOC pads).
+            GpioFamily::RaPort(_) if pin < 16 => {
+                self.pad_routes
+                    .bind(cell, pin, Some(RA_PSEL_GPT), line, func);
                 true
             }
             _ => false,

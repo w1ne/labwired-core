@@ -21,7 +21,7 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | `MSTPCRB.MSTPB31` release of SCI0 | declared only | `MSTP` is a stub; SCI0 runs with the bit set too |
 | SCI0 async TX at 9600 8N1 (`BRR 25` from 8 MHz) | smoke-tested | every console line, polled on `SSR.TDRE` |
 | `PWPR` unlock + `PmnPFS` write (S1/S2 `PCR` pull-up) | smoke-tested | `s1=1 s2=1`: the pads read high through the PFS pull-up link |
-| `PmnPFS` `PSEL`/`PMR` (P410/P411 → SCI0) | declared only | stored, no routing effect |
+| `PmnPFS` `PSEL`/`PMR` (P410/P411 → SCI0) | declared only | stored, no routing effect for SCI0 (they route P405/P406 to the GPT, below) |
 | PORT0 `PCNTR1` PDR/PODR, `PCNTR3` POSR/PORR, `PCNTR2` PIDR | smoke-tested | `led=blue on pin=1 podr=0040` … (one POSR/PORR store per LED; the whole-PODR read proves no other pin moved) |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
@@ -38,10 +38,13 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.1.0 `samples/sensor/bme280` (BME280 at 0x76 on IIC1; RXI/TXI/TEI/ERI → ELC events 0x078-0x07B → ICU IELSR91-94) | smoke-tested | `zephyr-bme280.yaml` PASS 2/2: the driver's chip-ID check, calibration load and once-a-second RTIO fetches (register burst reads with a restart, register writes) all complete; `temp: 25.0; press: 101.324218; humidity: 50.3906` twice from `bme280-system.yaml`'s defaults, then `temp: 21.500000; press: 98.996093; humidity: 39.995117` twice after the 1.5 s stimulus to 21.5 °C / 990 hPa / 40 %RH; 296,579 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `4a406198ff35036e…` |
 | IIC0-2 (`ra_iic`): RIIC master transmit/receive, 7-bit addresses, `ST`/`RS`/`SP` conditions with `BBSY`/`MST`/`TRS`, `ICDRT` holding register behind the shifter, read turn-around with the dummy `ICDRR` read, stop/restart deferred until the last byte is read, address NACK (`NACKF`/`ACKBR`), `ACKBT` behind `ACKWP`, `IICRST` resets; events on the rising edge of flag & enable; wire time from `ICBRL`/`ICBRH`/`CKS` | sim-tested | the sample above; `crates/core/tests/ra6m5_iic_icu.rs` (the start's TXI vectors through IELSR92; the BME280 chip-ID read 0xD0 → 0x60 step by step on the ICU events; an absent device NACKed through ERI) in both scheduler modes; unit tests `peripherals::ra_iic` |
 | RIIC slave mode (`SARLn`/`SARUn`/`ICSER`), 10-bit addresses, a NACKed data byte, arbitration loss, SCL-low timeout (`TMOF`), SMBus, wake-up (`ICWUR`), `RDRFS`, `WAIT` hold timing, `ICCR1` SCL/SDA overrides and `CLO`, `ICMR1.BC`, DTC transfers | **not modelled** | slave registers stored only; devices ACK every data byte; rise/fall times are not added to the SCL period |
-| DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
+| Stock Zephyr v4.1.0 `tests/drivers/pwm/pwm_api` (pwm1 = GPT1, GTIOC1A on P405 through PmnPFS PMR/PSEL 00011) | smoke-tested | `zephyr-pwm-api.yaml` PASS 5/5: `pwm_basic` 2/2 (`test_pwm_cycle`, `test_pwm_nsec`: 50%, 100%, 0% for a second each), 4,128 edges on P405 (50% of 64,000 PCLKD counts = 64,000/64,000 bus cycles, 3,125 edges; 50% of 2 ms = 200,000/200,000, 1,001 edges; 100% high, 0% low), final `GTPR` 199,999 and `GTUDDTYC.OADTY` 0b10; 131,375 steps, 0.01 s; audit 2,000,000 steps, 0 unsupported |
+| GPT0-9 (`ra_gpt`): saw-wave up-count at PCLKD / 2^`GTCR.TPCS`, `GTSTR`/`GTSTP`/`GTCLR` channel masks gated by `GTSSR`/`GTPSR`/`GTCSR` bit 31, cycle end (`TCFPO`, `GTPBR` → `GTPR`, `GTCCRC` → `GTCCRA`, `GTCCRE` → `GTCCRB` per `GTBER`, `CCRSWT` force), compare A/B (`TCFA`/`TCFB`), events 0x0C0 + 9n (+0 CCMPA, +1 CCMPB, +6 OVF), GTIOCnA/B from `GTIOR` (cycle-end / compare-match levels, initial level for the first period, `OADFLT`/`OAHLD` when stopped, `OAE`) and `GTUDDTYC` 0%/100%, edges at their exact cycle | smoke-tested | the test above; `crates/core/tests/ra6m5_gpt_pwm.rs` (P405 carries GTIOC1A only while P405PFS has PMR = 1 and PSEL = 00011; 30 of 100 counts high per period after an initial-level first period; GPT1 overflow latches IELSR64 once per period) in both scheduler modes; unit tests `peripherals::ra_gpt` |
+| GPT triangle-wave and one-shot modes, down-counting, input capture, hardware start/stop/clear/count sources, compare C-F events and double buffers, dead time, `GTINTAD`/POEG output disable, A/D triggers, `GTWP` write protection, `OADTY` cycle-end timing | **not modelled** | `GTCR.MD` != 0 counts like saw-wave with the pins held; `GTWP` stored only; `OADTY` applies at once |
+| DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
 | SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
 
-## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, button, blinky, adc_api and bme280 2026-11-01)
+## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, button, blinky, adc_api, bme280 and pwm_api 2026-11-01)
 
 ```bash
 # from the repository root
@@ -120,6 +123,15 @@ cargo test -p labwired-core --test ra6m5_adc12_icu   # also --features event-sch
 cargo test -p labwired-core --test ra6m5_iic_icu   # also --features event-scheduler
 #   3 passed
 
+# Stock Zephyr v4.1.0 tests/drivers/pwm/pwm_api (pwm1 = GPT1, GTIOC1A on P405)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-pwm-api.yaml --no-uart-stdout
+#   PASS  5/5 checks · zephyr-pwm-api · 131375 steps
+#   SUITE PASS - 100.00% [pwm_basic]: pass = 2, fail = 0, skip = 0, total = 2
+#   P405: 4128 edges (64000 / 64000 cycles, then 200000 / 200000)
+#   Audit (2,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test ra6m5_gpt_pwm   # also --features event-scheduler
+#   3 passed
+
 # Fixture rebuild: two runs of build.sh, byte-identical
 crates/firmware-ek-ra6m5-zephyr/build.sh
 #   cb8edcdbca022b61c35846d85699e56db400f52fb82c71a14ca2ab6b6ef9cd89  r7fa6m5bh-zephyr-hello.elf
@@ -129,10 +141,12 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 #   f6826f74e095d97eacfc160c57b6574e3e4f4143572e1d2743079a5432ce2627  r7fa6m5bh-zephyr-blinky.elf
 #   9a1ad5b6c16223c3a8f94008721265398046b66143d9b0ea2ba6e785781d5c82  r7fa6m5bh-zephyr-adc-api.elf
 #   4a406198ff35036e14562b8a330703a5eae91d22a3b5eca05e4a3166b0eb8698  r7fa6m5bh-zephyr-bme280.elf
+#   b5eb516d740f66287f67a27de4a31f026c97df4c197acf6bf7bbc9468dcd75ba  r7fa6m5bh-zephyr-pwm-api.elf
 
 # Determinism: two zephyr-hello runs, two zephyr-counter-alarm runs and two
 # zephyr-button runs, two zephyr-blinky runs, two zephyr-adc-api runs,
-# two zephyr-bme280 runs, identical uart.log + snapshot.json
+# two zephyr-bme280 runs, two zephyr-pwm-api runs (and logic edges),
+# identical uart.log + snapshot.json
 
 # Negative controls (each makes test_ek_ra6m5_zephyr_survival fail):
 #   - FCR keeps RFRST/TFRST set on read-back -> r_sci_uart_fifo_cfg spins
@@ -153,6 +167,9 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 # Negative control for zephyr-bme280.yaml: no BME280 on IIC1 -> address
 # NACK, FSP abort, `ID read failed: -5`, `Device "bme280@76" is not ready`
 # (FAIL)
+# Negative control for zephyr-pwm-api.yaml: GPT back to the old `stub`
+# window -> pwm_basic still passes 2/2 (the driver only writes registers),
+# but P405 has 0 edges and GTPR/GTUDDTYC read 0 (3 of 5 checks FAIL)
 # Negative control for zephyr-adc-api.yaml: ADC0/ADC1 back to the old
 # `stub` window -> no scan end, test_adc_asynchronous_call fails
 # (`k_poll failed with error -11`)

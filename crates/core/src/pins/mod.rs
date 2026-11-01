@@ -347,6 +347,15 @@ pub trait PinPort {
         false
     }
 
+    /// Take the peripheral function a [`pad_control`](Self::pad_control)
+    /// block selects for `pin`: `Some(PSEL)` while it hands the pad to a
+    /// peripheral (Renesas RA `PmnPFS.PMR` = 1), `None` while the port owns
+    /// it. Bracketed like [`set_config_pull`](Self::set_config_pull).
+    /// `false`: ignored.
+    fn set_config_function(&mut self, _pin: u8, _function: Option<u8>) -> bool {
+        false
+    }
+
     /// A chip-wide switch outside the port disables every internal pull-up
     /// (AVR `MCUCR.PUD`, owned by the CPU; see
     /// [`crate::Bus::set_pull_ups_disabled`]). The caller brackets for push

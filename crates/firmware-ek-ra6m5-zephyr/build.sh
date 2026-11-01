@@ -34,6 +34,10 @@
 #       driver calls ceil() and the BME280 decoder pow(), which Zephyr's
 #       minimal libc lacks, and the distro newlib has no retargetable locking.
 #       `west update picolibc` in the v4.1.0 workspace fetches it.
+#   tests/fixtures/r7fa6m5bh-zephyr-pwm-api.elf — tests/drivers/pwm/pwm_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-pwm-api.yaml: pwm1 is
+#       GPT1 through the ra_gpt model, its GTIOC1A on P405 checked on
+#       the pad), module list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -120,3 +124,6 @@ build_one "tests/drivers/adc/adc_api" "r7fa6m5bh-zephyr-adc-api.elf" \
 build_one "samples/sensor/bme280" "r7fa6m5bh-zephyr-bme280.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas;$ZEPHYRPROJECT_V41/modules/lib/picolibc" \
   -DCONFIG_PICOLIBC_USE_MODULE=y "-DEXTRA_DTC_OVERLAY_FILE=$HERE/bme280-iic1.overlay"
+# tests/drivers/pwm/pwm_api (pwm1 = GPT1, GTIOC1A on P405), same v4.1.0 tree.
+build_one "tests/drivers/pwm/pwm_api" "r7fa6m5bh-zephyr-pwm-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
