@@ -26,6 +26,35 @@
 #       (renesas_ra_external_interrupt). Built UNMODIFIED from v4.1.0 (commit
 #       7823374e8721; hal_renesas 3204903bdc5e, cmsis d1b8b20b6278) with the
 #       module list pinned.
+#   tests/fixtures/r7fa6m5bh-zephyr-blinky.elf — samples/basic/blinky from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-blinky.yaml: LED1 made an
+#       output through PmnPFS.PDR and toggled through PCNTR1.PODR), module
+#       list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-adc-api.elf — tests/drivers/adc/adc_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-adc-api.yaml: ADC1
+#       channels 0 and 2 through the ra_adc12 model, scan end linked by
+#       IELSR39), module list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-bme280.elf — samples/sensor/bme280 from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-bme280.yaml: a BME280 on
+#       IIC1 through the ra_iic model, RXI/TXI/TEI/ERI linked by
+#       IELSR91-94). Two build inputs beyond the module pin: bme280-iic1.overlay
+#       (next to this script) puts the BME280 at 0x76 on &iic1 (the sample's
+#       own overlays need an `arduino_i2c` label ek_ra6m5 lacks), and the
+#       picolibc module (82d62ed1ac55, CONFIG_PICOLIBC_USE_MODULE): the RA IIC
+#       driver calls ceil() and the BME280 decoder pow(), which Zephyr's
+#       minimal libc lacks, and the distro newlib has no retargetable locking.
+#       `west update picolibc` in the v4.1.0 workspace fetches it.
+#   tests/fixtures/r7fa6m5bh-zephyr-pwm-api.elf — tests/drivers/pwm/pwm_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-pwm-api.yaml: pwm1 is
+#       GPT1 through the ra_gpt model, its GTIOC1A on P405 checked on
+#       the pad), module list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-dac-api.elf — tests/drivers/dac/dac_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-dac-api.yaml: DAC0
+#       through the ra_dac12 model), module list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-dac-loopback.elf —
+#       tests/drivers/dac/dac_loopback from Zephyr v4.1.0, no overlay (the
+#       test reads ADC0 channel 0; examples/ek-ra6m5/zephyr-dac-loopback.yaml
+#       jumpers DA0 to AN000), module list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -111,4 +140,27 @@ build_one "samples/drivers/counter/alarm" "r7fa6m5bh-zephyr-counter-alarm.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
 # samples/basic/button (IRQ10 on P005 through the ICU), same v4.1.0 tree.
 build_one "samples/basic/button" "r7fa6m5bh-zephyr-button.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/basic/blinky (LED1 P006: output via PmnPFS.PDR, toggled through
+# PCNTR1.PODR), same v4.1.0 tree.
+build_one "samples/basic/blinky" "r7fa6m5bh-zephyr-blinky.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/adc/adc_api (ADC1 channels 0 and 2 per the in-tree
+# boards/ek_ra6m5.overlay; scan end ADC1_SCAN_END 0x166 through IELSR39),
+# same v4.1.0 tree.
+build_one "tests/drivers/adc/adc_api" "r7fa6m5bh-zephyr-adc-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/sensor/bme280 (BME280 at 0x76 on IIC1, see the header), same
+# v4.1.0 tree plus picolibc.
+build_one "samples/sensor/bme280" "r7fa6m5bh-zephyr-bme280.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas;$ZEPHYRPROJECT_V41/modules/lib/picolibc" \
+  -DCONFIG_PICOLIBC_USE_MODULE=y "-DEXTRA_DTC_OVERLAY_FILE=$HERE/bme280-iic1.overlay"
+# tests/drivers/pwm/pwm_api (pwm1 = GPT1, GTIOC1A on P405), same v4.1.0 tree.
+build_one "tests/drivers/pwm/pwm_api" "r7fa6m5bh-zephyr-pwm-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/dac/dac_api and dac_loopback (DAC0; the loopback reads ADC0
+# channel 0), same v4.1.0 tree.
+build_one "tests/drivers/dac/dac_api" "r7fa6m5bh-zephyr-dac-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+build_one "tests/drivers/dac/dac_loopback" "r7fa6m5bh-zephyr-dac-loopback.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"

@@ -99,7 +99,7 @@ impl SystemBus {
         if matches!(r, Ok(true)) && brackets {
             self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-            self.finish_pad_control_write(idx, pad_control_capture);
+            self.finish_pad_control_write(idx, pad_control_capture, off, 1, u32::from(value));
             self.finish_pad_claim_write(pad_claim_capture);
         }
         if matches!(r, Ok(true)) {
@@ -468,6 +468,9 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
+        self.rp2350_dcp.as_deref_mut()
+    }
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
         // Watched like every other width: a 64-bit load is a CPU access on
         // cores that have one (Cortex-A7 `w=8`), so the latch is uniform.
@@ -1309,7 +1312,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 2, u32::from(value));
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {
@@ -1509,7 +1512,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 4, value);
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {

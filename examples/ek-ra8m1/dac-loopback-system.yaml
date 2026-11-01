@@ -1,0 +1,18 @@
+# LabWired - EK-RA8M1 with DA0 jumpered to AN000, for the stock Zephyr v4.1.0
+# tests/drivers/dac/dac_loopback run (zephyr-dac-loopback.yaml). The test's
+# README asks for the DAC output to be wired to the ADC input it reads: DAC0
+# channel 0 (DA0, P014) and ADC0 channel 0 (AN000, P004, the board's
+# adc0_default pad). The jumper is `analog_links` on adc0: a conversion of
+# AN000 reads the level DA0 drives at that moment.
+name: "ek-ra8m1-dac-loopback"
+chip: "../../configs/chips/r7fa8m1ah.yaml"
+cpu_hz: 8_000_000
+peripherals:
+  - id: "adc0"
+    type: "ra_adc12"
+    base_address: 0x40332000
+    config:
+      analog_links:
+        0: "dac:0"
+external_devices: []
+board_io: []
