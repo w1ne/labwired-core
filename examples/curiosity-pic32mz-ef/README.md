@@ -23,7 +23,7 @@ COM port, interrupt driven in both directions) and Timer1 (`pic32_timer`).
 ```sh
 cargo run -q -p labwired-cli -- test --script examples/curiosity-pic32mz-ef/nuttx-nsh.yaml
 examples/curiosity-pic32mz-ef/ci/test.sh
-# ~9 minutes: ostest spins the CPU by design.
+# ~10 minutes: ostest spins the CPU by design.
 cargo run -q -p labwired-cli -- test --script examples/curiosity-pic32mz-ef/nuttx-ostest.yaml
 ```
 

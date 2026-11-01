@@ -74,7 +74,7 @@ fn nsh_runs_typed_commands() {
 }
 
 #[test]
-#[ignore = "about 18 G guest instructions (~9 minutes): ostest spins the CPU by design"]
+#[ignore = "about 10 minutes: ostest spins the CPU by design (hog_cpu to INT_MAX)"]
 fn ostest_passes_every_group() {
     // The full stock ostest as the init task: signals, POSIX timers, message
     // queues, mutexes/semaphores/condition variables, cancellation,

@@ -10,10 +10,10 @@
 # POSIX timers, spinlocks, watchdogs, round-robin scheduling, barriers,
 # priority inheritance and the scheduler lock.
 #
-# MANUAL, not in CI: the run is ~25 G guest instructions. ostest's priority
-# inheritance and round-robin tests spin the CPU by design (`hog_cpu()`
-# counts a volatile int to INT_MAX), which costs about two minutes on the
-# 200 MHz silicon and about nine on this interpreter.
+# MANUAL, not in CI: about 10 minutes of wall time here (measured
+# 2026-11-01). ostest's priority inheritance and round-robin tests spin the
+# CPU by design (`hog_cpu()` counts a volatile int to INT_MAX), so most of
+# the run is billions of real instructions, not idle time.
 schema_version: "1.2"
 inputs:
   firmware: "../../tests/fixtures/curiosity-pic32mz-ef-nuttx-ostest.elf"
