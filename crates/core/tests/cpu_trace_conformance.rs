@@ -21,7 +21,7 @@
 //! from the source tree rather than trusting the list below.
 
 use labwired_core::cpu::{
-    Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
+    Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
 };
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
@@ -245,6 +245,23 @@ fn cores() -> Vec<CoreUnderTest> {
             sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = RiscV64::default();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Aarch64",
+            entry: 0x100,
+            // `add x1, x1, #1` ×4 (A64, 4 bytes each). The PE runs at EL3 with
+            // the MMU off, so the flat bus is its physical memory.
+            program: std::iter::repeat_n(0x91000421u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Aarch64::default();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },

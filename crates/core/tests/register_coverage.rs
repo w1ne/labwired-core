@@ -330,6 +330,7 @@ fn measure_chip(name: &str, yaml: &str, svd: &str) -> (usize, usize, usize, usiz
         | Arch::Pic16
         | Arch::Rx
         | Arch::Mips
+        | Arch::Aarch64
         | Arch::Unknown) => {
             panic!(
                 "{name}: arch {arch:?} has no register probe path, so its coverage would \

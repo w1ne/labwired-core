@@ -1,3 +1,4 @@
+pub mod aarch64;
 pub mod arch_policy;
 pub mod builder;
 #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]

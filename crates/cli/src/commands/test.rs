@@ -2075,6 +2075,7 @@ pub(crate) fn run_test(
                 && (program.arch == labwired_core::Arch::Arm
                     || program.arch == labwired_core::Arch::Rx
                     || program.arch == labwired_core::Arch::Mips
+                    || program.arch == labwired_core::Arch::Aarch64
                     || rv64_chip)
                 && std::env::var("LABWIRED_HOSTED_FAST").as_deref() != Ok("0");
             if !jit_eligible && !hosted_fast {
@@ -2819,6 +2820,23 @@ pub(crate) fn run_test(
             // PIC32MZ: physical bus (RAM, program and boot flash, SFRs); the
             // EVIC is part of the core.
             setup_and_run!(labwired_core::cpu::Mips32::new())
+        }
+        labwired_core::Arch::Aarch64 => {
+            // The PE's GICv3 and generic timer are part of the core; its
+            // per-chip parameters (MPIDR, GIC bases, counter rate) come from
+            // the chip name. Entry is the ELF entry, at EL3.
+            let chip = resolved_system.as_ref().and_then(|s| {
+                s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                    .ok()
+            });
+            let cpu = match &chip {
+                Some(c) => labwired_core::cpu::Aarch64::for_chip(c),
+                None => {
+                    warn!("AArch64: could not resolve the chip; running without a GIC");
+                    labwired_core::cpu::Aarch64::default()
+                }
+            };
+            setup_and_run!(cpu)
         }
         labwired_core::Arch::Pic16 => {
             // PIC16 is Harvard as well: word-addressed program memory sized

@@ -63,6 +63,8 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     let pic16_fw = common::committed("examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf");
     let pic16e_fw =
         common::committed("examples/pic16f1829/firmware/pic16f1829-sdcc-uart-smoke.elf");
+    // AArch64: stock Zephyr v4.3.0 hello_world for sk_am62 (see examples/sk-am62).
+    let aarch64_fw = common::committed("tests/fixtures/sk-am62-zephyr-hello.elf");
     // RX: stock Zephyr v4.3.0 hello_world for ek_rx261 (see examples/ek-rx261).
     let rx_fw = common::committed("tests/fixtures/ek-rx261-zephyr-hello.elf");
     // MIPS: stock upstream NuttX nsh for the Curiosity PIC32MZ EF 2.0 (see
@@ -101,6 +103,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
             // at word 0x8007, not 0x2007).
             labwired_config::Arch::Pic16 if name == "pic16f1829" => &pic16e_fw,
             labwired_config::Arch::Pic16 => &pic16_fw,
+            labwired_config::Arch::Aarch64 => &aarch64_fw,
             labwired_config::Arch::Rx => &rx_fw,
             labwired_config::Arch::Mips => &mips_fw,
             labwired_config::Arch::Xtensa => {

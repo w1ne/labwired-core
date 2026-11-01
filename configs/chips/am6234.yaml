@@ -1,0 +1,101 @@
+# LabWired - TI Sitara AM6234 (AM62x, 4x Arm Cortex-A53) chip configuration
+#
+# The SoC on the TI SK-AM62B-P1 starter kit, a current-production TI kit
+# (TI store, DigiKey, Mouser). AM6234 = quad Cortex-A53 at up to 1.4 GHz plus
+# a Cortex-M4F and the device-management R5F.
+#
+# Sources:
+# - TI AM62x Technical Reference Manual (SPRUIV7), memory map: GIC-600
+#   distributor 0x0180_0000 / redistributors 0x0188_0000, MAIN_UART0-6 at
+#   0x0280_0000 + n * 0x1_0000, MAIN PADCFG at 0x000F_4000, OC SRAM
+#   0x7000_0000 (64 KB), DDR from 0x8000_0000.
+# - Zephyr v4.3.0 `dts/arm64/ti/ti_am62x_a53.dtsi`, `dts/vendor/ti/
+#   k3-am62-main.dtsi` and board `sk_am62/am6234/a53`: UARTs are `ns16550`
+#   with `reg-shift = <2>` (4-byte stride, TI K3 16550-compatible UART) and a
+#   48 MHz functional clock; MAIN_UART0 is GIC SPI 178; the A53 generic
+#   timer counts at 200 MHz.
+#
+# Modelled: A53 core 0 as an AArch64 (Armv8.0-A) PE with its GICv3
+# distributor/redistributor/CPU interface and generic timer inside the core
+# (crates/core/src/cpu/aarch64.rs); MAIN_UART0-6 as 16550s (polled TX);
+# OC SRAM and a DDR window as RAM.
+# Declared, not modelled (`type: stub`): MAIN pad configuration (pinctrl
+# writes are accepted), the mailbox. Not modelled: A53 cores 1-3, the M4F
+# and R5F, DMSC/TIFS and the boot flow (an ELF is loaded straight into DDR,
+# as U-Boot would place it), caches and the MMU-500.
+name: "am6234"
+arch: "aarch64"
+core: "cortex-a53"
+# A53 clock on the AM6234 speed grade the SK-AM62B-P1 fits. The 200 MHz
+# system counter ticks every 7 CPU clocks (Aarch64Params::for_chip_name).
+cpu_hz: 1_400_000_000
+
+# No internal flash: images run from DDR.
+flash: { base: 0, size: 0 }
+# DDR window. Zephyr's sk_am62 A53 image links at 0x8200_0000 (1 MB `ddr0`);
+# the kit has 2 GB of LPDDR4, the engine maps only the window firmware uses.
+ram: { base: 0x80000000, size: "64MiB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "oc_sram", base: 0x70000000, size: "64KiB" }
+# IRQs are GIC INTIDs (32 + SPI).
+peripherals:
+  - id: "main_uart0"
+    type: "uart"
+    base_address: 0x02800000
+    size: "256B"
+    irq: 210
+    config:
+      profile: "dw_apb_uart"
+  - id: "main_uart1"
+    type: "uart"
+    base_address: 0x02810000
+    size: "256B"
+    irq: 211
+    config:
+      profile: "dw_apb_uart"
+  - id: "main_uart2"
+    type: "uart"
+    base_address: 0x02820000
+    size: "256B"
+    irq: 212
+    config:
+      profile: "dw_apb_uart"
+  - id: "main_uart3"
+    type: "uart"
+    base_address: 0x02830000
+    size: "256B"
+    irq: 213
+    config:
+      profile: "dw_apb_uart"
+  - id: "main_uart4"
+    type: "uart"
+    base_address: 0x02840000
+    size: "256B"
+    irq: 214
+    config:
+      profile: "dw_apb_uart"
+  - id: "main_uart5"
+    type: "uart"
+    base_address: 0x02850000
+    size: "256B"
+    irq: 215
+    config:
+      profile: "dw_apb_uart"
+  - id: "main_uart6"
+    type: "uart"
+    base_address: 0x02860000
+    size: "256B"
+    irq: 216
+    config:
+      profile: "dw_apb_uart"
+  # MAIN PADCFG (PADCONFIG0..). Zephyr's ti,k3-pinctrl writes the UART0
+  # pad muxes here.
+  - id: "main_padcfg"
+    type: "stub"
+    base_address: 0x000F4000
+    size: "4KB"
+  - id: "mailbox0"
+    type: "stub"
+    base_address: 0x29000000
+    size: "512B"

@@ -135,6 +135,7 @@ fn chip_with_arch(arch: Arch) -> ChipDescriptor {
             Arch::Pic24 => "pic24",
             Arch::Pic18 => "pic18",
             Arch::Pic16 => "pic16",
+            Arch::Aarch64 => "aarch64",
             Arch::Rx => "rx",
             Arch::Mips => "mips",
             Arch::Unknown => "unknown",
@@ -164,6 +165,7 @@ fn each_declared_architecture_reaches_its_own_family() {
         (Arch::Pic24, MachineFamily::Pic24),
         (Arch::Pic18, MachineFamily::Pic18),
         (Arch::Pic16, MachineFamily::Pic16),
+        (Arch::Aarch64, MachineFamily::Aarch64),
         (Arch::Rx, MachineFamily::Rx),
         (Arch::Mips, MachineFamily::Mips),
     ] {
@@ -213,6 +215,8 @@ fn the_elf_machine_table_is_the_only_one() {
     assert_eq!(elf_arch(118), Some(crate::Arch::Pic24));
     // 204 is EM_MCHP_PIC, the registered Microchip 8-bit PIC machine value.
     assert_eq!(elf_arch(204), Some(crate::Arch::Pic18));
+    // 183 is EM_AARCH64.
+    assert_eq!(elf_arch(183), Some(crate::Arch::Aarch64));
     // 173 is EM_RX, Renesas RX.
     assert_eq!(elf_arch(173), Some(crate::Arch::Rx));
     // 8 is EM_MIPS.

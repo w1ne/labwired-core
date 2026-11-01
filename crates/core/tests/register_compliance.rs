@@ -143,6 +143,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Aarch64 => {
+            // No SVD-backed register list for the AArch64 parts yet.
+            println!(
+                "Skipping AArch64 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }

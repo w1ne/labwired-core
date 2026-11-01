@@ -159,6 +159,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_mpfs_disco_kit_zephyr_survival"),
     },
     ChipConf {
+        // TI AM6234 (SK-AM62), first AArch64 part: one Cortex-A53 with its
+        // GICv3 and generic timer in the core. SIM-DERIVED: no AM62x bench
+        // part. Modelled: MAIN_UART0-6 (16550, polled). Pad config and the
+        // mailbox are declared stubs — see examples/sk-am62/VALIDATION.md.
+        name: "am6234",
+        yaml: "configs/chips/am6234.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_sk_am62_zephyr_survival"),
+    },
+    ChipConf {
         // Renesas R5F52618BGFP (RX261, EK-RX261), first RX part: the RXv3
         // core with the ICU in the core. SIM-DERIVED: no RX261 bench part.
         // Modelled: SCI6 (classic SCI, polled), CMT0-3, the SYSTEM clock
