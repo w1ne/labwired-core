@@ -639,6 +639,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
         "cc2538sf53",
+        // First RV64 part (PolarFire SoC Discovery Kit, MPFS095T U54 hart):
+        // chip + system + example with stock Zephyr hello/sync/kernel-common,
+        // committed fixtures and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "mpfs095t",
         // First RA6M5 part (EK-RA6M5): chip + system + example with an
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.

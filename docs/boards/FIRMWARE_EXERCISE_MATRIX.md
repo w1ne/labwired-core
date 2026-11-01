@@ -715,6 +715,10 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBE
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, the countdown-timer one-shot and the Control-and-Status LED/switch/button CSR are proven by tests/fixtures/arty-litex-smoke.elf and examples/arty-litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs (examples/arty-litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
 
+### `mpfs095t`
+
+_L1 + stock RTOS, SIM-DERIVED. First RV64 part: one PolarFire SoC U54 hart (RV64IMAC M-mode, CLINT in the core) runs unmodified Zephyr v4.1.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63) from the DDR window on the MMUART1 16550 console (examples/mpfs-disco-kit). PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox are declared stubs, so no advanced blocks exist to list._
+
 ### `vegaboard-ri5cy`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LPUART0 console are proven by tests/fixtures/vegaboard-ri5cy-smoke.elf and examples/vegaboard-ri5cy/io-smoke.yaml. The SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs (examples/vegaboard-ri5cy/VALIDATION.md), so no advanced blocks exist to list._

@@ -1713,7 +1713,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: d0357510eac823452a6a0f29771946680ddfc05c8e0d483cc2595d196fa4340c
+    drift_ack_digest: 06a166da8f486c50e924523bffa720ce389c4bbf07074a19f5cf3ade2686be87
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2307,6 +2307,10 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -3786,7 +3790,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: cc2c7cb381b928bb9abee5acea89c8f599269978b0c27a84ca0c59cd74fa528d
+    drift_ack_digest: 20bec2d12c52a5da53536d402230fa31bb7979fb8c36910a1d28d3b225b2276f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4368,6 +4372,10 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -4810,7 +4818,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 8d3e4687d3cdaf57a6c83b3933d80889eaf71be02c4ad38f9124821122e843da
+    drift_ack_digest: f18bf547def3a97f237b5423ad1a68626479f27a2fa0800476241451db17eb82
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5325,6 +5333,10 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -5825,7 +5837,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 59cf915c79740de5c75c8a957ade69448e8e897cc29db99a897f8f491156bfca
+    drift_ack_digest: d8211daead99d49cc4b8b369a0477d8aac0ca94971c64ded130b5d30a4757a2e
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6410,6 +6422,10 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -6873,7 +6889,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3247dc4ce9939bfd3173507eed53669da11550ff1c1c2c3ebbf8aabda1d67e4d
+    drift_ack_digest: 4c6e16b6b9cb49deaef0db5455a57150ce08bb37b4db4328dddc7671660f7e8d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7390,6 +7406,10 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
+    # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
+    # layouts. STM32 UART register maps, byte paths and IRQ timing are
+    # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -10232,3 +10252,36 @@ boards:
       - crates/firmware-vegaboard-ri5cy-smoke
       - configs/chips/vegaboard-ri5cy.yaml
       - configs/systems/vegaboard-ri5cy.yaml
+
+  - id: mpfs095t
+    # 2026-11-01: Microchip PolarFire SoC Discovery Kit (MPFS095T). First RV64
+    # part and LabWired's first 64-bit RISC-V core (crates/core/src/cpu/
+    # riscv64.rs): one U54 hart (mhartid 1) as RV64IMAC + Zicsr/Zifencei in
+    # M-mode, with the CLINT (msip, mtimecmp, mtime at 1 MHz) inside the core,
+    # and the five MMUARTs as 16550s (4-byte stride, LCR.DLAB divisor
+    # latches). Unmodified Zephyr v4.1.0 hello_world, synchronization and
+    # tests/kernel/common (12 suites, 63/63) for mpfs_icicle/polarfire/u54 (the
+    # same MSS) boot from the DDR window at 0x8000_0000. F/D, S/U modes, Sv39,
+    # the PLIC and the other harts are not modelled; PLIC, MSS GPIO/I2C/SPI/QSPI
+    # and the system-controller mailbox are declared stubs. SIM-DERIVED — no
+    # MPFS bench part. See docs/boards/mpfs-disco-kit.md and
+    # examples/mpfs-disco-kit/VALIDATION.md.
+    doc: docs/boards/mpfs-disco-kit.md
+    chip: configs/chips/mpfs095t.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_mpfs_disco_kit_zephyr_survival"
+      - "riscv64_tests (15 tests: RV64I/M/A/C, traps, CLINT + MTI, WFI fast-forward, CSR surface, snapshot)"
+      - "uart16550_dlab_routes_divisor_writes_to_the_latches"
+    models:
+      - crates/core/src/cpu/riscv64.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/riscv.rs
+      - crates/core/src/system/node.rs
+      - crates/firmware-mpfs-zephyr
+      - configs/chips/mpfs095t.yaml
+      - configs/systems/mpfs-disco-kit.yaml
