@@ -5068,6 +5068,400 @@
           "default": 0.25
         }
       ]
+    },
+    {
+      "device_type": "mcp23017",
+      "label": "MCP23017 I/O Expander",
+      "summary": "Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map).",
+      "detail": "Microchip MCP23017 at 0x20 (A2/A1/A0 select 0x20-0x27), in its power-on IOCON.BANK = 0 layout: IODIRA/B at 0x00/0x01 (power-on 0xFF, all inputs) through GPIOA/B at 0x12/0x13 and OLATA/B at 0x14/0x15, with the address pointer incrementing and rolling over 0x15 to 0x00. A write to GPIO or OLAT sets the output latch, and every pin whose IODIR bit is 0 drives its latch bit onto its pad; GPIO reads back the latch on outputs and the posed input level (IPOL-inverted) on inputs. The sixteen pads bind through the optional gpa0_pin..gpb7_pin keys. NOT modelled: external pad levels reaching GPIO (inputs read the port_a / port_b stimulus), pull-ups, interrupt-on-change (INTF/INTCAP stay 0, INTA/INTB never assert), IOCON.BANK = 1 re-mapping and SEQOP byte mode, and releasing a pad when a pin is turned back into an input.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27."
+        },
+        {
+          "name": "port_a",
+          "ty": "float",
+          "doc": "Level (0-255) posed on the port A pins, seen by GPIOA reads on pins configured as inputs. Default 0. Drive it at runtime with the `port_a` input channel."
+        },
+        {
+          "name": "port_b",
+          "ty": "float",
+          "doc": "Level (0-255) posed on the port B pins, seen by GPIOB reads on input pins. Default 0."
+        },
+        {
+          "name": "gpa0_pin",
+          "ty": "str",
+          "doc": "Pad GPA0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "gpa1_pin",
+          "ty": "str",
+          "doc": "Pad GPA1 drives. Optional."
+        },
+        {
+          "name": "gpa2_pin",
+          "ty": "str",
+          "doc": "Pad GPA2 drives. Optional."
+        },
+        {
+          "name": "gpa3_pin",
+          "ty": "str",
+          "doc": "Pad GPA3 drives. Optional."
+        },
+        {
+          "name": "gpa4_pin",
+          "ty": "str",
+          "doc": "Pad GPA4 drives. Optional."
+        },
+        {
+          "name": "gpa5_pin",
+          "ty": "str",
+          "doc": "Pad GPA5 drives. Optional."
+        },
+        {
+          "name": "gpa6_pin",
+          "ty": "str",
+          "doc": "Pad GPA6 drives. Optional."
+        },
+        {
+          "name": "gpa7_pin",
+          "ty": "str",
+          "doc": "Pad GPA7 drives. Optional (output-only on the MCP23017)."
+        },
+        {
+          "name": "gpb0_pin",
+          "ty": "str",
+          "doc": "Pad GPB0 drives. Optional."
+        },
+        {
+          "name": "gpb1_pin",
+          "ty": "str",
+          "doc": "Pad GPB1 drives. Optional."
+        },
+        {
+          "name": "gpb2_pin",
+          "ty": "str",
+          "doc": "Pad GPB2 drives. Optional."
+        },
+        {
+          "name": "gpb3_pin",
+          "ty": "str",
+          "doc": "Pad GPB3 drives. Optional."
+        },
+        {
+          "name": "gpb4_pin",
+          "ty": "str",
+          "doc": "Pad GPB4 drives. Optional."
+        },
+        {
+          "name": "gpb5_pin",
+          "ty": "str",
+          "doc": "Pad GPB5 drives. Optional."
+        },
+        {
+          "name": "gpb6_pin",
+          "ty": "str",
+          "doc": "Pad GPB6 drives. Optional."
+        },
+        {
+          "name": "gpb7_pin",
+          "ty": "str",
+          "doc": "Pad GPB7 drives. Optional (output-only on the MCP23017)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "port_a",
+          "label": "Port A input level",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        },
+        {
+          "key": "port_b",
+          "label": "Port B input level",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "pcf8575",
+      "label": "PCF8575 I/O Expander",
+      "summary": "16-bit I²C quasi-bidirectional port expander (PCF8575).",
+      "detail": "PCF8575 at 0x20 (A2/A1/A0 select 0x20-0x27). There is no register pointer: data moves in pairs of bytes, the first for port 0 (P07-P00) and the second for port 1 (P17-P10), and the 16-bit word reaches the pins after the second byte of each pair. A read returns port 0 then port 1, alternating for as long as the master clocks. The port powers up at 0xFFFF, every pin released high. Writing a bit low drives that pad hard low; writing it high releases it, which is also how a pin is used as an input. The sixteen pads bind through the optional p00_pin..p17_pin config keys. NOT modelled: the input direction (an external level on a pad does not reach the readable port), the open-drain INT output, and electrical limits; a read returns the last pair written or the value driven through the `port` stimulus channel.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27."
+        },
+        {
+          "name": "port",
+          "ty": "float",
+          "doc": "Initial 16-bit port (0-65535; P07-P00 in the low byte). Default 65535, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+        },
+        {
+          "name": "p00_pin",
+          "ty": "str",
+          "doc": "Pad P00 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "p01_pin",
+          "ty": "str",
+          "doc": "Pad P01 drives. Optional."
+        },
+        {
+          "name": "p02_pin",
+          "ty": "str",
+          "doc": "Pad P02 drives. Optional."
+        },
+        {
+          "name": "p03_pin",
+          "ty": "str",
+          "doc": "Pad P03 drives. Optional."
+        },
+        {
+          "name": "p04_pin",
+          "ty": "str",
+          "doc": "Pad P04 drives. Optional."
+        },
+        {
+          "name": "p05_pin",
+          "ty": "str",
+          "doc": "Pad P05 drives. Optional."
+        },
+        {
+          "name": "p06_pin",
+          "ty": "str",
+          "doc": "Pad P06 drives. Optional."
+        },
+        {
+          "name": "p07_pin",
+          "ty": "str",
+          "doc": "Pad P07 drives. Optional."
+        },
+        {
+          "name": "p10_pin",
+          "ty": "str",
+          "doc": "Pad P10 drives. Optional."
+        },
+        {
+          "name": "p11_pin",
+          "ty": "str",
+          "doc": "Pad P11 drives. Optional."
+        },
+        {
+          "name": "p12_pin",
+          "ty": "str",
+          "doc": "Pad P12 drives. Optional."
+        },
+        {
+          "name": "p13_pin",
+          "ty": "str",
+          "doc": "Pad P13 drives. Optional."
+        },
+        {
+          "name": "p14_pin",
+          "ty": "str",
+          "doc": "Pad P14 drives. Optional."
+        },
+        {
+          "name": "p15_pin",
+          "ty": "str",
+          "doc": "Pad P15 drives. Optional."
+        },
+        {
+          "name": "p16_pin",
+          "ty": "str",
+          "doc": "Pad P16 drives. Optional."
+        },
+        {
+          "name": "p17_pin",
+          "ty": "str",
+          "doc": "Pad P17 drives. Optional."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "port",
+          "label": "Port",
+          "unit": "word",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 65535.0
+        }
+      ]
+    },
+    {
+      "device_type": "ads1015",
+      "label": "ADS1015 12-bit ADC",
+      "summary": "4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115.",
+      "detail": "Texas Instruments ADS1015 (default address 0x48; ADDR to VDD/SDA/SCL gives 0x49/0x4A/0x4B). Same register map and pointer protocol as the ADS1115, but CONVERSION holds a 12-bit two's-complement result left-justified in bits 15:4 (the low nibble always reads 0) and clips at 0x7FF0 / 0x8000. CONVERSION follows the live CONFIG MUX bits, including the four differential pairs, at the full scale the PGA bits select (±6.144 V down to ±0.256 V). NOT modelled: conversion time and the OS busy bit (a result is always ready), the comparator / ALERT-RDY pin, and the general-call reset; DR and MODE are stored only.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADDR to GND); 0x49 VDD, 0x4A SDA, 0x4B SCL."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "a0",
+          "label": "A0",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        },
+        {
+          "key": "a1",
+          "label": "A1",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        },
+        {
+          "key": "a2",
+          "label": "A2",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        },
+        {
+          "key": "a3",
+          "label": "A3",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "uln2803",
+      "label": "ULN2803A Darlington Sink Driver",
+      "summary": "Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay.",
+      "detail": "ULN2803A / ULN2803C eight-channel Darlington array. A logic-high input turns its Darlington on and pulls the matching output LOW (sinking the load); a logic-low input turns it off. Each OUTn reads !INn after 200 ns (the datasheet tOFF; tON is 100 ns). There is no enable and no shared state between channels. NOT modelled: the open collector itself - an OFF output is driven HIGH here, standing in for the load or pull-up that brings it high on a board - plus output current limits, saturation voltage, the COM flyback diodes and input thresholds.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "in1_pin",
+          "ty": "str",
+          "doc": "Input 1 (1B / I1, pin 1) - an MCU output (e.g. \"PA0\")."
+        },
+        {
+          "name": "out1_pin",
+          "ty": "str",
+          "doc": "Output 1 (1C / O1) - LOW while IN1 is high."
+        },
+        {
+          "name": "in2_pin",
+          "ty": "str",
+          "doc": "Input 2 (2B / I2)."
+        },
+        {
+          "name": "out2_pin",
+          "ty": "str",
+          "doc": "Output 2 (2C / O2)."
+        },
+        {
+          "name": "in3_pin",
+          "ty": "str",
+          "doc": "Input 3 (3B / I3)."
+        },
+        {
+          "name": "out3_pin",
+          "ty": "str",
+          "doc": "Output 3 (3C / O3)."
+        },
+        {
+          "name": "in4_pin",
+          "ty": "str",
+          "doc": "Input 4 (4B / I4)."
+        },
+        {
+          "name": "out4_pin",
+          "ty": "str",
+          "doc": "Output 4 (4C / O4)."
+        },
+        {
+          "name": "in5_pin",
+          "ty": "str",
+          "doc": "Input 5 (5B / I5)."
+        },
+        {
+          "name": "out5_pin",
+          "ty": "str",
+          "doc": "Output 5 (5C / O5)."
+        },
+        {
+          "name": "in6_pin",
+          "ty": "str",
+          "doc": "Input 6 (6B / I6)."
+        },
+        {
+          "name": "out6_pin",
+          "ty": "str",
+          "doc": "Output 6 (6C / O6)."
+        },
+        {
+          "name": "in7_pin",
+          "ty": "str",
+          "doc": "Input 7 (7B / I7)."
+        },
+        {
+          "name": "out7_pin",
+          "ty": "str",
+          "doc": "Output 7 (7C / O7)."
+        },
+        {
+          "name": "in8_pin",
+          "ty": "str",
+          "doc": "Input 8 (8B / I8)."
+        },
+        {
+          "name": "out8_pin",
+          "ty": "str",
+          "doc": "Output 8 (8C / O8)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "rfm95",
+      "label": "RFM95W LoRa module",
+      "summary": "HopeRF RFM95W (Semtech SX1276) SPI LoRa register shell (no RF).",
+      "detail": "HopeRF RFM95W, an SX1276 LoRa transceiver module, as an SPI register shell. Address byte bit 7 = 1 writes, 0 reads; bits 6:0 are the address. RegVersion (0x42) reads 0x12 and cannot be written; every other address is one byte of storage seeded with the SX1276 power-on value (RegOpMode 0x01, RegFrf 434 MHz, RegPaConfig 0x4F ...). NOT modelled: the RF air link, the packet engine and FIFO, DIO interrupt pins, FSK/LoRa register banking, mode sequencing and burst auto-increment.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI NSS GPIO pin. Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     }
   ]
 }
