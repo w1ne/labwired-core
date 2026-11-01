@@ -1,0 +1,5 @@
+# NuttX build outputs written by build.sh -- never commit these.
+*.o
+*.a
+.depend
+Make.dep
