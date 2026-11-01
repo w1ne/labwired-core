@@ -431,6 +431,12 @@ WAIVED: dict[str, str] = {
         "memory map (flash 0x20000000, RAM 0x10000000), and no throughput claim is "
         "made for this board (docs/boards/arty-litex-vexriscv.md)."
     ),
+    "r5f52618bgfp": (
+        "First Renesas RX part (EK-RX261, RXv3). This gate's perf-spin "
+        "fixtures are ARM/RISC-V images and no RX spin is built; the Zephyr "
+        "fixtures are not representative perf-spin workloads. No throughput "
+        "claim is made for this part (docs/boards/ek-rx261.md)."
+    ),
     "mpfs095t": (
         "First RV64 part (PolarFire SoC U54 hart, RV64IMAC). This gate's RISC-V "
         "perf-spin fixture is an RV32 image and no RV64 spin is built; the "

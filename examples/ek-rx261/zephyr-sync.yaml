@@ -1,0 +1,27 @@
+# LabWired - EK-RX261 stock Zephyr synchronization
+#
+# Unmodified upstream Zephyr v4.3.0 `samples/synchronization` for `ek_rx261`.
+# Two threads hand a semaphore back and forth with k_msleep(500) between
+# greetings: CMT0 compare-match interrupts through the ICU (vector 28), CMT1
+# as the free-running cycle counter, `INT #1` context switches with the
+# SMOVB/SMOVF frame copies, WAIT idle. Rebuild:
+# crates/firmware-ek-rx261-zephyr/build.sh
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ek-rx261-zephyr-sync.elf"
+  system: "./system.yaml"
+limits:
+  # Each round also busy-waits 100 ms (k_busy_wait on the CMT1 counter).
+  max_steps: 200000000
+  wall_time_ms: 120000
+  # Four greetings are three 500 ms sleeps apart: 1.5 s at 64 MHz, plus
+  # margin.
+  max_cycles: 128000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 ***"
+      - "thread_a: Hello World from cpu 0 on ek_rx261!"
+      - "thread_b: Hello World from cpu 0 on ek_rx261!"
+      - "thread_a: Hello World from cpu 0 on ek_rx261!"
+      - "thread_b: Hello World from cpu 0 on ek_rx261!"
+  - expected_stop_reason: max_cycles

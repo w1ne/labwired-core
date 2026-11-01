@@ -20,7 +20,7 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{Avr, CortexM, Pic16, Pic18, Pic24, RiscV, RiscV64, XtensaLx7};
+use labwired_core::cpu::{Avr, CortexM, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -329,6 +329,24 @@ fn cores() -> Vec<CoreUnderTest> {
                 // is loaded at byte addresses (two per word).
                 cpu.load_flash(entry * 2, program);
                 cpu.set_sp(5);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Rx",
+            entry: 0x100,
+            // `add #0x1234, r1` ×4 (`72 11 34 12`, 4 bytes each). RX is
+            // variable-length (1-8 bytes) and reports the 4 bytes at PC as
+            // the opcode, so the row uses a 4-byte instruction.
+            program: std::iter::repeat_n([0x72u8, 0x11, 0x34, 0x12], 4)
+                .flatten()
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Rx::new();
+                cpu.set_sp(0x8000);
                 Box::new(cpu)
             },
         },

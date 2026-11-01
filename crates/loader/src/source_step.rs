@@ -353,6 +353,8 @@ impl SourceDebug {
             MachineFamily::Pic18 => 8,
             // W, STATUS, FSR, PCLATH, SP, PC — provisional, same caveat.
             MachineFamily::Pic16 => 6,
+            // R0-R15 (GCC's RX DWARF numbering).
+            MachineFamily::Rx => 16,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -499,6 +501,16 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Rx => Abi {
+            // R0 is the stack pointer. Frame 0 only until the RX CFI unwind
+            // has been checked against GCC output.
+            sp: 0,
+            callee_saved: (6..=13).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -515,6 +527,7 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::Pic24 => 18,
         MachineFamily::Pic18 => 8,
         MachineFamily::Pic16 => 6,
+        MachineFamily::Rx => 16,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
@@ -687,6 +700,7 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Pic24 => 15,
         MachineFamily::Pic18 => 6,
         MachineFamily::Pic16 => 4,
+        MachineFamily::Rx => 0,
     }
 }
 
