@@ -346,11 +346,12 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and the IIC (RIIC) master.
+    // 12-bit ADC, the IIC (RIIC) master and the GPT (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
     "ra_iic",
+    "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1439,6 +1440,40 @@ pub fn try_build(
                 get("pclkb_hz").unwrap_or(iic::DEFAULT_PCLKB_HZ),
                 get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
+        }
+        // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
+        // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
+        // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
+        // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
+        "ra_gpt" => {
+            use crate::peripherals::ra_gpt as gpt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let mut pads = Vec::new();
+            if let Some(map) = p_cfg.config.get("gtioc_pads").and_then(|v| v.as_mapping()) {
+                for (signal, pad) in map {
+                    let (Some(signal), Some(pad)) = (signal.as_str(), pad.as_str()) else {
+                        continue;
+                    };
+                    match gpt::RaGpt::parse_pad(signal, pad) {
+                        Some(entry) => pads.push(entry),
+                        None => tracing::warn!(
+                            "ra_gpt '{}': gtioc_pads entry {signal}: {pad} not understood",
+                            p_cfg.id
+                        ),
+                    }
+                }
+            }
+            Box::new(
+                gpt::RaGpt::new(
+                    get("channels").map_or(gpt::MAX_CHANNELS, |v| v as usize),
+                    get("clock_hz").unwrap_or(gpt::DEFAULT_CLOCK_HZ),
+                    get("pclkd_hz").unwrap_or(gpt::DEFAULT_PCLKD_HZ),
+                    get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
+                    get("wide_channels").map_or(0xFF, |v| v as u32),
+                )
+                .with_output_pads(pads),
+            )
         }
         "ra_adc12" => {
             use crate::peripherals::ra_adc12 as adc;

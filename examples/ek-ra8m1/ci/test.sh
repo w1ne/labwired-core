@@ -133,3 +133,18 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 2000000 \
   --out-dir "$OUT/zephyr-bme280-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 tests/drivers/pwm/pwm_api: 50%/100%/0% on GPT7 in PWM
+# cycles and in ns, with GTIOC7A routed to P603 through PmnPFS PSEL; the
+# pad's edge count and the final GTPR/GTUDDTYC are checked, not only the
+# suite (tests/fixtures/r7fa8m1ah-zephyr-pwm-api.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-pwm-api.yaml \
+  --output-dir "$OUT/zephyr-pwm-api" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-pwm-api.elf \
+  --system examples/ek-ra8m1/system.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-pwm-api-unsupported-audit" \
+  --fail-on-unsupported

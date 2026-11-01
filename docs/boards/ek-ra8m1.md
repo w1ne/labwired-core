@@ -80,10 +80,12 @@ image prints nothing at all.
     `FRSR.DR` timeout), ERI and the error flags, and the `CCR2` baud decode
     are not modelled (RXI comes per character; the frame time is YAML
     `baud`). The AGT models timer mode only. DMAC/DTC,
-    FCACHE, FACI, ELC, RTC, IWDT/WDT, GPT, SPI, USBFS/USBHS,
+    FCACHE, FACI, ELC, RTC, IWDT/WDT, SPI, USBFS/USBHS,
     ETHERC and CANFD are declared stubs; ADC0/ADC1 convert software-started
-    scans (stock Zephyr `adc_api` 6/6) and IIC0/IIC1 are I2C masters (stock
-    Zephyr `samples/sensor/bme280` reads a BME280 on IIC1). SCI0–2, SCI4–8 and the remaining
+    scans (stock Zephyr `adc_api` 6/6), IIC0/IIC1 are I2C masters (stock
+    Zephyr `samples/sensor/bme280` reads a BME280 on IIC1) and GPT0-13
+    generate saw-wave PWM (stock Zephyr `pwm_api` 2/2, the GTIOC7A waveform
+    checked on P603). SCI0–2, SCI4–8 and the remaining
     blocks are **not mapped**: firmware that touches them faults with a memory violation. There
     is no silicon capture: **SIM-DERIVED**.
 
@@ -123,7 +125,7 @@ image prints nothing at all.
 | ICU | `0x4000_6000` (IRQCR/NMI) and `0x4000_C000` (WUPEN/IELSR) | IRQCR/NMI `type: stub`; IELSR modelled (`ra_icu`) — ELC event → `IR` → NVIC line level |
 | AGT0 / AGT1 | `0x4022_1000` / `0x4022_1100` | modelled (`ra_agt`) — 16-bit timer mode, LOCO/PCLKB sources, underflow + compare A/B as ELC events 0x046–0x04B |
 | PORT0–B | `0x4040_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
-| PFS / PWPR / PWPRS | `0x4040_0800` / `0x4040_0D0C` / `0x4040_0D14` | modelled (`ra8_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PSEL/PMR stored only |
+| PFS / PWPR / PWPRS | `0x4040_0800` / `0x4040_0D0C` / `0x4040_0D14` | modelled (`ra8_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PMR/PSEL route a pad to the GPT (GTIOC7A/B on P603/P602) and are stored only for other peripherals |
 | SCI9 (console) | `0x4035_8900` | modelled — SCI_B, async; RXI/TXI/TEI as ELC events 0x163-0x165; `FRSR.R` |
 | SCI3 (mikroBUS) | `0x4035_8300` | modelled — SCI_B, async; RXI/TXI/TEI as ELC events 0x139-0x13B; `FRSR.R` |
 | SCI0–2, SCI4–8 | `0x4035_8000` + `0x100`×n | not mapped |
@@ -132,7 +134,8 @@ image prints nothing at all.
 | SCI9 VCP | PA14 (TXD9) / PA15 (RXD9) | the simulator captures the SCI9 stream; the J-Link OB bridge is not modelled |
 | ADC0 / ADC1 | `0x4033_2000` / `0x4033_2200` | modelled (`ra_adc12`) — software-started single/continuous scans, `ADDRn`, addition/averaging, scan end as ELC events 0x1AE / 0x1B4; nominal 1 µs per channel; group scan, hardware triggers and the temperature sensor not modelled |
 | IIC0 / IIC1 | `0x4025_E000` / `0x4025_E100` | modelled (`ra_iic`) — RIIC master transmit/receive, 7-bit addresses, start/restart/stop, address NACK, RXI/TXI/TEI/ERI as ELC events 0x05C-0x05F / 0x061-0x064, wire time from `ICBRL`/`ICBRH`/`CKS`; slave mode, 10-bit addresses, arbitration loss, timeout and SMBus not modelled |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT, WDT, USBFS, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | see descriptor | `type: stub` |
+| GPT0-13 | `0x4032_2000` + `0x100`×n | modelled (`ra_gpt`) — saw-wave PWM counting PCLKD / 2^`TPCS`, cycle-end buffer transfers (`GTPBR`, `GTCCRC`/`GTCCRE`), compare A/B and overflow as ELC events 0x0A1 + 9n (+0/+1/+6), GTIOCnA/B from `GTIOR` and `GTUDDTYC` 0%/100% on the pads `gtioc_pads` names; triangle/one-shot modes, input capture, hardware sources, dead time and POEG not modelled |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT, WDT, USBFS, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | see descriptor | `type: stub` |
 
 ## Boot path
 

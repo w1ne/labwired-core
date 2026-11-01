@@ -116,15 +116,17 @@ hb=0 podr=0040 s1=1 s2=1
   stored only.
 - **AGT modes.** Timer mode only: no pulse output, event counter or pulse
   width / period measurement, and AGT1 does not count AGT0 underflows.
-- **PFS peripheral mux.** `PSEL`/`PMR` are stored only; SCI0 TX does not depend
-  on them.
+- **PFS peripheral mux.** `PSEL`/`PMR` route a pad only to the GPT (GTIOC1A/B
+  on P405/P406); for the other peripherals they are stored only, and SCI0 TX
+  does not depend on them.
 - **TrustZone** (IDAU/SAU, CPSCU/PSCU), flash programming (FACI), the data
   flash and the option-setting memory.
-- **DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, SPI0/1,
+- **DMAC/DTC, ELC, RTC, IWDT/WDT, SPI0/1,
   USBFS/USBHS, ETHERC/EDMAC, CANFD, FACI** are declared stubs (reads return 0,
   writes are dropped). ADC0/ADC1 are modelled since the stock Zephyr
-  `adc_api` slice (software-started scans only) and IIC0-2 since the stock
-  Zephyr `bme280` slice (master mode only); see VALIDATION.md.
+  `adc_api` slice (software-started scans only), IIC0-2 since the stock
+  Zephyr `bme280` slice (master mode only) and GPT0-9 since the stock
+  Zephyr `pwm_api` slice (saw-wave PWM only); see VALIDATION.md.
 - **SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC** and every other
   block are **not mapped**. Firmware that touches them faults with a memory
   violation.

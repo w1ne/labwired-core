@@ -51,10 +51,12 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
     measurement modes are not modelled. The PFS
     peripheral mux is stored only. The SCI FIFO has no TX occupancy (TX
     drains at once), no trigger levels and no FIFO interrupts. TrustZone,
-    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, SPI,
+    flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, SPI,
     USBFS/USBHS, ETHERC and CANFD are declared stubs; ADC0/ADC1 convert
-    software-started scans (stock Zephyr `adc_api` 6/6) and IIC0-2 are I2C
-    masters (stock Zephyr `samples/sensor/bme280` reads a BME280 on IIC1). SCI1–9 and the
+    software-started scans (stock Zephyr `adc_api` 6/6), IIC0-2 are I2C
+    masters (stock Zephyr `samples/sensor/bme280` reads a BME280 on IIC1)
+    and GPT0-9 generate saw-wave PWM (stock Zephyr `pwm_api` 2/2, the
+    GTIOC1A waveform checked on P405). SCI1–9 and the
     remaining blocks are **not mapped**: firmware that touches them faults
     with a memory violation. Option-setting memory is not mapped either; the
     loader warns and drops Zephyr's OFS segments. There is no silicon
@@ -97,7 +99,7 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | ICU | `0x4000_6000` | `ra_icu` — IELSR0–95 link ELC events to NVIC lines 0–95 (`IR` level, W0C); IRQCRn/NMI stored only |
 | AGT0–5 | `0x400E_8000` + `0x100`×n | `ra_agt` — 16-bit timer mode, underflow and compare A/B as ELC events (`0x040 + 3n`) |
 | PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3; 16-bit aliases upper half first (PODR +0x0, PDR +0x2, as `R7FA6M5BH.h`) |
-| PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PSEL/PMR stored only |
+| PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PMR/PSEL route a pad to the GPT (GTIOC1A/B on P405/P406) and are stored only for other peripherals |
 | SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async, polled; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`) for the FSP driver |
 | SCI1–9 | `0x4011_8100` + `0x100`×n | not mapped |
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |
@@ -105,7 +107,8 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | SCI0 VCP | P411 (TXD0) / P410 (RXD0) | the simulator captures the SCI0 stream; the J-Link OB bridge is not modelled |
 | ADC0 / ADC1 | `0x4017_0000` / `0x4017_0200` | modelled (`ra_adc12`) — software-started single/continuous scans, `ADDRn`, addition/averaging, scan end as ELC events 0x160 / 0x166; nominal 1 µs per channel; group scan, hardware triggers and the temperature sensor not modelled |
 | IIC0 / IIC1 / IIC2 | `0x4009_F000` + `0x100`×n | modelled (`ra_iic`) — RIIC master transmit/receive, 7-bit addresses, start/restart/stop, address NACK, RXI/TXI/TEI/ERI as ELC events 0x073 + 5n .. +3, wire time from `ICBRL`/`ICBRH`/`CKS`; slave mode, 10-bit addresses, arbitration loss, timeout and SMBus not modelled |
-| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, FACI | see descriptor | `type: stub` |
+| GPT0-9 | `0x4016_9000` + `0x100`×n | modelled (`ra_gpt`) — saw-wave PWM counting PCLKD / 2^`TPCS`, cycle-end buffer transfers (`GTPBR`, `GTCCRC`/`GTCCRE`), compare A/B and overflow as ELC events 0x0C0 + 9n (+0/+1/+6), GTIOCnA/B from `GTIOR` and `GTUDDTYC` 0%/100% on the pads `gtioc_pads` names; triangle/one-shot modes, input capture, hardware sources, dead time and POEG not modelled |
+| DMAC/DTC, ELC, RTC, IWDT, WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, FACI | see descriptor | `type: stub` |
 
 ## Boot path
 

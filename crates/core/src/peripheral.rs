@@ -766,6 +766,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Timer capability: the pads its output wires are tabled to, for a timer
+    /// whose pad table is chip data rather than a bus-side datasheet table
+    /// (Renesas RA GPT `gtioc_pads`): `(line, GPIO port name, pin)`. Empty by
+    /// default.
+    fn timer_output_pads(&self) -> Vec<(usize, String, u8)> {
+        Vec::new()
+    }
+
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
     /// channel-output wire `cell` — live while the pad is an alternate-function
     /// output and the timer drives that line (STM32 F1 fixed mapping). A port

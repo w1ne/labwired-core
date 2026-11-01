@@ -1207,7 +1207,8 @@ impl SystemBus {
         }
     }
 
-    /// Decode every pad's pull from `link`'s block and hand it to the port,
+    /// Decode every pad's pull (and, on RA, its `PmnPFS` PMR/PSEL peripheral
+    /// function) from `link`'s block and hand it to the port,
     /// plus, for a `written` (offset, width, value) store that set a pin's
     /// shared output flip-flops ([`crate::pins::PadControl::output_write`]),
     /// that pin's direction and level. A store the block refused (RA `PmnPFS`
@@ -1216,6 +1217,7 @@ impl SystemBus {
     fn apply_pad_control(&mut self, link: PadControlLink, written: Option<(u64, u64, u32)>) {
         let mut output = None;
         let mut pulls = [crate::pins::Pull::None; 32];
+        let mut functions = [None; 32];
         let count = {
             let (Some(block), Some(port)) = (
                 self.peripherals.get(link.block),
@@ -1229,6 +1231,7 @@ impl SystemBus {
             let count = usize::from(pins.pin_count()).min(pulls.len());
             for (pin, pull) in pulls.iter_mut().enumerate().take(count) {
                 *pull = link.control.pull(&*block.dev, pin as u8);
+                functions[pin] = link.control.function(&*block.dev, pin as u8);
             }
             if let Some((off, width, value)) = written {
                 if let Some(pin) = link.control.output_write(off, width) {
@@ -1250,6 +1253,7 @@ impl SystemBus {
         };
         for (pin, pull) in pulls.iter().enumerate().take(count) {
             port.set_config_pull(pin as u8, *pull);
+            port.set_config_function(pin as u8, functions[pin]);
         }
         if let Some((pin, (pdr, podr))) = output {
             port.set_config_output(pin, pdr, podr);
@@ -2716,6 +2720,41 @@ impl SystemBus {
                 FUNCS[usize::from(tc)][wo],
             ) {
                 self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+    }
+
+    /// Route each Renesas RA GPT's GTIOCnA/B wires onto the pads its chip
+    /// YAML names (`gtioc_pads`), so a pad whose `PmnPFS` hands it to the GPT
+    /// (PMR = 1, PSEL = 00011) reads, and the logic analyzer records, the PWM
+    /// the channel generates instead of the port's PODR.
+    pub(crate) fn wire_ra_gpt_output_pads(&mut self) {
+        use crate::peripherals::ra_gpt::LINE_NAMES;
+        for t_idx in 0..self.peripherals.len() {
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("ra_gpt") {
+                continue;
+            }
+            let pads = self.peripherals[t_idx].dev.timer_output_pads();
+            for (line, port, pin) in pads {
+                let Some(gpio_idx) = self.find_peripheral_index_by_name(&port) else {
+                    tracing::warn!(
+                        "ra_gpt '{}': {} names pad {port}:{pin}, but '{port}' is not on the bus",
+                        self.peripherals[t_idx].name,
+                        LINE_NAMES[line]
+                    );
+                    continue;
+                };
+                let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                    continue;
+                };
+                if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
+                    &lines,
+                    pin,
+                    line,
+                    LINE_NAMES[line],
+                ) {
+                    self.peripherals[t_idx].dev.timer_output_lines(true);
+                }
             }
         }
     }

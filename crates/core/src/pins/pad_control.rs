@@ -121,6 +121,24 @@ impl PadControl {
 
     /// The pull `block` (the pad-control peripheral) configures on `pin`. A
     /// register the block cannot read is no pull.
+    /// The peripheral function a register word hands the pad to: Renesas RA
+    /// `PmnPFS` PMR (bit 16) = 1 selects PSEL (bits 28:24) (R01UH0887
+    /// §19.2.5). `None` for a pad the port owns, and for the other blocks.
+    pub fn decode_function(self, word: u32) -> Option<u8> {
+        match self {
+            Self::RaPfs { .. } if word & (1 << 16) != 0 => Some(((word >> 24) & 0x1F) as u8),
+            _ => None,
+        }
+    }
+
+    /// The peripheral function `pin`'s register selects, read from `block`.
+    pub fn function(self, block: &dyn Peripheral, pin: u8) -> Option<u8> {
+        block
+            .read_u32(self.offset(pin))
+            .ok()
+            .and_then(|word| self.decode_function(word))
+    }
+
     pub fn pull(self, block: &dyn Peripheral, pin: u8) -> Pull {
         block
             .read_u32(self.offset(pin))

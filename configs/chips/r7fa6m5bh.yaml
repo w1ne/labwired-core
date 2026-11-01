@@ -55,7 +55,8 @@
 #   low-level mode raises on the falling edge only.
 # - AGT: timer mode only (`ra_agt`); pulse output, event counter and the
 #   measurement modes are not modelled.
-# - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
+# - PmnPFS PSEL/PMR (peripheral mux) routes a pad only to the GPT (GTIOC1A/B
+#   on P405/P406, `gtioc_pads`); SCI0 TX/RX need no pad
 #   routing in the model. A PmnPFS store sets the port's PCNTR1 PDR/PODR
 #   (the same flip-flops), but reading PmnPFS back returns the last store,
 #   not PCNTR1, and PIDR there reads 0.
@@ -76,7 +77,11 @@
 #   the RXI/TXI/TEI/ERI events, timed from ICBRL/ICBRH/CKS; slave mode,
 #   10-bit addresses, a NACKed data byte, arbitration loss, the SCL-low
 #   timeout, SMBus and DTC transfers are not modelled (see the model header).
-# - DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, SPI0/1,
+# - GPT0-9 (`ra_gpt`): saw-wave PWM counting up, the cycle-end buffer
+#   transfers, compare A/B and overflow events, GTIOC1A/B on P405/P406;
+#   triangle/one-shot modes, input capture, hardware start sources, dead
+#   time and POEG are not modelled (see the model header).
+# - DMAC/DTC, ELC, RTC, IWDT/WDT, SPI0/1,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
 # - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC and every block
@@ -360,10 +365,25 @@ peripherals:
     type: "stub"
     base_address: 0x4011A000
     size: "512B"
+  # GPT0-9 (FSP ra6m5 R_GPT0_BASE 0x40169000, 0x100 per channel; GPT0-3
+  # 32-bit per BSP_FEATURE_GPT_32BIT_CHANNEL_MASK 0x0F). Counts PCLKD
+  # (200 MHz / 2 = 100 MHz, Zephyr r7fa6m5xh.dtsi). Events:
+  # ELC_EVENT_GPT0_CAPTURE_COMPARE_A 0x0C0, nine per channel (ra6m5
+  # bsp_elc.h). GTIOC1A/B on P405/P406 (Zephyr ek_ra6m5-pinctrl.dtsi
+  # pwm1_default, RA_PSEL_GPT1).
   - id: "gpt"
-    type: "stub"
+    type: "ra_gpt"
     base_address: 0x40169000
     size: "4KB"
+    config:
+      channels: 10
+      clock_hz: 200000000
+      pclkd_hz: 100000000
+      elc_event: 192
+      wide_channels: 0x0F
+      gtioc_pads:
+        GTIOC1A: "P405"
+        GTIOC1B: "P406"
   # ADC0/ADC1 (12-bit, R_ADC0_Type; FSP ra6m5 R_ADC0_BASE 0x40170000 /
   # R_ADC1_BASE 0x40170200). Scan end is ELC_EVENT_ADC0_SCAN_END 0x160 /
   # ADC1_SCAN_END 0x166 (FSP ra6m5 bsp_elc.h), linked to NVIC through

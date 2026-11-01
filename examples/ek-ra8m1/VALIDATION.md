@@ -20,7 +20,7 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | SCI9 (SCI_B) async TX at 9600 8N1 (`CCR2.BRR` 25 from 8 MHz) | smoke-tested | every console line, polled on `CSR.TDRE`; `brr=25` and `ccr3=00001200` read back |
 | SCI_B `CCR0.TE` gate and `CESR.TIST/RIST` | smoke-tested | the firmware waits for `cesr=11` before its first `TDR` write; unit test `test_sci_b_tx_gate_status_and_readback` proves TX is dropped while TE is 0 |
 | `PWPRS` unlock + `PmnPFS` write (S1/S2 `PCR` pull-up) | smoke-tested | `s1=1 s2=1`: the pads read high through the PFS pull-up link; unit test `ra8_layout_moves_pwpr_and_adds_the_secure_twin` |
-| `PmnPFS` `PSEL`/`PMR` (PA14/PA15 → SCI9) | declared only | stored, no routing effect |
+| `PmnPFS` `PSEL`/`PMR` (PA14/PA15 → SCI9) | declared only | stored, no routing effect for SCI9 (they route P603/P602 to the GPT, below) |
 | PORT `PCNTR1` PDR/PODR, `PCNTR3` POSR/PORR, `PCNTR2` PIDR on ports 0, 1, 4, 6 | smoke-tested | `led=blue on pin=1 port=6 podr=0001` … (one POSR/PORR store per LED; the whole-PODR read proves no other pin of that port moved) |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
@@ -45,10 +45,13 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.1.0 `samples/sensor/bme280` (BME280 at 0x76 on IIC1; RXI/TXI/TEI/ERI → ELC events 0x061-0x064 → ICU IELSR91-94) | smoke-tested | `zephyr-bme280.yaml` PASS 2/2: the driver's chip-ID check, calibration load and once-a-second RTIO fetches (register burst reads with a restart, register writes) all complete; `temp: 25.0; press: 101.324218; humidity: 50.3906` twice from `bme280-system.yaml`'s defaults, then `temp: 21.500000; press: 98.996093; humidity: 39.995117` twice after the 1.5 s stimulus to 21.5 °C / 990 hPa / 40 %RH; 1,996,707 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `157366ee469d8501…` |
 | IIC0/IIC1 (`ra_iic`): RIIC master transmit/receive, 7-bit addresses, `ST`/`RS`/`SP` conditions with `BBSY`/`MST`/`TRS`, `ICDRT` holding register behind the shifter, read turn-around with the dummy `ICDRR` read, stop/restart deferred until the last byte is read, address NACK (`NACKF`/`ACKBR`), `ACKBT` behind `ACKWP`, `IICRST` resets; events on the rising edge of flag & enable; wire time from `ICBRL`/`ICBRH`/`CKS` | sim-tested | the sample above; `crates/core/tests/ra8m1_iic_icu.rs` (the start's TXI vectors through IELSR92; the BME280 chip-ID read 0xD0 → 0x60 step by step on the ICU events; an absent device NACKed through ERI) in both scheduler modes; unit tests `peripherals::ra_iic` |
 | RIIC slave mode (`SARLn`/`SARUn`/`ICSER`), 10-bit addresses, a NACKed data byte, arbitration loss, SCL-low timeout (`TMOF`), SMBus, wake-up (`ICWUR`), `RDRFS`, `WAIT` hold timing, `ICCR1` SCL/SDA overrides and `CLO`, `ICMR1.BC`, DTC transfers | **not modelled** | slave registers stored only; devices ACK every data byte; rise/fall times are not added to the SCL period |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
+| Stock Zephyr v4.1.0 `tests/drivers/pwm/pwm_api` (pwm7 = GPT7, GTIOC7A on P603 through PmnPFS PMR/PSEL 00011) | smoke-tested | `zephyr-pwm-api.yaml` PASS 5/5: `pwm_basic` 2/2 (`test_pwm_cycle`, `test_pwm_nsec`: 50%, 100%, 0% for a second each), 4,754 edges on P603 (50% of 64,000 PCLKD counts = 128,000/128,000 bus cycles, 3,751 edges; 50% of 2 ms = 480,000/480,000, 1,001 edges; 100% high, 0% low), final `GTPR` 239,999 and `GTUDDTYC.OADTY` 0b10; 1,639,468 steps, 0.04 s; audit 2,000,000 steps, 0 unsupported |
+| GPT0-13 (`ra_gpt`): saw-wave up-count at PCLKD / 2^`GTCR.TPCS`, `GTSTR`/`GTSTP`/`GTCLR` channel masks gated by `GTSSR`/`GTPSR`/`GTCSR` bit 31, cycle end (`TCFPO`, `GTPBR` → `GTPR`, `GTCCRC` → `GTCCRA`, `GTCCRE` → `GTCCRB` per `GTBER`, `CCRSWT` force), compare A/B (`TCFA`/`TCFB`), events 0x0A1 + 9n (+0 CCMPA, +1 CCMPB, +6 OVF), GTIOCnA/B from `GTIOR` (cycle-end / compare-match levels, initial level for the first period, `OADFLT`/`OAHLD` when stopped, `OAE`) and `GTUDDTYC` 0%/100%, edges at their exact cycle | smoke-tested | the test above; `crates/core/tests/ra8m1_gpt_pwm.rs` (P603 carries GTIOC7A only while P603PFS has PMR = 1 and PSEL = 00011; 30 of 100 counts high per period after an initial-level first period; GPT7 overflow latches IELSR41 once per period) in both scheduler modes; unit tests `peripherals::ra_gpt` |
+| GPT triangle-wave and one-shot modes, down-counting, input capture, hardware start/stop/clear/count sources, compare C-F events and double buffers, dead time, `GTINTAD`/POEG output disable, A/D triggers, `GTWP` write protection, `OADTY` cycle-end timing | **not modelled** | `GTCR.MD` != 0 counts like saw-wave with the pins held; `GTWP` stored only; `OADTY` applies at once |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
 | SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
-## Stock Zephyr (verified 2026-10-31, button, blinky, adc_api and bme280 2026-11-01)
+## Stock Zephyr (verified 2026-10-31, button, blinky, adc_api, bme280 and pwm_api 2026-11-01)
 
 ```bash
 # fixtures are committed; rebuild (byte-identical) with:
@@ -62,6 +65,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-blinky.elf  sha256 671464cdd92a9b4b... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-adc-api.elf  sha256 e949897baec2ee7c... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-bme280.elf  sha256 157366ee469d8501... (Zephyr v4.1.0 + picolibc)
+#   r7fa8m1ah-zephyr-pwm-api.elf  sha256 ac29030890bbec30... (Zephyr v4.1.0)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -118,6 +122,16 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 cargo test -p labwired-core --test ra8m1_iic_icu   # also --features event-scheduler
 #   3 passed
 
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-pwm-api.yaml --no-uart-stdout
+#   PASS  5/5 checks · zephyr-pwm-api · 1639468 steps
+#   [PWM]: 0, [period]: 64000, [pulse]: 32000 / 64000 / 0     PASS - test_pwm_cycle
+#   [PWM]: 0, [period]: 2000000, [pulse]: 1000000 / 2000000 / 0  PASS - test_pwm_nsec
+#   SUITE PASS - 100.00% [pwm_basic]: pass = 2, fail = 0, skip = 0, total = 2
+#   P603: 4754 edges (128000 / 128000 cycles, then 480000 / 480000)
+#   Audit (2,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test ra8m1_gpt_pwm   # also --features event-scheduler
+#   3 passed
+
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
 
@@ -143,6 +157,13 @@ driver logs `i2c_ra_iic_transfer: Write failed` / `ID read failed: -5`, so
 the sample prints `Device "bme280@76" is not ready`; with IIC1 back to the
 old `stub` window (and no device, which a stub cannot host) FSP reports
 `Bus busy condition` and the same not-ready error.
+
+Negative controls for `zephyr-pwm-api.yaml` (each one fails it): the
+driver only writes registers, so `pwm_basic` passes 2/2 against the old
+`stub` GPT window too, which is why the script checks the pad. With the
+stub, P603 has 0 edges and `GTPR`/`GTUDDTYC` read 0 (3 checks fail); with
+`GTIOC7A` dropped from `gtioc_pads` the pad keeps its port level and has 0
+edges.
 
 Negative control for `zephyr-adc-api.yaml`: with the old `adc12` stub
 window, ADC1 never raises its scan end, so `test_adc_asynchronous_call`
