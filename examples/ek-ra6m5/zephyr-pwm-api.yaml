@@ -1,0 +1,41 @@
+# LabWired - EK-RA6M5 stock Zephyr pwm_api test (GPT1 PWM on P405)
+#
+# Unmodified upstream Zephyr v4.1.0 `tests/drivers/pwm/pwm_api` for board
+# `ek_ra6m5`. Rebuild: crates/firmware-ek-ra6m5-zephyr/build.sh
+#
+# The board's pwm1 (renesas,ra-pwm) is GPT1, its GTIOC1A on P405 (PmnPFS
+# PMR = 1, PSEL = RA_PSEL_GPT1). pwm_renesas_ra.c drives FSP r_gpt: each
+# pwm_set stops GPT1, R_GPT_PeriodSet / R_GPT_DutyCycleSet load GTPBR and
+# the GTCCRC buffer (0%/100% through GTUDDTYC.OADTY), and GTSTR restarts it.
+# The test sets 50%, 100% and 0% for one second each, first in PWM cycles
+# (64000 of the 100 MHz PCLKD, 640 us), then in ns (2 ms).
+#
+# The driver only writes registers, so the suite passes against a `stub`
+# GPT too. What the pad shows is the oracle: P405 must carry the waveform.
+# 50% of 64000 counts is 64000 bus cycles high and low (2 per count), 3125
+# edges in the second; 50% of 2 ms is 200000 / 200000, 1001 edges; with the
+# reconfigurations that is 4128 edges, the 100% phases high and the 0%
+# phases low. The final registers are the 0% setting of the 2 ms period:
+# GTPR = 200000 - 1, OADTY = 0b10.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa6m5bh-zephyr-pwm-api.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+  max_cycles: 1300000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Running TESTSUITE pwm_basic"
+      - " PASS - test_pwm_cycle"
+      - " PASS - test_pwm_nsec"
+      - "SUITE PASS - 100.00% [pwm_basic]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - gpio_edges:
+      pin: "port4:5"
+      min_edges: 4128
+  - memory_value: { address: 0x40169164, expected_value: 199999, size: 4 }
+  - memory_value: { address: 0x40169130, expected_value: 0x00020000, mask: 0x00030000, size: 4 }
+  - expected_stop_reason: max_cycles

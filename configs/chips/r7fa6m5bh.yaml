@@ -20,7 +20,9 @@
 # The RA6M5 PORT/PFS/SCI register layouts match the RA4M1 blocks this repo
 # already models (configs/chips/ra4m1.yaml), only the bases moved:
 #   - PORTn at 0x40080000 + 0x20*n: PCNTR1 PDR[15:0]/PODR[31:16], PCNTR2
-#     PIDR, PCNTR3 POSR[15:0]/PORR[31:16].
+#     PIDR, PCNTR3 POSR[15:0]/PORR[31:16]. The 16-bit aliases put the upper
+#     half first, as on RA4M1 (FSP R7FA6M5BH.h: PODR +0x0, PDR +0x2, EIDR
+#     +0x4, PIDR +0x6, PORR +0x8, POSR +0xA): `swapped_half_aliases`.
 #   - PmnPFS at 0x40080800 + 0x40*m + 4*n; PWPR at PFS + 0x503 (0x40080D03).
 #   - SCIn at 0x40118000 + 0x100*n: SMR +0, BRR +1, SCR +2, TDR +3, SSR +4,
 #     RDR +5, SEMR +7 (classic SCI, async; the FIFO registers follow).
@@ -53,8 +55,11 @@
 #   mode raises on the falling edge only. NMI and DTCE are stored only.
 # - AGT: timer mode only (`ra_agt`); pulse output, event counter and the
 #   measurement modes are not modelled.
-# - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI0 TX/RX need no pad
-#   routing in the model.
+# - PmnPFS PSEL/PMR (peripheral mux) routes a pad only to the GPT (GTIOC1A/B
+#   on P405/P406, `gtioc_pads`); SCI0 TX/RX need no pad
+#   routing in the model. A PmnPFS store sets the port's PCNTR1 PDR/PODR
+#   (the same flip-flops), but reading PmnPFS back returns the last store,
+#   not PCNTR1, and PIDR there reads 0.
 # - TrustZone (IDAU/SAU, the CPSCU/PSCU security attribution; both are
 #   declared stubs), flash programming (FACI), data flash, option-setting
 #   memory (Zephyr's ELF carries OFS segments at 0x0100A100+; the loader
@@ -66,10 +71,26 @@
 #   15 ETU). RXI comes once per character a frame apart rather than at
 #   RTRG / the DR timeout. ERI and the receive error flags are not raised;
 #   SMR/BRR/SEMR are not decoded.
-# - DMAC/DTC, ELC, RTC, IWDT/WDT, GPT, IIC0-2, SPI0/1, ADC12,
+# - ADC0/ADC1 (ra_adc12): software-started single/continuous scans only;
+#   conversion timing is a nominal 1 us per channel, and group scan,
+#   hardware/ELC triggers, the temperature sensor, window comparator, ADBUF
+#   and sample-and-hold are not modelled.
+# - IIC0-2 (`ra_iic`): master transmit/receive with 7-bit addresses and
+#   the RXI/TXI/TEI/ERI events, timed from ICBRL/ICBRH/CKS; slave mode,
+#   10-bit addresses, a NACKed data byte, arbitration loss, the SCL-low
+#   timeout, SMBus and DTC transfers are not modelled (see the model header).
+# - GPT0-9 (`ra_gpt`): saw-wave PWM counting up, the cycle-end buffer
+#   transfers, compare A/B and overflow events, GTIOC1A/B on P405/P406;
+#   triangle/one-shot modes, input capture, hardware start sources, dead
+#   time and POEG are not modelled (see the model header).
+# - DAC12 (`ra_dac12`): DADR0/1 and the control registers read back; DAn
+#   outputs code * 3.3 V / 4096 while DACR.DAOEn = 1, at once. Conversion
+#   time, the amplifier wait, the reference / charge-pump selection and
+#   D/A-A/D synchronous start are not modelled (see the model header).
+# - DMAC/DTC, ELC, RTC, IWDT/WDT, SPI0/1,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
-# - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC and every block
+# - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, CRC, DOC and every block
 #   not listed below are NOT mapped. Firmware that touches them faults with a
 #   memory violation.
 
@@ -139,52 +160,52 @@ peripherals:
     type: "gpio"
     base_address: 0x40080000
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 0 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 0, swapped_half_aliases: true }
   - id: "port1"
     type: "gpio"
     base_address: 0x40080020
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 1 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 1, swapped_half_aliases: true }
   - id: "port2"
     type: "gpio"
     base_address: 0x40080040
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 2 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 2, swapped_half_aliases: true }
   - id: "port3"
     type: "gpio"
     base_address: 0x40080060
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 3 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 3, swapped_half_aliases: true }
   - id: "port4"
     type: "gpio"
     base_address: 0x40080080
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 4 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 4, swapped_half_aliases: true }
   - id: "port5"
     type: "gpio"
     base_address: 0x400800A0
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 5 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 5, swapped_half_aliases: true }
   - id: "port6"
     type: "gpio"
     base_address: 0x400800C0
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 6 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 6, swapped_half_aliases: true }
   - id: "port7"
     type: "gpio"
     base_address: 0x400800E0
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 7 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 7, swapped_half_aliases: true }
   - id: "port8"
     type: "gpio"
     base_address: 0x40080100
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 8 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 8, swapped_half_aliases: true }
   - id: "port9"
     type: "gpio"
     base_address: 0x40080120
     size: "32B"
-    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 9 }
+    config: { profile: "ra_port", pad_control: "pfs", pad_control_port: 9, swapped_half_aliases: true }
   - id: "porta"
     type: "gpio"
     base_address: 0x40080140
@@ -246,10 +267,38 @@ peripherals:
     type: "stub"
     base_address: 0x40090000
     size: "8KB"
-  - id: "iic"
-    type: "stub"
+  # IIC0-2 (RIIC master, `ra_iic`; R_IIC0_BASE 0x4009F000 + n*0x100).
+  # Interrupts are ELC events linked through the ICU IELSRn: IICn RXI
+  # 0x073 + 5n (= 115 + 5n), TXI +1, TEI +2, ERI +3 (FSP ra6m5 bsp_elc.h).
+  # `clock_hz` / `pclkb_hz` as for the AGT below.
+  - id: "iic0"
+    type: "ra_iic"
     base_address: 0x4009F000
-    size: "1KB"
+    size: "256B"
+    config:
+      elc_event: 115
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "iic1"
+    type: "ra_iic"
+    base_address: 0x4009F100
+    size: "256B"
+    config:
+      elc_event: 120
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "iic2"
+    type: "ra_iic"
+    base_address: 0x4009F200
+    size: "256B"
+    config:
+      elc_event: 125
+      clock_hz: 200000000
+      pclkb_hz: 50000000
+  - id: "iic_rsvd"
+    type: "stub"
+    base_address: 0x4009F300
+    size: "256B"
   - id: "canfd"
     type: "stub"
     base_address: 0x400B0000
@@ -327,14 +376,54 @@ peripherals:
     type: "stub"
     base_address: 0x4011A000
     size: "512B"
+  # GPT0-9 (FSP ra6m5 R_GPT0_BASE 0x40169000, 0x100 per channel; GPT0-3
+  # 32-bit per BSP_FEATURE_GPT_32BIT_CHANNEL_MASK 0x0F). Counts PCLKD
+  # (200 MHz / 2 = 100 MHz, Zephyr r7fa6m5xh.dtsi). Events:
+  # ELC_EVENT_GPT0_CAPTURE_COMPARE_A 0x0C0, nine per channel (ra6m5
+  # bsp_elc.h). GTIOC1A/B on P405/P406 (Zephyr ek_ra6m5-pinctrl.dtsi
+  # pwm1_default, RA_PSEL_GPT1).
   - id: "gpt"
-    type: "stub"
+    type: "ra_gpt"
     base_address: 0x40169000
     size: "4KB"
-  - id: "adc12"
-    type: "stub"
+    config:
+      channels: 10
+      clock_hz: 200000000
+      pclkd_hz: 100000000
+      elc_event: 192
+      wide_channels: 0x0F
+      gtioc_pads:
+        GTIOC1A: "P405"
+        GTIOC1B: "P406"
+  # ADC0/ADC1 (12-bit, R_ADC0_Type; FSP ra6m5 R_ADC0_BASE 0x40170000 /
+  # R_ADC1_BASE 0x40170200). Scan end is ELC_EVENT_ADC0_SCAN_END 0x160 /
+  # ADC1_SCAN_END 0x166 (FSP ra6m5 bsp_elc.h), linked to NVIC through
+  # IELSRn (ra_icu). `clock_hz` is the 200 MHz guest ICLK, as for the AGTs.
+  - id: "adc0"
+    type: "ra_adc12"
     base_address: 0x40170000
-    size: "1KB"
+    size: "512B"
+    config:
+      elc_event: 352
+      clock_hz: 200000000
+      vref_mv: 3300
+  - id: "adc1"
+    type: "ra_adc12"
+    base_address: 0x40170200
+    size: "512B"
+    config:
+      elc_event: 358
+      clock_hz: 200000000
+      vref_mv: 3300
+  # DAC12 (R_DAC_Type, 0x10C4 bytes; FSP ra6m5 R_DAC_BASE 0x40171000): two
+  # channels, DA0 on P014 (Zephyr pinctrl dac0_default). No interrupts.
+  # `vref_mv` scales RaDac12::output_mv (AVCC0 = VREFH0 = 3.3 V on the EK-RA6M5).
+  - id: "dac"
+    type: "ra_dac12"
+    base_address: 0x40171000
+    size: "4292"
+    config:
+      vref_mv: 3300
   # R_FCACHE (0x4001C000): bsp_clock_init invalidates the flash cache
   # (FCACHEIV +0x104, polled until it reads 0) and sets the flash wait
   # states (FLWT +0x11C) before the PLL switch. Declared stub: reads 0,

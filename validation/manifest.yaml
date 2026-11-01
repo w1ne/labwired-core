@@ -1736,7 +1736,10 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ec0f750db5294e7d5ef4b10ec2b70df6a2715672e926c5a06006ad3aa2500a43
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: e4e07a32ab6748411a4dd54920e30b9de66c688b17ed7ea0d828fcd670bd447c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3823,7 +3826,10 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: a2d8701a54900f34aec8250daa5edbbcfa48e1d53a0ae620b4c85d361cbe272c
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 468b13a6a64e7befa6035c670cba211ec2031a3ca193d1b28417c6a0fdcfa875
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4861,7 +4867,10 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: bce06c18c78bdb3741630eff4003396abc4f3e2b626d00afacca3fbbdc4b9548
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: dc06fca85057e6ac4d12c1087fc01e4be2f734a007dc01f6bbdc48e90ec1a475
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5890,7 +5899,10 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2a64b7e96a26b3d037e8795eae616bc6e959fb496655957cadbdf51ae25334ff
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: d1a07f4f3e88ae5793e1085e0619869fa908cc47f1a3588d7e33f51befe19bf6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6952,7 +6964,10 @@ boards:
     # 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
     # exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
     # when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ea01b1ce7dbffbef4890a1e12380ed1268ba00fc11109983648e51f0c48b02a2
+    # 2026-11-01 (#1597 merge of main 02c35d09e): digest re-stamped for the tree
+    # carrying both that change and #1597's shared pad-control path (PFS
+    # PDR/PODR into PCNTR1, PORT alias order). ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: 04ada63d76989364edf327b77de9c32dfbf000cb9d851eadba03d4b042df77aa
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

@@ -20,7 +20,7 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | SCI9 (SCI_B) async TX at 9600 8N1 (`CCR2.BRR` 25 from 8 MHz) | smoke-tested | every console line, polled on `CSR.TDRE`; `brr=25` and `ccr3=00001200` read back |
 | SCI_B `CCR0.TE` gate and `CESR.TIST/RIST` | smoke-tested | the firmware waits for `cesr=11` before its first `TDR` write; unit test `test_sci_b_tx_gate_status_and_readback` proves TX is dropped while TE is 0 |
 | `PWPRS` unlock + `PmnPFS` write (S1/S2 `PCR` pull-up) | smoke-tested | `s1=1 s2=1`: the pads read high through the PFS pull-up link; unit test `ra8_layout_moves_pwpr_and_adds_the_secure_twin` |
-| `PmnPFS` `PSEL`/`PMR` (PA14/PA15 → SCI9) | declared only | stored, no routing effect |
+| `PmnPFS` `PSEL`/`PMR` (PA14/PA15 → SCI9) | declared only | stored, no routing effect for SCI9 (they route P603/P602 to the GPT, below) |
 | PORT `PCNTR1` PDR/PODR, `PCNTR3` POSR/PORR, `PCNTR2` PIDR on ports 0, 1, 4, 6 | smoke-tested | `led=blue on pin=1 port=6 podr=0001` … (one POSR/PORR store per LED; the whole-PODR read proves no other pin of that port moved) |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
@@ -32,16 +32,30 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | SCI_B RXI/TXI/TEI as ELC events (`elc_event` on sci0/sci2/sci3/sci9): TXI on TDRE rising or TIE set with TDRE = 1, TEI on TEND rising or TEIE set with TEND = 1, RXI once per character a frame apart; frames of 10 bits at `baud` in `clock_hz` cycles | smoke-tested | the test above; `crates/core/tests/ra8m1_sci_icu.rs` (TXI vectors through IELSR25, TEI one frame after the last byte, RXI per character a frame apart, no RXI without RIE) in both scheduler modes; unit tests `peripherals::uart::sci_b_irq` |
 | SCI_B `FRSR.R` receive-FIFO count | smoke-tested | Zephyr's `fifo_read` reads it (`CONFIG_UART_RA_SCI_B_UART_FIFO_ENABLE=y` is the default); integration test above |
 | SCI_B FIFO trigger levels (`FCR.RTRG`, `FRSR.DR` 15-ETU timeout), ERI and the error flags, `CCR2` baud decode, TX FIFO occupancy | **not modelled** | RXI is raised per character instead of at RTRG; `FRSR.DR` and `FTSR` read 0 (a written byte leaves at once); the frame time comes from YAML `baud`, not `CCR2` |
-| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P009 → IRQ13 → ELC event 0x00E → ICU IELSR89 → NVIC line 89) | smoke-tested | `zephyr-button.yaml` PASS 3/3: two presses give exactly two `Button pressed at` lines (cycles 498,960,451 and 1,498,992,451), the releases none; 5,369,263 steps, 0.27 s; audit 2,000,000 steps, 0 unsupported |
+| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P009 → IRQ13 → ELC event 0x00E → ICU IELSR89 → NVIC line 89) | smoke-tested | `zephyr-button.yaml` PASS 5/5: two presses give exactly two `Button pressed at` lines (cycles 498,960,451 and 1,498,992,451), the releases none, and LED1 (P600) mirrors S1 (4 edges, ends low); 5,369,263 steps; audit 2,000,000 steps, 0 unsupported |
 | ICU IRQ-pin half (`ra_icu` at `0x4000_6000`, `ielsr_lines: 0`): `IRQCRn.IRQMD` falling/rising/both/low edge, `PmnPFS.ISEL` gate, `ICU_IRQn` = event n + 1 linked by `icu_ielsr`; pad → IRQn table from Zephyr `r7fa8m1xh.dtsi` | smoke-tested | the button above; unit tests `peripherals::ra_icu` (`irqmd_selects_the_edge_that_raises_icu_irqn`, `a_pad_without_isel_raises_nothing`, `the_irq_pin_half_alone_is_not_an_event_link_controller`) |
 | ICU NMI, `IRQCRn` digital filter (`FLTEN`/`FCLKSEL`), low-level re-raise while the pad stays low, `DTCE`, re-entry while `IR` stays set | **not modelled** | NMI registers stored only; an edge is taken at once; low-level mode raises on the falling edge only |
-| `PmnPFS` `PDR`/`PODR` (the same flip-flops as `PCNTR1` on silicon) | stored only | Zephyr's GPIO driver sets pin direction through PmnPFS, so the button sample's LED1 (P600) stays an input and its mirror of S1 is not checked |
+| `PmnPFS` `PDR`/`PODR` → `PCNTR1` (the same flip-flops on silicon) | sim-tested | Stock Zephyr v4.1.0 `samples/basic/blinky` (`zephyr-blinky.yaml` PASS 4/4): P600 made an output by its PmnPFS store and toggled five times through the 16-bit `PCNTR1.PODR` alias, exactly five `LED state` lines ending OFF, 6 edges on `port6:0`, `PCNTR1` ends PDR set / PODR clear; 1,304,065 steps; audit 1,000,000 steps, 0 unsupported; fixture sha256 `671464cdd92a9b4b…`. The button sample's LED1 mirror of S1 now shows 4 edges and ends low (5,369,263 steps). Without the PFS → port hand-over both scripts fail. Unit test `pins::pad_control::tests::ra_pfs_low_byte_stores_write_the_port_output`, `peripherals::gpio::tests::ra_port_16_bit_aliases_follow_the_part`; integration `pad_control_pulls::ra_pfs_pdr_podr_are_the_port_output_flip_flops` |
+| `PmnPFS` read-back of PDR/PODR after `PCNTR1`/`PCNTR3` writes; `PmnPFS.PIDR` | **not modelled** | PmnPFS returns the last store; PIDR there reads 0 |
+| Stock Zephyr v4.1.0 `tests/drivers/adc/adc_api` (ADC1 channels 0 and 2, scan end → ELC event 0x1B4 → ICU IELSR39 → NVIC line 39) | smoke-tested | `zephyr-adc-api.yaml` PASS 2/2: `adc_basic` 6/6 (`asynchronous_call`, `invalid_request`, `repeated_samplings`, `sample_one_channel`, `sample_two_channels`, `sample_with_interval`), the buffers holding `0x07ff` (potentiometer, 1650 mV) and `0x03a2` (TMP36 at 25 °C, 750 mV) from `adc-system.yaml`; 1,995,488 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `e949897baec2ee7c…` |
+| ADC0/ADC1 (`ra_adc12`): software-started single and continuous scans of `ADANSA0/1`, `ADDRn`, `ADST` clear on scan end, `ADCER.ADPRC` 12/10/8-bit and `ADRFMT` left-justify, `ADADS`/`ADADC` addition and averaging, scan-end ELC events 0x1AE/0x1B4 | sim-tested | the test above; `crates/core/tests/ra8m1_adc12_icu.rs` (vectors through IELSR39 with the converted codes, an unlinked scan end pends nothing) in both scheduler modes; unit tests `peripherals::ra_adc12` |
+| ADC12 conversion time, group scan (`ADCS` = 1, `ADANSB`, group-B scan end), double trigger, hardware/ELC start triggers (`TRGE`/`ADSTRGR`), temperature sensor and internal reference, window comparator, `ADBUF`, sample-and-hold, `ADCER.ACE` clear-after-read | **not modelled** | each channel converts in a nominal 1 µs at 480 MHz, not the manual's state count; a group-scan start converts nothing; `ADSSTRn`/`ADSHCR`/`ADEXICR` are stored only; `ADDRn` keep their value after a read |
 | AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
-| SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
+| Stock Zephyr v4.1.0 `samples/sensor/bme280` (BME280 at 0x76 on IIC1; RXI/TXI/TEI/ERI → ELC events 0x061-0x064 → ICU IELSR91-94) | smoke-tested | `zephyr-bme280.yaml` PASS 2/2: the driver's chip-ID check, calibration load and once-a-second RTIO fetches (register burst reads with a restart, register writes) all complete; `temp: 25.0; press: 101.324218; humidity: 50.3906` twice from `bme280-system.yaml`'s defaults, then `temp: 21.500000; press: 98.996093; humidity: 39.995117` twice after the 1.5 s stimulus to 21.5 °C / 990 hPa / 40 %RH; 1,996,707 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `157366ee469d8501…` |
+| IIC0/IIC1 (`ra_iic`): RIIC master transmit/receive, 7-bit addresses, `ST`/`RS`/`SP` conditions with `BBSY`/`MST`/`TRS`, `ICDRT` holding register behind the shifter, read turn-around with the dummy `ICDRR` read, stop/restart deferred until the last byte is read, address NACK (`NACKF`/`ACKBR`), `ACKBT` behind `ACKWP`, `IICRST` resets; events on the rising edge of flag & enable; wire time from `ICBRL`/`ICBRH`/`CKS` | sim-tested | the sample above; `crates/core/tests/ra8m1_iic_icu.rs` (the start's TXI vectors through IELSR92; the BME280 chip-ID read 0xD0 → 0x60 step by step on the ICU events; an absent device NACKed through ERI) in both scheduler modes; unit tests `peripherals::ra_iic` |
+| RIIC slave mode (`SARLn`/`SARUn`/`ICSER`), 10-bit addresses, a NACKed data byte, arbitration loss, SCL-low timeout (`TMOF`), SMBus, wake-up (`ICWUR`), `RDRFS`, `WAIT` hold timing, `ICCR1` SCL/SDA overrides and `CLO`, `ICMR1.BC`, DTC transfers | **not modelled** | slave registers stored only; devices ACK every data byte; rise/fall times are not added to the SCL period |
+| Stock Zephyr v4.1.0 `tests/drivers/pwm/pwm_api` (pwm7 = GPT7, GTIOC7A on P603 through PmnPFS PMR/PSEL 00011) | smoke-tested | `zephyr-pwm-api.yaml` PASS 5/5: `pwm_basic` 2/2 (`test_pwm_cycle`, `test_pwm_nsec`: 50%, 100%, 0% for a second each), 4,754 edges on P603 (50% of 64,000 PCLKD counts = 128,000/128,000 bus cycles, 3,751 edges; 50% of 2 ms = 480,000/480,000, 1,001 edges; 100% high, 0% low), final `GTPR` 239,999 and `GTUDDTYC.OADTY` 0b10; 1,639,468 steps, 0.04 s; audit 2,000,000 steps, 0 unsupported |
+| GPT0-13 (`ra_gpt`): saw-wave up-count at PCLKD / 2^`GTCR.TPCS`, `GTSTR`/`GTSTP`/`GTCLR` channel masks gated by `GTSSR`/`GTPSR`/`GTCSR` bit 31, cycle end (`TCFPO`, `GTPBR` → `GTPR`, `GTCCRC` → `GTCCRA`, `GTCCRE` → `GTCCRB` per `GTBER`, `CCRSWT` force), compare A/B (`TCFA`/`TCFB`), events 0x0A1 + 9n (+0 CCMPA, +1 CCMPB, +6 OVF), GTIOCnA/B from `GTIOR` (cycle-end / compare-match levels, initial level for the first period, `OADFLT`/`OAHLD` when stopped, `OAE`) and `GTUDDTYC` 0%/100%, edges at their exact cycle | smoke-tested | the test above; `crates/core/tests/ra8m1_gpt_pwm.rs` (P603 carries GTIOC7A only while P603PFS has PMR = 1 and PSEL = 00011; 30 of 100 counts high per period after an initial-level first period; GPT7 overflow latches IELSR41 once per period) in both scheduler modes; unit tests `peripherals::ra_gpt` |
+| GPT triangle-wave and one-shot modes, down-counting, input capture, hardware start/stop/clear/count sources, compare C-F events and double buffers, dead time, `GTINTAD`/POEG output disable, A/D triggers, `GTWP` write protection, `OADTY` cycle-end timing | **not modelled** | `GTCR.MD` != 0 counts like saw-wave with the pins held; `GTWP` stored only; `OADTY` applies at once |
+| Stock Zephyr v4.1.0 `tests/drivers/dac/dac_api` (dac0, DA0 on P014) | smoke-tested | `zephyr-dac-api.yaml` PASS 4/4: `dac` 1/1 (`test_task_write_value`, half scale), `DADR0` = 0x0800 and `DACR` = 0x5F (`DAOE0` and the reset bits 4:0); 1,548,985 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `f9b70d753b58fce4…`. Before `ra_dac12` the block was unmapped and `R_DAC_Open` BusFaulted on `DACR` |
+| Stock Zephyr v4.1.0 `tests/drivers/dac/dac_loopback` (DAC0 ch0 → ADC0 ch0, the test's README wiring) | smoke-tested | `zephyr-dac-loopback.yaml` PASS 4/4 on `dac-loopback-system.yaml` (DA0 P014 jumpered to AN000 P004, `analog_links` on adc0): `dac_loopback` 1/1 (2048 ± 32 expected), `DADR0` = 0x0800 and ADC0 `ADDR0` = 0x07FF (DA0 at 1650 mV, converted on the 3300 mV scale); 1,779,975 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `0e66eabf77bdc317…` |
+| DAC12 (`ra_dac12`): `DADR0`/`DADR1` keep 12 data bits per `DADPR.DPSEL` (right- or left-justified), `DACR` (reset 0x1F)/`DADPR`/`DAADSCR`/`DAVREFCR`/`DAAMPCR`/`DAPC`/`DAASWCR`/`DAADUSR` read back; DAn = code × 3300 mV / 4096 while `DACR.DAOEn` = 1, undriven otherwise; an ADC channel's `analog_links` reads that level at scan end | smoke-tested | the tests above; `crates/core/tests/ra_dac12_loopback.rs` (AN000 follows DA0 through `DAOE0` on/off and later `DADR0` writes; without the jumper AN000 reads 0) in both scheduler modes; unit tests `peripherals::ra_dac12` |
+| DAC conversion time and amplifier stabilisation wait, `DAVREFCR.REF` / charge pump, D/A-A/D synchronous start | **not modelled** | the output steps at once; `REF`, `DAPC`, `DAADSCR`/`DAADUSR` are stored only and the output always scales to `vref_mv` |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
+| SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
-## Stock Zephyr (verified 2026-10-31, button 2026-11-01)
+## Stock Zephyr (verified 2026-10-31, button, blinky, adc_api, bme280, pwm_api, dac_api and dac_loopback 2026-11-01)
 
 ```bash
 # fixtures are committed; rebuild (byte-identical) with:
@@ -52,6 +66,12 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-uart-basic-api.elf  sha256 9c0328041125498b...
 #   r7fa8m1ah-zephyr-shell.elf  sha256 c658de4cfb2a4686...
 #   r7fa8m1ah-zephyr-button.elf  sha256 ffbfe48e747d292e... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-blinky.elf  sha256 671464cdd92a9b4b... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-adc-api.elf  sha256 e949897baec2ee7c... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-bme280.elf  sha256 157366ee469d8501... (Zephyr v4.1.0 + picolibc)
+#   r7fa8m1ah-zephyr-pwm-api.elf  sha256 ac29030890bbec30... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-dac-api.elf  sha256 f9b70d753b58fce4... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-dac-loopback.elf  sha256 0e66eabf77bdc317... (Zephyr v4.1.0)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -81,12 +101,53 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   uart:~$ kernel uptime / Uptime: 519 ms
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-button.yaml --no-uart-stdout
-#   PASS  3/3 checks · zephyr-button · 5369263 steps
+#   PASS  5/5 checks · zephyr-button · 5369263 steps
 #   *** Booting Zephyr OS build v4.1.0 ***
 #   Set up button at gpio@40400000 pin 9 / Set up LED at gpio@404000c0 pin 0
 #   Press the button
 #   Button pressed at 498960451
 #   Button pressed at 1498992451
+#   LED1 (port6:0): 4 edges; PCNTR1 ends PDR0 set, PODR0 clear
+
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-blinky.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-blinky · 1304065 steps
+#   LED state: OFF / ON / OFF / ON / OFF; 6 edges on port6:0
+#   Audit (1,000,000 instructions): unsupported_total: 0
+
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-adc-api.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-adc-api · 1995488 steps
+#   Samples read: 0x07ff 0x03a2 0x8000 0x8000 0x8000 0x8000
+#   SUITE PASS - 100.00% [adc_basic]: pass = 6, fail = 0, skip = 0, total = 6
+#   Audit (2,000,000 instructions): unsupported_total: 0
+
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-bme280.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-bme280 · 1996707 steps
+#   temp: 25.0; press: 101.324218; humidity: 50.3906                 (x2)
+#   temp: 21.500000; press: 98.996093; humidity: 39.995117           (after the stimulus)
+#   Audit (2,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test ra8m1_iic_icu   # also --features event-scheduler
+#   3 passed
+
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-pwm-api.yaml --no-uart-stdout
+#   PASS  5/5 checks · zephyr-pwm-api · 1639468 steps
+#   [PWM]: 0, [period]: 64000, [pulse]: 32000 / 64000 / 0     PASS - test_pwm_cycle
+#   [PWM]: 0, [period]: 2000000, [pulse]: 1000000 / 2000000 / 0  PASS - test_pwm_nsec
+#   SUITE PASS - 100.00% [pwm_basic]: pass = 2, fail = 0, skip = 0, total = 2
+#   P603: 4754 edges (128000 / 128000 cycles, then 480000 / 480000)
+#   Audit (2,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test ra8m1_gpt_pwm   # also --features event-scheduler
+#   3 passed
+
+# Stock Zephyr v4.1.0 tests/drivers/dac/dac_api and dac_loopback (DAC0)
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-dac-api.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-dac-api · 1548985 steps
+#   SUITE PASS - 100.00% [dac]: pass = 1, fail = 0, skip = 0, total = 1
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-dac-loopback.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-dac-loopback · 1779975 steps
+#   SUITE PASS - 100.00% [dac_loopback]: pass = 1, fail = 0, skip = 0, total = 1
+#   Audits (2,000,000 instructions each): unsupported_total: 0
+cargo test -p labwired-core --test ra_dac12_loopback   # also --features event-scheduler
+#   4 passed
 
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
@@ -106,6 +167,38 @@ BusFaults at `0x4035_8308` in `R_SCI_B_UART_Open`.
 The v4.1.0 `ek_ra8m1` board also opens SCI0 (PMOD1) and SCI2 (PMOD2) at
 boot: without the `sci0` window the image BusFaults at `0x4035_8008` in
 `R_SCI_B_UART_Open`.
+
+Negative controls for `zephyr-bme280.yaml` (each one fails it): with no
+BME280 on IIC1 the address is NACKed, FSP aborts the transfer and the
+driver logs `i2c_ra_iic_transfer: Write failed` / `ID read failed: -5`, so
+the sample prints `Device "bme280@76" is not ready`; with IIC1 back to the
+old `stub` window (and no device, which a stub cannot host) FSP reports
+`Bus busy condition` and the same not-ready error.
+
+Negative controls for `zephyr-pwm-api.yaml` (each one fails it): the
+driver only writes registers, so `pwm_basic` passes 2/2 against the old
+`stub` GPT window too, which is why the script checks the pad. With the
+stub, P603 has 0 edges and `GTPR`/`GTUDDTYC` read 0 (3 checks fail); with
+`GTIOC7A` dropped from `gtioc_pads` the pad keeps its port level and has 0
+edges.
+
+Negative controls for `zephyr-dac-api.yaml` / `zephyr-dac-loopback.yaml`
+(each one fails it): the driver only writes registers, so `dac` passes 1/1
+against a `stub` DAC window too, which is why the script checks `DADR0` and
+`DACR` (both read 0 on the stub, 2 checks fail); run on the plain
+`system.yaml` (no DA0-AN000 jumper), ADC0 converts 0 and `dac_loopback`
+fails 0/1.
+
+Negative control for `zephyr-adc-api.yaml`: with the old `adc12` stub
+window, ADC1 never raises its scan end, so `test_adc_asynchronous_call`
+fails (`k_poll failed with error -11`) and the run never reaches the
+sample checks. Without the potentiometer and TMP36 in `adc-system.yaml` the
+suite still passes 6/6 but reads `0x0000`, and the sample assertions fail.
+
+Negative control for `zephyr-blinky.yaml` and the LED half of
+`zephyr-button.yaml`: with the port ignoring PmnPFS PDR/PODR stores (as
+before), P600 stays an input, so blinky has no edges and `PCNTR1` reads 0,
+and the button LED shows none; both fail.
 
 Negative control for `zephyr-button.yaml`: the `icu` window without its
 `irq_pins` (the IRQ-pin half inert, as the old stub was) prints "Press the

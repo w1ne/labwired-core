@@ -1,0 +1,31 @@
+# LabWired - EK-RA6M5 stock Zephyr dac_api test (DAC0, ra_dac12)
+#
+# Unmodified upstream Zephyr v4.1.0 `tests/drivers/dac/dac_api` for board
+# `ek_ra6m5` (dac0 is enabled in the board DTS, DA0 on P014). Rebuild:
+# crates/firmware-ek-ra6m5-zephyr/build.sh
+#
+# dac_renesas_ra.c drives FSP r_dac: R_DAC_Open stores DADPR/DAADSCR/
+# DAVREFCR with DACR.DAOE0 clear, R_DAC_Start sets DAOE0, and the test
+# writes half scale (2048) once. The suite only checks return codes, so a
+# write-only window would pass it too; the registers are the oracle: DADR0
+# must hold 0x0800 and DACR must read DAOE0 | the reset bits 4:0 (0x5F).
+# Before ra_dac12 the block was unmapped and R_DAC_Open faulted on DACR
+# (0x40171004).
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa6m5bh-zephyr-dac-api.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+  max_cycles: 1000000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Running TESTSUITE dac"
+      - " PASS - test_task_write_value"
+      - "SUITE PASS - 100.00% [dac]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - memory_value: { address: 0x40171000, expected_value: 0x0800, size: 2 }
+  - memory_value: { address: 0x40171004, expected_value: 0x5F, size: 1 }
+  - expected_stop_reason: max_cycles
