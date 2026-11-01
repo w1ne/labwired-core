@@ -23,11 +23,19 @@
 //! check the words move by the datasheet's arithmetic, so a part that answered
 //! a constant frame would fail those even if the constant were right.
 
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
+use labwired_core::peripherals::components::declarative_spi::GenericSpiDevice;
 use labwired_core::peripherals::i2c::I2cDevice;
+use labwired_core::peripherals::spi::SpiDevice;
+use labwired_core::Bus;
+use std::path::PathBuf;
 
 mod common;
-use common::transcript::{read_reg, read_stream, run_i2c, script, write_reg, Step};
+use common::transcript::{
+    read_reg, read_stream, run_i2c, run_spi, script, spi_xfer, write_reg, Step,
+};
 
 // ─── plumbing ──────────────────────────────────────────────────────────────
 
@@ -490,6 +498,82 @@ mod bosch {
     }
 }
 
+// ─── batch 4: expanders and the ADS1015 (I²C) ─────────────────────────────
+
+/// MCP23017 (DS20001952D Table 3-5): the whole BANK = 0 map in one sequential
+/// burst — IODIRA/B power up 0xFF, everything else 0x00 — then the pointer's
+/// 0x15 → 0x00 rollover (§3.2.1), IOCON's two addresses (bit 0 unimplemented)
+/// and the GPIO → OLAT path with the pin turned to output.
+fn check_mcp23017(d: &mut dyn I2cDevice) -> Result<(), String> {
+    let mut por = vec![0xFFu8, 0xFF];
+    por.extend([0x00u8; 20]);
+    ensure_eq!(rd(d, 0x00, 22), por, "MCP23017 power-on map 0x00..0x15");
+    ensure_eq!(
+        rd(d, 0x15, 2),
+        vec![0x00u8, 0xFF],
+        "MCP23017 OLATB then rollover to IODIRA"
+    );
+    // MIRROR (bit 6) plus the unimplemented bit 0. Not SEQOP: setting that
+    // would put silicon in Byte mode and stop the burst below incrementing.
+    wr(d, 0x0A, &[0x41]);
+    ensure_eq!(
+        rd(d, 0x0B, 1),
+        vec![0x40u8],
+        "MCP23017 IOCON written at 0x0A, read at 0x0B (bit 0 reads 0)"
+    );
+    wr(d, 0x00, &[0x00]); // IODIRA: all outputs
+    wr(d, 0x12, &[0xA5]); // GPIOA write lands in OLATA
+    ensure_eq!(
+        rd(d, 0x12, 3),
+        vec![0xA5u8, 0x00, 0xA5],
+        "MCP23017 GPIOA / GPIOB / OLATA after a GPIOA write"
+    );
+    Ok(())
+}
+
+/// PCF8575 (SCPS121I §8.1): power-on port reads 0xFF 0xFF; a written pair is
+/// read back port 0 first, and the pairing repeats for as long as the master
+/// clocks.
+fn check_pcf8575(d: &mut dyn I2cDevice) -> Result<(), String> {
+    ensure_eq!(bare_read(d, 2), vec![0xFFu8, 0xFF], "PCF8575 power-on port");
+    send(d, &[0x34, 0x12]);
+    ensure_eq!(
+        bare_read(d, 4),
+        vec![0x34u8, 0x12, 0x34, 0x12],
+        "PCF8575 port 0, port 1, port 0, port 1 after writing 0x1234"
+    );
+    Ok(())
+}
+
+/// ADS1015 (SBAS473F §8): CONFIG POR 8583h, Lo_thresh 8000h, Hi_thresh 7FFFh,
+/// and the reserved low nibbles of the thresholds (R-0h / R-Fh) surviving a
+/// write. CONVERSION is exercised in `ads1015_tracks_stimulus`.
+fn check_ads1015(d: &mut dyn I2cDevice) -> Result<(), String> {
+    ensure_eq!(rd(d, 0x01, 2), vec![0x85u8, 0x83], "ADS1015 CONFIG POR");
+    ensure_eq!(rd(d, 0x02, 2), vec![0x80u8, 0x00], "ADS1015 Lo_thresh POR");
+    ensure_eq!(rd(d, 0x03, 2), vec![0x7Fu8, 0xFF], "ADS1015 Hi_thresh POR");
+    wr(d, 0x02, &[0x12, 0x3F]);
+    wr(d, 0x03, &[0x12, 0x30]);
+    ensure_eq!(
+        rd(d, 0x02, 2),
+        vec![0x12u8, 0x30],
+        "ADS1015 Lo_thresh keeps its R-0h nibble"
+    );
+    ensure_eq!(
+        rd(d, 0x03, 2),
+        vec![0x12u8, 0x3F],
+        "ADS1015 Hi_thresh keeps its R-Fh nibble"
+    );
+    // OS (D15) cannot be cleared by a write: it reads "not converting".
+    wr(d, 0x01, &[0x44, 0x83]);
+    ensure_eq!(
+        rd(d, 0x01, 2),
+        vec![0xC4u8, 0x83],
+        "ADS1015 CONFIG write (MUX 100, PGA 010) with OS still set"
+    );
+    Ok(())
+}
+
 type Check = fn(&mut dyn I2cDevice) -> Result<(), String>;
 
 const PARTS: &[(&str, u8, Check)] = &[
@@ -502,6 +586,9 @@ const PARTS: &[(&str, u8, Check)] = &[
     ("dht20", 0x38, check_dht20),
     ("pmsa003i", 0x12, check_pmsa003i),
     ("ina226", 0x40, check_ina226),
+    ("mcp23017", 0x20, check_mcp23017),
+    ("pcf8575", 0x20, check_pcf8575),
+    ("ads1015", 0x48, check_ads1015),
 ];
 
 // ─── smoke + negative control ──────────────────────────────────────────────
@@ -928,4 +1015,434 @@ fn bme680_bosch_compensation_recovers_the_stimulus_exactly() {
         vec![0x00],
         "the reset register reads 0"
     );
+}
+
+// ─── batch 4: per-part behaviour beyond the default stimulus (I²C) ────────
+
+/// The MCP23017 drives a pad only where IODIR made the pin an output, reads
+/// the latch back on outputs and the posed level (IPOL-inverted) on inputs.
+#[test]
+fn mcp23017_tracks_stimulus() {
+    use labwired_core::sim_input::SimInput;
+    let mut d = dev("mcp23017", 0x20);
+    assert!(d.take_pin_drives().is_empty(), "reset drives nothing");
+
+    // §3.5.11: OLAT is written while every pin is still an input — no pad moves.
+    wr(&mut d, 0x14, &[0xFF]);
+    assert!(
+        d.take_pin_drives().is_empty(),
+        "OLATA written with IODIRA = 0xFF must not drive a pad"
+    );
+    // §3.5.1: GPA4..GPA7 become outputs and take their latch bits at once.
+    wr(&mut d, 0x00, &[0x0F]);
+    let mut drives = d.take_pin_drives();
+    drives.sort();
+    assert_eq!(
+        drives,
+        vec![
+            ("GPA4".to_string(), true),
+            ("GPA5".to_string(), true),
+            ("GPA6".to_string(), true),
+            ("GPA7".to_string(), true),
+        ]
+    );
+    // GPIOA = latch on the outputs, the posed level on the inputs.
+    d.set_input("port_a", 5.0).unwrap();
+    assert_eq!(rd(&mut d, 0x12, 1), vec![0xF5]);
+    // §3.5.2: IPOL inverts the input bits only.
+    wr(&mut d, 0x02, &[0xFF]);
+    assert_eq!(rd(&mut d, 0x12, 1), vec![0xFA]);
+
+    // A 2-byte burst at GPIOA writes GPIOA then GPIOB, through to the latches.
+    wr(&mut d, 0x01, &[0x00]); // IODIRB: all outputs
+    let _ = d.take_pin_drives();
+    wr(&mut d, 0x12, &[0x00, 0x81]);
+    let mut drives = d.take_pin_drives();
+    drives.sort();
+    assert_eq!(
+        drives,
+        vec![
+            ("GPA4".to_string(), false),
+            ("GPA5".to_string(), false),
+            ("GPA6".to_string(), false),
+            ("GPA7".to_string(), false),
+            ("GPB0".to_string(), true),
+            ("GPB7".to_string(), true),
+        ],
+        "GPB1..GPB6 were first driven LOW by the IODIRB write (latch 0x00), so \
+         only GPB0 and GPB7 move"
+    );
+    assert_eq!(rd(&mut d, 0x14, 2), vec![0x00, 0x81], "OLATA, OLATB");
+    // Input pins of port A still read the posed level, inverted.
+    assert_eq!(rd(&mut d, 0x12, 2), vec![0x0A, 0x81], "GPIOA, GPIOB");
+}
+
+/// The PCF8575 presents a word only when its pair completes, keeps
+/// alternating halves on long reads, and a host-posed port reaches both the
+/// wire and the pads.
+#[test]
+fn pcf8575_tracks_stimulus() {
+    use labwired_core::sim_input::SimInput;
+    let mut d = dev("pcf8575", 0x20);
+    send(&mut d, &[0x0F, 0xF0]);
+    let mut drives = d.take_pin_drives();
+    drives.sort();
+    let mut want: Vec<(String, bool)> = (0..8)
+        .map(|n| (format!("P0{n}"), n < 4))
+        .chain((0..8).map(|n| (format!("P1{n}"), n >= 4)))
+        .collect();
+    want.sort();
+    assert_eq!(
+        drives, want,
+        "every pad takes its bit from the written pair"
+    );
+
+    // §8.1: the port moves only after the SECOND byte of a pair. An odd
+    // trailing byte is a pair that never completed.
+    send(&mut d, &[0x00]);
+    assert!(d.take_pin_drives().is_empty(), "half a pair moved a pad");
+    assert_eq!(bare_read(&mut d, 2), vec![0x0F, 0xF0]);
+    // Three bytes: the first pair lands, the third byte does not.
+    send(&mut d, &[0xAA, 0x55, 0x00]);
+    assert_eq!(bare_read(&mut d, 2), vec![0xAA, 0x55]);
+    // Two pairs in one transaction: "after every two bytes, the previous data
+    // is overwritten".
+    send(&mut d, &[0x11, 0x22, 0x33, 0x44]);
+    assert_eq!(
+        bare_read(&mut d, 6),
+        vec![0x33, 0x44, 0x33, 0x44, 0x33, 0x44]
+    );
+
+    d.set_input("port", f64::from(0xBEEFu16)).unwrap();
+    assert_eq!(bare_read(&mut d, 2), vec![0xEF, 0xBE]);
+    let drives = d.take_pin_drives();
+    assert!(
+        drives.contains(&("P04".to_string(), false))
+            && drives.contains(&("P16".to_string(), false)),
+        "0xBEEF clears P04 and P16: {drives:?}"
+    );
+}
+
+/// ADS1015 CONVERSION: 12-bit, left-justified, MUX-selected, PGA-scaled,
+/// clipping at 7FFh / 800h (§7.3.3 Table 7-1, §7.5.4, Figure 8-2).
+#[test]
+fn ads1015_tracks_stimulus() {
+    use labwired_core::sim_input::SimInput;
+    // OS | MUX | PGA | MODE=1 | DR=100 | COMP_QUE=11.
+    fn config(mux: u16, pga: u16) -> [u8; 2] {
+        (0x8183 | mux << 12 | pga << 9).to_be_bytes()
+    }
+    fn conv(d: &mut GenericI2cDevice, mux: u16, pga: u16) -> u16 {
+        wr(d, 0x01, &config(mux, pga));
+        be16(&rd(d, 0x00, 2))
+    }
+    let mut d = dev("ads1015", 0x48);
+    d.set_input("a0", 1.0004).unwrap();
+    d.set_input("a1", 0.25).unwrap();
+    d.set_input("a2", 0.1).unwrap();
+    d.set_input("a3", -0.5).unwrap();
+    // AIN0 at ±2.048 V: 1.0004 V → 1000.4 → 1000 counts → 1000 << 4. The
+    // ADS1115 would report 16006 here; the low nibble is always zero.
+    assert_eq!(conv(&mut d, 4, 2), 1000 << 4);
+    // POR MUX 000 is AIN0 − AIN1: 0.7504 V → 750 counts.
+    assert_eq!(conv(&mut d, 0, 2), 750 << 4);
+    // AIN3 − GND, negative: −500 counts, two's complement in bits 15:4.
+    assert_eq!(conv(&mut d, 7, 2), ((-500i16 as u16) & 0x0FFF) << 4);
+    assert_eq!(conv(&mut d, 7, 2), 0xE0C0);
+    // AIN2 at ±0.256 V (PGA 101/110/111): 0.1 V → 800 counts.
+    for pga in 5..=7 {
+        assert_eq!(conv(&mut d, 6, pga), 800 << 4, "PGA {pga:03b}");
+    }
+    // AIN0 at ±6.144 V: 1.0004 V × 2048 / 6.144 = 333.47 → 333.
+    assert_eq!(conv(&mut d, 4, 0), 333 << 4);
+    // AIN1 − AIN3 at ±1.024 V: 0.75 V → 1500.
+    assert_eq!(conv(&mut d, 2, 3), 1500 << 4);
+    // Clipping: +FS → 7FFh, −FS → 800h (§7.5.4).
+    d.set_input("a0", 3.0).unwrap();
+    assert_eq!(conv(&mut d, 4, 2), 0x7FF0);
+    d.set_input("a0", -3.0).unwrap();
+    assert_eq!(conv(&mut d, 4, 2), 0x8000);
+}
+
+// ─── batch 4: the SPI part (RFM95W) ────────────────────────────────────────
+//
+// The checks above talk I²C; the RFM95W is SPI. It gets the same shape — a
+// check function, a smoke test, and a negative control against stand-ins
+// answering only 0x00 or only 0xFF — over `run_spi`.
+
+fn spi_dev(device_type: &str) -> GenericSpiDevice {
+    let yaml = labwired_config::embedded_device_yaml(device_type)
+        .unwrap_or_else(|| panic!("{device_type} descriptor is not embedded"));
+    GenericSpiDevice::from_yaml(yaml, "PA4").unwrap_or_else(|e| panic!("{device_type}.yaml: {e}"))
+}
+
+/// One SX127x register access: address byte (bit 7 = write), one data byte.
+/// Returns the MISO byte of the data phase.
+fn sx(d: &mut dyn SpiDevice, addr: u8, data: u8) -> u8 {
+    run_spi(d, &spi_xfer(&[addr, data])).bytes[1]
+}
+
+/// RFM95W / SX1276 (Table 41): RegVersion 0x12 (read-only), RegOpMode POR
+/// 0x01, RegFrf POR 434 MHz, RegPaConfig 0x4F, RegPaDac 0x84; a write to
+/// RegOpMode reads back.
+fn check_rfm95(d: &mut dyn SpiDevice) -> Result<(), String> {
+    ensure_eq!(sx(d, 0x42, 0x00), 0x12u8, "RFM95 RegVersion");
+    ensure_eq!(
+        sx(d, 0x01, 0x00),
+        0x01u8,
+        "RFM95 RegOpMode POR (FSK, standby)"
+    );
+    let frf = [sx(d, 0x06, 0), sx(d, 0x07, 0), sx(d, 0x08, 0)];
+    ensure_eq!(frf, [0x6Cu8, 0x80, 0x00], "RFM95 RegFrf POR (434 MHz)");
+    ensure_eq!(sx(d, 0x09, 0x00), 0x4Fu8, "RFM95 RegPaConfig POR");
+    ensure_eq!(sx(d, 0x4D, 0x00), 0x84u8, "RFM95 RegPaDac POR");
+    // LoRa mode, sleep — what every LoRa driver writes first.
+    sx(d, 0x81, 0x80);
+    ensure_eq!(sx(d, 0x01, 0x00), 0x80u8, "RFM95 RegOpMode after a write");
+    Ok(())
+}
+
+type SpiCheck = fn(&mut dyn SpiDevice) -> Result<(), String>;
+
+const SPI_PARTS: &[(&str, SpiCheck)] = &[("rfm95", check_rfm95)];
+
+#[test]
+fn every_spi_part_passes_its_smoke_check() {
+    for &(ty, check) in SPI_PARTS {
+        let mut d = spi_dev(ty);
+        check(&mut d).unwrap_or_else(|e| panic!("{ty}: {e}"));
+        println!("smoke  {ty:<9} (SPI): PASS");
+    }
+}
+
+/// A stand-in SPI part that answers every byte with one value.
+struct SilentSpi {
+    byte: u8,
+}
+
+impl SpiDevice for SilentSpi {
+    fn transfer(&mut self, _mosi: u8) -> u8 {
+        self.byte
+    }
+    fn cs_pin(&self) -> &str {
+        "PA4"
+    }
+}
+
+#[test]
+fn negative_control_a_silent_spi_part_fails_every_check() {
+    for &(ty, check) in SPI_PARTS {
+        for byte in [0x00u8, 0xFF] {
+            match check(&mut SilentSpi { byte }) {
+                Err(e) => {
+                    println!("negctl {ty:<9} answering 0x{byte:02X}: FAILS as required ({e})")
+                }
+                Ok(()) => panic!(
+                    "{ty}: a SPI part answering only 0x{byte:02X} PASSED the smoke check — \
+                     the check proves nothing"
+                ),
+            }
+        }
+    }
+}
+
+/// The RFM95W has no measurement channel — its "stimulus" is the driver's own
+/// configuration. A 915 MHz setup is stored and read back; RegVersion refuses
+/// a write; one byte per frame (burst walk not modelled, see the descriptor).
+#[test]
+fn rfm95_tracks_stimulus() {
+    let mut d = spi_dev("rfm95");
+    // 915 MHz: Frf = 915e6 / (32e6 / 2^19) = 0xE4C000.
+    for (addr, v) in [(0x06u8, 0xE4u8), (0x07, 0xC0), (0x08, 0x00)] {
+        sx(&mut d, 0x80 | addr, v);
+    }
+    assert_eq!(
+        [
+            sx(&mut d, 0x06, 0),
+            sx(&mut d, 0x07, 0),
+            sx(&mut d, 0x08, 0)
+        ],
+        [0xE4, 0xC0, 0x00]
+    );
+    // PA_BOOST at +17 dBm (RegPaConfig 0x8F) and an OCP of 0x2B.
+    sx(&mut d, 0x89, 0x8F);
+    assert_eq!(sx(&mut d, 0x09, 0), 0x8F);
+    // RegVersion is read-only.
+    sx(&mut d, 0xC2, 0x00);
+    assert_eq!(sx(&mut d, 0x42, 0), 0x12);
+    // Untouched addresses keep their Table 41 POR values.
+    assert_eq!(sx(&mut d, 0x0B, 0), 0x2B, "RegOcp");
+    assert_eq!(sx(&mut d, 0x70, 0), 0xD0, "RegPll");
+    assert_eq!(sx(&mut d, 0x3E, 0), 0x80, "RegIrqFlags1");
+}
+
+// ─── batch 4: the logic part (ULN2803A) ────────────────────────────────────
+//
+// A ULN2803A has no bus and no register: its "registers" are eight pads in and
+// eight pads out. The check therefore runs over a `Pads` seam — the real part
+// placed on a NUCLEO-L476RG bus, sampled through the GPIO input registers the
+// CPU reads — and the negative control runs the SAME check against stand-ins
+// whose outputs are stuck low, stuck high, or simply follow the inputs (a
+// non-inverting buffer). All three must fail.
+
+const ULN_IN: [&str; 8] = ["PC0", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7"];
+const ULN_OUT: [&str; 8] = ["PB0", "PB1", "PB2", "PB3", "PB4", "PB5", "PB6", "PB7"];
+
+trait Pads {
+    /// Put `byte` on IN1..IN8 (bit 0 = IN1) and let the outputs settle.
+    fn apply(&mut self, byte: u8);
+    /// OUT1..OUT8 as the CPU samples them (bit 0 = OUT1).
+    fn outputs(&mut self) -> u8;
+}
+
+struct UlnBench {
+    bus: SystemBus,
+    cycle: u64,
+}
+
+impl UlnBench {
+    fn new(extra_config: &str) -> Self {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/stm32l476.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("stm32l476 chip");
+        let mut config = String::new();
+        for n in 0..8 {
+            config.push_str(&format!("      in{}_pin: \"{}\"\n", n + 1, ULN_IN[n]));
+            config.push_str(&format!("      out{}_pin: \"{}\"\n", n + 1, ULN_OUT[n]));
+        }
+        config.push_str(extra_config);
+        let yaml = format!(
+            "name: \"uln2803-bench\"\nchip: \"{}\"\nboard_io: []\nexternal_devices:\n  \
+             - id: \"u1\"\n    type: \"uln2803\"\n    connection: \"gpio\"\n    config:\n{config}",
+            chip_path.display()
+        );
+        let manifest: SystemManifest = serde_yaml::from_str(&yaml).expect("manifest parses");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("attach uln2803");
+        // RCC_AHB2ENR: clock GPIOA/B/C.
+        bus.write_u32(0x4002_104C, 0b111)
+            .expect("enable GPIO clocks");
+        Self { bus, cycle: 0 }
+    }
+
+    fn drive(&mut self, pin: &str, high: bool) {
+        let (addr, bit) = SystemBus::resolve_pin_odr_pub(&self.bus, pin).expect("ODR");
+        let mut word = self.bus.read_u32(addr).expect("read ODR");
+        if high {
+            word |= 1 << bit;
+        } else {
+            word &= !(1 << bit);
+        }
+        self.bus.write_u32(addr, word).expect("write ODR");
+    }
+
+    fn sample(&mut self, pin: &str) -> bool {
+        let (addr, bit) = SystemBus::resolve_pin_idr_pub(&self.bus, pin).expect("IDR");
+        self.bus.read_u32(addr).expect("read IDR") >> bit & 1 != 0
+    }
+
+    fn tick(&mut self, cycles: u64) {
+        for _ in 0..cycles {
+            self.bus.set_current_cycle(self.cycle);
+            let _ = self.bus.tick_peripherals_fully();
+            self.cycle += 1;
+        }
+    }
+}
+
+impl Pads for UlnBench {
+    fn apply(&mut self, byte: u8) {
+        self.bus.set_current_cycle(self.cycle);
+        for (n, pin) in ULN_IN.iter().enumerate() {
+            self.drive(pin, byte >> n & 1 != 0);
+        }
+        // 200 ns is 16 cycles at the board's 80 MHz and 200 at the 1 GHz
+        // placement below; give both plenty.
+        self.tick(512);
+    }
+    fn outputs(&mut self) -> u8 {
+        (0..8).fold(0u8, |acc, n| acc | (u8::from(self.sample(ULN_OUT[n])) << n))
+    }
+}
+
+/// Stand-ins the check must reject.
+enum FakeUln {
+    Stuck(u8),
+    Follower(u8),
+}
+
+impl Pads for FakeUln {
+    fn apply(&mut self, byte: u8) {
+        if let FakeUln::Follower(last) = self {
+            *last = byte;
+        }
+    }
+    fn outputs(&mut self) -> u8 {
+        match self {
+            FakeUln::Stuck(v) | FakeUln::Follower(v) => *v,
+        }
+    }
+}
+
+/// Every output is the complement of its input, channel by channel: all off,
+/// all on, the two checkerboards and a walking one.
+fn check_uln2803(p: &mut dyn Pads) -> Result<(), String> {
+    let mut patterns = vec![0x00u8, 0xFF, 0xA5, 0x5A];
+    patterns.extend((0..8).map(|n| 1u8 << n));
+    for byte in patterns {
+        p.apply(byte);
+        ensure_eq!(
+            p.outputs(),
+            !byte,
+            "ULN2803A OUT1..8 for IN1..8 = {byte:08b}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn uln2803_passes_its_smoke_check_on_l476_pads() {
+    check_uln2803(&mut UlnBench::new("")).unwrap_or_else(|e| panic!("uln2803: {e}"));
+    println!("smoke  uln2803   (GPIO): PASS");
+}
+
+#[test]
+fn negative_control_a_stuck_or_non_inverting_uln2803_fails() {
+    for (what, mut fake) in [
+        ("stuck low", FakeUln::Stuck(0x00)),
+        ("stuck high", FakeUln::Stuck(0xFF)),
+        ("non-inverting buffer", FakeUln::Follower(0)),
+    ] {
+        match check_uln2803(&mut fake) {
+            Err(e) => println!("negctl uln2803 {what}: FAILS as required ({e})"),
+            Ok(()) => panic!("uln2803: a {what} stand-in PASSED the smoke check"),
+        }
+    }
+}
+
+/// The ULN2803A's stimulus is its input pads: a channel's output moves after
+/// tOFF (200 ns) and not before. `cpu_hz: 1_000_000_000` makes one cycle one
+/// nanosecond, so the deadline can be walked cycle by cycle.
+#[test]
+fn uln2803_tracks_stimulus() {
+    let mut b = UlnBench::new("      cpu_hz: 1000000000\n");
+    b.apply(0x00);
+    assert_eq!(b.outputs(), 0xFF, "precondition: every channel off");
+    let start = b.cycle;
+    b.bus.set_current_cycle(start);
+    b.drive(ULN_IN[2], true);
+    assert!(
+        b.sample(ULN_OUT[2]),
+        "OUT3 moved inside the store that moved IN3"
+    );
+    b.tick(199);
+    assert!(
+        b.sample(ULN_OUT[2]),
+        "OUT3 fell before the 200 ns propagation delay elapsed"
+    );
+    b.tick(2);
+    assert!(
+        !b.sample(ULN_OUT[2]),
+        "OUT3 must sink once 200 ns have passed"
+    );
+    assert_eq!(b.outputs(), !0b0000_0100, "only channel 3 moved");
 }
