@@ -9944,6 +9944,11 @@ boards:
     # buffer transfers; compare A / overflow events 0x0C9/0x0CF for GPT1 through
     # the ICU); PmnPFS PMR/PSEL now route GTIOC1A on P405. Stock Zephyr v4.1.0
     # tests/drivers/pwm/pwm_api 2/2 with the waveform checked on the pad.
+    # 2026-11-01 (feat/ra-dac12): DAC0/DAC1 are ra_dac12 (DADRn in either
+    # format, DACR/DADPR/DAAMPCR/... read back, DAn output while DAOEn); an
+    # ADC channel's `analog_links` binds it to a DAC output (a board jumper).
+    # Stock Zephyr v4.1.0 tests/drivers/dac/dac_api 1/1 and dac_loopback 1/1
+    # (DA0 jumpered to AN000, ADDR0 = 0x07FF).
     doc: docs/boards/ek-ra6m5.md
     chip: configs/chips/r7fa6m5bh.yaml
     tier: smoke-manual
@@ -9955,6 +9960,7 @@ boards:
       - "ra6m5_adc12_icu (ADC1 scan end through ICU IELSR39)"
       - "ra6m5_iic_icu (IIC1 events through ICU IELSR91-94, BME280 chip-ID read)"
       - "ra6m5_gpt_pwm (GPT1 PWM on P405 through PmnPFS PSEL, overflow through ICU IELSR64)"
+      - "ra_dac12_loopback (DA0 jumpered to ADC0 AN000 via analog_links, ra6m5)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9965,6 +9971,7 @@ boards:
       - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/ra_adc12.rs
       - crates/core/src/peripherals/ra_iic.rs
+      - crates/core/src/peripherals/ra_dac12.rs
       - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
@@ -10017,6 +10024,11 @@ boards:
     # buffer transfers; compare A / overflow events 0x0E0/0x0E6 for GPT7 through
     # the ICU); PmnPFS PMR/PSEL now route GTIOC7A on P603. Stock Zephyr v4.1.0
     # tests/drivers/pwm/pwm_api 2/2 with the waveform checked on the pad.
+    # 2026-11-01 (feat/ra-dac12): DAC0/DAC1 are ra_dac12 (DADRn in either
+    # format, DACR/DADPR/DAAMPCR/... read back, DAn output while DAOEn); an
+    # ADC channel's `analog_links` binds it to a DAC output (a board jumper).
+    # Stock Zephyr v4.1.0 tests/drivers/dac/dac_api 1/1 and dac_loopback 1/1
+    # (DA0 jumpered to AN000, ADDR0 = 0x07FF).
     doc: docs/boards/ek-ra8m1.md
     chip: configs/chips/r7fa8m1ah.yaml
     tier: smoke-manual
@@ -10028,6 +10040,7 @@ boards:
       - "ra8m1_adc12_icu (ADC1 scan end through ICU IELSR39)"
       - "ra8m1_iic_icu (IIC1 events through ICU IELSR91-94, BME280 chip-ID read)"
       - "ra8m1_gpt_pwm (GPT7 PWM on P603 through PmnPFS PSEL, overflow through ICU IELSR41)"
+      - "ra_dac12_loopback (DA0 jumpered to ADC0 AN000 via analog_links, ra8m1)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10038,6 +10051,7 @@ boards:
       - crates/core/src/peripherals/ra_agt.rs
       - crates/core/src/peripherals/ra_adc12.rs
       - crates/core/src/peripherals/ra_iic.rs
+      - crates/core/src/peripherals/ra_dac12.rs
       - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs

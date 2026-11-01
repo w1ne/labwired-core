@@ -45,10 +45,14 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.1.0 `tests/drivers/pwm/pwm_api` (pwm1 = GPT1, GTIOC1A on P405 through PmnPFS PMR/PSEL 00011) | smoke-tested | `zephyr-pwm-api.yaml` PASS 5/5: `pwm_basic` 2/2 (`test_pwm_cycle`, `test_pwm_nsec`: 50%, 100%, 0% for a second each), 4,128 edges on P405 (50% of 64,000 PCLKD counts = 64,000/64,000 bus cycles, 3,125 edges; 50% of 2 ms = 200,000/200,000, 1,001 edges; 100% high, 0% low), final `GTPR` 199,999 and `GTUDDTYC.OADTY` 0b10; 131,375 steps, 0.01 s; audit 2,000,000 steps, 0 unsupported |
 | GPT0-9 (`ra_gpt`): saw-wave up-count at PCLKD / 2^`GTCR.TPCS`, `GTSTR`/`GTSTP`/`GTCLR` channel masks gated by `GTSSR`/`GTPSR`/`GTCSR` bit 31, cycle end (`TCFPO`, `GTPBR` → `GTPR`, `GTCCRC` → `GTCCRA`, `GTCCRE` → `GTCCRB` per `GTBER`, `CCRSWT` force), compare A/B (`TCFA`/`TCFB`), events 0x0C0 + 9n (+0 CCMPA, +1 CCMPB, +6 OVF), GTIOCnA/B from `GTIOR` (cycle-end / compare-match levels, initial level for the first period, `OADFLT`/`OAHLD` when stopped, `OAE`) and `GTUDDTYC` 0%/100%, edges at their exact cycle | smoke-tested | the test above; `crates/core/tests/ra6m5_gpt_pwm.rs` (P405 carries GTIOC1A only while P405PFS has PMR = 1 and PSEL = 00011; 30 of 100 counts high per period after an initial-level first period; GPT1 overflow latches IELSR64 once per period) in both scheduler modes; unit tests `peripherals::ra_gpt` |
 | GPT triangle-wave and one-shot modes, down-counting, input capture, hardware start/stop/clear/count sources, compare C-F events and double buffers, dead time, `GTINTAD`/POEG output disable, A/D triggers, `GTWP` write protection, `OADTY` cycle-end timing | **not modelled** | `GTCR.MD` != 0 counts like saw-wave with the pins held; `GTWP` stored only; `OADTY` applies at once |
+| Stock Zephyr v4.1.0 `tests/drivers/dac/dac_api` (dac0, DA0 on P014) | smoke-tested | `zephyr-dac-api.yaml` PASS 4/4: `dac` 1/1 (`test_task_write_value`, half scale), `DADR0` = 0x0800 and `DACR` = 0x5F (`DAOE0` and the reset bits 4:0); 78,930 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `92449503ced24ffe…`. Before `ra_dac12` the block was unmapped and `R_DAC_Open` BusFaulted on `DACR` |
+| Stock Zephyr v4.1.0 `tests/drivers/dac/dac_loopback` (DAC0 ch0 → ADC0 ch0, the test's README wiring) | smoke-tested | `zephyr-dac-loopback.yaml` PASS 4/4 on `dac-loopback-system.yaml` (DA0 P014 jumpered to AN000 P000, `analog_links` on adc0): `dac_loopback` 1/1 (2048 ± 32 expected), `DADR0` = 0x0800 and ADC0 `ADDR0` = 0x07FF (DA0 at 1650 mV, converted on the 3300 mV scale); 84,461 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `ba26f2e13e61e2d3…` |
+| DAC12 (`ra_dac12`): `DADR0`/`DADR1` keep 12 data bits per `DADPR.DPSEL` (right- or left-justified), `DACR` (reset 0x1F)/`DADPR`/`DAADSCR`/`DAVREFCR`/`DAAMPCR`/`DAPC`/`DAASWCR`/`DAADUSR` read back; DAn = code × 3300 mV / 4096 while `DACR.DAOEn` = 1, undriven otherwise; an ADC channel's `analog_links` reads that level at scan end | smoke-tested | the tests above; `crates/core/tests/ra_dac12_loopback.rs` (AN000 follows DA0 through `DAOE0` on/off and later `DADR0` writes; without the jumper AN000 reads 0) in both scheduler modes; unit tests `peripherals::ra_dac12` |
+| DAC conversion time and amplifier stabilisation wait, `DAVREFCR.REF` / charge pump, D/A-A/D synchronous start | **not modelled** | the output steps at once; `REF`, `DAPC`, `DAADSCR`/`DAADUSR` are stored only and the output always scales to `vref_mv` |
 | DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
-| SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
+| SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
 
-## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, SCI interrupts, button, blinky, adc_api, bme280 and pwm_api 2026-11-01)
+## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, SCI interrupts, button, blinky, adc_api, bme280, pwm_api, dac_api and dac_loopback 2026-11-01)
 
 ```bash
 # from the repository root
@@ -143,6 +147,17 @@ cargo test -p labwired-core --test ra6m5_iic_icu   # also --features event-sched
 cargo test -p labwired-core --test ra6m5_gpt_pwm   # also --features event-scheduler
 #   3 passed
 
+# Stock Zephyr v4.1.0 tests/drivers/dac/dac_api and dac_loopback (DAC0)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-dac-api.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-dac-api · 78930 steps
+#   SUITE PASS - 100.00% [dac]: pass = 1, fail = 0, skip = 0, total = 1
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-dac-loopback.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-dac-loopback · 84461 steps
+#   SUITE PASS - 100.00% [dac_loopback]: pass = 1, fail = 0, skip = 0, total = 1
+#   Audits (2,000,000 instructions each): unsupported_total: 0
+cargo test -p labwired-core --test ra_dac12_loopback   # also --features event-scheduler
+#   4 passed
+
 # Fixture rebuild: two runs of build.sh, byte-identical
 crates/firmware-ek-ra6m5-zephyr/build.sh
 #   cb8edcdbca022b61c35846d85699e56db400f52fb82c71a14ca2ab6b6ef9cd89  r7fa6m5bh-zephyr-hello.elf
@@ -154,6 +169,8 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 #   9a1ad5b6c16223c3a8f94008721265398046b66143d9b0ea2ba6e785781d5c82  r7fa6m5bh-zephyr-adc-api.elf
 #   4a406198ff35036e14562b8a330703a5eae91d22a3b5eca05e4a3166b0eb8698  r7fa6m5bh-zephyr-bme280.elf
 #   b5eb516d740f66287f67a27de4a31f026c97df4c197acf6bf7bbc9468dcd75ba  r7fa6m5bh-zephyr-pwm-api.elf
+#   92449503ced24ffeabe11148f591755fdd514458c8942922c65922cdcd12c5fc  r7fa6m5bh-zephyr-dac-api.elf
+#   ba26f2e13e61e2d3e9005a92be9b2f9d4dda6ce5741e8317b00bc41f66152e70  r7fa6m5bh-zephyr-dac-loopback.elf
 
 # Determinism: two zephyr-hello runs, two zephyr-counter-alarm runs and two
 # zephyr-button runs, two zephyr-blinky runs, two zephyr-adc-api runs,
@@ -185,6 +202,11 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 # Negative control for zephyr-adc-api.yaml: ADC0/ADC1 back to the old
 # `stub` window -> no scan end, test_adc_asynchronous_call fails
 # (`k_poll failed with error -11`)
+# Negative controls for zephyr-dac-api.yaml / zephyr-dac-loopback.yaml:
+#   - DAC back to a `stub` window -> dac 1/1 still passes (the driver only
+#     writes), but DADR0 / DACR read 0 (2 of 4 checks FAIL)
+#   - the loopback on the plain system.yaml (no DA0-AN000 jumper) -> ADC0
+#     reads 0, dac_loopback 0/1 (2 of 4 checks FAIL)
 ```
 
 ## Notes

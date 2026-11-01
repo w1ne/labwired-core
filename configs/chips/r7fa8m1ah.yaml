@@ -98,9 +98,13 @@
 #   Manchester modes and the baud generator (CCR2 is not decoded; the frame
 #   time comes from `baud`) are not modelled; the control registers are
 #   stored and read back.
+# - DAC12 (`ra_dac12`): DADR0/1 and the control registers read back; DAn
+#   outputs code * 3.3 V / 4096 while DACR.DAOEn = 1, at once. Conversion
+#   time, the amplifier wait, the reference / charge-pump selection and
+#   D/A-A/D synchronous start are not modelled (see the model header).
 # - Option-setting memory (OFS0/OFS1 at 0x0300A100+), factory flash, flash
 #   programming (FACI), standby SRAM, OSPI/xSPI, SDRAM, Ethernet, USB, CAN
-#   FD, timers, ADC, DAC, crypto (RSIP-E51A), CEU and every block not listed
+#   FD, crypto (RSIP-E51A), CEU and every block not listed
 #   below are not mapped or are declared stubs.
 
 name: "r7fa8m1ah"
@@ -429,6 +433,15 @@ peripherals:
     config:
       elc_event: 436
       clock_hz: 480000000
+      vref_mv: 3300
+  # DAC12 (R_DAC_Type, 0x10C4 bytes; FSP R_DAC_BASE 0x40333000): two
+  # channels, DA0 on P014 (Zephyr pinctrl dac0_default). No interrupts.
+  # `vref_mv` scales RaDac12::output_mv (AVCC0 = VREFH0 = 3.3 V on the EK-RA8M1).
+  - id: "dac"
+    type: "ra_dac12"
+    base_address: 0x40333000
+    size: "4292"
+    config:
       vref_mv: 3300
   # USBHS0.
   - id: "usbhs"

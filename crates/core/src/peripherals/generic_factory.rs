@@ -346,10 +346,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
+    "ra_dac12",
     "ra_iic",
     "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
@@ -1490,7 +1491,38 @@ pub fn try_build(
                     }
                 }
             }
+            // Board wires from an analog output: `analog_links: { <ch>:
+            // "<peripheral>:<output>" }`, bound by the bus after build.
+            if let Some(map) = p_cfg
+                .config
+                .get("analog_links")
+                .and_then(|v| v.as_mapping())
+            {
+                for (k, v) in map {
+                    let link = v.as_str().and_then(|s| s.rsplit_once(':'));
+                    match (
+                        k.as_u64(),
+                        link.and_then(|(p, o)| Some((p, o.parse::<u8>().ok()?))),
+                    ) {
+                        (Some(ch), Some((source, output))) => {
+                            unit.add_analog_link(ch as u8, source.to_string(), output)
+                        }
+                        _ => tracing::warn!(
+                            "ra_adc12 '{}': analog_links entry {k:?}: {v:?} not understood \
+                             (expected <channel>: \"<peripheral>:<output>\")",
+                            p_cfg.id
+                        ),
+                    }
+                }
+            }
             Box::new(unit)
+        }
+        "ra_dac12" => {
+            use crate::peripherals::ra_dac12 as dac;
+            let vref = p_cfg.config.get("vref_mv").and_then(|v| v.as_u64());
+            Box::new(dac::RaDac12::new(
+                vref.map_or(dac::DEFAULT_VREF_MV, |v| v as u16),
+            ))
         }
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),

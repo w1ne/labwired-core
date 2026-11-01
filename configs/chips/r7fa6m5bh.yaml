@@ -83,10 +83,14 @@
 #   transfers, compare A/B and overflow events, GTIOC1A/B on P405/P406;
 #   triangle/one-shot modes, input capture, hardware start sources, dead
 #   time and POEG are not modelled (see the model header).
+# - DAC12 (`ra_dac12`): DADR0/1 and the control registers read back; DAn
+#   outputs code * 3.3 V / 4096 while DACR.DAOEn = 1, at once. Conversion
+#   time, the amplifier wait, the reference / charge-pump selection and
+#   D/A-A/D synchronous start are not modelled (see the model header).
 # - DMAC/DTC, ELC, RTC, IWDT/WDT, SPI0/1,
 #   USBFS/USBHS, ETHERC/EDMAC, CANFD and FACI: declared stubs (reads 0,
 #   writes dropped).
-# - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC and every block
+# - SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, CRC, DOC and every block
 #   not listed below are NOT mapped. Firmware that touches them faults with a
 #   memory violation.
 
@@ -410,6 +414,15 @@ peripherals:
     config:
       elc_event: 358
       clock_hz: 200000000
+      vref_mv: 3300
+  # DAC12 (R_DAC_Type, 0x10C4 bytes; FSP ra6m5 R_DAC_BASE 0x40171000): two
+  # channels, DA0 on P014 (Zephyr pinctrl dac0_default). No interrupts.
+  # `vref_mv` scales RaDac12::output_mv (AVCC0 = VREFH0 = 3.3 V on the EK-RA6M5).
+  - id: "dac"
+    type: "ra_dac12"
+    base_address: 0x40171000
+    size: "4292"
+    config:
       vref_mv: 3300
   # R_FCACHE (0x4001C000): bsp_clock_init invalidates the flash cache
   # (FCACHEIV +0x104, polled until it reads 0) and sets the flash wait
