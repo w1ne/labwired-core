@@ -91,3 +91,19 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 2000000 \
   --out-dir "$OUT/zephyr-adc-api-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 samples/sensor/bme280 with a BME280 at 0x76 on IIC1
+# (bme280-system.yaml): chip-ID check, calibration load and once-a-second
+# samples, every transfer sequenced from the IIC1 RXI/TXI/TEI/ERI events
+# linked through ICU IELSR91-94; a mid-run stimulus moves the readings
+# (tests/fixtures/r7fa6m5bh-zephyr-bme280.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra6m5/zephyr-bme280.yaml \
+  --output-dir "$OUT/zephyr-bme280" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa6m5bh-zephyr-bme280.elf \
+  --system examples/ek-ra6m5/bme280-system.yaml \
+  --max-steps 2000000 \
+  --out-dir "$OUT/zephyr-bme280-unsupported-audit" \
+  --fail-on-unsupported

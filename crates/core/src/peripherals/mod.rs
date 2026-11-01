@@ -97,6 +97,7 @@ pub mod ra_adc12;
 pub mod ra_agt;
 pub mod ra_clock;
 pub mod ra_icu;
+pub mod ra_iic;
 pub mod ra_pfs;
 pub mod radio;
 pub mod rcc;

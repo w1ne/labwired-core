@@ -41,10 +41,13 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | ADC12 conversion time, group scan (`ADCS` = 1, `ADANSB`, group-B scan end), double trigger, hardware/ELC start triggers (`TRGE`/`ADSTRGR`), temperature sensor and internal reference, window comparator, `ADBUF`, sample-and-hold, `ADCER.ACE` clear-after-read | **not modelled** | each channel converts in a nominal 1 µs at 480 MHz, not the manual's state count; a group-scan start converts nothing; `ADSSTRn`/`ADSHCR`/`ADEXICR` are stored only; `ADDRn` keep their value after a read |
 | AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
-| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
+| Stock Zephyr v4.1.0 `samples/sensor/bme280` (BME280 at 0x76 on IIC1; RXI/TXI/TEI/ERI → ELC events 0x061-0x064 → ICU IELSR91-94) | smoke-tested | `zephyr-bme280.yaml` PASS 2/2: the driver's chip-ID check, calibration load and once-a-second RTIO fetches (register burst reads with a restart, register writes) all complete; `temp: 25.0; press: 101.324218; humidity: 50.3906` twice from `bme280-system.yaml`'s defaults, then `temp: 21.500000; press: 98.996093; humidity: 39.995117` twice after the 1.5 s stimulus to 21.5 °C / 990 hPa / 40 %RH; 1,996,707 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `157366ee469d8501…` |
+| IIC0/IIC1 (`ra_iic`): RIIC master transmit/receive, 7-bit addresses, `ST`/`RS`/`SP` conditions with `BBSY`/`MST`/`TRS`, `ICDRT` holding register behind the shifter, read turn-around with the dummy `ICDRR` read, stop/restart deferred until the last byte is read, address NACK (`NACKF`/`ACKBR`), `ACKBT` behind `ACKWP`, `IICRST` resets; events on the rising edge of flag & enable; wire time from `ICBRL`/`ICBRH`/`CKS` | sim-tested | the sample above; `crates/core/tests/ra8m1_iic_icu.rs` (the start's TXI vectors through IELSR92; the BME280 chip-ID read 0xD0 → 0x60 step by step on the ICU events; an absent device NACKed through ERI) in both scheduler modes; unit tests `peripherals::ra_iic` |
+| RIIC slave mode (`SARLn`/`SARUn`/`ICSER`), 10-bit addresses, a NACKed data byte, arbitration loss, SCL-low timeout (`TMOF`), SMBus, wake-up (`ICWUR`), `RDRFS`, `WAIT` hold timing, `ICCR1` SCL/SDA overrides and `CLO`, `ICMR1.BC`, DTC transfers | **not modelled** | slave registers stored only; devices ACK every data byte; rise/fall times are not added to the SCL period |
+| DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, GPT, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
 | SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
-## Stock Zephyr (verified 2026-10-31, button, blinky and adc_api 2026-11-01)
+## Stock Zephyr (verified 2026-10-31, button, blinky, adc_api and bme280 2026-11-01)
 
 ```bash
 # fixtures are committed; rebuild (byte-identical) with:
@@ -56,6 +59,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-button.elf  sha256 ffbfe48e747d292e... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-blinky.elf  sha256 671464cdd92a9b4b... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-adc-api.elf  sha256 e949897baec2ee7c... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-bme280.elf  sha256 157366ee469d8501... (Zephyr v4.1.0 + picolibc)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -98,6 +102,14 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   SUITE PASS - 100.00% [adc_basic]: pass = 6, fail = 0, skip = 0, total = 6
 #   Audit (2,000,000 instructions): unsupported_total: 0
 
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-bme280.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-bme280 · 1996707 steps
+#   temp: 25.0; press: 101.324218; humidity: 50.3906                 (x2)
+#   temp: 21.500000; press: 98.996093; humidity: 39.995117           (after the stimulus)
+#   Audit (2,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test ra8m1_iic_icu   # also --features event-scheduler
+#   3 passed
+
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
 
@@ -116,6 +128,13 @@ BusFaults at `0x4035_8308` in `R_SCI_B_UART_Open`.
 The v4.1.0 `ek_ra8m1` board also opens SCI0 (PMOD1) and SCI2 (PMOD2) at
 boot: without the `sci0` window the image BusFaults at `0x4035_8008` in
 `R_SCI_B_UART_Open`.
+
+Negative controls for `zephyr-bme280.yaml` (each one fails it): with no
+BME280 on IIC1 the address is NACKed, FSP aborts the transfer and the
+driver logs `i2c_ra_iic_transfer: Write failed` / `ID read failed: -5`, so
+the sample prints `Device "bme280@76" is not ready`; with IIC1 back to the
+old `stub` window (and no device, which a stub cannot host) FSP reports
+`Bus busy condition` and the same not-ready error.
 
 Negative control for `zephyr-adc-api.yaml`: with the old `adc12` stub
 window, ADC1 never raises its scan end, so `test_adc_asynchronous_call`
