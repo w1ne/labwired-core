@@ -1,0 +1,22 @@
+# LabWired - AMD Kria KV260 RPU stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/hello_world` for board `kv260_r5`.
+# Rebuild: crates/firmware-kv260-r5-zephyr/build.sh
+#
+# The Cortex-R5F enters at the ELF entry in SVC mode; Zephyr programs the
+# 16-region PMSAv7 MPU, enables VFP, brings up the RPU GIC and TTC0, and polls
+# PS UART1 (Cadence) for its console.
+# Needs a native CLI: --features qemu-arm-system,event-scheduler.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/kv260-r5-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  # The image idles in WFI after main() returns; idle time is not steps.
+  max_cycles: 60000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Hello World! kv260_r5"
+  - expected_stop_reason: max_cycles

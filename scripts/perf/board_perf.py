@@ -456,6 +456,13 @@ WAIVED: dict[str, str] = {
         "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
         "is made for this board (docs/boards/sam4s-xplained.md)."
     ),
+    "xck26-rpu": (
+        "First Cortex-R part (Zynq UltraScale+ RPU, Cortex-R5F) on the optional "
+        "native qemu-arm-system engine, which single-steps the pinned tlib core "
+        "through the bus; the default CLI this gate builds cannot run it, and the "
+        "Zephyr fixtures are not representative perf-spin workloads. No "
+        "throughput claim is made for this part."
+    ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
         "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "

@@ -189,3 +189,17 @@ module insertion/helper execution and plant/full-host-power acceptance are
 Task4 gates. Physical board, rail, footprint, thermal and RF gates remain
 pending while hardware is unavailable. Local dogfood requires no npm
 publication or manual deployment.
+
+# Zynq UltraScale+ RPU platform (Cortex-R5F)
+
+`SystemBus::configure_armv7_zynqmp_rpu()` installs the map from
+`configs/chips/xck26-rpu.yaml` (`native_rpu_peripherals`): the RPU GIC
+distributor and CPU interface (PL390; the GICv2 model serves the GICv1 subset
+Zephyr uses), Cadence UART0/UART1 (`cadence_uart`) and TTC0 (`ttc`). The map is
+validated before the bus changes. The TTC derives its counts from the bus
+cycle with an absolute floor. It resolves match, interval and overflow events
+in closed form, and publishes the next enabled event as the fabric's CPU
+interrupt deadline, so idle fast-forward lands on it. Decrement mode and the
+external TTC clock are refused. The Cadence UART re-latches ISR conditions
+while they hold, and its GIC level is `ISR & IMR`. Its RX is reconciled through
+the fabric's `level_sources`.

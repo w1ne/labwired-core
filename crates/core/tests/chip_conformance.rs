@@ -62,6 +62,10 @@ const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
         "rv1103",
         "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
     ),
+    (
+        "xck26-rpu",
+        "Generic descriptor is CPU/memory only. The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification.",
+    ),
 ];
 
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly
@@ -1971,13 +1975,26 @@ fn is_declared_only_prototype(name: &str, chip: &ChipDescriptor) -> bool {
                 && chip.peripherals.is_empty()
                 && chip.flash.size == 0
         }
+        "xck26-rpu" => {
+            chip.name == "xck26-rpu"
+                && matches!(chip.arch, labwired_config::Arch::Arm)
+                && chip.core.as_deref() == Some("cortex-r5f")
+                && chip.peripherals.is_empty()
+                && chip.flash.size == 0
+        }
         _ => false,
     }
 }
 
 #[test]
 fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
-    assert_eq!(DECLARED_ONLY_CHIPS.len(), 1);
+    assert_eq!(DECLARED_ONLY_CHIPS.len(), 2);
+    let rpu = ChipDescriptor::from_file(root("configs/chips/xck26-rpu.yaml")).unwrap();
+    assert!(is_declared_only_prototype("xck26-rpu", &rpu));
+    assert!(!is_declared_only_prototype("rv1103", &rpu));
+    let mut wrong = rpu.clone();
+    wrong.core = Some("cortex-a7".into());
+    assert!(!is_declared_only_prototype("xck26-rpu", &wrong));
     assert!(DECLARED_ONLY_CHIPS.iter().any(|(n, _)| *n == "rv1103"));
     let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
     assert!(is_declared_only_prototype("rv1103", &chip));

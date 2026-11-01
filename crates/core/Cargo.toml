@@ -506,6 +506,12 @@ required-features = ["microbit-board-io-test"]
 name = "qemu_arm_system"
 required-features = ["qemu-arm-system"]
 
+# Stock Zephyr on the native Cortex-R5F. The synchronization case also needs
+# event-scheduler (idle fast-forward) and asserts it rather than going vacuous.
+[[test]]
+name = "kv260_r5_zephyr"
+required-features = ["qemu-arm-system"]
+
 # Explicitly opt in with --ignored and provide the shipped native CLI/artifacts.
 # Required features prevent a disabled backend from reporting a green 0-test gate.
 [[test]]

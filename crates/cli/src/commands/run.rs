@@ -1834,6 +1834,10 @@ pub(crate) fn run_interactive(
                             emit_error(cli.json, "ConfigError", "Cortex-A7 needs the system-aware run command: run --firmware <ELF> --system <manifest> (native --features qemu-arm)".into(), None, EXIT_CONFIG_ERROR);
                             return ExitCode::from(EXIT_CONFIG_ERROR);
                         }
+                        Ok(labwired_core::system::arch_policy::MachineFamily::CortexR) => {
+                            emit_error(cli.json, "ConfigError", "Cortex-R5F runs through `labwired test --system <manifest>` on a native --features qemu-arm-system build".into(), None, EXIT_CONFIG_ERROR);
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
                         Err(error) => {
                             emit_error(
                                 cli.json,

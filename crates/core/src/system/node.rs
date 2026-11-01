@@ -189,6 +189,21 @@ pub fn build_node_with_options(
             #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
             anyhow::bail!("node '{id}': Cortex-A7 needs a native build with --features qemu-arm; browser execution is unavailable")
         }
+        MachineFamily::CortexR => {
+            #[cfg(all(feature = "qemu-arm-system", not(target_arch = "wasm32")))]
+            {
+                let NodeFirmware::Elf(bytes) = firmware else {
+                    anyhow::bail!("node '{id}': Cortex-R5F takes an initialized-memory ELF");
+                };
+                let bus =
+                    crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+                Ok(Box::new(crate::system::cortex_r::load_elf(
+                    bus, chip, &bytes,
+                )?))
+            }
+            #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
+            anyhow::bail!("node '{id}': Cortex-R5F needs a native build with --features qemu-arm-system; browser execution is unavailable")
+        }
         MachineFamily::RiscV => {
             build_riscv_node(id, chip, system, firmware, opts.plugins, opts.fab, blobs)
         }

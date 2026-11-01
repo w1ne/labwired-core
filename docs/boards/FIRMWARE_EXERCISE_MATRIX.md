@@ -726,3 +726,7 @@ _L1 + stock RTOS, SIM-DERIVED. First Renesas RX part: the RXv3 core (integer, DS
 ### `vegaboard-ri5cy`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LPUART0 console are proven by tests/fixtures/vegaboard-ri5cy-smoke.elf and examples/vegaboard-ri5cy/io-smoke.yaml. The SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs (examples/vegaboard-ri5cy/VALIDATION.md), so no advanced blocks exist to list._
+
+### `xck26-rpu`
+
+_L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._

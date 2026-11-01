@@ -70,7 +70,8 @@ impl Isa {
         use crate::system::arch_policy::MachineFamily;
         match family {
             MachineFamily::CortexM => Some(Isa::Thumb),
-            MachineFamily::CortexA => None, // ARM/Thumb state needs a mode-aware fault decoder.
+            // ARM/Thumb state needs a mode-aware fault decoder.
+            MachineFamily::CortexA | MachineFamily::CortexR => None,
             MachineFamily::RiscV => Some(Isa::RiscV),
             MachineFamily::Xtensa => Some(Isa::Xtensa),
             MachineFamily::Avr => Some(Isa::Avr),

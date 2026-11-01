@@ -429,6 +429,27 @@
         "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
       }
     },
+    "xck26-rpu": {
+        "in_boards": false,
+        "uart": {
+          "state": "proven",
+          "file": "crates/core/tests/kv260_r5_zephyr.rs",
+          "test": "hello_world_prints_banner_and_greeting",
+          "signal": "committed stock Zephyr v4.1.0 kv260_r5 ELF tests/fixtures/kv260-r5-zephyr-hello.elf boots on the native Cortex-R5F and polls PS UART1 (Cadence) TX; the test asserts '*** Booting Zephyr OS build' and 'Hello World! kv260_r5' on the UART1 console sink. examples/kv260-r5/zephyr-{hello,sync,kernel-common}.yaml assert the same console through the native CLI.",
+          "lane": "core-qemu-arm (native, qemu-arm-system): cargo test -p labwired-core --test kv260_r5_zephyr; examples/kv260-r5/ci/test.sh",
+          "note": "RX and the UART interrupt path are unit-tested only (peripherals::armv7::cadence_uart); no firmware exercises interrupt-driven UART yet. Evidence captured 2026-11-01."
+        },
+        "spi": {
+          "state": "none",
+          "gap": "No ZynqMP SPI/QSPI controller is installed in the RPU platform slice.",
+          "lane": "none"
+        },
+        "i2c": {
+          "state": "none",
+          "gap": "No ZynqMP I2C controller is installed in the RPU platform slice.",
+          "lane": "none"
+        }
+      },
     "rv1103": {
       "in_boards": true,
       "uart": {
