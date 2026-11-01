@@ -5070,6 +5070,230 @@
       ]
     },
     {
+      "device_type": "mpu9250",
+      "label": "MPU-9250 IMU",
+      "summary": "TDK InvenSense MPU-9250 motion sensor (accel + gyro + temperature; AK8963 magnetometer not modelled) over I²C.",
+      "detail": "TDK InvenSense MPU-9250 at 0x68 (0x69 with AD0 high). WHO_AM_I (0x75) reads 0x71 and PWR_MGMT_1 powers up at 0x01, awake. The 14-byte burst at 0x3B carries accel, TEMP_OUT and gyro; ACCEL_CONFIG.ACCEL_FS_SEL and GYRO_CONFIG.GYRO_FS_SEL set the counts per g and per °/s at read time, and TEMP_OUT follows T × 333.87 − 7011.27. A 1 kHz sample timer raises INT_STATUS.RAW_DATA_RDY_INT, cleared by reading INT_STATUS. H_RESET restores the declared registers. The AK8963 magnetometer (internal I²C master and bypass at 0x0C), the FIFO, sleep gating and the programmable sample rate are NOT modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (AD0 low); 0x69 with AD0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "ens160",
+      "label": "ENS160 Air Quality",
+      "summary": "ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C.",
+      "detail": "ScioSense ENS160 at 0x52 (0x53 with MISO/ADDR high). PART_ID (0x00) reads 0x0160 little-endian and OPMODE powers up in IDLE (0x01). In STANDARD mode (OPMODE 0x02) DATA_AQI, DATA_TVOC (0x22) and DATA_ECO2 (0x24) follow the host's aqi, tvoc and eco2 channels, DEVICE_STATUS reports STATAS and NEWDAT, and its validity flag follows the host's validity channel (warm-up / initial start-up). TEMP_IN / RH_IN are copied into DATA_T / DATA_RH. The MOx algorithm, the STANDARD-mode cadence, GET_APPVER and the INTn pin are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x52 (MISO/ADDR low); 0x53 with MISO/ADDR high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "tvoc",
+          "label": "TVOC",
+          "unit": "ppb",
+          "min": 0.0,
+          "max": 65000.0,
+          "default": 100.0
+        },
+        {
+          "key": "eco2",
+          "label": "eCO2",
+          "unit": "ppm",
+          "min": 400.0,
+          "max": 65000.0,
+          "default": 600.0
+        },
+        {
+          "key": "aqi",
+          "label": "AQI-UBA",
+          "unit": "",
+          "min": 1.0,
+          "max": 5.0,
+          "default": 2.0
+        },
+        {
+          "key": "validity",
+          "label": "Validity flag (0 ok, 1 warm-up, 2 start-up, 3 invalid)",
+          "unit": "",
+          "min": 0.0,
+          "max": 3.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "ina260",
+      "label": "INA260 Power Monitor",
+      "summary": "TI INA260 current / voltage / power monitor with an integrated 2 mΩ shunt over I²C (36 V, 15 A).",
+      "detail": "Texas Instruments INA260 (default 0x40; 0x40–0x4F by A0/A1 strapping). Configuration powers up at 0x6127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x2270. Current (1.25 mA/LSB, two's complement) and bus voltage (1.25 mV/LSB) follow the host's current and bus_voltage; Power (10 mW/LSB) is Current × Bus Voltage / 6400 in register counts, exactly as the datasheet's §8.6.4 says, always positive. CVRF rises 2.2 ms after a Configuration write. Averaging, the alert comparator and power-down are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0 = A1 = GND); 0x40–0x4F by A0/A1 strapping."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 36.0,
+          "default": 5.0
+        },
+        {
+          "key": "current",
+          "label": "Current (internal 2 mΩ shunt)",
+          "unit": "A",
+          "min": -15.0,
+          "max": 15.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
+      "device_type": "ina3221",
+      "label": "INA3221 3-Channel Monitor",
+      "summary": "TI INA3221 three-channel shunt and bus voltage monitor over I²C (26 V).",
+      "detail": "Texas Instruments INA3221 (default 0x40; 0x40–0x43 by the A0 pin). Configuration powers up at 0x7127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x3220. Each channel's shunt (40 µV/LSB) and bus (8 mV/LSB) words are 13-bit two's complement left-aligned in 16 bits, D2:D0 zero, following the host's per-channel current through a 0.1 Ω shunt and bus voltage. The shunt-voltage sum follows SCC1..SCC3, and CVRF rises 6.6 ms after a Configuration write. Averaging, channel disable and the alert / power-valid / timing-control comparators are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0 = GND); 0x41 (VS), 0x42 (SDA), 0x43 (SCL)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ch1_bus_voltage",
+          "label": "CH1 bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 26.0,
+          "default": 5.0
+        },
+        {
+          "key": "ch1_current",
+          "label": "CH1 current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -2.0,
+          "max": 2.0,
+          "default": 0.2
+        },
+        {
+          "key": "ch2_bus_voltage",
+          "label": "CH2 bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 26.0,
+          "default": 3.2
+        },
+        {
+          "key": "ch2_current",
+          "label": "CH2 current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -2.0,
+          "max": 2.0,
+          "default": 0.1
+        },
+        {
+          "key": "ch3_bus_voltage",
+          "label": "CH3 bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 26.0,
+          "default": 12.0
+        },
+        {
+          "key": "ch3_current",
+          "label": "CH3 current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -2.0,
+          "max": 2.0,
+          "default": 0.5
+        }
+      ]
+    },
+    {
       "device_type": "mcp23017",
       "label": "MCP23017 I/O Expander",
       "summary": "Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map).",

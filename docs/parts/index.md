@@ -52,6 +52,10 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [DHT20](dht20.md) | `dht20` | I²C |
 | [PMSA003I](pmsa003i.md) | `pmsa003i` | I²C |
 | [INA226](ina226.md) | `ina226` | I²C |
+| [INA260](ina260.md) | `ina260` | I²C |
+| [INA3221](ina3221.md) | `ina3221` | I²C |
+| [MPU-9250](mpu9250.md) | `mpu9250` | I²C |
+| [ENS160](ens160.md) | `ens160` | I²C |
 | [MCP23017](mcp23017.md) | `mcp23017` | I²C |
 | [PCF8575](pcf8575.md) | `pcf8575` | I²C |
 | [ADS1015](ads1015.md) | `ads1015` | I²C |

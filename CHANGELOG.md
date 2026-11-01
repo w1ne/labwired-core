@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Four more everyday I²C parts as declarative `configs/devices/*.yaml`
+  descriptors: `mpu9250` (accel/gyro/temp; AK8963 magnetometer not modelled),
+  `ens160` (TVOC/eCO2/AQI, live only in STANDARD mode), `ina260` (fixed-LSB
+  current/power, integrated shunt) and `ina3221` (three channels, 13-bit
+  left-aligned words, shunt-voltage sum). Each has a smoke check, a
+  `*_tracks_stimulus` test and the 0x00/0xFF negative control in
+  `everyday_sensor_set.rs`, plus a `docs/parts/` page. AM2320 and VL53L5CX
+  were evaluated and not added: the `i2c_device` primitive cannot model them
+  truthfully.
 - Five more declarative parts on existing primitives, no Rust model:
   `mcp23017` (16-bit I²C GPIO expander; IODIR-gated output pads), `pcf8575`
   (16-bit quasi-bidirectional expander; byte-pair writes, alternating
