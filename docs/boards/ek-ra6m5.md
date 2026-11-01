@@ -48,6 +48,13 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
   below it). The FSP UART suite drives fifo_fill on TXI/TEI and fifo_read
   and the pending suite on RXI; without the events fifo_fill fails and
   fifo_read hangs.
+- **Stock Zephyr shell** (v4.0.0 `samples/subsys/shell/shell_module`,
+  `tests/fixtures/r7fa6m5bh-zephyr-shell.elf`, the sample of Renode's
+  `shell_module.robot`). Its serial backend is interrupt driven, so the
+  prompt, the echo and every reply leave on SCI0 TXI/TEI and every typed
+  byte arrives on RXI. `examples/ek-ra6m5/zephyr-shell.yaml` types commands,
+  arguments, TAB completion and history recall; without the sci0
+  `elc_event` the image prints nothing.
 - **Declared stubs** for `R_FCACHE` (the FCACHEIV invalidate completes on a
   0 read), the C-cache (`R_CACHE`) and the TrustZone attribution
   (`R_PSCU`/`R_CPSCU`), which Zephyr's `soc_early_init_hook` and
@@ -88,7 +95,7 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | Example system | [`configs/systems/ek-ra6m5.yaml`](../../configs/systems/ek-ra6m5.yaml) |
 | Reference firmware | [`crates/firmware-ek-ra6m5-smoke/`](../../crates/firmware-ek-ra6m5-smoke/); stock Zephyr v4.0.0 / v4.1.0 via [`crates/firmware-ek-ra6m5-zephyr/`](../../crates/firmware-ek-ra6m5-zephyr/) |
 | Example | [`examples/ek-ra6m5/`](../../examples/ek-ra6m5/) |
-| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf`, `r7fa6m5bh-zephyr-counter-alarm.elf`, `r7fa6m5bh-zephyr-uart-basic-api.elf` |
+| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf`, `r7fa6m5bh-zephyr-counter-alarm.elf`, `r7fa6m5bh-zephyr-uart-basic-api.elf`, `r7fa6m5bh-zephyr-shell.elf` |
 | Build target | `thumbv8m.main-none-eabi` |
 | Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI0); SIM-DERIVED |
 
@@ -138,6 +145,8 @@ cargo build -p firmware-ek-ra6m5-smoke --release --target thumbv8m.main-none-eab
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-counter-alarm.yaml --no-uart-stdout
 # stock Zephyr v4.0.0 uart_basic_api (SCI0 RXI/TXI/TEI through ICU IELSR0-2)
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+# stock Zephyr v4.0.0 shell (interrupt-driven serial backend on SCI0)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-shell.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra6m5/VALIDATION.md`](../../examples/ek-ra6m5/VALIDATION.md)
