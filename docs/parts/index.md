@@ -59,6 +59,11 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [INA3221](ina3221.md) | `ina3221` | I²C |
 | [MPU-9250](mpu9250.md) | `mpu9250` | I²C |
 | [ENS160](ens160.md) | `ens160` | I²C |
+| [MCP23017](mcp23017.md) | `mcp23017` | I²C |
+| [PCF8575](pcf8575.md) | `pcf8575` | I²C |
+| [ADS1015](ads1015.md) | `ads1015` | I²C |
+| [ULN2803A](uln2803.md) | `uln2803` | GPIO |
+| [RFM95W](rfm95.md) | `rfm95` | SPI |
 
 More devices live under [`configs/devices/`](../../configs/devices/) and in the live catalog. If a part is missing from this table, `labwired_describe` still works when the id is registered.
 

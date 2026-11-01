@@ -179,6 +179,11 @@ nav:
     - INA3221: parts/ina3221.md
     - MPU-9250: parts/mpu9250.md
     - ENS160: parts/ens160.md
+    - MCP23017: parts/mcp23017.md
+    - PCF8575: parts/pcf8575.md
+    - ADS1015: parts/ads1015.md
+    - ULN2803A: parts/uln2803.md
+    - RFM95W: parts/rfm95.md
 
   - Operations:
     - Release Strategy: release_strategy.md
