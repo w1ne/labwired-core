@@ -28,6 +28,7 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | ICU `IELSRn` event link (`ra_icu`): event sets `IR`, line n follows `IR` as a level, `IR` write-0-to-clear | smoke-tested | the alarm above; `crates/core/tests/ra8m1_agt_icu.rs` (vectors through IELSR84, unlinked event pends nothing, clearing `IR` drops the pend); unit tests `peripherals::ra_icu` |
 | AGT0/AGT1 timer mode (`ra_agt`): LOCO/PCLKB count sources, `AGTMR2.CKS`, reload, underflow `TUNDF`, compare A/B, `TSTOP` | smoke-tested | the alarm above; unit tests `peripherals::ra_agt` |
 | Stock Zephyr v3.7.0 `tests/drivers/uart/uart_basic_api` (interrupt-driven SCI_B driver, RXI/TXI/TEI through the ICU) | smoke-tested | `zephyr-uart-basic-api.yaml` PASS 2/2: `uart_basic_api` 6/6 (`fifo_fill` on TXI/TEI, `fifo_read` on RXI with the driver's default receive FIFO, `poll_in`, `poll_out`) and `uart_basic_api_pending` 1/1; 35,125,173 steps, 2.8 s |
+| Stock Zephyr v3.7.0 `samples/subsys/shell/shell_module` (interrupt-driven shell serial backend on SCI9) | smoke-tested | `zephyr-shell.yaml` PASS 2/2: typed `demo ping` → `pong`, `kernel version`, `device list`, `demo params a b` (argc/argv), TAB completion (`kern<TAB>up<TAB>` → `kernel uptime`, `Uptime: 519 ms`) and history recall (4× ESC [ A → `kernel version`); 1,143,616 steps |
 | SCI_B RXI/TXI/TEI as ELC events (`elc_event` on sci0/sci2/sci3/sci9): TXI on TDRE rising or TIE set with TDRE = 1, TEI on TEND rising or TEIE set with TEND = 1, RXI once per character a frame apart; frames of 10 bits at `baud` in `clock_hz` cycles | smoke-tested | the test above; `crates/core/tests/ra8m1_sci_icu.rs` (TXI vectors through IELSR25, TEI one frame after the last byte, RXI per character a frame apart, no RXI without RIE) in both scheduler modes; unit tests `peripherals::uart::sci_b_irq` |
 | SCI_B `FRSR.R` receive-FIFO count | smoke-tested | Zephyr's `fifo_read` reads it (`CONFIG_UART_RA_SCI_B_UART_FIFO_ENABLE=y` is the default); integration test above |
 | SCI_B FIFO trigger levels (`FCR.RTRG`, `FRSR.DR` 15-ETU timeout), ERI and the error flags, `CCR2` baud decode, TX FIFO occupancy | **not modelled** | RXI is raised per character instead of at RTRG; `FRSR.DR` and `FTSR` read 0 (a written byte leaves at once); the frame time comes from YAML `baud`, not `CCR2` |
@@ -53,6 +54,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-sync.elf   sha256 686cf687fbfe5078...
 #   r7fa8m1ah-zephyr-counter-alarm.elf  sha256 e4bd93a4991e21ca... (Zephyr v4.0.0)
 #   r7fa8m1ah-zephyr-uart-basic-api.elf  sha256 9c0328041125498b...
+#   r7fa8m1ah-zephyr-shell.elf  sha256 c658de4cfb2a4686...
 #   r7fa8m1ah-zephyr-button.elf  sha256 ffbfe48e747d292e... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-blinky.elf  sha256 671464cdd92a9b4b... (Zephyr v4.1.0)
 #   r7fa8m1ah-zephyr-adc-api.elf  sha256 e949897baec2ee7c... (Zephyr v4.1.0)
@@ -77,6 +79,12 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   PASS  2/2 checks · zephyr-uart-basic-api · 35125173 steps
 #   SUITE PASS - 100.00% [uart_basic_api]: pass = 6, fail = 0, skip = 0, total = 6
 #   SUITE PASS - 100.00% [uart_basic_api_pending]: pass = 1, fail = 0, skip = 0, total = 1
+
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-shell.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-shell · 1143616 steps
+#   uart:~$ demo ping / pong
+#   uart:~$ kernel version / Zephyr version 3.7.0
+#   uart:~$ kernel uptime / Uptime: 519 ms
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-button.yaml --no-uart-stdout
 #   PASS  5/5 checks · zephyr-button · 5369263 steps

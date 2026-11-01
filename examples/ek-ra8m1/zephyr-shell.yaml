@@ -1,0 +1,62 @@
+# LabWired - EK-RA8M1 Zephyr shell (samples/subsys/shell/shell_module)
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/subsys/shell/shell_module` for
+# `ek_ra8m1` (rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh), the sample
+# Renode's Zephyr shell tests drive. Its serial backend is interrupt driven
+# (CONFIG_SHELL_BACKEND_SERIAL_INTERRUPT_DRIVEN=y): every byte in and out
+# goes through SCI9 RXI/TXI/TEI, linked to the NVIC by the ICU IELSRn. Without
+# the SCI9 `elc_event` the same ELF prints nothing at all, not even the prompt.
+#
+# The script types six lines a fixed number of cycles apart (a script cannot
+# wait for the prompt): plain commands, a command with arguments, TAB
+# completion ("kern<TAB>up<TAB>" -> "kernel uptime") and history recall (four
+# ESC [ A go back to "kernel version"). The run is deterministic, so the
+# uptime is exact: 250M cycles at 480 MHz (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC)
+# is 520 ms, minus the time from reset to the kernel's tick 0.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-shell.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 100000000
+  max_cycles: 350000000
+  wall_time_ms: 120000
+uart_injections:
+  - uart: "sci9"
+    bytes: "demo ping\r"
+    trigger: !after_cycles { cycles: 50000000 }
+  - uart: "sci9"
+    bytes: "kernel version\r"
+    trigger: !after_cycles { cycles: 100000000 }
+  - uart: "sci9"
+    bytes: "device list\r"
+    trigger: !after_cycles { cycles: 150000000 }
+  - uart: "sci9"
+    bytes: "demo params a b\r"
+    trigger: !after_cycles { cycles: 200000000 }
+  - uart: "sci9"
+    bytes: "kern\tup\t\r"
+    trigger: !after_cycles { cycles: 250000000 }
+  - uart: "sci9"
+    bytes: "\x1b[A\x1b[A\x1b[A\x1b[A\r"
+    trigger: !after_cycles { cycles: 300000000 }
+assertions:
+  - uart_ordered:
+      - "uart:~$ "
+      - "demo ping"
+      - "pong"
+      - "kernel version"
+      - "Zephyr version 3.7.0"
+      - "device list"
+      - "devices:"
+      - "- uart (READY)"
+      - "demo params a b"
+      - "argc = 3"
+      - "  argv[1] = a"
+      - "  argv[2] = b"
+      - "kernel uptime "
+      - "Uptime: 519 ms"
+      - "kernel version"
+      - "Zephyr version 3.7.0"
+      - "uart:~$ "
+  - expected_stop_reason: max_cycles

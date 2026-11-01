@@ -1,0 +1,182 @@
+# Texas Instruments ADS1015 12-bit ΔΣ ADC — declarative I²C register-pointer
+# device, the 12-bit sibling of `ads1115.yaml`.
+#
+# Datasheet: ADS1013/ADS1014/ADS1015, TI SBAS473F (May 2009, rev. Jan 2025).
+# (The ADS1115 is SBAS444; the ADS1015 has its own document, and every
+# section number below is SBAS473F's.)
+#
+# ── Wire protocol (§7.5.3 "Writing To and Reading From the Registers",
+#    §8 "Register Map", Table 8-2) ────────────────────────────────────────────
+#
+# Identical to the ADS1115: a 1-byte Address Pointer whose P[1:0] select one of
+# four 16-bit registers, written or read MSB first. The pointer does not
+# auto-increment, so no `auto_increment:`.
+#
+#   0x00 CONVERSION  r   D[11:0] in bits 15:4, bits 3:0 read 0   reset 0000h
+#   0x01 CONFIG      rw  OS/MUX/PGA/MODE/DR/comparator           reset 8583h
+#   0x02 LO_THRESH   rw  Lo_thresh[11:0] in bits 15:4            reset 8000h
+#   0x03 HI_THRESH   rw  Hi_thresh[11:0] in bits 15:4            reset 7FFFh
+#
+# Address (§7.5.1.1, Table 7-2): ADDR → GND 0x48, VDD 0x49, SDA 0x4A, SCL 0x4B.
+#
+# ── CONVERSION: 12 bits, LEFT-justified (Figure 8-2, Table 8-3) ──────────
+#
+# "15:4 D[11:0] 12-bit conversion result; 3:0 Reserved, always reads back 0h".
+# §7.5.4: +FS → 7FFh, −FS → 800h, and "the output clips at these codes".
+#
+# So the count is quantised to 12 bits and saturated at ±2048 BEFORE it is
+# shifted into place — which is exactly what a `fields:` entry with
+# `shift: 4, width_bits: 12, signed: true` does (it rounds and saturates at its
+# own width, then shifts; see `FieldSpec::scale_from`). Scaling the ADS1115's
+# 16-bit word down instead would leave the low nibble non-zero, a value the
+# part never produces, and would clip at 0x7FFF rather than 0x7FF0.
+#
+# ── MUX (§7.3.1, Table 8-4 MUX[2:0]) ──────────────────────────────────────
+#
+#   MUX 000  AIN0 − AIN1 (POR)   100  AIN0 − GND
+#       001  AIN0 − AIN3         101  AIN1 − GND
+#       010  AIN1 − AIN3         110  AIN2 − GND
+#       011  AIN2 − AIN3         111  AIN3 − GND
+#
+# The ADS1115 descriptor answers this with a register-level `source_from`, but
+# `source_from` does not reach a `fields:` entry. The same selection is
+# therefore written as EIGHT fields over the same bits, one per MUX code, each
+# carrying a second `scale_from` factor that is 1.0 for its own code and 0.0
+# for the other seven. Exactly one field is non-zero for any CONFIG value, so
+# the word is that one input's 12-bit code and the other seven OR in zeros —
+# the multiplexer the datasheet describes, not a sum of channels. The
+# differential pairs are `behavior.derived` subtractions, as in ads1115.yaml.
+#
+# ── PGA: counts per volt for a 12-bit result (§7.3.3, Table 7-1) ──────────
+#
+# Equation 2: LSB = FSR / 2^12, i.e. ±FSR spans ±2048 counts, so
+# counts = V × 2048 / FSR:
+#
+#   PGA 000  ±6.144 V → 333.3333333333333   (2048 / 6.144; LSB 3 mV)
+#       001  ±4.096 V → 500                 (LSB 2 mV)
+#       010  ±2.048 V → 1000   (POR)        (LSB 1 mV)
+#       011  ±1.024 V → 2000                (LSB 0.5 mV)
+#       100  ±0.512 V → 4000                (LSB 0.25 mV)
+#       101/110/111  ±0.256 V → 8000        (LSB 0.125 mV)
+#
+# ── DR (Table 8-4 DR[2:0]) ────────────────────────────────────────────────
+#
+# 128 / 250 / 490 / 920 / 1600 (POR) / 2400 / 3300 / 3300 SPS. Stored only;
+# like the ADS1115 descriptor, no conversion time is modelled (see below).
+#
+# ── THRESHOLDS (Figure 8-6, Table 8-5, Table 8-6) ─────────────────────────
+#
+# Lo_thresh[11:0] / Hi_thresh[11:0] sit in bits 15:4 (resets 800h / 7FFh).
+# Bits 3:0 are RESERVED and read-only: "R-0h" in Lo_thresh, "R-Fh" in
+# Hi_thresh — which is why the register resets are 8000h and 7FFFh. `write_mask:
+# 0xFFF0` keeps each reserved nibble at its reset value through every write, so
+# Lo_thresh always reads …0h and Hi_thresh always reads …Fh, as on silicon.
+#
+# ── Stated approximations (the same ones ads1115.yaml declares) ──────────
+#
+#   * OS (D15) reads SET always — a conversion result is always available and
+#     a single-shot start never shows "converting". `write_mask: 0x7FFF`.
+#   * No conversion time: DR and MODE are storage. CONVERSION is the live
+#     stimulus, so it is never the 0000h §8 says it holds before the first
+#     conversion completes.
+#   * The comparator is not modelled: LO_THRESH / HI_THRESH are storage and
+#     ALERT/RDY never asserts. The general-call reset (§7.5.1.2) is not
+#     modelled.
+type: ads1015
+
+behavior:
+  primitive: i2c_device
+  # The four differential pairs of Table 8-4 MUX, as the subtractions they are.
+  derived:
+    - { name: a0_a1_diff, expr: "a0 - a1" }
+    - { name: a0_a3_diff, expr: "a0 - a3" }
+    - { name: a1_a3_diff, expr: "a1 - a3" }
+    - { name: a2_a3_diff, expr: "a2 - a3" }
+  i2c:
+    default_address: 0x48
+    registers:
+      # D[11:0] at bits 15:4. One field per MUX code; see the header for why
+      # the selector is a 1.0/0.0 factor and why the PGA map is counts/volt.
+      - name: CONVERSION
+        addr: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        fields:
+          - source: a0_a1_diff
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 1.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a0_a3_diff
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 1.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a1_a3_diff
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 0.0, 2: 1.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a2_a3_diff
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 0.0, 2: 0.0, 3: 1.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a0
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 1.0, 5: 0.0, 6: 0.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a1
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 1.0, 6: 0.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a2
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 1.0, 7: 0.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+          - source: a3
+            shift: 4
+            width_bits: 12
+            signed: true
+            scale_from:
+              - { register: CONFIG, shift: 12, mask: 0x07, map: { 0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 1.0 } }
+              - { register: CONFIG, shift: 9, mask: 0x07, map: { 0: 333.3333333333333, 1: 500.0, 2: 1000.0, 3: 2000.0, 4: 4000.0, 5: 8000.0, 6: 8000.0, 7: 8000.0 } }
+      # POR 8583h (Table 8-4). `write_mask: 0x7FFF` keeps OS reading set.
+      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: rw, write_mask: 0x7FFF, reset: 0x8583 }
+      # Bits 3:0 reserved and read-only: R-0h in Lo_thresh, R-Fh in Hi_thresh.
+      - { name: LO_THRESH, addr: 0x02, width: 2, endian: be, access: rw, write_mask: 0xFFF0, reset: 0x8000 }
+      - { name: HI_THRESH, addr: 0x03, width: 2, endian: be, access: rw, write_mask: 0xFFF0, reset: 0x7FFF }
+
+metadata:
+  label: "ADS1015 12-bit ADC"
+  summary: "4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115."
+  detail: "Texas Instruments ADS1015 (default address 0x48; ADDR to VDD/SDA/SCL gives 0x49/0x4A/0x4B). Same register map and pointer protocol as the ADS1115, but CONVERSION holds a 12-bit two's-complement result left-justified in bits 15:4 (the low nibble always reads 0) and clips at 0x7FF0 / 0x8000. CONVERSION follows the live CONFIG MUX bits, including the four differential pairs, at the full scale the PGA bits select (±6.144 V down to ±0.256 V). NOT modelled: conversion time and the OS busy bit (a result is always ready), the comparator / ALERT-RDY pin, and the general-call reset; DR and MODE are stored only."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x48 (ADDR to GND); 0x49 VDD, 0x4A SDA, 0x4B SCL."
+  inputs:
+    - { key: a0, label: "A0", unit: "V", min: -4.096, max: 4.096 }
+    - { key: a1, label: "A1", unit: "V", min: -4.096, max: 4.096 }
+    - { key: a2, label: "A2", unit: "V", min: -4.096, max: 4.096 }
+    - { key: a3, label: "A3", unit: "V", min: -4.096, max: 4.096 }
