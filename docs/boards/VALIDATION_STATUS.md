@@ -67,7 +67,7 @@ The models column is a content digest over everything that board's `models` list
 | `mpfs095t` | 🟡 smoke-manual | — | `e7b85658f4ab593d` | no silicon capture |
 | `am6234` | 🟡 smoke-manual | — | `3ea3c33896c8124f` | no silicon capture |
 | `r5f52618bgfp` | 🟡 smoke-manual | — | `7899552e0d2d5d8d` | no silicon capture |
-| `pic32mz2048efm144` | 🟡 smoke-manual | — | `c6a678b7945a1498` | no silicon capture |
+| `pic32mz2048efm144` | 🟡 smoke-manual | — | `d54b7f4bca887e1e` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
