@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: a2ecdc7a0070f076d412b1e4c16ea9893a8525b753b927ba0260338f5c7370b5
+    drift_ack_digest: 848b888dab74ae2d95bfec3f003c4c4bd7b5df946a95c085da19d1b53167cf51
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -673,6 +673,13 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -1010,7 +1017,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: a2ecdc7a0070f076d412b1e4c16ea9893a8525b753b927ba0260338f5c7370b5
+    drift_ack_digest: 848b888dab74ae2d95bfec3f003c4c4bd7b5df946a95c085da19d1b53167cf51
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1229,6 +1236,13 @@ boards:
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
     # an access with the Armv8-M MPU disabled from the default memory map
     # without the span cache (same decisions: default-map XN for fetches, the
@@ -1713,7 +1727,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: d0357510eac823452a6a0f29771946680ddfc05c8e0d483cc2595d196fa4340c
+    drift_ack_digest: 687a885d7330c313495b9592535316ec5903a64201efe9a8e498d724d828599d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2307,6 +2321,13 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -3786,7 +3807,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: cc2c7cb381b928bb9abee5acea89c8f599269978b0c27a84ca0c59cd74fa528d
+    drift_ack_digest: ea879b940a01ffcfc70548a70b75eba78f4880275d96e8274704b07394ab7284
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4368,6 +4389,13 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -4810,7 +4838,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 8d3e4687d3cdaf57a6c83b3933d80889eaf71be02c4ad38f9124821122e843da
+    drift_ack_digest: c9d86e345779ee93acf7c8e8a634648f400a158026603e659ec31ec313aff136
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5325,6 +5353,13 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -5825,7 +5860,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 59cf915c79740de5c75c8a957ade69448e8e897cc29db99a897f8f491156bfca
+    drift_ack_digest: 0c9c556c8018a3b55f627a17fa505e0d19268000ba0ca3e042b44dd3e36c75e9
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6410,6 +6445,13 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only
@@ -6873,7 +6915,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 3247dc4ce9939bfd3173507eed53669da11550ff1c1c2c3ebbf8aabda1d67e4d
+    drift_ack_digest: b500fab34c8d18fa01b1d73aa22a4524e69500bbe6e7f2629f81355b19b0fcd0
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7390,6 +7432,13 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
+    # 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+    # LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+    # STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+    # generic_factory.rs adds the RP2350-only bootram type and an optional
+    # rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+    # not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
     # for a `sci_b` UART with `elc_event`; from_config reads those keys only

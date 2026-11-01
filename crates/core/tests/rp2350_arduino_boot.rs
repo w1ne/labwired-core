@@ -55,7 +55,7 @@ fn load() -> (ChipDescriptor, SystemManifest) {
     let chip_path = root("configs/chips/rp2350.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("rp2350 chip");
     let mut manifest =
-        SystemManifest::from_file(&root("configs/systems/rp2350-zero.yaml")).expect("system");
+        SystemManifest::from_file(root("configs/systems/rp2350-zero.yaml")).expect("system");
     manifest.chip = chip_path.to_str().unwrap().to_string();
     (chip, manifest)
 }
