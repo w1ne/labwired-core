@@ -1727,6 +1727,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Whether this peripheral accepts a routed `VREF+`/`VDDA` voltage.
+    fn supports_adc_reference_voltage(&self) -> bool {
+        false
+    }
+
+    /// Set the ADC's positive full-scale reference voltage, in volts. Returns
+    /// false for a peripheral without a configurable analog reference.
+    fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {
+        false
+    }
+
     /// Set the ambient (die) temperature an on-chip temperature sensor
     /// reports, in °C. `true` when this peripheral has such a sensor and took
     /// the value; `false` otherwise (the default). The bus fans one world

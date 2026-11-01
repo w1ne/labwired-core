@@ -37,6 +37,7 @@ pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
     ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
+    NtcModel,
     MosModel, Mosfet, NodeRef, OpAmpModel, Polarity, PowerSink, RegulatorKind, RegulatorModel,
     Resistor, Switch, Vccs, Vcvs, VoltageSource, VoltageSwitchControl, Waveform,
     COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,

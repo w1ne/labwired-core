@@ -271,6 +271,42 @@ impl Solver {
             .position(|s| s.name.to_ascii_lowercase() == key)
     }
 
+    /// Index of a named resistor that has an NTC Beta model.
+    pub fn thermistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit.resistors.iter().position(|resistor| {
+            resistor.ntc.is_some() && resistor.name.to_ascii_lowercase() == key
+        })
+    }
+
+    /// Set an NTC's external temperature input in Celsius. A changed value
+    /// invalidates the linear stamp so its resistance is rebuilt next step.
+    /// Returns false for a non-NTC element, an invalid temperature or a model
+    /// whose resulting resistance is not finite and positive.
+    pub fn set_thermistor_temperature(&mut self, index: usize, celsius: f64) -> bool {
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return false;
+        }
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let Some(mut ntc) = resistor.ntc else {
+            return false;
+        };
+        ntc.temperature_celsius = celsius;
+        let resistance = ntc.resistance_ohms(resistor.ohms);
+        if !resistance.is_finite() || resistance <= 0.0 {
+            return false;
+        }
+        if resistor.ntc != Some(ntc) {
+            resistor.ntc = Some(ntc);
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
+    }
+
     /// Indices of every switch driven by the routed boolean input `ctrl`.
     /// Several switches may share one control (a break-before-make pair).
     pub fn switches_controlled_by(&self, ctrl: &str) -> Vec<usize> {
@@ -682,7 +718,7 @@ impl Solver {
                 dim,
                 resistor.a,
                 resistor.b,
-                1.0 / resistor.ohms,
+                1.0 / resistor.resistance_ohms(),
             );
         }
         for (index, switch) in self.circuit.switches.iter().enumerate() {

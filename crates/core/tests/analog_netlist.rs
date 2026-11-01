@@ -49,6 +49,36 @@ C1 out 0 100n
     }
 
     #[test]
+    fn parses_beta_model_ntc_resistors_with_an_external_temperature() {
+        let circuit = parse_netlist(
+            "Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950 tnom=25 temp=50\nRpull sense 0 10k\n",
+        )
+        .expect("NTC resistor parses");
+        let ntc = &circuit.resistors[0];
+        let model = ntc.ntc.expect("beta attaches an NTC model");
+        assert_eq!(ntc.ohms, 10_000.0, "ohms is R at the nominal temperature");
+        assert_eq!(model.beta, 3950.0);
+        assert_eq!(model.nominal_temperature_celsius, 25.0);
+        assert_eq!(model.temperature_celsius, 50.0);
+        let expected = 10_000.0
+            * (3950.0 * (1.0 / (50.0 + 273.15) - 1.0 / 298.15)).exp();
+        assert!((ntc.resistance_ohms() - expected).abs() / expected < 1e-12);
+        assert!(circuit.resistors[1].ntc.is_none(), "plain resistors stay linear");
+    }
+
+    #[test]
+    fn refuses_invalid_ntc_parameters() {
+        for text in [
+            "Rntc a 0 10k beta=0",
+            "Rntc a 0 -10k beta=3950",
+            "Rntc a 0 10k beta=3950 temp=-273.15",
+            "Rntc a 0 10k temp=25",
+        ] {
+            assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
+        }
+    }
+
+    #[test]
     fn parses_every_element_of_the_subset() {
         let text = "\
 * every supported element

@@ -77,16 +77,7 @@ pub fn ns_to_cycles(ns: u64, cpu_hz: u64) -> u64 {
     u64::try_from(cycles).unwrap_or(u64::MAX)
 }
 
-/// Full-scale reference of the modelled STM32 ADC, in volts.
-///
-/// The ADC models hold injected stimuli in millivolts and own the
-/// millivolt → count conversion — `Adc::set_channel_input` computes
-/// `count = mV * 4095 / 3300`, i.e. 3.3 V is full scale at 12 bits. This
-/// constant is here only so
-/// a routed voltage can be clamped to something the pin could physically see;
-/// the arithmetic deliberately stays in the ADC model, where every other
-/// analog stimulus (thermistor, potentiometer, battery divider) already
-/// converts.
+/// Default ADC reference until `board.power.vdda_volts` drives one explicitly.
 pub const ADC_VREF_VOLTS: f64 = 3.3;
 
 /// Prefix of the signal paths set from outside the engine:
@@ -159,6 +150,7 @@ impl InputThresholds {
 /// | `board.analog.<pad>_volts` | model → machine | `F64` |
 /// | `adc.<peripheral>.<channel>_volts` | model → machine | `F64` |
 /// | `board.power.vdd_volts` | model → machine | `F64` |
+/// | `board.power.vdda_volts` | model → machine | `F64` |
 /// | `board.motor.<id>.back_emf_v` | machine → model | `F64` volts |
 /// | `board.motor.<id>.current_a` | model → machine | `F64` amps |
 /// | `board.motor.<id>.supply_v` | model → machine | `F64` volts |
@@ -174,6 +166,8 @@ impl InputThresholds {
 /// `board.power.vdd_volts` is the MCU's supply: the chip's supply supervisor
 /// ([`crate::power`]) holds the core in reset below its power-on threshold and
 /// resets it on a power-down or brown-out.
+/// `board.power.vdda_volts` is the ADC positive full-scale reference; a board
+/// model may drive it independently from digital VDD.
 ///
 /// `<pad>` is a pad label in whatever form the chip speaks — `pa5` / `PA5` on
 /// STM32, `pd2` on the ATmega328P, `p0.13` on Nordic, `gpio5` / `5` on ESP32 —
@@ -218,8 +212,8 @@ pub enum SignalPath {
     /// `adc.<peripheral>.<channel>_volts` — the analog level on an explicitly
     /// named ADC channel, for chips whose descriptor records no analog pads.
     AdcChannel { peripheral: String, channel: u8 },
-    /// `board.power.<rail>_volts` — a supply rail of the chip. Only `vdd`
-    /// exists today.
+    /// `board.power.<rail>_volts` — the chip supply (`vdd`) or ADC reference
+    /// (`vdda`).
     SupplyRail { rail: String },
     /// `board.motor.<id>.back_emf_v` — the back-EMF an `armature: circuit` DC
     /// motor presents to its netlist.
@@ -383,8 +377,12 @@ pub enum RoutingError {
     },
     /// The owning GPIO block refused an externally driven level.
     DriveRejected { path: String },
-    /// `board.power.<rail>_volts` names a rail other than `vdd`.
+    /// `board.power.<rail>_volts` names neither `vdd` nor `vdda`.
     UnknownRail { path: String, rail: String },
+    /// `board.power.vdda_volts` names no ADC that accepts a configurable reference.
+    NoAdcReference { path: String },
+    /// The routed ADC reference is not a finite positive voltage.
+    InvalidAdcReference { path: String, volts: f64 },
     /// VDD is routed, but the chip descriptor has no `supply_monitor:`, so no
     /// voltage can hold the core in reset.
     NoSupplyMonitor { path: String },
@@ -491,8 +489,17 @@ impl std::fmt::Display for RoutingError {
             ),
             Self::UnknownRail { path, rail } => write!(
                 f,
-                "co-sim path '{path}': there is no supply rail '{rail}'; the only one is \
-                 board.power.vdd_volts"
+                "co-sim path '{path}': there is no supply rail '{rail}'; supported rails are \
+                 board.power.vdd_volts and board.power.vdda_volts"
+            ),
+            Self::NoAdcReference { path } => write!(
+                f,
+                "co-sim path '{path}' drives VDDA, but this chip has no ADC model with a \
+                 configurable reference voltage"
+            ),
+            Self::InvalidAdcReference { path, volts } => write!(
+                f,
+                "co-sim path '{path}' needs a finite positive ADC reference voltage, got {volts} V"
             ),
             Self::NoSupplyMonitor { path } => write!(
                 f,
@@ -554,6 +561,8 @@ enum WriteBinding {
     AdcChannel { connection: String, channel: u8 },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
+    /// The ADC reference rail, written to each ADC model that supports it.
+    AdcReference,
     /// Index of an `armature: circuit` motor; its winding current in amps.
     MotorCurrent { motor: usize },
     /// Index of an `armature: circuit` motor; its supply rail in volts.
@@ -767,18 +776,32 @@ impl SignalRouter {
                 })
             }
             SignalPath::SupplyRail { rail } => {
-                if rail != "vdd" {
-                    return Err(RoutingError::UnknownRail {
+                match rail.as_str() {
+                    "vdd" => {
+                        if !bus.supply.has_monitor() {
+                            return Err(RoutingError::NoSupplyMonitor {
+                                path: path.to_string(),
+                            });
+                        }
+                        Ok(WriteBinding::SupplyVdd)
+                    }
+                    "vdda" => {
+                        if !bus
+                            .peripherals
+                            .iter()
+                            .any(|peripheral| peripheral.dev.supports_adc_reference_voltage())
+                        {
+                            return Err(RoutingError::NoAdcReference {
+                                path: path.to_string(),
+                            });
+                        }
+                        Ok(WriteBinding::AdcReference)
+                    }
+                    _ => Err(RoutingError::UnknownRail {
                         path: path.to_string(),
                         rail: rail.clone(),
-                    });
+                    }),
                 }
-                if !bus.supply.has_monitor() {
-                    return Err(RoutingError::NoSupplyMonitor {
-                        path: path.to_string(),
-                    });
-                }
-                Ok(WriteBinding::SupplyVdd)
             }
             SignalPath::MotorCurrent { motor } => Ok(WriteBinding::MotorCurrent {
                 motor: circuit_motor(bus, motor, path)?,
@@ -936,6 +959,25 @@ impl SignalRouter {
                     };
                     bus.supply.set_vdd(volts);
                 }
+                WriteBinding::AdcReference => {
+                    let Some(volts) = signal_as_f64(value) else {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                        continue;
+                    };
+                    if !volts.is_finite() || volts <= 0.0 {
+                        errors.push(RoutingError::InvalidAdcReference {
+                            path: path.clone(),
+                            volts,
+                        });
+                    } else if !bus.seed_adc_reference_voltage(volts) {
+                        errors.push(RoutingError::NoAdcReference {
+                            path: path.clone(),
+                        });
+                    }
+                }
                 WriteBinding::MotorCurrent { motor } => {
                     let accepted = signal_as_f64(value)
                         .is_some_and(|amps| bus.set_circuit_motor_current(*motor, amps));
@@ -1013,21 +1055,20 @@ fn check_adc_channel(
     Ok(())
 }
 
-/// Clamp a routed node voltage to the millivolt level an ADC model takes.
+/// Convert a routed node voltage to the millivolt level an ADC model takes.
 ///
-/// The ADC owns millivolts → counts (see [`ADC_VREF_VOLTS`]), so this is only
-/// the unit change plus the clamp a real pin imposes: a SPICE node can ring
-/// below ground or above the rail, and a pin cannot present either to the
-/// converter. Rounds half away from zero, which is deterministic.
+/// Keep the input as a voltage until the ADC uses its current reference to
+/// convert it to a count. Negative voltages clamp at ground; values above
+/// full scale saturate in the ADC model. Rounds half away from zero.
 ///
 /// `NaN` is the one input with no honest answer — it is not high, low, or
 /// anywhere between — so it reads as 0 rather than being fed to a comparison
 /// that would quietly answer `false` in both directions.
 pub fn volts_to_millivolts(volts: f64) -> u16 {
-    if volts.is_nan() {
+    if volts.is_nan() || volts <= 0.0 {
         return 0;
     }
-    (volts.clamp(0.0, ADC_VREF_VOLTS) * 1000.0).round() as u16
+    (volts * 1000.0).round().min(f64::from(u16::MAX)) as u16
 }
 
 /// A non-volts pin value as a level. `F64` never reaches here: on a pin path
@@ -2010,14 +2051,14 @@ mod tests {
         assert_eq!(volts_to_millivolts(2.0805), 2081);
     }
 
-    /// A SPICE node can ring below ground or above the rail; a pin cannot
-    /// present that to the converter.
+    /// Negative voltages clamp at ground; the ADC itself saturates against its
+    /// selected Vdda reference when it converts a larger input.
     #[test]
-    fn clamps_voltages_a_pin_could_not_present() {
+    fn preserves_adc_input_voltage_until_conversion() {
         assert_eq!(volts_to_millivolts(-1.0), 0);
-        assert_eq!(volts_to_millivolts(12.0), 3300);
+        assert_eq!(volts_to_millivolts(12.0), 12_000);
         assert_eq!(volts_to_millivolts(f64::NAN), 0);
-        assert_eq!(volts_to_millivolts(f64::INFINITY), 3300);
+        assert_eq!(volts_to_millivolts(f64::INFINITY), u16::MAX);
     }
 
     // ── Time base ───────────────────────────────────────────────────────────

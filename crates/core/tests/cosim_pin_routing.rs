@@ -708,6 +708,40 @@ fn a_model_voltage_lands_on_the_adc_channel_of_its_pad() {
     assert_eq!(adc_channel_count(&mut bus, 0), 2047);
 }
 
+/// VDDA is independent from the routed pad voltage. The ADC holds the pin in
+/// millivolts and converts it against the reference present at acquisition.
+#[test]
+fn a_model_vdda_reference_sets_adc_full_scale() {
+    let mut bus = f401_bus();
+    let mut session = build_session(
+        &bus,
+        &[mock_model(
+            100_000,
+            &[],
+            &[
+                ("v_in", "board.analog.pa0_volts"),
+                ("vdda", "board.power.vdda_volts"),
+            ],
+            &[
+                ("v_in", serde_yaml::Value::from(1.65)),
+                ("vdda", serde_yaml::Value::from(1.65)),
+            ],
+        )],
+    );
+    let (_, errors) = session.advance_to(8_400, &mut bus).expect("step");
+    assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+    let idx = bus.find_peripheral_index_by_name("adc1").expect("ADC1");
+    let adc = bus.peripherals[idx]
+        .dev
+        .as_any()
+        .expect("ADC downcasts")
+        .downcast_ref::<labwired_core::peripherals::adc::Adc>()
+        .expect("ADC1 is an Adc");
+    assert_eq!(adc.reference_voltage_v(), 1.65);
+    assert_eq!(adc.channel_input_count(0), 4095, "the routed 1.65 V is full scale");
+}
+
 /// The pad form resolves through the chip descriptor's `analog_pins:`, not a
 /// built-in table: on an F401 PC5 is ADC1_IN15, so a model voltage routed to
 /// `board.analog.pc5_volts` must land on channel 15 and leave channel 0 alone.
