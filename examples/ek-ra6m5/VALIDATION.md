@@ -26,10 +26,11 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | SCI interrupts (RXI/TXI/TEI/ERI as ELC events) | **not modelled** | SCI0 raises no events, so the smoke and the Zephyr console are polled |
-| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P005 → IRQ10 → ELC event 0x00B → ICU IELSR42 → NVIC line 42) | sim-tested | `zephyr-button.yaml` 3/3: two presses give exactly two `Button pressed at` lines (cycles 500,060,451 and 1,499,740,451), the releases none; 9,868,849 steps, 0.59 s; audit 2,000,000 steps, 0 unsupported. Without `irq_pins` on `icu` it prints nothing after "Press the button" |
+| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P005 → IRQ10 → ELC event 0x00B → ICU IELSR42 → NVIC line 42) | sim-tested | `zephyr-button.yaml` 5/5: two presses give exactly two `Button pressed at` lines (cycles 500,060,451 and 1,499,740,451), the releases none, and LED1 (P006) mirrors S1 (4 edges, ends low); 9,874,303 steps; audit 2,000,000 steps, 0 unsupported. Without `irq_pins` on `icu` it prints nothing after "Press the button" |
 | ICU IRQ-pin half (`ra_icu`: `IRQCRn.IRQMD` edge, `PmnPFS.ISEL` gate, `ICU_IRQn` = event n + 1; pad → IRQn table from Zephyr `r7fa6m5xh.dtsi`) | sim-tested | the button above; unit tests `peripherals::ra_icu` |
 | ICU NMI, `IRQCRn` digital filter, low-level re-raise, `DTCE`; AGT pulse output, event counter, measurement modes | **not modelled** | stored only; an IRQ edge is taken at once, low-level mode raises on the falling edge only |
-| `PmnPFS` `PDR`/`PODR` (the same flip-flops as `PCNTR1` on silicon) | stored only | Zephyr sets pin direction through PmnPFS, so the button sample's LED1 (P006) stays an input and its mirror of S1 is not checked |
+| `PmnPFS` `PDR`/`PODR` → `PCNTR1` (the same flip-flops on silicon) | sim-tested | Stock Zephyr v4.1.0 `samples/basic/blinky` (`zephyr-blinky.yaml` PASS 4/4): P006 made an output by its PmnPFS store and toggled five times through the 16-bit `PCNTR1.PODR` alias, exactly five `LED state` lines ending OFF, 6 edges on `port0:6`, `PCNTR1` ends PDR set / PODR clear; 39,715 steps; audit 1,000,000 steps, 0 unsupported; fixture sha256 `f6826f74e095d97e…`. The button sample's LED1 mirror of S1 now shows 4 edges and ends low (9,874,303 steps). Without the PFS → port hand-over both scripts fail. On RA6M5 the 16-bit `PCNTR1` aliases are PODR at +0x0 and PDR at +0x2 (FSP `R7FA6M5BH.h`, `swapped_half_aliases`); with natural half order the blinky toggles PDR and fails, and the button LED never lights. Unit test `pins::pad_control::tests::ra_pfs_low_byte_stores_write_the_port_output`, `peripherals::gpio::tests::ra_port_16_bit_aliases_follow_the_part`; integration `pad_control_pulls::ra_pfs_pdr_podr_are_the_port_output_flip_flops` |
+| `PmnPFS` read-back of PDR/PODR after `PCNTR1`/`PCNTR3` writes; `PmnPFS.PIDR` | **not modelled** | PmnPFS returns the last store; PIDR there reads 0 |
 | TrustZone (IDAU/SAU, CPSCU/PSCU) | **not modelled** | the image runs secure, as on silicon out of reset; `R_PSCU`/`R_CPSCU` are declared stubs so Zephyr's `soc_early_init_hook` can clear PSARB-E/ICUSARG-I; nothing checks attribution |
 | DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, GPT, ADC12, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
 | SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
@@ -80,11 +81,20 @@ cargo test -p labwired-core --test ra6m5_agt_icu
 
 # Stock Zephyr v4.1.0 button (P005 -> IRQ10 -> ICU), two S1 presses
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-button.yaml --no-uart-stdout
-#   PASS  3/3 checks · zephyr-button · 9868849 steps
+#   PASS  5/5 checks · zephyr-button · 9874303 steps
 #   Set up button at gpio@40080000 pin 5 / Set up LED at gpio@40080000 pin 6
 #   Press the button
 #   Button pressed at 500060451
 #   Button pressed at 1499740451
+#   LED1 (port0:6): 4 edges; PCNTR1 ends PDR6 set, PODR6 clear
+
+# Stock Zephyr v4.1.0 blinky (P006 via PmnPFS.PDR, 16-bit PCNTR1.PODR at +0x0)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-blinky.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-blinky · 39715 steps
+#   LED state: OFF / ON / OFF / ON / OFF; 6 edges on port0:6
+#   Audit (1,000,000 instructions): unsupported_total: 0
+cargo test -p labwired-core --test pad_control_pulls
+#   5 passed
 
 # Fixture rebuild: two runs of build.sh, byte-identical
 crates/firmware-ek-ra6m5-zephyr/build.sh
@@ -92,9 +102,10 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 #   72d9e0071821238f251f1baa53e72bc1f58a940a086025cfa604014cd9557a15  r7fa6m5bh-zephyr-sync.elf
 #   5a2167b96f644d6f5c4706e940a00a3e8483eef7e5759525a4ac269fbe1b569e  r7fa6m5bh-zephyr-counter-alarm.elf
 #   f2041b1a3a59371236ac58f3ab65d14cd34b922f53683e1ab528667419bc6ce2  r7fa6m5bh-zephyr-button.elf
+#   f6826f74e095d97eacfc160c57b6574e3e4f4143572e1d2743079a5432ce2627  r7fa6m5bh-zephyr-blinky.elf
 
 # Determinism: two zephyr-hello runs, two zephyr-counter-alarm runs and two
-# zephyr-button runs, identical uart.log + snapshot.json
+# zephyr-button runs, two zephyr-blinky runs, identical uart.log + snapshot.json
 
 # Negative controls (each makes test_ek_ra6m5_zephyr_survival fail):
 #   - FCR keeps RFRST/TFRST set on read-back -> r_sci_uart_fifo_cfg spins
@@ -106,12 +117,19 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 # Mutations caught by ra6m5_agt_icu (2 of 3 tests fail each):
 #   - ICU back to `type: stub`
 #   - AGT0 elc_event 64 -> 67 (AGT1's INT)
+# Negative controls for zephyr-blinky.yaml and the LED half of
+# zephyr-button.yaml:
+#   - port ignores PmnPFS PDR/PODR stores -> P006 stays an input: blinky
+#     has no edges and PCNTR1 reads 0, the button LED none (both FAIL)
+#   - natural 16-bit half order (PDR at +0x0) -> blinky toggles PDR and ends
+#     with P006 an input (memory_value FAILs); the button LED never lights
 ```
 
 ## Notes
 
 - **Reused models.** The RA6M5 PORT, PFS/PWPR and SCI register layouts match
-  the RA4M1 blocks already in the tree (`ra_port`, `ra_pfs`, the `sci` UART
+  the RA4M1 blocks already in the tree (including the upper-half-first 16-bit
+  PCNTRn aliases) (`ra_port`, `ra_pfs`, the `sci` UART
   profile). The bases are from `R7FA6M5BH.h`. For Zephyr, the SYSTEM window
   moved to `ra6_sysc` (the RA8M1's full-register-file model with an RA6
   layout) and the `sci` profile gained the FIFO registers.

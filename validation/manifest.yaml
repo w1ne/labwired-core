@@ -1701,7 +1701,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 9981477dc83c7a987e3c7f486d82be76eece708b0e4d4b506a47067dd524df2c
+    drift_ack_digest: 40551850d78702aee4cb5f6e9e5da41a46f6cc7f71dbc95bd40abee998d03aae
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2294,6 +2294,14 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
+    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
+    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
+    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
+    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
+    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
+    # ports have no pad-control link and keep their byte paths. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -3326,6 +3334,14 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
+    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
+    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
+    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
+    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
+    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
+    # ports have no pad-control link and keep their byte paths. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
 
   - id: nucleo-l476rg
@@ -3762,7 +3778,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 4d8d52c8c82cc59d56e18d8c11eabaf9f64a783e9f26521afcaafca77be4ade6
+    drift_ack_digest: 8b8d5791f61d600b4a539f2659288d74f5db48fb0e2440d862a839abc5d9e464
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4343,6 +4359,14 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
+    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
+    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
+    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
+    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
+    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
+    # ports have no pad-control link and keep their byte paths. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -4774,7 +4798,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 41cebec354a75bd07e7c159fc4da9b4d134b761ac8d53a6649990db757b2bad3
+    drift_ack_digest: 1f8a08ed37dd12679c2cebbf812923d9af3de2fae4dafa72774f4d58a41858a5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5288,6 +5312,14 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
+    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
+    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
+    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
+    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
+    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
+    # ports have no pad-control link and keep their byte paths. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -5777,7 +5809,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 5e566948d46b7ecebe061549ee3681bbe3c56f06ff8b3e3f33043934d3d6b13f
+    drift_ack_digest: d0178526d5308933e91bde1e5d50dedad1aae284e1b8310bafcdfc612d1ed4b5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6361,6 +6393,14 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-01 (feat/ra-pfs-pdr-podr): a RA PmnPFS store now sets the
+    # linked port's PDR/PODR (pad_control.rs `output_write`, a defaulted
+    # `PinPort::set_config_output`, attach.rs/accessors.rs pass the store's
+    # offset/width/value to `finish_pad_control_write`), and gpio.rs adds the
+    # RA4/RA6 `swapped_half_aliases` byte remap. Both are ra_port-only (the
+    # pad-control link and the remap match RaPfs / GpioFamily::RaPort); STM32
+    # ports have no pad-control link and keep their byte paths. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-01
     # 2026-11-01 (feat/ek-ra8m1-sci-irq): uart.rs gained the RA8 SCI_B
     # interrupt events (RXI/TXI/TEI through the RA ICU) and FRSR, built only
@@ -6813,7 +6853,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 360a5c493adc33981083ae9af1232556e6f548ae57aa8fc9e451c0bca0771593
+    drift_ack_digest: d626e1f61b521f6e7e3389039f0c740b09906d069440ba60d79484a2dc906b39
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

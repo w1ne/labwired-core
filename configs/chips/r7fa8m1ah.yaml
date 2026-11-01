@@ -34,7 +34,9 @@
 #     0x40400D14 (`ra8_pfs`). PmnPFS keeps the RA layout, for ports 0-B.
 #   - The SCI kernel clock is its own SCICLK (SYSTEM SCICKDIVCR +0x54 /
 #     SCICKCR +0x55, with a CKSREQ/CKSRDY switch handshake: `ra8_sysc`).
-# PORTn keeps the RA PCNTR1-4 layout at 0x40400000 + 0x20*n.
+# PORTn keeps the RA PCNTR1-4 layout at 0x40400000 + 0x20*n, with the 16-bit
+# aliases in natural half order (FSP R7FA8M1AH.h: PDR +0x0, PODR +0x2), unlike
+# RA4M1/RA6M5.
 #
 # Tier: L1 UART+LED smoke. Boot from code flash, the SCI9 console (PA14
 # TXD9 / PA15 RXD9, the J-Link OB virtual COM port) and the three user LEDs
@@ -78,7 +80,9 @@
 # - AGT: timer mode only (`ra_agt`, see the model header); pulse output,
 #   event counter and measurement modes are not modelled.
 # - PmnPFS PSEL/PMR (peripheral mux) is stored only; SCI9 TX/RX need no pad
-#   routing in the model.
+#   routing in the model. A PmnPFS store sets the port's PCNTR1 PDR/PODR
+#   (the same flip-flops), but reading PmnPFS back returns the last store,
+#   not PCNTR1, and PIDR there reads 0.
 # - SCI_B: async TX/RX with the RXI/TXI/TEI interrupt events (CCR0
 #   RIE/TIE/TEIE). TXI/TEI follow the TDRE/TEND edges of a timed shift
 #   register; CSR still reads TDRE = TEND = 1 and a byte reaches the console

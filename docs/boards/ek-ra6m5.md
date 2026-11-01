@@ -94,8 +94,8 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | MSTP | `0x4008_4000` | `type: stub` — module stop not modelled |
 | ICU | `0x4000_6000` | `ra_icu` — IELSR0–95 link ELC events to NVIC lines 0–95 (`IR` level, W0C); IRQCRn/NMI stored only |
 | AGT0–5 | `0x400E_8000` + `0x100`×n | `ra_agt` — 16-bit timer mode, underflow and compare A/B as ELC events (`0x040 + 3n`) |
-| PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
-| PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
+| PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3; 16-bit aliases upper half first (PODR +0x0, PDR +0x2, as `R7FA6M5BH.h`) |
+| PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PSEL/PMR stored only |
 | SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async, polled; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`) for the FSP driver |
 | SCI1–9 | `0x4011_8100` + `0x100`×n | not mapped |
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |

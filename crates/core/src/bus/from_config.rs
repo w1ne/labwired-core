@@ -1076,6 +1076,25 @@ impl SystemBus {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)
                     };
+                    // RA4/RA6 PORT: 16-bit PCNTRn aliases with the halves
+                    // swapped (FSP R7FA6M5BH.h; see `RaPortGpio`).
+                    let port = if p_cfg
+                        .config
+                        .get("swapped_half_aliases")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        if layout != crate::peripherals::gpio::GpioRegisterLayout::RaPort {
+                            anyhow::bail!(
+                                "GPIO peripheral '{}': `swapped_half_aliases` applies to \
+                                 ra_port only",
+                                p_cfg.id
+                            );
+                        }
+                        port.with_ra_swapped_half_aliases()
+                    } else {
+                        port
+                    };
                     // Optional `pad_control`: the id of the block that keeps
                     // this port's pulls (Kinetis PORTx, RA PFS, i.MX RT
                     // IOMUXC). See `crate::pins::PadControl`.

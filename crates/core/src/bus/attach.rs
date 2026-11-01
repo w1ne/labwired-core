@@ -1203,13 +1203,18 @@ impl SystemBus {
             {
                 crate::pins::watch_begin(port);
             }
-            self.apply_pad_control(link);
+            self.apply_pad_control(link, None);
         }
     }
 
     /// Decode every pad's pull from `link`'s block and hand it to the port,
-    /// then close the push-capture bracket the caller opened.
-    fn apply_pad_control(&mut self, link: PadControlLink) {
+    /// plus, for a `written` (offset, width, value) store that set a pin's
+    /// shared output flip-flops ([`crate::pins::PadControl::output_write`]),
+    /// that pin's direction and level. A store the block refused (RA `PmnPFS`
+    /// behind `PWPR`) leaves the word without the written PDR/PODR and moves
+    /// nothing. Then close the push-capture bracket the caller opened.
+    fn apply_pad_control(&mut self, link: PadControlLink, written: Option<(u64, u64, u32)>) {
+        let mut output = None;
         let mut pulls = [crate::pins::Pull::None; 32];
         let count = {
             let (Some(block), Some(port)) = (
@@ -1225,6 +1230,15 @@ impl SystemBus {
             for (pin, pull) in pulls.iter_mut().enumerate().take(count) {
                 *pull = link.control.pull(&*block.dev, pin as u8);
             }
+            if let Some((off, width, value)) = written {
+                if let Some(pin) = link.control.output_write(off, width) {
+                    let stored = block.dev.read_u32(link.control.offset(pin)).ok();
+                    let bits = link.control.decode_output(value);
+                    if stored.map(|word| link.control.decode_output(word)) == Some(bits) {
+                        output = Some((pin, bits));
+                    }
+                }
+            }
             count
         };
         let Some(port) = self
@@ -1236,6 +1250,9 @@ impl SystemBus {
         };
         for (pin, pull) in pulls.iter().enumerate().take(count) {
             port.set_config_pull(pin as u8, *pull);
+        }
+        if let Some((pin, (pdr, podr))) = output {
+            port.set_config_output(pin, pdr, podr);
         }
         crate::pins::watch_end(port);
     }
@@ -1265,15 +1282,24 @@ impl SystemBus {
 
     /// Complete a successful pad-control write started by
     /// [`Self::begin_pad_control_write`]: hand every linked port its pulls as
-    /// the block now holds them, and push what moved.
-    pub(crate) fn finish_pad_control_write(&mut self, idx: usize, begun: bool) {
+    /// the block now holds them (and, for an RA `PmnPFS` store, the written
+    /// pin's PDR/PODR), and push what moved. `off`/`width`/`value` are the
+    /// store's.
+    pub(crate) fn finish_pad_control_write(
+        &mut self,
+        idx: usize,
+        begun: bool,
+        off: u64,
+        width: u64,
+        value: u32,
+    ) {
         if !begun {
             return;
         }
         for k in 0..self.pad_control_links.len() {
             let link = self.pad_control_links[k];
             if link.block == idx {
-                self.apply_pad_control(link);
+                self.apply_pad_control(link, Some((off, width, value)));
             }
         }
     }

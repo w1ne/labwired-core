@@ -31,16 +31,17 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | SCI_B RXI/TXI/TEI as ELC events (`elc_event` on sci0/sci2/sci3/sci9): TXI on TDRE rising or TIE set with TDRE = 1, TEI on TEND rising or TEIE set with TEND = 1, RXI once per character a frame apart; frames of 10 bits at `baud` in `clock_hz` cycles | smoke-tested | the test above; `crates/core/tests/ra8m1_sci_icu.rs` (TXI vectors through IELSR25, TEI one frame after the last byte, RXI per character a frame apart, no RXI without RIE) in both scheduler modes; unit tests `peripherals::uart::sci_b_irq` |
 | SCI_B `FRSR.R` receive-FIFO count | smoke-tested | Zephyr's `fifo_read` reads it (`CONFIG_UART_RA_SCI_B_UART_FIFO_ENABLE=y` is the default); integration test above |
 | SCI_B FIFO trigger levels (`FCR.RTRG`, `FRSR.DR` 15-ETU timeout), ERI and the error flags, `CCR2` baud decode, TX FIFO occupancy | **not modelled** | RXI is raised per character instead of at RTRG; `FRSR.DR` and `FTSR` read 0 (a written byte leaves at once); the frame time comes from YAML `baud`, not `CCR2` |
-| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P009 → IRQ13 → ELC event 0x00E → ICU IELSR89 → NVIC line 89) | smoke-tested | `zephyr-button.yaml` PASS 3/3: two presses give exactly two `Button pressed at` lines (cycles 498,960,451 and 1,498,992,451), the releases none; 5,369,263 steps, 0.27 s; audit 2,000,000 steps, 0 unsupported |
+| Stock Zephyr v4.1.0 `samples/basic/button` (S1 on P009 → IRQ13 → ELC event 0x00E → ICU IELSR89 → NVIC line 89) | smoke-tested | `zephyr-button.yaml` PASS 5/5: two presses give exactly two `Button pressed at` lines (cycles 498,960,451 and 1,498,992,451), the releases none, and LED1 (P600) mirrors S1 (4 edges, ends low); 5,369,263 steps; audit 2,000,000 steps, 0 unsupported |
 | ICU IRQ-pin half (`ra_icu` at `0x4000_6000`, `ielsr_lines: 0`): `IRQCRn.IRQMD` falling/rising/both/low edge, `PmnPFS.ISEL` gate, `ICU_IRQn` = event n + 1 linked by `icu_ielsr`; pad → IRQn table from Zephyr `r7fa8m1xh.dtsi` | smoke-tested | the button above; unit tests `peripherals::ra_icu` (`irqmd_selects_the_edge_that_raises_icu_irqn`, `a_pad_without_isel_raises_nothing`, `the_irq_pin_half_alone_is_not_an_event_link_controller`) |
 | ICU NMI, `IRQCRn` digital filter (`FLTEN`/`FCLKSEL`), low-level re-raise while the pad stays low, `DTCE`, re-entry while `IR` stays set | **not modelled** | NMI registers stored only; an edge is taken at once; low-level mode raises on the falling edge only |
-| `PmnPFS` `PDR`/`PODR` (the same flip-flops as `PCNTR1` on silicon) | stored only | Zephyr's GPIO driver sets pin direction through PmnPFS, so the button sample's LED1 (P600) stays an input and its mirror of S1 is not checked |
+| `PmnPFS` `PDR`/`PODR` → `PCNTR1` (the same flip-flops on silicon) | sim-tested | Stock Zephyr v4.1.0 `samples/basic/blinky` (`zephyr-blinky.yaml` PASS 4/4): P600 made an output by its PmnPFS store and toggled five times through the 16-bit `PCNTR1.PODR` alias, exactly five `LED state` lines ending OFF, 6 edges on `port6:0`, `PCNTR1` ends PDR set / PODR clear; 1,304,065 steps; audit 1,000,000 steps, 0 unsupported; fixture sha256 `671464cdd92a9b4b…`. The button sample's LED1 mirror of S1 now shows 4 edges and ends low (5,369,263 steps). Without the PFS → port hand-over both scripts fail. Unit test `pins::pad_control::tests::ra_pfs_low_byte_stores_write_the_port_output`, `peripherals::gpio::tests::ra_port_16_bit_aliases_follow_the_part`; integration `pad_control_pulls::ra_pfs_pdr_podr_are_the_port_output_flip_flops` |
+| `PmnPFS` read-back of PDR/PODR after `PCNTR1`/`PCNTR3` writes; `PmnPFS.PIDR` | **not modelled** | PmnPFS returns the last store; PIDR there reads 0 |
 | AGT pulse output, event counter, pulse-width/period measurement, AGT1 counting AGT0 underflow | **not modelled** | `AGTIOC`/`AGTISR`/`AGTIOSEL` stored only |
 | TrustZone (IDAU/SAU, CPSCU/PSCU, non-secure aliases) | **not modelled** | the image runs secure, as on silicon out of reset; nothing checks attribution |
 | DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, USBFS, IIC0-2, GPT, ADC12, USBHS, ETHERC/EDMAC, SPI0/1, CANFD | declared stubs | `configs/chips/r7fa8m1ah.yaml` (`type: "stub"`) |
 | SCI1, SCI4-8, OSPI/xSPI, SDRAM, SDHI, SSIE, CEU, DAC, CRC, DOC, RSIP, option-setting memory, standby SRAM | **not mapped** | no window in `configs/chips/r7fa8m1ah.yaml`; an access faults with a memory violation |
 
-## Stock Zephyr (verified 2026-10-31, button 2026-11-01)
+## Stock Zephyr (verified 2026-10-31, button and blinky 2026-11-01)
 
 ```bash
 # fixtures are committed; rebuild (byte-identical) with:
@@ -50,6 +51,7 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   r7fa8m1ah-zephyr-counter-alarm.elf  sha256 e4bd93a4991e21ca... (Zephyr v4.0.0)
 #   r7fa8m1ah-zephyr-uart-basic-api.elf  sha256 9c0328041125498b...
 #   r7fa8m1ah-zephyr-button.elf  sha256 ffbfe48e747d292e... (Zephyr v4.1.0)
+#   r7fa8m1ah-zephyr-blinky.elf  sha256 671464cdd92a9b4b... (Zephyr v4.1.0)
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-hello.yaml --no-uart-stdout
 #   PASS  1/1 checks · zephyr-hello · 673370 steps
@@ -73,12 +75,18 @@ crates/firmware-ek-ra8m1-zephyr/build.sh
 #   SUITE PASS - 100.00% [uart_basic_api_pending]: pass = 1, fail = 0, skip = 0, total = 1
 
 ./target/release/labwired test --script examples/ek-ra8m1/zephyr-button.yaml --no-uart-stdout
-#   PASS  3/3 checks · zephyr-button · 5369263 steps
+#   PASS  5/5 checks · zephyr-button · 5369263 steps
 #   *** Booting Zephyr OS build v4.1.0 ***
 #   Set up button at gpio@40400000 pin 9 / Set up LED at gpio@404000c0 pin 0
 #   Press the button
 #   Button pressed at 498960451
 #   Button pressed at 1498992451
+#   LED1 (port6:0): 4 edges; PCNTR1 ends PDR0 set, PODR0 clear
+
+./target/release/labwired test --script examples/ek-ra8m1/zephyr-blinky.yaml --no-uart-stdout
+#   PASS  4/4 checks · zephyr-blinky · 1304065 steps
+#   LED state: OFF / ON / OFF / ON / OFF; 6 edges on port6:0
+#   Audit (1,000,000 instructions): unsupported_total: 0
 
 # Determinism: two runs of each, identical uart.log and snapshot.json.
 ```
@@ -98,6 +106,11 @@ BusFaults at `0x4035_8308` in `R_SCI_B_UART_Open`.
 The v4.1.0 `ek_ra8m1` board also opens SCI0 (PMOD1) and SCI2 (PMOD2) at
 boot: without the `sci0` window the image BusFaults at `0x4035_8008` in
 `R_SCI_B_UART_Open`.
+
+Negative control for `zephyr-blinky.yaml` and the LED half of
+`zephyr-button.yaml`: with the port ignoring PmnPFS PDR/PODR stores (as
+before), P600 stays an input, so blinky has no edges and `PCNTR1` reads 0,
+and the button LED shows none; both fail.
 
 Negative control for `zephyr-button.yaml`: the `icu` window without its
 `irq_pins` (the IRQ-pin half inert, as the old stub was) prints "Press the

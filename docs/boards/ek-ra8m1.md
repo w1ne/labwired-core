@@ -113,7 +113,7 @@ an FSP ELF.
 | ICU | `0x4000_6000` (IRQCR/NMI) and `0x4000_C000` (WUPEN/IELSR) | IRQCR/NMI `type: stub`; IELSR modelled (`ra_icu`) — ELC event → `IR` → NVIC line level |
 | AGT0 / AGT1 | `0x4022_1000` / `0x4022_1100` | modelled (`ra_agt`) — 16-bit timer mode, LOCO/PCLKB sources, underflow + compare A/B as ELC events 0x046–0x04B |
 | PORT0–B | `0x4040_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |
-| PFS / PWPR / PWPRS | `0x4040_0800` / `0x4040_0D0C` / `0x4040_0D14` | modelled (`ra8_pfs`) — PCR pull-up and write protection; PSEL/PMR stored only |
+| PFS / PWPR / PWPRS | `0x4040_0800` / `0x4040_0D0C` / `0x4040_0D14` | modelled (`ra8_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PSEL/PMR stored only |
 | SCI9 (console) | `0x4035_8900` | modelled — SCI_B, async; RXI/TXI/TEI as ELC events 0x163-0x165; `FRSR.R` |
 | SCI3 (mikroBUS) | `0x4035_8300` | modelled — SCI_B, async; RXI/TXI/TEI as ELC events 0x139-0x13B; `FRSR.R` |
 | SCI0–2, SCI4–8 | `0x4035_8000` + `0x100`×n | not mapped |

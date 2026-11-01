@@ -14,10 +14,10 @@
 # regex demands exactly two lines, the first within 1% of cycle 500 M and
 # the second within 1% of cycle 1.5 G. The release edges must not print.
 #
-# Not checked: the sample's main loop also mirrors S1 onto LED1 (P006), but
-# Zephyr makes P006 an output through PmnPFS.PDR, which `ra_pfs` stores
-# without moving the port (see configs/chips/r7fa6m5bh.yaml), so the pad
-# stays an input here.
+# The sample's main loop also mirrors S1 onto LED1 (P006) every 1 ms.
+# Zephyr makes P006 an output through PmnPFS.PDR, which sets the port's PCNTR1
+# PDR (the same flip-flop), and drives it through PCNTR1.PODR, so LED1 shows
+# four edges: high on each press, low on each release.
 schema_version: "1.2"
 inputs:
   firmware: "../../tests/fixtures/r7fa6m5bh-zephyr-button.elf"
@@ -46,4 +46,10 @@ assertions:
       - "Set up LED at gpio@40080000 pin 6"
       - "Press the button"
   - uart_regex: "Press the button\\r?\\nButton pressed at (49[5-9]|50[0-4])\\d{6}\\r?\\nButton pressed at 1(49[5-9]|50[0-4])\\d{6}\\r?\\n$"
+  # LED1 mirrors S1: high while pressed, low on release, twice.
+  - gpio_edges:
+      pin: "port0:6"
+      min_edges: 4
+  # Released at the end: LED1 still an output (PDR), driving low (PODR).
+  - memory_value: { address: 0x40080000, expected_value: 0x00000040, mask: 0x400040, size: 4 }
   - expected_stop_reason: max_cycles

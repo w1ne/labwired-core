@@ -75,3 +75,17 @@ cargo run -q -p labwired-cli -- test \
   --max-steps 2000000 \
   --out-dir "$OUT/zephyr-button-unsupported-audit" \
   --fail-on-unsupported
+
+# Stock Zephyr v4.1.0 samples/basic/blinky: LED1 (P600) made an output through
+# PmnPFS.PDR|PODR and toggled five times through the 16-bit PCNTR1.PODR alias
+# (tests/fixtures/r7fa8m1ah-zephyr-blinky.elf), then its audit.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ek-ra8m1/zephyr-blinky.yaml \
+  --output-dir "$OUT/zephyr-blinky" \
+  --no-uart-stdout
+./scripts/unsupported_instruction_audit.sh \
+  --firmware tests/fixtures/r7fa8m1ah-zephyr-blinky.elf \
+  --system configs/systems/ek-ra8m1.yaml \
+  --max-steps 1000000 \
+  --out-dir "$OUT/zephyr-blinky-unsupported-audit" \
+  --fail-on-unsupported

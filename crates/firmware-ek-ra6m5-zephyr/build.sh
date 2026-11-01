@@ -16,6 +16,10 @@
 #       (renesas_ra_external_interrupt). Built UNMODIFIED from v4.1.0 (commit
 #       7823374e8721; hal_renesas 3204903bdc5e, cmsis d1b8b20b6278) with the
 #       module list pinned.
+#   tests/fixtures/r7fa6m5bh-zephyr-blinky.elf — samples/basic/blinky from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-blinky.yaml: LED1 made an
+#       output through PmnPFS.PDR and toggled through PCNTR1.PODR), module
+#       list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -83,4 +87,8 @@ build_one "samples/drivers/counter/alarm" "r7fa6m5bh-zephyr-counter-alarm.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
 # samples/basic/button (IRQ10 on P005 through the ICU), same v4.1.0 tree.
 build_one "samples/basic/button" "r7fa6m5bh-zephyr-button.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/basic/blinky (LED1 P006: output via PmnPFS.PDR, toggled through
+# PCNTR1.PODR), same v4.1.0 tree.
+build_one "samples/basic/blinky" "r7fa6m5bh-zephyr-blinky.elf" \
   "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
