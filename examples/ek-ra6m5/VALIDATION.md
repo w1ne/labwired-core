@@ -17,7 +17,10 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | Stock Zephyr v4.1.0 `samples/drivers/counter/alarm` (AGT0 compare match A → ELC event 0x041 → ICU IELSR84 → NVIC line 84) | sim-tested | `zephyr-counter-alarm.yaml` 1/1: four alarms (Now: 2/6/14/30), then the 65536-tick request refused, in 236,814 steps (6 G cycles, idle-skipped); `ra6m5_agt_icu` 3/3 |
 | ICU `IELSRn` event link (`ra_icu`: event → `IR` → line n as a level, `IR` W0C) | sim-tested | `ra6m5_agt_icu`: an unlinked event reaches no line; clearing `IR` drops the pend |
 | AGT0-5 16-bit timer mode (`ra_agt`: LOCO/PCLKB count source, underflow, compare A/B) | sim-tested | the counter alarm runs on AGT0 (LOCO / 16 = 2048 Hz); AGT1-5 share the model, unexercised by firmware |
-| SCI0 FIFO mode (`FCR` FM + RFRST/TFRST handshake, `FTDRL` TX, `FDR`, `FRDRL` RX) | sim-tested | FSP `r_sci_uart_fifo_cfg` completes; Zephyr's console writes `FTDRL`; `test_sci_classic_fifo_mode`. No TX occupancy, trigger levels or FIFO interrupts |
+| SCI0 FIFO mode (`FCR` FM + RFRST/TFRST handshake, `FTDRL` TX, `FDR`, `FRDRL` RX, `SSR_FIFO` TDFE/TEND/RDF/DR) | sim-tested | FSP `r_sci_uart_fifo_cfg` completes; Zephyr's console writes `FTDRL`; `test_sci_classic_fifo_mode`; `ra6m5_sci_icu` checks RDF at `RTRG` and DR below it. No TX occupancy (`FDR.T` reads 0); DR is set at once, not after 15 ETU |
+| Stock Zephyr v4.0.0 `tests/drivers/uart/uart_basic_api` (SCI0 RXI/TXI/TEI → ELC events 0x180-0x182 → ICU IELSR0-2 → NVIC lines 0-2) | sim-tested | `zephyr-uart-basic-api.yaml` 2/2: uart_basic_api 6/6 + uart_basic_api_pending 1/1 in 45,082,111 steps (300 M cycles, idle-skipped). Negative control: the same ELF with sci0 lacking `elc_event` fails fifo_fill and hangs in fifo_read |
+| Stock Zephyr v4.0.0 `samples/subsys/shell/shell_module` (interrupt-driven shell serial backend on SCI0; the sample of Renode's `shell_module.robot`) | sim-tested | `zephyr-shell.yaml` 2/2 in 443,990 steps: typed `demo ping` → `pong`, `kernel version`, `device list`, `demo params a b` (argc/argv), TAB completion (`kern<TAB>up<TAB>` → `kernel uptime`, `Uptime: 1249 ms`) and history recall (4× ESC [ A → `kernel version`). Negative control: without sci0 `elc_event` it prints nothing |
+| SCI0 interrupt events (`SCR` TIE/RIE/TE/RE/TEIE; TXI on the TDRE edge of a timed shift register, TEI one frame after the last byte, RXI per character a frame apart) | sim-tested | `ra6m5_sci_icu` 6/6 in both scheduler modes; 5 mutations caught (SCR not stored, RIE or TIE/TEIE mis-mapped, SSR_FIFO off, RTRG ignored). No ERI or error flags; the frame time is the chip YAML `baud`, not `SMR`/`BRR`/`SEMR` |
 | `MSTPCRB.MSTPB31` release of SCI0 | declared only | `MSTP` is a stub; SCI0 runs with the bit set too |
 | SCI0 async TX at 9600 8N1 (`BRR 25` from 8 MHz) | smoke-tested | every console line, polled on `SSR.TDRE` |
 | `PWPR` unlock + `PmnPFS` write (S1/S2 `PCR` pull-up) | smoke-tested | `s1=1 s2=1`: the pads read high through the PFS pull-up link |
@@ -31,6 +34,7 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | ICU NMI, `IRQCRn` digital filter, low-level re-raise, `DTCE`; AGT pulse output, event counter, measurement modes | **not modelled** | stored only; an IRQ edge is taken at once, low-level mode raises on the falling edge only |
 | `PmnPFS` `PDR`/`PODR` → `PCNTR1` (the same flip-flops on silicon) | sim-tested | Stock Zephyr v4.1.0 `samples/basic/blinky` (`zephyr-blinky.yaml` PASS 4/4): P006 made an output by its PmnPFS store and toggled five times through the 16-bit `PCNTR1.PODR` alias, exactly five `LED state` lines ending OFF, 6 edges on `port0:6`, `PCNTR1` ends PDR set / PODR clear; 39,715 steps; audit 1,000,000 steps, 0 unsupported; fixture sha256 `f6826f74e095d97e…`. The button sample's LED1 mirror of S1 now shows 4 edges and ends low (9,874,303 steps). Without the PFS → port hand-over both scripts fail. On RA6M5 the 16-bit `PCNTR1` aliases are PODR at +0x0 and PDR at +0x2 (FSP `R7FA6M5BH.h`, `swapped_half_aliases`); with natural half order the blinky toggles PDR and fails, and the button LED never lights. Unit test `pins::pad_control::tests::ra_pfs_low_byte_stores_write_the_port_output`, `peripherals::gpio::tests::ra_port_16_bit_aliases_follow_the_part`; integration `pad_control_pulls::ra_pfs_pdr_podr_are_the_port_output_flip_flops` |
 | `PmnPFS` read-back of PDR/PODR after `PCNTR1`/`PCNTR3` writes; `PmnPFS.PIDR` | **not modelled** | PmnPFS returns the last store; PIDR there reads 0 |
+| SCI ERI and the receive error flags (`ORER`/`FER`/`PER`) | **not modelled** | ERI (event 0x183) is never raised; RXI/TXI/TEI are covered above |
 | TrustZone (IDAU/SAU, CPSCU/PSCU) | **not modelled** | the image runs secure, as on silicon out of reset; `R_PSCU`/`R_CPSCU` are declared stubs so Zephyr's `soc_early_init_hook` can clear PSARB-E/ICUSARG-I; nothing checks attribution |
 | Stock Zephyr v4.1.0 `tests/drivers/adc/adc_api` (ADC1 channels 0 and 2, scan end → ELC event 0x166 → ICU IELSR39 → NVIC line 39) | smoke-tested | `zephyr-adc-api.yaml` PASS 2/2: `adc_basic` 6/6 (`asynchronous_call`, `invalid_request`, `repeated_samplings`, `sample_one_channel`, `sample_two_channels`, `sample_with_interval`), the buffers holding `0x07ff` (potentiometer, 1650 mV) and `0x03a2` (TMP36 at 25 °C, 750 mV) from `adc-system.yaml`; 316,024 steps; audit 2,000,000 steps, 0 unsupported; fixture sha256 `9a1ad5b6c1622…` |
 | ADC0/ADC1 (`ra_adc12`, the RA8M1 model at the RA6M5 bases 0x4017_0000 / 0x4017_0200): software-started single and continuous scans, `ADDRn`, `ADCER.ADPRC`/`ADRFMT`, addition/averaging, scan-end ELC events 0x160/0x166 (FSP ra6m5 `bsp_elc.h`) | sim-tested | the test above; `crates/core/tests/ra6m5_adc12_icu.rs` (vectors through IELSR39 with the converted codes, an unlinked scan end pends nothing) in both scheduler modes; unit tests `peripherals::ra_adc12` |
@@ -44,7 +48,7 @@ there is no RA6M5 bench part, and no Renode parity claim is made.
 | DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS, CANFD, USBHS, ETHERC/EDMAC, SPI0/1, FACI, FCACHE, C-cache | declared stubs | `configs/chips/r7fa6m5bh.yaml` (`type: "stub"`) |
 | SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC, data flash, option-setting memory | **not mapped** | no window in `configs/chips/r7fa6m5bh.yaml`; an access faults with a memory violation. The loader warns and drops Zephyr's OFS segments at 0x0100A100+ |
 
-## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, button, blinky, adc_api, bme280 and pwm_api 2026-11-01)
+## Commands and evidence (smoke verified 2026-10-30, Zephyr 2026-10-31, counter alarm, SCI interrupts, button, blinky, adc_api, bme280 and pwm_api 2026-11-01)
 
 ```bash
 # from the repository root
@@ -95,6 +99,13 @@ cargo test -p labwired-core --test ra6m5_agt_icu
 #   Press the button
 #   Button pressed at 500060451
 #   Button pressed at 1499740451
+# Stock Zephyr v4.0.0 tests/drivers/uart/uart_basic_api (SCI0 RXI/TXI/TEI + ICU)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+#   PASS  2/2 checks · zephyr-uart-basic-api · 45082111 steps
+#   Audit (150,000 instructions, boot only): unsupported_total: 0
+cargo test -p labwired-core --test ra6m5_sci_icu
+#   6 passed
+
 #   LED1 (port0:6): 4 edges; PCNTR1 ends PDR6 set, PODR6 clear
 
 # Stock Zephyr v4.1.0 blinky (P006 via PmnPFS.PDR, 16-bit PCNTR1.PODR at +0x0)
@@ -138,6 +149,7 @@ crates/firmware-ek-ra6m5-zephyr/build.sh
 #   72d9e0071821238f251f1baa53e72bc1f58a940a086025cfa604014cd9557a15  r7fa6m5bh-zephyr-sync.elf
 #   5a2167b96f644d6f5c4706e940a00a3e8483eef7e5759525a4ac269fbe1b569e  r7fa6m5bh-zephyr-counter-alarm.elf
 #   f2041b1a3a59371236ac58f3ab65d14cd34b922f53683e1ab528667419bc6ce2  r7fa6m5bh-zephyr-button.elf
+#   4060e1969d11755f583079c69c9c7b2c85e36d4c8ade5168b256f0847a45def9  r7fa6m5bh-zephyr-uart-basic-api.elf
 #   f6826f74e095d97eacfc160c57b6574e3e4f4143572e1d2743079a5432ce2627  r7fa6m5bh-zephyr-blinky.elf
 #   9a1ad5b6c16223c3a8f94008721265398046b66143d9b0ea2ba6e785781d5c82  r7fa6m5bh-zephyr-adc-api.elf
 #   4a406198ff35036e14562b8a330703a5eae91d22a3b5eca05e4a3166b0eb8698  r7fa6m5bh-zephyr-bme280.elf

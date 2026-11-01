@@ -5,6 +5,16 @@
 #   tests/fixtures/r7fa6m5bh-zephyr-sync.elf — samples/synchronization
 #       (examples/ek-ra6m5/zephyr-sync.yaml: k_busy_wait on the SysTick
 #       cycle counter, k_msleep woken by the SysTick system timer)
+#   tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf —
+#       tests/drivers/uart/uart_basic_api (examples/ek-ra6m5/
+#       zephyr-uart-basic-api.yaml: the interrupt-driven classic SCI driver,
+#       its RXI/TXI/TEI linked to the NVIC through the ICU IELSRn, with the
+#       driver's default 16-stage FIFO)
+#   tests/fixtures/r7fa6m5bh-zephyr-shell.elf —
+#       samples/subsys/shell/shell_module (examples/ek-ra6m5/
+#       zephyr-shell.yaml: the shell's interrupt-driven serial backend on
+#       the same SCI0 RXI/TXI/TEI). Built with Zephyr's picolibc module
+#       (see below).
 #   tests/fixtures/r7fa6m5bh-zephyr-counter-alarm.elf —
 #       samples/drivers/counter/alarm from Zephyr v4.1.0 (see below;
 #       examples/ek-ra6m5/zephyr-counter-alarm.yaml: AGT0 compare-match
@@ -55,6 +65,12 @@
 #     ~/zephyrproject-v4.0) with the cmsis and hal_renesas modules:
 #       west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.0.0
 #       west update cmsis hal_renesas
+#     and, for the shell, picolibc (`west update picolibc`, d492d5fa7c96,
+#     the revision v4.0.0's west.yml pins). The sample enables POSIX_API,
+#     which needs a C library with retargetable locking; the newlib that
+#     ships with a distro arm-none-eabi-gcc has none ("Retargetable locking
+#     must be enabled"), so the shell is built against Zephyr's picolibc
+#     module (CONFIG_PICOLIBC_USE_MODULE=y), as the Zephyr SDK would.
 #   - For the counter alarm: a Zephyr v4.1.0 west workspace
 #     (ZEPHYRPROJECT_V41, default ~/zephyrproject-v4.1) with cmsis and
 #     hal_renesas. v4.0.0 has the AGT counter driver but no RA6 `agt` nodes;
@@ -94,12 +110,20 @@ build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
   sha256sum "$FIXTURES/$2"
 }
 
-# The v4.0.0 fixtures were first built with only cmsis and hal_renesas; pin
-# that list so a workspace that has since fetched more modules (picolibc
-# swaps the C library) still rebuilds the same bytes.
-V40_MODULES="-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
-build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf" "$V40_MODULES"
-build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf" "$V40_MODULES"
+# Every build pins its module list: each fetched module adds an absolute
+# CONFIG_ZEPHYR_<MOD>_MODULE symbol to the ELF, so a workspace that fetched
+# more modules (picolibc, for the shell) would otherwise change the bytes.
+build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+# Module list pinned (as for the counter alarm) so a workspace that fetched
+# more modules still rebuilds the same bytes.
+build_one "tests/drivers/uart/uart_basic_api" "r7fa6m5bh-zephyr-uart-basic-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+build_one "samples/subsys/shell/shell_module" "r7fa6m5bh-zephyr-shell.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas;$ZEPHYRPROJECT/modules/lib/picolibc" \
+  -DCONFIG_PICOLIBC_USE_MODULE=y
 
 # Zephyr v4.1.0: samples/drivers/counter/alarm (AGT0 + ICU).
 ZEPHYRPROJECT_V41="${ZEPHYRPROJECT_V41:-$HOME/zephyrproject-v4.1}"

@@ -52,6 +52,27 @@ delivered through ICU IELSR84 (`ra_icu`, `ra_agt`):
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-counter-alarm.yaml --no-uart-stdout
 ```
 
+Stock Zephyr v4.0.0 `tests/drivers/uart/uart_basic_api`
+(`tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf`, same build script)
+runs the interrupt-driven SCI0 driver with its 16-stage FIFO: RXI, TXI and
+TEI are ELC events `0x180`-`0x182` linked to NVIC lines 0-2 through the ICU.
+It passes 6/6 + 1/1, with the three "Please send characters" prompts
+answered by cycle-timed injections:
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+```
+
+Stock Zephyr v4.0.0 `samples/subsys/shell/shell_module`
+(`tests/fixtures/r7fa6m5bh-zephyr-shell.elf`, same build script) answers
+typed commands on the same interrupt-driven SCI0: `demo ping`,
+`kernel version`, `device list`, arguments, TAB completion and history
+recall:
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-shell.yaml --no-uart-stdout
+```
+
 See [`VALIDATION.md`](VALIDATION.md).
 
 ## Build and run
@@ -110,9 +131,11 @@ hb=0 podr=0040 s1=1 s2=1
   neither checks the PRCR key nor applies the divider.
 - **Module stop.** `MSTP` is a stub: SCI0 runs whether or not `MSTPB31` is
   cleared.
-- **SCI interrupts.** The ICU (`ra_icu`) links AGT events to the NVIC, but
-  SCI0 raises no ELC events, so the smoke polls `SSR.TDRE` and the Zephyr
-  console polls `FDR`. The ICU IRQ-pin half (`IRQCRn`/NMI) and `DTCE` are
+- **SCI interrupts.** SCI0 raises RXI/TXI/TEI through the ICU, but not ERI
+  or the receive error flags. RXI comes once per character a frame apart,
+  not at `FCR.RTRG` or 15 ETU after the last stop bit, and `SSR_FIFO.DR`
+  is set at once. The frame time comes from the chip YAML `baud`, not
+  `SMR`/`BRR`/`SEMR`. The ICU IRQ-pin half (`IRQCRn`/NMI) and `DTCE` are
   stored only.
 - **AGT modes.** Timer mode only: no pulse output, event counter or pulse
   width / period measurement, and AGT1 does not count AGT0 underflows.

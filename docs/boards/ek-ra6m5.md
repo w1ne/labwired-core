@@ -35,6 +35,26 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
   `+2` compare B, FSP ra6m5 `bsp_elc.h`). The sample's four AGT0 compare
   alarms (Now: 2/6/14/30 s) arrive on IELSR84, then the 65536-tick request
   is refused. Same models as the EK-RA8M1, at the RA6M5 bases.
+- **SCI0 interrupts through the ICU** (stock Zephyr v4.0.0
+  `tests/drivers/uart/uart_basic_api`,
+  `tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf`: 6/6 + 1/1). SCI0
+  raises RXI/TXI/TEI as ELC events `0x180`/`0x181`/`0x182` (FSP ra6m5
+  `bsp_elc.h`), which Zephyr links to NVIC lines 0-2. `SCR` is stored, and
+  its TIE/RIE/TE/RE/TEIE enables drive the same interrupt engine as the
+  RA8M1's SCI_B: TXI when a byte moves into the timed shift register
+  (one 10-bit frame at 115200 baud of the 200 MHz guest clock), TEI when
+  the last frame ends, RXI once per received character a frame apart. In
+  FIFO mode `SSR` reads as `SSR_FIFO` (TDFE, TEND, RDF at `FCR.RTRG`, DR
+  below it). The FSP UART suite drives fifo_fill on TXI/TEI and fifo_read
+  and the pending suite on RXI; without the events fifo_fill fails and
+  fifo_read hangs.
+- **Stock Zephyr shell** (v4.0.0 `samples/subsys/shell/shell_module`,
+  `tests/fixtures/r7fa6m5bh-zephyr-shell.elf`, the sample of Renode's
+  `shell_module.robot`). Its serial backend is interrupt driven, so the
+  prompt, the echo and every reply leave on SCI0 TXI/TEI and every typed
+  byte arrives on RXI. `examples/ek-ra6m5/zephyr-shell.yaml` types commands,
+  arguments, TAB completion and history recall; without the sci0
+  `elc_event` the image prints nothing.
 - **Declared stubs** for `R_FCACHE` (the FCACHEIV invalidate completes on a
   0 read), the C-cache (`R_CACHE`) and the TrustZone attribution
   (`R_PSCU`/`R_CPSCU`), which Zephyr's `soc_early_init_hook` and
@@ -45,12 +65,14 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
     settle at once and `cpu_hz` stays the reset MOCO 8 MHz after Zephyr
     switches ICLK to the 200 MHz PLL (the SysTick-based Zephyr timebase
     counts cycles, so it is unaffected). Module stop (MSTP) is a declared
-    stub. SCI interrupts are not routed through the ICU (`irq:` on sci0 is
-    nominal), so the Zephyr console is polled; the ICU `IRQCRn`/NMI pin half
-    and `DTCE` are stored only. The AGT pulse output, event counter and
+    stub. The ICU `IRQCRn`/NMI pin half and `DTCE` are stored only.
+    SCI0 raises no ERI and no receive error flags, and `SMR`/`BRR`/`SEMR`
+    are not decoded (`baud` comes from the chip YAML). The AGT pulse output, event counter and
     measurement modes are not modelled. The PFS
     peripheral mux is stored only. The SCI FIFO has no TX occupancy (TX
-    drains at once), no trigger levels and no FIFO interrupts. TrustZone,
+    drains at once, so `FDR.T` reads 0); `DR` is set at once rather than
+    15 ETU after the last stop bit, and RXI comes per character rather
+    than at `RTRG` or the `DR` timeout. TrustZone,
     flash programming, DMAC/DTC, ELC, RTC, IWDT/WDT, SPI,
     USBFS/USBHS, ETHERC and CANFD are declared stubs; ADC0/ADC1 convert
     software-started scans (stock Zephyr `adc_api` 6/6), IIC0-2 are I2C
@@ -77,7 +99,7 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | Example system | [`configs/systems/ek-ra6m5.yaml`](../../configs/systems/ek-ra6m5.yaml) |
 | Reference firmware | [`crates/firmware-ek-ra6m5-smoke/`](../../crates/firmware-ek-ra6m5-smoke/); stock Zephyr v4.0.0 / v4.1.0 via [`crates/firmware-ek-ra6m5-zephyr/`](../../crates/firmware-ek-ra6m5-zephyr/) |
 | Example | [`examples/ek-ra6m5/`](../../examples/ek-ra6m5/) |
-| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf`, `r7fa6m5bh-zephyr-counter-alarm.elf` |
+| Committed artifacts | `tests/fixtures/ek-ra6m5-smoke.elf` (`EK-RA6M5 SMOKE`); `tests/fixtures/r7fa6m5bh-zephyr-hello.elf`, `r7fa6m5bh-zephyr-sync.elf`, `r7fa6m5bh-zephyr-counter-alarm.elf`, `r7fa6m5bh-zephyr-uart-basic-api.elf`, `r7fa6m5bh-zephyr-shell.elf` |
 | Build target | `thumbv8m.main-none-eabi` |
 | Tier (snapshot) | **L1** — smoke (CPU + memory + PORT/PFS + SCI0); SIM-DERIVED |
 
@@ -100,7 +122,7 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | AGT0–5 | `0x400E_8000` + `0x100`×n | `ra_agt` — 16-bit timer mode, underflow and compare A/B as ELC events (`0x040 + 3n`) |
 | PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3; 16-bit aliases upper half first (PODR +0x0, PDR +0x2, as `R7FA6M5BH.h`) |
 | PFS / PWPR | `0x4008_0800` / `0x4008_0D03` | modelled (`ra_pfs`) — PCR pull-up, write protection, PDR/PODR stores set the port's `PCNTR1` (stock Zephyr blinky); PmnPFS read-back of PDR/PODR and PIDR not modelled; PMR/PSEL route a pad to the GPT (GTIOC1A/B on P405/P406) and are stored only for other peripherals |
-| SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async, polled; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`) for the FSP driver |
+| SCI0 (console) | `0x4011_8000` | modelled — classic SCI, async; FIFO mode (`FCR`/`FDR`/`FTDRL`/`FRDRL`, `SSR_FIFO`); RXI/TXI/TEI as ICU events |
 | SCI1–9 | `0x4011_8100` + `0x100`×n | not mapped |
 | LEDs | LED1 blue P006, LED2 green P007, LED3 red P008 | modelled GPIO — active high |
 | Switches | S1 P005, S2 P004 | modelled GPIO input — active low, PFS pull-up |
@@ -128,6 +150,10 @@ cargo build -p firmware-ek-ra6m5-smoke --release --target thumbv8m.main-none-eab
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-sync.yaml --no-uart-stdout
 # stock Zephyr v4.1.0 counter alarm (AGT0 compare match through ICU IELSR84)
 ./target/release/labwired test --script examples/ek-ra6m5/zephyr-counter-alarm.yaml --no-uart-stdout
+# stock Zephyr v4.0.0 uart_basic_api (SCI0 RXI/TXI/TEI through ICU IELSR0-2)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+# stock Zephyr v4.0.0 shell (interrupt-driven serial backend on SCI0)
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-shell.yaml --no-uart-stdout
 ```
 
 See [`examples/ek-ra6m5/VALIDATION.md`](../../examples/ek-ra6m5/VALIDATION.md)

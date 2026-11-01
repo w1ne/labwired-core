@@ -46,6 +46,16 @@
 //! BGDM and the SCI clock are not decoded; `baud` comes from the chip YAML);
 //! and an RXI for a character that arrived while RIE was 0 is raised when RIE
 //! is set rather than lost.
+//!
+//! The classic SCI (RA6/RA4 SCIn, FSP `r_sci_uart`) raises the same four
+//! events under the same rules; only its enables sit elsewhere, in the 8-bit
+//! SCR (TIE bit 7, RIE 6, TE 5, RE 4, TEIE 2; FSP `R7FA6M5BH.h`
+//! `R_SCI0_SCR_*_Pos`). [`classic_scr_as_ccr0`] moves them to the CCR0
+//! positions, so one engine serves both. With the FIFO on, TXI follows TDFE
+//! (FIFO count <= FCR.TTRG); FSP leaves TTRG at 0, so it comes when the last
+//! queued byte enters the shift register — the TDRE edge above. RXI follows
+//! RDF / DR (FCR.DRES = 0, which FSP leaves) and is raised per character, as
+//! for SCI_B.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -55,6 +65,20 @@ pub(super) const CCR0_TE: u32 = 1 << 4;
 pub(super) const CCR0_RIE: u32 = 1 << 16;
 pub(super) const CCR0_TIE: u32 = 1 << 20;
 pub(super) const CCR0_TEIE: u32 = 1 << 21;
+
+/// The classic SCI's SCR enables at their SCI_B CCR0 positions.
+pub(super) fn classic_scr_as_ccr0(scr: u8) -> u32 {
+    [
+        (1 << 7, CCR0_TIE),
+        (1 << 6, CCR0_RIE),
+        (1 << 5, CCR0_TE),
+        (1 << 4, CCR0_RE),
+        (1 << 2, CCR0_TEIE),
+    ]
+    .into_iter()
+    .filter(|&(bit, _)| scr & bit != 0)
+    .fold(0, |ccr0, (_, flag)| ccr0 | flag)
+}
 
 /// Scheduler tokens for the TDRE / TEND edges: this base plus a 16-bit
 /// generation. The shared UART's wake is 0.
@@ -376,6 +400,20 @@ mod tests {
         s.note_rx_pop();
         assert!(s.service(30, ccr0, false).is_empty());
         assert_eq!(s.service(31, ccr0, true), vec![RXI]);
+    }
+
+    #[test]
+    fn classic_scr_enables_land_on_the_ccr0_positions() {
+        assert_eq!(classic_scr_as_ccr0(0), 0);
+        // FSP r_sci_uart: TE | RE | RIE, then Zephyr's irq_tx_enable adds
+        // TIE | TEIE.
+        assert_eq!(classic_scr_as_ccr0(0x70), CCR0_TE | CCR0_RE | CCR0_RIE);
+        assert_eq!(
+            classic_scr_as_ccr0(0xF4),
+            CCR0_TIE | CCR0_RIE | CCR0_TE | CCR0_RE | CCR0_TEIE
+        );
+        // CKE (bits 1:0) and MPIE (bit 3) carry no interrupt enable.
+        assert_eq!(classic_scr_as_ccr0(0x0B), 0);
     }
 
     #[test]
