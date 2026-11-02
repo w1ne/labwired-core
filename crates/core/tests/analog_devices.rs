@@ -22,10 +22,11 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
-//! discovered: diode diffusion charge (`TT`), BJT `Cje`/`Cjc`, JFET `Cgs`/`Cgd`,
-//! and MOSFET overlap or channel charge. Diode depletion charge through
-//! `CJO`/`VJ`/`M`/`FC` is exercised below. Circuits depending on unsupported stored
-//! charge still belong to `adapter: external_process`.
+//! discovered: diode diffusion charge (`TT`), BJT transit-time charge (`TF`/
+//! `TR`), JFET `Cgs`/`Cgd`, and MOSFET overlap or channel charge. Diode
+//! depletion charge through `CJO`/`VJ`/`M`/`FC` and BJT base-junction depletion
+//! charge through `CJE`/`CJC` are exercised below. Circuits depending on
+//! unsupported stored charge still belong to `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
 // verification command `cargo test -p labwired-core analog` runs all of them.
@@ -202,6 +203,140 @@ mod analog {
             assert!(
                 (v2 - expected_v2).abs() < 1e-8,
                 "{integration:?} second step: expected {expected_v2} V, got {v2} V"
+            );
+        }
+    }
+
+    #[test]
+    fn bjt_cje_integrates_as_base_emitter_charge_for_both_polarities() {
+        let cje = 10e-9;
+        let resistance = 1e3;
+        let h = 1e-6;
+        let ratio = resistance * cje / h;
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let netlist = format!(
+                "V1 in 0 dc 0\nR1 in b {resistance}\nVc c 0 dc 0\n\
+                 Q1 c b 0 QMOD\n.model QMOD {kind}(IS=1e-30 CJE={cje} VJE=1 MJE=0 FC=0.5)\n"
+            );
+            let circuit = parse_netlist(&netlist).expect("BJT junction-cap circuit parses");
+            assert_eq!(circuit.bjts[0].model.cje, cje);
+            assert_eq!(circuit.bjts[0].model.vje, 1.0);
+            assert_eq!(circuit.bjts[0].model.mje, 0.0);
+            assert_eq!(circuit.bjts[0].model.cjc, 0.0);
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut solver = Solver::new(circuit.clone(), integration).expect("solver builds");
+                let base = solver.circuit().node("b").expect("base node");
+                let source = solver.voltage_source_index("V1").expect("source exists");
+                solver.set_voltage_source(source, sign);
+                solver.advance(h).expect("first transient step solves");
+                let expected = sign / (1.0 + ratio);
+                let actual = solver.node_voltage(base);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{kind} {integration:?} base-emitter step: expected {expected} V, got {actual} V"
+                );
+
+                solver.advance(h).expect("second transient step solves");
+                let expected_second = match integration {
+                    Integration::BackwardEuler => {
+                        sign * (1.0 + ratio * expected.abs()) / (1.0 + ratio)
+                    }
+                    Integration::Trapezoidal => {
+                        sign * (1.0 + 3.0 * ratio * expected.abs()) / (1.0 + 2.0 * ratio)
+                    }
+                };
+                let actual_second = solver.node_voltage(base);
+                assert!(
+                    (actual_second - expected_second).abs() < 1e-8,
+                    "{kind} {integration:?} second base-emitter step: expected {expected_second} V, got {actual_second} V"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bjt_mje_changes_the_transient_base_emitter_charge() {
+        let cje = 10e-9;
+        let vje = 0.75;
+        let mje = 0.4;
+        let fc = 0.5;
+        let resistance = 1e3;
+        let h = 1e-6;
+        let charge =
+            |voltage: f64| cje * vje / (1.0 - mje) * (1.0 - (1.0 - voltage / vje).powf(1.0 - mje));
+        let mut lo = 0.0;
+        let mut hi = fc * vje;
+        for _ in 0..80 {
+            let mid = 0.5 * (lo + hi);
+            if (1.0 - mid) / resistance > charge(mid) / h {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let expected = 0.5 * (lo + hi);
+
+        let mut solver = build(&format!(
+            "V1 in 0 dc 0\nR1 in b {resistance}\nVc c 0 dc 0\nQ1 c b 0 QMOD\n\
+             .model QMOD NPN(IS=1e-30 CJE={cje} VJE={vje} MJE={mje} FC={fc})\n"
+        ));
+        let base = solver.circuit().node("b").expect("base node");
+        let source = solver.voltage_source_index("V1").expect("source exists");
+        solver.set_voltage_source(source, 1.0);
+        solver.advance(h).expect("graded B-E depletion step solves");
+        let actual = solver.node_voltage(base);
+        assert!(
+            (actual - expected).abs() < 1e-8,
+            "MJE={mje} charge curve should settle at {expected} V, got {actual} V"
+        );
+    }
+
+    #[test]
+    fn bjt_cjc_couples_a_base_step_into_the_collector() {
+        let cjc = 10e-9;
+        let resistance = 1e3;
+        let h = 1e-6;
+        let vjc = 0.75;
+        let mjc = 0.4;
+        let fc = 0.5;
+        let charge =
+            |voltage: f64| cjc * vjc / (1.0 - mjc) * (1.0 - (1.0 - voltage / vjc).powf(1.0 - mjc));
+        let mut lo = 0.0;
+        let mut hi = 1.0;
+        for _ in 0..80 {
+            let mid = 0.5 * (lo + hi);
+            if mid / resistance < charge(1.0 - mid) / h {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let expected_magnitude = 0.5 * (lo + hi);
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let netlist = format!(
+                "V1 b 0 dc 0\nR1 c 0 {resistance}\nQ1 c b 0 QMOD\n\
+                 .model QMOD {kind}(IS=1e-30 CJC={cjc} VJC={vjc} MJC={mjc} FC={fc})\n"
+            );
+            let circuit = parse_netlist(&netlist).expect("BJT junction-cap circuit parses");
+            assert_eq!(circuit.bjts[0].model.cje, 0.0);
+            assert_eq!(circuit.bjts[0].model.cjc, cjc);
+            assert_eq!(circuit.bjts[0].model.vjc, vjc);
+            assert_eq!(circuit.bjts[0].model.mjc, mjc);
+
+            let mut solver =
+                Solver::new(circuit, Integration::BackwardEuler).expect("solver builds");
+            let collector = solver.circuit().node("c").expect("collector node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, sign);
+            solver.advance(h).expect("base step couples through CJC");
+            let expected = sign * expected_magnitude;
+            let actual = solver.node_voltage(collector);
+            assert!(
+                (actual - expected).abs() < 1e-8,
+                "{kind} collector coupling: expected {expected} V, got {actual} V"
             );
         }
     }
