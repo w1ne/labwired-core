@@ -128,6 +128,10 @@ pub struct Solver {
     jfet_vgd: Vec<f64>,
     /// Each JFET's normalised drain-source voltage. Negative means reversed.
     jfet_vds: Vec<f64>,
+    /// Depletion charge and current history for each JFET, ordered G-S then
+    /// G-D and oriented in normalized device coordinates.
+    jfet_q: Vec<[f64; 2]>,
+    jfet_i: Vec<[f64; 2]>,
     /// Each power sink's linearisation point: `(v(p) − v(n), v(op) − v(on),
     /// i(control))`.
     sink_point: Vec<[f64; 3]>,
@@ -248,6 +252,8 @@ impl Solver {
             jfet_vgs: vec![0.0; jfets],
             jfet_vgd: vec![0.0; jfets],
             jfet_vds: vec![0.0; jfets],
+            jfet_q: vec![[0.0; 2]; jfets],
+            jfet_i: vec![[0.0; 2]; jfets],
             sink_point: vec![[0.0; 3]; sinks],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
@@ -575,6 +581,18 @@ impl Solver {
                 device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc).0;
             self.bjt_i[index] = [0.0; 2];
         }
+        for index in 0..self.circuit.jfets.len() {
+            let jfet = &self.circuit.jfets[index];
+            let sign = jfet.model.polarity.sign();
+            let model = jfet.model;
+            let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.s);
+            let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.d);
+            self.jfet_q[index] = [
+                device::junction_depletion_charge(vgs, model.cgs, model.pb, 0.5, model.fc).0,
+                device::junction_depletion_charge(vgd, model.cgd, model.pb, 0.5, model.fc).0,
+            ];
+            self.jfet_i[index] = [0.0; 2];
+        }
     }
 
     /// Integrate one internal step of `h` seconds.
@@ -787,6 +805,42 @@ impl Solver {
                     && self.bjt_i[index][junction].to_bits() == i_new.to_bits();
                 self.bjt_q[index][junction] = q_new;
                 self.bjt_i[index][junction] = i_new;
+            }
+        }
+        for index in 0..self.circuit.jfets.len() {
+            let jfet = &self.circuit.jfets[index];
+            let sign = jfet.model.polarity.sign();
+            let model = jfet.model;
+            let nodes = &self.solution[..self.nodes];
+            let voltages = [
+                sign * node_diff(nodes, jfet.g, jfet.s),
+                sign * node_diff(nodes, jfet.g, jfet.d),
+            ];
+            let capacitances = [model.cgs, model.cgd];
+            for junction in 0..2 {
+                let c0 = capacitances[junction];
+                if c0 == 0.0 {
+                    continue;
+                }
+                let q_new = device::junction_depletion_charge(
+                    voltages[junction],
+                    c0,
+                    model.pb,
+                    0.5,
+                    model.fc,
+                )
+                .0;
+                let i_new = match rule {
+                    Integration::BackwardEuler => (q_new - self.jfet_q[index][junction]) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (q_new - self.jfet_q[index][junction]) / h
+                            - self.jfet_i[index][junction]
+                    }
+                };
+                self.settled &= self.jfet_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.jfet_i[index][junction].to_bits() == i_new.to_bits();
+                self.jfet_q[index][junction] = q_new;
+                self.jfet_i[index][junction] = i_new;
             }
         }
         for index in 0..self.circuit.inductors.len() {
@@ -1671,10 +1725,13 @@ impl Solver {
                 &negate(&channel_terms),
             );
 
-            for (cathode, voltage) in [
-                (jfet.s, self.jfet_vgs[index]),
-                (jfet.d, self.jfet_vgd[index]),
-            ] {
+            for (junction, (cathode, voltage, c0)) in [
+                (jfet.s, self.jfet_vgs[index], jfet.model.cgs),
+                (jfet.d, self.jfet_vgd[index], jfet.model.cgd),
+            ]
+            .into_iter()
+            .enumerate()
+            {
                 let gate = device::diode_op(voltage, jfet.model.is, 1.0);
                 let gate_voltage = sign * voltage;
                 let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
@@ -1687,6 +1744,38 @@ impl Solver {
                     -sign * gate.id,
                     &negate(&gate_terms),
                 );
+
+                if c0 > 0.0 {
+                    if let Stamp::Transient(h, rule) = stamp {
+                        let (charge, capacitance) = device::junction_depletion_charge(
+                            voltage,
+                            c0,
+                            jfet.model.pb,
+                            0.5,
+                            jfet.model.fc,
+                        );
+                        let (geq, current) = match rule {
+                            Integration::BackwardEuler => {
+                                (capacitance / h, (charge - self.jfet_q[index][junction]) / h)
+                            }
+                            Integration::Trapezoidal => (
+                                2.0 * capacitance / h,
+                                2.0 * (charge - self.jfet_q[index][junction]) / h
+                                    - self.jfet_i[index][junction],
+                            ),
+                        };
+                        let charge_terms = [(geq, jfet.g, cathode, sign * voltage)];
+                        stamp_linearised(matrix, rhs, dim, jfet.g, sign * current, &charge_terms);
+                        stamp_linearised(
+                            matrix,
+                            rhs,
+                            dim,
+                            cathode,
+                            -sign * current,
+                            &negate(&charge_terms),
+                        );
+                    }
+                }
             }
         }
 

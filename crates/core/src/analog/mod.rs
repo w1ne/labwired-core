@@ -9,17 +9,17 @@
 //! It exists because the browser cannot spawn a process, so the ngspice
 //! `external_process` adapter has no browser counterpart. This engine compiles
 //! into the same WASM the playground ships, runs natively too, and adds one
-//! dependency (`libm`, for bit-identical transcendentals) to either. What it
-//! does not do — subcircuits, model libraries, AC/DC sweeps, and unsupported
-//! device capacitances such as diode diffusion charge, BJT transit-time charge,
-//! JFET gate capacitance, and MOSFET channel charge — it refuses by name and
-//! points at `tools/cosim/labwired_ngspice.py`, which does them all.
+//! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
+//! subcircuits, model libraries, AC/DC sweeps, diode diffusion charge, BJT
+//! transit-time charge, and MOSFET channel charge by name and points at
+//! `tools/cosim/labwired_ngspice.py`, which supports those features.
 //!
 //! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
-//! optional depletion charge), and the level-1 JFET and MOSFET — are solved by
-//! Newton–Raphson iteration inside each time step. A
-//! circuit with none of them takes exactly the code path it took before they
-//! existed, down to the floating-point operation order.
+//! optional depletion charge), and the level-1 JFET (including optional gate
+//! junction depletion charge) and MOSFET — are solved by Newton–Raphson
+//! iteration inside each time step. A circuit with none of them takes exactly
+//! the code path it took before they existed, down to the floating-point
+//! operation order.
 //!
 //! * [`netlist`] — the accepted SPICE subset and its errors.
 //! * [`device`] — the device equations, their limiters and their constants.

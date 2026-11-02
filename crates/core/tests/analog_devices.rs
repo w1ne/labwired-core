@@ -23,10 +23,11 @@
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
 //! discovered: diode diffusion charge (`TT`), BJT transit-time charge (`TF`/
-//! `TR`), JFET `Cgs`/`Cgd`, and MOSFET overlap or channel charge. Diode
-//! depletion charge through `CJO`/`VJ`/`M`/`FC` and BJT base-junction depletion
-//! charge through `CJE`/`CJC` are exercised below. Circuits depending on
-//! unsupported stored charge still belong to `adapter: external_process`.
+//! `TR`), and MOSFET overlap or channel charge. Diode depletion charge through
+//! `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion charge through `CJE`/`CJC`,
+//! and JFET gate-junction depletion charge through `CGS`/`CGD` are exercised
+//! below. Circuits depending on unsupported stored charge still belong to
+//! `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
 // verification command `cargo test -p labwired-core analog` runs all of them.
@@ -1265,6 +1266,123 @@ mod analog {
                 "{kind} gate current should be the two forward junctions: expected \
                  {expected} A, got {measured} A"
             );
+        }
+    }
+
+    /// Each level-1 JFET gate depletion capacitance is parsed and integrated
+    /// as a nonlinear junction charge for NJF and PJF, under both companion
+    /// rules. The expected node voltage is solved independently from the
+    /// level-1 M=0.5 charge equation and the BE/trapezoidal current formulas.
+    #[test]
+    fn jfet_gate_depletion_charge_integrates_cgs_and_cgd_for_both_polarities() {
+        let c0 = 10e-9;
+        let pb = 0.75;
+        let fc: f64 = 0.5;
+        let resistance = 1e3;
+        let h = 100e-6;
+        let input = 0.6;
+        let vfc = fc * pb;
+        let qfc = c0 * pb / 0.5 * (1.0 - (1.0 - fc).sqrt());
+        let cfc = c0 * (1.0 - fc).powf(-0.5);
+        let slope = 0.5 * c0 * (1.0 - fc).powf(-1.5) / pb;
+        let charge = |voltage: f64| {
+            if voltage < vfc {
+                c0 * pb / 0.5 * (1.0 - (1.0 - voltage / pb).sqrt())
+            } else {
+                let dv = voltage - vfc;
+                qfc + cfc * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let solve_voltage = |previous_charge: f64, previous_current: f64, rule: Integration| {
+            let mut lo = 0.0;
+            // Trapezoidal integration can overshoot a step input because its
+            // history term retains the previous positive current.
+            let mut hi = input + 0.2;
+            for _ in 0..100 {
+                let mid = 0.5 * (lo + hi);
+                let cap_current = match rule {
+                    Integration::BackwardEuler => (charge(mid) - previous_charge) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (charge(mid) - previous_charge) / h - previous_current
+                    }
+                };
+                if (input - mid) / resistance > cap_current {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            0.5 * (lo + hi)
+        };
+
+        for capacitance in ["CGS", "CGD"] {
+            for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+                let (cgs, cgd) = if capacitance == "CGS" {
+                    (c0, 0.0)
+                } else {
+                    (0.0, c0)
+                };
+                let netlist = format!(
+                    "V1 in 0 dc 0\nR1 in g {resistance}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA=100u IS=1e-30 \
+                     CGS={cgs} CGD={cgd} PB={pb} FC={fc})\n",
+                    if kind == "NJF" { -2.0 } else { 2.0 }
+                );
+                let circuit = parse_netlist(&netlist).expect("JFET capacitance model parses");
+                let model = circuit.jfets[0].model;
+                assert_eq!(model.cgs, cgs);
+                assert_eq!(model.cgd, cgd);
+                assert_eq!(model.pb, pb);
+                assert_eq!(model.fc, fc);
+
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let mut solver = Solver::new(circuit.clone(), integration)
+                        .expect("JFET capacitance solver builds");
+                    let gate = solver.circuit().node("g").expect("gate node");
+                    let source = solver.voltage_source_index("V1").expect("input source");
+                    solver.set_voltage_source(source, sign * input);
+
+                    let first = solve_voltage(0.0, 0.0, Integration::BackwardEuler);
+                    assert!(
+                        first > vfc,
+                        "the first step must exercise the FC continuation"
+                    );
+                    solver.advance(h).expect("first gate-charge step solves");
+                    let actual_first = solver.node_voltage(gate);
+                    assert!(
+                        (actual_first - sign * first).abs() < 1e-8,
+                        "{kind} {capacitance} first {integration:?} step: expected {} V, got {actual_first} V",
+                        sign * first
+                    );
+
+                    let first_charge = charge(first);
+                    let first_current = first_charge / h;
+                    let second = solve_voltage(first_charge, first_current, integration);
+                    assert!(
+                        second > vfc,
+                        "the second step must exercise the FC continuation"
+                    );
+                    solver.advance(h).expect("second gate-charge step solves");
+                    let actual_second = solver.node_voltage(gate);
+                    assert!(
+                        (actual_second - sign * second).abs() < 1e-8,
+                        "{kind} {capacitance} second {integration:?} step: expected {} V, got {actual_second} V",
+                        sign * second
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn jfet_gate_depletion_parameters_reject_invalid_values() {
+        for parameter in ["CGS=-1n", "PB=0", "FC=1"] {
+            let netlist = format!(
+                "Vd d 0 dc 0\nVg g 0 dc 0\nVs s 0 dc 0\nJ1 d g s JMOD\n\
+                 .model JMOD NJF({parameter})\n"
+            );
+            let error = parse_netlist(&netlist).expect_err("invalid JFET capacitance is refused");
+            assert!(error.to_string().contains("JFET model"), "{error}");
         }
     }
 
