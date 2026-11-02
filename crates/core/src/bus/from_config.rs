@@ -188,6 +188,14 @@ impl SystemBus {
         self.debug_schemas = Self::load_debug_schemas(chip, manifest);
     }
 
+    /// Copy the GPIO supply and input thresholds from the resolved chip.
+    /// Programmatic peripheral banks call this because they bypass from_config.
+    /// Missing values stay absent so voltage routes fail instead of guessing.
+    pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
+        self.io_voltage_v = chip.io_voltage_v;
+        self.gpio_input_thresholds = chip.gpio_input_thresholds;
+    }
+
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         Self::from_config_with_plugins(chip, manifest, &[])
     }
@@ -526,8 +534,7 @@ impl SystemBus {
                 (adc.peripheral.clone(), adc.channel),
             );
         }
-        bus.io_voltage_v = chip.io_voltage_v;
-        bus.gpio_input_thresholds = chip.gpio_input_thresholds;
+        bus.attach_chip_io_levels(chip);
         bus.supply = crate::power::SupplySupervisor::new(chip.supply_monitor.clone());
 
         let merged_peripherals = merged_peripheral_configs(chip, manifest);
