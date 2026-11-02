@@ -417,9 +417,8 @@ mod esp32_input_threshold_tests {
         let manifest: SystemManifest =
             serde_yaml::from_str("name: esp32-voltage-inputs\nchip: esp32\n")
                 .expect("parse manifest");
-        let (mut bus, _, _) =
-            build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
-                .expect("build classic ESP32");
+        let (mut bus, _, _) = build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
+            .expect("build classic ESP32");
         // Binding knows every analog output carries volts. Apply sampled F64
         // voltages directly: no firmware or external analog solver is needed.
         let model = CosimModelConfig {
@@ -448,8 +447,14 @@ mod esp32_input_threshold_tests {
             (0.8, 2.5, false, true),
         ] {
             let signals = CosimSignals::from([
-                ("board.gpio_in.gpio32".into(), CosimSignalValue::F64(clk_volts)),
-                ("board.gpio_in.gpio33".into(), CosimSignalValue::F64(dt_volts)),
+                (
+                    "board.gpio_in.gpio32".into(),
+                    CosimSignalValue::F64(clk_volts),
+                ),
+                (
+                    "board.gpio_in.gpio33".into(),
+                    CosimSignalValue::F64(dt_volts),
+                ),
             ]);
             let errors = router.apply(&mut bus, &signals);
             assert!(errors.is_empty(), "voltage application failed: {errors:?}");
