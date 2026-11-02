@@ -589,6 +589,7 @@ jobs:
             scripts/ci/test_host_clippy_scope.py \
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_gen_debug_schemas.py \
+            scripts/test_generate_chip_catalog.py \
             scripts/test_generate_firmware_exercise_matrix.py \
             scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \

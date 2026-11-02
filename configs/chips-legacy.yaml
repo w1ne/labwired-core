@@ -1,0 +1,26 @@
+# LabWired - parts we no longer model, kept here so the published chip list can
+# mark them as excluded instead of silently dropping them or (worse) still
+# claiming coverage.
+#
+# Why this file exists: the chip list page (docs/coverage/chips.md) reads the
+# live catalogues. When a part is removed from a descriptor directory it simply
+# vanishes from the page, so a reader who expected it cannot tell "retired on
+# purpose" from "we forgot it". The private labwired-ip tracker carries its own
+# `excluded:` block for the parts it drops; this file covers parts dropped
+# before that block existed and stays the core-side record.
+#
+# These are NOT supported parts. Never add a part here to hide a coverage gap —
+# this list means "retired", not "not finished yet".
+excluded:
+  pic16c63a: >-
+    Microchip lists PIC16C63A as Not Recommended for new designs. Classic OTP,
+    not buyable. Dropped with the PIC16C family in the parity tracker.
+  pic16c65b: >-
+    Microchip lists PIC16C65B as Not Recommended for new designs. Classic OTP,
+    not buyable. Dropped with the PIC16C family in the parity tracker.
+  pic16c73b: >-
+    Microchip lists PIC16C73B as Not Recommended for new designs. Classic OTP,
+    not buyable. Dropped with the PIC16C family in the parity tracker.
+  pic16c74b: >-
+    Microchip lists PIC16C74B as Not Recommended for new designs. Classic OTP,
+    not buyable. Dropped with the PIC16C family in the parity tracker.

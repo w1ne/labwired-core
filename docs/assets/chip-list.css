@@ -1,0 +1,94 @@
+/* Chip list page (docs/coverage/chips.md) — filter controls and badges.
+   Kept small and theme-agnostic: both palettes in mkdocs.yml are indigo, but
+   the badge colours below are picked to read on the light and slate schemes. */
+
+.lw-chips__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 1rem 0 0.5rem;
+}
+
+.lw-chips__controls input[type="search"] {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.lw-chips__controls select {
+  margin-left: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.lw-chips__count {
+  font-size: 0.8rem;
+  color: var(--md-default-fg-color--light);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.lw-chips__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.lw-chips__table th,
+.lw-chips__table td {
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  vertical-align: top;
+}
+
+.lw-chips__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--md-default-bg-color);
+  z-index: 1;
+}
+
+.lw-chip[hidden] {
+  display: none;
+}
+
+.lw-dim {
+  color: var(--md-default-fg-color--light);
+}
+
+.lw-badge {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.6rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+}
+
+.lw-badge--ok {
+  color: #1b7f4b;
+  background: rgba(27, 127, 75, 0.12);
+}
+
+.lw-badge--warn {
+  color: #9a6700;
+  background: rgba(154, 103, 0, 0.12);
+}
+
+.lw-badge--muted {
+  color: var(--md-default-fg-color--light);
+  background: transparent;
+}
+
+.lw-chips__empty {
+  color: var(--md-default-fg-color--light);
+  font-style: italic;
+}

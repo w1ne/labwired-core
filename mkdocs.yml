@@ -55,6 +55,12 @@ markdown_extensions:
 plugins:
   - search
 
+extra_css:
+  - assets/chip-list.css
+
+extra_javascript:
+  - assets/chip-list.js
+
 nav:
   - Home: index.md
   - Fidelity: fidelity.md
@@ -200,6 +206,7 @@ nav:
     - Release Determinism: RELEASE_DETERMINISM.md
     - Verification Audit: labwired_audit_protocol.md
     - Coverage Scoreboard: coverage_scoreboard.md
+    - Chip list (all models): coverage/chips.md
     - Chip Conformance (live): coverage/chip-conformance.md
     - Tier-1 Matrix (live): coverage/tier1-scoreboard.md
     - Arduino Scoreboard: coverage/arduino-scoreboard.md
