@@ -57,15 +57,17 @@ pub use super::mna::Integration;
 pub enum Probe {
     /// `v(node)` or a bare node name.
     NodeVoltage(NodeRef),
-    /// `i(element)` — a voltage source's or inductor's branch current.
+    /// `i(element)` — a voltage source, inductor, E or H branch current.
     BranchCurrent(usize),
+    /// `i(diode)` — anode-to-cathode current at the solved junction voltage.
+    DiodeCurrent(usize),
 }
 
 impl Probe {
     fn unit(&self) -> &'static str {
         match self {
             Self::NodeVoltage(_) => "V",
-            Self::BranchCurrent(_) => "A",
+            Self::BranchCurrent(_) | Self::DiodeCurrent(_) => "A",
         }
     }
 }
@@ -79,7 +81,7 @@ pub struct AnalogConfig {
     pub substeps: u32,
     /// Integration rule.
     pub integration: Integration,
-    /// LabWired output name → node or branch expression.
+    /// LabWired output name → node voltage or supported element-current expression.
     pub probes: BTreeMap<String, String>,
     /// LabWired input name → circuit element (`V`, `I` or `S`).
     pub sources: BTreeMap<String, String>,
@@ -359,6 +361,7 @@ impl AnalogCosimAdapter {
         match probe {
             Probe::NodeVoltage(node) => self.solver.node_voltage(*node),
             Probe::BranchCurrent(index) => self.solver.branch_current(*index),
+            Probe::DiodeCurrent(index) => self.solver.diode_current(*index),
         }
     }
 
@@ -493,7 +496,7 @@ fn lock(trace: &AnalogTraceHandle) -> std::sync::MutexGuard<'_, AnalogTrace> {
     }
 }
 
-/// Resolve `v(out)`, `out`, `V(OUT)` or `i(Vgpio)` against a circuit.
+/// Resolve `v(out)`, `out`, `V(OUT)`, `i(Vgpio)` or `i(Dled)` against a circuit.
 ///
 /// Same spelling as the ngspice wrapper's probe map, so one manifest works with
 /// either engine. An unknown node or element is an error at build time: a probe
@@ -513,10 +516,17 @@ pub fn resolve_probe(solver: &Solver, expression: &str) -> Result<Probe, AnalogE
         return circuit
             .branch_index(inner)
             .map(Probe::BranchCurrent)
+            .or_else(|| {
+                circuit
+                    .diodes
+                    .iter()
+                    .position(|diode| diode.name.eq_ignore_ascii_case(inner.trim()))
+                    .map(Probe::DiodeCurrent)
+            })
             .ok_or_else(|| {
                 AnalogError::Config(format!(
-                    "probe `{expression}`: `{inner}` is not a voltage source, inductor, E or H \
-                     element; only those carry a branch current"
+                    "probe `{expression}`: `{inner}` is not a voltage source, inductor, E, H \
+                     or diode element; current probes support only those elements"
                 ))
             });
     }
