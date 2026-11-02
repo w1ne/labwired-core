@@ -80,6 +80,12 @@ jobs:
           shared-key: core-board-${{ matrix.id }}
           workspaces: |
             . -> target
+          # Read-only on pull requests, as for `core-pr-gate` (core-ci.yml).
+          # Each board key is 270-540 MB; one PR touching configs/** wrote a
+          # PR-ref copy of every board (~6 GB, readable only by that PR) and
+          # pushed main's `core-pr-gate` entry out of the 10 GB budget, so
+          # pr-gate compiled cold and hit its 20-minute wall (2026-11-02).
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Install apt packages
         if: matrix.apt != ''
