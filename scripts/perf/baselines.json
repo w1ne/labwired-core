@@ -85,6 +85,9 @@
   "esp32c6": {
     "batch": 3.5
   },
+  "esp32p4": {
+    "batch": 2.2
+  },
   "esp32s3": {
     "batch": 2.4,
     "step": 991.9

@@ -144,6 +144,20 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/uart-smoke.yaml
             system: examples/esp32c6-devkitc/system.yaml
+          # ESP32-P4 / Guition JC4880P443 module — the P4's HP RISC-V core on
+          # the P4's own map (unified XIP window @ 0x4000_0000, HP SRAM @
+          # 0x4FF0_0000), not the C6's. Same shared `EspUart` console path, but
+          # the P4 has no PCR: its clock/reset block is HP_SYS_CLKRST, so there
+          # is no `clock:` gate and the console is the divisor + the FIFO. The
+          # panel (MIPI-DSI, touch) is deliberately NOT modelled — see
+          # examples/esp32p4-guition-jc4880p443/KNOWN_LIMITATIONS.md.
+          - id: esp32p4-guition-jc4880p443
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32p4-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32p4-guition-jc4880p443/uart-smoke.yaml
+            system: examples/esp32p4-guition-jc4880p443/system.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
