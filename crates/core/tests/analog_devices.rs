@@ -428,6 +428,52 @@ mod analog {
         );
     }
 
+    /// The fourth terminal is not silently grounded: in cutoff, its two GMIN
+    /// ties to drain and source carry the hand-calculated leakage currents.
+    /// The normalized voltages keep both body junctions reverse biased, and
+    /// the same stamp is checked for NMOS and PMOS.
+    #[test]
+    fn mosfet_bulk_terminal_carries_its_two_gmin_ties() {
+        let (vds, vbulk) = (0.4, -0.1);
+        let expected_drain = device::GMIN * vds + device::GMIN * (vds - vbulk);
+        let expected_bulk = device::GMIN * (vbulk - vds) + device::GMIN * vbulk;
+        let expected_source = device::GMIN * (0.0 - vds) + device::GMIN * (0.0 - vbulk);
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NMOS"
+            } else {
+                "PMOS"
+            };
+            let netlist = format!(
+                "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc 0\nVbulk b 0 dc {}\n\
+                 M1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP=20u LAMBDA=0)\n",
+                sign * vds,
+                sign * vbulk,
+                sign
+            );
+            let solver = build(&netlist);
+            let actual_drain = sign * source_current(&solver, "Vd");
+            let actual_bulk = sign * source_current(&solver, "Vbulk");
+            let actual_source = sign * source_current(&solver, "Vs");
+
+            assert!(
+                (actual_drain - expected_drain).abs() < device::GMIN * 1e-3,
+                "{kind}: drain current should include drain-source and drain-bulk GMIN ties; \
+                 expected {expected_drain} A, got {actual_drain} A"
+            );
+            assert!(
+                (actual_bulk - expected_bulk).abs() < device::GMIN * 1e-3,
+                "{kind}: bulk current should be {expected_bulk} A, got {actual_bulk} A"
+            );
+            assert!(
+                (actual_source - expected_source).abs() < device::GMIN * 1e-3,
+                "{kind}: source current should include its bulk tie; expected {expected_source} A, \
+                 got {actual_source} A"
+            );
+        }
+    }
+
     // -----------------------------------------------------------------------
     // JFET
     // -----------------------------------------------------------------------
