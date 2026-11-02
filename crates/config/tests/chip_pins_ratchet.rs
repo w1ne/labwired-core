@@ -62,6 +62,10 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "esp32",
     "esp32c3",
     "esp32c6",
+    // ESP32-P4: same ParseFallback as the C3/C6/S3 — the P4 GPIO pin labels are
+    // numeric GPIO0..GPIO54, there is no `pins:` map yet, and the L1 smoke reads
+    // no pad as a fact.
+    "esp32p4",
     "esp32s3",
     "esp32s3-zero",
     // The LiteX VexRiscv SoC models a UART and a timer and no GPIO bank, so

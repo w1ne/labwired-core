@@ -974,19 +974,13 @@ impl SystemBus {
     /// shifts bytes regardless of IO_MUX (`wire_esp32p4_uart_pads` says exactly
     /// that, rather than pretending a route exists).
     pub(crate) fn wire_esp32p4_uart_pads(&mut self) {
-        use crate::peripherals::esp_uart::EspUart;
-
         for name in ["uart0", "uart1", "uart2"] {
             let Some(idx) = self.find_peripheral_index_by_name(name) else {
                 continue;
             };
-            if let Some(uart) = self.peripherals[idx]
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<EspUart>())
-            {
-                let _ = uart.pad_lines_arc();
-            }
+            // Capability seam, not a downcast: `serial_pad_lines` creates the
+            // cell on the model that owns it.
+            let _ = self.peripherals[idx].dev.serial_pad_lines();
         }
     }
 

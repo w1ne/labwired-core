@@ -770,6 +770,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Serial capability: create (on first call) and return this controller's
+    /// live TX/RX pad cell, so a bus wiring pass can attach it to a pad table
+    /// or simply turn narration on. `None` for a peripheral that drives no
+    /// serial line. This is the capability seam that keeps a bus wiring pass
+    /// off `as_any_mut` — the downcast ratchet's preferred remediation.
+    fn serial_pad_lines(
+        &mut self,
+    ) -> Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>> {
+        None
+    }
+
     /// Timer capability: the pads its output wires are tabled to, for a timer
     /// whose pad table is chip data rather than a bus-side datasheet table
     /// (Renesas RA GPT `gtioc_pads`): `(line, GPIO port name, pin)`. Empty by
