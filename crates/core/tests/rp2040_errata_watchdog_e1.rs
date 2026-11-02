@@ -193,9 +193,7 @@ fn rp2040_e1_is_declared_and_the_watchdog_counts_down_twice_per_tick() {
         machine.config.peripheral_tick_interval = 1;
         machine.bus.config.peripheral_tick_interval = 1;
         machine
-            .advance(
-                AdvanceRequest::run(Some(10_u64.into())).with_breakpoints(BreakpointPolicy::Ignore),
-            )
+            .advance(AdvanceRequest::run(Some(10_u64)).with_breakpoints(BreakpointPolicy::Ignore))
             .expect("advance watchdog model");
         machine.bus.read_u32(CTRL).expect("read CTRL") & 0x00FF_FFFF
     };
