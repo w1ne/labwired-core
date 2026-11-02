@@ -186,13 +186,17 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 // copy-pasted into the browser crate and the CLI; they move here one family at
 // a time, each ported verbatim from the browser constructor.
 
+mod aarch64;
 mod arm;
 mod avr;
 mod cortex_a;
+mod cortex_r;
+mod mips;
 mod pic16;
 mod pic18;
 mod pic24;
 mod riscv;
+mod rx;
 mod xtensa;
 
 pub use xtensa::esp32s3_flash_backing_size;
@@ -365,12 +369,16 @@ pub fn build_machine_with_plugins(
     match machine_family(req.chip)? {
         MachineFamily::CortexM => arm::build(req, plugins),
         MachineFamily::CortexA => cortex_a::build(req, plugins),
+        MachineFamily::CortexR => cortex_r::build(req, plugins),
         MachineFamily::RiscV => riscv::build(req, plugins),
         MachineFamily::Xtensa => xtensa::build(req, plugins),
         MachineFamily::Avr => avr::build(req, plugins),
         MachineFamily::Pic24 => pic24::build(req, plugins),
         MachineFamily::Pic18 => pic18::build(req, plugins),
         MachineFamily::Pic16 => pic16::build(req, plugins),
+        MachineFamily::Aarch64 => aarch64::build(req, plugins),
+        MachineFamily::Rx => rx::build(req, plugins),
+        MachineFamily::Mips => mips::build(req, plugins),
     }
 }
 

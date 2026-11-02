@@ -1,0 +1,23 @@
+peripheral: ACTLR
+version: 0.1.0
+# Cortex-M33 Auxiliary Control Register, SCS 0xE000E008 (RP2350 datasheet
+# 3.7.5 M33 register list: ACTLR "Auxiliary Control Register"). A plain
+# read/write register here: the bits (EXTEXCLALL, DISITMATBFLUSH,
+# DISFOLD, ...) tune pipeline/bus behaviour the twin does not model.
+# pico-sdk's runtime_init_spin_locks_reset -> spinlock_set_extexclall()
+# sets EXTEXCLALL (bit 29) on RP2350 A2 (erratum E2 workaround).
+registers:
+- id: ACTLR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTEXCLALL
+    bit_range:
+    - 29
+    - 29
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

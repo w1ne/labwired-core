@@ -20,6 +20,17 @@ cargo run -q -p labwired-cli -- test \
   --script examples/nucleo-l552ze-q/zephyr-sync.yaml \
   --output-dir "$OUT/zephyr-sync" \
   --no-uart-stdout
+# Zephyr tests/kernel/mem_protect/protection: 5/5 only with the MPU enforced.
+cargo run -q -p labwired-cli -- test \
+  --script examples/nucleo-l552ze-q/zephyr-protection.yaml \
+  --output-dir "$OUT/zephyr-protection" \
+  --no-uart-stdout
+# Zephyr tests/kernel/mem_protect/userspace: 40 cases, ~24 s of wall time
+# (simulated sleeps), so release like fpu_sharing.
+cargo run -q --release -p labwired-cli -- test \
+  --script examples/nucleo-l552ze-q/zephyr-userspace.yaml \
+  --output-dir "$OUT/zephyr-userspace" \
+  --no-uart-stdout
 # Zephyr tests/kernel/fpu_sharing/generic runs 899 M cycles (~75 s on a
 # release build, far longer on debug), so it gets a release CLI.
 cargo run -q --release -p labwired-cli -- test \

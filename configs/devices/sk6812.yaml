@@ -1,0 +1,64 @@
+# SK6812RGBW addressable RGBW LED — single-wire NRZ strip, the WS2812 family
+# with a fourth (white) die. Declarative `led_strip` primitive, the SAME
+# `nrz_gpio` decoder as `ws2812.yaml` with 32 bits per LED. Datasheet:
+# Dongguan OPSCO "SK6812RGBW" specification, Document No. SPC/SK6812RGBW,
+# Rev. No. 01 — §10 "The data transmission time", §13 "The data structure of
+# 32bit".
+#
+# ── Bit timing (§10, TH + TL = 1.25 µs ± 600 ns) ───────────────────────────
+#   T0H 0.3 µs ± 0.15   T0L 0.9 µs ± 0.15     (a 0)
+#   T1H 0.6 µs ± 0.15   T1L 0.6 µs ± 0.15     (a 1)
+#   Trst ≥ 80 µs low                          (reset / latch)
+# So the HIGH duration alone decides a bit: the threshold is the T0H/T1H
+# midpoint, 450 ns. The reset detector sits at 50 µs — under the 80 µs Trst
+# minimum, and far above the longest in-frame low (T0L 0.9 + 0.15 µs), so no
+# ordinary bit can trip it. (The WS2812's 40 µs detector would also work; 50
+# keeps a firmware's inter-LED jitter below it further from a false latch.)
+#
+# ── Frame (§13) ────────────────────────────────────────────────────────────
+#   R7..R0  G7..G0  B7..B0  W7..W0   — 32 bits per LED, "high starting"
+# The artifact publishes the four bytes in WIRE order (format `sk6812_rgbw`),
+# exactly as the WS2812 artifact publishes its three: a twin that re-ordered
+# them could not be compared with a capture of the data line. Strips sold as
+# "SK6812 RGBW" with a G-R-B-W die order exist and FastLED/NeoPixel call them
+# GRBW; on those the first two published bytes are G then R. The decoder does
+# not care, the reader of the artifact does.
+#
+# ── What is new in the engine for this part ───────────────────────────────
+# `timing.bits_per_pixel: 32`. The decoder used to refuse anything but 24
+# (batch 3 skipped this part for exactly that reason); it now shifts four
+# bytes per LED and carries the fourth as the pixel's `white` byte, so a
+# three-colour strip's pixels and artifact are unchanged.
+#
+# NOT modelled, deliberately: luminous output and colour mixing, current
+# draw, the cascade's re-timing delay, the SK6812's own power-on reset state
+# (a strip that never saw an edge reports zero decoded LEDs, as WS2812 does).
+type: sk6812
+
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: nrz_gpio
+    artifact_format: sk6812_rgbw
+    default_pixels: 1
+    timing:
+      high_threshold_ns: 450
+      reset_threshold_ns: 50000
+      bits_per_pixel: 32
+    artifact_meta: [pixels_decoded, lit_pixels, data_pin]
+
+metadata:
+  label: "SK6812 RGBW strip"
+  summary: "Addressable RGBW LED strip on one data pin (32-bit edge-timed frames)."
+  detail: "SK6812RGBW: the WS2812-family single-wire NRZ protocol with four bytes per LED — R, G, B, W per the datasheet's 32-bit structure. Bits are decoded from HIGH durations (0.3 µs = 0, 0.6 µs = 1, threshold 450 ns); a low gap of 50 µs latches the frame (Trst ≥ 80 µs). Attaches as a GPIO observer on data_pin; the artifact (`sk6812_rgbw`) carries four wire-order bytes per LED."
+  category: gpio
+  config_keys:
+    - name: data_pin
+      ty: str
+      doc: "Data line GPIO (e.g. \"GPIO48\"). Defaults to GPIO48."
+    - name: num_pixels
+      ty: int
+      doc: "Number of LEDs on the strip. Defaults to 1."
+    - name: cpu_hz
+      ty: int
+      doc: "Simulated CPU Hz for edge timing. Defaults to the system's clock (the manifest's `cpu_hz:`, else the chip descriptor's)."

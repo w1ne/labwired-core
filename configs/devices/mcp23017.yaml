@@ -1,0 +1,252 @@
+# Microchip MCP23017 — 16-bit I²C I/O expander with a register map.
+#
+# Datasheet: MCP23017/MCP23S17, Microchip DS20001952D (rev. D, June 2022).
+#
+# A TIER-2 part like `pcf8574.yaml`, but with a real direction register: a
+# write to the output latch moves only the pins IODIR has made OUTPUTS.
+#
+# ── The wire (§3.2.2 I²C interface, Figures 3-1 / 3-2) ─────────────────────
+#
+# Control byte 0100 A2 A1 A0 R/W (address 0x20..0x27), then a register address
+# byte, then data. In Sequential mode (IOCON.SEQOP = 0, the POR default) "the
+# address counter increments after each byte" and "automatically rolls over to
+# address 00h after accessing the last register" (§3.2.1) — so a burst walks
+# the map byte by byte (`auto_increment: true`) and 0x15 → 0x00
+# (`auto_increment_map`). A driver that writes GPIOA and GPIOB in one 2-byte
+# burst lands on both.
+#
+# ── The register map: IOCON.BANK = 0 (Table 3-1, Table 3-5) ────────────────
+#
+#   0x00 IODIRA   0x01 IODIRB   POR 0xFF  1 = input, 0 = output (§3.5.1)
+#   0x02 IPOLA    0x03 IPOLB    POR 0x00  1 = GPIO bit reads the pin inverted
+#   0x04 GPINTENA 0x05 GPINTENB POR 0x00  interrupt-on-change enable
+#   0x06 DEFVALA  0x07 DEFVALB  POR 0x00  compare value
+#   0x08 INTCONA  0x09 INTCONB  POR 0x00  compare-against-DEFVAL select
+#   0x0A IOCON    0x0B IOCON    POR 0x00  ONE register at two addresses;
+#                                         bit 0 unimplemented (reads 0)
+#   0x0C GPPUA    0x0D GPPUB    POR 0x00  100 kΩ pull-up enable
+#   0x0E INTFA    0x0F INTFB    POR 0x00  interrupt flags (read-only)
+#   0x10 INTCAPA  0x11 INTCAPB  POR 0x00  captured port (read-only)
+#   0x12 GPIOA    0x13 GPIOB    POR 0x00  the port
+#   0x14 OLATA    0x15 OLATB    POR 0x00  the output latches
+#
+# ── What moves (§3.5.1, §3.5.2, §3.5.10, §3.5.11) ──────────────────────────
+#
+#   * OLAT holds the output latches; "a write to this register modifies the
+#     output latches that modifies the pins configured as outputs".
+#   * GPIO "reflects the value on the port… Writing to this register modifies
+#     the Output Latch (OLAT) register" — so a GPIO write is copied into OLAT.
+#   * Each pin whose IODIR bit is 0 is an output and is driven to its OLAT bit:
+#     on any write to GPIOx, OLATx or IODIRx (turning a pin to output drives it
+#     at once with the latch it already holds).
+#   * A read of GPIOx is the port: OLAT on output pins, the pin level on input
+#     pins, inverted where IPOL is set ("the corresponding GPIO register bit
+#     will reflect the inverted value on the pin"). Input-pin levels come from
+#     the `port_a` / `port_b` stimulus channels (default 0, which with
+#     IODIR = 0xFF gives the POR GPIO value 0x00 of Table 3-5).
+#   * IOCON at 0x0A and 0x0B is the same register: a write to either is mirrored
+#     into the other.
+#
+# Note §1 Features / §3.5.1: on the MCP23017, GPA7 and GPB7 are OUTPUT-ONLY
+# ("IO7 must be set via I2C interface to 0"). IODIR still resets to 0xFF and
+# stores bit 7 as written, per Table 3-5; this twin does not police it.
+#
+# ⚠️ NOT MODELLED:
+#   * The INPUT half: an external level on a pad does NOT reach GPIO — input
+#     pins read the `port_a` / `port_b` stimulus instead, exactly the stand-in
+#     pcf8574.yaml uses. GPPU pull-ups are storage: an unposed input reads the
+#     stimulus value, not 1.
+#   * Interrupt-on-change: GPINTEN/DEFVAL/INTCON are storage, INTF/INTCAP stay
+#     0x00, and INTA/INTB never assert. IOCON.MIRROR/ODR/INTPOL do nothing.
+#   * IOCON.BANK = 1: the bit is stored but the map is NOT re-laid out as
+#     Table 3-4. Firmware that sets BANK sees the BANK = 0 map.
+#   * IOCON.SEQOP = 1 (Byte mode / A-B toggling): the pointer always increments.
+#   * Turning an output pin back into an input does not RELEASE its pad: the
+#     engine has no "stop driving" action, so the pad holds the last level the
+#     latch drove until something else drives it.
+#   * HAEN (MCP23S17 only), the hardware RESET pin, slew rate and every
+#     electrical limit.
+type: mcp23017
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x20
+    # §3.2.1 Sequential mode (SEQOP = 0, POR): byte-wise increment, 0x15 → 0x00.
+    auto_increment: true
+    auto_increment_map:
+      - { from: 0x15, to: 0x00 }
+    registers:
+      - { name: IODIRA,   addr: 0x00, width: 1, endian: be, access: rw, reset: 0xFF }
+      - { name: IODIRB,   addr: 0x01, width: 1, endian: be, access: rw, reset: 0xFF }
+      - { name: IPOLA,    addr: 0x02, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IPOLB,    addr: 0x03, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GPINTENA, addr: 0x04, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GPINTENB, addr: 0x05, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: DEFVALA,  addr: 0x06, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: DEFVALB,  addr: 0x07, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: INTCONA,  addr: 0x08, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: INTCONB,  addr: 0x09, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Register 3-5: bit 0 is unimplemented and reads 0.
+      - name: IOCON
+        addr: 0x0A
+        width: 1
+        endian: be
+        access: rw
+        write_mask: 0xFE
+        reset: 0x00
+        bits:
+          - { name: INTPOL, shift: 1 }
+          - { name: ODR, shift: 2 }
+          - { name: HAEN, shift: 3 }
+          - { name: DISSLW, shift: 4 }
+          - { name: SEQOP, shift: 5 }
+          - { name: MIRROR, shift: 6 }
+          - { name: BANK, shift: 7 }
+      # Table 3-5: the same IOCON, decoded again at 0x0B.
+      - { name: IOCON_0B, addr: 0x0B, width: 1, endian: be, access: rw, write_mask: 0xFE, reset: 0x00 }
+      - { name: GPPUA,    addr: 0x0C, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GPPUB,    addr: 0x0D, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: INTFA,    addr: 0x0E, width: 1, endian: be, access: r,  reset: 0x00 }
+      - { name: INTFB,    addr: 0x0F, width: 1, endian: be, access: r,  reset: 0x00 }
+      - { name: INTCAPA,  addr: 0x10, width: 1, endian: be, access: r,  reset: 0x00 }
+      - { name: INTCAPB,  addr: 0x11, width: 1, endian: be, access: r,  reset: 0x00 }
+      - { name: GPIOA,    addr: 0x12, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GPIOB,    addr: 0x13, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: OLATA,    addr: 0x14, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: OLATB,    addr: 0x15, width: 1, endian: be, access: rw, reset: 0x00 }
+
+  # The sixteen pads. Each binds to a `config:` key; an unbound role drives nothing.
+  outputs: [GPA0, GPA1, GPA2, GPA3, GPA4, GPA5, GPA6, GPA7, GPB0, GPB1, GPB2, GPB3, GPB4, GPB5, GPB6, GPB7]
+  output_pins:
+    GPA0: gpa0_pin
+    GPA1: gpa1_pin
+    GPA2: gpa2_pin
+    GPA3: gpa3_pin
+    GPA4: gpa4_pin
+    GPA5: gpa5_pin
+    GPA6: gpa6_pin
+    GPA7: gpa7_pin
+    GPB0: gpb0_pin
+    GPB1: gpb1_pin
+    GPB2: gpb2_pin
+    GPB3: gpb3_pin
+    GPB4: gpb4_pin
+    GPB5: gpb5_pin
+    GPB6: gpb6_pin
+    GPB7: gpb7_pin
+
+  rules:
+    # ── IOCON: one register, two addresses (Table 3-5) ──────────────────────
+    - { on: { write: IOCON }, do: [ { write: { register: IOCON_0B, value: "reg(IOCON)" } } ] }
+    - { on: { write: IOCON_0B }, do: [ { write: { register: IOCON, value: "reg(IOCON_0B)" } } ] }
+
+    # ── port A ──────────────────────────────────────────────────────────
+    # §3.5.10: a write to GPIOA is a write to OLATA. Copy FIRST, so the
+    # view and the pad rules below see the new latch.
+    - { on: { write: GPIOA }, do: [ { write: { register: OLATA, value: "written & 0xFF" } } ] }
+    # GPIOA reads the PORT: latch on outputs, the posed level (IPOL-inverted)
+    # on inputs. Recomputed on every write that can move it.
+    - { on: { write: GPIOA }, do: [ { write: { register: GPIOA, value: "((reg(OLATA) & ~reg(IODIRA)) | ((input(port_a) ^ reg(IPOLA)) & reg(IODIRA))) & 0xFF" } } ] }
+    - { on: { write: OLATA }, do: [ { write: { register: GPIOA, value: "((reg(OLATA) & ~reg(IODIRA)) | ((input(port_a) ^ reg(IPOLA)) & reg(IODIRA))) & 0xFF" } } ] }
+    - { on: { write: IODIRA }, do: [ { write: { register: GPIOA, value: "((reg(OLATA) & ~reg(IODIRA)) | ((input(port_a) ^ reg(IPOLA)) & reg(IODIRA))) & 0xFF" } } ] }
+    - { on: { write: IPOLA }, do: [ { write: { register: GPIOA, value: "((reg(OLATA) & ~reg(IODIRA)) | ((input(port_a) ^ reg(IPOLA)) & reg(IODIRA))) & 0xFF" } } ] }
+    - { on: { input: port_a }, do: [ { write: { register: GPIOA, value: "((reg(OLATA) & ~reg(IODIRA)) | ((input(port_a) ^ reg(IPOLA)) & reg(IODIRA))) & 0xFF" } } ] }
+    # Pads: an OUTPUT pin (IODIR bit 0) drives its OLAT bit. An input pin is
+    # left alone (see NOT MODELLED: it is not released).
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 0) & 1 == 0", do: [ { pin: GPA0, level: "(reg(OLATA) >> 0) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 1) & 1 == 0", do: [ { pin: GPA1, level: "(reg(OLATA) >> 1) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 2) & 1 == 0", do: [ { pin: GPA2, level: "(reg(OLATA) >> 2) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 3) & 1 == 0", do: [ { pin: GPA3, level: "(reg(OLATA) >> 3) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 4) & 1 == 0", do: [ { pin: GPA4, level: "(reg(OLATA) >> 4) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 5) & 1 == 0", do: [ { pin: GPA5, level: "(reg(OLATA) >> 5) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 6) & 1 == 0", do: [ { pin: GPA6, level: "(reg(OLATA) >> 6) & 1" } ] }
+    - { on: { write: GPIOA }, when: "(reg(IODIRA) >> 7) & 1 == 0", do: [ { pin: GPA7, level: "(reg(OLATA) >> 7) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 0) & 1 == 0", do: [ { pin: GPA0, level: "(reg(OLATA) >> 0) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 1) & 1 == 0", do: [ { pin: GPA1, level: "(reg(OLATA) >> 1) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 2) & 1 == 0", do: [ { pin: GPA2, level: "(reg(OLATA) >> 2) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 3) & 1 == 0", do: [ { pin: GPA3, level: "(reg(OLATA) >> 3) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 4) & 1 == 0", do: [ { pin: GPA4, level: "(reg(OLATA) >> 4) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 5) & 1 == 0", do: [ { pin: GPA5, level: "(reg(OLATA) >> 5) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 6) & 1 == 0", do: [ { pin: GPA6, level: "(reg(OLATA) >> 6) & 1" } ] }
+    - { on: { write: OLATA }, when: "(reg(IODIRA) >> 7) & 1 == 0", do: [ { pin: GPA7, level: "(reg(OLATA) >> 7) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 0) & 1 == 0", do: [ { pin: GPA0, level: "(reg(OLATA) >> 0) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 1) & 1 == 0", do: [ { pin: GPA1, level: "(reg(OLATA) >> 1) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 2) & 1 == 0", do: [ { pin: GPA2, level: "(reg(OLATA) >> 2) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 3) & 1 == 0", do: [ { pin: GPA3, level: "(reg(OLATA) >> 3) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 4) & 1 == 0", do: [ { pin: GPA4, level: "(reg(OLATA) >> 4) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 5) & 1 == 0", do: [ { pin: GPA5, level: "(reg(OLATA) >> 5) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 6) & 1 == 0", do: [ { pin: GPA6, level: "(reg(OLATA) >> 6) & 1" } ] }
+    - { on: { write: IODIRA }, when: "(reg(IODIRA) >> 7) & 1 == 0", do: [ { pin: GPA7, level: "(reg(OLATA) >> 7) & 1" } ] }
+    # ── port B ──────────────────────────────────────────────────────────
+    # §3.5.10: a write to GPIOB is a write to OLATB. Copy FIRST, so the
+    # view and the pad rules below see the new latch.
+    - { on: { write: GPIOB }, do: [ { write: { register: OLATB, value: "written & 0xFF" } } ] }
+    # GPIOB reads the PORT: latch on outputs, the posed level (IPOL-inverted)
+    # on inputs. Recomputed on every write that can move it.
+    - { on: { write: GPIOB }, do: [ { write: { register: GPIOB, value: "((reg(OLATB) & ~reg(IODIRB)) | ((input(port_b) ^ reg(IPOLB)) & reg(IODIRB))) & 0xFF" } } ] }
+    - { on: { write: OLATB }, do: [ { write: { register: GPIOB, value: "((reg(OLATB) & ~reg(IODIRB)) | ((input(port_b) ^ reg(IPOLB)) & reg(IODIRB))) & 0xFF" } } ] }
+    - { on: { write: IODIRB }, do: [ { write: { register: GPIOB, value: "((reg(OLATB) & ~reg(IODIRB)) | ((input(port_b) ^ reg(IPOLB)) & reg(IODIRB))) & 0xFF" } } ] }
+    - { on: { write: IPOLB }, do: [ { write: { register: GPIOB, value: "((reg(OLATB) & ~reg(IODIRB)) | ((input(port_b) ^ reg(IPOLB)) & reg(IODIRB))) & 0xFF" } } ] }
+    - { on: { input: port_b }, do: [ { write: { register: GPIOB, value: "((reg(OLATB) & ~reg(IODIRB)) | ((input(port_b) ^ reg(IPOLB)) & reg(IODIRB))) & 0xFF" } } ] }
+    # Pads: an OUTPUT pin (IODIR bit 0) drives its OLAT bit. An input pin is
+    # left alone (see NOT MODELLED: it is not released).
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 0) & 1 == 0", do: [ { pin: GPB0, level: "(reg(OLATB) >> 0) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 1) & 1 == 0", do: [ { pin: GPB1, level: "(reg(OLATB) >> 1) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 2) & 1 == 0", do: [ { pin: GPB2, level: "(reg(OLATB) >> 2) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 3) & 1 == 0", do: [ { pin: GPB3, level: "(reg(OLATB) >> 3) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 4) & 1 == 0", do: [ { pin: GPB4, level: "(reg(OLATB) >> 4) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 5) & 1 == 0", do: [ { pin: GPB5, level: "(reg(OLATB) >> 5) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 6) & 1 == 0", do: [ { pin: GPB6, level: "(reg(OLATB) >> 6) & 1" } ] }
+    - { on: { write: GPIOB }, when: "(reg(IODIRB) >> 7) & 1 == 0", do: [ { pin: GPB7, level: "(reg(OLATB) >> 7) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 0) & 1 == 0", do: [ { pin: GPB0, level: "(reg(OLATB) >> 0) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 1) & 1 == 0", do: [ { pin: GPB1, level: "(reg(OLATB) >> 1) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 2) & 1 == 0", do: [ { pin: GPB2, level: "(reg(OLATB) >> 2) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 3) & 1 == 0", do: [ { pin: GPB3, level: "(reg(OLATB) >> 3) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 4) & 1 == 0", do: [ { pin: GPB4, level: "(reg(OLATB) >> 4) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 5) & 1 == 0", do: [ { pin: GPB5, level: "(reg(OLATB) >> 5) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 6) & 1 == 0", do: [ { pin: GPB6, level: "(reg(OLATB) >> 6) & 1" } ] }
+    - { on: { write: OLATB }, when: "(reg(IODIRB) >> 7) & 1 == 0", do: [ { pin: GPB7, level: "(reg(OLATB) >> 7) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 0) & 1 == 0", do: [ { pin: GPB0, level: "(reg(OLATB) >> 0) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 1) & 1 == 0", do: [ { pin: GPB1, level: "(reg(OLATB) >> 1) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 2) & 1 == 0", do: [ { pin: GPB2, level: "(reg(OLATB) >> 2) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 3) & 1 == 0", do: [ { pin: GPB3, level: "(reg(OLATB) >> 3) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 4) & 1 == 0", do: [ { pin: GPB4, level: "(reg(OLATB) >> 4) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 5) & 1 == 0", do: [ { pin: GPB5, level: "(reg(OLATB) >> 5) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 6) & 1 == 0", do: [ { pin: GPB6, level: "(reg(OLATB) >> 6) & 1" } ] }
+    - { on: { write: IODIRB }, when: "(reg(IODIRB) >> 7) & 1 == 0", do: [ { pin: GPB7, level: "(reg(OLATB) >> 7) & 1" } ] }
+
+metadata:
+  label: "MCP23017 I/O Expander"
+  summary: "Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map)."
+  detail: "Microchip MCP23017 at 0x20 (A2/A1/A0 select 0x20-0x27), in its power-on IOCON.BANK = 0 layout: IODIRA/B at 0x00/0x01 (power-on 0xFF, all inputs) through GPIOA/B at 0x12/0x13 and OLATA/B at 0x14/0x15, with the address pointer incrementing and rolling over 0x15 to 0x00. A write to GPIO or OLAT sets the output latch, and every pin whose IODIR bit is 0 drives its latch bit onto its pad; GPIO reads back the latch on outputs and the posed input level (IPOL-inverted) on inputs. The sixteen pads bind through the optional gpa0_pin..gpb7_pin keys. NOT modelled: external pad levels reaching GPIO (inputs read the port_a / port_b stimulus), pull-ups, interrupt-on-change (INTF/INTCAP stay 0, INTA/INTB never assert), IOCON.BANK = 1 re-mapping and SEQOP byte mode, and releasing a pad when a pin is turned back into an input."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27."
+    - name: port_a
+      ty: float
+      doc: "Level (0-255) posed on the port A pins, seen by GPIOA reads on pins configured as inputs. Default 0. Drive it at runtime with the `port_a` input channel."
+    - name: port_b
+      ty: float
+      doc: "Level (0-255) posed on the port B pins, seen by GPIOB reads on input pins. Default 0."
+    - { name: gpa0_pin, ty: str, doc: "Pad GPA0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing." }
+    - { name: gpa1_pin, ty: str, doc: "Pad GPA1 drives. Optional." }
+    - { name: gpa2_pin, ty: str, doc: "Pad GPA2 drives. Optional." }
+    - { name: gpa3_pin, ty: str, doc: "Pad GPA3 drives. Optional." }
+    - { name: gpa4_pin, ty: str, doc: "Pad GPA4 drives. Optional." }
+    - { name: gpa5_pin, ty: str, doc: "Pad GPA5 drives. Optional." }
+    - { name: gpa6_pin, ty: str, doc: "Pad GPA6 drives. Optional." }
+    - { name: gpa7_pin, ty: str, doc: "Pad GPA7 drives. Optional (output-only on the MCP23017)." }
+    - { name: gpb0_pin, ty: str, doc: "Pad GPB0 drives. Optional." }
+    - { name: gpb1_pin, ty: str, doc: "Pad GPB1 drives. Optional." }
+    - { name: gpb2_pin, ty: str, doc: "Pad GPB2 drives. Optional." }
+    - { name: gpb3_pin, ty: str, doc: "Pad GPB3 drives. Optional." }
+    - { name: gpb4_pin, ty: str, doc: "Pad GPB4 drives. Optional." }
+    - { name: gpb5_pin, ty: str, doc: "Pad GPB5 drives. Optional." }
+    - { name: gpb6_pin, ty: str, doc: "Pad GPB6 drives. Optional." }
+    - { name: gpb7_pin, ty: str, doc: "Pad GPB7 drives. Optional (output-only on the MCP23017)." }
+  inputs:
+    - { key: port_a, label: "Port A input level", unit: byte, min: 0, max: 255, default: 0 }
+    - { key: port_b, label: "Port B input level", unit: byte, min: 0, max: 255, default: 0 }

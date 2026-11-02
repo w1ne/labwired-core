@@ -1,0 +1,12 @@
+# LabWired - AMD Kria KV260 Vision AI Starter Kit (SK-KV260-G), RPU core 0
+#
+# K26 SOM (XCK26 Zynq UltraScale+) Cortex-R5F. Zephyr's `kv260_r5` board puts
+# its console on PS UART1 (the KV260 carrier's USB-UART), 115200 8N1.
+#
+# Not modelled: the APU (Cortex-A53) side, PMU firmware and the CSU/FSBL boot
+# flow (images are loaded straight into the RPU's low RAM window, as the FSBL
+# leaves them), the PL, and the carrier's peripherals.
+name: "kv260-r5"
+chip: "../chips/xck26-rpu.yaml"
+external_devices: []
+debug_uart: "uart1"

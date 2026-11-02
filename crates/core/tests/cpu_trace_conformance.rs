@@ -20,7 +20,9 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{Avr, CortexM, Pic16, Pic18, Pic24, RiscV, XtensaLx7};
+use labwired_core::cpu::{
+    Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
+};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -232,6 +234,39 @@ fn cores() -> Vec<CoreUnderTest> {
             },
         },
         CoreUnderTest {
+            name: "RiscV64",
+            entry: 0x100,
+            // `addi x1, x1, 1` ×4 (4 bytes each), the same RV encoding.
+            program: std::iter::repeat_n(0x00108093u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = RiscV64::default();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Aarch64",
+            entry: 0x100,
+            // `add x1, x1, #1` ×4 (A64, 4 bytes each). The PE runs at EL3 with
+            // the MMU off, so the flat bus is its physical memory.
+            program: std::iter::repeat_n(0x91000421u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Aarch64::default();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
             name: "Avr",
             entry: 0x100,
             // `ldi r16, 1` x4 (2 bytes each, little-endian in flash).
@@ -313,6 +348,42 @@ fn cores() -> Vec<CoreUnderTest> {
                 // is loaded at byte addresses (two per word).
                 cpu.load_flash(entry * 2, program);
                 cpu.set_sp(5);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Rx",
+            entry: 0x100,
+            // `add #0x1234, r1` ×4 (`72 11 34 12`, 4 bytes each). RX is
+            // variable-length (1-8 bytes) and reports the 4 bytes at PC as
+            // the opcode, so the row uses a 4-byte instruction.
+            program: std::iter::repeat_n([0x72u8, 0x11, 0x34, 0x12], 4)
+                .flatten()
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Rx::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Mips32",
+            entry: 0x100,
+            // `addiu at, at, 1` ×4 (`0x24210001`, little-endian). The core
+            // leaves reset with Status.ERL set, so KUSEG 0x100 is unmapped
+            // and lands on the RAM bus as is.
+            program: std::iter::repeat_n(0x2421_0001u32.to_le_bytes(), 4)
+                .flatten()
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Mips32::new();
+                cpu.set_sp(0x8000);
                 Box::new(cpu)
             },
         },

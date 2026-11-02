@@ -1,0 +1,19 @@
+# LabWired - EK-RA6M5 with two analog sources on ADC1, for the stock Zephyr
+# tests/drivers/adc/adc_api run (zephyr-adc-api.yaml). The test's in-tree
+# boards/ek_ra6m5.overlay reads ADC1 channels 0 and 2 (12-bit, 3300 mV
+# reference); a potentiometer drives channel 0 and a TMP36 channel 2.
+name: "ek-ra6m5-adc"
+chip: "../../configs/chips/r7fa6m5bh.yaml"
+cpu_hz: 8_000_000
+external_devices:
+  - id: "pot"
+    type: "potentiometer"
+    connection: "adc1"
+    config:
+      channel: 0
+  - id: "temp"
+    type: "tmp36"
+    connection: "adc1"
+    config:
+      channel: 2
+board_io: []

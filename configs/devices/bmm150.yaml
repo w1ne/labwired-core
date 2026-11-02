@@ -1,0 +1,162 @@
+# Bosch BMM150 3-axis geomagnetic sensor — declarative I²C register-pointer
+# device. Datasheet: Bosch Sensortec BMM150, document BST-BMM150-DS001-05,
+# revision 1.4 (April 2020).
+#
+# ── The wire (§5.2 "Register map", §6.2 "Inter-Integrated Circuit (I²C)") ──────────────────
+# Table 30: the five address MSBs are hardwired 00100; CSB and SDO set the
+# two LSBs → 0x10 (both GND, the default), 0x11, 0x12, 0x13 (both VDDIO).
+# One-byte register pointer; burst reads auto-increment.
+#
+# ── Power modes (§4.2) — the reason this part is a trap ───────────────────
+# "Suspend mode is the default power mode of BMM150 after the chip is
+# powered … In particular, in this mode a Chip ID read (register 0x40)
+# returns 0x00 (I²C)." Only the power-control register 0x4B is accessible.
+# Setting the Power Control bit (0x4B bit 0) moves it to Sleep mode, after
+# which the Chip ID reads 0x32 (§5.3, Table 5). A driver that probes the ID
+# before setting that bit sees 0x00 on silicon — and sees 0x00 here: every
+# register except POWER_CTRL is `zero_unless` the Power Control bit.
+#
+# ── Register map (§5.2) ────────────────────────────────────────────────────
+#   0x40  Chip ID          0x32  R    (only readable with Power Control = 1)
+#   0x42/43 DATA X         R    13-bit two's complement in [15:3]; bit 0 X-self-test
+#   0x44/45 DATA Y         R    13-bit in [15:3]; bit 0 Y-self-test
+#   0x46/47 DATA Z         R    15-bit in [15:1]; bit 0 Z-self-test
+#   0x48/49 RHALL          R    14-bit in [15:2]; bit 1 fixed 0; bit 0 Data Ready
+#   0x4A  Interrupt status 0x00 R
+#   0x4B  Power control    0x00 RW  Soft Reset[7] SPI3en[2] Soft Reset[1] Power[0]
+#                                    (Rev 1.4 changelog: default 0x01 → 0x00)
+#   0x4C  OpMode / ODR     0x06 RW  Adv.ST[7:6] DataRate[5:3] Opmode[2:1] SelfTest[0]
+#   0x4D  Interrupt enable 0x3F RW
+#   0x4E  Int/axis config  0x07 RW
+#   0x4F  Low threshold    0x00 RW
+#   0x50  High threshold   0x00 RW
+#   0x51  REPXY            0x00 RW
+#   0x52  REPZ             0x00 RW
+#   0x5D..0x71  trim NVM   N/A  R   ("factory trimmed", §4.5)
+#
+# Soft reset (§5.6, Table 15): "executed when both bits (register 0x4B bit7 and bit1)
+# are set 1 … all registers are reset except for the trim registers above
+# 0x54 and the power control register (0x4B). Soft reset always brings the
+# device into sleep mode." The two trigger bits read back 0.
+#
+# ── Trim registers and the data words: ONE REFERENCE UNIT ─────────────────
+# §5.2 prints the trim block 0x5D..0x71 as "N/A": it is per-unit NVM data
+# (§4.5) and Bosch publishes no values, only its layout, which comes from the
+# Bosch BMM150 Sensor API and is what Zephyr's `bmm150_trim_regs` reads:
+#   0x5D dig_x1 (i8)  0x5E dig_y1 (i8)  0x62/63 dig_z4 (i16 LE)
+#   0x64 dig_x2 (i8)  0x65 dig_y2 (i8)  0x68/69 dig_z2 (i16 LE)
+#   0x6A/6B dig_z1 (u16 LE)  0x6C/6D dig_xyz1 (u16 LE)  0x6E/6F dig_z3 (i16 LE)
+#   0x70 dig_xy2 (i8)  0x71 dig_xy1 (u8)
+# Like `bme680.yaml`, this twin is ONE unit, and its trim is chosen so the
+# Bosch compensation reduces to a fixed gain — NOT copied from a real part:
+#   dig_x1 = dig_y1 = dig_x2 = dig_y2 = dig_xy1 = dig_xy2 = 0,
+#   dig_z1 = dig_z3 = dig_z4 = 0, dig_z2 = 4096, dig_xyz1 = 6500,
+#   and RHALL always reads 6500 (= dig_xyz1).
+# Through Bosch's integer compensation (Zephyr bmm150_compensate_xy/_z):
+#   x/y:  prevalue = (xyz1 << 14) / rhall = 16384 → val = 0 →
+#         out = raw · ((0x100000 · 0xA0) >> 12) >> 13 = raw · 5   [1/16 µT]
+#   z:    out = (raw << 15) / dig_z2 = raw · 8                     [1/16 µT]
+# so a field of B µT is served as raw_xy = B · 3.2 (0.3125 µT/LSB, the
+# datasheet's ≈0.3 µT resolution) and raw_z = B · 2. The register words carry
+# those raws shifted into place: X/Y word = raw · 8 (scale 25.6), Z word =
+# raw · 2 (scale 4). A driver running the Bosch compensation recovers the
+# stimulus to its LSB; a driver that ignores trim reads 0.3125 µT/LSB on X/Y.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * Opmode, data rate and repetitions are stored only: data reflects the
+#     stimulus in every opmode once powered (no forced-mode one-shot, no
+#     sleep-mode freeze, no measurement time). Data Ready (RHALL bit 0) is
+#     always 1.
+#   * Interrupts (0x4A always 0x00), thresholds, overflow, the DRDY and INT
+#     pins, self-test and advanced self-test.
+#   * Temperature dependence (the RHALL term): RHALL is fixed at dig_xyz1.
+#   * SPI (3- and 4-wire) — only the I²C binding is offered.
+type: bmm150
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x10
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      - { name: CHIP_ID, addr: 0x40, width: 1, endian: le, access: r, reset: 0x32, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: RSVD_41, addr: 0x41, width: 1, endian: le, access: r, reset: 0x00 }
+      - name: DATA_X
+        addr: 0x42
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: mag_x
+        encode: { scale: 25.6 }
+        zero_unless: { register: POWER_CTRL, mask: 0x01 }
+      - name: DATA_Y
+        addr: 0x44
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: mag_y
+        encode: { scale: 25.6 }
+        zero_unless: { register: POWER_CTRL, mask: 0x01 }
+      - name: DATA_Z
+        addr: 0x46
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: mag_z
+        encode: { scale: 4.0 }
+        zero_unless: { register: POWER_CTRL, mask: 0x01 }
+      # RHALL = dig_xyz1 (6500) in [15:2], Data Ready (bit 0) set: 0x6591.
+      - { name: RHALL, addr: 0x48, width: 2, endian: le, access: r, reset: 0x6591, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: INT_STATUS, addr: 0x4A, width: 1, endian: le, access: r, reset: 0x00 }
+      # Bits 6..3 are "fixed 0"; the two soft-reset triggers clear themselves.
+      - { name: POWER_CTRL, addr: 0x4B, width: 1, endian: le, access: rw, write_mask: 0x87, self_clearing: 0x82, reset: 0x00 }
+      - { name: OP_MODE, addr: 0x4C, width: 1, endian: le, access: rw, reset: 0x06, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: INT_EN, addr: 0x4D, width: 1, endian: le, access: rw, reset: 0x3F, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: INT_CONF, addr: 0x4E, width: 1, endian: le, access: rw, reset: 0x07, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: LOW_THRESH, addr: 0x4F, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: HIGH_THRESH, addr: 0x50, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: REP_XY, addr: 0x51, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: REP_Z, addr: 0x52, width: 1, endian: le, access: rw, reset: 0x00 }
+      # ── Trim NVM (see header): one reference unit ─────────────────────────
+      - { name: DIG_X1, addr: 0x5D, width: 1, endian: le, access: r, reset: 0x00, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_Y1, addr: 0x5E, width: 1, endian: le, access: r, reset: 0x00, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: TRIM_RSVD1, addr: 0x5F, width: 3, endian: le, access: r, reset: 0x000000 }
+      - { name: DIG_Z4, addr: 0x62, width: 2, endian: le, access: r, reset: 0x0000, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_X2, addr: 0x64, width: 1, endian: le, access: r, reset: 0x00, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_Y2, addr: 0x65, width: 1, endian: le, access: r, reset: 0x00, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: TRIM_RSVD3, addr: 0x66, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: DIG_Z2, addr: 0x68, width: 2, endian: le, access: r, reset: 0x1000, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_Z1, addr: 0x6A, width: 2, endian: le, access: r, reset: 0x0000, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_XYZ1, addr: 0x6C, width: 2, endian: le, access: r, reset: 0x1964, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_Z3, addr: 0x6E, width: 2, endian: le, access: r, reset: 0x0000, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_XY2, addr: 0x70, width: 1, endian: le, access: r, reset: 0x00, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+      - { name: DIG_XY1, addr: 0x71, width: 1, endian: le, access: r, reset: 0x00, zero_unless: { register: POWER_CTRL, mask: 0x01 } }
+  rules:
+    # Soft reset (0x4B bits 7 and 1 both written 1): every register except the
+    # trim block and 0x4B returns to its default; the part lands in Sleep.
+    - on: { write: POWER_CTRL }
+      when: "(written & 0x82) == 0x82"
+      do:
+        - { write: { register: OP_MODE, value: "0x06" } }
+        - { write: { register: INT_EN, value: "0x3F" } }
+        - { write: { register: INT_CONF, value: "0x07" } }
+        - { write: { register: LOW_THRESH, value: "0x00" } }
+        - { write: { register: HIGH_THRESH, value: "0x00" } }
+        - { write: { register: REP_XY, value: "0x00" } }
+        - { write: { register: REP_Z, value: "0x00" } }
+
+metadata:
+  label: "Bosch BMM150 magnetometer"
+  summary: "Bosch BMM150 3-axis geomagnetic sensor over I²C (chip ID 0x32, trim block)."
+  detail: "Bosch BMM150 at 0x10 (0x11/0x12/0x13 by CSB/SDO). Powers up in Suspend: every register except POWER_CTRL (0x4B) reads 0x00, so the Chip ID (0x40) reads 0x00 until the Power Control bit is set, then 0x32 — as on silicon. DATA X/Y (13-bit) and Z (15-bit) words carry the field through a reference trim unit (0x5D..0x71) under which Bosch's compensation is a fixed gain: 0.3125 µT/LSB on X/Y, 0.5 µT/LSB on Z, RHALL fixed at dig_xyz1. Soft reset (0x4B bits 7+1) restores the defaults. Not modelled: opmode timing, interrupts, self-test, temperature drift, SPI."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x10 (CSB, SDO low); 0x11, 0x12, 0x13 by CSB/SDO." }
+  inputs:
+    - { key: mag_x, label: "Field X", unit: "µT", min: -1000, max: 1000, default: 20 }
+    - { key: mag_y, label: "Field Y", unit: "µT", min: -1000, max: 1000, default: -5 }
+    - { key: mag_z, label: "Field Z", unit: "µT", min: -2000, max: 2000, default: 40 }

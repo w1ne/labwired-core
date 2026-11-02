@@ -99,7 +99,7 @@ impl SystemBus {
         if matches!(r, Ok(true)) && brackets {
             self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-            self.finish_pad_control_write(idx, pad_control_capture);
+            self.finish_pad_control_write(idx, pad_control_capture, off, 1, u32::from(value));
             self.finish_pad_claim_write(pad_claim_capture);
         }
         if matches!(r, Ok(true)) {
@@ -468,6 +468,9 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
+        self.rp2350_dcp.as_deref_mut()
+    }
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
         // Watched like every other width: a 64-bit load is a CPU access on
         // cores that have one (Cortex-A7 `w=8`), so the latch is uniform.
@@ -588,8 +591,10 @@ impl crate::Bus for SystemBus {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
-            // Only the two registered ARM UART sources, never a peripheral scan.
-            for (index, intid) in [(f.uart2_index, Some(59)), (f.uart4_index, f.uart4_irq)] {
+            // Only the registered ARM level sources, never a peripheral scan.
+            let fixed = [(f.uart2_index, Some(59)), (f.uart4_index, f.uart4_irq)];
+            let listed = f.level_sources.iter().map(|&(i, id)| (Some(i), Some(id)));
+            for (index, intid) in fixed.into_iter().chain(listed) {
                 if let (Some(intid), Some(level)) = (
                     intid,
                     index
@@ -622,7 +627,7 @@ impl crate::Bus for SystemBus {
         Ok(())
     }
     fn next_cpu_interrupt_deadline_cycle(&self) -> Option<u64> {
-        self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
+        self.irq_fabric.armv7.as_ref()?.next_deadline()
     }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         let addr = self.resolve_mem_alias(addr);
@@ -1307,7 +1312,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 2, u32::from(value));
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {
@@ -1507,7 +1512,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 4, value);
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {

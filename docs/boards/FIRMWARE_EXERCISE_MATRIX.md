@@ -715,6 +715,26 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBE
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, the countdown-timer one-shot and the Control-and-Status LED/switch/button CSR are proven by tests/fixtures/arty-litex-smoke.elf and examples/arty-litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs (examples/arty-litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
 
+### `mpfs095t`
+
+_L1 + stock RTOS, SIM-DERIVED. First RV64 part: one PolarFire SoC U54 hart (RV64IMAC M-mode, CLINT in the core) runs unmodified Zephyr v4.1.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63) from the DDR window on the MMUART1 16550 console (examples/mpfs-disco-kit). PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox are declared stubs, so no advanced blocks exist to list._
+
+### `am6234`
+
+_L1 + stock RTOS, SIM-DERIVED. First AArch64 part: one Cortex-A53 PE (A64 Armv8.0, EL0-EL3, stage-1 MMU, GICv3 and generic timer in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63, user mode at EL0) for sk_am62/am6234/a53 from EL3, on the polled MAIN_UART0 16550 console with the virtual-timer tick (examples/sk-am62). Pad configuration and the mailbox are declared stubs and UART interrupts are not requested, so no advanced blocks exist to list._
+
+### `r5f52618bgfp`
+
+_L1 + stock RTOS, SIM-DERIVED. First Renesas RX part: the RXv3 core (integer, DSP accumulators, single-precision FPU; ICU in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 61 pass + 1 skip) for ek_rx261 from the reset vector, on the polled SCI6 console with the CMT0 tick (examples/ek-rx261). PORT/MPC, DTC and BSC are declared stubs and SCI interrupts are not requested, so no advanced blocks exist to list._
+
+### `pic32mz2048efm144`
+
+_L1 + stock RTOS, SIM-DERIVED. First MIPS part: the MIPS32r2 M5150 core (integer ISA with delay slots, CP0, eight shadow register sets; the PIC32MZ EVIC in the core, EIC mode) runs unmodified upstream NuttX (apache/nuttx 7956039dfd) for an out-of-tree Curiosity PIC32MZ EF 2.0 board from the reset vector: nsh with typed commands over the interrupt-driven UART2, and the full ostest (34 test groups, 0 errors) on the Timer1 tick with software-interrupt context switches (examples/curiosity-pic32mz-ef). Ports/PPS, OSC and CFG are declared stubs, so no advanced blocks exist to list._
+
 ### `vegaboard-ri5cy`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LPUART0 console are proven by tests/fixtures/vegaboard-ri5cy-smoke.elf and examples/vegaboard-ri5cy/io-smoke.yaml. The SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs (examples/vegaboard-ri5cy/VALIDATION.md), so no advanced blocks exist to list._
+
+### `xck26-rpu`
+
+_L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._

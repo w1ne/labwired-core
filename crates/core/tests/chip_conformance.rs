@@ -62,6 +62,10 @@ const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
         "rv1103",
         "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
     ),
+    (
+        "xck26-rpu",
+        "Generic descriptor is CPU/memory only. The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification.",
+    ),
 ];
 
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly
@@ -144,6 +148,50 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_cc2538dk_smoke_survival"),
     },
     ChipConf {
+        // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
+        // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
+        // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
+        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
+        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        name: "mpfs095t",
+        yaml: "configs/chips/mpfs095t.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_mpfs_disco_kit_zephyr_survival"),
+    },
+    ChipConf {
+        // TI AM6234 (SK-AM62), first AArch64 part: one Cortex-A53 with its
+        // GICv3 and generic timer in the core. SIM-DERIVED: no AM62x bench
+        // part. Modelled: MAIN_UART0-6 (16550, polled). Pad config and the
+        // mailbox are declared stubs — see examples/sk-am62/VALIDATION.md.
+        name: "am6234",
+        yaml: "configs/chips/am6234.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_sk_am62_zephyr_survival"),
+    },
+    ChipConf {
+        // Renesas R5F52618BGFP (RX261, EK-RX261), first RX part: the RXv3
+        // core with the ICU in the core. SIM-DERIVED: no RX261 bench part.
+        // Modelled: SCI6 (classic SCI, polled), CMT0-3, the SYSTEM clock
+        // handshakes and FLASH MEMWAITR. PORT/MPC, BSC, DTC and the reset
+        // status block are declared stubs — see examples/ek-rx261/VALIDATION.md.
+        name: "r5f52618bgfp",
+        yaml: "configs/chips/r5f52618bgfp.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_ek_rx261_zephyr_survival"),
+    },
+    ChipConf {
+        // Microchip PIC32MZ2048EFM144 (Curiosity PIC32MZ EF 2.0), first MIPS
+        // part: the MIPS32r2 M5150 core with the EVIC in the core.
+        // SIM-DERIVED: no PIC32MZ bench part. Modelled: UART2 (interrupt
+        // driven), Timer1. CFG, OSC, PPS, ports, flash controller, WDT, DMT
+        // and prefetch are declared stubs — see
+        // examples/curiosity-pic32mz-ef/VALIDATION.md.
+        name: "pic32mz2048efm144",
+        yaml: "configs/chips/pic32mz2048efm144.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_curiosity_pic32mz_nuttx_survival"),
+    },
+    ChipConf {
         // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
         // Modelled: the RA PORT (ra_port) and PmnPFS/PWPR (ra_pfs) reused
         // from RA4M1 at the RA6M5 bases, the full R_SYSTEM register file
@@ -160,9 +208,10 @@ const CHIPS: &[ChipConf] = &[
         // EK-RA8M1 (R7FA8M1AH, Cortex-M85). SIM-DERIVED: no RA8M1 bench part.
         // Modelled: the RA PORT (ra_port), the RA8 PmnPFS/PWPR/PWPRS
         // (ra8_pfs), SYSTEM HOCOCR/OSCSF + the SCICKCR handshake (ra8_sysc)
-        // and SCI9 on the new sci_b UART layout. MSTP, ICU and the listed
-        // timers/comms blocks are declared stubs; SCI0-8 and the rest are not
-        // mapped — see examples/ek-ra8m1/VALIDATION.md.
+        // and SCI3/SCI9 on the new sci_b UART layout (RXI/TXI/TEI as ELC
+        // events), the ICU IELSR event link (ra_icu) and AGT0/AGT1 (ra_agt). MSTP, the ICU IRQCR half and
+        // the listed timers/comms blocks are declared stubs; the other SCIs
+        // and the rest are not mapped — see examples/ek-ra8m1/VALIDATION.md.
         name: "r7fa8m1ah",
         yaml: "configs/chips/r7fa8m1ah.yaml",
         reset_oracle: None,
@@ -1948,13 +1997,26 @@ fn is_declared_only_prototype(name: &str, chip: &ChipDescriptor) -> bool {
                 && chip.peripherals.is_empty()
                 && chip.flash.size == 0
         }
+        "xck26-rpu" => {
+            chip.name == "xck26-rpu"
+                && matches!(chip.arch, labwired_config::Arch::Arm)
+                && chip.core.as_deref() == Some("cortex-r5f")
+                && chip.peripherals.is_empty()
+                && chip.flash.size == 0
+        }
         _ => false,
     }
 }
 
 #[test]
 fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
-    assert_eq!(DECLARED_ONLY_CHIPS.len(), 1);
+    assert_eq!(DECLARED_ONLY_CHIPS.len(), 2);
+    let rpu = ChipDescriptor::from_file(root("configs/chips/xck26-rpu.yaml")).unwrap();
+    assert!(is_declared_only_prototype("xck26-rpu", &rpu));
+    assert!(!is_declared_only_prototype("rv1103", &rpu));
+    let mut wrong = rpu.clone();
+    wrong.core = Some("cortex-a7".into());
+    assert!(!is_declared_only_prototype("xck26-rpu", &wrong));
     assert!(DECLARED_ONLY_CHIPS.iter().any(|(n, _)| *n == "rv1103"));
     let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
     assert!(is_declared_only_prototype("rv1103", &chip));

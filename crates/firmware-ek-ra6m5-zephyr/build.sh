@@ -5,6 +5,56 @@
 #   tests/fixtures/r7fa6m5bh-zephyr-sync.elf — samples/synchronization
 #       (examples/ek-ra6m5/zephyr-sync.yaml: k_busy_wait on the SysTick
 #       cycle counter, k_msleep woken by the SysTick system timer)
+#   tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf —
+#       tests/drivers/uart/uart_basic_api (examples/ek-ra6m5/
+#       zephyr-uart-basic-api.yaml: the interrupt-driven classic SCI driver,
+#       its RXI/TXI/TEI linked to the NVIC through the ICU IELSRn, with the
+#       driver's default 16-stage FIFO)
+#   tests/fixtures/r7fa6m5bh-zephyr-shell.elf —
+#       samples/subsys/shell/shell_module (examples/ek-ra6m5/
+#       zephyr-shell.yaml: the shell's interrupt-driven serial backend on
+#       the same SCI0 RXI/TXI/TEI). Built with Zephyr's picolibc module
+#       (see below).
+#   tests/fixtures/r7fa6m5bh-zephyr-counter-alarm.elf —
+#       samples/drivers/counter/alarm from Zephyr v4.1.0 (see below;
+#       examples/ek-ra6m5/zephyr-counter-alarm.yaml: AGT0 compare-match
+#       alarms linked to the NVIC through the ICU IELSRn)
+#   tests/fixtures/r7fa6m5bh-zephyr-button.elf — samples/basic/button from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-button.yaml: S1 through the ICU
+#       IRQ-pin half, PmnPFS.ISEL + IRQCRn, linked by IELSRn). v4.1.0 is the
+#       first release whose RA GPIO driver supports pin interrupts
+#       (renesas_ra_external_interrupt). Built UNMODIFIED from v4.1.0 (commit
+#       7823374e8721; hal_renesas 3204903bdc5e, cmsis d1b8b20b6278) with the
+#       module list pinned.
+#   tests/fixtures/r7fa6m5bh-zephyr-blinky.elf — samples/basic/blinky from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-blinky.yaml: LED1 made an
+#       output through PmnPFS.PDR and toggled through PCNTR1.PODR), module
+#       list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-adc-api.elf — tests/drivers/adc/adc_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-adc-api.yaml: ADC1
+#       channels 0 and 2 through the ra_adc12 model, scan end linked by
+#       IELSR39), module list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-bme280.elf — samples/sensor/bme280 from
+#       Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-bme280.yaml: a BME280 on
+#       IIC1 through the ra_iic model, RXI/TXI/TEI/ERI linked by
+#       IELSR91-94). Two build inputs beyond the module pin: bme280-iic1.overlay
+#       (next to this script) puts the BME280 at 0x76 on &iic1 (the sample's
+#       own overlays need an `arduino_i2c` label ek_ra6m5 lacks), and the
+#       picolibc module (82d62ed1ac55, CONFIG_PICOLIBC_USE_MODULE): the RA IIC
+#       driver calls ceil() and the BME280 decoder pow(), which Zephyr's
+#       minimal libc lacks, and the distro newlib has no retargetable locking.
+#       `west update picolibc` in the v4.1.0 workspace fetches it.
+#   tests/fixtures/r7fa6m5bh-zephyr-pwm-api.elf — tests/drivers/pwm/pwm_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-pwm-api.yaml: pwm1 is
+#       GPT1 through the ra_gpt model, its GTIOC1A on P405 checked on
+#       the pad), module list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-dac-api.elf — tests/drivers/dac/dac_api
+#       from Zephyr v4.1.0 (examples/ek-ra6m5/zephyr-dac-api.yaml: DAC0
+#       through the ra_dac12 model), module list pinned like the button.
+#   tests/fixtures/r7fa6m5bh-zephyr-dac-loopback.elf —
+#       tests/drivers/dac/dac_loopback from Zephyr v4.1.0, no overlay (the
+#       test reads ADC0 channel 0; examples/ek-ra6m5/zephyr-dac-loopback.yaml
+#       jumpers DA0 to AN000), module list pinned like the button.
 #
 # UNMODIFIED upstream Zephyr v4.0.0 (commit 8469084dfae8) built for board
 # `ek_ra6m5`, with the hal_renesas module (Renesas FSP, BSD-3-Clause) and
@@ -22,6 +72,22 @@
 #     ~/zephyrproject-v4.0) with the cmsis and hal_renesas modules:
 #       west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.0.0
 #       west update cmsis hal_renesas
+#     and, for the shell, picolibc (`west update picolibc`, d492d5fa7c96,
+#     the revision v4.0.0's west.yml pins). The sample enables POSIX_API,
+#     which needs a C library with retargetable locking; the newlib that
+#     ships with a distro arm-none-eabi-gcc has none ("Retargetable locking
+#     must be enabled"), so the shell is built against Zephyr's picolibc
+#     module (CONFIG_PICOLIBC_USE_MODULE=y), as the Zephyr SDK would.
+#   - For the counter alarm: a Zephyr v4.1.0 west workspace
+#     (ZEPHYRPROJECT_V41, default ~/zephyrproject-v4.1) with cmsis and
+#     hal_renesas. v4.0.0 has the AGT counter driver but no RA6 `agt` nodes;
+#     v4.1.0 adds them to ra6-cm33-common.dtsi along with the in-tree
+#     samples/drivers/counter/alarm/boards/ek_ra6m5.overlay that enables
+#     &agt0 (LOCO / 16 = 2048 Hz, agtcmai on IELSR84). Built UNMODIFIED from
+#     v4.1.0 (commit 7823374e8721; hal_renesas 3204903bdc5e, cmsis
+#     d1b8b20b6278, the revisions its west.yml pins), with the module list
+#     pinned so a workspace that fetched more modules still rebuilds the same
+#     bytes.
 #   - arm-none-eabi-gcc on PATH (the gnuarmemb toolchain variant); no Zephyr SDK
 #     install needed.
 set -euo pipefail
@@ -41,9 +107,9 @@ echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/nu
 echo "Board:     $BOARD"
 echo "Toolchain: $ZEPHYR_TOOLCHAIN_VARIANT ($(arm-none-eabi-gcc -dumpfullversion))"
 
-build_one() { # <sample-dir> <fixture-name>
+build_one() { # <sample-dir> <fixture-name> [extra cmake args...]
   local build; build="$(mktemp -d)"
-  "$WEST" build -p always -b "$BOARD" "$ZEPHYR_BASE/$1" -d "$build"
+  "$WEST" build -p always -b "$BOARD" "$ZEPHYR_BASE/$1" -d "$build" -- "${@:3}"
   arm-none-eabi-strip --strip-debug -o "$FIXTURES/$2" "$build/zephyr/zephyr.elf"
   chmod 644 "$FIXTURES/$2"
   rm -rf "$build"
@@ -51,5 +117,50 @@ build_one() { # <sample-dir> <fixture-name>
   sha256sum "$FIXTURES/$2"
 }
 
-build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf"
-build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf"
+# Every build pins its module list: each fetched module adds an absolute
+# CONFIG_ZEPHYR_<MOD>_MODULE symbol to the ELF, so a workspace that fetched
+# more modules (picolibc, for the shell) would otherwise change the bytes.
+build_one "samples/hello_world" "r7fa6m5bh-zephyr-hello.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+build_one "samples/synchronization" "r7fa6m5bh-zephyr-sync.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+# Module list pinned (as for the counter alarm) so a workspace that fetched
+# more modules still rebuilds the same bytes.
+build_one "tests/drivers/uart/uart_basic_api" "r7fa6m5bh-zephyr-uart-basic-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas"
+build_one "samples/subsys/shell/shell_module" "r7fa6m5bh-zephyr-shell.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT/modules/hal/cmsis;$ZEPHYRPROJECT/modules/hal/renesas;$ZEPHYRPROJECT/modules/lib/picolibc" \
+  -DCONFIG_PICOLIBC_USE_MODULE=y
+
+# Zephyr v4.1.0: samples/drivers/counter/alarm (AGT0 + ICU).
+ZEPHYRPROJECT_V41="${ZEPHYRPROJECT_V41:-$HOME/zephyrproject-v4.1}"
+export ZEPHYR_BASE="$ZEPHYRPROJECT_V41/zephyr"
+echo "Zephyr:    $ZEPHYR_BASE ($(git -C "$ZEPHYR_BASE" describe --tags 2>/dev/null || echo '?'))"
+build_one "samples/drivers/counter/alarm" "r7fa6m5bh-zephyr-counter-alarm.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/basic/button (IRQ10 on P005 through the ICU), same v4.1.0 tree.
+build_one "samples/basic/button" "r7fa6m5bh-zephyr-button.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/basic/blinky (LED1 P006: output via PmnPFS.PDR, toggled through
+# PCNTR1.PODR), same v4.1.0 tree.
+build_one "samples/basic/blinky" "r7fa6m5bh-zephyr-blinky.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/adc/adc_api (ADC1 channels 0 and 2 per the in-tree
+# boards/ek_ra6m5.overlay; scan end ADC1_SCAN_END 0x166 through IELSR39),
+# same v4.1.0 tree.
+build_one "tests/drivers/adc/adc_api" "r7fa6m5bh-zephyr-adc-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# samples/sensor/bme280 (BME280 at 0x76 on IIC1, see the header), same
+# v4.1.0 tree plus picolibc.
+build_one "samples/sensor/bme280" "r7fa6m5bh-zephyr-bme280.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas;$ZEPHYRPROJECT_V41/modules/lib/picolibc" \
+  -DCONFIG_PICOLIBC_USE_MODULE=y "-DEXTRA_DTC_OVERLAY_FILE=$HERE/bme280-iic1.overlay"
+# tests/drivers/pwm/pwm_api (pwm1 = GPT1, GTIOC1A on P405), same v4.1.0 tree.
+build_one "tests/drivers/pwm/pwm_api" "r7fa6m5bh-zephyr-pwm-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+# tests/drivers/dac/dac_api and dac_loopback (DAC0; the loopback reads ADC0
+# channel 0), same v4.1.0 tree.
+build_one "tests/drivers/dac/dac_api" "r7fa6m5bh-zephyr-dac-api.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"
+build_one "tests/drivers/dac/dac_loopback" "r7fa6m5bh-zephyr-dac-loopback.elf" \
+  "-DZEPHYR_MODULES=$ZEPHYRPROJECT_V41/modules/hal/cmsis;$ZEPHYRPROJECT_V41/modules/hal/renesas"

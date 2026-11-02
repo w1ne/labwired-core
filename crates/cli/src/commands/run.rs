@@ -1818,6 +1818,8 @@ pub(crate) fn run_interactive(
     // Chip name for per-device CPU geometry (PIC18 flash size / Access Bank,
     // PIC16 flash size).
     let mut chip_name = String::new();
+    // A `core: rv64…` chip runs the 64-bit hart, built from its descriptor.
+    let mut rv64_chip: Option<labwired_config::ChipDescriptor> = None;
     let cpu_arch = if let Some(sys_path) = &system_path {
         match labwired_config::SystemManifest::from_file(sys_path) {
             Ok(manifest) => {
@@ -1832,6 +1834,10 @@ pub(crate) fn run_interactive(
                             emit_error(cli.json, "ConfigError", "Cortex-A7 needs the system-aware run command: run --firmware <ELF> --system <manifest> (native --features qemu-arm)".into(), None, EXIT_CONFIG_ERROR);
                             return ExitCode::from(EXIT_CONFIG_ERROR);
                         }
+                        Ok(labwired_core::system::arch_policy::MachineFamily::CortexR) => {
+                            emit_error(cli.json, "ConfigError", "Cortex-R5F runs through `labwired test --system <manifest>` on a native --features qemu-arm-system build".into(), None, EXIT_CONFIG_ERROR);
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
                         Err(error) => {
                             emit_error(
                                 cli.json,
@@ -1844,6 +1850,9 @@ pub(crate) fn run_interactive(
                         }
                         _ => {
                             chip_name = c.name.clone();
+                            if labwired_core::cpu::riscv64::is_rv64_chip(&c) {
+                                rv64_chip = Some(c.clone());
+                            }
                             c.arch
                         }
                     },
@@ -1892,6 +1901,9 @@ pub(crate) fn run_interactive(
             labwired_core::Arch::Pic24 => labwired_config::Arch::Pic24,
             labwired_core::Arch::Pic18 => labwired_config::Arch::Pic18,
             labwired_core::Arch::Pic16 => labwired_config::Arch::Pic16,
+            labwired_core::Arch::Aarch64 => labwired_config::Arch::Aarch64,
+            labwired_core::Arch::Rx => labwired_config::Arch::Rx,
+            labwired_core::Arch::Mips => labwired_config::Arch::Mips,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1906,7 +1918,10 @@ pub(crate) fn run_interactive(
 
     match cpu_arch {
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
-        labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
+        labwired_config::Arch::RiscV => match rv64_chip {
+            Some(chip) => run_interactive_riscv64(cli, bus, program, metrics, &chip),
+            None => run_interactive_riscv(cli, bus, program, metrics),
+        },
         labwired_config::Arch::Xtensa => run_interactive_xtensa(cli, bus, program, metrics),
         labwired_config::Arch::Pic24 => run_interactive_pic24(cli, bus, program, metrics),
         labwired_config::Arch::Pic18 => {
@@ -1915,6 +1930,11 @@ pub(crate) fn run_interactive(
         labwired_config::Arch::Pic16 => {
             run_interactive_pic16(cli, bus, program, metrics, &chip_name)
         }
+        labwired_config::Arch::Aarch64 => {
+            run_interactive_aarch64(cli, bus, program, metrics, &chip_name)
+        }
+        labwired_config::Arch::Rx => run_interactive_rx(cli, bus, program, metrics),
+        labwired_config::Arch::Mips => run_interactive_mips(cli, bus, program, metrics),
         _ => {
             emit_error(
                 cli.json,
@@ -2749,6 +2769,256 @@ pub(crate) fn run_interactive_riscv(
             return ExitCode::from(EXIT_RUNTIME_ERROR);
         }
         return ExitCode::from(EXIT_PASS);
+    }
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
+}
+
+/// `labwired run` for an AArch64 chip: the PE from the chip's parameters,
+/// entered at the ELF entry at EL3 (the A53 reset state).
+pub(crate) fn run_interactive_aarch64(
+    cli: Cli,
+    mut bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+    chip_name: &str,
+) -> ExitCode {
+    attach_interactive_rtt(&cli, &mut bus);
+    note_itm_echo_suppressed(&cli);
+    let params = labwired_core::cpu::aarch64::Aarch64Params::for_chip_name(chip_name, bus.cpu_hz);
+    let mut machine = labwired_core::Machine::new(labwired_core::cpu::Aarch64::new(params), bus);
+    machine.add_observer(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.add_observer(observer);
+    }
+
+    if let Err(e) = machine.load_firmware(&program) {
+        tracing::error!("Failed to load firmware into memory: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    info!("Starting Simulation (AArch64)...");
+    info!("Initial PC: {:#x}, EL{}", machine.cpu.pc, machine.cpu.el);
+
+    if cli.gdb.is_some() {
+        error!("GDB server is not available for the AArch64 core yet");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
+}
+
+/// `labwired run` for a `core: rv64…` chip: the RV64 hart from the chip
+/// descriptor, entered at the ELF entry (the image sets up its own stack).
+pub(crate) fn run_interactive_rx(
+    cli: Cli,
+    mut bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+) -> ExitCode {
+    use labwired_core::Cpu as _;
+    attach_interactive_rtt(&cli, &mut bus);
+    note_itm_echo_suppressed(&cli);
+    let mut machine = labwired_core::Machine::new(labwired_core::cpu::Rx::new(), bus);
+    machine.add_observer(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.add_observer(observer);
+    }
+
+    if let Err(e) = machine.load_firmware(&program) {
+        tracing::error!("Failed to load firmware into memory: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+    // The core starts at the fixed reset vector, as the silicon does.
+    match labwired_core::system::rx::reset_pc(&machine.bus) {
+        Ok(pc) => machine.cpu.set_pc(pc),
+        Err(e) => {
+            tracing::error!("{e:#}");
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
+    }
+
+    info!("Starting Simulation (Renesas RX)...");
+    info!("Initial PC: {:#x}", machine.cpu.pc);
+
+    if cli.gdb.is_some() {
+        error!("GDB server is not available for the RX core yet");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
+}
+
+pub(crate) fn run_interactive_mips(
+    cli: Cli,
+    mut bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+) -> ExitCode {
+    use labwired_core::Cpu as _;
+    attach_interactive_rtt(&cli, &mut bus);
+    note_itm_echo_suppressed(&cli);
+    let mut machine = labwired_core::Machine::new(labwired_core::cpu::Mips32::new(), bus);
+    machine.add_observer(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.add_observer(observer);
+    }
+
+    if let Err(e) = machine.load_firmware(&program) {
+        tracing::error!("Failed to load firmware into memory: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+    // The core starts at the reset vector 0xBFC00000 once the image's boot
+    // ISA has been checked, as the silicon does.
+    if let Err(e) = machine.cpu.reset(&mut machine.bus) {
+        tracing::error!("{e:#}");
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+    machine.cpu.set_pc(labwired_core::cpu::mips::RESET_VECTOR);
+
+    info!("Starting Simulation (MIPS32 / PIC32MZ)...");
+    info!("Initial PC: {:#x}", machine.cpu.pc);
+
+    if cli.gdb.is_some() {
+        error!("GDB server is not available for the MIPS core yet");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
+}
+
+pub(crate) fn run_interactive_riscv64(
+    cli: Cli,
+    mut bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+    chip: &labwired_config::ChipDescriptor,
+) -> ExitCode {
+    use labwired_core::Cpu as _;
+    attach_interactive_rtt(&cli, &mut bus);
+    note_itm_echo_suppressed(&cli);
+    let cpu = labwired_core::cpu::RiscV64::for_chip(chip);
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.add_observer(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.add_observer(observer);
+    }
+
+    if let Err(e) = machine.load_firmware(&program) {
+        tracing::error!("Failed to load firmware into memory: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+    machine.cpu.set_pc(program.entry_point as u32);
+
+    info!("Starting Simulation (RISC-V RV64)...");
+    info!(
+        "Initial PC: {:#x}, mhartid: {}",
+        machine.cpu.pc, machine.cpu.hart_id
+    );
+
+    if cli.gdb.is_some() {
+        error!("GDB server is not available for the RV64 hart yet");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
     }
 
     let result = run_simulation_loop(&cli, &mut machine, &metrics);

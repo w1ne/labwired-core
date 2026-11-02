@@ -43,6 +43,37 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [Multiplexed LED matrix](led-matrix-mux.md) | `led-matrix-mux` | GPIO |
 | [74HC4051](74hc4051.md) | `74hc4051` | Analog mux (GPIO select) |
 | [NAU88L21 audio codec](nau88l21.md) | `nau88l21` | I²C |
+| [SHT40](sht40.md) | `sht40` | I²C |
+| [BME680](bme680.md) | `bme680` | I²C |
+| [ICM-42688-P](icm42688.md) | `icm42688` | I²C |
+| [ICM-20948](icm20948.md) | `icm20948` | I²C |
+| [SGP40](sgp40.md) | `sgp40` | I²C |
+| [TSL2591](tsl2591.md) | `tsl2591` | I²C |
+| [DHT20](dht20.md) | `dht20` | I²C |
+| [PMSA003I](pmsa003i.md) | `pmsa003i` | I²C |
+| [INA226](ina226.md) | `ina226` | I²C |
+| [ST7735R TFT](st7735.md) | `st7735` | SPI |
+| [GC9A01 round TFT](gc9a01.md) | `gc9a01` | SPI |
+| [SSD1309 OLED](ssd1309.md) | `oled-ssd1309` | I²C |
+| [INA260](ina260.md) | `ina260` | I²C |
+| [INA3221](ina3221.md) | `ina3221` | I²C |
+| [MPU-9250](mpu9250.md) | `mpu9250` | I²C |
+| [ENS160](ens160.md) | `ens160` | I²C |
+| [MCP23017](mcp23017.md) | `mcp23017` | I²C |
+| [PCF8575](pcf8575.md) | `pcf8575` | I²C |
+| [ADS1015](ads1015.md) | `ads1015` | I²C |
+| [ULN2803A](uln2803.md) | `uln2803` | GPIO |
+| [RFM95W](rfm95.md) | `rfm95` | SPI |
+| [SX1276](sx1276.md) | `sx1276` | SPI |
+| [SX1262](sx1262.md) | `sx1262` | SPI |
+| [SK6812 RGBW](sk6812.md) | `sk6812` | GPIO |
+| [MCP3008](mcp3008.md) | `mcp3008` | SPI |
+| [ADS1256](ads1256.md) | `ads1256` | SPI |
+| [BMI160](bmi160.md) | `bmi160` | I²C |
+| [BMM150](bmm150.md) | `bmm150` | I²C |
+| [VEML6075](veml6075.md) | `veml6075` | I²C |
+| [HT16K33](ht16k33.md) | `ht16k33` | I²C |
+| [TM1638](tm1638.md) | `tm1638` | GPIO |
 
 More devices live under [`configs/devices/`](../../configs/devices/) and in the live catalog. If a part is missing from this table, `labwired_describe` still works when the id is registered.
 

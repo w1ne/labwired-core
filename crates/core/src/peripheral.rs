@@ -14,6 +14,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+/// A live analog level, in millivolts (`None` = not driven); see
+/// [`Peripheral::analog_output_probe`].
+pub type AnalogProbe = Arc<dyn Fn() -> Option<u16> + Send + Sync>;
+
 use crate::{logic_capture, peripherals, pins, sched, Bus, CycleClock, SimResult, SimulationError};
 
 // ── DMA request vocabulary ────────────────────────────────────────────────
@@ -764,6 +768,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// SAMD51 TC pass binds only `samd51_tc`). `None` by default.
     fn timer_output_family(&self) -> Option<&'static str> {
         None
+    }
+
+    /// Timer capability: the pads its output wires are tabled to, for a timer
+    /// whose pad table is chip data rather than a bus-side datasheet table
+    /// (Renesas RA GPT `gtioc_pads`): `(line, GPIO port name, pin)`. Empty by
+    /// default.
+    fn timer_output_pads(&self) -> Vec<(usize, String, u8)> {
+        Vec::new()
     }
 
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
@@ -1635,6 +1647,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Default: reports nothing (pulse semantics on every explicit IRQ).
     fn irq_line_levels(&self, _report: &mut dyn FnMut(u32, bool)) {}
 
+    /// True when this model's `explicit_irqs` are interrupt EVENT numbers
+    /// for the chip's event-link controller (the Renesas RA ICU's ELC event
+    /// numbers), not NVIC lines. The bus then hands each one to
+    /// [`Self::link_event`] on every peripheral instead of pending it.
+    ///
+    /// Default: false (explicit IRQs are NVIC lines).
+    fn explicit_irqs_are_link_events(&self) -> bool {
+        false
+    }
+
+    /// Event-link controller hook (Renesas RA ICU `IELSRn`): take event
+    /// `event` and report every NVIC line it is linked to through `line`.
+    /// Returns true when this model is an event-link controller, so the bus
+    /// reconciles its [`Self::irq_line_levels`] afterwards (the linked lines
+    /// are level sources).
+    ///
+    /// Default: not a controller.
+    fn link_event(&mut self, _event: u32, _line: &mut dyn FnMut(u32)) -> bool {
+        false
+    }
+
     /// True for a device that only stores and serves bytes: it does not use
     /// the scheduler, has no scheduler wake owner, no SPI-attached devices, no
     /// IRQ line level, no bus tick and no legacy tick. `SystemBus`'s MMIO
@@ -1725,6 +1758,34 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// session is built rather than written nowhere for the whole run.
     fn adc_channel_count(&self) -> Option<u8> {
         None
+    }
+
+    /// A live view of one of this peripheral's analog outputs (a DAC
+    /// channel): the probe returns the pin level in millivolts, or `None`
+    /// while the output is not driven. `None` for a peripheral or channel
+    /// with no analog output (the default).
+    ///
+    /// The probe reads the output as it is at the moment it is called, so a
+    /// consumer bound through [`Peripheral::bind_adc_channel_probe`] sees
+    /// every later write without the bus pushing anything.
+    fn analog_output_probe(&self, _channel: u8) -> Option<AnalogProbe> {
+        None
+    }
+
+    /// Wire `probe` onto ADC input `channel`: while it returns a level, a
+    /// conversion of that channel reads it instead of the held
+    /// [`Peripheral::set_adc_channel_input`] level. Returns whether this ADC
+    /// took it (`false`, the default, for a peripheral that is not an ADC or
+    /// a channel it does not have).
+    fn bind_adc_channel_probe(&mut self, _channel: u8, _probe: AnalogProbe) -> bool {
+        false
+    }
+
+    /// The board wires this ADC asks for: `(channel, source peripheral,
+    /// source output)` per entry of its `analog_links` config, bound by the
+    /// bus once every peripheral exists. Empty by default.
+    fn analog_input_links(&self) -> Vec<(u8, String, u8)> {
+        Vec::new()
     }
 
     /// Set the ambient (die) temperature an on-chip temperature sensor

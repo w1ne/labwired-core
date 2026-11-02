@@ -103,6 +103,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_clkrst",
     "rp2040_xip_ssi",
     "rp2040_usb",
+    "rp2350_bootram",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -341,10 +342,31 @@ pub const MODEL_TYPES: &[&str] = &[
     // xxxCKCR handshake).
     "ra8_sysc",
     "ra6_sysc",
+    // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
+    "rx_sysc",
+    // Renesas RX FLASH control registers (0xAA-keyed word writes).
+    "rx_flash",
+    // Renesas RX RTC registers as read-back storage.
+    "rx_rtc",
+    // Renesas RX compare match timer unit (CMSTR + two channels).
+    "rx_cmt",
+    // Microchip PIC32MZ UART (UxMODE/UxSTA/UxTXREG/UxRXREG/UxBRG with the
+    // CLR/SET/INV aliases; EVIC flags through explicit IRQs).
+    "pic32_uart",
+    // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
+    "pic32_timer",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
+    // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
+    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    "ra_icu",
+    "ra_agt",
+    "ra_adc12",
+    "ra_dac12",
+    "ra_iic",
+    "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -1100,7 +1122,10 @@ pub fn try_build(
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
-        "rp2040_usb" => Box::new(crate::peripherals::rp2040::usb::Rp2040Usb::new()),
+        "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        "rp2040_usb" => Box::new(
+            crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
+        ),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
@@ -1379,8 +1404,221 @@ pub fn try_build(
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
+        // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
+        // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
+        "pic32_timer" => {
+            use crate::peripherals::pic32_timer as t;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let irq = get("irq").ok_or_else(|| {
+                anyhow::anyhow!("pic32_timer '{}' needs `irq` (EVIC vector)", p_cfg.id)
+            })? as u32;
+            let type_a = match p_cfg.config.get("timer_type").and_then(|v| v.as_str()) {
+                Some("a") | Some("A") => true,
+                Some("b") | Some("B") => false,
+                other => anyhow::bail!(
+                    "pic32_timer '{}' needs `timer_type: a|b`, got {other:?}",
+                    p_cfg.id
+                ),
+            };
+            Box::new(t::Pic32Timer::new(
+                get("clock_hz").unwrap_or(t::DEFAULT_CLOCK_HZ),
+                get("pbclk_hz").unwrap_or(t::DEFAULT_PBCLK_HZ),
+                get("sosc_hz").unwrap_or(t::DEFAULT_SOSC_HZ),
+                type_a,
+                irq,
+            ))
+        }
+        // `irqs`: the EVIC vectors [fault, receive, transmit]; `clock_hz`:
+        // SYSCLK; `pbclk_hz`: the UART's PBCLK2 (baud and RX polling).
+        "pic32_uart" => {
+            let irqs = p_cfg
+                .config
+                .get("irqs")
+                .and_then(|v| v.as_sequence())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(|v| v as u32)
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| v.len() == 3)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "pic32_uart '{}' needs `irqs: [fault, rx, tx]` (EVIC vectors)",
+                        p_cfg.id
+                    )
+                })?;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            use crate::peripherals::pic32_uart as u;
+            Box::new(u::Pic32Uart::with_clocks(
+                [irqs[0], irqs[1], irqs[2]],
+                get("clock_hz").unwrap_or(u::DEFAULT_CLOCK_HZ),
+                get("pbclk_hz").unwrap_or(u::DEFAULT_PBCLK_HZ),
+            ))
+        }
+        "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
+        "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
+        // `vectors`: the two channels' CMI vectors; `clock_hz`: the CPU
+        // cycle rate; `pclkb_hz`: the CMT count source before CKS.
+        "rx_cmt" => {
+            use crate::peripherals::rx_cmt as cmt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let vectors = p_cfg
+                .config
+                .get("vectors")
+                .and_then(|v| v.as_sequence())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(|v| v as u32)
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| v.len() == 2)
+                .map_or([28, 29], |v| [v[0], v[1]]);
+            Box::new(cmt::RxCmt::new(
+                get("clock_hz").unwrap_or(cmt::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(cmt::DEFAULT_PCLKB_HZ),
+                vectors,
+            ))
+        }
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
         "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
+        // `ielsr_lines`: IELSRn count (default 96; 0 = only the IRQ-pin half);
+        // `irq_pins`: `[port, pin, IRQn]` per IRQ pad; `pfs_base`: PmnPFS base.
+        "ra_icu" => {
+            use crate::peripherals::ra_icu as icu;
+            let lines = p_cfg
+                .config
+                .get("ielsr_lines")
+                .and_then(|v| v.as_u64())
+                .map_or(icu::LINES, |v| v as u32);
+            let irq_pins = p_cfg
+                .config
+                .get("irq_pins")
+                .and_then(|v| v.as_sequence())
+                .map(|rows| {
+                    rows.iter()
+                        .filter_map(|row| {
+                            let row = row.as_sequence()?;
+                            let get = |i: usize| row.get(i)?.as_u64().map(|v| v as u8);
+                            (row.len() == 3).then_some((get(0)?, get(1)?, get(2)?))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let pfs_base = p_cfg.config.get("pfs_base").and_then(|v| v.as_u64());
+            Box::new(icu::RaIcu::with_irq_pins(lines, irq_pins, pfs_base))
+        }
+        // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB for
+        // the PCLKB count sources; `elc_event`: the channel's INT event
+        // (compare A/B are +1/+2).
+        "ra_agt" => {
+            use crate::peripherals::ra_agt as agt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(agt::RaAgt::new(
+                get("clock_hz").unwrap_or(agt::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(agt::DEFAULT_PCLKB_HZ),
+                get("elc_event").map_or(agt::DEFAULT_ELC_EVENT, |v| v as u32),
+            ))
+        }
+        // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
+        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
+        // board-level static channel levels.
+        // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
+        // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
+        // are +1/+2/+3).
+        "ra_iic" => {
+            use crate::peripherals::ra_iic as iic;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(iic::RaIic::new(
+                get("clock_hz").unwrap_or(iic::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(iic::DEFAULT_PCLKB_HZ),
+                get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
+            ))
+        }
+        // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
+        // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
+        // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
+        // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
+        "ra_gpt" => {
+            use crate::peripherals::ra_gpt as gpt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let mut pads = Vec::new();
+            if let Some(map) = p_cfg.config.get("gtioc_pads").and_then(|v| v.as_mapping()) {
+                for (signal, pad) in map {
+                    let (Some(signal), Some(pad)) = (signal.as_str(), pad.as_str()) else {
+                        continue;
+                    };
+                    match gpt::RaGpt::parse_pad(signal, pad) {
+                        Some(entry) => pads.push(entry),
+                        None => tracing::warn!(
+                            "ra_gpt '{}': gtioc_pads entry {signal}: {pad} not understood",
+                            p_cfg.id
+                        ),
+                    }
+                }
+            }
+            Box::new(
+                gpt::RaGpt::new(
+                    get("channels").map_or(gpt::MAX_CHANNELS, |v| v as usize),
+                    get("clock_hz").unwrap_or(gpt::DEFAULT_CLOCK_HZ),
+                    get("pclkd_hz").unwrap_or(gpt::DEFAULT_PCLKD_HZ),
+                    get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
+                    get("wide_channels").map_or(0xFF, |v| v as u32),
+                )
+                .with_output_pads(pads),
+            )
+        }
+        "ra_adc12" => {
+            use crate::peripherals::ra_adc12 as adc;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let mut unit = adc::RaAdc12::new(
+                get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
+                get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
+                get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            );
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    if let (Some(ch), Some(mv)) = (k.as_u64(), v.as_u64()) {
+                        unit.set_channel_input(ch as u8, mv as u16);
+                    }
+                }
+            }
+            // Board wires from an analog output: `analog_links: { <ch>:
+            // "<peripheral>:<output>" }`, bound by the bus after build.
+            if let Some(map) = p_cfg
+                .config
+                .get("analog_links")
+                .and_then(|v| v.as_mapping())
+            {
+                for (k, v) in map {
+                    let link = v.as_str().and_then(|s| s.rsplit_once(':'));
+                    match (
+                        k.as_u64(),
+                        link.and_then(|(p, o)| Some((p, o.parse::<u8>().ok()?))),
+                    ) {
+                        (Some(ch), Some((source, output))) => {
+                            unit.add_analog_link(ch as u8, source.to_string(), output)
+                        }
+                        _ => tracing::warn!(
+                            "ra_adc12 '{}': analog_links entry {k:?}: {v:?} not understood \
+                             (expected <channel>: \"<peripheral>:<output>\")",
+                            p_cfg.id
+                        ),
+                    }
+                }
+            }
+            Box::new(unit)
+        }
+        "ra_dac12" => {
+            use crate::peripherals::ra_dac12 as dac;
+            let vref = p_cfg.config.get("vref_mv").and_then(|v| v.as_u64());
+            Box::new(dac::RaDac12::new(
+                vref.map_or(dac::DEFAULT_VREF_MV, |v| v as u16),
+            ))
+        }
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),
         "imxrt_ccm" => Box::new(crate::peripherals::imxrt::ccm::ImxrtCcm::new()),

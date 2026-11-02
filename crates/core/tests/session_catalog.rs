@@ -33,6 +33,11 @@ const NEEDS: &[(&str, &str)] = &[
         "rv1103",
         "Cortex-A7 construction needs a native build with --features qemu-arm",
     ),
+    #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
+    (
+        "xck26-rpu",
+        "Cortex-R5F construction needs a native build with --features qemu-arm-system",
+    ),
 ];
 
 #[test]
@@ -45,6 +50,8 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     );
 
     let arm_fw = common::committed("tests/fixtures/uart-ok-thumbv7m.elf");
+    // Cortex-R5F: stock Zephyr v4.1.0 hello_world for kv260_r5 (examples/kv260-r5).
+    let r5_fw = common::committed("tests/fixtures/kv260-r5-zephyr-hello.elf");
     let riscv_fw = common::committed("tests/fixtures/riscv-ci-fixture.elf");
     let avr_fw = common::committed("tests/fixtures/avr/arduino-nano-blinky.elf");
     // PIC24 M0 fixture: hand-assembled ELF (see examples/dspic33fj32mc204).
@@ -56,6 +63,13 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     let pic16_fw = common::committed("examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf");
     let pic16e_fw =
         common::committed("examples/pic16f1829/firmware/pic16f1829-sdcc-uart-smoke.elf");
+    // AArch64: stock Zephyr v4.3.0 hello_world for sk_am62 (see examples/sk-am62).
+    let aarch64_fw = common::committed("tests/fixtures/sk-am62-zephyr-hello.elf");
+    // RX: stock Zephyr v4.3.0 hello_world for ek_rx261 (see examples/ek-rx261).
+    let rx_fw = common::committed("tests/fixtures/ek-rx261-zephyr-hello.elf");
+    // MIPS: stock upstream NuttX nsh for the Curiosity PIC32MZ EF 2.0 (see
+    // examples/curiosity-pic32mz-ef).
+    let mips_fw = common::committed("tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf");
     // Committed Tier-1 Xtensa fixtures (same ones session_builder_xtensa.rs
     // uses): esp32.elf for the classic dual-core part, esp32s3.elf for both
     // S3 SKUs (esp32s3 and esp32s3-zero share the same silicon).
@@ -79,6 +93,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
         };
 
         let fw: &[u8] = match chip.arch {
+            labwired_config::Arch::Arm if name == "xck26-rpu" => &r5_fw,
             labwired_config::Arch::Arm => &arm_fw,
             labwired_config::Arch::RiscV => &riscv_fw,
             labwired_config::Arch::Avr => &avr_fw,
@@ -88,6 +103,9 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
             // at word 0x8007, not 0x2007).
             labwired_config::Arch::Pic16 if name == "pic16f1829" => &pic16e_fw,
             labwired_config::Arch::Pic16 => &pic16_fw,
+            labwired_config::Arch::Aarch64 => &aarch64_fw,
+            labwired_config::Arch::Rx => &rx_fw,
+            labwired_config::Arch::Mips => &mips_fw,
             labwired_config::Arch::Xtensa => {
                 if name == "esp32" {
                     &esp32_fw

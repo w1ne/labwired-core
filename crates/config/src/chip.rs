@@ -28,6 +28,15 @@ pub enum Arch {
     /// PIC16 classic mid-range 8-bit MCU (14-bit instruction words).
     #[serde(alias = "pic16f")]
     Pic16,
+    /// AArch64 application cores (Armv8-A, Cortex-A53 class).
+    #[serde(alias = "arm64", alias = "armv8-a")]
+    Aarch64,
+    /// Renesas RX 32-bit MCU family (RXv1/v2/v3 CISC, variable-length).
+    #[serde(alias = "rxv3", alias = "renesas-rx")]
+    Rx,
+    /// MIPS32 release 2 (Microchip PIC32MZ, M5150 class).
+    #[serde(alias = "mips32", alias = "mips32r2", alias = "pic32")]
+    Mips,
     Unknown,
 }
 
@@ -663,6 +672,15 @@ impl ChipInclude {
 ///
 /// or `include: [a.yaml, b.yaml]`. Includes load first; local keys win.
 /// `peripherals` union by `id`.
+/// A vendor coprocessor on the Cortex-M coprocessor interface.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CortexMCoprocessor {
+    /// RP2350 double-precision coprocessor, p4 (current security state) and
+    /// p5 (Non-secure) — RP2350 datasheet 3.6.2.
+    Rp2350Dcp,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -716,6 +734,11 @@ pub struct ChipDescriptor {
     /// with the alias on a store there would be written into flash.
     #[serde(default = "default_true")]
     pub flash_boot_alias: bool,
+    /// Non-Arm coprocessors attached to the Cortex-M core's coprocessor
+    /// interface (p0..p7). Default none: every coprocessor instruction outside
+    /// the FPU's p10/p11 is UNDEFINED, which is correct for most parts.
+    #[serde(default)]
+    pub coprocessors: Vec<CortexMCoprocessor>,
     /// Atomic register aliases: the 0x1000-strided aliases of every peripheral
     /// register that a family's HAL uses for read-modify-write without a
     /// critical section. Two families do this with the SAME stride and
@@ -1430,6 +1453,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             ram,
             reset_vector_offset: 0,
             flash_boot_alias: true,
+            coprocessors: Vec::new(),
             atomic_register_aliases: AtomicAliasFlavour::None,
             ns_alias_offset: None,
             memory_regions: Vec::new(),

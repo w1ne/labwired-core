@@ -1,0 +1,132 @@
+# Vishay VEML6075 UVA / UVB light sensor — declarative register-pointer
+# device. Datasheet: Vishay VEML6075, Document Number 84304, Rev. 1.2
+# (23-Nov-16).
+#
+# ── The wire (p.5, "Slave Address and Function Description") ──────────────
+# Fixed 7-bit address 0x10. Every register is a 16-bit word addressed by a
+# one-byte COMMAND CODE and sent LOW BYTE FIRST (Fig. 7 / Table 6: "Data byte
+# low represents LSB and data byte high represents MSB"), so `endian: le`.
+# A read is the SMBus read-word: S addr·W cmd Sr addr·R LSB MSB P.
+#
+# ── Table 1 "Command Code and Register Description" ───────────────────────
+#
+#   CODE  REGISTER        R/W  DEFAULT
+#   00h   UV_CONF (L)     R/W  0x00     UV_IT[6:4] HD[3] UV_TRIG[2] UV_AF[1] SD[0]
+#         reserved (H)    R/W  0x00
+#   01h..06h reserved     R/W  0x0000
+#   07h   UVA_Data        R    0x0000
+#   08h   reserved        R    0x0000
+#   09h   UVB_Data        R    0x0000
+#   0Ah   UVCOMP1_Data    R    0x0000
+#   0Bh   UVCOMP2_Data    R    0x0000
+#   0Ch   ID              R    0x0026   (Table 5: LSB 0x26 device ID; MSB 0x00 =
+#                                        company code 00, slave address 0x20,
+#                                        version 0000 = VEML6075 CS)
+#
+# UV_CONF (Table 2): UV_IT 000 = 50 ms, 001 = 100 ms, 010 = 200 ms, 011 =
+# 400 ms, 100 = 800 ms (101..111 reserved); SD 0 = power on, 1 = shut down.
+# The part powers up ON (default 0x00 — unlike the VEML7700, whose SD bit
+# powers up set). The high byte is reserved, so `write_mask: 0x007F` keeps
+# the reserved bit 7 and the whole 00h_H byte at 0. UV_TRIG "returns to 0
+# automatically" (Table 2): the one rule below clears it after the write.
+#
+# ── Counts (p.2, "Basic Characteristics") ─────────────────────────────────
+#   UVA responsivity 0.93 counts/(µW/cm²) at IT = 50 ms
+#   UVB responsivity 2.1  counts/(µW/cm²) at IT = 50 ms
+# A count is an integration, so doubling IT doubles it: the `scale_from` map
+# halves the resolution per UV_IT step (50 ms ×1 … 800 ms ×16). UVCOMP1 /
+# UVCOMP2 are the visible and IR compensation channels; the datasheet gives
+# no responsivity for them, so their stimulus IS a count at 50 ms, scaled by
+# IT the same way. Words clip at 0xFFFF.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * HD (high dynamic): the datasheet gives no numeric sensitivity change in
+#     this document (it defers to app note 84339), so HD is stored only.
+#   * SD (shut down) does not freeze the outputs. The datasheet's "Data
+#     Auto-Memorization" says a shut-down part keeps its last results; this
+#     twin keeps reporting the live stimulus.
+#   * Active-force mode (UV_AF / UV_TRIG) and the integration delay: a result
+#     is always available, so there is no "first conversion pending" window.
+#   * The UV index is not computed by the part (app note 84339 does it in
+#     firmware from these four words), so there is nothing to model there.
+type: veml6075
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x10
+    unmapped_byte: 0x00
+    registers:
+      - name: UV_CONF
+        addr: 0x00
+        width: 2
+        endian: le
+        access: rw
+        write_mask: 0x007F
+        reset: 0x0000
+      # 01h..06h: reserved R/W words, default 0x0000 (Table 1 / Table 4).
+      - { name: RSVD_01, addr: 0x01, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: RSVD_02, addr: 0x02, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: RSVD_03, addr: 0x03, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: RSVD_04, addr: 0x04, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: RSVD_05, addr: 0x05, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: RSVD_06, addr: 0x06, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - name: UVA_DATA
+        addr: 0x07
+        width: 2
+        endian: le
+        access: r
+        source: uva
+        resolution: 1.0752688172043010   # 1 / 0.93 µW/cm² per count at 50 ms
+        scale_from:
+          - { register: UV_CONF, mask: 0x7, shift: 4, map: { 0: 1.0, 1: 0.5, 2: 0.25, 3: 0.125, 4: 0.0625 } }
+      - { name: RSVD_08, addr: 0x08, width: 2, endian: le, access: r, reset: 0x0000 }
+      - name: UVB_DATA
+        addr: 0x09
+        width: 2
+        endian: le
+        access: r
+        source: uvb
+        resolution: 0.47619047619047616  # 1 / 2.1 µW/cm² per count at 50 ms
+        scale_from:
+          - { register: UV_CONF, mask: 0x7, shift: 4, map: { 0: 1.0, 1: 0.5, 2: 0.25, 3: 0.125, 4: 0.0625 } }
+      - name: UVCOMP1_DATA
+        addr: 0x0A
+        width: 2
+        endian: le
+        access: r
+        source: uv_comp1
+        resolution: 1.0
+        scale_from:
+          - { register: UV_CONF, mask: 0x7, shift: 4, map: { 0: 1.0, 1: 0.5, 2: 0.25, 3: 0.125, 4: 0.0625 } }
+      - name: UVCOMP2_DATA
+        addr: 0x0B
+        width: 2
+        endian: le
+        access: r
+        source: uv_comp2
+        resolution: 1.0
+        scale_from:
+          - { register: UV_CONF, mask: 0x7, shift: 4, map: { 0: 1.0, 1: 0.5, 2: 0.25, 3: 0.125, 4: 0.0625 } }
+      # Table 1 / Table 5: device ID 0x0026, read-only.
+      - { name: ID, addr: 0x0C, width: 2, endian: le, access: r, reset: 0x0026 }
+  rules:
+    # UV_TRIG is a momentary "go" bit: the measurement it requests is always
+    # already available here, and the bit reads back 0.
+    - on: { write: UV_CONF }
+      when: "written & 0x0004"
+      do:
+        - { write: { register: UV_CONF, value: "reg(UV_CONF) & 0x007B" } }
+
+metadata:
+  label: "Vishay VEML6075 UV"
+  summary: "UVA / UVB light sensor over I²C (16-bit counts, ID 0x0026)."
+  detail: "Vishay VEML6075 at fixed address 0x10, a command-code device with 16-bit little-endian words. ID (0x0C) reads 0x0026. UVA (0x07) and UVB (0x09) are counts at the datasheet responsivity (0.93 and 2.1 counts per µW/cm² at 50 ms) scaled by the UV_IT integration time; UVCOMP1/UVCOMP2 (0x0A/0x0B) report the compensation-channel stimulus as counts. UV_CONF powers up 0x0000 (on, 50 ms). Not modelled: HD sensitivity, shutdown freezing the outputs, active-force timing."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. The VEML6075 address is fixed at 0x10." }
+  inputs:
+    - { key: uva, label: "UVA irradiance", unit: "µW/cm²", min: 0, max: 5000, default: 100 }
+    - { key: uvb, label: "UVB irradiance", unit: "µW/cm²", min: 0, max: 2000, default: 100 }
+    - { key: uv_comp1, label: "UVCOMP1 (visible) counts at 50 ms", unit: "counts", min: 0, max: 4095, default: 20 }
+    - { key: uv_comp2, label: "UVCOMP2 (IR) counts at 50 ms", unit: "counts", min: 0, max: 4095, default: 10 }

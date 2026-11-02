@@ -62,11 +62,13 @@ fn an_apa102_latches_its_frames_in_red_green_blue_order() {
         vec![
             LedPixel {
                 wire: [0xFF, 0, 0],
-                brightness: 0x1F
+                brightness: 0x1F,
+                white: None,
             },
             LedPixel {
                 wire: [0, 0xFF, 0],
-                brightness: 0x1F
+                brightness: 0x1F,
+                white: None,
             },
         ],
         "red then green at full brightness"
@@ -253,15 +255,18 @@ fn a_ws2812_decodes_edge_timing_into_grb_words() {
         vec![
             LedPixel {
                 wire: [0x00, 0xFF, 0x00],
-                brightness: 0
+                brightness: 0,
+                white: None,
             },
             LedPixel {
                 wire: [0xFF, 0x00, 0x00],
-                brightness: 0
+                brightness: 0,
+                white: None,
             },
             LedPixel {
                 wire: [0x00, 0x00, 0xFF],
-                brightness: 0
+                brightness: 0,
+                white: None,
             },
         ],
         "three GRB words, in wire order"
@@ -346,6 +351,20 @@ fn a_reset_threshold_below_the_bit_threshold_is_refused() {
         format!("{err:#}").contains("inter-bit low would latch"),
         "got: {err:#}"
     );
+}
+
+/// 24 (RGB) and 32 (RGBW) are the two frame sizes the decoder knows how to
+/// split into colour bytes; anything else is refused rather than silently
+/// decoded with the wrong stride.
+#[test]
+fn only_24_or_32_bits_per_pixel_are_accepted() {
+    let yaml = labwired_config::embedded_device_yaml("neopixel").expect("embedded");
+    let rgbw = yaml.replace("bits_per_pixel: 24", "bits_per_pixel: 32");
+    assert_ne!(rgbw, yaml, "the edit did not apply");
+    GenericLedStrip::from_yaml(&rgbw).expect("32 bits per LED is an RGBW strip");
+    let broken = yaml.replace("bits_per_pixel: 24", "bits_per_pixel: 16");
+    let err = GenericLedStrip::from_yaml(&broken).expect_err("must be refused");
+    assert!(format!("{err:#}").contains("RGBW"), "got: {err:#}");
 }
 
 #[test]

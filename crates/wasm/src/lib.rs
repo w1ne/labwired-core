@@ -526,6 +526,9 @@ impl WasmSimulator {
             MachineFamily::CortexA => return Err(JsValue::from_str(
                 "Cortex-A7 requires the native qemu-arm backend; browser execution is unavailable",
             )),
+            MachineFamily::CortexR => return Err(JsValue::from_str(
+                "Cortex-R5F requires the native qemu-arm-system backend; browser execution is unavailable",
+            )),
             MachineFamily::CortexM => {
                 Self::new_from_config_arm(&chip, &manifest, firmware, blob_map)
             }
@@ -574,6 +577,15 @@ impl WasmSimulator {
             )),
             MachineFamily::Pic16 => Err(JsValue::from_str(
                 "PIC16 is not available in the browser build yet",
+            )),
+            MachineFamily::Aarch64 => Err(JsValue::from_str(
+                "AArch64 is not available in the browser build yet",
+            )),
+            MachineFamily::Rx => Err(JsValue::from_str(
+                "RX is not available in the browser build yet",
+            )),
+            MachineFamily::Mips => Err(JsValue::from_str(
+                "MIPS is not available in the browser build yet",
             )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds

@@ -3776,6 +3776,77 @@
       ]
     },
     {
+      "device_type": "st7735",
+      "label": "ST7735R TFT 1.8″",
+      "summary": "1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI.",
+      "detail": "Sitronix ST7735R in the GM[1:0]=11 configuration: a 128x160 frame memory (datasheet V0.2 section 9.9.3, reset table 9.15.1). Command table SWRESET / SLPIN / SLPOUT / INVOFF / INVON / DISPOFF / DISPON / CASET / RASET / RAMWR / MADCTL / COLMOD, with MADCTL MY/MX/MV moving the address map and the window clamp. Reports `lit` (DISPON AND awake) beside the raw pixels, because a panel that never got SLPOUT is dark whatever is in memory. RGB565 throughout: COLMOD is consumed, not honoured.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select pin label."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes an init parameter byte 0x2C as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED. Only an explicit `false` darkens the panel: it then ignores the SPI bus and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "gc9a01",
+      "label": "GC9A01 round TFT 1.28″",
+      "summary": "1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI.",
+      "detail": "GalaxyCore GC9A01A against a 240x240 RGB565 frame memory (datasheet Rev 1.0 section 2). The round glass is a bezel over that square: the controller and this model address all 240x240 pixels, corners included. Command table SLPIN / SLPOUT / INVOFF / INVON / DISPOFF / DISPON / CASET / RASET / RAMWR / MADCTL / COLMOD / WRMEMC; the GC9A01A lists no SWRESET opcode. Reports `lit` (DISPON AND awake) beside the raw pixels. RGB565 throughout: COLMOD is consumed, not honoured.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select pin label."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because the GC9A01A's Level 2/3 init commands carry many parameter bytes and an inferring model decodes the first one that happens to be 0x2C as RAMWR."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED. Only an explicit `false` darkens the panel: it then ignores the SPI bus and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "oled-ssd1309",
+      "label": "SSD1309 OLED 2.42″",
+      "summary": "2.42in 128×64 monochrome OLED on a Solomon Systech SSD1309, I2C, paged framebuffer.",
+      "detail": "Solomon Systech SSD1309, the SSD1306's sibling on the larger 2.42in/2.4in 128x64 glass. Same eight-page GDDRAM, I2C control-byte framing and addressing commands as the SSD1306; no charge pump (external 7-16 V VCC, so no 8Dh), plus the SSD1309's command lock (FDh) and GPIO (DCh) consumed for their parameter bytes. Resets to page addressing mode, per its datasheet. 0x3C / 0x3D address pair.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0 (D/C# pin) = high variant."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "dc-motor",
       "label": "Brushed DC motor",
       "summary": "Configurable deterministic brushed DC motor plant",
@@ -4617,6 +4688,1595 @@
           "name": "hall_c_pin",
           "ty": "str",
           "doc": "Hall C output to the MCU."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "bme680",
+      "label": "BME680 Environmental",
+      "summary": "Bosch BME680 temperature / pressure / humidity sensor over I²C (gas channel not modelled).",
+      "detail": "Bosch BME680 at 0x76 (0x77 with SDO high). CHIP_ID (0xD0) reads 0x61 and VARIANT_ID (0xF0) 0x00. Serves a full factory-calibration block and raw 20-bit T/P and 16-bit H ADC words that are the exact inverse of Bosch's integer compensation (BME68x_SensorAPI) at those coefficients, so the Bosch, Adafruit and Zephyr drivers recover the host's temperature, pressure and humidity. Forced mode (ctrl_meas mode = 01) raises new_data_0 7.3 ms later and returns to sleep. The gas channel is NOT modelled: gas_r reads 0 with gas_valid clear. Oversampling, filter and noise are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x76 (SDO low); 0x77 with SDO high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%RH",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 50.0
+        },
+        {
+          "key": "pressure",
+          "label": "Pressure",
+          "unit": "hPa",
+          "min": 300.0,
+          "max": 1100.0,
+          "default": 1013.25
+        }
+      ]
+    },
+    {
+      "device_type": "sht40",
+      "label": "SHT40 Temp/Humidity",
+      "summary": "Sensirion SHT40 I²C temperature and humidity sensor (single-byte commands, CRC-8).",
+      "detail": "Sensirion SHT40 at default address 0x44 (0x45 / 0x46 for the -BD1B / -CD1B variants). Single-byte commands: 0xFD / 0xF6 / 0xE0 measure at high / medium / low precision and answer after the datasheet's maximum duration (8.3 / 4.5 / 1.6 ms) with a temperature word and a humidity word, each 16-bit big-endian plus a Sensirion CRC-8. 0x89 reads a constant serial number; 0x94 is a soft reset. A read issued before the measurement completes returns 0xFF. The heater commands take their datasheet time but do not heat.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x44 (SHT40-AD1B); 0x45 / 0x46 for the -BD1B / -CD1B variants."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0,
+          "default": 25.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 50.0
+        }
+      ]
+    },
+    {
+      "device_type": "icm42688",
+      "label": "ICM-42688-P IMU",
+      "summary": "TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C.",
+      "detail": "TDK InvenSense ICM-42688-P at 0x68 (0x69 with AP_AD0 high). WHO_AM_I (0x75) reads 0x47. Accel, gyro and temperature are big-endian int16 words at 0x1D..0x2A whose sensitivity follows ACCEL_FS_SEL / GYRO_FS_SEL. The sensors power up OFF and their data registers read the datasheet's 0x8000 until PWR_MGMT0 turns them on; DATA_RDY_INT rises 1 ms later. Bank select (0x76) works, but only bank 0 is modelled. The FIFO, APEX features, timestamps and interrupt pins are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (AP_AD0 low); 0x69 with AP_AD0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "icm20948",
+      "label": "ICM-20948 IMU",
+      "summary": "TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C.",
+      "detail": "TDK InvenSense ICM-20948 at 0x68 (0x69 with AD0 high). WHO_AM_I (bank 0, 0x00) reads 0xEA. REG_BANK_SEL (0x7F) switches user banks 0/2/3, and the same pointer decodes to a different register in each bank as on silicon. The part powers up asleep (PWR_MGMT_1 = 0x41) and its outputs read 0 until SLEEP is cleared; accel and gyro sensitivity then follow ACCEL_FS_SEL / GYRO_FS_SEL in bank 2. The AK09916 magnetometer behind the auxiliary I²C master is NOT modelled, nor are the FIFO, DMP and interrupt pin.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (AD0 low); 0x69 with AD0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "sgp40",
+      "label": "Sensirion SGP40 VOC",
+      "summary": "MOx VOC sensor returning the raw SRAW_VOC signal over I²C.",
+      "detail": "Sensirion SGP40 at fixed address 0x59, speaking the Sensirion command protocol with CRC-8 (poly 0x31). 0x260F (with RH/T compensation words) answers the raw SRAW_VOC tick after the datasheet's 30 ms; the host's Gas Index Algorithm turns it into a VOC Index. Self-test (0x280E) answers 0xD400 after 320 ms. The raw signal is an externally driven input (channel voc_sraw).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SGP40 fixed address 0x59."
+        },
+        {
+          "name": "voc_sraw",
+          "ty": "float",
+          "doc": "Initial raw VOC tick (~20000..40000). Default 28000. Drive it at runtime with the `voc_sraw` input channel."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "voc_sraw",
+          "label": "VOC raw",
+          "unit": "ticks",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 28000.0
+        }
+      ]
+    },
+    {
+      "device_type": "tsl2591",
+      "label": "TSL2591 Light",
+      "summary": "ams TSL2591 high-dynamic-range light sensor (full-spectrum + IR channels) over I²C.",
+      "detail": "ams TSL2591 at fixed address 0x29. Every transaction starts with the command byte 0xA0 | register. ID (0x12) reads 0x50. CH0 (full spectrum) and CH1 (infrared) are 16-bit little-endian counts that scale with the programmed gain (1×/25×/428×/9876×) and integration time (100–600 ms), saturating at 37888 for 100 ms and 65535 otherwise. Both read 0 until AEN is set; AVALID rises one 100 ms integration later. Host inputs are the counts at 1× gain / 100 ms. Interrupts, persistence and the special-function commands are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x29 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ch0",
+          "label": "CH0 full-spectrum counts (1×, 100 ms)",
+          "unit": "counts",
+          "min": 0.0,
+          "max": 37888.0,
+          "default": 1200.0
+        },
+        {
+          "key": "ch1",
+          "label": "CH1 infrared counts (1×, 100 ms)",
+          "unit": "counts",
+          "min": 0.0,
+          "max": 37888.0,
+          "default": 300.0
+        }
+      ]
+    },
+    {
+      "device_type": "dht20",
+      "label": "DHT20 Temp/Humidity",
+      "summary": "Aosong DHT20 I²C temperature and humidity module (AHT20-based).",
+      "detail": "Aosong DHT20 at fixed address 0x38, following its manual: 0x71 reads the status byte (0x18 = calibrated, idle), 0xAC 0x33 0x00 triggers a measurement, and after the datasheet's 80 ms a 7-byte read returns status, a 20-bit humidity and a 20-bit temperature packed across five bytes, and a CRC-8 over all six. A read during the measurement returns 0x98 (BUSY). Calibration-register initialisation is not modelled; the part always reads calibrated.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x38 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 80.0,
+          "default": 25.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 50.0
+        }
+      ]
+    },
+    {
+      "device_type": "pmsa003i",
+      "label": "PMSA003I PM2.5",
+      "summary": "Plantower PMSA003I particulate-matter sensor (PM1.0 / PM2.5 / PM10) over I²C.",
+      "detail": "Plantower PMSA003I at fixed address 0x12. A 32-byte read (bare, or after pointer 0x00) returns the Plantower frame: 0x42 0x4D, frame length 28, PM1.0/PM2.5/PM10 at CF=1 and atmospheric, six particle-count bins per 0.1 L, a reserved word and a 16-bit check code that is the byte sum of the 30 bytes before it — computed over what the twin actually answered. The pointer wraps 0x1F → 0x00, so repeated bare reads each return a whole frame. CF=1 and atmospheric words report the same values; the fan, cadence and warm-up are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x12 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "pm1_0",
+          "label": "PM1.0",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 5.0
+        },
+        {
+          "key": "pm2_5",
+          "label": "PM2.5",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 8.0
+        },
+        {
+          "key": "pm10",
+          "label": "PM10",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0,
+          "default": 10.0
+        },
+        {
+          "key": "n0_3",
+          "label": "Particles >0.3 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 900.0
+        },
+        {
+          "key": "n0_5",
+          "label": "Particles >0.5 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 280.0
+        },
+        {
+          "key": "n1_0",
+          "label": "Particles >1.0 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 50.0
+        },
+        {
+          "key": "n2_5",
+          "label": "Particles >2.5 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 6.0
+        },
+        {
+          "key": "n5_0",
+          "label": "Particles >5.0 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 2.0
+        },
+        {
+          "key": "n10",
+          "label": "Particles >10 µm",
+          "unit": "/0.1 L",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
+      "device_type": "ina226",
+      "label": "INA226 Power Monitor",
+      "summary": "TI INA226 bidirectional current / power monitor over I²C (36 V, 16-bit).",
+      "detail": "Texas Instruments INA226 (default 0x40; 0x40–0x4F by A0/A1 strapping). Configuration powers up at 0x4127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x2260. Shunt (2.5 µV/LSB) and bus (1.25 mV/LSB) voltages follow the host's bus_voltage and current through a 0.1 Ω shunt; Current and Power are computed from those words and the Calibration register exactly as the datasheet's equations 3 and 4 say, so they read 0 until firmware writes Calibration. CVRF rises 2.2 ms after a Configuration write. Averaging, the alert comparator and power-down are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0 = A1 = GND); 0x40–0x4F by A0/A1 strapping."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 36.0,
+          "default": 5.0
+        },
+        {
+          "key": "current",
+          "label": "Current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -0.8,
+          "max": 0.8,
+          "default": 0.25
+        }
+      ]
+    },
+    {
+      "device_type": "mpu9250",
+      "label": "MPU-9250 IMU",
+      "summary": "TDK InvenSense MPU-9250 motion sensor (accel + gyro + temperature; AK8963 magnetometer not modelled) over I²C.",
+      "detail": "TDK InvenSense MPU-9250 at 0x68 (0x69 with AD0 high). WHO_AM_I (0x75) reads 0x71 and PWR_MGMT_1 powers up at 0x01, awake. The 14-byte burst at 0x3B carries accel, TEMP_OUT and gyro; ACCEL_CONFIG.ACCEL_FS_SEL and GYRO_CONFIG.GYRO_FS_SEL set the counts per g and per °/s at read time, and TEMP_OUT follows T × 333.87 − 7011.27. A 1 kHz sample timer raises INT_STATUS.RAW_DATA_RDY_INT, cleared by reading INT_STATUS. H_RESET restores the declared registers. The AK8963 magnetometer (internal I²C master and bypass at 0x0C), the FIFO, sleep gating and the programmable sample rate are NOT modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (AD0 low); 0x69 with AD0 high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "ens160",
+      "label": "ENS160 Air Quality",
+      "summary": "ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C.",
+      "detail": "ScioSense ENS160 at 0x52 (0x53 with MISO/ADDR high). PART_ID (0x00) reads 0x0160 little-endian and OPMODE powers up in IDLE (0x01). In STANDARD mode (OPMODE 0x02) DATA_AQI, DATA_TVOC (0x22) and DATA_ECO2 (0x24) follow the host's aqi, tvoc and eco2 channels, DEVICE_STATUS reports STATAS and NEWDAT, and its validity flag follows the host's validity channel (warm-up / initial start-up). TEMP_IN / RH_IN are copied into DATA_T / DATA_RH. The MOx algorithm, the STANDARD-mode cadence, GET_APPVER and the INTn pin are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x52 (MISO/ADDR low); 0x53 with MISO/ADDR high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "tvoc",
+          "label": "TVOC",
+          "unit": "ppb",
+          "min": 0.0,
+          "max": 65000.0,
+          "default": 100.0
+        },
+        {
+          "key": "eco2",
+          "label": "eCO2",
+          "unit": "ppm",
+          "min": 400.0,
+          "max": 65000.0,
+          "default": 600.0
+        },
+        {
+          "key": "aqi",
+          "label": "AQI-UBA",
+          "unit": "",
+          "min": 1.0,
+          "max": 5.0,
+          "default": 2.0
+        },
+        {
+          "key": "validity",
+          "label": "Validity flag (0 ok, 1 warm-up, 2 start-up, 3 invalid)",
+          "unit": "",
+          "min": 0.0,
+          "max": 3.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "ina260",
+      "label": "INA260 Power Monitor",
+      "summary": "TI INA260 current / voltage / power monitor with an integrated 2 mΩ shunt over I²C (36 V, 15 A).",
+      "detail": "Texas Instruments INA260 (default 0x40; 0x40–0x4F by A0/A1 strapping). Configuration powers up at 0x6127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x2270. Current (1.25 mA/LSB, two's complement) and bus voltage (1.25 mV/LSB) follow the host's current and bus_voltage; Power (10 mW/LSB) is Current × Bus Voltage / 6400 in register counts, exactly as the datasheet's §8.6.4 says, always positive. CVRF rises 2.2 ms after a Configuration write. Averaging, the alert comparator and power-down are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0 = A1 = GND); 0x40–0x4F by A0/A1 strapping."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 36.0,
+          "default": 5.0
+        },
+        {
+          "key": "current",
+          "label": "Current (internal 2 mΩ shunt)",
+          "unit": "A",
+          "min": -15.0,
+          "max": 15.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
+      "device_type": "ina3221",
+      "label": "INA3221 3-Channel Monitor",
+      "summary": "TI INA3221 three-channel shunt and bus voltage monitor over I²C (26 V).",
+      "detail": "Texas Instruments INA3221 (default 0x40; 0x40–0x43 by the A0 pin). Configuration powers up at 0x7127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x3220. Each channel's shunt (40 µV/LSB) and bus (8 mV/LSB) words are 13-bit two's complement left-aligned in 16 bits, D2:D0 zero, following the host's per-channel current through a 0.1 Ω shunt and bus voltage. The shunt-voltage sum follows SCC1..SCC3, and CVRF rises 6.6 ms after a Configuration write. Averaging, channel disable and the alert / power-valid / timing-control comparators are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0 = GND); 0x41 (VS), 0x42 (SDA), 0x43 (SCL)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ch1_bus_voltage",
+          "label": "CH1 bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 26.0,
+          "default": 5.0
+        },
+        {
+          "key": "ch1_current",
+          "label": "CH1 current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -2.0,
+          "max": 2.0,
+          "default": 0.2
+        },
+        {
+          "key": "ch2_bus_voltage",
+          "label": "CH2 bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 26.0,
+          "default": 3.2
+        },
+        {
+          "key": "ch2_current",
+          "label": "CH2 current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -2.0,
+          "max": 2.0,
+          "default": 0.1
+        },
+        {
+          "key": "ch3_bus_voltage",
+          "label": "CH3 bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 26.0,
+          "default": 12.0
+        },
+        {
+          "key": "ch3_current",
+          "label": "CH3 current (0.1 Ω shunt)",
+          "unit": "A",
+          "min": -2.0,
+          "max": 2.0,
+          "default": 0.5
+        }
+      ]
+    },
+    {
+      "device_type": "mcp23017",
+      "label": "MCP23017 I/O Expander",
+      "summary": "Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map).",
+      "detail": "Microchip MCP23017 at 0x20 (A2/A1/A0 select 0x20-0x27), in its power-on IOCON.BANK = 0 layout: IODIRA/B at 0x00/0x01 (power-on 0xFF, all inputs) through GPIOA/B at 0x12/0x13 and OLATA/B at 0x14/0x15, with the address pointer incrementing and rolling over 0x15 to 0x00. A write to GPIO or OLAT sets the output latch, and every pin whose IODIR bit is 0 drives its latch bit onto its pad; GPIO reads back the latch on outputs and the posed input level (IPOL-inverted) on inputs. The sixteen pads bind through the optional gpa0_pin..gpb7_pin keys. NOT modelled: external pad levels reaching GPIO (inputs read the port_a / port_b stimulus), pull-ups, interrupt-on-change (INTF/INTCAP stay 0, INTA/INTB never assert), IOCON.BANK = 1 re-mapping and SEQOP byte mode, and releasing a pad when a pin is turned back into an input.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27."
+        },
+        {
+          "name": "port_a",
+          "ty": "float",
+          "doc": "Level (0-255) posed on the port A pins, seen by GPIOA reads on pins configured as inputs. Default 0. Drive it at runtime with the `port_a` input channel."
+        },
+        {
+          "name": "port_b",
+          "ty": "float",
+          "doc": "Level (0-255) posed on the port B pins, seen by GPIOB reads on input pins. Default 0."
+        },
+        {
+          "name": "gpa0_pin",
+          "ty": "str",
+          "doc": "Pad GPA0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "gpa1_pin",
+          "ty": "str",
+          "doc": "Pad GPA1 drives. Optional."
+        },
+        {
+          "name": "gpa2_pin",
+          "ty": "str",
+          "doc": "Pad GPA2 drives. Optional."
+        },
+        {
+          "name": "gpa3_pin",
+          "ty": "str",
+          "doc": "Pad GPA3 drives. Optional."
+        },
+        {
+          "name": "gpa4_pin",
+          "ty": "str",
+          "doc": "Pad GPA4 drives. Optional."
+        },
+        {
+          "name": "gpa5_pin",
+          "ty": "str",
+          "doc": "Pad GPA5 drives. Optional."
+        },
+        {
+          "name": "gpa6_pin",
+          "ty": "str",
+          "doc": "Pad GPA6 drives. Optional."
+        },
+        {
+          "name": "gpa7_pin",
+          "ty": "str",
+          "doc": "Pad GPA7 drives. Optional (output-only on the MCP23017)."
+        },
+        {
+          "name": "gpb0_pin",
+          "ty": "str",
+          "doc": "Pad GPB0 drives. Optional."
+        },
+        {
+          "name": "gpb1_pin",
+          "ty": "str",
+          "doc": "Pad GPB1 drives. Optional."
+        },
+        {
+          "name": "gpb2_pin",
+          "ty": "str",
+          "doc": "Pad GPB2 drives. Optional."
+        },
+        {
+          "name": "gpb3_pin",
+          "ty": "str",
+          "doc": "Pad GPB3 drives. Optional."
+        },
+        {
+          "name": "gpb4_pin",
+          "ty": "str",
+          "doc": "Pad GPB4 drives. Optional."
+        },
+        {
+          "name": "gpb5_pin",
+          "ty": "str",
+          "doc": "Pad GPB5 drives. Optional."
+        },
+        {
+          "name": "gpb6_pin",
+          "ty": "str",
+          "doc": "Pad GPB6 drives. Optional."
+        },
+        {
+          "name": "gpb7_pin",
+          "ty": "str",
+          "doc": "Pad GPB7 drives. Optional (output-only on the MCP23017)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "port_a",
+          "label": "Port A input level",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        },
+        {
+          "key": "port_b",
+          "label": "Port B input level",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "pcf8575",
+      "label": "PCF8575 I/O Expander",
+      "summary": "16-bit I²C quasi-bidirectional port expander (PCF8575).",
+      "detail": "PCF8575 at 0x20 (A2/A1/A0 select 0x20-0x27). There is no register pointer: data moves in pairs of bytes, the first for port 0 (P07-P00) and the second for port 1 (P17-P10), and the 16-bit word reaches the pins after the second byte of each pair. A read returns port 0 then port 1, alternating for as long as the master clocks. The port powers up at 0xFFFF, every pin released high. Writing a bit low drives that pad hard low; writing it high releases it, which is also how a pin is used as an input. The sixteen pads bind through the optional p00_pin..p17_pin config keys. NOT modelled: the input direction (an external level on a pad does not reach the readable port), the open-drain INT output, and electrical limits; a read returns the last pair written or the value driven through the `port` stimulus channel.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27."
+        },
+        {
+          "name": "port",
+          "ty": "float",
+          "doc": "Initial 16-bit port (0-65535; P07-P00 in the low byte). Default 65535, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+        },
+        {
+          "name": "p00_pin",
+          "ty": "str",
+          "doc": "Pad P00 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "p01_pin",
+          "ty": "str",
+          "doc": "Pad P01 drives. Optional."
+        },
+        {
+          "name": "p02_pin",
+          "ty": "str",
+          "doc": "Pad P02 drives. Optional."
+        },
+        {
+          "name": "p03_pin",
+          "ty": "str",
+          "doc": "Pad P03 drives. Optional."
+        },
+        {
+          "name": "p04_pin",
+          "ty": "str",
+          "doc": "Pad P04 drives. Optional."
+        },
+        {
+          "name": "p05_pin",
+          "ty": "str",
+          "doc": "Pad P05 drives. Optional."
+        },
+        {
+          "name": "p06_pin",
+          "ty": "str",
+          "doc": "Pad P06 drives. Optional."
+        },
+        {
+          "name": "p07_pin",
+          "ty": "str",
+          "doc": "Pad P07 drives. Optional."
+        },
+        {
+          "name": "p10_pin",
+          "ty": "str",
+          "doc": "Pad P10 drives. Optional."
+        },
+        {
+          "name": "p11_pin",
+          "ty": "str",
+          "doc": "Pad P11 drives. Optional."
+        },
+        {
+          "name": "p12_pin",
+          "ty": "str",
+          "doc": "Pad P12 drives. Optional."
+        },
+        {
+          "name": "p13_pin",
+          "ty": "str",
+          "doc": "Pad P13 drives. Optional."
+        },
+        {
+          "name": "p14_pin",
+          "ty": "str",
+          "doc": "Pad P14 drives. Optional."
+        },
+        {
+          "name": "p15_pin",
+          "ty": "str",
+          "doc": "Pad P15 drives. Optional."
+        },
+        {
+          "name": "p16_pin",
+          "ty": "str",
+          "doc": "Pad P16 drives. Optional."
+        },
+        {
+          "name": "p17_pin",
+          "ty": "str",
+          "doc": "Pad P17 drives. Optional."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "port",
+          "label": "Port",
+          "unit": "word",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 65535.0
+        }
+      ]
+    },
+    {
+      "device_type": "ads1015",
+      "label": "ADS1015 12-bit ADC",
+      "summary": "4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115.",
+      "detail": "Texas Instruments ADS1015 (default address 0x48; ADDR to VDD/SDA/SCL gives 0x49/0x4A/0x4B). Same register map and pointer protocol as the ADS1115, but CONVERSION holds a 12-bit two's-complement result left-justified in bits 15:4 (the low nibble always reads 0) and clips at 0x7FF0 / 0x8000. CONVERSION follows the live CONFIG MUX bits, including the four differential pairs, at the full scale the PGA bits select (±6.144 V down to ±0.256 V). NOT modelled: conversion time and the OS busy bit (a result is always ready), the comparator / ALERT-RDY pin, and the general-call reset; DR and MODE are stored only.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADDR to GND); 0x49 VDD, 0x4A SDA, 0x4B SCL."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "a0",
+          "label": "A0",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        },
+        {
+          "key": "a1",
+          "label": "A1",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        },
+        {
+          "key": "a2",
+          "label": "A2",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        },
+        {
+          "key": "a3",
+          "label": "A3",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "uln2803",
+      "label": "ULN2803A Darlington Sink Driver",
+      "summary": "Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay.",
+      "detail": "ULN2803A / ULN2803C eight-channel Darlington array. A logic-high input turns its Darlington on and pulls the matching output LOW (sinking the load); a logic-low input turns it off. Each OUTn reads !INn after 200 ns (the datasheet tOFF; tON is 100 ns). There is no enable and no shared state between channels. NOT modelled: the open collector itself - an OFF output is driven HIGH here, standing in for the load or pull-up that brings it high on a board - plus output current limits, saturation voltage, the COM flyback diodes and input thresholds.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "in1_pin",
+          "ty": "str",
+          "doc": "Input 1 (1B / I1, pin 1) - an MCU output (e.g. \"PA0\")."
+        },
+        {
+          "name": "out1_pin",
+          "ty": "str",
+          "doc": "Output 1 (1C / O1) - LOW while IN1 is high."
+        },
+        {
+          "name": "in2_pin",
+          "ty": "str",
+          "doc": "Input 2 (2B / I2)."
+        },
+        {
+          "name": "out2_pin",
+          "ty": "str",
+          "doc": "Output 2 (2C / O2)."
+        },
+        {
+          "name": "in3_pin",
+          "ty": "str",
+          "doc": "Input 3 (3B / I3)."
+        },
+        {
+          "name": "out3_pin",
+          "ty": "str",
+          "doc": "Output 3 (3C / O3)."
+        },
+        {
+          "name": "in4_pin",
+          "ty": "str",
+          "doc": "Input 4 (4B / I4)."
+        },
+        {
+          "name": "out4_pin",
+          "ty": "str",
+          "doc": "Output 4 (4C / O4)."
+        },
+        {
+          "name": "in5_pin",
+          "ty": "str",
+          "doc": "Input 5 (5B / I5)."
+        },
+        {
+          "name": "out5_pin",
+          "ty": "str",
+          "doc": "Output 5 (5C / O5)."
+        },
+        {
+          "name": "in6_pin",
+          "ty": "str",
+          "doc": "Input 6 (6B / I6)."
+        },
+        {
+          "name": "out6_pin",
+          "ty": "str",
+          "doc": "Output 6 (6C / O6)."
+        },
+        {
+          "name": "in7_pin",
+          "ty": "str",
+          "doc": "Input 7 (7B / I7)."
+        },
+        {
+          "name": "out7_pin",
+          "ty": "str",
+          "doc": "Output 7 (7C / O7)."
+        },
+        {
+          "name": "in8_pin",
+          "ty": "str",
+          "doc": "Input 8 (8B / I8)."
+        },
+        {
+          "name": "out8_pin",
+          "ty": "str",
+          "doc": "Output 8 (8C / O8)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "rfm95",
+      "label": "RFM95W LoRa module",
+      "summary": "HopeRF RFM95W (Semtech SX1276) SPI LoRa register shell (no RF).",
+      "detail": "HopeRF RFM95W, an SX1276 LoRa transceiver module, as an SPI register shell. Address byte bit 7 = 1 writes, 0 reads; bits 6:0 are the address. RegVersion (0x42) reads 0x12 and cannot be written; every other address is one byte of storage seeded with the SX1276 power-on value (RegOpMode 0x01, RegFrf 434 MHz, RegPaConfig 0x4F ...). NOT modelled: the RF air link, the packet engine and FIFO, DIO interrupt pins, FSK/LoRa register banking, mode sequencing and burst auto-increment.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI NSS GPIO pin. Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "sx1276",
+      "label": "Semtech SX1276 LoRa",
+      "summary": "Semtech SX1276 LoRa transceiver, SPI register model of the LoRa page (no RF air link).",
+      "detail": "Semtech SX1276 over SPI (address bit 7 = 1 writes). RegVersion (0x42) reads 0x12. Registers 0x00..0x3F present the LoRa page with its reset values (RegModemConfig1 0x72, RegModemConfig2 0x70, RegSyncWord 0x12, RegFifoTxBaseAddr 0x80…); RegRssiValue / RegPktRssiValue / RegPktSnrValue report the rssi_dbm / packet_rssi_dbm / snr_db stimulus with the HF (−157) or LF (−164) offset in LoRa mode; RegIrqFlags is write-1-to-clear; a TX mode write raises TxDone and returns to standby. NOT modelled: the RF air link (nothing is received), the 256-byte FIFO, the FSK page, DIO pins, burst access and timing.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI NSS GPIO pin. Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "rssi_dbm",
+          "label": "Current RSSI",
+          "unit": "dBm",
+          "min": -157.0,
+          "max": 0.0,
+          "default": -100.0
+        },
+        {
+          "key": "packet_rssi_dbm",
+          "label": "Last packet RSSI",
+          "unit": "dBm",
+          "min": -157.0,
+          "max": 0.0,
+          "default": -90.0
+        },
+        {
+          "key": "snr_db",
+          "label": "Last packet SNR",
+          "unit": "dB",
+          "min": -32.0,
+          "max": 31.75,
+          "default": 9.5
+        }
+      ]
+    },
+    {
+      "device_type": "sx1262",
+      "label": "Semtech SX1262 LoRa",
+      "summary": "Semtech SX1262 LoRa transceiver, SPI command interface (status, standby/RX/TX, registers, IRQ) — no RF air link.",
+      "detail": "Semtech SX1262 over SPI: one command per NSS-low transaction, status returned on command bytes (Table 13-76, 0x20 = STBY_RC at power-on). SetStandby (0x80), SetFs (0xC1), SetRx (0x82), SetTx (0x83, completes at once with TxDone), SetSleep (0x84), GetStatus (0xC0), Read/WriteRegister (0x1D/0x0D) over the Table 12-1 registers (LoRa sync word 0x0740 = 0x14 0x24, OCP 0x08E7 = 0x38), Set/GetPacketType, SetDioIrqParams, Get/ClearIrqStatus, GetRssiInst, GetPacketStatus, Get/ClearDeviceErrors. BUSY is driven low (high in Sleep); DIO1 follows IRQ & IrqMask & DIO1Mask. NOT modelled: the RF air link (nothing is received), the data buffer, timing, DIO2/DIO3.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI NSS GPIO pin. Defaults to PA4."
+        },
+        {
+          "name": "busy_pin",
+          "ty": "str",
+          "doc": "GPIO the BUSY output drives."
+        },
+        {
+          "name": "dio1_pin",
+          "ty": "str",
+          "doc": "GPIO the DIO1 interrupt output drives."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "rssi_dbm",
+          "label": "Instantaneous RSSI",
+          "unit": "dBm",
+          "min": -127.0,
+          "max": 0.0,
+          "default": -95.0
+        },
+        {
+          "key": "packet_rssi_dbm",
+          "label": "Last packet RSSI",
+          "unit": "dBm",
+          "min": -127.0,
+          "max": 0.0,
+          "default": -88.0
+        },
+        {
+          "key": "snr_db",
+          "label": "Last packet SNR",
+          "unit": "dB",
+          "min": -32.0,
+          "max": 31.0,
+          "default": 7.0
+        }
+      ]
+    },
+    {
+      "device_type": "mcp3008",
+      "label": "Microchip MCP3008 ADC",
+      "summary": "8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing).",
+      "detail": "Microchip MCP3008 over SPI, three-byte transaction per Figure 6-1: 0x01 (start bit), SGL/DIFF·D2·D1·D0 in the high nibble of byte 1, then a don't-care byte. Byte 1 answers with the null bit and B9:B8, byte 2 with B7..B0, so (b1 & 3) << 8 | b2 is the code; further bytes repeat the result LSB first, then zeros. code = 1024·VIN/VREF clamped 0..1023, single-ended on CH0..CH7 or differential on the Table 5-2 pairs. Inputs ch0_mv..ch7_mv and vref_mv are in millivolts. Not modelled: other start-bit alignments, conversion timing.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI CS GPIO pin. Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ch0_mv",
+          "label": "CH0",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 1650.0
+        },
+        {
+          "key": "ch1_mv",
+          "label": "CH1",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 825.0
+        },
+        {
+          "key": "ch2_mv",
+          "label": "CH2",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 2475.0
+        },
+        {
+          "key": "ch3_mv",
+          "label": "CH3",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 100.0
+        },
+        {
+          "key": "ch4_mv",
+          "label": "CH4",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 3300.0
+        },
+        {
+          "key": "ch5_mv",
+          "label": "CH5",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 1000.0
+        },
+        {
+          "key": "ch6_mv",
+          "label": "CH6",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 2000.0
+        },
+        {
+          "key": "ch7_mv",
+          "label": "CH7",
+          "unit": "mV",
+          "min": 0.0,
+          "max": 5500.0,
+          "default": 3000.0
+        },
+        {
+          "key": "vref_mv",
+          "label": "VREF",
+          "unit": "mV",
+          "min": 250.0,
+          "max": 5500.0,
+          "default": 3300.0
+        }
+      ]
+    },
+    {
+      "device_type": "ads1256",
+      "label": "TI ADS1256 24-bit ADC",
+      "summary": "8-channel 24-bit delta-sigma SPI ADC (RREG/WREG/RDATA, PGA, DRDY).",
+      "detail": "TI ADS1256 over SPI (mode 1). Command-driven per Table 24: RREG (1rh 0nh) and WREG (5rh 0nh) read and write the eleven registers of Table 23 (STATUS 0x31 → 0x30 with ID 3, MUX 01h, ADCON 20h, DRATE F0h, IO E0h); RDATA (01h) returns the 24-bit result of (AINP − AINN)·PGA·(2^23−1)/(2·VREF), clipped, MSB first. MUX selects AIN0..AIN7 / AINCOM, ADCON[2:0] the PGA (1..64). The DRDY pin and STATUS bit 0 go low 0.21 ms after power-up/RESET/calibration and high after a full read. Inputs ain0_uv..ain7_uv, aincom_uv and vref_uv are microvolts. Not modelled: data-rate timing, RDATAC, standby, calibration arithmetic, ORDER, GPIO pins.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI CS GPIO pin. Defaults to PA4."
+        },
+        {
+          "name": "drdy_pin",
+          "ty": "str",
+          "doc": "GPIO the DRDY output drives (active low)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ain0_uv",
+          "label": "AIN0",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 1250000.0
+        },
+        {
+          "key": "ain1_uv",
+          "label": "AIN1",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 0.0
+        },
+        {
+          "key": "ain2_uv",
+          "label": "AIN2",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 2000000.0
+        },
+        {
+          "key": "ain3_uv",
+          "label": "AIN3",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 500000.0
+        },
+        {
+          "key": "ain4_uv",
+          "label": "AIN4",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 0.0
+        },
+        {
+          "key": "ain5_uv",
+          "label": "AIN5",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 0.0
+        },
+        {
+          "key": "ain6_uv",
+          "label": "AIN6",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 0.0
+        },
+        {
+          "key": "ain7_uv",
+          "label": "AIN7",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 0.0
+        },
+        {
+          "key": "aincom_uv",
+          "label": "AINCOM",
+          "unit": "µV",
+          "min": -100000.0,
+          "max": 5100000.0,
+          "default": 0.0
+        },
+        {
+          "key": "vref_uv",
+          "label": "VREF",
+          "unit": "µV",
+          "min": 500000.0,
+          "max": 2600000.0,
+          "default": 2500000.0
+        }
+      ]
+    },
+    {
+      "device_type": "bmi160",
+      "label": "Bosch BMI160 IMU",
+      "summary": "Bosch BMI160 6-axis IMU (accel + gyro + temperature) over I²C.",
+      "detail": "Bosch BMI160 at 0x68 (0x69 with SDO high). CHIP_ID (0x00) reads 0xD1. Accelerometer and gyroscope power up in suspend and read 0x0000 until CMD (0x7E) puts them in normal mode (0x11 / 0x15), which PMU_STATUS (0x03) and STATUS drdy bits report. Data are little-endian int16 words at 0x0C..0x17 scaled by ACC_RANGE / GYR_RANGE; TEMPERATURE (0x20) is (T − 23 °C)·512 and reads 0x8000 (invalid) unless the gyro is in normal mode. Softreset (0xB6) restores the defaults. Not modelled: FIFO, interrupts, aux magnetometer, sensor time, PMU switch delays, SPI.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68 (SDO low); 0x69 with SDO high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        },
+        {
+          "key": "gyro_x",
+          "label": "Gyro X",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_y",
+          "label": "Gyro Y",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gyro_z",
+          "label": "Gyro Z",
+          "unit": "dps",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature",
+          "label": "Die temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "bmm150",
+      "label": "Bosch BMM150 magnetometer",
+      "summary": "Bosch BMM150 3-axis geomagnetic sensor over I²C (chip ID 0x32, trim block).",
+      "detail": "Bosch BMM150 at 0x10 (0x11/0x12/0x13 by CSB/SDO). Powers up in Suspend: every register except POWER_CTRL (0x4B) reads 0x00, so the Chip ID (0x40) reads 0x00 until the Power Control bit is set, then 0x32 — as on silicon. DATA X/Y (13-bit) and Z (15-bit) words carry the field through a reference trim unit (0x5D..0x71) under which Bosch's compensation is a fixed gain: 0.3125 µT/LSB on X/Y, 0.5 µT/LSB on Z, RHALL fixed at dig_xyz1. Soft reset (0x4B bits 7+1) restores the defaults. Not modelled: opmode timing, interrupts, self-test, temperature drift, SPI.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x10 (CSB, SDO low); 0x11, 0x12, 0x13 by CSB/SDO."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "mag_x",
+          "label": "Field X",
+          "unit": "µT",
+          "min": -1000.0,
+          "max": 1000.0,
+          "default": 20.0
+        },
+        {
+          "key": "mag_y",
+          "label": "Field Y",
+          "unit": "µT",
+          "min": -1000.0,
+          "max": 1000.0,
+          "default": -5.0
+        },
+        {
+          "key": "mag_z",
+          "label": "Field Z",
+          "unit": "µT",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 40.0
+        }
+      ]
+    },
+    {
+      "device_type": "veml6075",
+      "label": "Vishay VEML6075 UV",
+      "summary": "UVA / UVB light sensor over I²C (16-bit counts, ID 0x0026).",
+      "detail": "Vishay VEML6075 at fixed address 0x10, a command-code device with 16-bit little-endian words. ID (0x0C) reads 0x0026. UVA (0x07) and UVB (0x09) are counts at the datasheet responsivity (0.93 and 2.1 counts per µW/cm² at 50 ms) scaled by the UV_IT integration time; UVCOMP1/UVCOMP2 (0x0A/0x0B) report the compensation-channel stimulus as counts. UV_CONF powers up 0x0000 (on, 50 ms). Not modelled: HD sensitivity, shutdown freezing the outputs, active-force timing.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. The VEML6075 address is fixed at 0x10."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "uva",
+          "label": "UVA irradiance",
+          "unit": "µW/cm²",
+          "min": 0.0,
+          "max": 5000.0,
+          "default": 100.0
+        },
+        {
+          "key": "uvb",
+          "label": "UVB irradiance",
+          "unit": "µW/cm²",
+          "min": 0.0,
+          "max": 2000.0,
+          "default": 100.0
+        },
+        {
+          "key": "uv_comp1",
+          "label": "UVCOMP1 (visible) counts at 50 ms",
+          "unit": "counts",
+          "min": 0.0,
+          "max": 4095.0,
+          "default": 20.0
+        },
+        {
+          "key": "uv_comp2",
+          "label": "UVCOMP2 (IR) counts at 50 ms",
+          "unit": "counts",
+          "min": 0.0,
+          "max": 4095.0,
+          "default": 10.0
+        }
+      ]
+    },
+    {
+      "device_type": "ht16k33",
+      "label": "Holtek HT16K33 LED backpack",
+      "summary": "16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands).",
+      "detail": "Holtek HT16K33 at 0x70 (0x70..0x77 by A2..A0). The first byte of each write is a command: 00h..0Fh point into the 16-byte display RAM (written and read back, auto-incrementing), 21h/20h start/stop the oscillator, 80h|B1B0|D sets display on and blink, E0h|P sets the 16-step dimming. Key RAM (40h..45h) and the INT flag (60h) read 0x00. Not modelled: key scan, INT pin, pointer wrap past 0Fh, the LED panel picture.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x70 (A2..A0 floating/low); 0x70..0x77."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "sk6812",
+      "label": "SK6812 RGBW strip",
+      "summary": "Addressable RGBW LED strip on one data pin (32-bit edge-timed frames).",
+      "detail": "SK6812RGBW: the WS2812-family single-wire NRZ protocol with four bytes per LED — R, G, B, W per the datasheet's 32-bit structure. Bits are decoded from HIGH durations (0.3 µs = 0, 0.6 µs = 1, threshold 450 ns); a low gap of 50 µs latches the frame (Trst ≥ 80 µs). Attaches as a GPIO observer on data_pin; the artifact (`sk6812_rgbw`) carries four wire-order bytes per LED.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "data_pin",
+          "ty": "str",
+          "doc": "Data line GPIO (e.g. \"GPIO48\"). Defaults to GPIO48."
+        },
+        {
+          "name": "num_pixels",
+          "ty": "int",
+          "doc": "Number of LEDs on the strip. Defaults to 1."
+        },
+        {
+          "name": "cpu_hz",
+          "ty": "int",
+          "doc": "Simulated CPU Hz for edge timing. Defaults to the system's clock (the manifest's `cpu_hz:`, else the chip descriptor's)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "tm1638",
+      "label": "TM1638 LED&KEY (8-digit)",
+      "summary": "8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver.",
+      "detail": "Titan Micro TM1638, bit-banged on three GPIO lines: STB↓ starts an instruction, DIO is sampled LSB first on CLK↑, no ACK. Decodes the data command (0x40 auto-increment / 0x44 fixed), the address command (0xC0..0xCF) followed by display data, and display control (0x80..0x8F: on/off, pulse width) into the 16-byte display RAM. The artifact renders the eight digit bytes (even addresses) through the 7-segment font and reports the eight discrete LEDs (bit 0 of the odd addresses). NOT modelled: key reading (the chip would drive DIO), random power-on RAM, test mode.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "stb_pin",
+          "ty": "str",
+          "doc": "STB GPIO pin the firmware bit-bangs (e.g. \"PA7\")."
+        },
+        {
+          "name": "clk_pin",
+          "ty": "str",
+          "doc": "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\")."
+        },
+        {
+          "name": "dio_pin",
+          "ty": "str",
+          "doc": "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\")."
         }
       ],
       "labs": [],

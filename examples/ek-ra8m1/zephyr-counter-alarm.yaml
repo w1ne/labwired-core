@@ -1,0 +1,42 @@
+# LabWired - EK-RA8M1 stock Zephyr counter alarm sample (AGT0 + ICU)
+#
+# Unmodified upstream Zephyr v4.0.0 `samples/drivers/counter/alarm` for
+# board `ek_ra8m1`, with the sample's in-tree ek_ra8m1.overlay (&agt0 on
+# LOCO / 16 = 2048 Hz). Rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# The alarm is AGT0 compare match A: Zephyr's counter_renesas_ra_agt.c links
+# ELC_EVENT_AGT0_COMPARE_A (0x047) to NVIC line 84 through ICU IELSR84, so
+# every "!!! Alarm !!!" line is a compare-match event delivered through the
+# ICU. The handler re-arms with twice the delay (2, 4, 8, 16 s); "Now:" is
+# read back from the AGT counter (0xFFFF minus the count, in seconds). The
+# fifth alarm, 32 s = 65536 ticks, exceeds the 16-bit top value and the
+# driver refuses it (-EINVAL). The 30 s of guest time are 14.4 G cycles at
+# the 480 MHz Zephyr clock, almost all of them idle-skipped in k_sleep.
+# Same AGT-period evidence as Renode's Renesas_RA8M1.robot "Should Run
+# Periodically Blink LED" (an FSP AGT ELF), on stock Zephyr instead.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-counter-alarm.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 5000000
+  wall_time_ms: 120000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.0.0 ***"
+      - "Counter alarm sample"
+      - "Set alarm in 2 sec (4096 ticks)"
+      - "!!! Alarm !!!"
+      - "Now: 2"
+      - "Set alarm in 4 sec (8192 ticks)"
+      - "!!! Alarm !!!"
+      - "Now: 6"
+      - "Set alarm in 8 sec (16384 ticks)"
+      - "!!! Alarm !!!"
+      - "Now: 14"
+      - "Set alarm in 16 sec (32768 ticks)"
+      - "!!! Alarm !!!"
+      - "Now: 30"
+      - "Set alarm in 32 sec (65536 ticks)"
+      - "Alarm could not be set"

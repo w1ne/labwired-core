@@ -1,0 +1,264 @@
+# Texas Instruments ADS1256 24-bit, 8-channel delta-sigma ADC with SPI
+# interface — declarative SPI MESSAGE device. Datasheet: TI ADS1255/ADS1256,
+# SBAS288K (June 2003, revised September 2013) — "Register Map" Table 23,
+# "Command Definitions" Table 24, Table 16 "Ideal Output Code vs Input Signal",
+# Table 13 "Settling Time vs Data Rate", and Figures 30/34/35.
+#
+# ── Why this part needs `spi.miso_var` ──────────────────────────────────────
+# The ADS1256 is command-driven (Table 24), and its register access is TWO
+# command bytes: RREG = 0001 rrrr, 0000 nnnn — the address in the FIRST byte,
+# the count in the SECOND — then the data. The `spi_device` register framing
+# decodes its address from the last command byte, so batch 4 could not model
+# it. Here every byte is a one-byte frame; the rules below run a small command
+# state machine and set `miso` for the byte being clocked.
+#
+# ── Register map (Table 23) ─────────────────────────────────────────────────
+#   00h STATUS  x1h   ID3..ID0 (factory, RO) ORDER ACAL BUFEN DRDY (RO)
+#   01h MUX     01h   PSEL3..0 NSEL3..0   (0..7 = AIN0..AIN7, 1xxx = AINCOM)
+#   02h ADCON   20h   0 CLK1 CLK0 SDCS1 SDCS0 PGA2..0  (bit 7 always 0, RO)
+#   03h DRATE   F0h   30 000 SPS
+#   04h IO      E0h
+#   05h..07h OFC0..2, 08h..0Ah FSC0..2   "Reset value depends on calibration
+#                                         results"
+# The ID nibble is printed "x" (factory programmed). This twin answers ID = 3,
+# so STATUS powers up 0x31 and reads 0x30 once the first conversion is ready;
+# that is a model choice, stated here, not a datasheet value. OFC/FSC are one
+# unit's calibration words; this unit reads 000000h for both and the
+# conversion below does not apply them (an ideal converter).
+#
+# ── Commands (Table 24) ─────────────────────────────────────────────────────
+#   01h RDATA   → 24-bit result, MSB first, on the next three bytes (Fig. 30)
+#   1rh 0nh RREG → n+1 register bytes from r, wrapping past 0Ah (Fig. 34,
+#                  "the addresses will wrap back to the beginning")
+#   5rh 0nh WREG → n+1 data bytes into r, r+1, … (Fig. 35)
+#   FEh RESET   → registers to their power-up values; DRDY high until settled
+#   F0h..F4h calibrations, FCh SYNC, 00h/FFh WAKEUP → DRDY high until settled
+#   03h RDATAC / 0Fh SDATAC, FDh STANDBY → accepted and ignored (NOT MODELLED)
+# The t6 delay between a command and its data is the master's to honour; the
+# twin answers on the very next byte.
+#
+# ── Conversion (Table 16) ───────────────────────────────────────────────────
+#   code = (AINP − AINN) · PGA · (2^23 − 1) / (2 · VREF), clipped to
+#   7FFFFFh / 800000h, two's complement. PGA = 1, 2, 4 … 64 from ADCON[2:0]
+#   (110 and 111 are both 64). Inputs are MICROVOLTS (the rule arithmetic is
+#   integer); the division truncates toward zero. VREF is the `vref_uv` input,
+#   2.5 V by default.
+#
+# ── DRDY ───────────────────────────────────────────────────────────────────
+# The DRDY pin (and STATUS bit 0, which "duplicates the state of the DRDY
+# pin") goes LOW Table 13's t18 = 0.21 ms after power-up, RESET, a
+# calibration or SYNC/WAKEUP at the default 30 000 SPS. Reading all 24 bits of
+# a result drives it HIGH, and the next conversion brings it low one data
+# period (33 µs) later.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * Data-rate-dependent timing: t18 and the data period are the 30 kSPS
+#     values whatever DRATE says.
+#   * Continuous read (RDATAC), STANDBY, SYNC/PDWN and RESET pins, the input
+#     buffer, sensor-detect currents, ORDER = 1 (LSB-first output), GPIO pins,
+#     self/system calibration arithmetic (OFC/FSC are stored, not applied),
+#     noise.
+type: ads1256
+
+behavior:
+  primitive: spi_device
+  spi:
+    miso_var: miso
+  frames:
+    length: 1
+    discard_partial: true
+  outputs: [DRDY]
+  output_pins:
+    DRDY: drdy_pin
+  vars:
+    mode: 0     # 0 command, 1 RREG count, 2 RREG data, 3 WREG count, 4 WREG data, 5 RDATA
+    done: 0     # a rule has handled this byte
+    ptr: 0      # register pointer for RREG / WREG
+    left: 0     # registers still to transfer
+    k: 0        # RDATA byte index
+    vp: 0
+    vn: 0
+    raw: 0
+    data: 0     # latched 24-bit two's-complement result
+    miso: 0
+    r0: 0x31    # STATUS (ID = 3, DRDY high until the first conversion)
+    r1: 0x01    # MUX
+    r2: 0x20    # ADCON
+    r3: 0xF0    # DRATE
+    r4: 0xE0    # IO
+    r5: 0       # OFC0
+    r6: 0       # OFC1
+    r7: 0       # OFC2
+    r8: 0       # FSC0
+    r9: 0       # FSC1
+    r10: 0      # FSC2
+  timers:
+    # t18 at 30 000 SPS (Table 13): the first conversion after power-up.
+    - { name: settle, after_us: 210, start: on_reset }
+    # One data period at 30 000 SPS: the next result after a read.
+    - { name: conv, after_us: 33, start: manual }
+  rules:
+    - on: { timer: settle }
+      do:
+        - { var: { name: r0, value: "var(r0) & 0xFE" } }
+        - { pin: DRDY, level: "0" }
+    - on: { timer: conv }
+      do:
+        - { var: { name: r0, value: "var(r0) & 0xFE" } }
+        - { pin: DRDY, level: "0" }
+    - on: cs_select
+      do:
+        - { var: { name: mode, value: "0" } }
+        - { var: { name: miso, value: "0" } }
+    # Every byte: nothing handled yet, DOUT idles low.
+    - on: frame
+      do:
+        - { var: { name: done, value: "0" } }
+        - { var: { name: miso, value: "0" } }
+    # ── data phases, declared BEFORE the command decoder so a command that
+    # switches mode cannot also be handled as that mode's first data byte ──
+    # RDATA: three bytes, MSB first; the last one releases DRDY high.
+    - on: frame
+      when: "var(mode) == 5 && !var(done)"
+      do:
+        - { var: { name: miso, value: "(var(data) >> (16 - 8 * var(k))) & 0xFF" } }
+        - { var: { name: k, value: "var(k) + 1" } }
+        - { var: { name: mode, value: "5 * (var(k) < 3)" } }
+        - { var: { name: done, value: "1" } }
+    - on: frame
+      when: "var(k) == 3 && var(mode) == 0 && var(done)"
+      do:
+        - { var: { name: k, value: "0" } }
+        - { var: { name: r0, value: "var(r0) | 0x01" } }
+        - { pin: DRDY, level: "1" }
+        - { timer: conv, start: true }
+    # RREG data: one register per byte, wrapping after 0Ah.
+    - on: frame
+      when: "var(mode) == 2 && !var(done)"
+      do:
+        - { var: { name: miso, value: "(var(ptr) == 0) * var(r0) + (var(ptr) == 1) * var(r1) + (var(ptr) == 2) * var(r2) + (var(ptr) == 3) * var(r3) + (var(ptr) == 4) * var(r4) + (var(ptr) == 5) * var(r5) + (var(ptr) == 6) * var(r6) + (var(ptr) == 7) * var(r7) + (var(ptr) == 8) * var(r8) + (var(ptr) == 9) * var(r9) + (var(ptr) == 10) * var(r10)" } }
+        - { var: { name: ptr, value: "(var(ptr) + 1) % 11" } }
+        - { var: { name: left, value: "var(left) - 1" } }
+        - { var: { name: mode, value: "2 * (var(left) > 0)" } }
+        - { var: { name: done, value: "1" } }
+    # RREG second command byte: 0000 nnnn.
+    - on: frame
+      when: "var(mode) == 1 && !var(done)"
+      do:
+        - { var: { name: left, value: "(frame_byte(0) & 0x0F) + 1" } }
+        - { var: { name: mode, value: "2" } }
+        - { var: { name: done, value: "1" } }
+    # WREG data: STATUS keeps its read-only ID and DRDY bits, ADCON bit 7 reads 0.
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 0"
+      do: [ { var: { name: r0, value: "(var(r0) & 0xF1) | (frame_byte(0) & 0x0E)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 1"
+      do: [ { var: { name: r1, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 2"
+      do: [ { var: { name: r2, value: "frame_byte(0) & 0x7F" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 3"
+      do: [ { var: { name: r3, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 4"
+      do: [ { var: { name: r4, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 5"
+      do: [ { var: { name: r5, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 6"
+      do: [ { var: { name: r6, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 7"
+      do: [ { var: { name: r7, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 8"
+      do: [ { var: { name: r8, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 9"
+      do: [ { var: { name: r9, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done) && var(ptr) == 10"
+      do: [ { var: { name: r10, value: "frame_byte(0)" } } ]
+    - on: frame
+      when: "var(mode) == 4 && !var(done)"
+      do:
+        - { var: { name: ptr, value: "(var(ptr) + 1) % 11" } }
+        - { var: { name: left, value: "var(left) - 1" } }
+        - { var: { name: mode, value: "4 * (var(left) > 0)" } }
+        - { var: { name: done, value: "1" } }
+    # WREG second command byte: 0000 nnnn.
+    - on: frame
+      when: "var(mode) == 3 && !var(done)"
+      do:
+        - { var: { name: left, value: "(frame_byte(0) & 0x0F) + 1" } }
+        - { var: { name: mode, value: "4" } }
+        - { var: { name: done, value: "1" } }
+    # ── command decoder (mode 0) ────────────────────────────────────────────
+    - on: frame
+      when: "var(mode) == 0 && !var(done) && frame_byte(0) & 0xF0 == 0x10"
+      do:
+        - { var: { name: ptr, value: "(frame_byte(0) & 0x0F) % 11" } }
+        - { var: { name: mode, value: "1" } }
+        - { var: { name: done, value: "1" } }
+    - on: frame
+      when: "var(mode) == 0 && !var(done) && frame_byte(0) & 0xF0 == 0x50"
+      do:
+        - { var: { name: ptr, value: "(frame_byte(0) & 0x0F) % 11" } }
+        - { var: { name: mode, value: "3" } }
+        - { var: { name: done, value: "1" } }
+    # RDATA: latch the conversion of the CURRENT MUX / PGA / inputs.
+    - on: frame
+      when: "var(mode) == 0 && !var(done) && frame_byte(0) == 0x01"
+      do:
+        - { var: { name: vp, value: "(((var(r1) >> 4) & 0xF) == 0) * input(ain0_uv) + (((var(r1) >> 4) & 0xF) == 1) * input(ain1_uv) + (((var(r1) >> 4) & 0xF) == 2) * input(ain2_uv) + (((var(r1) >> 4) & 0xF) == 3) * input(ain3_uv) + (((var(r1) >> 4) & 0xF) == 4) * input(ain4_uv) + (((var(r1) >> 4) & 0xF) == 5) * input(ain5_uv) + (((var(r1) >> 4) & 0xF) == 6) * input(ain6_uv) + (((var(r1) >> 4) & 0xF) == 7) * input(ain7_uv) + (((var(r1) >> 4) & 0xF) >= 8) * input(aincom_uv)" } }
+        - { var: { name: vn, value: "((var(r1) & 0xF) == 0) * input(ain0_uv) + ((var(r1) & 0xF) == 1) * input(ain1_uv) + ((var(r1) & 0xF) == 2) * input(ain2_uv) + ((var(r1) & 0xF) == 3) * input(ain3_uv) + ((var(r1) & 0xF) == 4) * input(ain4_uv) + ((var(r1) & 0xF) == 5) * input(ain5_uv) + ((var(r1) & 0xF) == 6) * input(ain6_uv) + ((var(r1) & 0xF) == 7) * input(ain7_uv) + ((var(r1) & 0xF) >= 8) * input(aincom_uv)" } }
+        - { var: { name: raw, value: "(var(vp) - var(vn)) * (1 << ((var(r2) & 7) - ((var(r2) & 7) == 7))) * 8388607 / (2 * input(vref_uv))" } }
+        - { var: { name: raw, value: "var(raw) - (var(raw) - 8388607) * (var(raw) > 8388607) - (var(raw) + 8388608) * (var(raw) < -8388608)" } }
+        - { var: { name: data, value: "var(raw) & 0xFFFFFF" } }
+        - { var: { name: k, value: "0" } }
+        - { var: { name: mode, value: "5" } }
+        - { var: { name: done, value: "1" } }
+    # RESET: registers to power-up values (CLK1:CLK0 "can only be reset using
+    # the RESET pin", so ADCON keeps them); DRDY high until settled.
+    - on: frame
+      when: "var(mode) == 0 && !var(done) && frame_byte(0) == 0xFE"
+      do:
+        - { var: { name: r0, value: "0x31" } }
+        - { var: { name: r1, value: "0x01" } }
+        - { var: { name: r2, value: "(var(r2) & 0x60) | 0x00" } }
+        - { var: { name: r3, value: "0xF0" } }
+        - { var: { name: r4, value: "0xE0" } }
+        - { pin: DRDY, level: "1" }
+        - { timer: settle, start: true }
+        - { var: { name: done, value: "1" } }
+    # Calibrations (F0h..F4h), SYNC (FCh) then WAKEUP: DRDY high until settled.
+    - on: frame
+      when: "var(mode) == 0 && !var(done) && (frame_byte(0) >= 0xF0 && frame_byte(0) <= 0xF4 || frame_byte(0) == 0xFC)"
+      do:
+        - { var: { name: r0, value: "var(r0) | 0x01" } }
+        - { pin: DRDY, level: "1" }
+        - { timer: settle, start: true }
+        - { var: { name: done, value: "1" } }
+
+metadata:
+  label: "TI ADS1256 24-bit ADC"
+  summary: "8-channel 24-bit delta-sigma SPI ADC (RREG/WREG/RDATA, PGA, DRDY)."
+  detail: "TI ADS1256 over SPI (mode 1). Command-driven per Table 24: RREG (1rh 0nh) and WREG (5rh 0nh) read and write the eleven registers of Table 23 (STATUS 0x31 → 0x30 with ID 3, MUX 01h, ADCON 20h, DRATE F0h, IO E0h); RDATA (01h) returns the 24-bit result of (AINP − AINN)·PGA·(2^23−1)/(2·VREF), clipped, MSB first. MUX selects AIN0..AIN7 / AINCOM, ADCON[2:0] the PGA (1..64). The DRDY pin and STATUS bit 0 go low 0.21 ms after power-up/RESET/calibration and high after a full read. Inputs ain0_uv..ain7_uv, aincom_uv and vref_uv are microvolts. Not modelled: data-rate timing, RDATAC, standby, calibration arithmetic, ORDER, GPIO pins."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "SPI CS GPIO pin. Defaults to PA4." }
+    - { name: drdy_pin, ty: str, doc: "GPIO the DRDY output drives (active low)." }
+  inputs:
+    - { key: ain0_uv, label: "AIN0", unit: "µV", min: -100000, max: 5100000, default: 1250000 }
+    - { key: ain1_uv, label: "AIN1", unit: "µV", min: -100000, max: 5100000, default: 0 }
+    - { key: ain2_uv, label: "AIN2", unit: "µV", min: -100000, max: 5100000, default: 2000000 }
+    - { key: ain3_uv, label: "AIN3", unit: "µV", min: -100000, max: 5100000, default: 500000 }
+    - { key: ain4_uv, label: "AIN4", unit: "µV", min: -100000, max: 5100000, default: 0 }
+    - { key: ain5_uv, label: "AIN5", unit: "µV", min: -100000, max: 5100000, default: 0 }
+    - { key: ain6_uv, label: "AIN6", unit: "µV", min: -100000, max: 5100000, default: 0 }
+    - { key: ain7_uv, label: "AIN7", unit: "µV", min: -100000, max: 5100000, default: 0 }
+    - { key: aincom_uv, label: "AINCOM", unit: "µV", min: -100000, max: 5100000, default: 0 }
+    - { key: vref_uv, label: "VREF", unit: "µV", min: 500000, max: 2600000, default: 2500000 }

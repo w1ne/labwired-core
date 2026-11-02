@@ -213,6 +213,16 @@ pub(crate) fn run_firmware_with_system(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+    if family == MachineFamily::CortexR {
+        emit_error(
+            json,
+            "ConfigError",
+            "Cortex-R5F runs through `labwired test --system <manifest>` on a native --features qemu-arm-system build".into(),
+            None,
+            EXIT_CONFIG_ERROR,
+        );
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
     if family == MachineFamily::CortexA && program.arch != labwired_core::Arch::Arm {
         emit_error(json, "ConfigError", "Cortex-A7 requires a 32-bit ARM ELF; firmware architecture does not match the declared chip".into(), None, EXIT_CONFIG_ERROR);
         return ExitCode::from(EXIT_CONFIG_ERROR);

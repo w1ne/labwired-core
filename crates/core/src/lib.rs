@@ -63,8 +63,9 @@ pub use machine::{
     IdlePolicy,
 };
 pub use peripheral::{
-    DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome, MmioAccessClass,
-    Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX, DMA_SIGNAL_TX,
+    AnalogProbe, DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome,
+    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX,
+    DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;
@@ -85,6 +86,12 @@ pub enum Arch {
     Pic18,
     /// PIC16 classic mid-range 8-bit MCU (14-bit words, word-addressed PC).
     Pic16,
+    /// AArch64 (Armv8-A, Cortex-A53 class).
+    Aarch64,
+    /// Renesas RX (RXv3, RX261 class).
+    Rx,
+    /// MIPS32r2 (PIC32MZ EF, M5150 class).
+    Mips,
     Unknown,
 }
 
@@ -2444,7 +2451,16 @@ impl<C: Cpu> Machine<C> {
         // (`pend_irq_for_event` would mis-route it), so the NVIC fallthrough is
         // taken only when no matrix fabric claimed delivery (the Cortex-M /
         // nRF SysTick + own-line path).
-        if !self.bus.deliver_scheduled_irq_levels() {
+        if !result.explicit_irqs.is_empty()
+            && self.bus.peripherals[peripheral_idx]
+                .dev
+                .explicit_irqs_are_link_events()
+        {
+            // Event numbers (RA ELC), routed through the ICU.
+            for line in self.bus.link_events(&result.explicit_irqs) {
+                self.bus.pend_irq_for_event(line, &mut fallthrough);
+            }
+        } else if !self.bus.deliver_scheduled_irq_levels() {
             for irq in &result.explicit_irqs {
                 self.bus.pend_irq_for_event(*irq, &mut fallthrough);
             }

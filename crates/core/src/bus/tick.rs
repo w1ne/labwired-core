@@ -116,6 +116,29 @@ impl SystemBus {
         self.reconcile_multi_irq_levels(idx, LevelSync::Both);
     }
 
+    /// Hand interrupt EVENT numbers (from a model whose
+    /// [`Peripheral::explicit_irqs_are_link_events`] is true) to the chip's
+    /// event-link controller (the RA ICU, [`Peripheral::link_event`]) and
+    /// return the NVIC lines they drive, for the caller to pend. The
+    /// controller's lines are level sources, so they are marked here: the
+    /// write choke drops a pend once firmware clears the controller's flag.
+    /// Rare (one call per timer event), so a scan for the controller is fine.
+    pub(crate) fn link_events(&mut self, events: &[u32]) -> Vec<u32> {
+        let mut lines = Vec::new();
+        for idx in 0..self.peripherals.len() {
+            let mut is_controller = false;
+            for &event in events {
+                is_controller |= self.peripherals[idx]
+                    .dev
+                    .link_event(event, &mut |line| lines.push(line));
+            }
+            if is_controller {
+                self.mark_multi_irq_levels(idx);
+            }
+        }
+        lines
+    }
+
     /// The MMIO write-choke level reconcile for peripheral `idx`: its single
     /// configured line ([`Peripheral::irq_line_level`], both directions) and
     /// any multi-line levels ([`Peripheral::irq_line_levels`], drops only).
@@ -797,7 +820,16 @@ impl SystemBus {
                 }
             }
 
-            if let Some(irqs) = res.explicit_irqs {
+            if let Some(irqs) = res.explicit_irqs.as_deref().filter(|_| {
+                self.peripherals[peripheral_index]
+                    .dev
+                    .explicit_irqs_are_link_events()
+            }) {
+                // Event numbers (RA ELC), routed through the ICU.
+                for line in self.link_events(irqs) {
+                    pend_nvic(&self.nvic, &mut interrupts, line);
+                }
+            } else if let Some(irqs) = res.explicit_irqs {
                 for irq in &irqs {
                     pend_nvic(&self.nvic, &mut interrupts, *irq);
                 }

@@ -1,0 +1,292 @@
+# Bosch BME680 environmental sensor — declarative I²C register-pointer device.
+# Temperature, pressure and humidity are modelled end to end; the GAS channel
+# is NOT (see the end of this header).
+#
+# Datasheet: Bosch Sensortec BST-BME680-DS001 ("BME680 Low power gas,
+# pressure, temperature & humidity sensor"):
+#   §5.2 "Memory map" / Table 20 — the addresses below:
+#     0x1D meas_status_0  new_data_0(7) gas_measuring(6) measuring(5)
+#     0x1F..0x21 press_msb/lsb/xlsb   20-bit, xlsb[7:4]
+#     0x22..0x24 temp_msb/lsb/xlsb    20-bit, xlsb[7:4]
+#     0x25..0x26 hum_msb/lsb          16-bit
+#     0x2A..0x2B gas_r_msb/lsb        gas_r[9:2] | gas_r[1:0] gas_valid_r(5)
+#                                     heat_stab_r(4) gas_range_r[3:0]
+#     0x50..0x59 idac_heat_0..9, 0x5A..0x63 res_heat_0..9,
+#     0x64..0x6D gas_wait_0..9
+#     0x70 ctrl_gas_0 heat_off(3)       0x71 ctrl_gas_1 run_gas(4) nb_conv[3:0]
+#     0x72 ctrl_hum osrs_h[2:0]         0x74 ctrl_meas osrs_t[7:5]
+#                                       osrs_p[4:2] mode[1:0]
+#     0x75 config filter[4:2]           0xD0 chip_id = 0x61
+#     0xE0 reset (write 0xB6)
+#   §3.1/§3.3 — forced mode: writing mode = 01 runs ONE T/P/H(/gas) cycle and
+#     the part returns to sleep (mode reads 00); new_data_0 then reads 1.
+#   §3.3.x "Calibration parameters" — the factory coefficients the host reads
+#     and the integer compensation it runs.
+#
+# Calibration-byte layout and the compensation arithmetic are taken from
+# Bosch's reference driver (BME68x_SensorAPI, `bme68x.c` get_calib_data /
+# calc_temperature / calc_pressure / calc_humidity — integer build), which is
+# what Adafruit_BME680, Zephyr and the Bosch examples run:
+#   coeff block 1 at 0x8A (23 bytes), block 2 at 0xE1 (14 bytes), block 3 at
+#   0x00 (5 bytes):
+#     par_t1 0xE9/0xEA  par_t2 0x8A/0x8B  par_t3 0x8C
+#     par_p1 0x8E/0x8F  par_p2 0x90/0x91  par_p3 0x92  par_p4 0x94/0x95
+#     par_p5 0x96/0x97  par_p6 0x99  par_p7 0x98  par_p8 0x9C/0x9D
+#     par_p9 0x9E/0x9F  par_p10 0xA0
+#     par_h1 = 0xE3<<4 | 0xE2[3:0]   par_h2 = 0xE1<<4 | 0xE2[7:4]
+#     par_h3..h7 0xE4..0xE8
+#     par_gh2 0xEB/0xEC  par_gh1 0xED  par_gh3 0xEE
+#     res_heat_val 0x00  res_heat_range 0x02[5:4]  range_sw_err 0x04[7:4]
+#   0xF0 variant_id: 0x00 = BME680 (the BME688 answers 0x01).
+#
+# ── The calibration values ────────────────────────────────────────────────
+# Factory coefficients are per-unit data, not a property of the part number.
+# This twin is ONE plausible unit (values chosen in the range real BME680s
+# report): t1 26236, t2 26474, t3 3; p1 34600, p2 −10405, p3 88, p4 7174,
+# p5 −114, p6 30, p7 32, p8 −3021, p9 −2541, p10 20; h1 788, h2 1011, h3 0,
+# h4 45, h5 20, h6 120, h7 −100; gh1 −20, gh2 −12500, gh3 18.
+# Two of them are chosen against Bosch's int32 arithmetic, measured by
+# sweeping the formula:
+#   * p10 = 20, not the ~30 many units carry: the cubic term
+#     `(p>>8)^3 · p10` overflows int32 above ≈1062 hPa at 30.
+#   * p1 = 34600: `(1048576 − adc − var2>>12) · 3125` overflows int32 once
+#     it passes 2^31, and the pressure that reaches scales with p1. At
+#     p1 = 36151 the Bosch code cannot report more than ≈1010 hPa at −40 °C;
+#     at 34600 it reaches 1105 hPa there, so the whole 300–1100 hPa range is
+#     representable at every temperature from −40 to 85 °C.
+#
+# ── Stimulus → ADC: the exact inverse of Bosch's integer compensation ─────
+# Same technique as `bme280.yaml`: each ADC word is the integer the Bosch
+# formula maps back NEAREST to the host's value, found by `invert` over the
+# formula itself with THESE coefficients. Bosch's integer outputs are 0.01 °C,
+# 1 Pa and 0.001 %RH, but not every output is reachable: one humidity ADC
+# count moves the result ≈4 milli-%RH, and above the `pres_ovf_check` branch
+# (≈530–600 hPa, temperature-dependent) Bosch divides before doubling, so
+# pressure moves in 2 Pa steps. The twin serves the word whose Bosch output is
+# nearest — temperature exact, pressure within 1 Pa, humidity within ≈2
+# milli-%RH. At that branch Bosch's function also steps back by 1 Pa at one
+# point, so the inverse's monotonicity contract holds everywhere but there.
+# The domains are bounded so Bosch's `(… ) · 3125` product cannot overflow at
+# any temperature in the declared range (press_adc ≥ 249000) and humidity
+# stays clear of int32 (hum_adc ≤ 50000, well past the 100 %RH clamp); inside
+# them the i64 program here and the C driver agree bit for bit for every
+# reading up to 1100 hPa. The float build of the Bosch API uses different
+# formulas and lands within its own rounding.
+#
+# ⚠️ NOT modelled, named rather than faked:
+#   * GAS. gas_r reads 0x0000: gas_valid_r = 0, heat_stab_r = 0, range 0. A
+#     driver that checks the valid bit (Bosch's, Adafruit's) reports "no gas
+#     reading"; one that does not reads an implausible resistance. The heater
+#     registers are storage. Modelling gas needs the per-range lookup tables
+#     and the automatic range selection of calc_gas_resistance_low, which the
+#     integer-program primitive could express but which this descriptor does
+#     not yet carry.
+#   * Oversampling, the IIR filter and noise: the readings are the stimulus,
+#     exact. The measurement time is Bosch's own `bme68x_get_meas_dur` for the
+#     SHORTEST cycle that measures anything — one channel at 1×: 1963 µs + TPH
+#     switching 4 × 477 µs + gas phase 5 × 477 µs + 1000 µs wake-up = 7256 µs.
+#     It is a lower bound over every oversampling setting, so a driver that
+#     waits its own (longer) duration is never stalled, and one that does not
+#     wait at all reads new_data_0 = 0. `measuring` (bit 5) and
+#     `gas_measuring` (bit 6) never rise.
+#   * The ADC registers track the stimulus live instead of latching at the end
+#     of the forced cycle.
+#   * Soft reset restores the control registers, not the bus pointer.
+type: bme680
+
+behavior:
+  primitive: i2c_device
+  derived:
+    - name: target_t
+      quantize: { expr: 'temperature * 100', rounding: nearest }
+    - name: adc_t
+      invert:
+        variable: x
+        over: [0, 1048575]
+        target: target_t
+        bindings:
+          - { name: v1, expr: 'shr(x, 3) - 52472' }
+          - { name: v2, expr: 'shr(v1 * 26474, 11)' }
+          - { name: q, expr: 'shr(shr(v1, 1) * shr(v1, 1), 12)' }
+          - { name: v3, expr: 'shr(q * 48, 14)' }
+        of: 'shr((v2 + v3) * 5 + 128, 8)'
+    - name: t_fine
+      integer:
+        bindings:
+          - { name: v1, expr: 'shr(adc_t, 3) - 52472' }
+          - { name: v2, expr: 'shr(v1 * 26474, 11)' }
+          - { name: q, expr: 'shr(shr(v1, 1) * shr(v1, 1), 12)' }
+          - { name: v3, expr: 'shr(q * 48, 14)' }
+        of: 'v2 + v3'
+    - name: target_p
+      quantize: { expr: 'pressure * 100', rounding: nearest }
+    - name: adc_p
+      invert:
+        variable: x
+        over: [249000, 1048575]
+        target: '-target_p'
+        bindings:
+          - { name: a, expr: 'shr(t_fine, 1) - 64000' }
+          - { name: b0, expr: 'shr(shr(shr(a, 2) * shr(a, 2), 11) * 30, 2)' }
+          - { name: b1, expr: 'b0 + shl(a * -114, 1)' }
+          - { name: b, expr: 'shr(b1, 2) + shl(7174, 16)' }
+          - { name: c0, expr: 'shr(shr(shr(a, 2) * shr(a, 2), 13) * shl(88, 5), 3) + shr(-10405 * a, 1)' }
+          - { name: c1, expr: 'shr(c0, 18)' }
+          - { name: c, expr: 'shr((32768 + c1) * 34600, 15)' }
+          - { name: n, expr: '(1048576 - x - shr(b, 12)) * 3125' }
+          - { name: hi, expr: 'shl(n / c, 1)', when: 'n >= 1073741824' }
+          - { name: lo, expr: 'shl(n, 1) / c', when: 'n < 1073741824' }
+          - { name: pc, expr: 'hi + lo' }
+          - { name: d1, expr: 'shr(-2541 * shr(shr(pc, 3) * shr(pc, 3), 13), 12)' }
+          - { name: d2, expr: 'shr(shr(pc, 2) * -3021, 13)' }
+          - { name: d3, expr: 'shr(shr(pc, 8) * shr(pc, 8) * shr(pc, 8) * 20, 17)' }
+        of: '-(pc + shr(d1 + d2 + d3 + shl(32, 7), 4))'
+    - name: target_h
+      quantize: { expr: 'humidity * 1000', rounding: nearest }
+    - name: adc_h
+      invert:
+        variable: x
+        over: [0, 50000]
+        target: target_h
+        bindings:
+          - { name: ts, expr: 'shr(t_fine * 5 + 128, 8)' }
+          - { name: v1, expr: 'x - 788 * 16 - shr((ts * 0) / 100, 1)' }
+          - { name: v2, expr: 'shr(1011 * ((ts * 45) / 100 + shr(ts * ((ts * 20) / 100), 6) / 100 + 16384), 10)' }
+          - { name: v3, expr: 'v1 * v2' }
+          - { name: v4, expr: 'shr(shl(120, 7) + (ts * -100) / 100, 4)' }
+          - { name: v5, expr: 'shr(shr(v3, 14) * shr(v3, 14), 10)' }
+          - { name: v6, expr: 'shr(v4 * v5, 1)' }
+        of: 'min(max(shr(shr(v3 + v6, 10) * 1000, 12), 0), 100000)'
+  i2c:
+    default_address: 0x76
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      # ── Coefficient block 3 (0x00..0x04) ─────────────────────────────────
+      - { name: RES_HEAT_VAL, addr: 0x00, width: 1, endian: be, access: r, reset: 0x31 }
+      - { name: RES_HEAT_RANGE, addr: 0x02, width: 1, endian: be, access: r, reset: 0x10 }
+      - { name: RANGE_SW_ERR, addr: 0x04, width: 1, endian: be, access: r, reset: 0x00 }
+      # ── Field 0 (data) ───────────────────────────────────────────────────
+      - { name: MEAS_STATUS_0, addr: 0x1D, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: MEAS_INDEX_0, addr: 0x1E, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: PRESS, addr: 0x1F, width: 3, endian: be, access: r, source: adc_p, encode: { scale: 16 } }
+      - { name: TEMP, addr: 0x22, width: 3, endian: be, access: r, source: adc_t, encode: { scale: 16 } }
+      - { name: HUM, addr: 0x25, width: 2, endian: be, access: r, source: adc_h }
+      - { name: GAS_R_MSB, addr: 0x2A, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: GAS_R_LSB, addr: 0x2B, width: 1, endian: be, access: r, reset: 0x00 }
+      # ── Heater set-points (storage; the heater is not modelled) ───────────
+      - { name: IDAC_HEAT_0, addr: 0x50, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_1, addr: 0x51, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_2, addr: 0x52, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_3, addr: 0x53, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_4, addr: 0x54, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_5, addr: 0x55, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_6, addr: 0x56, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_7, addr: 0x57, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_8, addr: 0x58, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IDAC_HEAT_9, addr: 0x59, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_0, addr: 0x5A, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_1, addr: 0x5B, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_2, addr: 0x5C, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_3, addr: 0x5D, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_4, addr: 0x5E, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_5, addr: 0x5F, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_6, addr: 0x60, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_7, addr: 0x61, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_8, addr: 0x62, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: RES_HEAT_9, addr: 0x63, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_0, addr: 0x64, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_1, addr: 0x65, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_2, addr: 0x66, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_3, addr: 0x67, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_4, addr: 0x68, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_5, addr: 0x69, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_6, addr: 0x6A, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_7, addr: 0x6B, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_8, addr: 0x6C, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GAS_WAIT_9, addr: 0x6D, width: 1, endian: be, access: rw, reset: 0x00 }
+      # ── Control ──────────────────────────────────────────────────────────
+      - { name: CTRL_GAS_0, addr: 0x70, width: 1, endian: be, access: rw, write_mask: 0x08, reset: 0x00 }
+      - { name: CTRL_GAS_1, addr: 0x71, width: 1, endian: be, access: rw, write_mask: 0x1F, reset: 0x00 }
+      - { name: CTRL_HUM, addr: 0x72, width: 1, endian: be, access: rw, write_mask: 0x47, reset: 0x00 }
+      # mode[1:0] = 01 (forced) runs one cycle and returns to sleep: the bits
+      # self-clear once the conversion has been started.
+      - { name: CTRL_MEAS, addr: 0x74, width: 1, endian: be, access: rw, self_clearing: 0x03, reset: 0x00 }
+      - { name: CONFIG, addr: 0x75, width: 1, endian: be, access: rw, write_mask: 0x1D, reset: 0x00 }
+      # ── Coefficient block 1 (0x8A..0xA0) ─────────────────────────────────
+      - { name: PAR_T2_LSB, addr: 0x8A, width: 1, endian: be, access: r, reset: 0x6A }
+      - { name: PAR_T2_MSB, addr: 0x8B, width: 1, endian: be, access: r, reset: 0x67 }
+      - { name: PAR_T3, addr: 0x8C, width: 1, endian: be, access: r, reset: 0x03 }
+      - { name: PAR_P1_LSB, addr: 0x8E, width: 1, endian: be, access: r, reset: 0x28 }
+      - { name: PAR_P1_MSB, addr: 0x8F, width: 1, endian: be, access: r, reset: 0x87 }
+      - { name: PAR_P2_LSB, addr: 0x90, width: 1, endian: be, access: r, reset: 0x5B }
+      - { name: PAR_P2_MSB, addr: 0x91, width: 1, endian: be, access: r, reset: 0xD7 }
+      - { name: PAR_P3, addr: 0x92, width: 1, endian: be, access: r, reset: 0x58 }
+      - { name: PAR_P4_LSB, addr: 0x94, width: 1, endian: be, access: r, reset: 0x06 }
+      - { name: PAR_P4_MSB, addr: 0x95, width: 1, endian: be, access: r, reset: 0x1C }
+      - { name: PAR_P5_LSB, addr: 0x96, width: 1, endian: be, access: r, reset: 0x8E }
+      - { name: PAR_P5_MSB, addr: 0x97, width: 1, endian: be, access: r, reset: 0xFF }
+      - { name: PAR_P7, addr: 0x98, width: 1, endian: be, access: r, reset: 0x20 }
+      - { name: PAR_P6, addr: 0x99, width: 1, endian: be, access: r, reset: 0x1E }
+      - { name: PAR_P8_LSB, addr: 0x9C, width: 1, endian: be, access: r, reset: 0x33 }
+      - { name: PAR_P8_MSB, addr: 0x9D, width: 1, endian: be, access: r, reset: 0xF4 }
+      - { name: PAR_P9_LSB, addr: 0x9E, width: 1, endian: be, access: r, reset: 0x13 }
+      - { name: PAR_P9_MSB, addr: 0x9F, width: 1, endian: be, access: r, reset: 0xF6 }
+      - { name: PAR_P10, addr: 0xA0, width: 1, endian: be, access: r, reset: 0x14 }
+      # ── Identification / reset ───────────────────────────────────────────
+      - { name: CHIP_ID, addr: 0xD0, width: 1, endian: be, access: r, reset: 0x61 }
+      - { name: RESET, addr: 0xE0, width: 1, endian: be, access: rw, write_mask: 0x00, reset: 0x00 }
+      # ── Coefficient block 2 (0xE1..0xEE) ─────────────────────────────────
+      - { name: PAR_H2_MSB, addr: 0xE1, width: 1, endian: be, access: r, reset: 0x3F }
+      - { name: PAR_H2_H1_LSB, addr: 0xE2, width: 1, endian: be, access: r, reset: 0x34 }
+      - { name: PAR_H1_MSB, addr: 0xE3, width: 1, endian: be, access: r, reset: 0x31 }
+      - { name: PAR_H3, addr: 0xE4, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: PAR_H4, addr: 0xE5, width: 1, endian: be, access: r, reset: 0x2D }
+      - { name: PAR_H5, addr: 0xE6, width: 1, endian: be, access: r, reset: 0x14 }
+      - { name: PAR_H6, addr: 0xE7, width: 1, endian: be, access: r, reset: 0x78 }
+      - { name: PAR_H7, addr: 0xE8, width: 1, endian: be, access: r, reset: 0x9C }
+      - { name: PAR_T1_LSB, addr: 0xE9, width: 1, endian: be, access: r, reset: 0x7C }
+      - { name: PAR_T1_MSB, addr: 0xEA, width: 1, endian: be, access: r, reset: 0x66 }
+      - { name: PAR_GH2_LSB, addr: 0xEB, width: 1, endian: be, access: r, reset: 0x2C }
+      - { name: PAR_GH2_MSB, addr: 0xEC, width: 1, endian: be, access: r, reset: 0xCF }
+      - { name: PAR_GH1, addr: 0xED, width: 1, endian: be, access: r, reset: 0xEC }
+      - { name: PAR_GH3, addr: 0xEE, width: 1, endian: be, access: r, reset: 0x12 }
+      - { name: VARIANT_ID, addr: 0xF0, width: 1, endian: be, access: r, reset: 0x00 }
+    data_ready:
+      - name: forced_measurement
+        start_register: CTRL_MEAS
+        start_mask: 0x03
+        start_value: 0x01
+        ready_register: MEAS_STATUS_0
+        ready_mask: 0x80
+        conversion_us: 7256
+  rules:
+    - on: { write: RESET }
+      when: "written == 0xB6"
+      do:
+        - { write: { register: CTRL_MEAS, value: "0" } }
+        - { write: { register: CTRL_HUM, value: "0" } }
+        - { write: { register: CONFIG, value: "0" } }
+        - { write: { register: CTRL_GAS_0, value: "0" } }
+        - { write: { register: CTRL_GAS_1, value: "0" } }
+
+metadata:
+  label: "BME680 Environmental"
+  summary: "Bosch BME680 temperature / pressure / humidity sensor over I²C (gas channel not modelled)."
+  detail: >-
+    Bosch BME680 at 0x76 (0x77 with SDO high). CHIP_ID (0xD0) reads 0x61 and
+    VARIANT_ID (0xF0) 0x00. Serves a full factory-calibration block and raw
+    20-bit T/P and 16-bit H ADC words that are the exact inverse of Bosch's
+    integer compensation (BME68x_SensorAPI) at those coefficients, so the
+    Bosch, Adafruit and Zephyr drivers recover the host's temperature,
+    pressure and humidity. Forced mode (ctrl_meas mode = 01) raises
+    new_data_0 7.3 ms later and returns to sleep. The gas channel is NOT
+    modelled: gas_r reads 0 with gas_valid clear. Oversampling, filter and
+    noise are not modelled.
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: '7-bit slave address. Defaults to 0x76 (SDO low); 0x77 with SDO high.' }
+  inputs:
+    - { key: temperature, label: Temperature, unit: '°C', min: -40, max: 85, default: 25 }
+    - { key: humidity, label: Humidity, unit: '%RH', min: 0, max: 100, default: 50 }
+    - { key: pressure, label: Pressure, unit: hPa, min: 300, max: 1100, default: 1013.25 }

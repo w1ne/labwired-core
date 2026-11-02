@@ -8,6 +8,13 @@
 #     generic, twister scenario kernel.fpu_sharing.generic.arm
 #     (PI_NUM_ITERATIONS=70000); examples/nucleo-l552ze-q/zephyr-fpu-sharing.yaml
 #     = Renode ARMv8M.robot "Should Pass Zephyr FPU Sharing Test"
+#   tests/fixtures/stm32l552-zephyr-protection.elf — tests/kernel/mem_protect/
+#     protection (examples/nucleo-l552ze-q/zephyr-protection.yaml)
+#     = Renode ARMv8M.robot "Should Pass Zephyr Protection Test"
+#   tests/fixtures/stm32l552-zephyr-userspace.elf — tests/kernel/mem_protect/
+#     userspace, twister scenario kernel.memory_protection.userspace
+#     (examples/nucleo-l552ze-q/zephyr-userspace.yaml)
+#     = Renode ARMv8M.robot "Should Pass Zephyr Userspace Test"
 #
 # UNMODIFIED upstream Zephyr v3.7.0 (commit 36940db938a8) built for board
 # `nucleo_l552ze_q` (the TrustZone-disabled board target, so the image runs
@@ -23,6 +30,8 @@
 #     with the cmsis, hal_nxp, hal_stm32 and hal_ti modules.
 #   - arm-none-eabi-gcc on PATH (the gnuarmemb toolchain variant); no Zephyr SDK
 #     install needed.
+#   - gperf on PATH (CONFIG_USERSPACE kernel-object hashing, userspace only).
+#     Without root: `apt-get download gperf && dpkg -x gperf_*.deb <dir>`.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,3 +70,6 @@ build_one "samples/hello_world"     "stm32l552-zephyr-hello.elf"
 build_one "samples/synchronization" "stm32l552-zephyr-sync.elf"
 build_one "tests/kernel/fpu_sharing/generic" "stm32l552-zephyr-fpu-sharing.elf" \
   -DPI_NUM_ITERATIONS=70000
+build_one "tests/kernel/mem_protect/protection" "stm32l552-zephyr-protection.elf"
+build_one "tests/kernel/mem_protect/userspace" "stm32l552-zephyr-userspace.elf" \
+  -DCONFIG_TEST_HW_STACK_PROTECTION=n -DCONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE=0

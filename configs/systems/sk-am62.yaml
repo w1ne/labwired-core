@@ -1,0 +1,12 @@
+# LabWired - TI SK-AM62B-P1 (AM62x starter kit) system manifest
+#
+# AM6234 (TI "SK-AM62B-P1 Starter Kit User's Guide", SPRUJ83). Zephyr's
+# `sk_am62/am6234/a53` target puts its console on MAIN_UART0 (the kit's
+# FTDI USB-UART bridge), 115200 8N1 from the 48 MHz UART clock.
+#
+# Not modelled yet: LEDs, user button, the boot flow (TF-A, U-Boot); images
+# are loaded straight into DDR and entered at EL3.
+name: "sk-am62"
+chip: "../chips/am6234.yaml"
+external_devices: []
+debug_uart: "main_uart0"
