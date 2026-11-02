@@ -155,6 +155,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no RX core bring-up in this harness; bytes are proven by the \
          ek_rx261_zephyr survival gate",
     ),
+    // Curiosity PIC32MZ EF 2.0: this harness has no MIPS bring-up; the UART2
+    // bytes are proven by the curiosity_pic32mz_nuttx survival gate.
+    (
+        "pic32mz2048efm144",
+        BusKind::Uart,
+        "no MIPS core bring-up in this harness; bytes are proven by the \
+         curiosity_pic32mz_nuttx survival gate",
+    ),
     (
         "mpfs095t",
         BusKind::Uart,

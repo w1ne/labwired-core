@@ -443,6 +443,13 @@ WAIVED: dict[str, str] = {
         "fixtures are not representative perf-spin workloads. No throughput "
         "claim is made for this part (docs/boards/ek-rx261.md)."
     ),
+    "pic32mz2048efm144": (
+        "First MIPS part (Curiosity PIC32MZ EF 2.0, MIPS32r2). This gate's "
+        "perf-spin fixtures are ARM/RISC-V images and no MIPS spin is built; "
+        "the NuttX fixtures are not representative perf-spin workloads. No "
+        "throughput claim is made for this part "
+        "(docs/boards/curiosity-pic32mz-ef.md)."
+    ),
     "mpfs095t": (
         "First RV64 part (PolarFire SoC U54 hart, RV64IMAC). This gate's RISC-V "
         "perf-spin fixture is an RV32 image and no RV64 spin is built; the "

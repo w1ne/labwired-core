@@ -34,6 +34,9 @@ pub enum Arch {
     /// Renesas RX 32-bit MCU family (RXv1/v2/v3 CISC, variable-length).
     #[serde(alias = "rxv3", alias = "renesas-rx")]
     Rx,
+    /// MIPS32 release 2 (Microchip PIC32MZ, M5150 class).
+    #[serde(alias = "mips32", alias = "mips32r2", alias = "pic32")]
+    Mips,
     Unknown,
 }
 

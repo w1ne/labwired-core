@@ -52,6 +52,7 @@ pub enum CpuSnapshot {
     RiscV64(Box<crate::cpu::riscv64::RiscV64CpuSnapshot>),
     Aarch64(Box<crate::cpu::aarch64::Aarch64CpuSnapshot>),
     Rx(Box<crate::cpu::rx::RxCpuSnapshot>),
+    Mips(Box<crate::cpu::mips::MipsCpuSnapshot>),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
     Pic24(Box<Pic24CpuSnapshot>),
