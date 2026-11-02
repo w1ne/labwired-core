@@ -68,7 +68,10 @@ mod analog {
         );
 
         let (on, source) = currents(&mut adapter, 1_000_000, 3.3);
-        assert!((0.005..0.010).contains(&on), "the 330-ohm LED carries {on} A");
+        assert!(
+            (0.005..0.010).contains(&on),
+            "the 330-ohm LED carries {on} A"
+        );
         assert_kcl(on, source);
         let led = adapter.solver().circuit().node("led").unwrap();
         let resistor = (3.3 - adapter.solver().node_voltage(led)) / 330.0;
