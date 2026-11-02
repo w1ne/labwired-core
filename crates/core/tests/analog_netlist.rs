@@ -9,7 +9,7 @@
 // verification command `cargo test -p labwired-core analog` runs all of them.
 mod analog {
     use labwired_core::analog::{
-        parse_netlist, parse_spice_value, AnalogError, Polarity, Waveform,
+        parse_netlist, parse_spice_value, AnalogError, Integration, Polarity, Solver, Waveform,
     };
 
     const RC: &str = "\
@@ -60,10 +60,12 @@ C1 out 0 100n
         assert_eq!(model.beta, 3950.0);
         assert_eq!(model.nominal_temperature_celsius, 25.0);
         assert_eq!(model.temperature_celsius, 50.0);
-        let expected = 10_000.0
-            * (3950.0 * (1.0 / (50.0 + 273.15) - 1.0 / 298.15)).exp();
+        let expected = 10_000.0 * f64::exp(3950.0 * (1.0 / (50.0 + 273.15) - 1.0 / 298.15));
         assert!((ntc.resistance_ohms() - expected).abs() / expected < 1e-12);
-        assert!(circuit.resistors[1].ntc.is_none(), "plain resistors stay linear");
+        assert!(
+            circuit.resistors[1].ntc.is_none(),
+            "plain resistors stay linear"
+        );
     }
 
     #[test]
@@ -76,6 +78,33 @@ C1 out 0 100n
         ] {
             assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
         }
+    }
+
+    #[test]
+    fn changing_ntc_temperature_rebuilds_the_mna_resistor_stamp() {
+        let circuit =
+            parse_netlist("Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950\nRpull sense 0 10k\n")
+                .expect("NTC divider parses");
+        let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver builds");
+        let sense = solver.circuit().node("sense").expect("sense node");
+        let thermistor = solver
+            .thermistor_index("rntc")
+            .expect("case-insensitive lookup");
+        let at_25_c = solver.node_voltage(sense);
+        assert!((at_25_c - 1.65).abs() < 1e-6, "25 °C divider: {at_25_c} V");
+
+        assert!(solver.set_thermistor_temperature(thermistor, 80.0));
+        solver.advance(1e-6).expect("hot operating point solves");
+        let hot = solver.node_voltage(sense);
+        assert!(hot > at_25_c, "NTC divider rises when hot: {hot} V");
+
+        assert!(solver.set_thermistor_temperature(thermistor, -10.0));
+        solver.advance(1e-6).expect("cold operating point solves");
+        let cold = solver.node_voltage(sense);
+        assert!(cold < at_25_c, "NTC divider falls when cold: {cold} V");
+
+        assert!(!solver.set_thermistor_temperature(thermistor, -273.15));
+        assert!(!solver.set_thermistor_temperature(thermistor, f64::NAN));
     }
 
     #[test]

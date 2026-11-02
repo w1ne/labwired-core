@@ -136,10 +136,8 @@ const F1_TS_AVG_SLOPE_MV_PER_C: f64 = 4.3;
 /// Internal reference voltage, typical: 1.20 V (DS5319 Table 13 "Embedded
 /// internal reference voltage", V_REFINT min 1.16 / typ 1.20 / max 1.24 V).
 const F1_VREFINT_MV: f64 = 1200.0;
-/// V_REF+ the converter's 12-bit code is taken against. A Blue Pill ties
-/// V_DDA/V_REF+ to the 3.3 V rail; the same reference `set_channel_input`
-/// assumes.
-const F1_VREF_MV: f64 = 3300.0;
+/// Default positive full-scale reference until a board route drives VDDA.
+const ADC_VREF_MV: f64 = 3300.0;
 /// Ambient temperature an F1 temperature sensor reads before anything sets
 /// one, in °C.
 pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
@@ -490,7 +488,7 @@ impl Adc {
             cycles_remaining: 0,
             conversion_time: 14,
             channel_inputs_mv: [None; MAX_CHANNELS],
-            reference_millivolts: 3300.0,
+            reference_millivolts: ADC_VREF_MV,
             sampled_input: None,
             clock: None,
             chain_live: false,
@@ -604,10 +602,7 @@ impl Adc {
                 // A channel with no external or modeled internal source keeps
                 // the old incrementing fallback for visual feedback.
                 if let Some(sample) = self.sampled_input.take() {
-                    self.dr = Self::code_for_mv(
-                        sample.millivolts,
-                        sample.reference_millivolts,
-                    );
+                    self.dr = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
@@ -1585,13 +1580,19 @@ mod tests {
         for _ in 0..15 {
             adc.tick();
         }
-        assert_eq!(adc.dr, 2047, "the first sample keeps its acquired 1.65 V / 3.3 V");
+        assert_eq!(
+            adc.dr, 2047,
+            "the first sample keeps its acquired 1.65 V / 3.3 V"
+        );
 
         f1_software_start(&mut adc);
         for _ in 0..15 {
             adc.tick();
         }
-        assert_eq!(adc.dr, 4095, "the next sample sees channel 3 and 1.65 V VREF+");
+        assert_eq!(
+            adc.dr, 4095,
+            "the next sample sees channel 3 and 1.65 V VREF+"
+        );
     }
 
     /// `clear_channel_input` releases the held level and restores the no-input

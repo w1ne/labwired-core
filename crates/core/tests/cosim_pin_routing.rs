@@ -739,7 +739,11 @@ fn a_model_vdda_reference_sets_adc_full_scale() {
         .downcast_ref::<labwired_core::peripherals::adc::Adc>()
         .expect("ADC1 is an Adc");
     assert_eq!(adc.reference_voltage_v(), 1.65);
-    assert_eq!(adc.channel_input_count(0), 4095, "the routed 1.65 V is full scale");
+    assert_eq!(
+        adc.channel_input_count(0),
+        4095,
+        "the routed 1.65 V is full scale"
+    );
 }
 
 /// The pad form resolves through the chip descriptor's `analog_pins:`, not a

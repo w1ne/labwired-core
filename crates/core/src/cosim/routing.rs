@@ -775,34 +775,32 @@ impl SignalRouter {
                     channel: *channel,
                 })
             }
-            SignalPath::SupplyRail { rail } => {
-                match rail.as_str() {
-                    "vdd" => {
-                        if !bus.supply.has_monitor() {
-                            return Err(RoutingError::NoSupplyMonitor {
-                                path: path.to_string(),
-                            });
-                        }
-                        Ok(WriteBinding::SupplyVdd)
+            SignalPath::SupplyRail { rail } => match rail.as_str() {
+                "vdd" => {
+                    if !bus.supply.has_monitor() {
+                        return Err(RoutingError::NoSupplyMonitor {
+                            path: path.to_string(),
+                        });
                     }
-                    "vdda" => {
-                        if !bus
-                            .peripherals
-                            .iter()
-                            .any(|peripheral| peripheral.dev.supports_adc_reference_voltage())
-                        {
-                            return Err(RoutingError::NoAdcReference {
-                                path: path.to_string(),
-                            });
-                        }
-                        Ok(WriteBinding::AdcReference)
-                    }
-                    _ => Err(RoutingError::UnknownRail {
-                        path: path.to_string(),
-                        rail: rail.clone(),
-                    }),
+                    Ok(WriteBinding::SupplyVdd)
                 }
-            }
+                "vdda" => {
+                    if !bus
+                        .peripherals
+                        .iter()
+                        .any(|peripheral| peripheral.dev.supports_adc_reference_voltage())
+                    {
+                        return Err(RoutingError::NoAdcReference {
+                            path: path.to_string(),
+                        });
+                    }
+                    Ok(WriteBinding::AdcReference)
+                }
+                _ => Err(RoutingError::UnknownRail {
+                    path: path.to_string(),
+                    rail: rail.clone(),
+                }),
+            },
             SignalPath::MotorCurrent { motor } => Ok(WriteBinding::MotorCurrent {
                 motor: circuit_motor(bus, motor, path)?,
             }),
@@ -973,9 +971,7 @@ impl SignalRouter {
                             volts,
                         });
                     } else if !bus.seed_adc_reference_voltage(volts) {
-                        errors.push(RoutingError::NoAdcReference {
-                            path: path.clone(),
-                        });
+                        errors.push(RoutingError::NoAdcReference { path: path.clone() });
                     }
                 }
                 WriteBinding::MotorCurrent { motor } => {
