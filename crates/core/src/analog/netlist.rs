@@ -56,12 +56,11 @@
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (every capacitance, every temperature coefficient, `VAF`, `IKF`,
-//! `GAMMA`, …) are **accepted and ignored** rather than rejected, so a vendor
-//! model pasted from a datasheet still runs — with the large-signal DC
-//! behaviour it describes and none of its charge storage. See
-//! [`super::device`] for what that costs.
-//! MOSFET level-1 `IS` is used for its two bulk junction currents; `GAMMA` and
-//! bulk-effect threshold shift remain unmodelled.
+//! `RD`, `RS`, …) are **accepted and ignored** rather than rejected, so a vendor
+//! model pasted from a datasheet still runs with its large-signal DC behaviour
+//! and none of its charge storage. MOSFET level-1 `GAMMA` and `PHI` do model
+//! body effect; `IS` is used for the two bulk junction currents. See
+//! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
 //! entirely: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100),
@@ -851,6 +850,10 @@ pub struct MosModel {
     pub kp: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
+    /// Bulk threshold parameter `GAMMA`, sqrt(V).
+    pub gamma: f64,
+    /// Surface potential `PHI`, volts.
+    pub phi: f64,
     /// Bulk junction saturation current `IS`, amps.
     pub is: f64,
     /// Default channel width `W`, metres (the element line may override it).
@@ -894,6 +897,8 @@ impl MosModel {
             vto: 0.0,
             kp: 2e-5,
             lambda: 0.0,
+            gamma: 0.0,
+            phi: 0.6,
             is: 1e-14,
             w: 1e-4,
             l: 1e-4,
@@ -1274,8 +1279,8 @@ pub struct Mosfet {
     pub g: NodeRef,
     /// Source.
     pub s: NodeRef,
-    /// Bulk. Required by the syntax; its drain and source pn junctions use the
-    /// MOS model's `IS`. It does not shift the threshold: there is no body effect.
+    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
+    /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
@@ -2300,8 +2305,15 @@ fn bind_models(
                 let ModelCard::Mos(model) = card else {
                     return Err(wrong_kind("M"));
                 };
-                if model.kp <= 0.0 || model.is <= 0.0 {
-                    return Err(ctx.parse_err("a MOSFET model needs KP > 0 and IS > 0".to_string()));
+                if model.kp <= 0.0 || model.is <= 0.0 || model.gamma < 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs KP > 0, IS > 0 and GAMMA >= 0".to_string(),
+                    ));
+                }
+                if model.gamma > 0.0 && model.phi <= 0.0 {
+                    return Err(
+                        ctx.parse_err("a MOSFET model with GAMMA > 0 needs PHI > 0".to_string())
+                    );
                 }
                 let w = device.width.unwrap_or(model.w);
                 let l = device.length.unwrap_or(model.l);
@@ -2581,6 +2593,8 @@ fn parse_model(
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
+            (ModelCard::Mos(model), "PHI") => model.phi = value,
             (ModelCard::Mos(model), "IS") => model.is = value,
             (ModelCard::Mos(model), "W") => model.w = value,
             (ModelCard::Mos(model), "L") => model.l = value,
@@ -2881,6 +2895,8 @@ fn lower_comparator(
                 vto: 0.5,
                 kp,
                 lambda: 0.0,
+                gamma: 0.0,
+                phi: 0.6,
                 is: 1e-14,
                 w: 1.0,
                 l: 1.0,

@@ -325,6 +325,8 @@ pub struct MosOp {
     pub gm: f64,
     /// `∂Id/∂Vds`, siemens.
     pub gds: f64,
+    /// `∂Id/∂Vbs`, siemens.
+    pub gmb: f64,
 }
 
 /// Shichman–Hodges (SPICE level 1), with `beta = Kp·W/L`:
@@ -335,16 +337,48 @@ pub struct MosOp {
 /// saturation  Vds ≥ Vgs − Vto      Id = (beta/2)·(1 + λ·Vds)·(Vgs − Vto)²
 /// ```
 ///
-/// No body effect: `Vth` is `Vto`, which is ngspice's level 1 with its default
-/// `GAMMA = 0`. The bulk terminal's drain and source pn junctions are stamped
-/// by [`super::mna`] using the model's `IS`; they do not shift the threshold.
-pub fn mos_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> MosOp {
-    let vgst = vgs - vto;
+/// The body-effect threshold shift follows SPICE level 1:
+/// `Vth = VTO + GAMMA·(sqrt(PHI − Vbs) − sqrt(PHI))`, where `Vbs` is the
+/// normalised bulk-to-effective-source voltage. For forward body bias, the
+/// square-root term uses ngspice's linear continuation, floored at zero.
+/// `gmb` is the matching `∂Id/∂Vbs`; the MNA solver stamps it with the gate and
+/// drain derivatives. The bulk terminal's drain and source pn junctions are
+/// stamped separately using the model's `IS`.
+pub fn mos_op(
+    vgs: f64,
+    vds: f64,
+    vto: f64,
+    beta: f64,
+    lambda: f64,
+    gamma: f64,
+    phi: f64,
+    vbs: f64,
+) -> MosOp {
+    let (threshold, gmb_factor) = if gamma == 0.0 {
+        (vto, 0.0)
+    } else {
+        let sqrt_phi = libm::sqrt(phi);
+        let (body_root, gmb_factor) = if vbs <= 0.0 {
+            let body_root = libm::sqrt(phi - vbs);
+            (body_root, gamma / (2.0 * body_root))
+        } else {
+            let body_root = (sqrt_phi - vbs / (2.0 * sqrt_phi)).max(0.0);
+            let gmb_factor = if body_root > 0.0 {
+                gamma / (2.0 * sqrt_phi)
+            } else {
+                0.0
+            };
+            (body_root, gmb_factor)
+        };
+        (vto + gamma * (body_root - sqrt_phi), gmb_factor)
+    };
+    let vgst = vgs - threshold;
     if vgst <= 0.0 {
         return MosOp {
             id: 0.0,
             gm: 0.0,
             gds: 0.0,
+            gmb: 0.0,
         };
     }
     let betap = beta * (1.0 + lambda * vds);
@@ -353,12 +387,14 @@ pub fn mos_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> MosOp {
             id: betap * vds * (vgst - 0.5 * vds),
             gm: betap * vds,
             gds: betap * (vgst - vds) + lambda * beta * vds * (vgst - 0.5 * vds),
+            gmb: betap * vds * gmb_factor,
         }
     } else {
         MosOp {
             id: 0.5 * betap * vgst * vgst,
             gm: betap * vgst,
             gds: 0.5 * lambda * beta * vgst * vgst,
+            gmb: betap * vgst * gmb_factor,
         }
     }
 }

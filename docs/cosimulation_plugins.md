@@ -423,7 +423,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> W=<m> L=<m>)
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> IS=<a>)
 .model <name> PJF  (...)
@@ -435,11 +435,12 @@ from a card takes **ngspice's** default, so a deck written out in full means the
 same thing to both engines.
 
 Parameters this engine has no term for — every capacitance (`CJO`, `CJE`,
-`CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, `GAMMA`,
-`PHI`, `BV` — are **accepted and ignored**, so a vendor card pasted off a
-datasheet runs with the large-signal DC behaviour it describes. MOSFET
-`LEVEL` other than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are
-refused by name because they use different channel equations.
+`CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, and
+`BV` — are **accepted and ignored**, so a vendor card pasted off a datasheet
+runs with the large-signal DC behaviour it describes. Level-1 MOSFET `GAMMA`
+and `PHI` model body effect; their defaults are 0 and 0.6 V. MOSFET `LEVEL`
+other than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are refused by
+name because they use different channel equations.
 
 Seven built-in cards need no `.model` line at all, which is what a catalog part
 emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
@@ -449,19 +450,19 @@ values use ngspice's level-1 defaults.
 
 **What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`;
 Ebers–Moll (transport-form Gummel–Poon with `VAF`/`VAR`/`IKF`/`IKR` infinite
-and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1; and SPICE
-JFET level 1 with `B=1`, including its two gate junctions. MOSFET and JFET
-channel-length modulation, both polarities and reverse channel operation are
-covered by tests. Every parameter is taken at 300.00 K; there is no temperature
-model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
+and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1 with
+`GAMMA`/`PHI` body effect; and SPICE JFET level 1 with `B=1`, including its
+two gate junctions. MOSFET and JFET channel-length modulation, both polarities,
+reverse channel operation and MOSFET body effect are covered by tests. Every
+parameter is taken at 300.00 K; there is no temperature model, which is why
+decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
 **What is not, in this first version:** device capacitances, and therefore
 anything whose behaviour comes from stored device charge — reverse recovery, a
 Miller-limited edge, a charge pump. There is no Early effect (output conductance
-in the active region is `GMIN`, not `Ic/VAF`) and no body effect (`VTH` is
-`VTO`; the bulk terminal is required by the syntax and tied through `GMIN`, but
-does not shift the threshold). JFET drain/source ohmic resistances `RD`/`RS`,
-gate capacitances and levels other than level 1 with `B=1` are also not modeled.
+in the active region is `GMIN`, not `Ic/VAF`). MOSFET gate/channel charge and
+JFET drain/source ohmic resistances `RD`/`RS`, gate capacitances and levels
+other than level 1 with `B=1` are also not modeled.
 A circuit that needs any of those belongs on
 `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 

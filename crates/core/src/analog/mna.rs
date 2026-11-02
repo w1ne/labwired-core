@@ -1388,17 +1388,30 @@ impl Solver {
             } else {
                 (vgs, vds)
             };
+            let vbs_eff = if reversed {
+                self.mos_vbd[index]
+            } else {
+                self.mos_vbs[index]
+            };
             let op = device::mos_op(
                 vgs_eff,
                 vds_eff,
                 sign * model.vto,
                 mosfet.beta,
                 model.lambda,
+                model.gamma,
+                model.phi,
+                vbs_eff,
             );
 
             let u1 = sign * vgs_eff;
             let u2 = sign * vds_eff;
-            let drain_terms = [(op.gm, mosfet.g, source, u1), (op.gds, drain, source, u2)];
+            let u3 = sign * vbs_eff;
+            let drain_terms = [
+                (op.gm, mosfet.g, source, u1),
+                (op.gds, drain, source, u2),
+                (op.gmb, mosfet.bulk, source, u3),
+            ];
             stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &drain_terms);
             stamp_linearised(
                 matrix,

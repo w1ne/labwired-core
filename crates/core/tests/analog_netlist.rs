@@ -352,6 +352,8 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.mosfets[1].model.polarity, Polarity::P);
         assert_eq!(circuit.mosfets[0].model.is, 1e-14);
         assert_eq!(circuit.mosfets[1].model.is, 1e-14);
+        assert_eq!(circuit.mosfets[0].model.gamma, 0.0);
+        assert_eq!(circuit.mosfets[0].model.phi, 0.6);
         // A PMOS threshold is negative, as in ngspice.
         assert!(circuit.mosfets[1].model.vto < 0.0);
         assert_eq!(circuit.jfets[0].model.polarity, Polarity::N);
@@ -359,6 +361,19 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.jfets[1].model.polarity, Polarity::P);
         assert_eq!(circuit.jfets[1].model.vto, 2.0);
         assert!(circuit.is_nonlinear());
+    }
+
+    #[test]
+    fn mosfet_body_effect_parameters_are_parsed_and_require_positive_phi() {
+        let circuit =
+            parse_netlist("M1 d g s b MOD\n.model MOD NMOS(VTO=0.8 KP=20u GAMMA=0.42 PHI=0.65)\n")
+                .expect("body-effect parameters parse");
+        assert_eq!(circuit.mosfets[0].model.gamma, 0.42);
+        assert_eq!(circuit.mosfets[0].model.phi, 0.65);
+
+        let error = parse_netlist("M1 d g s b MOD\n.model MOD NMOS(GAMMA=0.4 PHI=0)\n")
+            .expect_err("body effect requires a positive surface potential");
+        assert!(error.to_string().contains("PHI > 0"), "{error}");
     }
 
     #[test]
