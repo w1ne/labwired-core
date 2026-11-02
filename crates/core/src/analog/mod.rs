@@ -14,7 +14,7 @@
 //! capacitance — it refuses by name and points at
 //! `tools/cosim/labwired_ngspice.py`, which does them all.
 //!
-//! Nonlinear devices — the Shockley diode, the Ebers–Moll BJT and the level-1
+//! Nonlinear devices — the Shockley diode, the Early-effect Gummel–Poon BJT and the level-1
 //! MOSFET — are solved by Newton–Raphson iteration inside each time step. A
 //! circuit with none of them takes exactly the code path it took before they
 //! existed, down to the floating-point operation order.

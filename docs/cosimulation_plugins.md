@@ -435,7 +435,7 @@ from a card takes **ngspice's** default, so a deck written out in full means the
 same thing to both engines.
 
 Parameters this engine has no term for — every capacitance (`CJO`, `CJE`,
-`CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, and
+`CJC`, `TT`, `CGSO`…), every temperature coefficient, `IKF`, and
 `BV` — are **accepted and ignored**, so a vendor card pasted off a datasheet
 runs with the large-signal DC behaviour it describes. Level-1 MOSFET `GAMMA`
 and `PHI` model body effect; their defaults are 0 and 0.6 V. MOSFET `LEVEL`
@@ -449,18 +449,18 @@ defaults). The MOSFET values are this engine's convenience values; the JFET
 values use ngspice's level-1 defaults.
 
 **What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`;
-Ebers–Moll (transport-form Gummel–Poon with `VAF`/`VAR`/`IKF`/`IKR` infinite
-and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1 with
+Gummel–Poon BJT transport with `VAF`/`VAR` base-width modulation and
+`IKF`/`IKR` infinite, with no ohmic terminal resistances; Shichman–Hodges MOSFET level 1 with
 `GAMMA`/`PHI` body effect; and SPICE JFET level 1 with `B=1`, including its
 two gate junctions. MOSFET and JFET channel-length modulation, both polarities,
 reverse channel operation and MOSFET body effect are covered by tests. Every
 parameter is taken at 300.00 K; there is no temperature model, which is why
 decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not, in this first version:** device capacitances, and therefore
+**What is not, in this first version:** BJT high-injection rolloff and base
+recombination, device capacitances, and therefore
 anything whose behaviour comes from stored device charge — reverse recovery, a
-Miller-limited edge, a charge pump. There is no Early effect (output conductance
-in the active region is `GMIN`, not `Ic/VAF`). MOSFET gate/channel charge and
+Miller-limited edge, a charge pump. MOSFET gate/channel charge and
 JFET drain/source ohmic resistances `RD`/`RS`, gate capacitances and levels
 other than level 1 with `B=1` are also not modeled.
 A circuit that needs any of those belongs on
