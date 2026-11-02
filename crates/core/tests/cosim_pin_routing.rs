@@ -140,19 +140,24 @@ fn fresh_fixture_epoch_preserves_global_time_and_rebinds_actual_board_destinatio
     assert_eq!(session.cycles_until_boundary(7_800), 8_400);
 }
 
-/// The injected 12-bit count the next conversion on `channel` would return.
-/// `0xFFFF` means nothing has been injected.
-fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
+/// Read back the injected input count and active reference. `0xFFFF` means
+/// nothing has been injected on `channel`.
+fn adc_readback(bus: &mut SystemBus, channel: u8) -> (u16, f64) {
     let idx = bus
         .find_peripheral_index_by_name("adc1")
         .expect("F401 declares adc1");
-    bus.peripherals[idx]
+    let adc = bus.peripherals[idx]
         .dev
         .as_any_mut()
         .expect("adc1 downcasts")
         .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-        .expect("adc1 is an Adc")
-        .channel_input_count(channel)
+        .expect("adc1 is an Adc");
+    (adc.channel_input_count(channel), adc.reference_voltage_v())
+}
+
+/// The injected 12-bit count the next conversion on `channel` would return.
+fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
+    adc_readback(bus, channel).0
 }
 
 /// Drive a GPIO output latch the way firmware does — an MMIO store to ODR.
@@ -731,19 +736,9 @@ fn a_model_vdda_reference_sets_adc_full_scale() {
     let (_, errors) = session.advance_to(8_400, &mut bus).expect("step");
     assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
 
-    let idx = bus.find_peripheral_index_by_name("adc1").expect("ADC1");
-    let adc = bus.peripherals[idx]
-        .dev
-        .as_any()
-        .expect("ADC downcasts")
-        .downcast_ref::<labwired_core::peripherals::adc::Adc>()
-        .expect("ADC1 is an Adc");
-    assert_eq!(adc.reference_voltage_v(), 1.65);
-    assert_eq!(
-        adc.channel_input_count(0),
-        4095,
-        "the routed 1.65 V is full scale"
-    );
+    let (count, reference_v) = adc_readback(&mut bus, 0);
+    assert_eq!(reference_v, 1.65);
+    assert_eq!(count, 4095, "the routed 1.65 V is full scale");
 }
 
 /// The pad form resolves through the chip descriptor's `analog_pins:`, not a
