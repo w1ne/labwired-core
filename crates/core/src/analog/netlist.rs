@@ -56,9 +56,10 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, every
-//! temperature coefficient, `NKF`, terminal resistances, …) are **accepted and
-//! ignored** rather than rejected. BJT
+//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and BJT
+//! base-junction depletion capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`
+//! with shared `FC`, every temperature coefficient, `NKF`, terminal
+//! resistances, …) are **accepted and ignored** rather than rejected. BJT
 //! `IKF`/`IKR` high-injection rolloff and `ISE`/`NE`/`ISC`/`NC` base
 //! recombination are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
 //! modelled; MOSFET `IS` is used for the two bulk junction currents. See
@@ -866,6 +867,20 @@ pub struct BjtModel {
     pub isc: f64,
     /// Base-collector recombination emission coefficient `NC`.
     pub nc: f64,
+    /// Zero-bias base-emitter depletion capacitance `CJE`, farads.
+    pub cje: f64,
+    /// Base-emitter junction potential `VJE`, volts.
+    pub vje: f64,
+    /// Base-emitter junction grading coefficient `MJE`.
+    pub mje: f64,
+    /// Zero-bias base-collector depletion capacitance `CJC`, farads.
+    pub cjc: f64,
+    /// Base-collector junction potential `VJC`, volts.
+    pub vjc: f64,
+    /// Base-collector junction grading coefficient `MJC`.
+    pub mjc: f64,
+    /// Forward-bias depletion-capacitance coefficient `FC`.
+    pub fc: f64,
 }
 
 impl BjtModel {
@@ -885,6 +900,13 @@ impl BjtModel {
             ne: 1.5,
             isc: 0.0,
             nc: 2.0,
+            cje: 0.0,
+            vje: 0.75,
+            mje: 0.33,
+            cjc: 0.0,
+            vjc: 0.75,
+            mjc: 0.33,
+            fc: 0.5,
         }
     }
 }
@@ -2386,6 +2408,27 @@ fn bind_models(
                         "a BJT model needs ISE >= 0, ISC >= 0, NE > 0 and NC > 0".to_string(),
                     ));
                 }
+                if !model.cje.is_finite()
+                    || model.cje < 0.0
+                    || !model.vje.is_finite()
+                    || model.vje <= 0.0
+                    || !model.mje.is_finite()
+                    || model.mje < 0.0
+                    || !model.cjc.is_finite()
+                    || model.cjc < 0.0
+                    || !model.vjc.is_finite()
+                    || model.vjc <= 0.0
+                    || !model.mjc.is_finite()
+                    || model.mjc < 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs CJE/CJC >= 0, VJE/VJC > 0, MJE/MJC >= 0 and 0 <= FC < 1"
+                            .to_string(),
+                    ));
+                }
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
@@ -2696,6 +2739,13 @@ fn parse_model(
             (ModelCard::Bjt(model), "NE") => model.ne = value,
             (ModelCard::Bjt(model), "ISC") => model.isc = value,
             (ModelCard::Bjt(model), "NC") => model.nc = value,
+            (ModelCard::Bjt(model), "CJE") => model.cje = value,
+            (ModelCard::Bjt(model), "VJE" | "PE") => model.vje = value,
+            (ModelCard::Bjt(model), "MJE" | "ME") => model.mje = value,
+            (ModelCard::Bjt(model), "CJC") => model.cjc = value,
+            (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
+            (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
+            (ModelCard::Bjt(model), "FC") => model.fc = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,

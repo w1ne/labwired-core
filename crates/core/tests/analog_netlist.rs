@@ -363,6 +363,43 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn bjt_depletion_parameters_resolve_and_validate() {
+        let circuit = parse_netlist(
+            "Q1 c b e QMOD\n\
+             .model QMOD NPN(CJE=4p VJE=0.7 MJE=0.4 CJC=2p VJC=0.8 MJC=0.3 FC=0.6)\n",
+        )
+        .expect("BJT depletion parameters parse");
+        let model = circuit.bjts[0].model;
+        assert_eq!(model.cje, 4e-12);
+        assert_eq!(model.vje, 0.7);
+        assert_eq!(model.mje, 0.4);
+        assert_eq!(model.cjc, 2e-12);
+        assert_eq!(model.vjc, 0.8);
+        assert_eq!(model.mjc, 0.3);
+        assert_eq!(model.fc, 0.6);
+
+        let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD PNP\n")
+            .expect("omitted BJT charge parameters use SPICE defaults");
+        let defaults = defaults.bjts[0].model;
+        assert_eq!(defaults.cje, 0.0);
+        assert_eq!(defaults.vje, 0.75);
+        assert_eq!(defaults.mje, 0.33);
+        assert_eq!(defaults.cjc, 0.0);
+        assert_eq!(defaults.vjc, 0.75);
+        assert_eq!(defaults.mjc, 0.33);
+        assert_eq!(defaults.fc, 0.5);
+
+        for parameters in [
+            "CJE=-1p", "VJE=0", "MJE=-0.1", "CJC=-1p", "VJC=0", "MJC=-0.1", "FC=-0.1", "FC=1",
+        ] {
+            let text = format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n");
+            let error =
+                parse_netlist(&text).expect_err("invalid BJT junction parameters are refused");
+            assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
+        }
+    }
+
+    #[test]
     fn nonpositive_bjt_high_injection_knees_are_rejected() {
         for parameter in ["IKF=0", "IKR=-1m"] {
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))

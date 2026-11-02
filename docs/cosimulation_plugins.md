@@ -434,14 +434,14 @@ and a card may be written after the elements that use it. A parameter omitted
 from a card takes **ngspice's** default, so a deck written out in full means the
 same thing to both engines.
 
-Parameters this engine has no term for — such as device capacitances other
-than diode depletion `CJO`/`VJ`/`M`/`FC`, every temperature coefficient,
-`NKF`, and BJT terminal resistances `RB`/`RC`/`RE` — are **accepted and
-ignored**, so a vendor card pasted off a datasheet runs with its supported
-behaviour. Level-1 MOSFET `GAMMA` and `PHI` model body effect; their defaults
-are 0 and 0.6 V. MOSFET `LEVEL`
-other than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are refused by
-name because they use different channel equations.
+This engine models diode depletion capacitance from `CJO`/`VJ`/`M`/`FC` and
+BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
+`CJC`/`VJC`/`MJC`, and shared `FC`. Other device capacitances, temperature
+coefficients, `NKF`, and BJT terminal resistances `RB`/`RC`/`RE` are accepted
+and ignored, so a vendor card runs with its supported behaviour. Level-1 MOSFET
+`GAMMA` and `PHI` model body effect; their defaults are 0 and 0.6 V. MOSFET
+`LEVEL` other than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are
+refused by name because they use different channel equations.
 
 Seven built-in cards need no `.model` line at all, which is what a catalog part
 emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
@@ -453,17 +453,19 @@ values use ngspice's level-1 defaults.
 depletion charge in transient runs from `CJO`/`VJ`/`M`/`FC` (default `CJO=0`);
 Gummel–Poon BJT transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
-recombination currents from `ISE`/`NE` and `ISC`/`NC`. BJT ohmic terminal
-resistances are not modeled. Shichman–Hodges MOSFET level 1 with
+recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
+base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`
+(both capacitances default to zero; shared `FC` defaults to 0.5). BJT ohmic
+terminal resistances are not modeled. Shichman–Hodges MOSFET level 1 with
 `GAMMA`/`PHI` body effect; and SPICE JFET level 1 with `B=1`, including its
 two gate junctions. MOSFET and JFET channel-length modulation, both polarities,
 reverse channel operation and MOSFET body effect are covered by tests. Every
 parameter is taken at 300.00 K; there is no temperature model, which is why
 decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not modeled:** diode diffusion charge (`TT`), BJT `CJE`/`CJC`, JFET
-gate capacitances, and MOSFET overlap or channel charge. Reverse recovery and
-Miller-limited switching therefore remain outside the in-core model. JFET
+**What is not modeled:** diode diffusion charge (`TT`), BJT transit-time charge
+(`TF`/`TR`), JFET gate capacitances, and MOSFET overlap or channel charge.
+Reverse recovery and Miller-limited switching therefore remain outside the in-core model. JFET
 drain/source ohmic resistances `RD`/`RS` and levels other than level 1 with
 `B=1` are also not modeled.
 A circuit that needs any of those belongs on

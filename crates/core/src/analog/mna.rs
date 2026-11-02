@@ -109,6 +109,10 @@ pub struct Solver {
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
     bjt_vbc: Vec<f64>,
+    /// Depletion charge and current history for each BJT, ordered B-E then B-C
+    /// and oriented in normalized device coordinates.
+    bjt_q: Vec<[f64; 2]>,
+    bjt_i: Vec<[f64; 2]>,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
     /// names the terminals — not swapped for reverse mode.
     mos_vgs: Vec<f64>,
@@ -235,6 +239,8 @@ impl Solver {
             diode_i: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
+            bjt_q: vec![[0.0; 2]; bjts],
+            bjt_i: vec![[0.0; 2]; bjts],
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
             mos_vbd: vec![0.0; mosfets],
@@ -557,6 +563,18 @@ impl Solver {
                 self.diode_i[index] = 0.0;
             }
         }
+        for index in 0..self.circuit.bjts.len() {
+            let bjt = &self.circuit.bjts[index];
+            let sign = bjt.model.polarity.sign();
+            let vbe = sign * node_diff(&self.node_v, bjt.b, bjt.e);
+            let vbc = sign * node_diff(&self.node_v, bjt.b, bjt.c);
+            let model = bjt.model;
+            self.bjt_q[index][0] =
+                device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc).0;
+            self.bjt_q[index][1] =
+                device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc).0;
+            self.bjt_i[index] = [0.0; 2];
+        }
     }
 
     /// Integrate one internal step of `h` seconds.
@@ -731,6 +749,45 @@ impl Solver {
                 && self.diode_i[index].to_bits() == i_new.to_bits();
             self.diode_q[index] = q_new;
             self.diode_i[index] = i_new;
+        }
+        for index in 0..self.circuit.bjts.len() {
+            let bjt = &self.circuit.bjts[index];
+            let sign = bjt.model.polarity.sign();
+            let model = bjt.model;
+            let nodes = &self.solution[..self.nodes];
+            let voltages = [
+                sign * node_diff(nodes, bjt.b, bjt.e),
+                sign * node_diff(nodes, bjt.b, bjt.c),
+            ];
+            let parameters = [
+                (model.cje, model.vje, model.mje),
+                (model.cjc, model.vjc, model.mjc),
+            ];
+            for junction in 0..2 {
+                let (c0, vj, grading) = parameters[junction];
+                if c0 == 0.0 {
+                    continue;
+                }
+                let q_new = device::junction_depletion_charge(
+                    voltages[junction],
+                    c0,
+                    vj,
+                    grading,
+                    model.fc,
+                )
+                .0;
+                let i_new = match rule {
+                    Integration::BackwardEuler => (q_new - self.bjt_q[index][junction]) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (q_new - self.bjt_q[index][junction]) / h
+                            - self.bjt_i[index][junction]
+                    }
+                };
+                self.settled &= self.bjt_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.bjt_i[index][junction].to_bits() == i_new.to_bits();
+                self.bjt_q[index][junction] = q_new;
+                self.bjt_i[index][junction] = i_new;
+            }
         }
         for index in 0..self.circuit.inductors.len() {
             let inductor = &self.circuit.inductors[index];
@@ -1451,6 +1508,43 @@ impl Solver {
             stamp_linearised(matrix, rhs, dim, bjt.c, sign * op.ic, &collector);
             stamp_linearised(matrix, rhs, dim, bjt.b, sign * op.ib, &base);
             stamp_linearised(matrix, rhs, dim, bjt.e, -sign * (op.ic + op.ib), &emitter);
+
+            if let Stamp::Transient(h, rule) = stamp {
+                let junctions = [(bjt.b, bjt.e, vbe), (bjt.b, bjt.c, vbc)];
+                let parameters = [
+                    (model.cje, model.vje, model.mje),
+                    (model.cjc, model.vjc, model.mjc),
+                ];
+                for junction in 0..2 {
+                    let (c0, vj, grading) = parameters[junction];
+                    if c0 == 0.0 {
+                        continue;
+                    }
+                    let (positive, negative, voltage) = junctions[junction];
+                    let (charge, capacitance) =
+                        device::junction_depletion_charge(voltage, c0, vj, grading, model.fc);
+                    let (geq, current) = match rule {
+                        Integration::BackwardEuler => {
+                            (capacitance / h, (charge - self.bjt_q[index][junction]) / h)
+                        }
+                        Integration::Trapezoidal => (
+                            2.0 * capacitance / h,
+                            2.0 * (charge - self.bjt_q[index][junction]) / h
+                                - self.bjt_i[index][junction],
+                        ),
+                    };
+                    let control = [(geq, positive, negative, sign * voltage)];
+                    stamp_linearised(matrix, rhs, dim, positive, sign * current, &control);
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        negative,
+                        -sign * current,
+                        &negate(&control),
+                    );
+                }
+            }
         }
 
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
