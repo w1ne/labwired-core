@@ -67,6 +67,9 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     let aarch64_fw = common::committed("tests/fixtures/sk-am62-zephyr-hello.elf");
     // RX: stock Zephyr v4.3.0 hello_world for ek_rx261 (see examples/ek-rx261).
     let rx_fw = common::committed("tests/fixtures/ek-rx261-zephyr-hello.elf");
+    // MIPS: stock upstream NuttX nsh for the Curiosity PIC32MZ EF 2.0 (see
+    // examples/curiosity-pic32mz-ef).
+    let mips_fw = common::committed("tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf");
     // Committed Tier-1 Xtensa fixtures (same ones session_builder_xtensa.rs
     // uses): esp32.elf for the classic dual-core part, esp32s3.elf for both
     // S3 SKUs (esp32s3 and esp32s3-zero share the same silicon).
@@ -102,6 +105,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
             labwired_config::Arch::Pic16 => &pic16_fw,
             labwired_config::Arch::Aarch64 => &aarch64_fw,
             labwired_config::Arch::Rx => &rx_fw,
+            labwired_config::Arch::Mips => &mips_fw,
             labwired_config::Arch::Xtensa => {
                 if name == "esp32" {
                     &esp32_fw

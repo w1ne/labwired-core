@@ -1,0 +1,31 @@
+# LabWired - Curiosity PIC32MZ EF 2.0: stock upstream NuttX NSH
+#
+# Unmodified apache/nuttx 7956039dfd + nuttx-apps 1f8cac8b87 (2026-10-08)
+# built for the out-of-tree board in crates/firmware-curiosity-pic32mz-nuttx
+# (rebuild: build.sh nsh). The MIPS32 core starts at the reset vector
+# 0xBFC00000; Timer1 is the 100 Hz system tick (EVIC vector 4), context
+# switches run through core software interrupt 0 (EVIC vector 1), and the
+# console is UART2, interrupt driven (EVIC vectors 146/147).
+#
+# The shell prompt comes up, then `hello` typed on the console runs the
+# builtin hello example and returns to the prompt.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 40000000
+  # The shell idles at its prompt between commands; idle time is not steps.
+  max_cycles: 60000000
+  wall_time_ms: 120000
+uart_injections:
+  - uart: "uart2"
+    bytes: "hello\r"
+    trigger: !after_cycles { cycles: 20000000 }
+assertions:
+  - uart_ordered:
+      - "NuttShell (NSH)"
+      - "nsh> "
+      - "Hello, World!!"
+      - "nsh> "
+  - expected_stop_reason: max_cycles

@@ -11,6 +11,9 @@
 //! (`tests/fixtures/real_world/rp2040.svd`): `CTRL` resets to `0x0700_0000`
 //! (all three PAUSE bits set) and `TICK` to `0x0000_0200` (`ENABLE` set,
 //! `CYCLES` zero).
+//! The corpus declaration is `errata:` on the `watchdog` instance in
+//! `configs/chips/rp2040.yaml`; its load-bearing integration check is
+//! `crates/core/tests/rp2040_errata_watchdog_e1.rs`.
 //!
 //! ## What silicon does, and what this models
 //!
