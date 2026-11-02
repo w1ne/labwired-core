@@ -352,10 +352,11 @@ const fn edev(
 
 /// The parts this model knows. A row means every SFR address and bit the
 /// model implements matches the part's SDCC 4.4.0 `pic14` header; flash
-/// words come from the gputils `<part>_g.lkr` code pages, port masks from
-/// the header's `R<port><bit>` fields and aliases from the lkr `SHAREBANK`
-/// groups. `scripts/pic16/check_sfr_map.py --check-table` regenerates and
-/// re-verifies every row. A row is geometry, not onboarding.
+/// words come from SDCC's device table, cross-checked against the gputils
+/// `<part>_g.lkr` code and oscillator-calibration pages; port masks come from
+/// the header's `R<port><bit>` fields and aliases from lkr `SHAREBANK` groups.
+/// `scripts/pic16/check_sfr_map.py --check-table` re-verifies every row. A
+/// row is geometry, not onboarding.
 ///
 /// Enhanced mid-range rows (`edev`) must match their map (`--enhanced`;
 /// `PIC16E_F182X_MAP` shown here): core registers, bank-31 shadows and stack, INTCON,
@@ -365,19 +366,27 @@ const fn edev(
 /// 0x010 is the PIC16F161x layout (`PIC16E_F161X_MAP`, PORT/TRIS/LAT A-C and
 /// PIR1-5/PIE1-5).
 ///
-/// Classic parts without PORTC (PIC16F627A/628A/648A, PIC16F87/88) have a
-/// zero PORTC mask, so 0x07 reads 0 and ignores writes; the checker requires
-/// the address to be free in their header. The OTP/EPROM PIC16C63A/65B/73B/74B
-/// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
+/// Classic parts with absent ports have a zero mask at that port slot, so
+/// reads return 0 and writes are ignored. PIC16F630 has no PORTB but does have
+/// PORTC; PIC16F627A/628A/648A and PIC16F87/88 have no PORTC. The checker
+/// requires absent-port addresses to be free in the device header. The
+/// OTP/EPROM PIC16C63A/65B/73B/74B match the map; other PIC16C parts lack an
+/// SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F630/676/684, PIC16F84A, PIC16F716 and friends), except PIC16F818
-/// and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; enhanced parts without
-/// an EUSART (PIC16F1503/1507/1613/1703/1707), with comparator SFRs at
-/// LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
-/// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
-/// entry for them, so no lkr cross-check or SDCC firmware build).
+/// (PIC16F676/684, PIC16F84A, PIC16F716 and friends), except PIC16F630,
+/// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; enhanced
+/// parts without an EUSART (PIC16F1503/1507/1613/1703/1707), parts with
+/// comparator SFRs at LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx,
+/// and for now the PIC16F157x (their headers match, but gputils 1.4.0 has no
+/// processor entry for them, so no lkr cross-check or SDCC firmware build).
 const PIC16_DEVICES: &[Pic16Device] = &[
+    dev_no_usart(
+        "pic16f630",
+        1024,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0A0, 0x0DF, 0x020)],
+    ),
     dev(
         "pic16f687",
         2048,
@@ -3285,6 +3294,32 @@ mod tests {
         }
         cpu.write_data(SFR_PIR1, 0x10);
         assert_eq!(cpu.read_data(SFR_PIR1), 0x10);
+    }
+
+    #[test]
+    fn pic16f630_uses_no_usart_geometry_and_nonconsecutive_ports() {
+        let device = pic16_device("pic16f630").expect("F630 row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("pic16f630");
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+        cpu.write_data(SFR_PIR1, 0x10);
+        assert_eq!(cpu.read_data(SFR_PIR1), 0x10);
+
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0x01);
+        assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0x00, "unimplemented PORTB");
     }
 
     #[test]
