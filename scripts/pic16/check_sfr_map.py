@@ -81,6 +81,9 @@ BITS = {
     "GIE": 0x80, "PEIE": 0x40,
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
+NO_USART_PARTS = {"pic16f819"}
+NO_USART_SFRS = {"RCSTA", "TXREG", "TXSTA", "SPBRG"}
+NO_USART_BITS = {"TXIF", "TXEN", "TRMT", "SPEN"}
 
 
 # Enhanced mid-range (PIC16F1xxx, 32 banks): the PIC16F182x/F193x layout
@@ -184,7 +187,11 @@ def check(part: str) -> list[str]:
     bad = []
     if "BSR" in addrs:
         bad.append("enhanced mid-range (BSR)")
-    for name, want in SFRS.items():
+    sfrs = {name: want for name, want in SFRS.items()
+            if part not in NO_USART_PARTS or name not in NO_USART_SFRS}
+    bits = {name: want for name, want in BITS.items()
+            if part not in NO_USART_PARTS or name not in NO_USART_BITS}
+    for name, want in sfrs.items():
         if addrs.get(name) != want:
             bad.append(f"{name} at {addrs.get(name)!r}, model {want:#x}")
     for name, want in OPTIONAL_SFRS.items():
@@ -198,7 +205,7 @@ def check(part: str) -> list[str]:
             others = sorted(n for n, a in addrs.items() if a == want)
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
-    for name, want in BITS.items():
+    for name, want in bits.items():
         found = re.search(rf"#define\s+_{name}\s+0x([0-9A-Fa-f]+)", h)
         if not found or int(found[1], 16) != want:
             bad.append(f"bit {name} {found[1] if found else None}, model {want:#x}")
@@ -316,6 +323,8 @@ def row(part: str) -> str:
     if own:
         o = ", ".join(f"0x{x:03X}" for x in own)
         return f'    dev_own("{part}", {flash_words}, [{m}], &[{a}], &[{o}]),'
+    if part in NO_USART_PARTS:
+        return f'    dev_no_usart("{part}", {flash_words}, [{m}], &[{a}]),'
     return (f'    dev("{part}", {flash_words}, [{m}], &[{a}]),')
 
 
@@ -389,14 +398,14 @@ def committed_rows() -> dict[str, tuple]:
         sys.exit("error: PIC16_DEVICES not found in pic16.rs")
     rows = {}
     for m in re.finditer(
-            r'\bdev(_own)?\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
+            r'\b(dev|dev_own|dev_no_usart)\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
             r'(?:,\s*&\[([^\]]*)\])?,?\s*\)',
             table[1], re.S):
         masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[4])]
         aliases = [tuple(int(x, 16) for x in t)
                    for t in re.findall(r"\(0x(\w+),\s*0x(\w+),\s*0x(\w+)\)", m[5])]
         own = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[6] or "")]
-        rows[m[2]] = (int(m[3]), masks, aliases, own)
+        rows[m[2]] = (m[1], int(m[3]), masks, aliases, own)
     return rows
 
 
@@ -409,9 +418,12 @@ def main() -> int:
         for part, committed in rows.items():
             mism = check(part)
             want = geometry(part)
-            if mism or tuple(want) != committed:
+            kind = committed[0]
+            expected_kind = ("dev_own" if want[3] else
+                             "dev_no_usart" if part in NO_USART_PARTS else "dev")
+            if mism or tuple(want) != committed[1:] or kind != expected_kind:
                 bad += 1
-                print(f"{part}: {mism or ''}\n  committed {committed}\n  derived   {want}")
+                print(f"{part}: {mism or ''}\n  committed {committed}\n  derived   {(expected_kind, *want)}")
         erows = committed_enhanced_rows()
         if not erows:
             sys.exit("error: no edev(...) rows parsed from PIC16_DEVICES")
