@@ -239,6 +239,10 @@
   },
   {
     "buses": [],
+    "name": "pic32mz2048efm144"
+  },
+  {
+    "buses": [],
     "name": "r5f52618bgfp"
   },
   {
