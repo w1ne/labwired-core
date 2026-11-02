@@ -218,6 +218,65 @@ mod analog {
         }
     }
 
+    /// With the emitter and collector junction roles reversed, the old
+    /// emitter carries the reverse transport current and its ratio to base
+    /// current is `BR`. Check all three terminal currents against the
+    /// Ebers–Moll equations for both polarities; forward-only checks would
+    /// miss a swapped BC/BE stamp or a lost reverse gain.
+    #[test]
+    fn bjt_reverse_active_gain_matches_ebers_moll_by_hand() {
+        let is = 1e-16;
+        let bf = 80.0;
+        let br = 4.0;
+        let vbe = -4.35;
+        let vbc = 0.65;
+        let exp_be = (vbe / VT).exp();
+        let exp_bc = (vbc / VT).exp();
+        let junction_be = exp_be - 1.0;
+        let junction_bc = exp_bc - 1.0;
+        let ic = is * (exp_be - exp_bc) - (is / br) * junction_bc - device::GMIN * vbc;
+        let ib = (is / bf) * junction_be + (is / br) * junction_bc + device::GMIN * (vbe + vbc);
+        // The solver ties both base junctions with GMIN. In this reverse
+        // active point, Vb−Ve = Vbe and Vb−Vc = Vbc.
+        let ie = -(ic + ib);
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NPN"
+            } else {
+                "PNP"
+            };
+            let netlist = format!(
+                "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} NF=1 NR=1)\n",
+                sign * vbc,
+                sign * (vbc - vbe)
+            );
+            let solver = build(&netlist);
+            let actual_ic = sign * source_current(&solver, "Vc");
+            let actual_ib = sign * source_current(&solver, "Vb");
+            let actual_ie = sign * source_current(&solver, "Ve");
+
+            assert!(
+                relative(actual_ic, ic) < 1e-5,
+                "{kind}: reverse collector terminal current should be {ic} A, got {actual_ic} A"
+            );
+            assert!(
+                relative(actual_ib, ib) < 1e-5,
+                "{kind}: reverse base current should be {ib} A, got {actual_ib} A"
+            );
+            assert!(
+                relative(actual_ie, ie) < 1e-5,
+                "{kind}: reverse emitter transport current should be {ie} A, got {actual_ie} A"
+            );
+            let reverse_gain = actual_ie / actual_ib;
+            assert!(
+                (reverse_gain - br).abs() / br < 1e-5,
+                "{kind}: reverse common-emitter gain should be about {br}, got {reverse_gain}"
+            );
+        }
+    }
+
     /// The Early effect is the one missing Gummel–Poon term a user will notice:
     /// output conductance in the active region is `GMIN`, not `Ic/VAF`. Say so
     /// with a test rather than only in a doc comment.
