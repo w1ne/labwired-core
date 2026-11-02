@@ -19,9 +19,11 @@
 //! DC/large-signal behaviour for the nonlinear current equations. Diode
 //! depletion charge (`CJO`, `VJ`, `M`, `FC`), BJT base-junction depletion
 //! charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`, `FC`), and JFET gate-junction
-//! depletion charge (`CGS`, `CGD`, `PB`, `FC`, with level-1 `M=0.5`) are also
-//! integrated in transient runs; diode diffusion charge, BJT transit-time
-//! charge, and MOSFET overlap or channel charge are not. There is no
+//! depletion charge (`CGS`, `CGD`, `PB`, `FC`, with level-1 `M=0.5`) are
+//! integrated in transient runs. MOSFET gate overlap charge (`CGSO`, `CGDO`,
+//! `CGBO`) is integrated as linear capacitance using instance `W` and `L`;
+//! MOSFET channel charge, diode diffusion charge and BJT transit-time charge
+//! are not. There is no
 //! temperature model: every parameter is taken at [`TEMPERATURE_K`] as
 //! written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted
