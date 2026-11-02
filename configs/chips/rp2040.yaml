@@ -102,6 +102,10 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2040/watchdog.yaml"
+    errata:
+      - id: "RP2040-E1"
+        summary: "Watchdog count is decremented twice per tick."
+        model_check: "crates/core/src/peripherals/rp2040/watchdog.rs::tests::counter_decrements_twice_per_tick"
   # ADC + temperature sensor (datasheet §4.9). Behavioural model — a 12-bit SAR
   # over five inputs (0..3 = GPIO26..29, 4 = the on-die sensor) with the 8-entry
   # sample FIFO, the round-robin sequencer and DIV-paced free-running mode.
