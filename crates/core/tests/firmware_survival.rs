@@ -53,6 +53,8 @@ enum Hal {
     Arduino,
     /// Unmodified upstream Contiki-NG build.
     Contiki,
+    /// Unmodified upstream Apache NuttX build.
+    NuttX,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1066,6 +1068,25 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "ek-rx261-zephyr-hello.elf",
         valid_pc_ranges: &[],
         expected_uart_output: b"Hello World! ek_rx261/r5f52618bgfp",
+    },
+    SurvivalCase {
+        // Curiosity PIC32MZ EF 2.0 (PIC32MZ2048EFM144): unmodified upstream
+        // NuttX (apache/nuttx 7956039dfd) nsh for an out-of-tree board on the
+        // MIPS32r2 core — reset vector 0xBFC00000, the EVIC, Timer1 tick,
+        // software-interrupt context switches and the UART2 console up to
+        // the shell prompt. Runs through the Session builder, the MIPS
+        // machine family's only build path.
+        // Rebuild: crates/firmware-curiosity-pic32mz-nuttx/build.sh nsh.
+        // SIM-DERIVED.
+        name: "curiosity_pic32mz_nuttx",
+        core: "m5150",
+        family: CpuFamily::Session,
+        hal: Hal::NuttX,
+        chip: "pic32mz2048efm144",
+        system: "curiosity-pic32mz-ef",
+        fixture: "curiosity-pic32mz-ef-nuttx-nsh.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"NuttShell (NSH)",
     },
     SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
@@ -3127,6 +3148,10 @@ survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 survival_gate!(test_mpfs_disco_kit_zephyr_survival, "mpfs_disco_kit_zephyr");
 survival_gate!(test_sk_am62_zephyr_survival, "sk_am62_zephyr");
 survival_gate!(test_ek_rx261_zephyr_survival, "ek_rx261_zephyr");
+survival_gate!(
+    test_curiosity_pic32mz_nuttx_survival,
+    "curiosity_pic32mz_nuttx"
+);
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

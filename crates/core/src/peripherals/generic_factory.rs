@@ -350,6 +350,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "rx_rtc",
     // Renesas RX compare match timer unit (CMSTR + two channels).
     "rx_cmt",
+    // Microchip PIC32MZ UART (UxMODE/UxSTA/UxTXREG/UxRXREG/UxBRG with the
+    // CLR/SET/INV aliases; EVIC flags through explicit IRQs).
+    "pic32_uart",
+    // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
+    "pic32_timer",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1400,6 +1405,58 @@ pub fn try_build(
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
+        // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
+        // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
+        "pic32_timer" => {
+            use crate::peripherals::pic32_timer as t;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let irq = get("irq").ok_or_else(|| {
+                anyhow::anyhow!("pic32_timer '{}' needs `irq` (EVIC vector)", p_cfg.id)
+            })? as u32;
+            let type_a = match p_cfg.config.get("timer_type").and_then(|v| v.as_str()) {
+                Some("a") | Some("A") => true,
+                Some("b") | Some("B") => false,
+                other => anyhow::bail!(
+                    "pic32_timer '{}' needs `timer_type: a|b`, got {other:?}",
+                    p_cfg.id
+                ),
+            };
+            Box::new(t::Pic32Timer::new(
+                get("clock_hz").unwrap_or(t::DEFAULT_CLOCK_HZ),
+                get("pbclk_hz").unwrap_or(t::DEFAULT_PBCLK_HZ),
+                get("sosc_hz").unwrap_or(t::DEFAULT_SOSC_HZ),
+                type_a,
+                irq,
+            ))
+        }
+        // `irqs`: the EVIC vectors [fault, receive, transmit]; `clock_hz`:
+        // SYSCLK; `pbclk_hz`: the UART's PBCLK2 (baud and RX polling).
+        "pic32_uart" => {
+            let irqs = p_cfg
+                .config
+                .get("irqs")
+                .and_then(|v| v.as_sequence())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(|v| v as u32)
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| v.len() == 3)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "pic32_uart '{}' needs `irqs: [fault, rx, tx]` (EVIC vectors)",
+                        p_cfg.id
+                    )
+                })?;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            use crate::peripherals::pic32_uart as u;
+            Box::new(u::Pic32Uart::with_clocks(
+                [irqs[0], irqs[1], irqs[2]],
+                get("clock_hz").unwrap_or(u::DEFAULT_CLOCK_HZ),
+                get("pbclk_hz").unwrap_or(u::DEFAULT_PBCLK_HZ),
+            ))
+        }
         "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
         "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
         // `vectors`: the two channels' CMI vectors; `clock_hz`: the CPU

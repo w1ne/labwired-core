@@ -100,6 +100,14 @@ boards:
     kind: sim-validate
     path: examples/ek-rx261
     gate: true
+  # Curiosity PIC32MZ EF 2.0: the first MIPS part (PIC32MZ2048EFM144,
+  # MIPS32r2 M5150 core). Committed stock upstream NuttX fixtures (nsh with a
+  # scripted `hello`, ostest), plus the unsupported-instruction audit of each
+  # image.
+  - id: curiosity-pic32mz-ef
+    kind: sim-validate
+    path: examples/curiosity-pic32mz-ef
+    gate: true
   # EK-RA6M5: the first RA6M5 part. Builds the cortex-m-rt smoke for
   # thumbv8m.main (the RA6M5 is a Cortex-M33) and runs the SCI0/LED io-smoke
   # plus the unsupported-instruction audit through the CLI.

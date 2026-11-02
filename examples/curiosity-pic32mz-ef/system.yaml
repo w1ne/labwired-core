@@ -1,0 +1,5 @@
+# LabWired - Microchip Curiosity PIC32MZ EF 2.0 (DM320209)
+name: "curiosity-pic32mz-ef"
+chip: "../../configs/chips/pic32mz2048efm144.yaml"
+external_devices: []
+debug_uart: "uart2"

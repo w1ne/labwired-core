@@ -219,6 +219,13 @@ pub fn build_node_with_options(
             let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
             Ok(Box::new(crate::system::rx::load_elf(bus, &bytes)?))
         }
+        MachineFamily::Mips => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': MIPS takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::mips::load_elf(bus, &bytes)?))
+        }
         MachineFamily::Aarch64 => {
             let NodeFirmware::Elf(bytes) = firmware else {
                 anyhow::bail!("node '{id}': AArch64 takes an ELF");
@@ -904,7 +911,13 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
         check_load_segment(ph, bytes.len())?;
-        image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
+        let addr = if arch == crate::Arch::Mips {
+            // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
+            crate::system::mips::kseg_to_physical(ph.p_paddr)
+        } else {
+            ph.p_paddr
+        };
+        image.add_segment(addr, bytes[off..off + n].to_vec());
     }
     Ok(image)
 }

@@ -180,6 +180,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_ek_rx261_zephyr_survival"),
     },
     ChipConf {
+        // Microchip PIC32MZ2048EFM144 (Curiosity PIC32MZ EF 2.0), first MIPS
+        // part: the MIPS32r2 M5150 core with the EVIC in the core.
+        // SIM-DERIVED: no PIC32MZ bench part. Modelled: UART2 (interrupt
+        // driven), Timer1. CFG, OSC, PPS, ports, flash controller, WDT, DMT
+        // and prefetch are declared stubs — see
+        // examples/curiosity-pic32mz-ef/VALIDATION.md.
+        name: "pic32mz2048efm144",
+        yaml: "configs/chips/pic32mz2048efm144.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_curiosity_pic32mz_nuttx_survival"),
+    },
+    ChipConf {
         // EK-RA6M5 (R7FA6M5BH, Cortex-M33). SIM-DERIVED: no RA6M5 bench part.
         // Modelled: the RA PORT (ra_port) and PmnPFS/PWPR (ra_pfs) reused
         // from RA4M1 at the RA6M5 bases, the full R_SYSTEM register file

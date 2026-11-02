@@ -171,6 +171,14 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                         program_image.add_segment(v, segment_data);
                     }
                 }
+            } else if arch == labwired_core::Arch::Mips {
+                // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
+                let start_addr = labwired_core::system::mips::kseg_to_physical(ph.p_paddr);
+                debug!(
+                    "MIPS segment {:#x} -> physical {:#x}",
+                    ph.p_paddr, start_addr
+                );
+                program_image.add_segment(start_addr, segment_data);
             } else {
                 let start_addr = ph.p_paddr;
                 debug!(
