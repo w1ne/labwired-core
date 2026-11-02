@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 //! The nonlinear half of the in-core analog engine: the diode, the BJT, the
-//! MOSFET, the Newton iteration that reaches them and the model cards that
-//! parameterise them.
+//! JFET, the MOSFET, the Newton iteration that reaches them and the model
+//! cards that parameterise them.
 //!
 //! Three kinds of assertion live here and they are deliberately different:
 //!
@@ -23,9 +23,10 @@
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
 //! discovered: device capacitances. No junction or diffusion charge on the
-//! diode, no `Cje`/`Cjc` on the BJT, no overlap or channel charge on the
-//! MOSFET. A circuit whose behaviour comes from stored device charge belongs
-//! to `adapter: external_process`, not to this engine.
+//! diode, no `Cje`/`Cjc` on the BJT, no `Cgs`/`Cgd` on the JFET, and no overlap
+//! or channel charge on the MOSFET. A circuit whose behaviour comes from
+//! stored device charge belongs to `adapter: external_process`, not to this
+//! engine.
 
 // The `analog` module puts every test under `analog::`, so the design's
 // verification command `cargo test -p labwired-core analog` runs all of them.
@@ -318,6 +319,100 @@ mod analog {
     }
 
     // -----------------------------------------------------------------------
+    // JFET
+    // -----------------------------------------------------------------------
+
+    /// The three level-1 channel regions are checked against the model's
+    /// closed form, with both channel polarities and reverse gate-junction
+    /// leakage included in the measured drain supply current.
+    #[test]
+    fn jfet_operating_point_matches_level1_channel_equation_by_hand() {
+        let beta = 2e-4;
+        let lambda = 0.02;
+        let is = 1e-14;
+        let vto = -2.0;
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NJF"
+            } else {
+                "PJF"
+            };
+            for (vgs, vds) in [(-2.5, 5.0), (0.0, 0.4), (0.0, 5.0)] {
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA={beta} \
+                     LAMBDA={lambda} IS={is})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vto
+                );
+                let solver = build(&netlist);
+                let vgst = vgs - vto;
+                let channel = if vgst <= 0.0 {
+                    0.0
+                } else if vds < vgst {
+                    beta * (1.0 + lambda * vds) * vds * (2.0 * vgst - vds)
+                } else {
+                    beta * (1.0 + lambda * vds) * vgst * vgst
+                };
+                let gate_drain_voltage = vgs - vds;
+                let expected =
+                    channel + device::GMIN * vds - device::diode_op(gate_drain_voltage, is, 1.0).id;
+                let measured = sign * source_current(&solver, "Vd");
+                let label = format!("{kind} Vgs={vgs} Vds={vds}");
+                assert!(
+                    relative(measured, expected) < 2e-5,
+                    "{label}: expected {expected} A including gate leakage, got {measured} A"
+                );
+            }
+        }
+    }
+
+    /// The JFET channel is symmetric, and each gate junction conducts when
+    /// forward biased. Both behaviors are exercised through the MNA solver.
+    #[test]
+    fn jfet_reverse_channel_and_forward_gate_junction_are_solved() {
+        let deck = |kind: &str, sign: f64, drain: f64, source: f64| {
+            format!(
+                "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc {}\n\
+                 J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA=200u IS=1e-12)\n",
+                sign * drain,
+                sign * source,
+                -2.0 * sign
+            )
+        };
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let forward = sign * source_current(&build(&deck(kind, sign, 0.4, 0.0)), "Vd");
+            let reverse = sign * source_current(&build(&deck(kind, sign, 0.0, 0.4)), "Vs");
+            assert!(
+                forward > 1e-6,
+                "{kind} forward channel current should be on, got {forward} A"
+            );
+            assert!(
+                relative(reverse, forward) < 1e-6,
+                "{kind} reverse channel should mirror: {forward} A vs {reverse} A"
+            );
+        }
+
+        let is = 1e-12;
+        let expected = 2.0 * device::diode_op(0.4, is, 1.0).id;
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let netlist = format!(
+                "Vg g 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                 J1 d g s JMOD\n.model JMOD {kind}(IS={is})\n",
+                sign * 0.4
+            );
+            let measured = sign * source_current(&build(&netlist), "Vg");
+            assert!(
+                relative(measured, expected) < 1e-5,
+                "{kind} gate current should be the two forward junctions: expected \
+                 {expected} A, got {measured} A"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Newton iteration itself
     // -----------------------------------------------------------------------
 
@@ -331,6 +426,7 @@ mod analog {
         assert!(build("V1 in 0 dc 5\nR1 in a 1k\nD1 a 0 D\n").is_nonlinear());
         assert!(build("V1 in 0 dc 5\nR1 in b 100k\nQ1 in b 0 NPN\n").is_nonlinear());
         assert!(build("V1 in 0 dc 5\nR1 in d 1k\nM1 d in 0 0 NMOS\n").is_nonlinear());
+        assert!(build("V1 in 0 dc 0\nR1 in d 1k\nJ1 d in 0 NJF\n").is_nonlinear());
     }
 
     /// An ideal voltage source connected straight across a junction with no

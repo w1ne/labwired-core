@@ -117,6 +117,7 @@ R1 a b 1k
 C1 b 0 10u ic=0.5
 L1 b c 2.2m ic=-0.25
 S1 c 0 gate ron=1.5 roff=1meg
+J1 b c b NJF
 .ic V(a)=5 V(b)=1.25
 .end
 ";
@@ -131,6 +132,8 @@ S1 c 0 gate ron=1.5 roff=1meg
         assert_eq!(switch.ctrl, "gate");
         assert_eq!(switch.ron, 1.5);
         assert_eq!(switch.roff, 1e6);
+        assert_eq!(circuit.jfets.len(), 1);
+        assert_eq!(circuit.jfets[0].model.polarity, Polarity::N);
         assert!(
             switch.voltage.is_none(),
             "digital form has no voltage control"
@@ -195,15 +198,15 @@ S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
 
     #[test]
     fn unknown_element_letters_point_at_ngspice() {
-        // `D`, `Q` and `M` used to be on this list and are now in the subset,
+        // `D`, `Q`, `M` and `J` used to be on this list and are now in the subset,
         // and so are the four LINEAR controlled sources and an `X` whose model
         // is an OPAMP/COMP card. What is left is what still has no in-core
         // term: a subcircuit needs a flattener, a model library needs a file
-        // loader, a JFET and a POLY/VALUE controlled source need equations
+        // loader, a MESFET and a POLY/VALUE controlled source need equations
         // nobody has written here.
         for line in [
             "X1 a b subckt",
-            "J1 d g s jfet",
+            "Z1 d g s mesfet",
             "E1 a b POLY(2) c 0 d 0 0 1 1",
             "G1 a b VALUE={V(c)*V(d)}",
             "K1 L1 L2 0.9",
@@ -335,10 +338,11 @@ C1 out 0 100n $ dollar comment
     /// The built-in cards let a part be dropped in with no model library at
     /// all, which is what the catalog will emit.
     #[test]
-    fn the_five_builtin_models_need_no_model_line() {
+    fn builtin_semiconductor_models_need_no_model_line() {
         let circuit = parse_netlist(
             "D1 a 0 D\nQ1 c b e NPN\nQ2 c2 b2 e2 PNP\n\
-             M1 d g s 0 NMOS\nM2 d2 g2 s2 0 PMOS\n",
+             M1 d g s 0 NMOS\nM2 d2 g2 s2 0 PMOS\n\
+             J1 jd jg js NJF\nJ2 jd2 jg2 js2 PJF\n",
         )
         .expect("built-in models resolve");
         assert_eq!(circuit.diodes[0].model.is, 2.52e-9);
@@ -348,7 +352,30 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.mosfets[1].model.polarity, Polarity::P);
         // A PMOS threshold is negative, as in ngspice.
         assert!(circuit.mosfets[1].model.vto < 0.0);
+        assert_eq!(circuit.jfets[0].model.polarity, Polarity::N);
+        assert_eq!(circuit.jfets[0].model.vto, -2.0);
+        assert_eq!(circuit.jfets[1].model.polarity, Polarity::P);
+        assert_eq!(circuit.jfets[1].model.vto, 2.0);
         assert!(circuit.is_nonlinear());
+    }
+
+    #[test]
+    fn jfet_model_parameters_are_parsed_and_unsupported_levels_are_refused() {
+        let circuit =
+            parse_netlist("J1 d g s MOD\n.model MOD NJF(VTO=-1.8 BETA=2m LAMBDA=0.02 IS=4p B=1)\n")
+                .expect("level-1 JFET parameters parse");
+        let model = circuit.jfets[0].model;
+        assert_eq!(model.vto, -1.8);
+        assert_eq!(model.beta, 2e-3);
+        assert_eq!(model.lambda, 0.02);
+        assert_eq!(model.is, 4e-12);
+
+        for (card, rejected) in [("NJF(LEVEL=2)", "LEVEL=2"), ("NJF(B=1.2)", "B=1.2")] {
+            let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD {card}\n"))
+                .expect_err("unsupported JFET equations must be refused");
+            assert!(err.to_string().contains(rejected), "{err}");
+            assert!(err.to_string().contains("labwired_ngspice.py"), "{err}");
+        }
     }
 
     /// `W` and `L` on the element line override the card, and `beta` is what

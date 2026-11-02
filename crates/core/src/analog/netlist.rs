@@ -24,6 +24,7 @@
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
+//! | JFET | `J<name> nd ng ns <model>` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
@@ -51,7 +52,7 @@
 //!
 //! ## Models
 //!
-//! `.model <name> D|NPN|PNP|NMOS|PMOS (<param>=<value> ...)` declares a model
+//! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (every capacitance, every temperature coefficient, `VAF`, `IKF`,
@@ -60,9 +61,10 @@
 //! behaviour it describes and none of its charge storage. See
 //! [`super::device`] for what that costs.
 //!
-//! An element may also name one of five built-in cards and skip `.model`
+//! An element may also name one of seven built-in cards and skip `.model`
 //! entirely: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100),
-//! `NMOS`, `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`). Those are *this
+//! `NMOS`, `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`), `NJF` and `PJF`
+//! (level-1 defaults). Those are *this
 //! engine's* convenience values and are not ngspice's parameter defaults; a
 //! parameter omitted from a real `.model` line gets ngspice's default, so a
 //! deck written out in full means the same thing to both engines.
@@ -853,6 +855,34 @@ pub struct MosModel {
     pub l: f64,
 }
 
+/// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
+/// level 1 with Parker–Skellern `B = 1`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JfetModel {
+    /// N-channel or P-channel.
+    pub polarity: Polarity,
+    /// Pinch-off voltage `VTO`, volts (negative for NJF, positive for PJF).
+    pub vto: f64,
+    /// Transconductance parameter `BETA`, A/V².
+    pub beta: f64,
+    /// Channel-length modulation `LAMBDA`, 1/V.
+    pub lambda: f64,
+    /// Gate-junction saturation current `IS`, amps.
+    pub is: f64,
+}
+
+impl JfetModel {
+    fn defaults(polarity: Polarity) -> Self {
+        Self {
+            polarity,
+            vto: if polarity == Polarity::N { -2.0 } else { 2.0 },
+            beta: 1e-4,
+            lambda: 0.0,
+            is: 1e-14,
+        }
+    }
+}
+
 impl MosModel {
     fn defaults(polarity: Polarity) -> Self {
         Self {
@@ -875,6 +905,8 @@ pub enum ModelCard {
     Bjt(BjtModel),
     /// An `NMOS` or `PMOS` card.
     Mos(MosModel),
+    /// An `NJF` or `PJF` card.
+    Jfet(JfetModel),
     /// An `OPAMP` card (this engine's type, not ngspice's).
     OpAmp(OpAmpModel),
     /// A `COMP` card (this engine's type, not ngspice's).
@@ -902,6 +934,10 @@ impl ModelCard {
             Self::Mos(model) => match model.polarity {
                 Polarity::N => "NMOS",
                 Polarity::P => "PMOS",
+            },
+            Self::Jfet(model) => match model.polarity {
+                Polarity::N => "NJF",
+                Polarity::P => "PJF",
             },
         }
     }
@@ -949,6 +985,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             ibv: 10e-3,
             nbv: None,
         })),
+        "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
+        "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
         // An op-amp that is ideal for any circuit a board puts around it:
         // 120 dB, 10 MHz, 1 Ω, rail to rail.
         "IDEAL_OPAMP" => Some(ModelCard::OpAmp(OpAmpModel {
@@ -1242,6 +1280,23 @@ pub struct Mosfet {
     pub beta: f64,
 }
 
+/// `J<name> nd ng ns <model>` — a SPICE level-1 JFET.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Jfet {
+    /// Element name as written, e.g. `J1`.
+    pub name: String,
+    /// Drain.
+    pub d: NodeRef,
+    /// Gate.
+    pub g: NodeRef,
+    /// Source.
+    pub s: NodeRef,
+    /// Model name as written, for diagnostics.
+    pub model_name: String,
+    /// Resolved model parameters.
+    pub model: JfetModel,
+}
+
 /// Voltage threshold control for a switch: closes from the voltage between
 /// `pos` and `neg` rather than from a routed boolean input.
 ///
@@ -1317,6 +1372,8 @@ pub struct Circuit {
     pub bjts: Vec<Bjt>,
     /// MOSFETs, in netlist order.
     pub mosfets: Vec<Mosfet>,
+    /// JFETs, in netlist order.
+    pub jfets: Vec<Jfet>,
     /// Voltage-controlled voltage sources (`E`), in netlist order.
     pub vcvs: Vec<Vcvs>,
     /// Voltage-controlled current sources (`G`), in netlist order.
@@ -1422,6 +1479,7 @@ impl Circuit {
             || self.diodes.iter().any(|e| matches(&e.name))
             || self.bjts.iter().any(|e| matches(&e.name))
             || self.mosfets.iter().any(|e| matches(&e.name))
+            || self.jfets.iter().any(|e| matches(&e.name))
             || self.vcvs.iter().any(|e| matches(&e.name))
             || self.vccs.iter().any(|e| matches(&e.name))
             || self.cccs.iter().any(|e| matches(&e.name))
@@ -1439,6 +1497,7 @@ impl Circuit {
         !self.diodes.is_empty()
             || !self.bjts.is_empty()
             || !self.mosfets.is_empty()
+            || !self.jfets.is_empty()
             || !self.power_sinks.is_empty()
     }
 
@@ -1640,7 +1699,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             .unwrap_or(' ');
         if !matches!(
             letter,
-            'R' | 'C' | 'L' | 'V' | 'I' | 'S' | 'D' | 'Q' | 'M' | 'E' | 'G' | 'F' | 'H' | 'X'
+            'R' | 'C' | 'L' | 'V' | 'I' | 'S' | 'D' | 'Q' | 'M' | 'J' | 'E' | 'G' | 'F' | 'H' | 'X'
         ) {
             return Err(ctx.unsupported());
         }
@@ -1788,11 +1847,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     });
                 }
             }
-            'D' | 'Q' | 'M' => {
+            'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
                     'D' => (2, "D<name> n+ n- <model>"),
                     'Q' => (3, "Q<name> nc nb ne <model>"),
-                    _ => (4, "M<name> nd ng ns nb <model> [w=<m>] [l=<m>]"),
+                    'M' => (4, "M<name> nd ng ns nb <model> [w=<m>] [l=<m>]"),
+                    _ => (3, "J<name> nd ng ns <model>"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -2154,7 +2214,7 @@ fn bind_models(
         let card = resolved.ok_or_else(|| {
             ctx.parse_err(format!(
                 "no `.model {}` line, and `{}` is not one of the built-in models \
-                     `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `1N4733A`, `SMAJ5.0A`",
+                     `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, `1N4733A`, `SMAJ5.0A`",
                 device.model_name, device.model_name
             ))
         })?;
@@ -2252,6 +2312,22 @@ fn bind_models(
                     model_name: device.model_name,
                     model,
                     beta: model.kp * w / l,
+                });
+            }
+            'J' => {
+                let ModelCard::Jfet(model) = card else {
+                    return Err(wrong_kind("J"));
+                };
+                if model.beta <= 0.0 || model.is <= 0.0 {
+                    return Err(ctx.parse_err("a JFET model needs BETA > 0 and IS > 0"));
+                }
+                circuit.jfets.push(Jfet {
+                    name: device.name,
+                    d: device.nodes[0],
+                    g: device.nodes[1],
+                    s: device.nodes[2],
+                    model_name: device.model_name,
+                    model,
                 });
             }
             _ => unreachable!("device letter filtered above"),
@@ -2390,6 +2466,8 @@ fn parse_model(
         "PNP" => ModelCard::Bjt(BjtModel::defaults(Polarity::P)),
         "NMOS" => ModelCard::Mos(MosModel::defaults(Polarity::N)),
         "PMOS" => ModelCard::Mos(MosModel::defaults(Polarity::P)),
+        "NJF" => ModelCard::Jfet(JfetModel::defaults(Polarity::N)),
+        "PJF" => ModelCard::Jfet(JfetModel::defaults(Polarity::P)),
         "OPAMP" => ModelCard::OpAmp(OpAmpModel::default()),
         "COMP" => ModelCard::Comparator(ComparatorModel::default()),
         "LDO" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Linear)),
@@ -2397,7 +2475,7 @@ fn parse_model(
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
         other => {
             return Err(ctx.parse_err(format!(
-                "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, \
+                "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
                  `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
@@ -2508,6 +2586,22 @@ fn parse_model(
                     "MOSFET `LEVEL={value}` is not modelled in-core; only level 1 \
                      (Shichman-Hodges) is. Use `adapter: external_process` with \
                      `tools/cosim/labwired_ngspice.py`"
+                )))
+            }
+            (ModelCard::Jfet(model), "VTO" | "VT0") => model.vto = value,
+            (ModelCard::Jfet(model), "BETA") => model.beta = value,
+            (ModelCard::Jfet(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Jfet(model), "IS") => model.is = value,
+            (ModelCard::Jfet(_), "LEVEL") if value != 1.0 => {
+                return Err(ctx.parse_err(format!(
+                    "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \
+                     `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
+                )))
+            }
+            (ModelCard::Jfet(_), "B") if value != 1.0 => {
+                return Err(ctx.parse_err(format!(
+                    "JFET `B={value}` is not modelled in-core; only Parker–Skellern B=1 is. \
+                     Use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
                 )))
             }
             _ => {}
