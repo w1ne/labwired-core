@@ -568,8 +568,11 @@ fn build_riscv_node(
             // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
             // C6: below ROM-reserved HP SRAM (esp32c6_rom::APP_SRAM_END).
+            // P4: same contract, its own ceiling (esp32p4_rom::APP_SRAM_END).
             let sp_top = if crate::boot::esp32c6_rom::is_esp32c6(chip) {
                 crate::boot::esp32c6_rom::app_stack_top()
+            } else if crate::boot::esp32p4_rom::is_esp32p4(chip) {
+                crate::boot::esp32p4_rom::app_stack_top()
             } else {
                 (chip.ram.base + chip.ram.size) as u32
             };

@@ -1,0 +1,3290 @@
+peripheral: HP_SYS_CLKRST
+version: 0.1.0
+registers:
+- id: CLK_EN0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: REG_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  side_effects: null
+- id: ROOT_CLK_CTRL0
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_CPUICM_DELAY_NUM
+    bit_range:
+    - 3
+    - 0
+    description: Reserved
+  - name: REG_SOC_CLK_DIV_UPDATE
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_CPU_CLK_DIV_NUM
+    bit_range:
+    - 12
+    - 5
+    description: Reserved
+  - name: REG_CPU_CLK_DIV_NUMERATOR
+    bit_range:
+    - 20
+    - 13
+    description: Reserved
+  - name: REG_CPU_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 28
+    - 21
+    description: Reserved
+  side_effects: null
+- id: ROOT_CLK_CTRL1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: REG_MEM_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_MEM_CLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_MEM_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_SYS_CLK_DIV_NUM
+    bit_range:
+    - 31
+    - 24
+    description: Reserved
+  side_effects: null
+- id: ROOT_CLK_CTRL2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: REG_SYS_CLK_DIV_NUMERATOR
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_SYS_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_APB_CLK_DIV_NUM
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_APB_CLK_DIV_NUMERATOR
+    bit_range:
+    - 31
+    - 24
+    description: Reserved
+  side_effects: null
+- id: ROOT_CLK_CTRL3
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_APB_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  side_effects: null
+- id: SOC_CLK_CTRL0
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 3873413039
+  fields:
+  - name: REG_CORE0_CLIC_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_CORE1_CLIC_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_MISC_CPU_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_CORE0_CPU_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_CORE1_CPU_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_TCM_CPU_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_BUSMON_CPU_CLK_EN
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_L1CACHE_CPU_CLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_L1CACHE_D_CPU_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_L1CACHE_I0_CPU_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_L1CACHE_I1_CPU_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_TRACE_CPU_CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_ICM_CPU_CLK_EN
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_GDMA_CPU_CLK_EN
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_VPU_CPU_CLK_EN
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_L1CACHE_MEM_CLK_EN
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_L1CACHE_D_MEM_CLK_EN
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_L1CACHE_I0_MEM_CLK_EN
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_L1CACHE_I1_MEM_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_L2CACHE_MEM_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_L2MEM_MEM_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_L2MEMMON_MEM_CLK_EN
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_ICM_MEM_CLK_EN
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_MISC_SYS_CLK_EN
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_TRACE_SYS_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_L2CACHE_SYS_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_L2MEM_SYS_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_L2MEMMON_SYS_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_TCMMON_SYS_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_ICM_SYS_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_FLASH_SYS_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_PSRAM_SYS_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: SOC_CLK_CTRL1
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 2088730655
+  fields:
+  - name: REG_GPSPI2_SYS_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_GPSPI3_SYS_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_REGDMA_SYS_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_AHB_PDMA_SYS_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_AXI_PDMA_SYS_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_GDMA_SYS_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_DMA2D_SYS_CLK_EN
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_VPU_SYS_CLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_JPEG_SYS_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_PPA_SYS_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_CSI_BRG_SYS_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_CSI_HOST_SYS_CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_DSI_SYS_CLK_EN
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_EMAC_SYS_CLK_EN
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_SDMMC_SYS_CLK_EN
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_USB_OTG11_SYS_CLK_EN
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_USB_OTG20_SYS_CLK_EN
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_UHCI_SYS_CLK_EN
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_UART0_SYS_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_UART1_SYS_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_UART2_SYS_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_UART3_SYS_CLK_EN
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_UART4_SYS_CLK_EN
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_PARLIO_SYS_CLK_EN
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_ETM_SYS_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_PVT_SYS_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_CRYPTO_SYS_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_KEY_MANAGER_SYS_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_BITSRAMBLER_SYS_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_BITSRAMBLER_RX_SYS_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_BITSRAMBLER_TX_SYS_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_H264_SYS_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: SOC_CLK_CTRL2
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 553127902
+  fields:
+  - name: REG_RMT_SYS_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_HP_CLKRST_APB_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_SYSREG_APB_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_ICM_APB_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_INTRMTX_APB_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_ADC_APB_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_UHCI_APB_CLK_EN
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_UART0_APB_CLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_UART1_APB_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_UART2_APB_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_UART3_APB_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_UART4_APB_CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_I2C0_APB_CLK_EN
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_I2C1_APB_CLK_EN
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_I2S0_APB_CLK_EN
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_I2S1_APB_CLK_EN
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_I2S2_APB_CLK_EN
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_I3C_MST_APB_CLK_EN
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_I3C_SLV_APB_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_GPSPI2_APB_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_GPSPI3_APB_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_TIMERGRP0_APB_CLK_EN
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_TIMERGRP1_APB_CLK_EN
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_SYSTIMER_APB_CLK_EN
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_TWAI0_APB_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_TWAI1_APB_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_TWAI2_APB_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_MCPWM0_APB_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_MCPWM1_APB_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_USB_DEVICE_APB_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_PCNT_APB_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_PARLIO_APB_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: SOC_CLK_CTRL3
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: REG_LEDC_APB_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_LCDCAM_APB_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_ETM_APB_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_IOMUX_APB_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  side_effects: null
+- id: REF_CLK_CTRL0
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 33624841
+  fields:
+  - name: REG_REF_50M_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_REF_25M_CLK_DIV_NUM
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_REF_240M_CLK_DIV_NUM
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_REF_160M_CLK_DIV_NUM
+    bit_range:
+    - 31
+    - 24
+    description: Reserved
+  side_effects: null
+- id: REF_CLK_CTRL1
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 1477903619
+  fields:
+  - name: REG_REF_120M_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_REF_80M_CLK_DIV_NUM
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_REF_20M_CLK_DIV_NUM
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_TM_400M_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_TM_200M_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_TM_100M_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_REF_50M_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_REF_25M_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_TM_480M_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_REF_240M_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_TM_240M_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: REF_CLK_CTRL2
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 277
+  fields:
+  - name: REG_REF_160M_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_TM_160M_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_REF_120M_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_TM_120M_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_REF_80M_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_TM_80M_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_TM_60M_CLK_EN
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_TM_48M_CLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_REF_20M_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_TM_20M_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL00
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 49212
+  fields:
+  - name: REG_FLASH_CLK_SRC_SEL
+    bit_range:
+    - 1
+    - 0
+    description: Reserved
+  - name: REG_FLASH_PLL_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_FLASH_CORE_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_FLASH_CORE_CLK_DIV_NUM
+    bit_range:
+    - 11
+    - 4
+    description: Reserved
+  - name: REG_PSRAM_CLK_SRC_SEL
+    bit_range:
+    - 13
+    - 12
+    description: Reserved
+  - name: REG_PSRAM_PLL_CLK_EN
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_PSRAM_CORE_CLK_EN
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_PSRAM_CORE_CLK_DIV_NUM
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_PAD_EMAC_REF_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_EMAC_RMII_CLK_SRC_SEL
+    bit_range:
+    - 26
+    - 25
+    description: Reserved
+  - name: REG_EMAC_RMII_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_EMAC_RX_CLK_SRC_SEL
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_EMAC_RX_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL01
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 1025
+  fields:
+  - name: REG_EMAC_RX_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_EMAC_TX_CLK_SRC_SEL
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_EMAC_TX_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_EMAC_TX_CLK_DIV_NUM
+    bit_range:
+    - 17
+    - 10
+    description: Reserved
+  - name: REG_EMAC_PTP_REF_CLK_SRC_SEL
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_EMAC_PTP_REF_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_EMAC_UNUSED0_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_EMAC_UNUSED1_CLK_EN
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_SDIO_HS_MODE
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_SDIO_LS_CLK_SRC_SEL
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_SDIO_LS_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL02
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_SDIO_LS_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_SDIO_LS_CLK_EDGE_CFG_UPDATE
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_SDIO_LS_CLK_EDGE_L
+    bit_range:
+    - 12
+    - 9
+    description: Reserved
+  - name: REG_SDIO_LS_CLK_EDGE_H
+    bit_range:
+    - 16
+    - 13
+    description: Reserved
+  - name: REG_SDIO_LS_CLK_EDGE_N
+    bit_range:
+    - 20
+    - 17
+    description: Reserved
+  - name: REG_SDIO_LS_SLF_CLK_EDGE_SEL
+    bit_range:
+    - 22
+    - 21
+    description: Reserved
+  - name: REG_SDIO_LS_DRV_CLK_EDGE_SEL
+    bit_range:
+    - 24
+    - 23
+    description: Reserved
+  - name: REG_SDIO_LS_SAM_CLK_EDGE_SEL
+    bit_range:
+    - 26
+    - 25
+    description: Reserved
+  - name: REG_SDIO_LS_SLF_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_SDIO_LS_DRV_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_SDIO_LS_SAM_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_MIPI_DSI_DPHY_CLK_SRC_SEL
+    bit_range:
+    - 31
+    - 30
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL03
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_MIPI_DSI_DPHY_CFG_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_MIPI_DSI_DPHY_PLL_REFCLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_MIPI_CSI_DPHY_CLK_SRC_SEL
+    bit_range:
+    - 3
+    - 2
+    description: Reserved
+  - name: REG_MIPI_CSI_DPHY_CFG_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_MIPI_DSI_DPICLK_SRC_SEL
+    bit_range:
+    - 6
+    - 5
+    description: Reserved
+  - name: REG_MIPI_DSI_DPICLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_MIPI_DSI_DPICLK_DIV_NUM
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL10
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2C0_CLK_SRC_SEL
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_I2C0_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_I2C0_CLK_DIV_NUM
+    bit_range:
+    - 9
+    - 2
+    description: Reserved
+  - name: REG_I2C0_CLK_DIV_NUMERATOR
+    bit_range:
+    - 17
+    - 10
+    description: Reserved
+  - name: REG_I2C0_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 25
+    - 18
+    description: Reserved
+  - name: REG_I2C1_CLK_SRC_SEL
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_I2C1_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL11
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2C1_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_I2C1_CLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_I2C1_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_I2S0_RX_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_I2S0_RX_CLK_SRC_SEL
+    bit_range:
+    - 26
+    - 25
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL12
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S0_RX_DIV_N
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_I2S0_RX_DIV_X
+    bit_range:
+    - 16
+    - 8
+    description: Reserved
+  - name: REG_I2S0_RX_DIV_Y
+    bit_range:
+    - 25
+    - 17
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL13
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S0_RX_DIV_Z
+    bit_range:
+    - 8
+    - 0
+    description: Reserved
+  - name: REG_I2S0_RX_DIV_YN1
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_I2S0_TX_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_I2S0_TX_CLK_SRC_SEL
+    bit_range:
+    - 12
+    - 11
+    description: Reserved
+  - name: REG_I2S0_TX_DIV_N
+    bit_range:
+    - 20
+    - 13
+    description: Reserved
+  - name: REG_I2S0_TX_DIV_X
+    bit_range:
+    - 29
+    - 21
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL14
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S0_TX_DIV_Y
+    bit_range:
+    - 8
+    - 0
+    description: Reserved
+  - name: REG_I2S0_TX_DIV_Z
+    bit_range:
+    - 17
+    - 9
+    description: Reserved
+  - name: REG_I2S0_TX_DIV_YN1
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_I2S0_MST_CLK_SEL
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_I2S1_RX_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_I2S1_RX_CLK_SRC_SEL
+    bit_range:
+    - 22
+    - 21
+    description: Reserved
+  - name: REG_I2S1_RX_DIV_N
+    bit_range:
+    - 30
+    - 23
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL15
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S1_RX_DIV_X
+    bit_range:
+    - 8
+    - 0
+    description: Reserved
+  - name: REG_I2S1_RX_DIV_Y
+    bit_range:
+    - 17
+    - 9
+    description: Reserved
+  - name: REG_I2S1_RX_DIV_Z
+    bit_range:
+    - 26
+    - 18
+    description: Reserved
+  - name: REG_I2S1_RX_DIV_YN1
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_I2S1_TX_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_I2S1_TX_CLK_SRC_SEL
+    bit_range:
+    - 30
+    - 29
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL16
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S1_TX_DIV_N
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_I2S1_TX_DIV_X
+    bit_range:
+    - 16
+    - 8
+    description: Reserved
+  - name: REG_I2S1_TX_DIV_Y
+    bit_range:
+    - 25
+    - 17
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL17
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S1_TX_DIV_Z
+    bit_range:
+    - 8
+    - 0
+    description: Reserved
+  - name: REG_I2S1_TX_DIV_YN1
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_I2S1_MST_CLK_SEL
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_I2S2_RX_CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_I2S2_RX_CLK_SRC_SEL
+    bit_range:
+    - 13
+    - 12
+    description: Reserved
+  - name: REG_I2S2_RX_DIV_N
+    bit_range:
+    - 21
+    - 14
+    description: Reserved
+  - name: REG_I2S2_RX_DIV_X
+    bit_range:
+    - 30
+    - 22
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL18
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S2_RX_DIV_Y
+    bit_range:
+    - 8
+    - 0
+    description: Reserved
+  - name: REG_I2S2_RX_DIV_Z
+    bit_range:
+    - 17
+    - 9
+    description: Reserved
+  - name: REG_I2S2_RX_DIV_YN1
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_I2S2_TX_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_I2S2_TX_CLK_SRC_SEL
+    bit_range:
+    - 21
+    - 20
+    description: Reserved
+  - name: REG_I2S2_TX_DIV_N
+    bit_range:
+    - 29
+    - 22
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL19
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_I2S2_TX_DIV_X
+    bit_range:
+    - 8
+    - 0
+    description: Reserved
+  - name: REG_I2S2_TX_DIV_Y
+    bit_range:
+    - 17
+    - 9
+    description: Reserved
+  - name: REG_I2S2_TX_DIV_Z
+    bit_range:
+    - 26
+    - 18
+    description: Reserved
+  - name: REG_I2S2_TX_DIV_YN1
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_I2S2_MST_CLK_SEL
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_LCD_CLK_SRC_SEL
+    bit_range:
+    - 30
+    - 29
+    description: Reserved
+  - name: REG_LCD_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL110
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: REG_LCD_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_LCD_CLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_LCD_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_UART0_CLK_SRC_SEL
+    bit_range:
+    - 25
+    - 24
+    description: Reserved
+  - name: REG_UART0_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL111
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: REG_UART0_SCLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_UART0_SCLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_UART0_SCLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_UART1_CLK_SRC_SEL
+    bit_range:
+    - 25
+    - 24
+    description: Reserved
+  - name: REG_UART1_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL112
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: REG_UART1_SCLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_UART1_SCLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_UART1_SCLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_UART2_CLK_SRC_SEL
+    bit_range:
+    - 25
+    - 24
+    description: Reserved
+  - name: REG_UART2_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL113
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: REG_UART2_SCLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_UART2_SCLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_UART2_SCLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_UART3_CLK_SRC_SEL
+    bit_range:
+    - 25
+    - 24
+    description: Reserved
+  - name: REG_UART3_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL114
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: REG_UART3_SCLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_UART3_SCLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_UART3_SCLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_UART4_CLK_SRC_SEL
+    bit_range:
+    - 25
+    - 24
+    description: Reserved
+  - name: REG_UART4_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL115
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_UART4_SCLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_UART4_SCLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_UART4_SCLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_TWAI0_CLK_SRC_SEL
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_TWAI0_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_TWAI1_CLK_SRC_SEL
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_TWAI1_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_TWAI2_CLK_SRC_SEL
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_TWAI2_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL116
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 17825800
+  fields:
+  - name: REG_GPSPI2_CLK_SRC_SEL
+    bit_range:
+    - 2
+    - 0
+    description: Reserved
+  - name: REG_GPSPI2_HS_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_GPSPI2_HS_CLK_DIV_NUM
+    bit_range:
+    - 11
+    - 4
+    description: Reserved
+  - name: REG_GPSPI2_MST_CLK_DIV_NUM
+    bit_range:
+    - 19
+    - 12
+    description: Reserved
+  - name: REG_GPSPI2_MST_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_GPSPI3_CLK_SRC_SEL
+    bit_range:
+    - 23
+    - 21
+    description: Reserved
+  - name: REG_GPSPI3_HS_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL117
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: REG_GPSPI3_HS_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_GPSPI3_MST_CLK_DIV_NUM
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_GPSPI3_MST_CLK_EN
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_PARLIO_RX_CLK_SRC_SEL
+    bit_range:
+    - 18
+    - 17
+    description: Reserved
+  - name: REG_PARLIO_RX_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_PARLIO_RX_CLK_DIV_NUM
+    bit_range:
+    - 27
+    - 20
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL118
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_PARLIO_RX_CLK_DIV_NUMERATOR
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_PARLIO_RX_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_PARLIO_TX_CLK_SRC_SEL
+    bit_range:
+    - 17
+    - 16
+    description: Reserved
+  - name: REG_PARLIO_TX_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_PARLIO_TX_CLK_DIV_NUM
+    bit_range:
+    - 26
+    - 19
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL119
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_PARLIO_TX_CLK_DIV_NUMERATOR
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_PARLIO_TX_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_I3C_MST_CLK_SRC_SEL
+    bit_range:
+    - 17
+    - 16
+    description: Reserved
+  - name: REG_I3C_MST_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_I3C_MST_CLK_DIV_NUM
+    bit_range:
+    - 26
+    - 19
+    description: Reserved
+  - name: REG_CAM_CLK_SRC_SEL
+    bit_range:
+    - 28
+    - 27
+    description: Reserved
+  - name: REG_CAM_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL120
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_CAM_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_CAM_CLK_DIV_NUMERATOR
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_CAM_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL20
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 3372220416
+  fields:
+  - name: REG_MCPWM0_CLK_SRC_SEL
+    bit_range:
+    - 1
+    - 0
+    description: Reserved
+  - name: REG_MCPWM0_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_MCPWM0_CLK_DIV_NUM
+    bit_range:
+    - 10
+    - 3
+    description: Reserved
+  - name: REG_MCPWM1_CLK_SRC_SEL
+    bit_range:
+    - 12
+    - 11
+    description: Reserved
+  - name: REG_MCPWM1_CLK_EN
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_MCPWM1_CLK_DIV_NUM
+    bit_range:
+    - 21
+    - 14
+    description: Reserved
+  - name: REG_TIMERGRP0_T0_SRC_SEL
+    bit_range:
+    - 23
+    - 22
+    description: Reserved
+  - name: REG_TIMERGRP0_T0_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_TIMERGRP0_T1_SRC_SEL
+    bit_range:
+    - 26
+    - 25
+    description: Reserved
+  - name: REG_TIMERGRP0_T1_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_TIMERGRP0_WDT_SRC_SEL
+    bit_range:
+    - 29
+    - 28
+    description: Reserved
+  - name: REG_TIMERGRP0_WDT_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_TIMERGRP0_TGRT_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL21
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 1379926016
+  fields:
+  - name: REG_TIMERGRP0_TGRT_CLK_SRC_SEL
+    bit_range:
+    - 3
+    - 0
+    description: Reserved
+  - name: REG_TIMERGRP0_TGRT_CLK_DIV_NUM
+    bit_range:
+    - 19
+    - 4
+    description: Reserved
+  - name: REG_TIMERGRP1_T0_SRC_SEL
+    bit_range:
+    - 21
+    - 20
+    description: Reserved
+  - name: REG_TIMERGRP1_T0_CLK_EN
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_TIMERGRP1_T1_SRC_SEL
+    bit_range:
+    - 24
+    - 23
+    description: Reserved
+  - name: REG_TIMERGRP1_T1_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_TIMERGRP1_WDT_SRC_SEL
+    bit_range:
+    - 27
+    - 26
+    description: Reserved
+  - name: REG_TIMERGRP1_WDT_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_SYSTIMER_CLK_SRC_SEL
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_SYSTIMER_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL22
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_LEDC_CLK_SRC_SEL
+    bit_range:
+    - 1
+    - 0
+    description: Reserved
+  - name: REG_LEDC_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_RMT_CLK_SRC_SEL
+    bit_range:
+    - 4
+    - 3
+    description: Reserved
+  - name: REG_RMT_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_RMT_CLK_DIV_NUM
+    bit_range:
+    - 13
+    - 6
+    description: Reserved
+  - name: REG_RMT_CLK_DIV_NUMERATOR
+    bit_range:
+    - 21
+    - 14
+    description: Reserved
+  - name: REG_RMT_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 29
+    - 22
+    description: Reserved
+  - name: REG_ADC_CLK_SRC_SEL
+    bit_range:
+    - 31
+    - 30
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL23
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: REG_ADC_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_ADC_CLK_DIV_NUM
+    bit_range:
+    - 8
+    - 1
+    description: Reserved
+  - name: REG_ADC_CLK_DIV_NUMERATOR
+    bit_range:
+    - 16
+    - 9
+    description: Reserved
+  - name: REG_ADC_CLK_DIV_DENOMINATOR
+    bit_range:
+    - 24
+    - 17
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL24
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 1028
+  fields:
+  - name: REG_ADC_SAR1_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_ADC_SAR2_CLK_DIV_NUM
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_PVT_CLK_DIV_NUM
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_PVT_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL25
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 8372224
+  fields:
+  - name: REG_PVT_PERI_GROUP_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_PVT_PERI_GROUP1_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_PVT_PERI_GROUP2_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_PVT_PERI_GROUP3_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_PVT_PERI_GROUP4_CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_CRYPTO_CLK_SRC_SEL
+    bit_range:
+    - 13
+    - 12
+    description: Reserved
+  - name: REG_CRYPTO_AES_CLK_EN
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_CRYPTO_DS_CLK_EN
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_CRYPTO_ECC_CLK_EN
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_CRYPTO_HMAC_CLK_EN
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_CRYPTO_RSA_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_CRYPTO_SEC_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_CRYPTO_SHA_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_CRYPTO_ECDSA_CLK_EN
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_CRYPTO_KM_CLK_EN
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_ISP_CLK_SRC_SEL
+    bit_range:
+    - 24
+    - 23
+    description: Reserved
+  - name: REG_ISP_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL26
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: REG_ISP_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_IOMUX_CLK_SRC_SEL
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_IOMUX_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_IOMUX_CLK_DIV_NUM
+    bit_range:
+    - 17
+    - 10
+    description: Reserved
+  - name: REG_H264_CLK_SRC_SEL
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_H264_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_H264_CLK_DIV_NUM
+    bit_range:
+    - 27
+    - 20
+    description: Reserved
+  - name: REG_PADBIST_RX_CLK_SRC_SEL
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_PADBIST_RX_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  side_effects: null
+- id: PERI_CLK_CTRL27
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_PADBIST_RX_CLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_PADBIST_TX_CLK_SRC_SEL
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_PADBIST_TX_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_PADBIST_TX_CLK_DIV_NUM
+    bit_range:
+    - 17
+    - 10
+    description: Reserved
+  side_effects: null
+- id: CLK_FORCE_ON_CTRL0
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 262143
+  fields:
+  - name: REG_CPUICM_GATED_CLK_FORCE_ON
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_TCM_CPU_CLK_FORCE_ON
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_BUSMON_CPU_CLK_FORCE_ON
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_L1CACHE_CPU_CLK_FORCE_ON
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_L1CACHE_D_CPU_CLK_FORCE_ON
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_L1CACHE_I0_CPU_CLK_FORCE_ON
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_L1CACHE_I1_CPU_CLK_FORCE_ON
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_TRACE_CPU_CLK_FORCE_ON
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_TRACE_SYS_CLK_FORCE_ON
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_L1CACHE_MEM_CLK_FORCE_ON
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_L1CACHE_D_MEM_CLK_FORCE_ON
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_L1CACHE_I0_MEM_CLK_FORCE_ON
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_L1CACHE_I1_MEM_CLK_FORCE_ON
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_L2CACHE_MEM_CLK_FORCE_ON
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_L2MEM_MEM_CLK_FORCE_ON
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_SAR1_CLK_FORCE_ON
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_SAR2_CLK_FORCE_ON
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_GMAC_TX_CLK_FORCE_ON
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  side_effects: null
+- id: DPA_CTRL0
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_SEC_DPA_LEVEL
+    bit_range:
+    - 1
+    - 0
+    description: Reserved
+  - name: REG_SEC_DPA_CFG_SEL
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  side_effects: null
+- id: ANA_PLL_CTRL0
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_PLLA_CAL_END
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_PLLA_CAL_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_CPU_PLL_CAL_END
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_CPU_PLL_CAL_STOP
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_SDIO_PLL_CAL_END
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_SDIO_PLL_CAL_STOP
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_SYS_PLL_CAL_END
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_SYS_PLL_CAL_STOP
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_MSPI_CAL_END
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_MSPI_CAL_STOP
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  side_effects: null
+- id: HP_RST_EN0
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: REG_RST_EN_CORECTRL
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_RST_EN_PVT_TOP
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_RST_EN_PVT_PERI_GROUP1
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_RST_EN_PVT_PERI_GROUP2
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_RST_EN_PVT_PERI_GROUP3
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_RST_EN_PVT_PERI_GROUP4
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_RST_EN_REGDMA
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_RST_EN_CORE0_GLOBAL
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_RST_EN_CORE1_GLOBAL
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_RST_EN_CORETRACE0
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_RST_EN_CORETRACE1
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_RST_EN_HP_TCM
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_RST_EN_HP_CACHE
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_RST_EN_L1_I0_CACHE
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_RST_EN_L1_I1_CACHE
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_RST_EN_L1_D_CACHE
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_RST_EN_L2_CACHE
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_RST_EN_L2_MEM
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_RST_EN_L2MEMMON
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_RST_EN_TCMMON
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_RST_EN_PVT_APB
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_RST_EN_GDMA
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_RST_EN_MSPI_AXI
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_RST_EN_DUAL_MSPI_AXI
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_RST_EN_MSPI_APB
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_RST_EN_DUAL_MSPI_APB
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_RST_EN_DSI_BRG
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_RST_EN_CSI_HOST
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_RST_EN_CSI_BRG
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_RST_EN_ISP
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_RST_EN_JPEG
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_RST_EN_DMA2D
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: HP_RST_EN1
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_RST_EN_PPA
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_RST_EN_AHB_PDMA
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_RST_EN_AXI_PDMA
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_RST_EN_IOMUX
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_RST_EN_PADBIST
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_RST_EN_STIMER
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_RST_EN_TIMERGRP0
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_RST_EN_TIMERGRP1
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_RST_EN_UART0_CORE
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_RST_EN_UART1_CORE
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_RST_EN_UART2_CORE
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_RST_EN_UART3_CORE
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_RST_EN_UART4_CORE
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_RST_EN_UART0_APB
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_RST_EN_UART1_APB
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_RST_EN_UART2_APB
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_RST_EN_UART3_APB
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_RST_EN_UART4_APB
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_RST_EN_UHCI
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_RST_EN_I3CMST
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_RST_EN_I3CSLV
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_RST_EN_I2C1
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_RST_EN_I2C0
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_RST_EN_RMT
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_RST_EN_PWM0
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_RST_EN_PWM1
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_RST_EN_CAN0
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_RST_EN_CAN1
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_RST_EN_CAN2
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_RST_EN_LEDC
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_RST_EN_PCNT
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_RST_EN_ETM
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: HP_RST_EN2
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_RST_EN_INTRMTX
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_RST_EN_PARLIO
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_RST_EN_PARLIO_RX
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_RST_EN_PARLIO_TX
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_RST_EN_I2S0_APB
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_RST_EN_I2S1_APB
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_RST_EN_I2S2_APB
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_RST_EN_SPI2
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_RST_EN_SPI3
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_RST_EN_LCDCAM
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_RST_EN_ADC
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_RST_EN_BITSRAMBLER
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_RST_EN_BITSRAMBLER_RX
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_RST_EN_BITSRAMBLER_TX
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_RST_EN_CRYPTO
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_RST_EN_SEC
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_RST_EN_AES
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_RST_EN_DS
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_RST_EN_SHA
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_RST_EN_HMAC
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_RST_EN_ECDSA
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_RST_EN_RSA
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_RST_EN_ECC
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_RST_EN_KM
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_RST_EN_H264
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  side_effects: null
+- id: HP_FORCE_NORST0
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_FORCE_NORST_CORE0
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_FORCE_NORST_CORE1
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_FORCE_NORST_CORETRACE0
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_FORCE_NORST_CORETRACE1
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_FORCE_NORST_L2MEMMON
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_FORCE_NORST_TCMMON
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_FORCE_NORST_GDMA
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_FORCE_NORST_MSPI_AXI
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_FORCE_NORST_DUAL_MSPI_AXI
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_FORCE_NORST_MSPI_APB
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_FORCE_NORST_DUAL_MSPI_APB
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_FORCE_NORST_DSI_BRG
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_FORCE_NORST_CSI_HOST
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_FORCE_NORST_CSI_BRG
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_FORCE_NORST_ISP
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_FORCE_NORST_JPEG
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_FORCE_NORST_DMA2D
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_FORCE_NORST_PPA
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_FORCE_NORST_AHB_PDMA
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_FORCE_NORST_AXI_PDMA
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_FORCE_NORST_IOMUX
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_FORCE_NORST_PADBIST
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_FORCE_NORST_STIMER
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_FORCE_NORST_TIMERGRP0
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_FORCE_NORST_TIMERGRP1
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_FORCE_NORST_UART0
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_FORCE_NORST_UART1
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  - name: REG_FORCE_NORST_UART2
+    bit_range:
+    - 27
+    - 27
+    description: Reserved
+  - name: REG_FORCE_NORST_UART3
+    bit_range:
+    - 28
+    - 28
+    description: Reserved
+  - name: REG_FORCE_NORST_UART4
+    bit_range:
+    - 29
+    - 29
+    description: Reserved
+  - name: REG_FORCE_NORST_UHCI
+    bit_range:
+    - 30
+    - 30
+    description: Reserved
+  - name: REG_FORCE_NORST_I3CMST
+    bit_range:
+    - 31
+    - 31
+    description: Reserved
+  side_effects: null
+- id: HP_FORCE_NORST1
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_FORCE_NORST_I3CSLV
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_FORCE_NORST_I2C1
+    bit_range:
+    - 1
+    - 1
+    description: Reserved
+  - name: REG_FORCE_NORST_I2C0
+    bit_range:
+    - 2
+    - 2
+    description: Reserved
+  - name: REG_FORCE_NORST_RMT
+    bit_range:
+    - 3
+    - 3
+    description: Reserved
+  - name: REG_FORCE_NORST_PWM0
+    bit_range:
+    - 4
+    - 4
+    description: Reserved
+  - name: REG_FORCE_NORST_PWM1
+    bit_range:
+    - 5
+    - 5
+    description: Reserved
+  - name: REG_FORCE_NORST_CAN0
+    bit_range:
+    - 6
+    - 6
+    description: Reserved
+  - name: REG_FORCE_NORST_CAN1
+    bit_range:
+    - 7
+    - 7
+    description: Reserved
+  - name: REG_FORCE_NORST_CAN2
+    bit_range:
+    - 8
+    - 8
+    description: Reserved
+  - name: REG_FORCE_NORST_LEDC
+    bit_range:
+    - 9
+    - 9
+    description: Reserved
+  - name: REG_FORCE_NORST_PCNT
+    bit_range:
+    - 10
+    - 10
+    description: Reserved
+  - name: REG_FORCE_NORST_ETM
+    bit_range:
+    - 11
+    - 11
+    description: Reserved
+  - name: REG_FORCE_NORST_INTRMTX
+    bit_range:
+    - 12
+    - 12
+    description: Reserved
+  - name: REG_FORCE_NORST_PARLIO
+    bit_range:
+    - 13
+    - 13
+    description: Reserved
+  - name: REG_FORCE_NORST_PARLIO_RX
+    bit_range:
+    - 14
+    - 14
+    description: Reserved
+  - name: REG_FORCE_NORST_PARLIO_TX
+    bit_range:
+    - 15
+    - 15
+    description: Reserved
+  - name: REG_FORCE_NORST_I2S0
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_FORCE_NORST_I2S1
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_FORCE_NORST_I2S2
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  - name: REG_FORCE_NORST_SPI2
+    bit_range:
+    - 19
+    - 19
+    description: Reserved
+  - name: REG_FORCE_NORST_SPI3
+    bit_range:
+    - 20
+    - 20
+    description: Reserved
+  - name: REG_FORCE_NORST_LCDCAM
+    bit_range:
+    - 21
+    - 21
+    description: Reserved
+  - name: REG_FORCE_NORST_ADC
+    bit_range:
+    - 22
+    - 22
+    description: Reserved
+  - name: REG_FORCE_NORST_BITSRAMBLER
+    bit_range:
+    - 23
+    - 23
+    description: Reserved
+  - name: REG_FORCE_NORST_BITSRAMBLER_RX
+    bit_range:
+    - 24
+    - 24
+    description: Reserved
+  - name: REG_FORCE_NORST_BITSRAMBLER_TX
+    bit_range:
+    - 25
+    - 25
+    description: Reserved
+  - name: REG_FORCE_NORST_H264
+    bit_range:
+    - 26
+    - 26
+    description: Reserved
+  side_effects: null
+- id: HPWDT_CORE0_RST_CTRL0
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 4113
+  fields:
+  - name: REG_HPCORE0_STALL_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_HPCORE0_STALL_WAIT_NUM
+    bit_range:
+    - 8
+    - 1
+    description: Reserved
+  - name: REG_WDT_HPCORE0_RST_LEN
+    bit_range:
+    - 16
+    - 9
+    description: Reserved
+  side_effects: null
+- id: HPWDT_CORE1_RST_CTRL0
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 4113
+  fields:
+  - name: REG_HPCORE1_STALL_EN
+    bit_range:
+    - 0
+    - 0
+    description: Reserved
+  - name: REG_HPCORE1_STALL_WAIT_NUM
+    bit_range:
+    - 8
+    - 1
+    description: Reserved
+  - name: REG_WDT_HPCORE1_RST_LEN
+    bit_range:
+    - 16
+    - 9
+    description: Reserved
+  side_effects: null
+- id: CPU_SRC_FREQ0
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_CPU_SRC_FREQ
+    bit_range:
+    - 31
+    - 0
+    description: cpu source clock frequency, step by 0.25MHz
+  side_effects: null
+- id: CPU_CLK_STATUS0
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_ASIC_OR_FPGA
+    bit_range:
+    - 0
+    - 0
+    description: '0: ASIC mode, 1: FPGA mode'
+  - name: REG_CPU_DIV_EFFECT
+    bit_range:
+    - 1
+    - 1
+    description: '0: Divider bypass, 1: Divider takes effect'
+  - name: REG_CPU_SRC_IS_CPLL
+    bit_range:
+    - 2
+    - 2
+    description: '0: CPU source isn''t cpll_400m, 1: CPU Source is cll_400m'
+  - name: REG_CPU_DIV_NUM_CUR
+    bit_range:
+    - 10
+    - 3
+    description: cpu current div number
+  - name: REG_CPU_DIV_NUMERATOR_CUR
+    bit_range:
+    - 18
+    - 11
+    description: cpu current div numerator
+  - name: REG_CPU_DIV_DENOMINATOR_CUR
+    bit_range:
+    - 26
+    - 19
+    description: cpu current div denominator
+  side_effects: null
+- id: DBG_CLK_CTRL0
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108863
+  fields:
+  - name: REG_DBG_CH0_SEL
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_DBG_CH1_SEL
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_DBG_CH2_SEL
+    bit_range:
+    - 23
+    - 16
+    description: Reserved
+  - name: REG_DBG_CH0_DIV_NUM
+    bit_range:
+    - 31
+    - 24
+    description: Reserved
+  side_effects: null
+- id: DBG_CLK_CTRL1
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 771
+  fields:
+  - name: REG_DBG_CH1_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Reserved
+  - name: REG_DBG_CH2_DIV_NUM
+    bit_range:
+    - 15
+    - 8
+    description: Reserved
+  - name: REG_DBG_CH0_EN
+    bit_range:
+    - 16
+    - 16
+    description: Reserved
+  - name: REG_DBG_CH1_EN
+    bit_range:
+    - 17
+    - 17
+    description: Reserved
+  - name: REG_DBG_CH2_EN
+    bit_range:
+    - 18
+    - 18
+    description: Reserved
+  side_effects: null
+- id: HPCORE_WDT_RESET_SOURCE0
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: REG_HPCORE0_WDT_RESET_SOURCE_SEL
+    bit_range:
+    - 0
+    - 0
+    description: '1''b0: use wdt0 to reset hpcore0, 1''b1: use wdt1 to reset hpcore0'
+  - name: REG_HPCORE1_WDT_RESET_SOURCE_SEL
+    bit_range:
+    - 1
+    - 1
+    description: '1''b0: use wdt0 to reset hpcore1, 1''b1: use wdt1 to reset hpcore1'
+  side_effects: null
+interrupts: null
+timing: null

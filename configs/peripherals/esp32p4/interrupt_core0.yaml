@@ -1,0 +1,1613 @@
+peripheral: INTERRUPT_CORE0
+version: 0.1.0
+registers:
+- id: LP_RTC_INT_MAP
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_RTC_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_WDT_INT_MAP
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_WDT_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_TIMER_REG_0_INT_MAP
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_TIMER_REG_0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_TIMER_REG_1_INT_MAP
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_TIMER_REG_1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: MB_HP_INT_MAP
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_MB_HP_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: MB_LP_INT_MAP
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_MB_LP_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PMU_REG_0_INT_MAP
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PMU_REG_0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PMU_REG_1_INT_MAP
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PMU_REG_1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_ANAPERI_INT_MAP
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_ANAPERI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_ADC_INT_MAP
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_ADC_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_GPIO_INT_MAP
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_GPIO_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_I2C_INT_MAP
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_I2C_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_I2S_INT_MAP
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_I2S_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_SPI_INT_MAP
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_SPI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_TOUCH_INT_MAP
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_TOUCH_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_TSENS_INT_MAP
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_TSENS_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_UART_INT_MAP
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_UART_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_EFUSE_INT_MAP
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_EFUSE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_SW_INT_MAP
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_SW_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_SYSREG_INT_MAP
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_SYSREG_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LP_HUK_INT_MAP
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LP_HUK_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SYS_ICM_INT_MAP
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SYS_ICM_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: USB_DEVICE_INT_MAP
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_USB_DEVICE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SDIO_HOST_INT_MAP
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SDIO_HOST_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GDMA_INT_MAP
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GDMA_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SPI2_INT_MAP
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SPI2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SPI3_INT_MAP
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SPI3_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I2S0_INT_MAP
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I2S0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I2S1_INT_MAP
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I2S1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I2S2_INT_MAP
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I2S2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: UHCI0_INT_MAP
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_UHCI0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: UART0_INT_MAP
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_UART0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: UART1_INT_MAP
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_UART1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: UART2_INT_MAP
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_UART2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: UART3_INT_MAP
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_UART3_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: UART4_INT_MAP
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_UART4_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LCD_CAM_INT_MAP
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LCD_CAM_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: ADC_INT_MAP
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_ADC_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PWM0_INT_MAP
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PWM0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PWM1_INT_MAP
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PWM1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CAN0_INT_MAP
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CAN0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CAN1_INT_MAP
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CAN1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CAN2_INT_MAP
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CAN2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: RMT_INT_MAP
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_RMT_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I2C0_INT_MAP
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I2C0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I2C1_INT_MAP
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I2C1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: TIMERGRP0_T0_INT_MAP
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_TIMERGRP0_T0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: TIMERGRP0_T1_INT_MAP
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_TIMERGRP0_T1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: TIMERGRP0_WDT_INT_MAP
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_TIMERGRP0_WDT_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: TIMERGRP1_T0_INT_MAP
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_TIMERGRP1_T0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: TIMERGRP1_T1_INT_MAP
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_TIMERGRP1_T1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: TIMERGRP1_WDT_INT_MAP
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_TIMERGRP1_WDT_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LEDC_INT_MAP
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LEDC_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SYSTIMER_TARGET0_INT_MAP
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SYSTIMER_TARGET0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SYSTIMER_TARGET1_INT_MAP
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SYSTIMER_TARGET1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SYSTIMER_TARGET2_INT_MAP
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SYSTIMER_TARGET2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AHB_PDMA_IN_CH0_INT_MAP
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AHB_PDMA_IN_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AHB_PDMA_IN_CH1_INT_MAP
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AHB_PDMA_IN_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AHB_PDMA_IN_CH2_INT_MAP
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AHB_PDMA_IN_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AHB_PDMA_OUT_CH0_INT_MAP
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AHB_PDMA_OUT_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AHB_PDMA_OUT_CH1_INT_MAP
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AHB_PDMA_OUT_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AHB_PDMA_OUT_CH2_INT_MAP
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AHB_PDMA_OUT_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AXI_PDMA_IN_CH0_INT_MAP
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AXI_PDMA_IN_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AXI_PDMA_IN_CH1_INT_MAP
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AXI_PDMA_IN_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AXI_PDMA_IN_CH2_INT_MAP
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AXI_PDMA_IN_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AXI_PDMA_OUT_CH0_INT_MAP
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AXI_PDMA_OUT_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AXI_PDMA_OUT_CH1_INT_MAP
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AXI_PDMA_OUT_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AXI_PDMA_OUT_CH2_INT_MAP
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AXI_PDMA_OUT_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: RSA_INT_MAP
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_RSA_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: AES_INT_MAP
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_AES_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SHA_INT_MAP
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SHA_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: ECC_INT_MAP
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_ECC_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: ECDSA_INT_MAP
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_ECDSA_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: KM_INT_MAP
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_KM_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GPIO_INT0_MAP
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GPIO_INT0_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GPIO_INT1_MAP
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GPIO_INT1_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GPIO_INT2_MAP
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GPIO_INT2_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GPIO_INT3_MAP
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GPIO_INT3_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GPIO_PAD_COMP_INT_MAP
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GPIO_PAD_COMP_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CPU_INT_FROM_CPU_0_MAP
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CPU_INT_FROM_CPU_0_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CPU_INT_FROM_CPU_1_MAP
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CPU_INT_FROM_CPU_1_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CPU_INT_FROM_CPU_2_MAP
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CPU_INT_FROM_CPU_2_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CPU_INT_FROM_CPU_3_MAP
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CPU_INT_FROM_CPU_3_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CACHE_INT_MAP
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CACHE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: FLASH_MSPI_INT_MAP
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_FLASH_MSPI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CSI_BRIDGE_INT_MAP
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CSI_BRIDGE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DSI_BRIDGE_INT_MAP
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DSI_BRIDGE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CSI_INT_MAP
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CSI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DSI_INT_MAP
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DSI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: GMII_PHY_INT_MAP
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_GMII_PHY_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: LPI_INT_MAP
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_LPI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PMT_INT_MAP
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PMT_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: SBD_INT_MAP
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_SBD_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: USB_OTG_INT_MAP
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_USB_OTG_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: USB_OTG_ENDP_MULTI_PROC_INT_MAP
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_USB_OTG_ENDP_MULTI_PROC_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: JPEG_INT_MAP
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_JPEG_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PPA_INT_MAP
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PPA_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CORE0_TRACE_INT_MAP
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CORE0_TRACE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: CORE1_TRACE_INT_MAP
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_CORE1_TRACE_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: HP_CORE_CTRL_INT_MAP
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_HP_CORE_CTRL_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: ISP_INT_MAP
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_ISP_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I3C_MST_INT_MAP
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I3C_MST_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: I3C_SLV_INT_MAP
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_I3C_SLV_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: USB_OTG11_INT_MAP
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_USB_OTG11_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DMA2D_IN_CH0_INT_MAP
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DMA2D_IN_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DMA2D_IN_CH1_INT_MAP
+  address_offset: 420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DMA2D_IN_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DMA2D_OUT_CH0_INT_MAP
+  address_offset: 424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DMA2D_OUT_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DMA2D_OUT_CH1_INT_MAP
+  address_offset: 428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DMA2D_OUT_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: DMA2D_OUT_CH2_INT_MAP
+  address_offset: 432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_DMA2D_OUT_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PSRAM_MSPI_INT_MAP
+  address_offset: 436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PSRAM_MSPI_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: HP_SYSREG_INT_MAP
+  address_offset: 440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_HP_SYSREG_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: PCNT_INT_MAP
+  address_offset: 444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_PCNT_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: HP_PAU_INT_MAP
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_HP_PAU_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: HP_PARLIO_RX_INT_MAP
+  address_offset: 452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_HP_PARLIO_RX_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: HP_PARLIO_TX_INT_MAP
+  address_offset: 456
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_HP_PARLIO_TX_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_OUT_CH0_INT_MAP
+  address_offset: 460
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_OUT_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_OUT_CH1_INT_MAP
+  address_offset: 464
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_OUT_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_OUT_CH2_INT_MAP
+  address_offset: 468
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_OUT_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_OUT_CH3_INT_MAP
+  address_offset: 472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_OUT_CH3_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_OUT_CH4_INT_MAP
+  address_offset: 476
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_OUT_CH4_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_IN_CH0_INT_MAP
+  address_offset: 480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_IN_CH0_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_IN_CH1_INT_MAP
+  address_offset: 484
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_IN_CH1_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_IN_CH2_INT_MAP
+  address_offset: 488
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_IN_CH2_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_IN_CH3_INT_MAP
+  address_offset: 492
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_IN_CH3_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_IN_CH4_INT_MAP
+  address_offset: 496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_IN_CH4_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_DMA2D_IN_CH5_INT_MAP
+  address_offset: 500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_DMA2D_IN_CH5_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: H264_REG_INT_MAP
+  address_offset: 504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_H264_REG_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: ASSIST_DEBUG_INT_MAP
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_ASSIST_DEBUG_INT_MAP
+    bit_range:
+    - 5
+    - 0
+    description: NA
+  side_effects: null
+- id: INTR_STATUS_REG_0
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_INTR_STATUS_0
+    bit_range:
+    - 31
+    - 0
+    description: NA
+  side_effects: null
+- id: INTR_STATUS_REG_1
+  address_offset: 516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_INTR_STATUS_1
+    bit_range:
+    - 31
+    - 0
+    description: NA
+  side_effects: null
+- id: INTR_STATUS_REG_2
+  address_offset: 520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_INTR_STATUS_2
+    bit_range:
+    - 31
+    - 0
+    description: NA
+  side_effects: null
+- id: INTR_STATUS_REG_3
+  address_offset: 524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE0_INTR_STATUS_3
+    bit_range:
+    - 31
+    - 0
+    description: NA
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 528
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CORE0_REG_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: NA
+  side_effects: null
+- id: INTERRUPT_REG_DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 33566752
+  fields:
+  - name: CORE0_INTERRUPT_REG_DATE
+    bit_range:
+    - 27
+    - 0
+    description: NA
+  side_effects: null
+interrupts: null
+timing: null

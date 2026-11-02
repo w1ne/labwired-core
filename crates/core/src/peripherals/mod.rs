@@ -31,6 +31,7 @@ pub mod efr32;
 pub mod esp32;
 pub mod esp32c3;
 pub mod esp32c6;
+pub mod esp32p4;
 pub mod esp32s3;
 pub(crate) mod esp_gdma;
 pub mod esp_gpio_net;

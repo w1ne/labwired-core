@@ -1,0 +1,178 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: "esp32p4"
+arch: "riscv"
+# HP core: RV32IMAFC (Espressif `esp32p4.svd` <cpu><name>RV32IMAFC</name>). The F
+# (single-precision float) and A (word atomics) extensions are NOT decoded by
+# the interpreter (crates/core/src/decoder/riscv.rs implements RV32IMC plus a
+# subset of M) — this L1 smoke targets the riscv32imc subset and does not
+# exercise them. The LOW-POWER LX7-class core is NOT modelled: this descriptor
+# is the HP core only, exactly like esp32c6.yaml's HP-core-only scope.
+core: "rv32imafc"
+registers_count: 31
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. The P4 HP core runs at
+# up to 400 MHz (ESP32-P4 datasheet v0.5 §4.1, CPU_CLK default 360 MHz; 400 MHz
+# is the top bin). The UART baud pacing scales against this.
+cpu_hz: 360_000_000
+
+flash:
+  # Unified external-memory / XIP window. The P4 maps both instructions and
+  # constant data through 0x4000_0000..0x43FF_FFFF (esp32p4 soc.h:
+  # SOC_IROM_LOW = SOC_DROM_LOW = 0x40000000, SOC_IROM_HIGH = 0x44000000 —
+  # a 64 MiB window). A bare ELF loads straight at its link addresses.
+  base: 0x40000000
+  # The Guition JC4880P443 module carries 32 MiB of external SPI flash. Spelled
+  # in KB because `parse_size` reads MB as 10^6 — "32MB" would be 32_000_000,
+  # 777_216 bytes short of the part (gated by
+  # crates/core/src/tests/chip_memory_sizes.rs).
+  size: "32768KB"
+ram:
+  # HP SRAM: 768 kB at 0x4FF0_0000..0x4FFB_FFFF (esp32p4 soc.h SOC_IRAM_LOW =
+  # SOC_DRAM_LOW = 0x4ff00000, SOC_IRAM_HIGH = SOC_DRAM_HIGH = 0x4ffc0000).
+  # The mask ROM reserves the top of this window for its own .data/.bss (see
+  # crates/core/src/boot/esp32p4_rom.rs APP_SRAM_END).
+  base: 0x4FF00000
+  size: "768KB"
+memory_regions:
+  # Mask ROM (HP): 128 kB at 0x4FC0_0000..0x4FC1_FFFF (esp32p4 soc.h
+  # SOC_IROM_MASK_LOW/HIGH = 0x4fc00000/0x4fc20000). The dump is Espressif's
+  # copyrighted mask ROM, so it is loaded from a path in LABWIRED_ESP32P4_ROM
+  # rather than committed; the region stays zero if unset.
+  - name: "rom"
+    base: 0x4FC00000
+    size: "128KB"
+    image_env: "LABWIRED_ESP32P4_ROM"
+  # LP SRAM: 32 kB at 0x5010_8000..0x5010_FFFF (soc.h SOC_LP_RAM_LOW = 0x50108000,
+  # SOC_LP_RAM_HIGH = 0x50110000). Deep-sleep retention memory; mapped so
+  # RTC/LP code that touches it does not fault. The LP core itself is NOT
+  # modelled.
+  - name: "lp_sram"
+    base: 0x50108000
+    size: "32KB"
+  # External PSRAM window: 0x4800_0000..0x4BFF_FFFF (soc.h SOC_EXTRAM_LOW/HIGH).
+  # The JC4880P443 module carries 16 MiB of PSRAM (Guition spec). Mapped as a
+  # plain byte-accessible window (no MSPI/DDR PHY behind it at L1).
+  - name: "psram"
+    base: 0x48000000
+    size: "16384KB"
+peripherals:
+  # --- HP APB peripheral window: 0x5000_0000..0x500F_FFFF (esp32p4 soc.h
+  # --- SOC_PERIPHERAL_LOW/HIGH). Bases below are from the official
+  # --- espressif/svd esp32p4.svd (exact baseAddress per peripheral), cross-
+  # --- checked against soc.h / reg_base.h.
+  #
+  # Espressif UART IP. The P4 UART head register map is offset-identical to the
+  # C3/C6/S3 (esp32p4.svd UART0: FIFO@0x00, INT_RAW@0x04, INT_ST@0x08,
+  # INT_ENA@0x0C, INT_CLR@0x10, CLKDIV_SYNC@0x14, RX_FILT@0x18, STATUS@0x1C,
+  # CONF0_SYNC@0x20, CONF1@0x24) — the `_SYNC` suffixes are SVD naming only and
+  # do not move any offset — so the shared `EspUart` model serves it, built with
+  # the C6 register map (0x70 = FSM_STATUS, which the P4 also has; the C3
+  # POSPULSE reset 0xFFF at that offset would wedge a wait-idle poll).
+  # Base per esp32p4.svd (UART0 @ 0x500CA000, UART1 @ 0x500CB000, UART2 @
+  # 0x500CC000); the P4 has no UART3/4 (soc.h REG_UART_BASE(i) covers UART0/1/2
+  # only). IRQ ids are documentation at L1: the interrupt matrix is not routed
+  # through the bus on this target.
+  - id: "uart0"
+    type: "esp32p4_uart"
+    base_address: 0x500CA000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32p4/uart0.yaml"
+  - id: "uart1"
+    type: "esp32p4_uart"
+    base_address: 0x500CB000
+    size: "4KB"
+    config:
+      echo_stdout: false
+      debug_schema: "../peripherals/esp32p4/uart1.yaml"
+  - id: "uart2"
+    type: "esp32p4_uart"
+    base_address: 0x500CC000
+    size: "4KB"
+    config:
+      echo_stdout: false
+      debug_schema: "../peripherals/esp32p4/uart2.yaml"
+  # SYSTIMER — same register layout as the S3/C3 (esp32p4.svd SYSTIMER:
+  # CONF@0x00, UNIT0_OP@0x04 ... INT_CLR@0x6C, INT_ST@0x70, REAL_TARGET0_LO@0x74),
+  # so the shared `esp_systimer::Systimer` model fits. Base per esp32p4.svd
+  # (SYSTIMER @ 0x500E2000).
+  - id: "systimer"
+    type: "esp32p4_systimer"
+    base_address: 0x500E2000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32p4/systimer.yaml"
+  # Timer Groups. The P4 TIMG register head (esp32p4.svd TIMG0: T0CONFIG@0x00,
+  # T0LO@0x04, T0HI@0x08, T0UPDATE@0x0C, T0LOAD@0x20, WDTCONFIG0@0x48,
+  # WDTFEED@0x60, WDTWPROTECT@0x64, RTCCALICFG@0x68, INT_RAW_TIMERS@0x74,
+  # INT_CLR_TIMERS@0x7C) is offset-identical to the C3/C6, so both groups reuse
+  # the shared `esp32::timg::Timg` model. One GP timer per group (the P4 TIMG0
+  # SVD exposes T0 only). Bases per esp32p4.svd (TIMG0 @ 0x500C2000, TIMG1 @
+  # 0x500C3000).
+  - id: "timg0"
+    type: "esp32p4_timg"
+    base_address: 0x500C2000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32p4/timg0.yaml"
+  - id: "timg1"
+    type: "esp32p4_timg"
+    base_address: 0x500C3000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32p4/timg1.yaml"
+  # GPIO — the P4 carries a TWO-BANK GPIO (esp32p4.svd GPIO: OUT@0x04,
+  # OUT_W1TS@0x08, OUT_W1TC@0x0C, OUT1@0x10, ..., ENABLE@0x20, ENABLE1@0x2C,
+  # IN@0x3C, IN1@0x40, FUNCn_OUT_SEL_CFG@0x558). This is NOT the C3/C6
+  # single-bank register head, so the C3 GPIO model does not fit; the window is
+  # declared as an SVD-derived `declarative` register file (register-backed,
+  # no electrical enforcement) and the bank-1/double-word behaviour is listed
+  # as a limitation on the board page. Base per esp32p4.svd (GPIO @ 0x500E0000).
+  - id: "gpio"
+    type: "declarative"
+    base_address: 0x500E0000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32p4/gpio.yaml"
+  # IO_MUX pad registers (esp32p4.svd IO_MUX @ 0x500E1000 is a pad-function
+  # register file). Register-backed declarative stub: MCU_SEL/function writes
+  # are recorded with the SVD reset values, but pad function is NOT
+  # electrically enforced — the console UART shifts bytes regardless of pad
+  # routing (same contract as the C6 io_mux stub).
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x500E1000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32p4/io_mux.yaml"
+  # CLKRST — the P4 clock/reset block (a.k.a. HP_SYS_CLKRST). Register-backed
+  # declarative descriptor derived from esp32p4.svd (CLK_EN0@0x00,
+  # PERI_CLK_CTRLnn, REF_CLK_CTRLn). NOTE: unlike the C6 there is NO `clock:`
+  # gate on the UARTs — the P4 clock tree is not modelled and no peripheral is
+  # gated on CLK_EN0 at L1 (documented limitation). Base per esp32p4.svd
+  # (HP_SYS_CLKRST @ 0x500E6000).
+  - id: "clkrst"
+    type: "declarative"
+    base_address: 0x500E6000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32p4/clkrst.yaml"
+  # INTMTX / INTERRUPT_CORE0 — interrupt matrix source-map registers
+  # (esp32p4.svd INTERRUPT_CORE0 @ 0x500D6000). Declared so a firmware that
+  # programs the matrix does not fault; source routing is NOT wired at L1 (the
+  # smoke is polled, exactly like the other ESP L1 targets).
+  - id: "interrupt_core0"
+    type: "declarative"
+    base_address: 0x500D6000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32p4/interrupt_core0.yaml"
+  # Everything else the P4 exposes (MIPI-DSI/CSI, USB 2.0 OTG + PHY, GDMA +
+  # DMA2D + AXI/AHB DMA, H.264, JPEG, PPA, ISP, EMAC, SD/MMC, the LP subsystem,
+  # eFuse, and every radio) is deliberately NOT declared: unmapped windows
+  # fault loudly instead of pretending to work. See
+  # examples/esp32p4-guition-jc4880p443/KNOWN_LIMITATIONS.md.

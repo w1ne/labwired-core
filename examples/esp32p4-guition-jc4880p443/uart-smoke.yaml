@@ -1,0 +1,11 @@
+# LabWired - Guition JC4880P443 (ESP32-P4) UART smoke test
+schema_version: "1.0"
+inputs:
+  # Built by: cargo build -p firmware-esp32p4-demo --release --target riscv32imc-unknown-none-elf
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32p4-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,500 @@
+peripheral: TIMG0
+version: 0.1.0
+registers:
+- id: T0CONFIG
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1610620928
+  fields:
+  - name: USE_XTAL
+    bit_range:
+    - 9
+    - 9
+    description: '1: Use XTAL_CLK as the source clock of timer group. 0: Use APB_CLK as the source clock of timer group.'
+  - name: ALARM_EN
+    bit_range:
+    - 10
+    - 10
+    description: When set, the alarm is enabled. This bit is automatically cleared once an alarm occurs.
+  - name: DIVCNT_RST
+    bit_range:
+    - 12
+    - 12
+    description: When set, Timer %s 's clock divider counter will be reset.
+  - name: DIVIDER
+    bit_range:
+    - 28
+    - 13
+    description: Timer %s clock (T%s_clk) prescaler value.
+  - name: AUTORELOAD
+    bit_range:
+    - 29
+    - 29
+    description: When set, timer %s auto-reload at alarm is enabled.
+  - name: INCREASE
+    bit_range:
+    - 30
+    - 30
+    description: When set, the timer %s time-base counter will increment every clock tick. When cleared, the timer %s time-base counter will decrement.
+  - name: EN
+    bit_range:
+    - 31
+    - 31
+    description: When set, the timer %s time-base counter is enabled.
+  side_effects: null
+- id: T0LO
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LO
+    bit_range:
+    - 31
+    - 0
+    description: After writing to TIMG_T%sUPDATE_REG, the low 32 bits of the time-base counter of timer %s can be read here.
+  side_effects: null
+- id: T0HI
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HI
+    bit_range:
+    - 21
+    - 0
+    description: After writing to TIMG_T%sUPDATE_REG, the high 22 bits of the time-base counter of timer %s can be read here.
+  side_effects: null
+- id: T0UPDATE
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UPDATE
+    bit_range:
+    - 31
+    - 31
+    description: After writing 0 or 1 to TIMG_T%sUPDATE_REG, the counter value is latched.
+  side_effects: null
+- id: T0ALARMLO
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_LO
+    bit_range:
+    - 31
+    - 0
+    description: Timer %s alarm trigger time-base counter value, low 32 bits.
+  side_effects: null
+- id: T0ALARMHI
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_HI
+    bit_range:
+    - 21
+    - 0
+    description: Timer %s alarm trigger time-base counter value, high 22 bits.
+  side_effects: null
+- id: T0LOADLO
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOAD_LO
+    bit_range:
+    - 31
+    - 0
+    description: Low 32 bits of the value that a reload will load onto timer %s time-base Counter.
+  side_effects: null
+- id: T0LOADHI
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOAD_HI
+    bit_range:
+    - 21
+    - 0
+    description: High 22 bits of the value that a reload will load onto timer %s time-base counter.
+  side_effects: null
+- id: T0LOAD
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOAD
+    bit_range:
+    - 31
+    - 0
+    description: Write any value to trigger a timer %s time-base counter reload.
+  side_effects: null
+- id: WDTCONFIG0
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 311296
+  fields:
+  - name: WDT_APPCPU_RESET_EN
+    bit_range:
+    - 12
+    - 12
+    description: WDT reset CPU enable.
+  - name: WDT_PROCPU_RESET_EN
+    bit_range:
+    - 13
+    - 13
+    description: WDT reset CPU enable.
+  - name: WDT_FLASHBOOT_MOD_EN
+    bit_range:
+    - 14
+    - 14
+    description: When set, Flash boot protection is enabled.
+  - name: WDT_SYS_RESET_LENGTH
+    bit_range:
+    - 17
+    - 15
+    description: 'System reset signal length selection. 0: 100 ns, 1: 200 ns, 2: 300 ns, 3: 400 ns, 4: 500 ns, 5: 800 ns, 6: 1.6 us, 7: 3.2 us.'
+  - name: WDT_CPU_RESET_LENGTH
+    bit_range:
+    - 20
+    - 18
+    description: 'CPU reset signal length selection. 0: 100 ns, 1: 200 ns, 2: 300 ns, 3: 400 ns, 4: 500 ns, 5: 800 ns, 6: 1.6 us, 7: 3.2 us.'
+  - name: WDT_USE_XTAL
+    bit_range:
+    - 21
+    - 21
+    description: choose WDT clock:0-apb_clk, 1-xtal_clk.
+  - name: WDT_CONF_UPDATE_EN
+    bit_range:
+    - 22
+    - 22
+    description: update the WDT configuration registers
+  - name: WDT_STG3
+    bit_range:
+    - 24
+    - 23
+    description: 'Stage 3 configuration. 0: off, 1: interrupt, 2: reset CPU, 3: reset system.'
+  - name: WDT_STG2
+    bit_range:
+    - 26
+    - 25
+    description: 'Stage 2 configuration. 0: off, 1: interrupt, 2: reset CPU, 3: reset system.'
+  - name: WDT_STG1
+    bit_range:
+    - 28
+    - 27
+    description: 'Stage 1 configuration. 0: off, 1: interrupt, 2: reset CPU, 3: reset system.'
+  - name: WDT_STG0
+    bit_range:
+    - 30
+    - 29
+    description: 'Stage 0 configuration. 0: off, 1: interrupt, 2: reset CPU, 3: reset system.'
+  - name: WDT_EN
+    bit_range:
+    - 31
+    - 31
+    description: When set, MWDT is enabled.
+  side_effects: null
+- id: WDTCONFIG1
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: WDT_DIVCNT_RST
+    bit_range:
+    - 0
+    - 0
+    description: When set, WDT 's clock divider counter will be reset.
+  - name: WDT_CLK_PRESCALE
+    bit_range:
+    - 31
+    - 16
+    description: MWDT clock prescaler value. MWDT clock period = 12.5 ns * TIMG_WDT_CLK_PRESCALE.
+  side_effects: null
+- id: WDTCONFIG2
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 26000000
+  fields:
+  - name: WDT_STG0_HOLD
+    bit_range:
+    - 31
+    - 0
+    description: Stage 0 timeout value, in MWDT clock cycles.
+  side_effects: null
+- id: WDTCONFIG3
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 134217727
+  fields:
+  - name: WDT_STG1_HOLD
+    bit_range:
+    - 31
+    - 0
+    description: Stage 1 timeout value, in MWDT clock cycles.
+  side_effects: null
+- id: WDTCONFIG4
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 1048575
+  fields:
+  - name: WDT_STG2_HOLD
+    bit_range:
+    - 31
+    - 0
+    description: Stage 2 timeout value, in MWDT clock cycles.
+  side_effects: null
+- id: WDTCONFIG5
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 1048575
+  fields:
+  - name: WDT_STG3_HOLD
+    bit_range:
+    - 31
+    - 0
+    description: Stage 3 timeout value, in MWDT clock cycles.
+  side_effects: null
+- id: WDTFEED
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WDT_FEED
+    bit_range:
+    - 31
+    - 0
+    description: Write any value to feed the MWDT. (WO)
+  side_effects: null
+- id: WDTWPROTECT
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 1356348065
+  fields:
+  - name: WDT_WKEY
+    bit_range:
+    - 31
+    - 0
+    description: If the register contains a different value than its reset value, write protection is enabled.
+  side_effects: null
+- id: RTCCALICFG
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 69632
+  fields:
+  - name: RTC_CALI_START_CYCLING
+    bit_range:
+    - 12
+    - 12
+    description: '0: one-shot frequency calculation,1: periodic frequency calculation,'
+  - name: RTC_CALI_CLK_SEL
+    bit_range:
+    - 14
+    - 13
+    description: 0:rtc slow clock. 1:clk_8m, 2:xtal_32k.
+  - name: RTC_CALI_RDY
+    bit_range:
+    - 15
+    - 15
+    description: indicate one-shot frequency calculation is done.
+  - name: RTC_CALI_MAX
+    bit_range:
+    - 30
+    - 16
+    description: Configure the time to calculate RTC slow clock's frequency.
+  - name: RTC_CALI_START
+    bit_range:
+    - 31
+    - 31
+    description: Set this bit to start one-shot frequency calculation.
+  side_effects: null
+- id: RTCCALICFG1
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC_CALI_CYCLING_DATA_VLD
+    bit_range:
+    - 0
+    - 0
+    description: indicate periodic frequency calculation is done.
+  - name: RTC_CALI_VALUE
+    bit_range:
+    - 31
+    - 7
+    description: When one-shot or periodic frequency calculation is done, read this value to calculate RTC slow clock's frequency.
+  side_effects: null
+- id: INT_ENA_TIMERS
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T0_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The interrupt enable bit for the TIMG_T0_INT interrupt.
+  - name: T1_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The interrupt enable bit for the TIMG_T1_INT interrupt.
+  - name: WDT_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: The interrupt enable bit for the TIMG_WDT_INT interrupt.
+  side_effects: null
+- id: INT_RAW_TIMERS
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T0_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt status bit for the TIMG_T0_INT interrupt.
+  - name: T1_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt status bit for the TIMG_T1_INT interrupt.
+  - name: WDT_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt status bit for the TIMG_WDT_INT interrupt.
+  side_effects: null
+- id: INT_ST_TIMERS
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T0_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The masked interrupt status bit for the TIMG_T0_INT interrupt.
+  - name: T1_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The masked interrupt status bit for the TIMG_T1_INT interrupt.
+  - name: WDT_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: The masked interrupt status bit for the TIMG_WDT_INT interrupt.
+  side_effects: null
+- id: INT_CLR_TIMERS
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T0_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the TIMG_T0_INT interrupt.
+  - name: T1_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to clear the TIMG_T1_INT interrupt.
+  - name: WDT_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to clear the TIMG_WDT_INT interrupt.
+  side_effects: null
+- id: RTCCALICFG2
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967192
+  fields:
+  - name: RTC_CALI_TIMEOUT
+    bit_range:
+    - 0
+    - 0
+    description: RTC calibration timeout indicator
+  - name: RTC_CALI_TIMEOUT_RST_CNT
+    bit_range:
+    - 6
+    - 3
+    description: Cycles that release calibration timeout reset
+  - name: RTC_CALI_TIMEOUT_THRES
+    bit_range:
+    - 31
+    - 7
+    description: Threshold value for the RTC calibration timer. If the calibration timer's value exceeds this threshold, a timeout is triggered.
+  side_effects: null
+- id: NTIMERS_DATE
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 35688770
+  fields:
+  - name: NTIMGS_DATE
+    bit_range:
+    - 27
+    - 0
+    description: Timer version control register
+  side_effects: null
+- id: REGCLK
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 1879048192
+  fields:
+  - name: ETM_EN
+    bit_range:
+    - 28
+    - 28
+    description: enable timer's etm task and event
+  - name: WDT_CLK_IS_ACTIVE
+    bit_range:
+    - 29
+    - 29
+    description: enable WDT's clock
+  - name: TIMER_CLK_IS_ACTIVE
+    bit_range:
+    - 30
+    - 30
+    description: enable Timer 30's clock
+  - name: CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: 'Register clock gate signal. 1: Registers can be read and written to by software. 0: Registers can not be read or written to by software.'
+  side_effects: null
+interrupts:
+  TG0_T0: 46
+  TG0_T1: 47
+  TG0_WDT: 48
+timing: null

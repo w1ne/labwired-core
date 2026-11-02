@@ -32,6 +32,7 @@ use crate::boot::esp32c3_rom::{
     RomBootOpts,
 };
 use crate::boot::esp32c6_rom;
+use crate::boot::esp32p4_rom;
 use crate::boot::esp32s3_rom::RomImages;
 use crate::bus::SystemBus;
 use crate::console::{ConsoleCapture, HostConsole};
@@ -159,8 +160,12 @@ fn build_program_image(
     }
 
     // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).
+    // P4: same contract, its own reservation ceiling
+    // (esp32p4_rom::APP_SRAM_END).
     let sp_top = if esp32c6_rom::is_esp32c6(chip) {
         esp32c6_rom::app_stack_top()
+    } else if esp32p4_rom::is_esp32p4(chip) {
+        esp32p4_rom::app_stack_top()
     } else {
         (chip.ram.base + chip.ram.size) as u32
     };

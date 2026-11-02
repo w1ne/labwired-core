@@ -12,6 +12,7 @@
 pub mod esp32_arduino;
 pub mod esp32c3_rom;
 pub mod esp32c6_rom;
+pub mod esp32p4_rom;
 pub mod esp32s3;
 pub mod esp32s3_rom;
 pub mod esp_partition_table;
