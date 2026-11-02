@@ -371,8 +371,8 @@ const fn edev(
 /// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F630/676/684, PIC16F818, PIC16F84A, PIC16F716 and friends), except
-/// PIC16F819 which uses `PIC16_CLASSIC_NO_USART_MAP`; enhanced parts without
+/// (PIC16F630/676/684, PIC16F84A, PIC16F716 and friends), except PIC16F818
+/// and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; enhanced parts without
 /// an EUSART (PIC16F1503/1507/1613/1703/1707), with comparator SFRs at
 /// LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
 /// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
@@ -782,6 +782,18 @@ const PIC16_DEVICES: &[Pic16Device] = &[
             (0x0F0, 0x0FF, 0x070),
             (0x170, 0x17F, 0x070),
             (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev_no_usart(
+        "pic16f818",
+        1024,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0C0, 0x0FF, 0x040),
+            (0x120, 0x13F, 0x020),
+            (0x140, 0x17F, 0x040),
+            (0x1A0, 0x1BF, 0x020),
+            (0x1C0, 0x1FF, 0x040),
         ],
     ),
     dev_no_usart(
@@ -3251,6 +3263,26 @@ mod tests {
             );
         }
         // PIR1 bit 4 is not synthesized as TXIF on a part without a USART.
+        cpu.write_data(SFR_PIR1, 0x10);
+        assert_eq!(cpu.read_data(SFR_PIR1), 0x10);
+    }
+
+    #[test]
+    fn pic16f818_uses_its_smaller_no_usart_geometry_and_file_registers() {
+        let device = pic16_device("pic16f818").expect("F818 row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0xFF, 0xFF, 0x00, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("pic16f818");
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
         cpu.write_data(SFR_PIR1, 0x10);
         assert_eq!(cpu.read_data(SFR_PIR1), 0x10);
     }
