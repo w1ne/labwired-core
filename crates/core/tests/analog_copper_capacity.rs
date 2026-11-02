@@ -85,7 +85,9 @@ mod analog {
         // 98 unknowns. Each output still has the closed-form one-pole response.
         let mut deck = String::from("V1 in 0 dc 0\n");
         for index in 0..96 {
-            deck.push_str(&format!("R{index} in n{index} 1k\nC{index} n{index} 0 100n\n"));
+            deck.push_str(&format!(
+                "R{index} in n{index} 1k\nC{index} n{index} 0 100n\n"
+            ));
         }
         let circuit = parse_netlist(&deck).unwrap();
         assert_eq!(circuit.unknowns(), 98);
