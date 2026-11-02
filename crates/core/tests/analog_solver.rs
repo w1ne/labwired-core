@@ -258,22 +258,23 @@ mod analog {
     #[test]
     fn a_circuit_over_the_unknown_limit_is_refused() {
         // One voltage source plus a chain of resistors: each new node is one more
-        // unknown, so 64 nodes + 1 branch current crosses the ceiling.
+        // unknown. MAX_UNKNOWNS nodes plus one source branch crosses the
+        // ceiling by exactly one, even if the configured limit changes.
         let mut netlist = String::from("* ladder\nV1 n0 0 dc 1\n");
         let nodes = MAX_UNKNOWNS;
-        for index in 0..nodes {
+        for index in 0..nodes - 1 {
             netlist.push_str(&format!("R{index} n{index} n{} 1k\n", index + 1));
         }
-        netlist.push_str(".end\n");
+        netlist.push_str(&format!("Rend n{} 0 1k\n.end\n", nodes - 1));
 
         let circuit = parse_netlist(&netlist).expect("ladder parses");
-        assert!(circuit.unknowns() > MAX_UNKNOWNS);
+        assert_eq!(circuit.unknowns(), MAX_UNKNOWNS + 1);
         let err = Solver::new(circuit, Integration::BackwardEuler)
             .expect_err("an over-sized circuit must be refused, not silently truncated");
         match err {
             AnalogError::TooLarge { unknowns, max } => {
                 assert_eq!(max, MAX_UNKNOWNS);
-                assert!(unknowns > MAX_UNKNOWNS);
+                assert_eq!(unknowns, MAX_UNKNOWNS + 1);
             }
             other => panic!("expected TooLarge, got {other}"),
         }
@@ -286,14 +287,22 @@ mod analog {
     #[test]
     fn a_circuit_at_the_unknown_limit_is_accepted() {
         let mut netlist = String::from("* ladder\nV1 n0 0 dc 1\n");
-        // 63 nodes + 1 voltage-source branch current = exactly 64.
-        for index in 0..62 {
+        // Reserve one unknown for the voltage-source branch. Equal resistors
+        // give an analytic divider at every remaining node, including the last.
+        let nodes = MAX_UNKNOWNS - 1;
+        for index in 0..nodes - 1 {
             netlist.push_str(&format!("R{index} n{index} n{} 1k\n", index + 1));
         }
-        netlist.push_str("Rend n62 0 1k\n.end\n");
+        netlist.push_str(&format!("Rend n{} 0 1k\n.end\n", nodes - 1));
         let circuit = parse_netlist(&netlist).expect("ladder parses");
         assert_eq!(circuit.unknowns(), MAX_UNKNOWNS);
-        Solver::new(circuit, Integration::BackwardEuler).expect("64 unknowns is inside the limit");
+        let solver = Solver::new(circuit, Integration::BackwardEuler)
+            .expect("a circuit exactly at the limit is accepted");
+        for index in 0..nodes {
+            let node = solver.circuit().node(&format!("n{index}")).unwrap();
+            let expected = (nodes - index) as f64 / nodes as f64;
+            assert!((solver.node_voltage(node) - expected).abs() < 1e-10);
+        }
     }
 
     #[test]

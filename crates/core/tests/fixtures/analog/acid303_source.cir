@@ -1,0 +1,46 @@
+* Acid303 R-2R DAC / dual-LM358 regression.
+Cc_analog v_net_c_analog_1 0 100n
+Cc_line v_net_c_line_1 v_net_c_line_2 10u
+Ccf1 v_net_cf1_1 0 22n
+Ccf2 v_net_cf2_1 0 22n
+Vsup_j_analog v_net_c_analog_1 0 dc 5
+Rr_bleed v_net_j_line_1 0 100k
+Rr_line v_net_c_line_2 v_net_j_line_1 1k
+Rrd0 v_net_rd0_1 v_net_rd0_2 20k
+Rrd1 v_net_rd1_1 v_net_rd1_2 20k
+Rrd2 v_net_rd2_1 v_net_rd2_2 20k
+Rrd3 v_net_rd3_1 v_net_rd3_2 20k
+Rrd4 v_net_rd4_1 v_net_rd4_2 20k
+Rrd5 v_net_rd5_1 v_net_rd5_2 20k
+Rrd6 v_net_rd6_1 v_net_rd6_2 20k
+Rrd7 v_net_rd7_1 v_net_j_line_3 20k
+Rrf1 v_net_rf1_1 v_net_cf1_1 10k
+Rrf2 v_net_cf1_1 v_net_cf2_1 10k
+Rrl0 v_net_rd0_2 v_net_rd1_2 10k
+Rrl1 v_net_rd1_2 v_net_rd2_2 10k
+Rrl2 v_net_rd2_2 v_net_rd3_2 10k
+Rrl3 v_net_rd3_2 v_net_rd4_2 10k
+Rrl4 v_net_rd4_2 v_net_rd5_2 10k
+Rrl5 v_net_rd5_2 v_net_rd6_2 10k
+Rrl6 v_net_rd6_2 v_net_j_line_3 10k
+Rrt v_net_rd0_2 0 20k
+Xu_analog_A v_net_j_line_3 v_net_rf1_1 v_net_c_analog_1 0 v_net_rf1_1 LM358
+Xu_analog_B v_net_cf2_1 v_net_c_line_1 v_net_c_analog_1 0 v_net_c_line_1 LM358
+Vdrv_pa6 d_pa6 0 dc 0
+Sdrv_pa6 d_pa6 v_net_c_line_1 ctl_pa6 ron=25 roff=1e12
+Vdrv_pb0 d_pb0 0 dc 0
+Sdrv_pb0 d_pb0 v_net_rd0_1 ctl_pb0 ron=25 roff=1e12
+Vdrv_pb1 d_pb1 0 dc 0
+Sdrv_pb1 d_pb1 v_net_rd1_1 ctl_pb1 ron=25 roff=1e12
+Vdrv_pb10 d_pb10 0 dc 0
+Sdrv_pb10 d_pb10 v_net_rd7_1 ctl_pb10 ron=25 roff=1e12
+Vdrv_pb3 d_pb3 0 dc 0
+Sdrv_pb3 d_pb3 v_net_rd2_1 ctl_pb3 ron=25 roff=1e12
+Vdrv_pb4 d_pb4 0 dc 0
+Sdrv_pb4 d_pb4 v_net_rd3_1 ctl_pb4 ron=25 roff=1e12
+Vdrv_pb5 d_pb5 0 dc 0
+Sdrv_pb5 d_pb5 v_net_rd4_1 ctl_pb5 ron=25 roff=1e12
+Vdrv_pb6 d_pb6 0 dc 0
+Sdrv_pb6 d_pb6 v_net_rd5_1 ctl_pb6 ron=25 roff=1e12
+Vdrv_pb7 d_pb7 0 dc 0
+Sdrv_pb7 d_pb7 v_net_rd6_1 ctl_pb7 ron=25 roff=1e12

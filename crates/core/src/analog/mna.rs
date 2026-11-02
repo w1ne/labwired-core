@@ -55,9 +55,10 @@ use super::device;
 use super::netlist::{AnalogError, Circuit, NodeRef, POWER_SINK_VMIN};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
-/// currents. Dense LU is `O(n³)`; at 64 unknowns one step is a few microseconds
-/// even in the browser, and a bigger circuit is a sign the user wants ngspice.
-pub const MAX_UNKNOWNS: usize = 64;
+/// currents. The bound accommodates routed-PCB resistor terminals while keeping
+/// dense LU's `O(n³)` factorization and two `O(n²)` matrix buffers bounded.
+/// Larger circuits belong on the ngspice adapter.
+pub const MAX_UNKNOWNS: usize = 128;
 
 /// Integration rule for the reactive companion models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -871,7 +872,7 @@ impl Solver {
     }
 
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
-    /// implementation on purpose: the systems are at most 64×64, and a linear
+    /// implementation on purpose: the systems are at most 128×128, and a linear
     /// algebra dependency would have to compile to WASM and stay deterministic
     /// across hosts to buy nothing at this size.
     fn factorize(&mut self) -> Result<(), AnalogError> {
@@ -959,7 +960,7 @@ pub const MAX_STEP_CUTS: u32 = 10;
 /// Tighter than SPICE's `RELTOL` (1e-3) on purpose. The engine's job here is to
 /// be reproducible rather than fast: at 1e-3 the converged answer depends on
 /// the path the limiter took, which makes a golden worth nothing, and the extra
-/// iterations cost microseconds on a 64-unknown dense solve.
+/// iterations are bounded by the small dense system.
 pub const NEWTON_RELTOL: f64 = 1e-9;
 
 /// Absolute floor for a node voltage, volts. SPICE's `VNTOL` is 1e-6.

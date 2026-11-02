@@ -460,7 +460,7 @@ does not shift the threshold). A circuit that needs any of those belongs on
 `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
-as SPICE does. It counts against the 64-unknown ceiling and can be probed.
+as SPICE does. It counts against the 128-unknown ceiling and can be probed.
 
 ### Solver
 
@@ -471,8 +471,10 @@ as SPICE does. It counts against the 64-unknown ceiling and can be probed.
   source or switch change is taken with backward Euler, as SPICE does at a
   breakpoint, so an edge does not leave trapezoidal a half-step behind.
 - Fixed internal step `h = step_ns / substeps`. Dense LU, own implementation.
-  `N` nodes + `M` branch currents is capped at 64; a bigger circuit is an
-  error naming the ngspice adapter.
+  `N` nodes + `M` branch currents is capped at 128; a bigger circuit is an
+  error naming the ngspice adapter. Extracted PCB copper resistance retains
+  its terminal nodes under this same bound. The matrix and elimination-factor
+  buffers together use at most 256 KiB; factorization remains `O(n³)`.
 - The solver caches elimination pivots and multipliers until a switch, step
   length, or integration rule changes. Source and reactive-history changes
   refresh only the right-hand side. Multipliers replay in the original order,
