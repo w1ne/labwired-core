@@ -10,12 +10,13 @@
 //! `external_process` adapter has no browser counterpart. This engine compiles
 //! into the same WASM the playground ships, runs natively too, and adds one
 //! dependency (`libm`, for bit-identical transcendentals) to either. What it
-//! does not do — subcircuits, model libraries, AC/DC sweeps, and every device
-//! capacitance — it refuses by name and points at
+//! does not do — subcircuits, model libraries, AC/DC sweeps, and unsupported
+//! device capacitances — it refuses by name and points at
 //! `tools/cosim/labwired_ngspice.py`, which does them all.
 //!
-//! Nonlinear devices — the Shockley diode, the Early-effect Gummel–Poon BJT and the level-1
-//! MOSFET — are solved by Newton–Raphson iteration inside each time step. A
+//! Nonlinear devices — the Shockley diode (with optional depletion charge),
+//! the Gummel–Poon BJT, and the level-1 JFET and MOSFET — are solved by
+//! Newton–Raphson iteration inside each time step. A
 //! circuit with none of them takes exactly the code path it took before they
 //! existed, down to the floating-point operation order.
 //!

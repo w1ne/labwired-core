@@ -308,20 +308,33 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.diodes[0].model.rs, 0.5);
     }
 
-    /// Parameters that carry charge or temperature behaviour are accepted and
-    /// dropped, so a card pasted off a datasheet runs. That is a deliberate
-    /// choice and it has a cost, which `analog::device` states.
+    /// The diode's depletion-charge parameters resolve into the model; the
+    /// still-unsupported diffusion and temperature parameters remain accepted
+    /// for vendor-card compatibility.
     #[test]
-    fn unmodelled_model_parameters_are_accepted_and_ignored() {
+    fn diode_cjo_parameters_resolve_while_other_vendor_parameters_are_ignored() {
         let circuit = parse_netlist(
             "D1 a 0 D1N4148\n\
-             .model D1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.333 TT=11.54n \
+             .model D1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.333 FC=0.4 TT=11.54n \
              VJ=0.75 BV=100 IBV=100u EG=1.11 XTI=3)\n",
         )
         .expect("a vendor card parses");
         assert_eq!(circuit.diodes[0].model.is, 2.52e-9);
         assert_eq!(circuit.diodes[0].model.n, 1.752);
         assert_eq!(circuit.diodes[0].model.rs, 0.568);
+        assert_eq!(circuit.diodes[0].model.cjo, 4e-12);
+        assert_eq!(circuit.diodes[0].model.m, 0.333);
+        assert_eq!(circuit.diodes[0].model.vj, 0.75);
+        assert_eq!(circuit.diodes[0].model.fc, 0.4);
+    }
+
+    #[test]
+    fn invalid_diode_depletion_parameters_are_rejected() {
+        for parameters in ["CJO=-1p", "VJ=0", "M=-0.1", "FC=-0.1", "FC=1"] {
+            let text = format!("D1 a 0 DMOD\n.model DMOD D({parameters})\n");
+            let error = parse_netlist(&text).expect_err("invalid junction parameters are refused");
+            assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
+        }
     }
 
     #[test]
