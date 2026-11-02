@@ -1099,8 +1099,6 @@ jobs:
         with:
           shared-key: core-browser-layer
           workspaces: . -> target
-          # Read-only on pull requests; see `core-pr-gate` above.
-          save-if: ${{ github.event_name != 'pull_request' }}
 
       # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
       # (see `default-members` in the root Cargo.toml), so every step above
