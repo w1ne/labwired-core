@@ -179,6 +179,30 @@ fn an_and_gate_and_a_nand_gate_disagree_on_every_input() {
     }
 }
 
+/// `74hc32` (OR) on the same pins as the NAND above. Its truth table differs
+/// from NAND at three of four inputs and from AND at two, so a part that fell
+/// back to either shape fails here on a pad.
+#[test]
+fn a_74hc32_answers_its_truth_table_on_stm32l476_pads() {
+    for (a, b, want) in [
+        (false, false, false),
+        (false, true, true),
+        (true, false, true),
+        (true, true, true),
+    ] {
+        let mut bus = bus_with("stm32l476.yaml", "74hc32", "u1", NAND_PINS);
+        clock_l476_gpio(&mut bus);
+        drive(&mut bus, "PA0", a);
+        drive(&mut bus, "PA1", b);
+        tick(&mut bus, 0, 64);
+        assert_eq!(
+            sample(&mut bus, "PA4"),
+            want,
+            "OR({a}, {b}) must read {want} on PA4"
+        );
+    }
+}
+
 // ─── propagation delay ─────────────────────────────────────────────────────
 
 /// **The output moves after `tprop_ns`, and not before.**
@@ -284,6 +308,64 @@ fn a_74hc245_drives_the_side_dir_points_at() {
     assert!(
         !sample(&mut bus, "PA0"),
         "with OE high the transceiver is off the wire; A1 must not follow B1"
+    );
+}
+
+/// The single-bit `74lvc1t45`: the same DIR/OE contract as one bit of the
+/// `74hc245` above, on its own descriptor. The supply rails it exists for are
+/// not modelled (its `metadata.detail` says so), so direction and isolation
+/// are the whole observable.
+#[test]
+fn a_74lvc1t45_drives_the_side_dir_points_at() {
+    let pins = "a_pin: \"PA0\"\nb_pin: \"PA1\"\ndir_pin: \"PA2\"\noe_pin: \"PA3\"\n";
+    let mut bus = bus_with("stm32l476.yaml", "74lvc1t45", "u6", pins);
+    clock_l476_gpio(&mut bus);
+
+    drive(&mut bus, "PA3", false); // OE low = enabled
+    drive(&mut bus, "PA2", true); // DIR high = A to B
+    drive(&mut bus, "PA0", true);
+    drive(&mut bus, "PA1", false);
+    let now = tick(&mut bus, 0, 64);
+    assert!(sample(&mut bus, "PA1"), "DIR high must send A to B");
+
+    drive(&mut bus, "PA2", false); // DIR low = B to A, and B is driving LOW
+    let now = tick(&mut bus, now, 64);
+    assert!(!sample(&mut bus, "PA0"), "DIR low must send B to A");
+
+    drive(&mut bus, "PA3", true); // OE high = isolated
+    let now = tick(&mut bus, now, 64);
+    drive(&mut bus, "PA1", true);
+    tick(&mut bus, now, 64);
+    assert!(
+        !sample(&mut bus, "PA0"),
+        "with OE high the translator is off the wire; A must not follow B"
+    );
+}
+
+/// The 4-channel MOSFET shifter module, modelled as a 4-bit transceiver with a
+/// DIR strap and no OE. Channel 1 is checked both ways; the strap is what the
+/// placement sets, so flipping it is flipping the lab's wiring choice.
+#[test]
+fn a_logic_level_shifter_4ch_follows_its_dir_strap() {
+    let mut pins = String::from("dir_pin: \"PA2\"\na1_pin: \"PA0\"\nb1_pin: \"PA1\"\n");
+    for n in 2..=4 {
+        pins.push_str(&format!("a{n}_pin: \"PB{}\"\n", n - 2));
+        pins.push_str(&format!("b{n}_pin: \"PC{}\"\n", n - 2));
+    }
+    let mut bus = bus_with("stm32l476.yaml", "logic_level_shifter_4ch", "u7", &pins);
+    clock_l476_gpio(&mut bus);
+
+    drive(&mut bus, "PA2", true); // DIR high = A to B
+    drive(&mut bus, "PA0", true);
+    drive(&mut bus, "PA1", false);
+    let now = tick(&mut bus, 0, 64);
+    assert!(sample(&mut bus, "PA1"), "DIR high must send A1 to B1");
+
+    drive(&mut bus, "PA2", false); // DIR low = B to A
+    tick(&mut bus, now, 64);
+    assert!(
+        !sample(&mut bus, "PA0"),
+        "DIR low must send B1 to A1; PA0 still HIGH means the strap is not read"
     );
 }
 

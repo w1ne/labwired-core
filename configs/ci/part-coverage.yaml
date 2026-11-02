@@ -1,0 +1,33 @@
+# What scripts/ci/part_coverage.py cannot derive about configs/devices/.
+#
+# A part is exercised when an example lab attaches it or an integration test
+# under crates/*/tests/ names its `type:` — that is derived, and a derived part
+# must NOT be listed here (the gate rejects it). This file holds the rest:
+#
+#   kind: tested       a test exercises it through a path the derivation does
+#                      not read; `tests:` names the files, and each must exist
+#                      and mention the part.
+#   kind: device-only  nothing exercises it today; `reason:` says why.
+#
+# Both counts are ratchets and must EQUAL today's numbers: `max_device_only`
+# only falls, `min_lab_exercised` (parts an example lab attaches — the
+# Playground claim) only rises.
+max_device_only: 1
+min_lab_exercised: 46
+
+parts:
+  apa102:
+    kind: tested
+    tests:
+      - crates/core/tests/apa102_strip.rs
+      - crates/core/tests/led_strip_migration_parity.rs
+    reason: >-
+      Both tests build the strip from the embedded descriptor through the
+      `declarative_led_strip::apa102` constructor, not a manifest `type:`. No
+      example lab places an APA102.
+  segment_display_mux:
+    kind: device-only
+    reason: >-
+      Not exercised outside the model: the multiplexing, persistence and font
+      behaviour is unit-tested in declarative_segment_display.rs, but no lab
+      and no integration test attaches the descriptor through a manifest.
