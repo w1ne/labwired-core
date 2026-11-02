@@ -13,8 +13,12 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
 | stm32l552 | **L1** | ✓ | 50 | — | — | firmware_survival::test_nucleo_l552ze_q_smoke_survival |
 | cc2538sf53 | **L1** | ✓ | 28 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
-| r7fa6m5bh | **L1** | ✓ | 37 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
-| r7fa8m1ah | **L1** | ✓ | 35 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
+| mpfs095t | **L1** | ✓ | 14 | — | — | firmware_survival::test_mpfs_disco_kit_zephyr_survival |
+| am6234 | **L1** | ✓ | 9 | — | — | firmware_survival::test_sk_am62_zephyr_survival |
+| r5f52618bgfp | **L1** | ✓ | 10 | — | — | firmware_survival::test_ek_rx261_zephyr_survival |
+| pic32mz2048efm144 | **L1** | ✓ | 10 | — | — | firmware_survival::test_curiosity_pic32mz_nuttx_survival |
+| r7fa6m5bh | **L1** | ✓ | 48 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
+| r7fa8m1ah | **L1** | ✓ | 44 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
 | amap42kp | **L1** | ✓ | 46 | — | — | firmware_survival::test_apollo4p_evb_smoke_survival |
 | mk64f12 | **L1** | ✓ | 25 | — | — | firmware_survival::test_frdm_k64f_smoke_survival |
 | same70q21b | **L1** | ✓ | 24 | — | — | firmware_survival::test_sam_e70_xplained_smoke_survival |
@@ -72,7 +76,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 36 | — | — | firmware_survival::test_stm32f767_tier1_survival |
-| rp2350 | **L1** | ✓ | 23 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2350 | **L1** | ✓ | 26 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |
@@ -123,3 +127,4 @@ These descriptors carry declarations only. They receive no estate checkmark, con
 | Chip | State | Evidence boundary |
 |------|-------|-------------------|
 | rv1103 | Declared only | Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate. |
+| xck26-rpu | Declared only | Generic descriptor is CPU/memory only. The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification. |

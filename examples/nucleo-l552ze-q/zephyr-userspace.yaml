@@ -1,0 +1,41 @@
+# LabWired - NUCLEO-L552ZE-Q stock Zephyr tests/kernel/mem_protect/userspace
+#
+# Unmodified upstream Zephyr v3.7.0 `tests/kernel/mem_protect/userspace`, the
+# twister scenario kernel.memory_protection.userspace
+# (CONFIG_TEST_HW_STACK_PROTECTION=n, CONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE=0),
+# for board `nucleo_l552ze_q`. Rebuild: crates/firmware-l552ze-zephyr/build.sh
+#
+# Renode's ARMv8M.robot "Should Pass Zephyr Userspace Test" ("Test the TT(T)
+# instruction parsing") waits for `PROJECT EXECUTION SUCCESSFUL`. The three
+# suites (40 cases) run user threads (CONTROL.nPRIV) and pass only if:
+# - unprivileged loads/stores of kernel RAM/text/rodata, privileged stacks and
+#   other threads' stacks raise MemManage (armv8m_mpu enforcement);
+# - unprivileged writes to the MPU (PPB) raise BusFault, and MSR CONTROL from
+#   user mode cannot clear nPRIV;
+# - TTT reports no R/RW for kernel objects, so the k_pipe_put/k_pipe_get
+#   syscall buffer checks (cmse_check_address_range) oops;
+# - memory-domain partitions reprogrammed on every context switch grant the
+#   user thread exactly its own partitions.
+# The `ASSERTION FAIL [z_stack_is_user_capable(...)]` line is
+# test_kernel_only_thread's expected fatal error (reason 4).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/stm32l552-zephyr-userspace.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+  wall_time_ms: 600000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Running TESTSUITE userspace"
+      - " PASS - test_disable_mmu_mpu"
+      - " PASS - test_read_kernram"
+      - " PASS - test_read_kobject_user_pipe"
+      - " PASS - test_write_control"
+      - " PASS - test_write_kobject_user_pipe"
+      - "SUITE PASS - 100.00% [userspace]: pass = 33, fail = 0, skip = 0, total = 33"
+      - "SUITE PASS - 100.00% [userspace_domain]: pass = 4, fail = 0, skip = 0, total = 4"
+      - "SUITE PASS - 100.00% [userspace_domain_ctx]: pass = 3, fail = 0, skip = 0, total = 3"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - expected_stop_reason: max_steps

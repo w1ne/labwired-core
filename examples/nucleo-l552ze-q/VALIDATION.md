@@ -21,7 +21,11 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | FLASH `ACR.LATENCY` read-back | **not modelled** — fidelity gap | the FLASH controller is a stub, so `LL_SetFlashLatency` reads 0 back, gives up after two reads and returns `ERROR`, which Zephyr ignores. Silicon latches 5 wait states for 110 MHz |
 | Stock Zephyr v3.7.0 `tests/kernel/fpu_sharing/generic` (Renode `ARMv8M.robot` FPU sharing case) | smoke-tested | `zephyr-fpu-sharing.yaml` 2/2: `test_load_store` + `test_pi` PASS, `PROJECT EXECUTION SUCCESSFUL` |
 | FP extension context (`CONTROL.FPCA`, FPCCR/FPCAR/FPDSCR/MVFR, extended exception frame, EXC_RETURN[4]) | modelled — `cortex_m_fpu` | eager, not lazy: the S0-S15/FPSCR slots are filled at entry and `FPCCR.LSPACT` reads 0. Unit tests in `cortex_m_tests.rs`; the Zephyr test fails when the unstacking is removed |
-| PMSAv8 MPU region file (RNR/RBAR/RLAR + aliases A1-A3, MAIR0/1, 8 regions) and `TT` | modelled, **not enforced** — `armv8m_mpu` | TT reports MREGION/MRVALID/R/RW from the stored regions (Zephyr's `get_region_index`); no access is checked, MemManage is never raised, so Zephyr `mem_protect` tests are not claimed |
+| PMSAv8 MPU region file (RNR/RBAR/RLAR + aliases A1-A3, MAIR0/1, 8 regions) and `TT` | modelled — `armv8m_mpu` | TT reports MREGION/MRVALID/R/RW from the stored regions (Zephyr's `get_region_index`) |
+| PMSAv8 MPU enforcement (AP, XN, PRIVDEFENA background, HFNMIENA, PPB exempt, overlap faults) | modelled — `armv8m_mpu` + `cortex_m.rs` | every data access and fetch is checked; MemManage DACCVIOL + MMFAR / IACCVIOL, HardFault FORCED when MEMFAULTENA is clear. `tests/cortex_m_mpu_enforcement.rs`; `zephyr-protection.yaml` 5/5. Not modelled: MAIR Device-type XN, MSTKERR/MUNSTKERR/MLSPERR, Armv8.1-M PXN |
+| Stock Zephyr v3.7.0 `tests/kernel/mem_protect/protection` (Renode `ARMv8M.robot` protection case) | smoke-tested | `zephyr-protection.yaml`: 5/5 (`test_exec_data/heap/stack`, `test_write_ro/text`), `PROJECT EXECUTION SUCCESSFUL` |
+| Stock Zephyr v3.7.0 `tests/kernel/mem_protect/userspace` (Renode `ARMv8M.robot` userspace case) | smoke-tested | `zephyr-userspace.yaml`: userspace 33/33, userspace_domain 4/4, userspace_domain_ctx 3/3, `PROJECT EXECUTION SUCCESSFUL` |
+| Unprivileged execution (CONTROL.nPRIV): PPB privileged-only, MSR to CONTROL/masks/SPs ignored, `TTT` R/RW for the unprivileged view | modelled — `cortex_m.rs`, `exec/system.rs`, `armv8m_mpu` | the PPB rule is applied on cores with `armv8m_mpu` only; the MSR rule on every Cortex-M. STIR with `CCR.USERSETMPEND` is not special-cased |
 | TrustZone / SAU / GTZC / secure aliasing | **not modelled** | `TT`'s SAU/IDAU fields read 0 |
 | VDDIO2 isolation of PG[15:2] until `PWR_CR2.IOSV` | **not modelled** — fidelity gap | the sim drives port G whether or not IOSV is set, so a firmware that forgets IOSV passes here and stays silent on the board. The smoke sets IOSV (RM0438 PWR chapter; CMSIS `PWR_CR2_IOSV_Pos = 9`) |
 | L5 non-secure FLASH controller, EXTI, ADC, FDCAN, USB | declared stubs | `configs/chips/stm32l552.yaml` |
@@ -178,6 +182,68 @@ crates/firmware-l552ze-zephyr/build.sh
 #                                  no console output, FAIL 0/1
 #   S0-S15 not unstacked        -> "reference pi -1832.509277", calculate_pi_low assert, FAIL 1/2
 ```
+
+### Stock Zephyr mem_protect/protection (verified 2026-10-31)
+
+Unmodified upstream Zephyr v3.7.0 `tests/kernel/mem_protect/protection`
+(twister `kernel.memory_protection.protection`), same board target and build
+script. This is Renode's `ARMv8M.robot` "Should Pass Zephyr Protection Test"
+("Test the PMSAv8 MPU"). Each case passes only if its access faults: the
+test's `k_sys_fatal_error_handler` prints `Caught system error` and passes,
+while an access that goes through reaches `zassert_unreachable`.
+
+The core now checks every data load/store and instruction fetch against the
+region file (ARMv8-M ARM B3.5, `MPUCheck`) through a cached per-span decision
+that MPU writes invalidate. Zephyr maps flash read-only + executable and
+SRAM read-write + execute-never, with PRIVDEFENA. So `test_write_ro/text`
+take MemManage DACCVIOL with MMFAR = the address, and `test_exec_*` take
+IACCVIOL at the buffer.
+
+```bash
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-protection.yaml
+#   E: ***** MPU FAULT *****  /  E:   Data Access Violation  /  MMFAR Address: 0x8006540
+#   Caught system error -- reason 0
+#   SUITE PASS - 100.00% [protection]: pass = 5, fail = 0, skip = 0, total = 5
+#   PROJECT EXECUTION SUCCESSFUL
+
+# Negative control: main before this change (no enforcement) -> 0/5,
+#   "Execute from target buffer succeeded!", "rodata modified!",
+#   PROJECT EXECUTION FAILED.
+```
+
+### Stock Zephyr mem_protect/userspace (verified 2026-10-31)
+
+Unmodified upstream Zephyr v3.7.0 `tests/kernel/mem_protect/userspace`, the
+twister scenario `kernel.memory_protection.userspace`
+(`CONFIG_TEST_HW_STACK_PROTECTION=n`, `CONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE=0`),
+same build script (it needs `gperf`). This is Renode's `ARMv8M.robot`
+"Should Pass Zephyr Userspace Test". Beyond the enforcement above it needed
+three architectural rules for unprivileged Thread mode:
+
+- the PPB is privileged-only: `test_disable_mmu_mpu` writes `MPU_CTRL` from
+  user mode and must BusFault. Before, the write went through, and every
+  later case ran with the MPU off (14 failures in the userspace suite);
+- MSR to CONTROL, PRIMASK, BASEPRI, FAULTMASK, MSP and PSP is ignored
+  (`test_write_control`);
+- `TT`/`TTT` R and RW are the access check for the privilege asked about,
+  so an unprivileged query of kernel RAM reports neither. The
+  `k_pipe_put`/`k_pipe_get` syscall buffer checks
+  (`cmse_check_address_range`) depend on this
+  (`test_read/write_kobject_user_pipe`).
+
+```bash
+./target/release/labwired test --script examples/nucleo-l552ze-q/zephyr-userspace.yaml
+#   SUITE PASS - 100.00% [userspace]: pass = 33, fail = 0, skip = 0, total = 33
+#   SUITE PASS - 100.00% [userspace_domain]: pass = 4, fail = 0, skip = 0, total = 4
+#   SUITE PASS - 100.00% [userspace_domain_ctx]: pass = 3, fail = 0, skip = 0, total = 3
+#   PROJECT EXECUTION SUCCESSFUL      (~24 s wall, release)
+# Negative controls: PPB rule removed -> 14 failures (MPU left off); TT R/RW from the
+#   default map -> the two kobject_user_pipe cases fail.
+```
+
+The FPU-sharing run costs about 3% more wall time with the MPU checks
+(86.9 s -> 89.6 s on work-1, release). Chips without `armv8m_mpu` only pay an
+`Option` test per access.
 
 ## Notes
 

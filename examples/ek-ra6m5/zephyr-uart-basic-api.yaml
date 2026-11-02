@@ -1,0 +1,61 @@
+# LabWired - EK-RA6M5 Zephyr tests/drivers/uart/uart_basic_api
+#
+# Unmodified upstream Zephyr v4.0.0 `tests/drivers/uart/uart_basic_api` for
+# `ek_ra6m5` (rebuild: crates/firmware-ek-ra6m5-zephyr/build.sh). The same
+# test as examples/ek-ra8m1/zephyr-uart-basic-api.yaml, here on the classic
+# SCI driver (`uart_renesas_ra_sci.c` over FSP r_sci_uart) with its default
+# 16-stage FIFO (CONFIG_UART_RA_SCI_UART_FIFO_ENABLE, RTRG 8).
+#
+# Every UART interrupt here is an ICU event: the driver links
+# ELC_EVENT_SCI0_RXI/TXI/TEI (0x180/0x181/0x182) to NVIC lines 0/1/2
+# through IELSRn and clears IELSRn.IR in each handler. fifo_fill is driven
+# by TXI/TEI (SCR.TIE/TEIE, read-modify-written), fifo_read and the pending
+# suite by RXI with SSR_FIFO.DR/RDF and FDR.R, poll_in/poll_out by FDR.
+#
+# Renode writes "The quick brown fox jumps over the lazy dog" after each
+# "Please send characters to serial console" prompt; this script does the
+# same with cycle-timed `uart_injections`. The run is deterministic: the
+# prompts come at ~0.5 s of fifo_fill sleep (idle-skipped) past boot, under
+# 120M, 130M and 140M cycles of the 200 MHz guest clock, and the injections
+# sit just behind them: 125M, 135M, 145M. The run stops at `max_cycles`,
+# idle after the summary.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 100000000
+  max_cycles: 300000000
+  wall_time_ms: 120000
+uart_injections:
+  - uart: "sci0"
+    bytes: "The quick brown fox jumps over the lazy dog\n"
+    trigger: !after_cycles { cycles: 125000000 }
+  - uart: "sci0"
+    bytes: "The quick brown fox jumps over the lazy dog\n"
+    trigger: !after_cycles { cycles: 135000000 }
+  - uart: "sci0"
+    bytes: "The quick brown fox jumps over the lazy dog\n"
+    trigger: !after_cycles { cycles: 145000000 }
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.0.0 ***"
+      - "Running TESTSUITE uart_basic_api"
+      - "This is a FIFO test."
+      - " PASS - test_uart_fifo_fill"
+      - "Please send characters to serial console"
+      - "The quick brown fox jumps over the lazy dog"
+      - " PASS - test_uart_fifo_read"
+      - "Please send characters to serial console"
+      - "The quick brown fox jumps over the lazy dog"
+      - " PASS - test_uart_poll_in"
+      - "This is a POLL test."
+      - " PASS - test_uart_poll_out"
+      - "TESTSUITE uart_basic_api succeeded"
+      - "Please send characters to serial console"
+      - "The quick brown fox jumps over the lazy dog"
+      - " PASS - test_uart_pending"
+      - "SUITE PASS - 100.00% [uart_basic_api]: pass = 6, fail = 0, skip = 0, total = 6"
+      - "SUITE PASS - 100.00% [uart_basic_api_pending]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - expected_stop_reason: max_cycles

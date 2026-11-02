@@ -1,0 +1,118 @@
+# Plantower PMSA003I particulate-matter sensor (I²C variant) — declarative
+# I²C register-pointer device.
+#
+# Datasheet: Plantower "PMSA003I series data manual" (digital universal
+# particle concentration sensor, I²C interface), the I²C register table, which
+# maps the 32-byte frame onto register addresses 0x00..0x1F (16-bit words, MSB
+# at the lower address):
+#
+#   0x00/0x01 start characters          0x42, 0x4D
+#   0x02/0x03 frame length              2 × 13 + 2 = 28 (0x001C)
+#   0x04 data 1   PM1.0  µg/m³, CF=1 (standard particle)
+#   0x06 data 2   PM2.5  µg/m³, CF=1
+#   0x08 data 3   PM10   µg/m³, CF=1
+#   0x0A data 4   PM1.0  µg/m³, atmospheric environment
+#   0x0C data 5   PM2.5  µg/m³, atmospheric environment
+#   0x0E data 6   PM10   µg/m³, atmospheric environment
+#   0x10 data 7   particles > 0.3 µm in 0.1 L of air
+#   0x12 data 8   particles > 0.5 µm
+#   0x14 data 9   particles > 1.0 µm
+#   0x16 data 10  particles > 2.5 µm
+#   0x18 data 11  particles > 5.0 µm
+#   0x1A data 12  particles > 10 µm
+#   0x1C data 13  reserved
+#   0x1E check code = 16-bit sum of bytes 0x00..0x1D
+#   7-bit address 0x12, fixed.
+#
+# ── Reading the frame ─────────────────────────────────────────────────────
+# Drivers read the 32 bytes in one burst, and the widely used ones
+# (Adafruit_PM25AQI among them) do it with a BARE read — no pointer write —
+# every time. For that to return the frame head each time the pointer must
+# come back to 0x00 after the check code, so the auto-increment walk is
+# declared to wrap 0x1F → 0x00. A driver that writes pointer 0x00 first reads
+# the same frame.
+#
+# ── The check code is COMPUTED, not a literal ───────────────────────────
+# It is the integer program `checksum` below: the byte sum over whatever the
+# twin actually puts in 0x00..0x1D for the current stimulus. Every data word is
+# first quantised to the count the register will hold (the same nearest
+# rounding and 0..65535 clamp), so the code and the words can never disagree.
+#
+# ⚠️ Modelled scope, named:
+#   * The CF=1 words report the same value as the atmospheric words. Plantower
+#     documents the two as equal at the standard calibration condition and does
+#     not publish the factor between them; the host drives one set of mass
+#     concentrations.
+#   * The reserved word reads 0x0000.
+#   * The fan, the 1 s frame cadence, the 30 s warm-up and the SET / RESET
+#     pins are not modelled; the frame always holds the current stimulus.
+type: pmsa003i
+
+behavior:
+  primitive: i2c_device
+  derived:
+    - { name: w_pm1_0, quantize: { expr: "min(max(pm1_0, 0), 65535)", rounding: nearest } }
+    - { name: w_pm2_5, quantize: { expr: "min(max(pm2_5, 0), 65535)", rounding: nearest } }
+    - { name: w_pm10, quantize: { expr: "min(max(pm10, 0), 65535)", rounding: nearest } }
+    - { name: w_n0_3, quantize: { expr: "min(max(n0_3, 0), 65535)", rounding: nearest } }
+    - { name: w_n0_5, quantize: { expr: "min(max(n0_5, 0), 65535)", rounding: nearest } }
+    - { name: w_n1_0, quantize: { expr: "min(max(n1_0, 0), 65535)", rounding: nearest } }
+    - { name: w_n2_5, quantize: { expr: "min(max(n2_5, 0), 65535)", rounding: nearest } }
+    - { name: w_n5_0, quantize: { expr: "min(max(n5_0, 0), 65535)", rounding: nearest } }
+    - { name: w_n10, quantize: { expr: "min(max(n10, 0), 65535)", rounding: nearest } }
+    # Byte sum of 0x00..0x1D. Header: 0x42 + 0x4D + 0x00 + 0x1C = 0xAB. The
+    # three mass words appear twice (CF=1 and atmospheric). Reserved adds 0.
+    - name: checksum
+      integer:
+        bindings:
+          - { name: s_pm1_0, expr: "shr(w_pm1_0, 8) + (w_pm1_0 - shl(shr(w_pm1_0, 8), 8))" }
+          - { name: s_pm2_5, expr: "shr(w_pm2_5, 8) + (w_pm2_5 - shl(shr(w_pm2_5, 8), 8))" }
+          - { name: s_pm10, expr: "shr(w_pm10, 8) + (w_pm10 - shl(shr(w_pm10, 8), 8))" }
+          - { name: s_n0_3, expr: "shr(w_n0_3, 8) + (w_n0_3 - shl(shr(w_n0_3, 8), 8))" }
+          - { name: s_n0_5, expr: "shr(w_n0_5, 8) + (w_n0_5 - shl(shr(w_n0_5, 8), 8))" }
+          - { name: s_n1_0, expr: "shr(w_n1_0, 8) + (w_n1_0 - shl(shr(w_n1_0, 8), 8))" }
+          - { name: s_n2_5, expr: "shr(w_n2_5, 8) + (w_n2_5 - shl(shr(w_n2_5, 8), 8))" }
+          - { name: s_n5_0, expr: "shr(w_n5_0, 8) + (w_n5_0 - shl(shr(w_n5_0, 8), 8))" }
+          - { name: s_n10, expr: "shr(w_n10, 8) + (w_n10 - shl(shr(w_n10, 8), 8))" }
+        of: "171 + 2 * (s_pm1_0 + s_pm2_5 + s_pm10) + s_n0_3 + s_n0_5 + s_n1_0 + s_n2_5 + s_n5_0 + s_n10"
+  i2c:
+    default_address: 0x12
+    auto_increment: true
+    auto_increment_map:
+      - { from: 0x1F, to: 0x00 }
+    unmapped_byte: 0x00
+    registers:
+      - { name: START, addr: 0x00, width: 2, endian: be, access: r, reset: 0x424D }
+      - { name: FRAME_LENGTH, addr: 0x02, width: 2, endian: be, access: r, reset: 0x001C }
+      - { name: PM1_0_CF1, addr: 0x04, width: 2, endian: be, access: r, source: w_pm1_0 }
+      - { name: PM2_5_CF1, addr: 0x06, width: 2, endian: be, access: r, source: w_pm2_5 }
+      - { name: PM10_CF1, addr: 0x08, width: 2, endian: be, access: r, source: w_pm10 }
+      - { name: PM1_0_ATM, addr: 0x0A, width: 2, endian: be, access: r, source: w_pm1_0 }
+      - { name: PM2_5_ATM, addr: 0x0C, width: 2, endian: be, access: r, source: w_pm2_5 }
+      - { name: PM10_ATM, addr: 0x0E, width: 2, endian: be, access: r, source: w_pm10 }
+      - { name: PARTICLES_0_3, addr: 0x10, width: 2, endian: be, access: r, source: w_n0_3 }
+      - { name: PARTICLES_0_5, addr: 0x12, width: 2, endian: be, access: r, source: w_n0_5 }
+      - { name: PARTICLES_1_0, addr: 0x14, width: 2, endian: be, access: r, source: w_n1_0 }
+      - { name: PARTICLES_2_5, addr: 0x16, width: 2, endian: be, access: r, source: w_n2_5 }
+      - { name: PARTICLES_5_0, addr: 0x18, width: 2, endian: be, access: r, source: w_n5_0 }
+      - { name: PARTICLES_10, addr: 0x1A, width: 2, endian: be, access: r, source: w_n10 }
+      - { name: RESERVED, addr: 0x1C, width: 2, endian: be, access: r, reset: 0x0000 }
+      - { name: CHECK_CODE, addr: 0x1E, width: 2, endian: be, access: r, source: checksum }
+
+metadata:
+  label: "PMSA003I PM2.5"
+  summary: "Plantower PMSA003I particulate-matter sensor (PM1.0 / PM2.5 / PM10) over I²C."
+  detail: "Plantower PMSA003I at fixed address 0x12. A 32-byte read (bare, or after pointer 0x00) returns the Plantower frame: 0x42 0x4D, frame length 28, PM1.0/PM2.5/PM10 at CF=1 and atmospheric, six particle-count bins per 0.1 L, a reserved word and a 16-bit check code that is the byte sum of the 30 bytes before it — computed over what the twin actually answered. The pointer wraps 0x1F → 0x00, so repeated bare reads each return a whole frame. CF=1 and atmospheric words report the same values; the fan, cadence and warm-up are not modelled."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x12 (fixed on real silicon)." }
+  inputs:
+    - { key: pm1_0, label: "PM1.0", unit: "µg/m³", min: 0, max: 1000, default: 5 }
+    - { key: pm2_5, label: "PM2.5", unit: "µg/m³", min: 0, max: 1000, default: 8 }
+    - { key: pm10, label: "PM10", unit: "µg/m³", min: 0, max: 1000, default: 10 }
+    - { key: n0_3, label: "Particles >0.3 µm", unit: "/0.1 L", min: 0, max: 65535, default: 900 }
+    - { key: n0_5, label: "Particles >0.5 µm", unit: "/0.1 L", min: 0, max: 65535, default: 280 }
+    - { key: n1_0, label: "Particles >1.0 µm", unit: "/0.1 L", min: 0, max: 65535, default: 50 }
+    - { key: n2_5, label: "Particles >2.5 µm", unit: "/0.1 L", min: 0, max: 65535, default: 6 }
+    - { key: n5_0, label: "Particles >5.0 µm", unit: "/0.1 L", min: 0, max: 65535, default: 2 }
+    - { key: n10, label: "Particles >10 µm", unit: "/0.1 L", min: 0, max: 65535, default: 1 }

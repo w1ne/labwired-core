@@ -163,6 +163,37 @@ nav:
     - 74HC4051: parts/74hc4051.md
     - MAX485: parts/max485.md
     - XY-MD02: parts/xy-md02.md
+    - SHT40: parts/sht40.md
+    - BME680: parts/bme680.md
+    - ICM-42688-P: parts/icm42688.md
+    - ICM-20948: parts/icm20948.md
+    - SGP40: parts/sgp40.md
+    - TSL2591: parts/tsl2591.md
+    - DHT20: parts/dht20.md
+    - PMSA003I: parts/pmsa003i.md
+    - INA226: parts/ina226.md
+    - ST7735R TFT: parts/st7735.md
+    - GC9A01 round TFT: parts/gc9a01.md
+    - SSD1309 OLED: parts/ssd1309.md
+    - INA260: parts/ina260.md
+    - INA3221: parts/ina3221.md
+    - MPU-9250: parts/mpu9250.md
+    - ENS160: parts/ens160.md
+    - MCP23017: parts/mcp23017.md
+    - PCF8575: parts/pcf8575.md
+    - ADS1015: parts/ads1015.md
+    - ULN2803A: parts/uln2803.md
+    - RFM95W: parts/rfm95.md
+    - SX1276: parts/sx1276.md
+    - SX1262: parts/sx1262.md
+    - SK6812 RGBW: parts/sk6812.md
+    - MCP3008: parts/mcp3008.md
+    - ADS1256: parts/ads1256.md
+    - BMI160: parts/bmi160.md
+    - BMM150: parts/bmm150.md
+    - VEML6075: parts/veml6075.md
+    - HT16K33: parts/ht16k33.md
+    - TM1638: parts/tm1638.md
 
   - Operations:
     - Release Strategy: release_strategy.md

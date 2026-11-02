@@ -41,7 +41,39 @@ v4.0.0 west workspace:
 ```
 
 They run FSP's clock bring-up (MOSC, PLL, `SCKSCR`) on `ra6_sysc` and the
-SCI0 console in FIFO mode. See [`VALIDATION.md`](VALIDATION.md).
+SCI0 console in FIFO mode.
+
+Stock Zephyr v4.1.0 `samples/drivers/counter/alarm` (the first release with
+RA6 `agt` nodes; `tests/fixtures/r7fa6m5bh-zephyr-counter-alarm.elf`, same
+build script, a v4.1.0 workspace) runs four AGT0 compare-match alarms, each
+delivered through ICU IELSR84 (`ra_icu`, `ra_agt`):
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-counter-alarm.yaml --no-uart-stdout
+```
+
+Stock Zephyr v4.0.0 `tests/drivers/uart/uart_basic_api`
+(`tests/fixtures/r7fa6m5bh-zephyr-uart-basic-api.elf`, same build script)
+runs the interrupt-driven SCI0 driver with its 16-stage FIFO: RXI, TXI and
+TEI are ELC events `0x180`-`0x182` linked to NVIC lines 0-2 through the ICU.
+It passes 6/6 + 1/1, with the three "Please send characters" prompts
+answered by cycle-timed injections:
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-uart-basic-api.yaml --no-uart-stdout
+```
+
+Stock Zephyr v4.0.0 `samples/subsys/shell/shell_module`
+(`tests/fixtures/r7fa6m5bh-zephyr-shell.elf`, same build script) answers
+typed commands on the same interrupt-driven SCI0: `demo ping`,
+`kernel version`, `device list`, arguments, TAB completion and history
+recall:
+
+```bash
+./target/release/labwired test --script examples/ek-ra6m5/zephyr-shell.yaml --no-uart-stdout
+```
+
+See [`VALIDATION.md`](VALIDATION.md).
 
 ## Build and run
 
@@ -99,15 +131,25 @@ hb=0 podr=0040 s1=1 s2=1
   neither checks the PRCR key nor applies the divider.
 - **Module stop.** `MSTP` is a stub: SCI0 runs whether or not `MSTPB31` is
   cleared.
-- **ICU / IELSR.** The ICU is a stub, so no peripheral event reaches the NVIC;
-  the smoke polls `SSR.TDRE`.
-- **PFS peripheral mux.** `PSEL`/`PMR` are stored only; SCI0 TX does not depend
-  on them.
+- **SCI interrupts.** SCI0 raises RXI/TXI/TEI through the ICU, but not ERI
+  or the receive error flags. RXI comes once per character a frame apart,
+  not at `FCR.RTRG` or 15 ETU after the last stop bit, and `SSR_FIFO.DR`
+  is set at once. The frame time comes from the chip YAML `baud`, not
+  `SMR`/`BRR`/`SEMR`. The ICU IRQ-pin half (`IRQCRn`/NMI) and `DTCE` are
+  stored only.
+- **AGT modes.** Timer mode only: no pulse output, event counter or pulse
+  width / period measurement, and AGT1 does not count AGT0 underflows.
+- **PFS peripheral mux.** `PSEL`/`PMR` route a pad only to the GPT (GTIOC1A/B
+  on P405/P406); for the other peripherals they are stored only, and SCI0 TX
+  does not depend on them.
 - **TrustZone** (IDAU/SAU, CPSCU/PSCU), flash programming (FACI), the data
   flash and the option-setting memory.
-- **DMAC/DTC, ELC, RTC, IWDT/WDT, AGT0-5, GPT, IIC0-2, SPI0/1, ADC12,
+- **DMAC/DTC, ELC, RTC, IWDT/WDT, SPI0/1,
   USBFS/USBHS, ETHERC/EDMAC, CANFD, FACI** are declared stubs (reads return 0,
-  writes are dropped).
+  writes are dropped). ADC0/ADC1 are modelled since the stock Zephyr
+  `adc_api` slice (software-started scans only), IIC0-2 since the stock
+  Zephyr `bme280` slice (master mode only) and GPT0-9 since the stock
+  Zephyr `pwm_api` slice (saw-wave PWM only); see VALIDATION.md.
 - **SCI1-9, QSPI/OSPI, SDHI, SSIE, CTSU, CEC, DAC12, CRC, DOC** and every other
   block are **not mapped**. Firmware that touches them faults with a memory
   violation.

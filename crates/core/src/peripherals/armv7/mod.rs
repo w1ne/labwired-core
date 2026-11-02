@@ -1,10 +1,13 @@
 //! RV1103 initial functional platform: one CPU, GICv2, fixed 24 MHz timer,
 //! DW UART2. TrustZone banks, virtualization, DMA and serial/cache timing are
 //! outside this slice; the native CPU continues owning MMU and execution.
+pub mod cadence_uart;
 pub mod dw_uart;
 pub mod gic;
 pub mod rk3x_i2c;
 pub mod timer;
+pub mod ttc;
+pub mod zynqmp;
 use crate::{SimResult, SimulationError};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -22,6 +25,11 @@ pub struct Armv7Fabric {
     pub(crate) uart2_index: Option<usize>,
     pub(crate) uart4_index: Option<usize>,
     pub(crate) uart4_irq: Option<u32>,
+    /// Further peripherals whose `irq_line_level` drives a GIC INTID, sampled
+    /// with the UARTs above (host RX can arrive between instructions).
+    pub(crate) level_sources: Vec<(usize, u32)>,
+    /// Bus-clocked platform timer sharing this fabric's cycle synchronisation.
+    pub(crate) ttc: Option<Arc<Mutex<ttc::Ttc>>>,
     pub gic: Arc<Mutex<gic::Gic>>,
     pub timer: timer::ArchTimer,
 }
@@ -32,6 +40,8 @@ impl Default for Armv7Fabric {
             uart2_index: None,
             uart4_index: None,
             uart4_irq: None,
+            level_sources: Vec::new(),
+            ttc: None,
             gic: Arc::new(Mutex::new(gic::Gic::default())),
             timer: timer::ArchTimer::default(),
         }
@@ -44,6 +54,8 @@ impl Clone for Armv7Fabric {
             uart2_index: None,
             uart4_index: None,
             uart4_irq: None,
+            level_sources: Vec::new(),
+            ttc: None,
             gic: Arc::new(Mutex::new(self.gic.lock().unwrap().clone())),
             timer: self.timer.clone(),
         }
@@ -55,7 +67,21 @@ impl Armv7Fabric {
     }
     pub fn synchronize(&mut self, cycle: u64, cpu_hz: u64) {
         self.timer.synchronize(cycle, cpu_hz);
+        if let Some(ttc) = &self.ttc {
+            ttc.lock().unwrap().synchronize(cycle);
+        }
         self.sync_levels();
+    }
+    /// Earliest modeled cycle at which the arch timer or TTC raises a level.
+    pub fn next_deadline(&self) -> Option<u64> {
+        let ttc = self
+            .ttc
+            .as_ref()
+            .and_then(|t| t.lock().unwrap().next_deadline());
+        match (self.timer.next_deadline(), ttc) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
     pub fn sync_levels(&self) {
         let (p, v) = self.timer.levels();

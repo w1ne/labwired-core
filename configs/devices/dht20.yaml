@@ -1,0 +1,79 @@
+# Aosong DHT20 I²C temperature + humidity module — declarative COMMAND device.
+#
+# The DHT20 is the AHT20 die on a module, and the measurement frame is the
+# AHT20's byte for byte (see `aht20.yaml` for the packed-field / CRC
+# derivation). It gets its own descriptor because the DHT20 MANUAL prescribes a
+# different conversation and a different status word, and a driver written to
+# that manual must see what the manual says:
+#
+# Datasheet: Aosong "DHT20 Humidity and Temperature Module" product manual
+# (V1.0), §7 "Sensor reading process" and §6 "Signal transformation":
+#   1. After power-on wait ≥100 ms, then send 0x71 and read the STATUS byte.
+#      "If the status word and 0x18 are not equal to 0x18", initialise the
+#      calibration registers. A calibrated part therefore reads 0x18 —
+#      bit 3 (CAL) and bit 4 set, bit 7 (BUSY) clear. That is the status byte
+#      declared here (the AHT20 descriptor answers 0x08, its own manual's).
+#   2. Wait 10 ms, send 0xAC 0x33 0x00 to trigger a measurement.
+#   3. Wait 80 ms; read the status byte until bit 7 (BUSY) is 0.
+#   4. Read 7 bytes: status, 20-bit humidity, 20-bit temperature (sharing byte
+#      3), CRC-8 (poly 0x31, init 0xFF) over the six preceding bytes.
+#   §6: RH% = S_RH / 2^20 · 100      ⇒ scale 10485.76
+#       T   = S_T  / 2^20 · 200 − 50 ⇒ scale 5242.88, offset 262144
+#   7-bit address 0x38, fixed.
+#
+# ── The 0x71 status read ──────────────────────────────────────────────────
+# On this part the status byte is simply the FIRST byte of every read frame;
+# 0x71 is how the manual asks for it, and a master reading one byte gets the
+# status. The shared engine requires every answering command to answer at least
+# the six bytes the frame checksum covers, so 0x71 is declared as the whole
+# seven-byte frame — status, the CURRENT measurement and its CRC. A master that
+# reads one byte (every DHT20 driver) sees exactly 0x18; one that reads on gets
+# the live measurement where silicon would hand back the LAST one. Named, not
+# hidden.
+#
+# ⚠️ NOT modelled: the calibration-register initialisation of step 1 (writes to
+# 0x1B / 0x1C / 0x1E are not decoded — the part always reads calibrated), and
+# a bare read with no preceding command (answers 0xFF, open bus, as in
+# `aht20.yaml`).
+type: dht20
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x38
+    code_width: 1
+    crc8: { poly: 0x31, init: 0xFF, covers: { bytes: 6 } }
+    # Status during the 80 ms measurement: BUSY (bit 7) | 0x18.
+    not_ready_byte: 0x98
+    commands:
+      - name: read_status
+        code: 0x71
+        response:
+          - { const: 0x18, width: 1 }
+          - width: 5
+            endian: be
+            fields:
+              - { source: humidity,    shift: 20, width_bits: 20, encode: { scale: 10485.76 } }
+              - { source: temperature, shift: 0,  width_bits: 20, encode: { scale: 5242.88, offset: 262144.0 } }
+      - name: trigger_measurement
+        code: 0xAC
+        # §7 step 3: "wait 80 ms for the measurement to be completed".
+        delay_us: 80000
+        response:
+          - { const: 0x18, width: 1 }
+          - width: 5
+            endian: be
+            fields:
+              - { source: humidity,    shift: 20, width_bits: 20, encode: { scale: 10485.76 } }
+              - { source: temperature, shift: 0,  width_bits: 20, encode: { scale: 5242.88, offset: 262144.0 } }
+
+metadata:
+  label: "DHT20 Temp/Humidity"
+  summary: "Aosong DHT20 I²C temperature and humidity module (AHT20-based)."
+  detail: "Aosong DHT20 at fixed address 0x38, following its manual: 0x71 reads the status byte (0x18 = calibrated, idle), 0xAC 0x33 0x00 triggers a measurement, and after the datasheet's 80 ms a 7-byte read returns status, a 20-bit humidity and a 20-bit temperature packed across five bytes, and a CRC-8 over all six. A read during the measurement returns 0x98 (BUSY). Calibration-register initialisation is not modelled; the part always reads calibrated."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x38 (fixed on real silicon)." }
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 80, default: 25.0 }
+    - { key: humidity, label: "Humidity", unit: "%", min: 0, max: 100, default: 50.0 }

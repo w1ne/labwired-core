@@ -1,0 +1,24 @@
+# LabWired - PolarFire SoC Discovery Kit stock Zephyr synchronization
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/synchronization`. Two threads
+# hand a semaphore back and forth; each prints, busy-waits 100 ms on the CLINT
+# `mtime` (k_busy_wait), then sleeps 500 ms on a CLINT compare interrupt. The
+# alternation needs timer interrupts, context switches and MRET to work.
+# 100 ms of busy-wait is 60 M instructions at the U54's 600 MHz, so this runs
+# on a release CLI in ci/test.sh. Rebuild: crates/firmware-mpfs-zephyr/build.sh
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mpfs-zephyr-sync.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 1200000000
+  max_cycles: 1200000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "thread_a: Hello World from cpu 0 on mpfs_icicle!"
+      - "thread_b: Hello World from cpu 0 on mpfs_icicle!"
+      - "thread_a: Hello World from cpu 0 on mpfs_icicle!"
+      - "thread_b: Hello World from cpu 0 on mpfs_icicle!"
+  - expected_stop_reason: max_cycles

@@ -34,7 +34,9 @@ peripherals:
     base_address: 0x4001E000
     size: "256B"
   # PORT n @ 0x40040000 + n*0x20 (R01UH0887 §19 / FSP IOPORT). The input
-  # pull-up is PmnPFS.PCR in the PFS block, so each port names it.
+  # pull-up is PmnPFS.PCR in the PFS block, so each port names it. The
+  # 16-bit aliases put the upper half first (FSP R7FA4M1AB.h: PODR +0x0,
+  # PDR +0x2, EIDR +0x4, PIDR +0x6, PORR +0x8, POSR +0xA).
   - id: "port1"
     type: "gpio"
     base_address: 0x40040020
@@ -43,6 +45,7 @@ peripherals:
       profile: "ra_port"
       pad_control: "pfs"
       pad_control_port: 1
+      swapped_half_aliases: true
   - id: "port3"
     type: "gpio"
     base_address: 0x40040060
@@ -51,9 +54,12 @@ peripherals:
       profile: "ra_port"
       pad_control: "pfs"
       pad_control_port: 3
+      swapped_half_aliases: true
   # PFS @ 0x40040800: PmnPFS at 0x40*m + 4*n, PWPR at +0x503 (R01UH0887
-  # §19.2.5, §19.5). Pull-up (PCR) and write protection are modelled; the
-  # PODR/PDR aliases of PCNTR1 and the peripheral mux are stored only.
+  # §19.2.5, §19.5). Pull-up (PCR) and write protection are modelled, and a
+  # PmnPFS store sets PDR/PODR in the port's PCNTR1 (the same flip-flops).
+  # Reading PmnPFS back returns the last store, not PCNTR1; PIDR reads 0;
+  # the peripheral mux is stored only.
   - id: "pfs"
     type: "ra_pfs"
     base_address: 0x40040800

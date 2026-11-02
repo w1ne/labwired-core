@@ -4,6 +4,7 @@
 //! translation, banked registers and exception entry remain native.
 use crate::snapshot::{CortexACpuSnapshot, CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
+pub use labwired_arm_system::ArmModel;
 use labwired_arm_system::{ArmCpu, PhysicalBus};
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -26,7 +27,14 @@ pub struct CortexA7System {
 }
 impl CortexA7System {
     pub fn new() -> SimResult<Self> {
-        let mut cpu = ArmCpu::new().map_err(native_error)?;
+        Self::with_model(ArmModel::CortexA7)
+    }
+    /// The same privileged ARMv7 engine built as another pinned tlib model.
+    /// `CortexR5F` is PMSAv7 (16-region MPU, no MMU) with VFPv3-D16, as on the
+    /// Zynq UltraScale+ RPU; the bus-owned memory and IRQ/FIQ contract is
+    /// unchanged.
+    pub fn with_model(model: ArmModel) -> SimResult<Self> {
+        let mut cpu = ArmCpu::with_model(model).map_err(native_error)?;
         let mut registers = [0; 17];
         for (n, v) in registers.iter_mut().enumerate() {
             *v = cpu.register(n as u8).map_err(native_error)?;

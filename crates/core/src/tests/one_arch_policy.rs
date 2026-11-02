@@ -135,6 +135,9 @@ fn chip_with_arch(arch: Arch) -> ChipDescriptor {
             Arch::Pic24 => "pic24",
             Arch::Pic18 => "pic18",
             Arch::Pic16 => "pic16",
+            Arch::Aarch64 => "aarch64",
+            Arch::Rx => "rx",
+            Arch::Mips => "mips",
             Arch::Unknown => "unknown",
         }
     );
@@ -162,6 +165,9 @@ fn each_declared_architecture_reaches_its_own_family() {
         (Arch::Pic24, MachineFamily::Pic24),
         (Arch::Pic18, MachineFamily::Pic18),
         (Arch::Pic16, MachineFamily::Pic16),
+        (Arch::Aarch64, MachineFamily::Aarch64),
+        (Arch::Rx, MachineFamily::Rx),
+        (Arch::Mips, MachineFamily::Mips),
     ] {
         let got = machine_family(&chip_with_arch(arch)).expect("declared arch must be accepted");
         assert_eq!(got, want, "chip arch {arch:?} reached the wrong family");
@@ -175,6 +181,17 @@ fn cortex_a7_never_routes_to_cortex_m() {
     assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexA);
     chip.core = Some("cortex-a53".into());
     assert!(machine_family(&chip).is_err());
+}
+
+#[test]
+fn cortex_r_never_routes_to_cortex_m() {
+    let mut chip = chip_with_arch(Arch::Arm);
+    chip.core = Some("cortex-r5f".into());
+    assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexR);
+    for unsupported in ["cortex-r5", "cortex-r52", "cortex-r8"] {
+        chip.core = Some(unsupported.into());
+        assert!(machine_family(&chip).is_err(), "{unsupported}");
+    }
 }
 
 #[test]
@@ -198,6 +215,12 @@ fn the_elf_machine_table_is_the_only_one() {
     assert_eq!(elf_arch(118), Some(crate::Arch::Pic24));
     // 204 is EM_MCHP_PIC, the registered Microchip 8-bit PIC machine value.
     assert_eq!(elf_arch(204), Some(crate::Arch::Pic18));
+    // 183 is EM_AARCH64.
+    assert_eq!(elf_arch(183), Some(crate::Arch::Aarch64));
+    // 173 is EM_RX, Renesas RX.
+    assert_eq!(elf_arch(173), Some(crate::Arch::Rx));
+    // 8 is EM_MIPS.
+    assert_eq!(elf_arch(8), Some(crate::Arch::Mips));
     // EM_MCHP_PIC also covers PIC16; only a pic16 chip retargets it.
     use crate::system::arch_policy::image_arch_for_chip;
     assert_eq!(

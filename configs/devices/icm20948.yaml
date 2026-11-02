@@ -1,0 +1,206 @@
+# TDK InvenSense ICM-20948 9-axis motion device — declarative I²C
+# register-pointer device. The accel, gyro and temperature are modelled; the
+# AK09916 magnetometer that makes it "9-axis" is NOT (see the end of this
+# header).
+#
+# Datasheet: TDK InvenSense DS-000189 ("ICM-20948 Datasheet", rev 1.3):
+#   §7 "Register Map" — Tables for USER BANK 0 / 2 / 3, and §8 register
+#     descriptions. Every address and reset value below. Cross-checked against
+#     Zephyr's `drivers/sensor/tdk/icm20948/icm20948_reg.h`.
+#   §8.1 WHO_AM_I (bank 0, 0x00) = 0xEA.
+#   §8.65 REG_BANK_SEL (0x7F, every bank): USER_BANK[5:4]. A driver writes
+#     0x00 / 0x10 / 0x20 / 0x30, which is the value each register's `page:` is
+#     keyed on. The SAME pointer means different registers per bank — 0x00 is
+#     WHO_AM_I in bank 0 and GYRO_SMPLRT_DIV in bank 2, 0x01 is GYRO_CONFIG_1
+#     in bank 2 and I2C_MST_CTRL in bank 3 — so every banked register carries
+#     its bank.
+#
+# ── Output data (bank 0, big-endian int16) ─────────────────────────────────
+#   ACCEL_XOUT_H 0x2D / Y 0x2F / Z 0x31, GYRO_XOUT_H 0x33 / Y 0x35 / Z 0x37,
+#   TEMP_OUT_H 0x39.
+#   ACCEL_CONFIG (bank 2, 0x14) ACCEL_FS_SEL[2:1]: ±2/4/8/16 g =
+#     16384/8192/4096/2048 LSB/g. Reset 0x01 ⇒ ±2 g.
+#   GYRO_CONFIG_1 (bank 2, 0x01) GYRO_FS_SEL[2:1]: ±250/500/1000/2000 dps =
+#     131/65.5/32.8/16.4 LSB/dps. Reset 0x01 ⇒ ±250 dps.
+#   §"Temperature": Temp_degC = (TEMP_OUT − RoomTemp_Offset)/Temp_Sensitivity
+#     + 21 °C, Temp_Sensitivity = 333.87 LSB/°C, RoomTemp_Offset = 0 ⇒
+#     scale 333.87, offset −21 × 333.87 = −7011.27.
+#
+# ── Sleep ──────────────────────────────────────────────────────────────────
+# PWR_MGMT_1 resets to 0x41: SLEEP (bit 6) set, CLKSEL = 1. Asleep, the part
+# converts nothing and the output registers hold their reset value 0x0000, so
+# every output reads zero until firmware clears SLEEP (`zero_when`). A driver
+# that never wakes the part reads zeros here as on silicon.
+# INT_STATUS_1.RAW_DATA_0_RDY_INT (bit 0) rises one sample period after SLEEP
+# is cleared — 1/1.125 kHz ≈ 889 µs at the reset sample-rate dividers, taken as
+# 1 ms here — and clears when INT_STATUS_1 is read.
+#
+# ⚠️ NOT modelled, named rather than faked:
+#   * The AK09916 MAGNETOMETER. On silicon it sits on the part's auxiliary I²C
+#     bus, read through the internal I²C master (I2C_SLV0_* in bank 3, results
+#     in EXT_SLV_SENS_DATA_00.. at 0x3B) or exposed directly in bypass mode.
+#     Neither path is modelled: the I2C_SLVx registers are plain storage, the
+#     master never runs, EXT_SLV_SENS_DATA reads 0x00, and I2C_SLV4_DONE never
+#     rises. A driver that requires the magnetometer will time out — as it
+#     should, because the twin cannot answer it truthfully.
+#   * PWR_MGMT_2 per-axis disables (stored, the data keeps flowing), LP mode,
+#     the FIFO, the DMP, wake-on-motion, the INT pin, ODR / DLPF (stored,
+#     inert), banks 1 and the rest of bank 3, and holding the LAST sample after
+#     returning to sleep (the twin reads 0).
+#   * DEVICE_RESET restores the bank-0/2 registers modelled here but not the
+#     bank select itself.
+type: icm20948
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x68
+    auto_increment: true
+    unmapped_byte: 0x00
+    page_register: 0x7F
+    registers:
+      # ── Bank 0 ───────────────────────────────────────────────────────────
+      - { name: WHO_AM_I, addr: 0x00, page: 0x00, width: 1, endian: be, access: r, reset: 0xEA }
+      - { name: USER_CTRL, addr: 0x03, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0xFE, self_clearing: 0x0E, reset: 0x00 }
+      - { name: LP_CONFIG, addr: 0x05, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0x70, reset: 0x40 }
+      - { name: PWR_MGMT_1, addr: 0x06, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0xEF, self_clearing: 0x80, reset: 0x41 }
+      - { name: PWR_MGMT_2, addr: 0x07, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x00 }
+      - { name: INT_PIN_CFG, addr: 0x0F, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0xFE, reset: 0x00 }
+      - { name: INT_ENABLE, addr: 0x10, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: INT_ENABLE_1, addr: 0x11, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0x01, reset: 0x00 }
+      - { name: INT_ENABLE_2, addr: 0x12, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0x1F, reset: 0x00 }
+      - { name: INT_ENABLE_3, addr: 0x13, page: 0x00, width: 1, endian: be, access: rw, write_mask: 0x1F, reset: 0x00 }
+      - { name: I2C_MST_STATUS, addr: 0x17, page: 0x00, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: INT_STATUS, addr: 0x19, page: 0x00, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: INT_STATUS_1, addr: 0x1A, page: 0x00, width: 1, endian: be, access: r, reset: 0x00 }
+      - name: ACCEL_XOUT
+        addr: 0x2D
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: accel_x
+        scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 1, map: { 0: 16384, 1: 8192, 2: 4096, 3: 2048 } }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      - name: ACCEL_YOUT
+        addr: 0x2F
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: accel_y
+        scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 1, map: { 0: 16384, 1: 8192, 2: 4096, 3: 2048 } }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      - name: ACCEL_ZOUT
+        addr: 0x31
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: accel_z
+        scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 1, map: { 0: 16384, 1: 8192, 2: 4096, 3: 2048 } }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      - name: GYRO_XOUT
+        addr: 0x33
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: gyro_x
+        scale_from: { register: GYRO_CONFIG_1, mask: 0x03, shift: 1, map: { 0: 131, 1: 65.5, 2: 32.8, 3: 16.4 } }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      - name: GYRO_YOUT
+        addr: 0x35
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: gyro_y
+        scale_from: { register: GYRO_CONFIG_1, mask: 0x03, shift: 1, map: { 0: 131, 1: 65.5, 2: 32.8, 3: 16.4 } }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      - name: GYRO_ZOUT
+        addr: 0x37
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: gyro_z
+        scale_from: { register: GYRO_CONFIG_1, mask: 0x03, shift: 1, map: { 0: 131, 1: 65.5, 2: 32.8, 3: 16.4 } }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      - name: TEMP_OUT
+        addr: 0x39
+        page: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source: temperature
+        encode: { scale: 333.87, offset: -7011.27 }
+        zero_when: { register: PWR_MGMT_1, mask: 0x40 }
+      # ── Bank 2 ───────────────────────────────────────────────────────────
+      - { name: GYRO_SMPLRT_DIV, addr: 0x00, page: 0x20, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GYRO_CONFIG_1, addr: 0x01, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x01 }
+      - { name: GYRO_CONFIG_2, addr: 0x02, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x00 }
+      - { name: ODR_ALIGN_EN, addr: 0x09, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x01, reset: 0x00 }
+      - { name: ACCEL_SMPLRT_DIV_1, addr: 0x10, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x0F, reset: 0x00 }
+      - { name: ACCEL_SMPLRT_DIV_2, addr: 0x11, page: 0x20, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: ACCEL_CONFIG, addr: 0x14, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x3F, reset: 0x01 }
+      - { name: ACCEL_CONFIG_2, addr: 0x15, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x1F, reset: 0x00 }
+      - { name: TEMP_CONFIG, addr: 0x53, page: 0x20, width: 1, endian: be, access: rw, write_mask: 0x07, reset: 0x00 }
+      # ── Bank 3 (auxiliary I²C master — storage only, the master never runs) ─
+      - { name: I2C_MST_ODR_CONFIG, addr: 0x00, page: 0x30, width: 1, endian: be, access: rw, write_mask: 0x0F, reset: 0x00 }
+      - { name: I2C_MST_CTRL, addr: 0x01, page: 0x30, width: 1, endian: be, access: rw, write_mask: 0x9F, reset: 0x00 }
+      - { name: I2C_MST_DELAY_CTRL, addr: 0x02, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV0_ADDR, addr: 0x03, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV0_REG, addr: 0x04, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV0_CTRL, addr: 0x05, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV0_DO, addr: 0x06, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV4_ADDR, addr: 0x13, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV4_REG, addr: 0x14, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV4_CTRL, addr: 0x15, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV4_DO, addr: 0x16, page: 0x30, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: I2C_SLV4_DI, addr: 0x17, page: 0x30, width: 1, endian: be, access: r, reset: 0x00 }
+      # ── Every bank ───────────────────────────────────────────────────────
+      - { name: REG_BANK_SEL, addr: 0x7F, width: 1, endian: be, access: rw, write_mask: 0x30, reset: 0x00 }
+    data_ready:
+      - name: raw_data
+        start_register: PWR_MGMT_1
+        start_mask: 0x40
+        start_value: 0x00
+        ready_register: INT_STATUS_1
+        ready_mask: 0x01
+        conversion_us: 1000
+        clear_on_read: [INT_STATUS_1]
+  rules:
+    # PWR_MGMT_1.DEVICE_RESET (bit 7): the modelled registers return to reset.
+    - on: { write: PWR_MGMT_1 }
+      when: "written & 0x80"
+      do:
+        - { write: { register: PWR_MGMT_1, value: "0x41" } }
+        - { write: { register: PWR_MGMT_2, value: "0x00" } }
+        - { write: { register: USER_CTRL, value: "0x00" } }
+        - { write: { register: LP_CONFIG, value: "0x40" } }
+        - { write: { register: GYRO_CONFIG_1, value: "0x01" } }
+        - { write: { register: ACCEL_CONFIG, value: "0x01" } }
+
+metadata:
+  label: "ICM-20948 IMU"
+  summary: "TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C."
+  detail: "TDK InvenSense ICM-20948 at 0x68 (0x69 with AD0 high). WHO_AM_I (bank 0, 0x00) reads 0xEA. REG_BANK_SEL (0x7F) switches user banks 0/2/3, and the same pointer decodes to a different register in each bank as on silicon. The part powers up asleep (PWR_MGMT_1 = 0x41) and its outputs read 0 until SLEEP is cleared; accel and gyro sensitivity then follow ACCEL_FS_SEL / GYRO_FS_SEL in bank 2. The AK09916 magnetometer behind the auxiliary I²C master is NOT modelled, nor are the FIFO, DMP and interrupt pin."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x68 (AD0 low); 0x69 with AD0 high." }
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_y, label: "Accel Y", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_z, label: "Accel Z", unit: "g", min: -16, max: 16, default: 1 }
+    - { key: gyro_x, label: "Gyro X", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_y, label: "Gyro Y", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_z, label: "Gyro Z", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: temperature, label: "Die temperature", unit: "°C", min: -40, max: 85, default: 25 }

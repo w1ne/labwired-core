@@ -1,0 +1,145 @@
+# ScioSense ENS160 digital metal-oxide multi-gas sensor (TVOC / eCO2 /
+# AQI-UBA) — declarative I²C register-pointer device. The current part in this
+# space next to the Sensirion SGP40 (`sgp40.yaml`).
+#
+# Datasheet: ScioSense "ENS160 datasheet", Version 1.3, SC-001224-DS-9,
+# 2023-03-29, document status Production:
+#   §16.1 Table 16 "Register Overview" — every address below. "Registers are
+#     stored in little endian so the LSB of PART_ID is at address 0."
+#   §16.2.1  PART_ID       0x00  2 B  R    0x0160 (0x60, 0x01 on the wire)
+#   §16.2.2  OPMODE        0x10  1 B  R/W  default 0x01 (IDLE); 0x00 DEEP
+#                                          SLEEP, 0x02 STANDARD, 0xF0 RESET
+#   §16.2.3  CONFIG        0x11  1 B  R/W  INTPOL[6] INT_CFG[5] INTGPR[3]
+#                                          INTDAT[1] INTEN[0]; others reserved
+#   §16.2.4  COMMAND       0x12  1 B  R/W  0x00 NOP, 0x0E GET_APPVER, 0xCC CLRGPR
+#   §16.2.5  TEMP_IN       0x13  2 B  R/W  Kelvin × 64; "update is recognized on
+#                                          a write to TEMP_IN_MSB"
+#   §16.2.6  RH_IN         0x15  2 B  R/W  %RH × 512; same MSB rule
+#   §16.2.7  DEVICE_STATUS 0x20  1 B  R    STATAS[7] STATER[6] VALIDITY[3:2]
+#                                          NEWDAT[1] NEWGPR[0]
+#   §16.2.8  DATA_AQI      0x21  1 B  R    AQI_UBA[2:0] 1..5, default 0x01
+#   §16.2.9  DATA_TVOC     0x22  2 B  R    ppb, default 0x0000
+#   §16.2.10 DATA_ECO2     0x24  2 B  R    ppm, default 0x0000
+#   §16.2.12 DATA_T        0x30  2 B  R    default 0x4A8A (25 °C), "taken from
+#                                          TEMP_IN, if supplied"
+#   §16.2.13 DATA_RH       0x32  2 B  R    default 0x6400 (50 %RH), "taken from
+#                                          RH_IN if supplied"
+#   §2 pin assignment / §14 "Host communication": 7-bit address 0x52
+#     (MISO/ADDR low) or 0x53 (MISO/ADDR high).
+#   §5 Table 4: TVOC 0..65000 ppb, eCO2 400..65000 ppm, AQI-UBA 1..5.
+#
+# ⚠️ DATA_TVOC is at 0x22. The brief that asked for this part placed it at
+# 0x26; Table 16 lists 0x26 as Reserved, and the datasheet wins.
+#
+# ── Operating modes ───────────────────────────────────────────────────────
+# §15 Figure 13: after POR the part sits in IDLE (OPMODE 0x01); it measures
+# only in STANDARD (0x02). The DATA_x registers are therefore driven by a
+# Tier-2 rule that runs at every START while OPMODE == 0x02 and does nothing
+# otherwise: they hold their datasheet defaults (AQI 1, TVOC 0, eCO2 0) until
+# firmware starts STANDARD mode, and keep the last result when it leaves. A
+# driver that never writes OPMODE = 0x02 reads zeros here, as on silicon.
+# The rule language is integer-only, so the stimulus is TRUNCATED to whole
+# ppb / ppm; the input channels are bounded to the Table 4 ranges.
+#
+# The three outputs are independent stimulus channels. ScioSense's TrueVOC
+# algorithm that relates them on silicon (and the UBA mapping of §5.3 Table 6)
+# is not modelled — the host poses all three.
+#
+# ── DEVICE_STATUS, honestly ───────────────────────────────────────────────
+#   STATAS (bit 7) reads 1 while OPMODE is STANDARD.
+#   VALIDITY (bits 3:2) is a STIMULUS channel, `validity` (0 normal, 1
+#     warm-up, 2 initial start-up, 3 invalid). §10 / §11 Table 10: warm-up is
+#     the first 3 minutes after power-on and initial start-up the first full
+#     hour of the sensor's LIFE, persisted in NVM only after 24 h of
+#     operation. The twin has no NVM history and no reason to make a firmware
+#     test wait three simulated minutes, so the host poses the phase; the
+#     default is 0. Firmware that must ignore readings during warm-up can be
+#     tested by driving `validity` to 1.
+#   NEWDAT (bit 1) is a data-ready flag: it rises once STANDARD mode is
+#     entered and "Cleared automatically at first DATA_x read". ⚠️ The
+#     datasheet publishes NO update period for STANDARD mode, so the twin does
+#     not invent one: the next result is ready immediately (conversion_us: 0),
+#     i.e. NEWDAT reads set at every poll that follows a DATA read.
+#
+# ── TEMP_IN / RH_IN → DATA_T / DATA_RH ────────────────────────────────────
+# A write that completes TEMP_IN (the MSB, at 0x14) copies the word into
+# DATA_T, and likewise RH_IN → DATA_RH, which is the "taken from TEMP_IN, if
+# supplied" of §16.2.12/13. The compensation itself is not modelled — the
+# gas outputs do not depend on TEMP_IN / RH_IN.
+#
+# ⚠️ NOT modelled, named rather than faked: the MOx hotplates and the
+# TrueVOC algorithm (above), the STANDARD-mode cadence (above), DEEP SLEEP
+# (registers stay readable), STATER and invalid-OPMODE detection (STATER never
+# rises), RESET beyond OPMODE (0xF0 returns OPMODE to IDLE; the other
+# registers keep their values), COMMAND (GET_APPVER places no firmware version
+# in GPR_READ — the datasheet does not give the value — and NEWGPR never
+# rises), the GPR_WRITE / GPR_READ banks and DATA_MISR (unmapped, read 0x00),
+# the INTn pin, and SPI.
+type: ens160
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x52
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      - { name: PART_ID, addr: 0x00, width: 2, endian: le, access: r, reset: 0x0160 }
+      - { name: OPMODE, addr: 0x10, width: 1, endian: le, access: rw, reset: 0x01 }
+      - { name: CONFIG, addr: 0x11, width: 1, endian: le, access: rw, write_mask: 0x6B, reset: 0x00 }
+      - { name: COMMAND, addr: 0x12, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TEMP_IN, addr: 0x13, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: RH_IN, addr: 0x15, width: 2, endian: le, access: rw, reset: 0x0000 }
+      # STATAS and VALIDITY are written by the rule below; NEWDAT is OR'd in
+      # by the data-ready rule.
+      - { name: DEVICE_STATUS, addr: 0x20, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: DATA_AQI, addr: 0x21, width: 1, endian: le, access: r, reset: 0x01 }
+      - { name: DATA_TVOC, addr: 0x22, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: DATA_ECO2, addr: 0x24, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: DATA_T, addr: 0x30, width: 2, endian: le, access: r, reset: 0x4A8A }
+      - { name: DATA_RH, addr: 0x32, width: 2, endian: le, access: r, reset: 0x6400 }
+    data_ready:
+      - name: new_data
+        start_register: OPMODE
+        start_mask: 0xFF
+        start_value: 0x02
+        ready_register: DEVICE_STATUS
+        ready_mask: 0x02
+        conversion_us: 0
+        clear_on_read: [DATA_AQI, DATA_TVOC, DATA_ECO2]
+  rules:
+    - on: start
+      do:
+        - { write: { register: DEVICE_STATUS, value: "128 * (reg(OPMODE) == 2) + 4 * input(validity)" } }
+    # STANDARD mode: the outputs follow the stimulus. The channels' declared
+    # ranges are Table 4's, and the host cannot pose a value outside them.
+    - on: start
+      when: "reg(OPMODE) == 2"
+      do:
+        - { write: { register: DATA_AQI, value: "input(aqi)" } }
+        - { write: { register: DATA_TVOC, value: "input(tvoc)" } }
+        - { write: { register: DATA_ECO2, value: "input(eco2)" } }
+    - on: { write: TEMP_IN }
+      do:
+        - { write: { register: DATA_T, value: "written" } }
+    - on: { write: RH_IN }
+      do:
+        - { write: { register: DATA_RH, value: "written" } }
+    # OPMODE 0xF0 (RESET): back to IDLE, the state Figure 13 leaves POR in.
+    - on: { write: OPMODE }
+      when: "written == 0xF0"
+      do:
+        - { write: { register: OPMODE, value: "0x01" } }
+
+metadata:
+  label: "ENS160 Air Quality"
+  summary: "ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C."
+  detail: "ScioSense ENS160 at 0x52 (0x53 with MISO/ADDR high). PART_ID (0x00) reads 0x0160 little-endian and OPMODE powers up in IDLE (0x01). In STANDARD mode (OPMODE 0x02) DATA_AQI, DATA_TVOC (0x22) and DATA_ECO2 (0x24) follow the host's aqi, tvoc and eco2 channels, DEVICE_STATUS reports STATAS and NEWDAT, and its validity flag follows the host's validity channel (warm-up / initial start-up). TEMP_IN / RH_IN are copied into DATA_T / DATA_RH. The MOx algorithm, the STANDARD-mode cadence, GET_APPVER and the INTn pin are not modelled."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x52 (MISO/ADDR low); 0x53 with MISO/ADDR high." }
+  inputs:
+    - { key: tvoc, label: "TVOC", unit: "ppb", min: 0, max: 65000, default: 100 }
+    - { key: eco2, label: "eCO2", unit: "ppm", min: 400, max: 65000, default: 600 }
+    - { key: aqi, label: "AQI-UBA", unit: "", min: 1, max: 5, default: 2 }
+    - { key: validity, label: "Validity flag (0 ok, 1 warm-up, 2 start-up, 3 invalid)", unit: "", min: 0, max: 3, default: 0 }

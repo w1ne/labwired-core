@@ -338,6 +338,13 @@ impl LedcPads {
         best
     }
 
+    /// The first cycle after the advanced-to cycle at which an edge or a
+    /// staged change is due, for a chip model that keeps its own single
+    /// scheduler wake instead of [`Self::take_scheduled_events`] (RA GPT).
+    pub fn next_change(&self) -> Option<u64> {
+        self.next_change_after(self.anchor)
+    }
+
     /// Advance to `now`, publishing every edge on its own cycle and applying
     /// staged changes at their period boundaries.
     pub fn advance_to(&mut self, now: u64) {

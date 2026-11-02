@@ -189,6 +189,21 @@ pub fn build_node_with_options(
             #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
             anyhow::bail!("node '{id}': Cortex-A7 needs a native build with --features qemu-arm; browser execution is unavailable")
         }
+        MachineFamily::CortexR => {
+            #[cfg(all(feature = "qemu-arm-system", not(target_arch = "wasm32")))]
+            {
+                let NodeFirmware::Elf(bytes) = firmware else {
+                    anyhow::bail!("node '{id}': Cortex-R5F takes an initialized-memory ELF");
+                };
+                let bus =
+                    crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+                Ok(Box::new(crate::system::cortex_r::load_elf(
+                    bus, chip, &bytes,
+                )?))
+            }
+            #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
+            anyhow::bail!("node '{id}': Cortex-R5F needs a native build with --features qemu-arm-system; browser execution is unavailable")
+        }
         MachineFamily::RiscV => {
             build_riscv_node(id, chip, system, firmware, opts.plugins, opts.fab, blobs)
         }
@@ -197,6 +212,29 @@ pub fn build_node_with_options(
         MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic18 => build_pic18_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic16 => build_pic16_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Rx => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': RX takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::rx::load_elf(bus, &bytes)?))
+        }
+        MachineFamily::Mips => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': MIPS takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::mips::load_elf(bus, &bytes)?))
+        }
+        MachineFamily::Aarch64 => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': AArch64 takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::aarch64::load_elf(
+                bus, chip, &bytes,
+            )?))
+        }
     }
 }
 
@@ -490,6 +528,16 @@ fn build_riscv_node(
             let image = parse_elf_image(&bytes)
                 .with_context(|| format!("node '{id}': parse firmware ELF"))?;
             use crate::Cpu as _;
+            // A `core: rv64…` chip runs the 64-bit hart. Nothing ESP-specific
+            // applies, and the image sets up its own stack from reset.
+            if crate::cpu::riscv64::is_rv64_chip(chip) {
+                let mut machine = Machine::new(crate::cpu::RiscV64::for_chip(chip), bus);
+                machine
+                    .load_firmware(&image)
+                    .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+                machine.cpu.set_pc(image.entry_point as u32);
+                return Ok(Box::new(machine));
+            }
             // The single-chip engine's C3 bare-ELF path, step for step
             // (`builder::riscv`, the browser's `new_from_config_riscv`): the
             // real mask ROM in its windows, its reset-time `.data` copy
@@ -863,7 +911,13 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
         check_load_segment(ph, bytes.len())?;
-        image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
+        let addr = if arch == crate::Arch::Mips {
+            // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
+            crate::system::mips::kseg_to_physical(ph.p_paddr)
+        } else {
+            ph.p_paddr
+        };
+        image.add_segment(addr, bytes[off..off + n].to_vec());
     }
     Ok(image)
 }

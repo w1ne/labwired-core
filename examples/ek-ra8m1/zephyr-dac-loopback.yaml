@@ -1,0 +1,32 @@
+# LabWired - EK-RA8M1 stock Zephyr dac_loopback test (DA0 jumpered to AN000)
+#
+# Unmodified upstream Zephyr v4.1.0 `tests/drivers/dac/dac_loopback` for
+# board `ek_ra8m1`, built without an overlay: for renesas,ra-dac the test
+# writes half scale (2048) to DAC0 channel 0, waits 10 ms and reads ADC0
+# channel 0 (12-bit, ADC_REF_INTERNAL), expecting 2048 +/- 32. Rebuild:
+# crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# The test README asks for the DAC output to be wired to that ADC input;
+# dac-loopback-system.yaml is that jumper (DA0 P014 -> AN000 P004, the
+# board's adc0_default pad) as `analog_links` on adc0. DA0 drives
+# 2048 * 3300 / 4096 = 1650 mV, which ADC0 converts to 0x07FF
+# (1650 * 4095 / 3300), so ADDR0 is checked as well as the suite. On the
+# board's plain system.yaml (no jumper) ADC0 reads 0 and the suite fails.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-dac-loopback.elf"
+  system: "./dac-loopback-system.yaml"
+limits:
+  max_steps: 20000000
+  max_cycles: 1000000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Running TESTSUITE dac_loopback"
+      - " PASS - test_dac_loopback"
+      - "SUITE PASS - 100.00% [dac_loopback]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - memory_value: { address: 0x40333000, expected_value: 0x0800, size: 2 }
+  - memory_value: { address: 0x40332020, expected_value: 0x07FF, size: 2 }
+  - expected_stop_reason: max_cycles

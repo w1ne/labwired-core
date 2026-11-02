@@ -399,11 +399,7 @@ impl SystemBus {
         self.pin_port_ids = self
             .peripherals
             .iter()
-            .map(|p| {
-                p.dev.pins().and_then(|pins| {
-                    crate::pins::PortId::from_prefixed_name(&p.name, pins.port_name_prefix())
-                })
-            })
+            .map(|p| p.dev.pins().and_then(|pins| pins.port_id(&p.name)))
             .collect();
         // Pin ports whose pulls another block keeps: link them, and hand each
         // the pulls its block holds now.

@@ -1,0 +1,228 @@
+# Bosch BMI160 6-axis IMU (accelerometer + gyroscope) — declarative I²C
+# register-pointer device. Datasheet: Bosch Sensortec BMI160, document
+# BST-BMI160-DS000-09, revision 1.0 (November 2020).
+#
+# ── The wire (§3.2.3 "Primary I2C Interface") ──────────────────────────────
+# Default 7-bit address 0b1101000 = 0x68 (SDO → GND); 0x69 with SDO → VDDIO.
+# One-byte register pointer, burst reads auto-increment. Data words are
+# little-endian two's complement (§2.11.4: DATA_8 = gyr_x_7_0, DATA_9 =
+# gyr_x_15_8, …).
+#
+# ── Register map (§2.11, Figure 20) — what is modelled ─────────────────────
+#
+#   ADDR  NAME           RESET  ACCESS  NOTES
+#   0x00  CHIP_ID        0xD1   R       §2.11.1
+#   0x02  ERR_REG        0x00   R
+#   0x03  PMU_STATUS     0x00   R       acc_pmu_status[5:4] gyr_pmu_status[3:2]
+#                                       mag_pmu_status[1:0]; 00 = suspend
+#   0x04..0x0B DATA_0..7 0x00   R       mag x/y/z + RHALL (aux mag not modelled)
+#   0x0C..0x11 GYR X/Y/Z        R       int16 LE, gated on gyro NORMAL
+#   0x12..0x17 ACC X/Y/Z        R       int16 LE, gated on accel NORMAL / LOW POWER
+#   0x18..0x1A SENSORTIME 0x00  R       not advanced (see NOT MODELLED)
+#   0x1B  STATUS         0x00   R       drdy_acc[7] drdy_gyr[6] (rules below)
+#   0x20  TEMPERATURE    0x8000 R       int16 LE, valid only with gyro NORMAL
+#   0x40  ACC_CONF       0x28   RW
+#   0x41  ACC_RANGE      0x03   RW      0011 ±2 g, 0101 ±4 g, 1000 ±8 g, 1100 ±16 g
+#   0x42  GYR_CONF       0x28   RW
+#   0x43  GYR_RANGE      0x00   RW      000 ±2000 … 100 ±125 °/s
+#   0x44  MAG_CONF       0x0B   RW
+#   0x45  FIFO_DOWNS     0x88   RW
+#   0x46  FIFO_CONFIG_0  0x80   RW
+#   0x47  FIFO_CONFIG_1  0x10   RW
+#   0x50..0x57 INT_EN / INT_OUT_CTRL / INT_LATCH / INT_MAP  0x00  RW
+#   0x7E  CMD            0x00   W       acc_set_pmu_mode 0b0001_00nn,
+#                                       gyr_set_pmu_mode 0b0001_01nn, softreset 0xB6
+#
+# The two copies of the STATUS reset in the datasheet disagree: Figure 20
+# prints 0x01, §2.11.6 prints 0b0000_0000 (and bit 0 is reserved). The twin
+# follows §2.11.6.
+#
+# ── Power management (§2.11.38 CMD, §2.11.3 PMU_STATUS) ────────────────────
+# The part powers up with accelerometer and gyroscope in SUSPEND. Firmware
+# wakes them by writing CMD: 0x11 = accel normal, 0x15 = gyro normal. The
+# rules below copy the `nn` field of those commands into PMU_STATUS — which is
+# read-only to the master, as on silicon — and set/clear drdy_acc/drdy_gyr.
+# A data register whose sensor is suspended reads its 0x0000 reset value; the
+# temperature reads 0x8000 ("Invalid", §2.11.8) unless the gyroscope is in
+# normal mode, which is the datasheet's own validity rule.
+#
+# ── Scaling (Tables 2/3 and §2.11.12/§2.11.14) ─────────────────────────────
+#   accel: ±2 g 16384, ±4 g 8192, ±8 g 4096, ±16 g 2048 LSB/g
+#   gyro:  ±2000 16.4, ±1000 32.8, ±500 65.6, ±250 131.2, ±125 262.4 LSB/°/s
+#   temperature: 0x0000 = 23 °C, 2^-9 K/LSB → word = (T − 23) · 512
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * The FIFO (FIFO_LENGTH reads 0, FIFO_DATA reads 0x00), the interrupt
+#     engines and INT1/INT2 pins, step counter, FOC, self-test, NVM.
+#   * The auxiliary magnetometer interface (MAG_IF, DATA_0..7).
+#   * SENSORTIME does not run, and drdy_* do not clear on a data read: data is
+#     always fresh, so a driver that polls drdy sees it set while the sensor is
+#     in normal mode.
+#   * PMU switch time (3.2–3.8 ms accel, ≤80 ms gyro, Table 24): the mode
+#     change is immediate.
+#   * The SPI interface. Only the I²C binding is offered.
+type: bmi160
+
+behavior:
+  primitive: i2c_device
+  derived:
+    # A suspended sensor's data registers hold their 0x0000 reset value.
+    - { name: suspended, expr: "0" }
+    # Out-of-range for the signed 16-bit encode → saturates to 0x8000, the
+    # §2.11.8 "Invalid" temperature word.
+    - { name: temp_invalid, expr: "-1000" }
+  i2c:
+    default_address: 0x68
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      - { name: CHIP_ID, addr: 0x00, width: 1, endian: le, access: r, reset: 0xD1 }
+      - { name: ERR_REG, addr: 0x02, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: PMU_STATUS, addr: 0x03, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: MAG_X, addr: 0x04, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: MAG_Y, addr: 0x06, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: MAG_Z, addr: 0x08, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: RHALL, addr: 0x0A, width: 2, endian: le, access: r, reset: 0x0000 }
+      - name: GYR_X
+        addr: 0x0C
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: suspended
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 2, table: { 1: gyro_x } }
+        scale_from: { register: GYR_RANGE, mask: 0x7, map: { 0: 16.4, 1: 32.8, 2: 65.6, 3: 131.2, 4: 262.4 } }
+      - name: GYR_Y
+        addr: 0x0E
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: suspended
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 2, table: { 1: gyro_y } }
+        scale_from: { register: GYR_RANGE, mask: 0x7, map: { 0: 16.4, 1: 32.8, 2: 65.6, 3: 131.2, 4: 262.4 } }
+      - name: GYR_Z
+        addr: 0x10
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: suspended
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 2, table: { 1: gyro_z } }
+        scale_from: { register: GYR_RANGE, mask: 0x7, map: { 0: 16.4, 1: 32.8, 2: 65.6, 3: 131.2, 4: 262.4 } }
+      - name: ACC_X
+        addr: 0x12
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: suspended
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 4, table: { 1: accel_x, 2: accel_x } }
+        scale_from: { register: ACC_RANGE, mask: 0xF, map: { 3: 16384, 5: 8192, 8: 4096, 12: 2048 } }
+      - name: ACC_Y
+        addr: 0x14
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: suspended
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 4, table: { 1: accel_y, 2: accel_y } }
+        scale_from: { register: ACC_RANGE, mask: 0xF, map: { 3: 16384, 5: 8192, 8: 4096, 12: 2048 } }
+      - name: ACC_Z
+        addr: 0x16
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: suspended
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 4, table: { 1: accel_z, 2: accel_z } }
+        scale_from: { register: ACC_RANGE, mask: 0xF, map: { 3: 16384, 5: 8192, 8: 4096, 12: 2048 } }
+      - { name: SENSORTIME, addr: 0x18, width: 3, endian: le, access: r, reset: 0x000000 }
+      - { name: STATUS, addr: 0x1B, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: INT_STATUS, addr: 0x1C, width: 4, endian: le, access: r, reset: 0x00000000 }
+      - name: TEMPERATURE
+        addr: 0x20
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: temp_invalid
+        source_from: { register: PMU_STATUS, mask: 0x3, shift: 2, table: { 1: temperature } }
+        encode: { scale: 512.0, offset: -11776.0 }
+      - { name: FIFO_LENGTH, addr: 0x22, width: 2, endian: le, access: r, reset: 0x0000 }
+      - { name: FIFO_DATA, addr: 0x24, width: 1, endian: le, access: r, reset: 0x00 }
+      # Configuration (Figure 20 reset values). The reserved high bits of the
+      # range registers keep their 0 (`write_mask`).
+      - { name: ACC_CONF, addr: 0x40, width: 1, endian: le, access: rw, reset: 0x28 }
+      - { name: ACC_RANGE, addr: 0x41, width: 1, endian: le, access: rw, write_mask: 0x0F, reset: 0x03 }
+      - { name: GYR_CONF, addr: 0x42, width: 1, endian: le, access: rw, write_mask: 0x3F, reset: 0x28 }
+      - { name: GYR_RANGE, addr: 0x43, width: 1, endian: le, access: rw, write_mask: 0x07, reset: 0x00 }
+      - { name: MAG_CONF, addr: 0x44, width: 1, endian: le, access: rw, write_mask: 0x0F, reset: 0x0B }
+      - { name: FIFO_DOWNS, addr: 0x45, width: 1, endian: le, access: rw, reset: 0x88 }
+      - { name: FIFO_CONFIG_0, addr: 0x46, width: 1, endian: le, access: rw, reset: 0x80 }
+      - { name: FIFO_CONFIG_1, addr: 0x47, width: 1, endian: le, access: rw, reset: 0x10 }
+      - { name: INT_EN_0, addr: 0x50, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_EN_1, addr: 0x51, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_EN_2, addr: 0x52, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_OUT_CTRL, addr: 0x53, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_LATCH, addr: 0x54, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_MAP_0, addr: 0x55, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_MAP_1, addr: 0x56, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_MAP_2, addr: 0x57, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: IF_CONF, addr: 0x6B, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: NV_CONF, addr: 0x70, width: 1, endian: le, access: rw, reset: 0x00 }
+      # CMD is write-only (MODE W): a command is consumed, so it reads back 0.
+      - { name: CMD, addr: 0x7E, width: 1, endian: le, access: rw, self_clearing: 0xFF, reset: 0x00 }
+  rules:
+    # acc_set_pmu_mode 0b0001_00nn → acc_pmu_status = nn; drdy_acc follows
+    # whether the accelerometer is converting (normal or low power).
+    - on: { write: CMD }
+      when: "(written & 0xFC) == 0x10"
+      do:
+        - { write: { register: PMU_STATUS, value: "(reg(PMU_STATUS) & 0x0F) | ((written & 0x3) << 4)" } }
+        - { write: { register: STATUS, value: "(reg(STATUS) & 0x7F) | ((((written & 0x3) == 1) || ((written & 0x3) == 2)) << 7)" } }
+    # gyr_set_pmu_mode 0b0001_01nn → gyr_pmu_status = nn; drdy_gyr in normal.
+    - on: { write: CMD }
+      when: "(written & 0xFC) == 0x14"
+      do:
+        - { write: { register: PMU_STATUS, value: "(reg(PMU_STATUS) & 0x33) | ((written & 0x3) << 2)" } }
+        - { write: { register: STATUS, value: "(reg(STATUS) & 0xBF) | (((written & 0x3) == 1) << 6)" } }
+    # softreset 0xB6: "all user configuration settings are overwritten with
+    # their default state" (§2.11.38) — sensors back to suspend.
+    - on: { write: CMD }
+      when: "written == 0xB6"
+      do:
+        - { write: { register: PMU_STATUS, value: "0x00" } }
+        - { write: { register: STATUS, value: "0x00" } }
+        - { write: { register: ACC_CONF, value: "0x28" } }
+        - { write: { register: ACC_RANGE, value: "0x03" } }
+        - { write: { register: GYR_CONF, value: "0x28" } }
+        - { write: { register: GYR_RANGE, value: "0x00" } }
+        - { write: { register: MAG_CONF, value: "0x0B" } }
+        - { write: { register: FIFO_DOWNS, value: "0x88" } }
+        - { write: { register: FIFO_CONFIG_0, value: "0x80" } }
+        - { write: { register: FIFO_CONFIG_1, value: "0x10" } }
+        - { write: { register: INT_EN_0, value: "0x00" } }
+        - { write: { register: INT_EN_1, value: "0x00" } }
+        - { write: { register: INT_EN_2, value: "0x00" } }
+        - { write: { register: INT_OUT_CTRL, value: "0x00" } }
+        - { write: { register: INT_LATCH, value: "0x00" } }
+        - { write: { register: INT_MAP_0, value: "0x00" } }
+        - { write: { register: INT_MAP_1, value: "0x00" } }
+        - { write: { register: INT_MAP_2, value: "0x00" } }
+
+metadata:
+  label: "Bosch BMI160 IMU"
+  summary: "Bosch BMI160 6-axis IMU (accel + gyro + temperature) over I²C."
+  detail: "Bosch BMI160 at 0x68 (0x69 with SDO high). CHIP_ID (0x00) reads 0xD1. Accelerometer and gyroscope power up in suspend and read 0x0000 until CMD (0x7E) puts them in normal mode (0x11 / 0x15), which PMU_STATUS (0x03) and STATUS drdy bits report. Data are little-endian int16 words at 0x0C..0x17 scaled by ACC_RANGE / GYR_RANGE; TEMPERATURE (0x20) is (T − 23 °C)·512 and reads 0x8000 (invalid) unless the gyro is in normal mode. Softreset (0xB6) restores the defaults. Not modelled: FIFO, interrupts, aux magnetometer, sensor time, PMU switch delays, SPI."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x68 (SDO low); 0x69 with SDO high." }
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_y, label: "Accel Y", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: accel_z, label: "Accel Z", unit: "g", min: -16, max: 16, default: 1 }
+    - { key: gyro_x, label: "Gyro X", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_y, label: "Gyro Y", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gyro_z, label: "Gyro Z", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: temperature, label: "Die temperature", unit: "°C", min: -40, max: 85, default: 25 }

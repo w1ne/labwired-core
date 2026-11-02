@@ -1,0 +1,13 @@
+# LabWired - PolarFire SoC Discovery Kit example system (same as configs/systems/mpfs-disco-kit.yaml)
+#
+# MPFS095T (Microchip "PolarFire SoC FPGA Discovery Kit User Guide").
+# Zephyr's u54 target (`mpfs_icicle/polarfire/u54`, the same MSS)
+# puts its console on MMUART1, 115200 8N1 from the 150 MHz APB clock.
+#
+# Not modelled yet: the LEDs and buttons (fabric GPIO via the FPGA design),
+# DDR training and the HSS boot flow (images are loaded straight into the DDR
+# window, as the HSS leaves them before handing a U54 its entry point).
+name: "mpfs-disco-kit"
+chip: "../../configs/chips/mpfs095t.yaml"
+external_devices: []
+debug_uart: "mmuart1"

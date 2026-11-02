@@ -53,6 +53,8 @@ enum Hal {
     Arduino,
     /// Unmodified upstream Contiki-NG build.
     Contiki,
+    /// Unmodified upstream Apache NuttX build.
+    NuttX,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1017,6 +1019,74 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "vegaboard-ri5cy-smoke.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2002_FFFF)],
         expected_uart_output: b"VEGABOARD RI5CY SMOKE\n",
+    },
+    SurvivalCase {
+        // PolarFire SoC Discovery Kit (MPFS095T): unmodified Zephyr v4.1.0
+        // hello_world for `mpfs_icicle/polarfire/u54` (same MSS) on the RV64
+        // hart — mhartid 1, CLINT machine timer, MMUART1 as a 16550 with the
+        // DLAB divisor latch. Code and stack in the DDR window at 0x8000_0000.
+        // Rebuild: crates/firmware-mpfs-zephyr/build.sh. SIM-DERIVED.
+        name: "mpfs_disco_kit_zephyr",
+        core: "rv64imac",
+        family: CpuFamily::RiscV,
+        hal: Hal::Zephyr,
+        chip: "mpfs095t",
+        system: "mpfs-disco-kit",
+        fixture: "mpfs-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x8000_0000, 0x807F_FFFF)],
+        expected_uart_output: b"Hello World! mpfs_icicle/polarfire/u54",
+    },
+    SurvivalCase {
+        // SK-AM62 (TI AM6234): unmodified Zephyr v4.3.0 hello_world for
+        // `sk_am62/am6234/a53` on the AArch64 core — EL3 reset, ERET to EL1,
+        // MMU on, GICv3 and generic-timer bring-up, MAIN_UART0 as a 16550.
+        // Runs through the Session builder, the AArch64 machine family's only
+        // build path. Rebuild: crates/firmware-sk-am62-zephyr/build.sh.
+        // SIM-DERIVED.
+        name: "sk_am62_zephyr",
+        core: "cortex-a53",
+        family: CpuFamily::Session,
+        hal: Hal::Zephyr,
+        chip: "am6234",
+        system: "sk-am62",
+        fixture: "sk-am62-zephyr-hello.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"Hello World! sk_am62/am6234/a53",
+    },
+    SurvivalCase {
+        // EK-RX261 (R5F52618BGFP): unmodified Zephyr v4.3.0 hello_world for
+        // `ek_rx261` on the RX core — reset vector, RDP clock setup against
+        // `rx_sysc`/`rx_flash`, the SCI6 console. Runs through the Session
+        // builder, the RX machine family's only build path.
+        // Rebuild: crates/firmware-ek-rx261-zephyr/build.sh. SIM-DERIVED.
+        name: "ek_rx261_zephyr",
+        core: "rxv3",
+        family: CpuFamily::Session,
+        hal: Hal::Zephyr,
+        chip: "r5f52618bgfp",
+        system: "ek-rx261",
+        fixture: "ek-rx261-zephyr-hello.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"Hello World! ek_rx261/r5f52618bgfp",
+    },
+    SurvivalCase {
+        // Curiosity PIC32MZ EF 2.0 (PIC32MZ2048EFM144): unmodified upstream
+        // NuttX (apache/nuttx 7956039dfd) nsh for an out-of-tree board on the
+        // MIPS32r2 core — reset vector 0xBFC00000, the EVIC, Timer1 tick,
+        // software-interrupt context switches and the UART2 console up to
+        // the shell prompt. Runs through the Session builder, the MIPS
+        // machine family's only build path.
+        // Rebuild: crates/firmware-curiosity-pic32mz-nuttx/build.sh nsh.
+        // SIM-DERIVED.
+        name: "curiosity_pic32mz_nuttx",
+        core: "m5150",
+        family: CpuFamily::Session,
+        hal: Hal::NuttX,
+        chip: "pic32mz2048efm144",
+        system: "curiosity-pic32mz-ef",
+        fixture: "curiosity-pic32mz-ef-nuttx-nsh.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"NuttShell (NSH)",
     },
     SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
@@ -2362,7 +2432,12 @@ fn run_riscv_firmware(
     // through the same one resolution the CLI, browser and debugger paths
     // use — a generic `rv32*` chip must not silently run the ESP32-C3's
     // vendor CSR set.
-    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    // A `core: rv64…` chip (PolarFire SoC U54) runs the 64-bit hart.
+    let cpu: Box<dyn Cpu> = if labwired_core::cpu::riscv64::is_rv64_chip(&chip) {
+        Box::new(labwired_core::cpu::RiscV64::for_chip(&chip))
+    } else {
+        Box::new(labwired_core::system::riscv::configure_riscv(&mut bus))
+    };
     let mut machine = Machine::new(cpu, bus);
     let trace = Arc::new(TraceObserver::new(5000));
     machine.add_observer(trace.clone());
@@ -3070,6 +3145,13 @@ survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 
 survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
+survival_gate!(test_mpfs_disco_kit_zephyr_survival, "mpfs_disco_kit_zephyr");
+survival_gate!(test_sk_am62_zephyr_survival, "sk_am62_zephyr");
+survival_gate!(test_ek_rx261_zephyr_survival, "ek_rx261_zephyr");
+survival_gate!(
+    test_curiosity_pic32mz_nuttx_survival,
+    "curiosity_pic32mz_nuttx"
+);
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

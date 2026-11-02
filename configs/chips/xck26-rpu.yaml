@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT
+# AMD Zynq UltraScale+ XCK26 (the Kria K26 SOM on the KV260 Vision AI Starter
+# Kit), Real-time Processing Unit core 0: Arm Cortex-R5F, ARMv7-R, PMSAv7
+# 16-region MPU, VFPv3-D16 (UG1085, "Real-time Processing Unit" chapter).
+# The application Cortex-A53 cluster, PMU, PL, DDR controller and boot flow
+# (CSU ROM -> PMU firmware -> FSBL loads the RPU image) are not modelled: an
+# ELF is loaded directly, as the FSBL would place it.
+# Memory and the RPU peripheral map follow the Zephyr v4.1.0 `zynqmp.dtsi` and
+# `zynqmp_rpu.dtsi` nodes for board `kv260_r5`, cross-checked with UG1085.
+name: xck26-rpu
+arch: arm
+core: cortex-r5f
+registers_count: 17
+# K26 SOM RPU maximum (DS987). One modeled tick per retired instruction; no
+# cycle timings, caches or TCM wait states.
+cpu_hz: 533_000_000
+# No internal flash: the RPU executes from TCM/DDR loaded by the FSBL.
+flash: { base: 0, size: 0 }
+# Zephyr's `kv260_r5` RAM window: the low 64 MiB (ATCM/BTCM alias + DDR low).
+ram: { base: 0, size: "64MiB" }
+memory_regions:
+  - { name: ocm, base: 0xfffc0000, size: "256KiB" }
+peripherals: []
+# Native Cortex-R5F (qemu-arm-system) platform map, installed only by the
+# native RPU path; the generic peripherals above remain empty.
+# IRQs are GIC INTIDs (32 + SPI). TTC0 raises one SPI per counter: 68, 69, 70.
+# The TTC `input_hz` is the counter input clock the firmware was built for:
+# Zephyr's kv260_r5.dts `ttc0` clock-frequency.
+native_rpu_peripherals:
+  - { id: gicd, type: arm_gic_distributor, base_address: 0xf9000000, size: 4KiB }
+  - { id: gicc, type: arm_gic_cpu_interface, base_address: 0xf9001000, size: 4KiB }
+  - { id: uart0, type: cadence_uart, base_address: 0xff000000, size: 4KiB, irq: 53 }
+  - { id: uart1, type: cadence_uart, base_address: 0xff010000, size: 4KiB, irq: 54 }
+  - { id: ttc0, type: cadence_ttc, base_address: 0xff110000, size: 4KiB, irq: 68, config: { input_hz: 5000000 } }

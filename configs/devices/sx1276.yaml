@@ -1,0 +1,171 @@
+# Semtech SX1276 LoRa transceiver — declarative SPI register device, LoRa
+# PAGE. Datasheet: Semtech SX1276/77/78/79 Rev. 4 (March 2015) — §4.3 "SPI
+# Interface", §4.1.6 "LoRa Modem State Machine Sequences", §5.5.5 "RSSI and
+# SNR in LoRa Mode", §6.1 Table 41 "Registers Summary" and §6.4 "LoRa Mode
+# Register Map".
+#
+# How this differs from `rfm95.yaml` (an SX1276 module, already shipped):
+# that descriptor is a POR register shell of the FSK/OOK page. This one is the
+# bare chip as LoRa firmware actually uses it — the LoRa page of 0x0D..0x3F
+# with §6.4's reset values, an RSSI / packet-RSSI / SNR read path from
+# stimulus, a write-1-to-clear RegIrqFlags, and the TX sequence's TxDone.
+#
+# ── The wire (§4.3) ─────────────────────────────────────────────────────────
+# CS↓, an address byte — bit 7 "wnr": 1 = write, 0 = read; bits 6:0 address —
+# then the data byte. So `rw_bit: 7`, `rw_read_high: false`, `addr_mask: 0x7F`.
+# One byte per CS frame is exact; a burst past the first byte reads 0xFF (the
+# silicon walks the address, and pops the FIFO at 0x00 — see NOT MODELLED).
+#
+# ── Register page (§4.1.2.1, Table 41) ─────────────────────────────────────
+# The SX1276 has TWO physical register banks over 0x0D..0x3F, selected by
+# RegOpMode.LongRangeMode, and "the content of the LoRa configuration
+# registers is retained in FSK/OOK mode". The engine has no SPI banking, so
+# this descriptor presents the LoRa page at all times: 0x00..0x3F carry the
+# §6.4 LoRa reset values, 0x40 and up the Table 41 POR values (they are common
+# to both modes). A driver that uses the FSK modem must use `rfm95`.
+#
+#   0x01 RegOpMode          0x01   LongRangeMode[7] AccessSharedReg[6]
+#                                  LowFrequencyModeOn[3] Mode[2:0] (001 STDBY).
+#                                  Table 41 POR value; §6.4's bit table prints
+#                                  LowFrequencyModeOn reset "0x01", which would
+#                                  make it 0x09 — the summary table is used.
+#   0x06..0x08 RegFrf      6C 80 00  434 MHz
+#   0x09 RegPaConfig 0x4F  0x0A RegPaRamp 0x09  0x0B RegOcp 0x2B  0x0C RegLna 0x20
+#   0x0E RegFifoTxBaseAddr 0x80   0x0F RegFifoRxBaseAddr 0x00
+#   0x12 RegIrqFlags       0x00   write-1-to-clear ("rc", "writing a 1 clears")
+#   0x18 RegModemStat      0x10   "Modem clear"
+#   0x19 RegPktSnrValue           SNR[dB] = PacketSnr / 4, two's complement
+#   0x1A RegPktRssiValue          Packet Strength = −157 + PacketRssi (HF port)
+#   0x1B RegRssiValue             RSSI = −157 + Rssi (HF), −164 + Rssi (LF port)
+#   0x1D RegModemConfig1   0x72   BW 125 kHz, CR 4/5, explicit header
+#   0x1E RegModemConfig2   0x70   SF7
+#   0x1F RegSymbTimeoutLsb 0x64   0x21 RegPreambleLsb 0x08
+#   0x22 RegPayloadLength  0x01   0x23 RegMaxPayloadLength 0xFF
+#   0x26 RegModemConfig3   0x00   0x31 RegDetectOptimize 0xC3
+#   0x33 RegInvertIQ       0x27   0x37 RegDetectionThreshold 0x0A
+#   0x39 RegSyncWord       0x12
+#   0x42 RegVersion        0x12   READ-ONLY
+#   0x4B RegTcxo 0x09  0x4D RegPaDac 0x84  0x61..0x64 AGC 13 0E 5B DB  0x70 RegPll 0xD0
+#
+# RSSI port: the −157 / −164 constant follows RegOpMode.LowFrequencyModeOn
+# (§5.5.5), and the three measurement registers read 0x00 while
+# LongRangeMode is clear — the FSK page's AFC/FEI registers at 0x19..0x1B,
+# which this twin does not model, power up 0x00 too (Table 41). The packet
+# RSSI is the SNR ≥ 0 form; the SNR < 0 correction is the driver's job.
+#
+# ── TX (§4.1.6, "Data Transmission Sequence") ──────────────────────────────
+# "Upon completion the TxDone interrupt is issued and the radio returns to
+# Standby mode." Writing Mode = 011 (TX) with LongRangeMode set raises
+# RegIrqFlags.TxDone (bit 3) and drops Mode back to 001 (STDBY) at once —
+# there is no time-on-air. A driver that polls TxDone (arduino-LoRa's
+# synchronous endPacket, RadioLib's transmit) completes; one that waits for a
+# DIO0 interrupt does not, because DIO0 is not driven.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * THE RF AIR LINK. Nothing is ever received: RX never sets RxDone, no
+#     packet enters the FIFO, RegRxNbBytes stays 0.
+#   * The 256-byte FIFO data buffer behind RegFifo (0x00) and RegFifoAddrPtr:
+#     0x00 is one byte of storage, and a burst does not walk the buffer.
+#   * The FSK/OOK register page and the page switch, burst auto-increment,
+#     DIO0..DIO5, CAD, FHSS, time-on-air, mode-transition timing, RegTemp.
+type: sx1276
+
+behavior:
+  primitive: spi_device
+  derived:
+    # §5.5.5: RSSI (dBm) = −157 + Rssi (HF port), −164 + Rssi (LF port).
+    - { name: rssi_hf, expr: "rssi_dbm + 157" }
+    - { name: rssi_lf, expr: "rssi_dbm + 164" }
+    - { name: pkt_rssi_hf, expr: "packet_rssi_dbm + 157" }
+    - { name: pkt_rssi_lf, expr: "packet_rssi_dbm + 164" }
+    # Not in LoRa mode: the FSK page's AFC/FEI words, POR 0x00.
+    - { name: fsk_page, expr: "0" }
+  spi:
+    framing:
+      command_bytes: 1
+      rw_bit: 7
+      rw_read_high: false
+      addr_mask: 0x7F
+      auto_increment: false
+    registers:
+      - { name: RegOpMode, addr: 0x01, width: 1, endian: be, access: rw, write_mask: 0xCF, reset: 0x01 }
+      - { name: RegIrqFlags, addr: 0x12, width: 1, endian: be, access: rw, on_write: write_one_to_clear, reset: 0x00 }
+      - { name: RegModemStat, addr: 0x18, width: 1, endian: be, access: r, reset: 0x10 }
+      - name: RegPktSnrValue
+        addr: 0x19
+        width: 1
+        endian: be
+        access: r
+        signed: true
+        source: fsk_page
+        source_from: { register: RegOpMode, mask: 0x10, shift: 3, table: { 0x10: snr_db } }
+        encode: { scale: 4.0 }
+      - name: RegPktRssiValue
+        addr: 0x1A
+        width: 1
+        endian: be
+        access: r
+        source: fsk_page
+        source_from: { register: RegOpMode, mask: 0x11, shift: 3, table: { 0x10: pkt_rssi_hf, 0x11: pkt_rssi_lf } }
+      - name: RegRssiValue
+        addr: 0x1B
+        width: 1
+        endian: be
+        access: r
+        source: fsk_page
+        source_from: { register: RegOpMode, mask: 0x11, shift: 3, table: { 0x10: rssi_hf, 0x11: rssi_lf } }
+      # Table 41: RegVersion 0x12 for the SX1276/77/78/79. Read-only.
+      - { name: RegVersion, addr: 0x42, width: 1, endian: be, access: r, reset: 0x12 }
+    # Every other address is one byte of storage. 0x00..0x3F: §6.4 LoRa-page
+    # reset values; 0x40 and up: Table 41 POR values. Absent entries reset 0x00
+    # (and the "n/a" read-only status bytes — RegFifoRxCurrentAddr, RegRxNbBytes,
+    # the header / packet counters, RegHopChannel, RegFifoRxByteAddr,
+    # RegRssiWideband — read 0x00: no packet has ever been received).
+    register_file:
+      size: 0x80
+      reset:
+        0x06: 0x6C # RegFrfMsb  ─┐
+        0x07: 0x80 # RegFrfMid   ├ 434 MHz
+        #   0x08: 0x00 RegFrfLsb ┘
+        0x09: 0x4F # RegPaConfig
+        0x0A: 0x09 # RegPaRamp
+        0x0B: 0x2B # RegOcp
+        0x0C: 0x20 # RegLna
+        0x0E: 0x80 # RegFifoTxBaseAddr
+        0x1D: 0x72 # RegModemConfig1  BW 125 kHz, CR 4/5
+        0x1E: 0x70 # RegModemConfig2  SF7
+        0x1F: 0x64 # RegSymbTimeoutLsb
+        0x21: 0x08 # RegPreambleLsb
+        0x22: 0x01 # RegPayloadLength
+        0x23: 0xFF # RegMaxPayloadLength
+        0x31: 0xC3 # RegDetectOptimize (reserved 0xC0 | SF7..12 0x03)
+        0x33: 0x27 # RegInvertIQ
+        0x37: 0x0A # RegDetectionThreshold
+        0x39: 0x12 # RegSyncWord
+        0x44: 0x2D # RegPllHop
+        0x4B: 0x09 # RegTcxo
+        0x4D: 0x84 # RegPaDac
+        0x61: 0x13 # RegAgcRef
+        0x62: 0x0E # RegAgcThresh1
+        0x63: 0x5B # RegAgcThresh2
+        0x64: 0xDB # RegAgcThresh3
+        0x70: 0xD0 # RegPll
+  rules:
+    # §4.1.6: TX in LoRa mode completes at once — TxDone, back to STDBY.
+    - on: { write: RegOpMode }
+      when: "(written & 0x87) == 0x83"
+      do:
+        - { write: { register: RegIrqFlags, value: "reg(RegIrqFlags) | 0x08" } }
+        - { write: { register: RegOpMode, value: "(reg(RegOpMode) & 0xF8) | 0x01" } }
+
+metadata:
+  label: "Semtech SX1276 LoRa"
+  summary: "Semtech SX1276 LoRa transceiver, SPI register model of the LoRa page (no RF air link)."
+  detail: "Semtech SX1276 over SPI (address bit 7 = 1 writes). RegVersion (0x42) reads 0x12. Registers 0x00..0x3F present the LoRa page with its reset values (RegModemConfig1 0x72, RegModemConfig2 0x70, RegSyncWord 0x12, RegFifoTxBaseAddr 0x80…); RegRssiValue / RegPktRssiValue / RegPktSnrValue report the rssi_dbm / packet_rssi_dbm / snr_db stimulus with the HF (−157) or LF (−164) offset in LoRa mode; RegIrqFlags is write-1-to-clear; a TX mode write raises TxDone and returns to standby. NOT modelled: the RF air link (nothing is received), the 256-byte FIFO, the FSK page, DIO pins, burst access and timing."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "SPI NSS GPIO pin. Defaults to PA4." }
+  inputs:
+    - { key: rssi_dbm, label: "Current RSSI", unit: "dBm", min: -157, max: 0, default: -100 }
+    - { key: packet_rssi_dbm, label: "Last packet RSSI", unit: "dBm", min: -157, max: 0, default: -90 }
+    - { key: snr_db, label: "Last packet SNR", unit: "dB", min: -32, max: 31.75, default: 9.5 }

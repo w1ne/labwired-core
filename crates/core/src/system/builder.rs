@@ -136,6 +136,10 @@ pub fn build_esp32_system_from_manifest_with_plugins(
 
     let mut bus = SystemBus::new();
     let pro_cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
+    // The peripheral bank is programmatic, but voltage routes still need the
+    // resolved descriptor's electrical data, just as SystemBus::from_config does.
+    // Keep absent metadata absent so co-simulation refuses untranscribed levels.
+    bus.attach_chip_io_levels(&chip);
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)?;
     // The peripheral BANK is programmatic (above), but the chip YAML is still
     // where a peripheral's debugger register schema is declared. Without this,
@@ -182,13 +186,17 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 // copy-pasted into the browser crate and the CLI; they move here one family at
 // a time, each ported verbatim from the browser constructor.
 
+mod aarch64;
 mod arm;
 mod avr;
 mod cortex_a;
+mod cortex_r;
+mod mips;
 mod pic16;
 mod pic18;
 mod pic24;
 mod riscv;
+mod rx;
 mod xtensa;
 
 pub use xtensa::esp32s3_flash_backing_size;
@@ -361,12 +369,16 @@ pub fn build_machine_with_plugins(
     match machine_family(req.chip)? {
         MachineFamily::CortexM => arm::build(req, plugins),
         MachineFamily::CortexA => cortex_a::build(req, plugins),
+        MachineFamily::CortexR => cortex_r::build(req, plugins),
         MachineFamily::RiscV => riscv::build(req, plugins),
         MachineFamily::Xtensa => xtensa::build(req, plugins),
         MachineFamily::Avr => avr::build(req, plugins),
         MachineFamily::Pic24 => pic24::build(req, plugins),
         MachineFamily::Pic18 => pic18::build(req, plugins),
         MachineFamily::Pic16 => pic16::build(req, plugins),
+        MachineFamily::Aarch64 => aarch64::build(req, plugins),
+        MachineFamily::Rx => rx::build(req, plugins),
+        MachineFamily::Mips => mips::build(req, plugins),
     }
 }
 
@@ -395,5 +407,80 @@ mod host_stream_tests {
         let mut bus = SystemBus::new();
         wire_host_streams(&mut bus, &BuildOptions::default()).unwrap();
         assert!(bus.segger_rtt_status().is_none());
+    }
+}
+
+#[cfg(test)]
+mod esp32_input_threshold_tests {
+    use super::build_esp32_system_from_manifest;
+    use crate::cosim::{CosimSignalValue, CosimSignals, SignalRouter};
+    use labwired_config::{CosimAdapter, CosimModelConfig, SystemManifest};
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    #[test]
+    fn classic_esp32_voltage_routes_use_the_descriptor_thresholds() {
+        // Exercise the programmatic builder used by hosted ESP32 runs, not the
+        // generic from_config path, which already copied this electrical data.
+        let manifest: SystemManifest =
+            serde_yaml::from_str("name: esp32-voltage-inputs\nchip: esp32\n")
+                .expect("parse manifest");
+        let (mut bus, _, _) = build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
+            .expect("build classic ESP32");
+        // Binding knows every analog output carries volts. Apply sampled F64
+        // voltages directly: no firmware or external analog solver is needed.
+        let model = CosimModelConfig {
+            id: "voltage_probe".into(),
+            adapter: CosimAdapter::Analog,
+            model: None,
+            step_ns: 1_000,
+            inputs: HashMap::new(),
+            outputs: HashMap::from([
+                ("v_clk".into(), "board.gpio_in.gpio32".into()),
+                ("v_dt".into(), "board.gpio_in.gpio33".into()),
+            ]),
+            config: HashMap::new(),
+        };
+        let (mut router, errors) = SignalRouter::bind(&[model], &bus);
+        assert!(errors.is_empty(), "analog pin routes must bind: {errors:?}");
+        assert!(!router.is_empty());
+
+        // ESP32 at 3.3 V: VIL = 0.825 V, VIH = 2.475 V. Between the thresholds,
+        // preserve the previous state. Distinct levels also catch pin aliasing.
+        for (clk_volts, dt_volts, clk_high, dt_high) in [
+            (0.0, 3.3, false, true),
+            (2.4, 0.9, false, true),
+            (2.5, 0.8, true, false),
+            (0.9, 2.4, true, false),
+            (0.8, 2.5, false, true),
+        ] {
+            let signals = CosimSignals::from([
+                (
+                    "board.gpio_in.gpio32".into(),
+                    CosimSignalValue::F64(clk_volts),
+                ),
+                (
+                    "board.gpio_in.gpio33".into(),
+                    CosimSignalValue::F64(dt_volts),
+                ),
+            ]);
+            let errors = router.apply(&mut bus, &signals);
+            assert!(errors.is_empty(), "voltage application failed: {errors:?}");
+            let gpio = bus
+                .peripherals
+                .iter()
+                .find(|entry| entry.name == "gpio")
+                .expect("classic ESP32 GPIO peripheral");
+            assert_eq!(
+                gpio.dev.read_gpio_input(32),
+                Some(clk_high),
+                "GPIO32 at {clk_volts} V"
+            );
+            assert_eq!(
+                gpio.dev.read_gpio_input(33),
+                Some(dt_high),
+                "GPIO33 at {dt_volts} V"
+            );
+        }
     }
 }

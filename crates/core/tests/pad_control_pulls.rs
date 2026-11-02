@@ -139,3 +139,55 @@ fn a_pad_control_write_is_push_captured() {
         "the pull-up was pushed: {states:?}"
     );
 }
+
+/// RA `PmnPFS` PDR/PODR are the port's `PCNTR1` flip-flops: Zephyr's RA GPIO
+/// driver (gpio_renesas_ra_ioport.c, `pinctrl_configure_pins`) makes a pin an
+/// output by storing PDR (and PODR for `GPIO_OUTPUT_INIT_HIGH`) in `PmnPFS`,
+/// then toggles it through the 16-bit `PCNTR1.PODR` half.
+#[test]
+fn ra_pfs_pdr_podr_are_the_port_output_flip_flops() {
+    use labwired_core::pins::Out;
+    let mut bus = bus("r7fa8m1ah.yaml");
+    const PFS: u64 = 0x4040_0800;
+    const P600PFS: u64 = PFS + 0x40 * 6;
+    const PORT6: u64 = 0x4040_00C0;
+    let port6 = bus.find_peripheral_index_by_name("port6").unwrap();
+    let out = |bus: &SystemBus, pin| {
+        bus.peripherals[port6]
+            .dev
+            .pins()
+            .unwrap()
+            .driver(pin)
+            .unwrap()
+            .out
+    };
+    // Write-protected: a refused PDR|PODR store does not move the pad.
+    bus.write_u32(P600PFS, 0b101).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0, "PWPRS locked");
+    assert_eq!(out(&bus, 0), Out::Off);
+    // R_BSP_PinAccessEnable (secure build: PWPRS).
+    bus.write_u8(PFS + 0x514, 0x00).unwrap();
+    bus.write_u8(PFS + 0x514, 0x40).unwrap();
+    // PDR | PODR: an output driving high, seen in PCNTR1 and on the pad.
+    bus.write_u32(P600PFS, 0b101).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0001_0001);
+    assert_eq!(out(&bus, 0), Out::High);
+    // gpio_pin_toggle_dt: PCNTR1.PODR (16-bit, +2) ^= BIT(0).
+    let podr = bus.read_u16(PORT6 + 2).unwrap();
+    bus.write_u16(PORT6 + 2, podr ^ 1).unwrap();
+    assert_eq!(out(&bus, 0), Out::Low);
+    // PmnPFS_BY (+3) aliases bits 7:0: PDR alone keeps the output, low.
+    bus.write_u8(P600PFS + 3, 0b100).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0000_0001);
+    // A store to the upper bytes (PSEL, +0 byte 3 lane) leaves PDR/PODR.
+    bus.write_u8(P600PFS + 1, 0x00).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0000_0001, "upper byte");
+    // PDR clear: back to an input. Only P600 moved.
+    bus.write_u32(P600PFS, 0).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0);
+    assert_eq!(out(&bus, 0), Out::Off);
+    bus.write_u32(P600PFS + 4, 0b101).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0002_0002, "P601");
+    let port5 = bus.find_peripheral_index_by_name("port5").unwrap();
+    assert_eq!(bus.read_u32(bus.peripherals[port5].base).unwrap(), 0);
+}

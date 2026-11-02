@@ -1,0 +1,33 @@
+# LabWired - EK-RX261 stock Zephyr tests/kernel/common
+#
+# Unmodified upstream Zephyr v4.3.0 `tests/kernel/common` (ztest, 12 suites,
+# 61 pass + 1 skip): atomics, bitarray, byteorder, clock (CMT1 cycle counter,
+# k_uptime), irq_offload (`INT #`), timeout ordering, errno/thread context,
+# printk and pow2. The skip is test_nested_irq_offload, which the RX port
+# does not support. CONFIG_BOOT_DELAY=500 busy-waits 500 ms before the kernel
+# starts. Rebuild: crates/firmware-ek-rx261-zephyr/build.sh
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ek-rx261-zephyr-kernel-common.elf"
+  system: "./system.yaml"
+limits:
+  # The suites finish after ~60 M instructions; the image then idles.
+  max_steps: 80000000
+  max_cycles: 1500000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 (delayed boot 500ms) ***"
+      - "SUITE PASS - 100.00% [atomic]: pass = 3, fail = 0, skip = 0, total = 3"
+      - "SUITE PASS - 100.00% [bitarray]: pass = 8, fail = 0, skip = 0, total = 8"
+      - "SUITE PASS - 100.00% [boot_delay]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [byteorder]: pass = 37, fail = 0, skip = 0, total = 37"
+      - "SUITE PASS - 100.00% [clock]: pass = 4, fail = 0, skip = 0, total = 4"
+      - "SUITE PASS - 100.00% [common]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "SUITE PASS - 100.00% [common_1cpu]: pass = 1, fail = 0, skip = 1, total = 2"
+      - "SUITE PASS - 100.00% [common_errno]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "SUITE PASS - 100.00% [irq_offload]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [multilib]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [pow2]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "SUITE PASS - 100.00% [printk]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "PROJECT EXECUTION SUCCESSFUL"
