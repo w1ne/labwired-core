@@ -23,8 +23,14 @@ wat = "1.0"
 # the `iolink-native` feature is enabled. Off by default so browser/wasm builds
 # never need a C toolchain.
 cc = "1.2"
+# Used solely by build.rs to zlib-pack the embedded peripheral descriptors
+# (src/bus/embedded_descriptors.rs); the runtime side only inflates.
+miniz_oxide = "0.8"
 
 [dependencies]
+# Inflates the build.rs-packed peripheral descriptors on first lookup. Already
+# in the wasm engine through flate2, so this adds no new crate to the browser.
+miniz_oxide = "0.8"
 thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
