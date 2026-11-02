@@ -55,11 +55,12 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (every capacitance, every temperature coefficient, `ISE`, `ISC`,
-//! `NKF`, terminal resistances, …) are **accepted and ignored** rather than
-//! rejected. BJT `IKF`/`IKR` high-injection rolloff and MOSFET level-1 `GAMMA`/
-//! `PHI` body effect are modelled; MOSFET `IS` is used for the two bulk
-//! junction currents. See [`super::device`] for what is and is not modelled.
+//! model (every capacitance, every temperature coefficient, `NKF`, terminal
+//! resistances, …) are **accepted and ignored** rather than rejected. BJT
+//! `IKF`/`IKR` high-injection rolloff and `ISE`/`NE`/`ISC`/`NC` base
+//! recombination are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
+//! modelled; MOSFET `IS` is used for the two bulk junction currents. See
+//! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
 //! entirely: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100),
@@ -833,6 +834,16 @@ pub struct BjtModel {
     /// Reverse beta rolloff knee current `IKR`, amps. Infinity disables
     /// reverse high-injection rolloff, matching ngspice's default.
     pub ikr: f64,
+    /// Base-emitter recombination saturation current `ISE`, amps. Zero
+    /// disables this current, matching ngspice's default.
+    pub ise: f64,
+    /// Base-emitter recombination emission coefficient `NE`.
+    pub ne: f64,
+    /// Base-collector recombination saturation current `ISC`, amps. Zero
+    /// disables this current, matching ngspice's default.
+    pub isc: f64,
+    /// Base-collector recombination emission coefficient `NC`.
+    pub nc: f64,
 }
 
 impl BjtModel {
@@ -848,6 +859,10 @@ impl BjtModel {
             var: f64::INFINITY,
             ikf: f64::INFINITY,
             ikr: f64::INFINITY,
+            ise: 0.0,
+            ne: 1.5,
+            isc: 0.0,
+            nc: 2.0,
         }
     }
 }
@@ -2319,6 +2334,15 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
+                if !(model.ise >= 0.0)
+                    || !(model.isc >= 0.0)
+                    || !(model.ne > 0.0)
+                    || !(model.nc > 0.0)
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs ISE >= 0, ISC >= 0, NE > 0 and NC > 0".to_string(),
+                    ));
+                }
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
@@ -2621,6 +2645,10 @@ fn parse_model(
             (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
             (ModelCard::Bjt(model), "IKF") => model.ikf = value,
             (ModelCard::Bjt(model), "IKR") => model.ikr = value,
+            (ModelCard::Bjt(model), "ISE") => model.ise = value,
+            (ModelCard::Bjt(model), "NE") => model.ne = value,
+            (ModelCard::Bjt(model), "ISC") => model.isc = value,
+            (ModelCard::Bjt(model), "NC") => model.nc = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,

@@ -328,17 +328,25 @@ C1 out 0 100n $ dollar comment
     fn bjt_early_and_high_injection_parameters_resolve_and_default_to_infinity() {
         let circuit = parse_netlist(
             "Q1 c b e NPN\nQ2 c2 b2 e2 QMOD\n\
-             .model QMOD NPN(VAF=75 VAR=120 IKF=5m IKR=2m)\n",
+             .model QMOD NPN(VAF=75 VAR=120 IKF=5m IKR=2m ISE=3p NE=1.6 ISC=4p NC=1.8)\n",
         )
         .expect("BJT model parameters parse");
         assert_eq!(circuit.bjts[0].model.vaf, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.var, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.ikf, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.ikr, f64::INFINITY);
+        assert_eq!(circuit.bjts[0].model.ise, 0.0);
+        assert_eq!(circuit.bjts[0].model.ne, 1.5);
+        assert_eq!(circuit.bjts[0].model.isc, 0.0);
+        assert_eq!(circuit.bjts[0].model.nc, 2.0);
         assert_eq!(circuit.bjts[1].model.vaf, 75.0);
         assert_eq!(circuit.bjts[1].model.var, 120.0);
         assert_eq!(circuit.bjts[1].model.ikf, 5e-3);
         assert_eq!(circuit.bjts[1].model.ikr, 2e-3);
+        assert_eq!(circuit.bjts[1].model.ise, 3e-12);
+        assert_eq!(circuit.bjts[1].model.ne, 1.6);
+        assert_eq!(circuit.bjts[1].model.isc, 4e-12);
+        assert_eq!(circuit.bjts[1].model.nc, 1.8);
     }
 
     #[test]
@@ -348,6 +356,20 @@ C1 out 0 100n $ dollar comment
                 .expect_err("a zero or negative high-injection knee is invalid");
             assert!(error.to_string().contains("IKF > 0"), "{error}");
             assert!(error.to_string().contains("IKR > 0"), "{error}");
+        }
+    }
+
+    #[test]
+    fn invalid_bjt_base_recombination_parameters_are_rejected() {
+        for parameter in ["ISE=-1u", "ISC=-1u", "NE=0", "NC=-1"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("invalid base recombination parameters must be refused");
+            assert!(
+                error
+                    .to_string()
+                    .contains("ISE >= 0, ISC >= 0, NE > 0 and NC > 0"),
+                "{error}"
+            );
         }
     }
 

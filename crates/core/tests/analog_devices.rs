@@ -441,6 +441,10 @@ mod analog {
                 var,
                 f64::INFINITY,
                 f64::INFINITY,
+                0.0,
+                1.5,
+                0.0,
+                2.0,
             );
             let (ict_plus, ibe_plus, _) = currents(vbe + delta, vbc);
             let (ict_minus, ibe_minus, _) = currents(vbe - delta, vbc);
@@ -489,6 +493,10 @@ mod analog {
             0.0,
             f64::INFINITY,
             f64::INFINITY,
+            0.0,
+            1.5,
+            0.0,
+            2.0,
         );
         let disabled_by_infinity = device::bjt_op(
             parameters.0,
@@ -502,6 +510,10 @@ mod analog {
             f64::INFINITY,
             f64::INFINITY,
             f64::INFINITY,
+            0.0,
+            1.5,
+            0.0,
+            2.0,
         );
         assert_eq!(disabled_by_zero, disabled_by_infinity);
     }
@@ -584,7 +596,9 @@ mod analog {
         };
 
         for (vbe, vbc) in [(0.68, -0.1), (-0.1, 0.62)] {
-            let op = device::bjt_op(vbe, vbc, is, bf, br, nf, nr, vaf, var, ikf, ikr);
+            let op = device::bjt_op(
+                vbe, vbc, is, bf, br, nf, nr, vaf, var, ikf, ikr, 0.0, 1.5, 0.0, 2.0,
+            );
             let expected_gif =
                 (transport(vbe + delta, vbc) - transport(vbe - delta, vbc)) / (2.0 * delta);
             let expected_gir =
@@ -638,6 +652,104 @@ mod analog {
             (actual_vc - expected_vc).abs() < 1e-8,
             "loaded collector should settle at {expected_vc} V with IKF rolloff, got {actual_vc} V"
         );
+    }
+
+    /// Base-emitter and base-collector recombination currents remain separate
+    /// from transport current in forward and reverse operation.
+    #[test]
+    fn bjt_base_recombination_matches_gummel_poon_by_hand() {
+        let (is, bf, br, ise, ne, isc, nc) = (1e-16, 80.0, 4.0, 1e-12, 1.5, 2e-11, 2.0);
+        for (vbe, vbc) in [(0.65, -4.35), (-4.35, 0.65)] {
+            let forward = (vbe / VT).exp();
+            let reverse = (vbc / VT).exp();
+            let transport = is * (forward - reverse);
+            let ibe = (is / bf) * (forward - 1.0) + ise * ((vbe / (ne * VT)).exp() - 1.0);
+            let ibc = (is / br) * (reverse - 1.0) + isc * ((vbc / (nc * VT)).exp() - 1.0);
+            let ic = transport - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            let ie = -(ic + ib);
+            let direction = if vbe > 0.0 { "forward" } else { "reverse" };
+
+            for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+                let kind = if polarity == Polarity::N {
+                    "NPN"
+                } else {
+                    "PNP"
+                };
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} ISE={ise} NE={ne} ISC={isc} NC={nc})\n",
+                    sign * vbc,
+                    sign * (vbc - vbe),
+                );
+                let solver = build(&netlist);
+                let actual_ic = sign * source_current(&solver, "Vc");
+                let actual_ib = sign * source_current(&solver, "Vb");
+                let actual_ie = sign * source_current(&solver, "Ve");
+
+                assert!(
+                    relative(actual_ic, ic) < 1e-5,
+                    "{kind} {direction}: collector current should be {ic} A, got {actual_ic} A"
+                );
+                assert!(
+                    relative(actual_ib, ib) < 1e-5,
+                    "{kind} {direction}: base current should be {ib} A, got {actual_ib} A"
+                );
+                assert!(
+                    relative(actual_ie, ie) < 1e-5,
+                    "{kind} {direction}: emitter current should be {ie} A, got {actual_ie} A"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bjt_base_recombination_partials_match_finite_difference() {
+        let (is, bf, br, nf, nr, ise, ne, isc, nc) =
+            (2e-15, 75.0, 3.0, 1.1, 1.2, 3e-12, 1.5, 5e-12, 2.0);
+        let delta = 1e-7;
+        let base_emitter_current = |vbe: f64| {
+            (is / bf) * ((vbe / (nf * VT)).exp() - 1.0) + ise * ((vbe / (ne * VT)).exp() - 1.0)
+        };
+        let base_collector_current = |vbc: f64| {
+            (is / br) * ((vbc / (nr * VT)).exp() - 1.0) + isc * ((vbc / (nc * VT)).exp() - 1.0)
+        };
+
+        for (vbe, vbc) in [(0.62, -0.1), (-0.1, 0.58)] {
+            let op = device::bjt_op(
+                vbe,
+                vbc,
+                is,
+                bf,
+                br,
+                nf,
+                nr,
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::INFINITY,
+                ise,
+                ne,
+                isc,
+                nc,
+            );
+            let expected_gpi = (base_emitter_current(vbe + delta)
+                - base_emitter_current(vbe - delta))
+                / (2.0 * delta);
+            let expected_gmu = (base_collector_current(vbc + delta)
+                - base_collector_current(vbc - delta))
+                / (2.0 * delta);
+            assert!(
+                relative(op.gpi, expected_gpi) < 1e-6,
+                "gpi: {} vs {expected_gpi}",
+                op.gpi
+            );
+            assert!(
+                relative(op.gmu, expected_gmu) < 1e-6,
+                "gmu: {} vs {expected_gmu}",
+                op.gmu
+            );
+        }
     }
 
     // -----------------------------------------------------------------------
