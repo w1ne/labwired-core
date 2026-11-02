@@ -277,6 +277,57 @@ mod analog {
         }
     }
 
+    /// When both base junctions are forward biased, the Ebers–Moll transport
+    /// currents oppose each other. Check all terminals against the equations
+    /// for NPN and PNP; active-region tests do not exercise the BC injection
+    /// term that dominates a saturated transistor.
+    #[test]
+    fn bjt_saturation_matches_ebers_moll_by_hand() {
+        let is = 1e-16;
+        let bf = 80.0;
+        let br = 4.0;
+        let vbe: f64 = 0.65;
+        let vbc: f64 = 0.55;
+        let exp_be = (vbe / VT).exp();
+        let exp_bc = (vbc / VT).exp();
+        let junction_be = exp_be - 1.0;
+        let junction_bc = exp_bc - 1.0;
+        let ic = is * (exp_be - exp_bc) - (is / br) * junction_bc - device::GMIN * vbc;
+        let ib = (is / bf) * junction_be + (is / br) * junction_bc + device::GMIN * (vbe + vbc);
+        let ie = -(ic + ib);
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NPN"
+            } else {
+                "PNP"
+            };
+            let netlist = format!(
+                "Vb b 0 dc {}\nVc c 0 dc {}\nVe e 0 dc 0\nQ1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} NF=1 NR=1)\n",
+                sign * vbe,
+                sign * (vbe - vbc)
+            );
+            let solver = build(&netlist);
+            let actual_ic = sign * source_current(&solver, "Vc");
+            let actual_ib = sign * source_current(&solver, "Vb");
+            let actual_ie = sign * source_current(&solver, "Ve");
+
+            assert!(
+                relative(actual_ic, ic) < 1e-5,
+                "{kind}: saturated collector current should be {ic} A, got {actual_ic} A"
+            );
+            assert!(
+                relative(actual_ib, ib) < 1e-5,
+                "{kind}: saturated base current should be {ib} A, got {actual_ib} A"
+            );
+            assert!(
+                relative(actual_ie, ie) < 1e-5,
+                "{kind}: saturated emitter current should be {ie} A, got {actual_ie} A"
+            );
+        }
+    }
+
     /// The Early effect is the one missing Gummel–Poon term a user will notice:
     /// output conductance in the active region is `GMIN`, not `Ic/VAF`. Say so
     /// with a test rather than only in a doc comment.
