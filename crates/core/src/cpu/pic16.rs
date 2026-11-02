@@ -387,6 +387,12 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
         &[(0x0A0, 0x0DF, 0x020)],
     ),
+    dev_no_usart(
+        "pic16f676",
+        1024,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        &[(0x0A0, 0x0DF, 0x020)],
+    ),
     dev(
         "pic16f687",
         2048,
@@ -3304,6 +3310,32 @@ mod tests {
         assert!(!device.map.has_usart);
 
         let mut cpu = Pic16::for_chip_name("pic16f630");
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+        cpu.write_data(SFR_PIR1, 0x10);
+        assert_eq!(cpu.read_data(SFR_PIR1), 0x10);
+
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0x01);
+        assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0x00, "unimplemented PORTB");
+    }
+
+    #[test]
+    fn pic16f676_uses_no_usart_geometry_and_nonconsecutive_ports() {
+        let device = pic16_device("pic16f676").expect("F676 row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("pic16f676");
         for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
             cpu.write_data(address, value);
             assert_eq!(
