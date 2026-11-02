@@ -22,7 +22,8 @@
 #     cycle counter (CMI1 = vector 29), CMT at PCLKB/8 = 4 MHz.
 #
 # Tier: L1 boot + UART + stock RTOS. Stock Zephyr v4.3.0 hello_world,
-# synchronization and tests/kernel/common for `ek_rx261` run
+# synchronization, tests/kernel/common and tests/drivers/uart/uart_basic_api
+# (interrupt-driven SCI6) for `ek_rx261` run
 # (examples/ek-rx261, crates/firmware-ek-rx261-zephyr).
 #
 # Core: `arch: rx` builds the RX machine family (crates/core/src/cpu/rx.rs).
@@ -33,8 +34,8 @@
 # NOT modelled in this slice:
 # - PORT/MPC (pin direction/output/input, PmnPFS): declared stub, so the
 #   EK-RX261 LEDs and switch are not reachable; SCI6 needs no pad routing.
-# - SCI6 interrupts: the classic SCI is polled (TDRE/TEND/RDRF); RXI/TXI/TEI/
-#   ERI are never requested.
+# - SCI6 ERI6 (receive errors) is never requested; RXI6/TXI6/TEI6 are, as
+#   ICU vectors (`rxi_vector`). Every request is an edge into IRn.
 # - DTC, BSC, the reset/LVD status block at 0x0008C280: declared stubs.
 # - FLASH programming/erase (FACI): `rx_flash` stores the control registers
 #   with the 0xAA key convention only. RTC: plain storage (`rx_rtc`), no
@@ -74,6 +75,12 @@ peripherals:
     size: "32B"
     config:
       profile: "sci"
+      # RXI6/TXI6/TEI6 are ICU vectors 227/228/229 (Zephyr rx261-common.dtsi),
+      # latched in the core's ICU IRn. TDRE/TEND edges are timed at 115200
+      # baud in 64 MHz ICLK cycles.
+      rxi_vector: 227
+      clock_hz: 64000000
+      baud: 115200
   # FLASH control registers (FLASH 0x007FC090; MEMWAITR at 0x007FFFC0).
   - id: "flash_regs"
     type: "rx_flash"
