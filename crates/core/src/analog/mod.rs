@@ -12,14 +12,12 @@
 //! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
 //! subcircuits, model libraries, AC/DC sweeps, diode diffusion charge, BJT
 //! transit-time charge, and MOSFET channel charge by name and points at
-//! `tools/cosim/labwired_ngspice.py`, which supports those features. MOSFET
-//! level-1 overlap charge (`CGSO`/`CGDO`/`CGBO`) is integrated in-core.
+//! `tools/cosim/labwired_ngspice.py`, which supports those features.
 //!
 //! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
-//! optional depletion charge), the level-1 JFET (including optional gate
-//! junction depletion charge), and the MOSFET (including optional linear gate
-//! overlap charge) — are solved by Newton–Raphson iteration inside each time
-//! step. A circuit with none of them takes exactly
+//! optional depletion charge), and the level-1 JFET (including optional gate
+//! junction depletion charge) and MOSFET — are solved by Newton–Raphson
+//! iteration inside each time step. A circuit with none of them takes exactly
 //! the code path it took before they existed, down to the floating-point
 //! operation order.
 //!

@@ -23,11 +23,10 @@
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
 //! discovered: diode diffusion charge (`TT`), BJT transit-time charge (`TF`/
-//! `TR`), and MOSFET channel charge. Diode depletion charge through
+//! `TR`), and MOSFET overlap or channel charge. Diode depletion charge through
 //! `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion charge through `CJE`/`CJC`,
-//! JFET gate-junction depletion charge through `CGS`/`CGD`, and MOSFET linear
-//! overlap charge through `CGSO`/`CGDO`/`CGBO` are exercised below. Circuits
-//! depending on unsupported stored charge still belong to
+//! and JFET gate-junction depletion charge through `CGS`/`CGD` are exercised
+//! below. Circuits depending on unsupported stored charge still belong to
 //! `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
@@ -1172,103 +1171,6 @@ mod analog {
                     relative(measured, expected) < 1e-6,
                     "{kind} {direction}: body-shifted current should be {expected} A, got {measured} A"
                 );
-            }
-        }
-    }
-
-    /// The three level-1 gate overlap parameters become linear G-S, G-D and
-    /// G-B capacitances after applying the instance width/length. Each route
-    /// is solved as an RC transient for NMOS and PMOS under both integration
-    /// rules; the first step restarts with BE and the second uses its selected
-    /// rule and the prior charge/current history.
-    #[test]
-    fn mosfet_overlap_charge_integrates_cgso_cgdo_and_cgbo() {
-        let width = 2e-3;
-        let length = 3e-3;
-        let resistance = 1e3;
-        let h = 1e-12;
-        let input = 0.2;
-        let cases = [
-            ("CGSO", "2.5p", 2.5e-12 * width, 0),
-            ("CGDO", "5p", 5e-12 * width, 1),
-            (
-                "CGBO",
-                "6.666666666666667p",
-                6.666666666666667e-12 * length,
-                2,
-            ),
-        ];
-
-        for (parameter, value, capacitance, junction) in cases {
-            for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
-                let (drain, source, bulk) = match junction {
-                    0 => ("0", "x", "0"),
-                    1 => ("x", "0", "0"),
-                    2 => ("0", "0", "x"),
-                    _ => unreachable!(),
-                };
-                let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
-                let netlist = format!(
-                    "Vg g 0 dc 0\nR1 x 0 {resistance}\n\
-                     M1 {drain} g {source} {bulk} MMOD w={width} l={length}\n\
-                     .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 {parameter}={value})\n"
-                );
-                let circuit = parse_netlist(&netlist).expect("MOS overlap model parses");
-                let mosfet = &circuit.mosfets[0];
-                assert!((mosfet.overlap_capacitances()[junction] - capacitance).abs() < 1e-27);
-                for (index, other) in mosfet.overlap_capacitances().into_iter().enumerate() {
-                    if index != junction {
-                        assert_eq!(other, 0.0);
-                    }
-                }
-
-                let initially_biased =
-                    netlist.replacen("Vg g 0 dc 0", &format!("Vg g 0 dc {}", sign * input), 1);
-                let mut biased_solver = Solver::new(
-                    parse_netlist(&initially_biased).expect("prebiased MOS overlap parses"),
-                    Integration::BackwardEuler,
-                )
-                .expect("prebiased MOS overlap solver builds");
-                let biased_x = biased_solver
-                    .circuit()
-                    .node("x")
-                    .expect("overlap terminal node");
-                biased_solver
-                    .advance(h)
-                    .expect("operating-point overlap charge carries into transient");
-                assert!(
-                    biased_solver.node_voltage(biased_x).abs() < 1e-12,
-                    "{kind} {parameter} must not create startup current from its operating-point charge"
-                );
-
-                let ratio = resistance * capacitance / h;
-                let expected_first = sign * input * ratio / (1.0 + ratio);
-                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
-                    let mut solver = Solver::new(circuit.clone(), integration)
-                        .expect("MOS overlap solver builds");
-                    let x = solver.circuit().node("x").expect("overlap terminal node");
-                    let source = solver.voltage_source_index("Vg").expect("gate source");
-                    solver.set_voltage_source(source, sign * input);
-                    solver.advance(h).expect("first MOS overlap step solves");
-                    let actual_first = solver.node_voltage(x);
-                    assert!(
-                        (actual_first - expected_first).abs() < 1e-9,
-                        "{kind} {parameter} first step: expected {expected_first} V, got {actual_first} V"
-                    );
-
-                    let expected_second = match integration {
-                        Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
-                        Integration::Trapezoidal => {
-                            ratio * (3.0 * expected_first - sign * input) / (1.0 + 2.0 * ratio)
-                        }
-                    };
-                    solver.advance(h).expect("second MOS overlap step solves");
-                    let actual_second = solver.node_voltage(x);
-                    assert!(
-                        (actual_second - expected_second).abs() < 1e-9,
-                        "{kind} {parameter} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
-                    );
-                }
             }
         }
     }

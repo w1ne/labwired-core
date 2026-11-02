@@ -57,17 +57,13 @@
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, JFET gate
-//! junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`, MOSFET overlap
-//! capacitance `CGSO`/`CGDO`/`CGBO`, and BJT
+//! junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`, and BJT
 //! base-junction depletion capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`
 //! with shared `FC`, every temperature coefficient, `NKF`, terminal
 //! resistances, …) are **accepted and ignored** rather than rejected. BJT
 //! `IKF`/`IKR` high-injection rolloff and `ISE`/`NE`/`ISC`/`NC` base
 //! recombination are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
-//! modelled; MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
-//! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
-//! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
-//! as linear overlap charge. MOSFET channel charge is not modelled. See
+//! modelled; MOSFET `IS` is used for the two bulk junction currents. See
 //! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
@@ -92,9 +88,7 @@
 //! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
 //! transient steps; diode diffusion charge (`TT`) is not modelled. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
-//! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
-//! gate overlap charge based on instance `W`/`L`; channel charge is not
-//! modelled. `.model <name> OPAMP(...)` and
+//! grading coefficient `M=0.5` is used. `.model <name> OPAMP(...)` and
 //! `.model <name> COMP(...)` are this engine's own card types, not ngspice's.
 //!
 //! ## Directives and comments
@@ -942,12 +936,6 @@ pub struct MosModel {
     pub w: f64,
     /// Default channel length `L`, metres (the element line may override it).
     pub l: f64,
-    /// Gate-source overlap capacitance per unit width `CGSO`, F/m.
-    pub cgso: f64,
-    /// Gate-drain overlap capacitance per unit width `CGDO`, F/m.
-    pub cgdo: f64,
-    /// Gate-bulk overlap capacitance per unit length `CGBO`, F/m.
-    pub cgbo: f64,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -1002,9 +990,6 @@ impl MosModel {
             is: 1e-14,
             w: 1e-4,
             l: 1e-4,
-            cgso: 0.0,
-            cgdo: 0.0,
-            cgbo: 0.0,
         }
     }
 }
@@ -1399,21 +1384,6 @@ pub struct Mosfet {
     pub model: MosModel,
     /// `KP·W/L`, A/V² — the transconductance the solver actually stamps.
     pub beta: f64,
-    /// Instance channel width `W`, metres.
-    pub w: f64,
-    /// Instance channel length `L`, metres.
-    pub l: f64,
-}
-
-impl Mosfet {
-    /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
-    pub fn overlap_capacitances(&self) -> [f64; 3] {
-        [
-            self.model.cgso * self.w,
-            self.model.cgdo * self.w,
-            self.model.cgbo * self.l,
-        ]
-    }
 }
 
 /// `J<name> nd ng ns <model>` — a SPICE level-1 JFET.
@@ -2501,23 +2471,6 @@ fn bind_models(
                 if w <= 0.0 || l <= 0.0 {
                     return Err(ctx.parse_err("a MOSFET model needs W > 0 and L > 0".to_string()));
                 }
-                if ![model.cgso, model.cgdo, model.cgbo]
-                    .into_iter()
-                    .all(|capacitance| capacitance.is_finite() && capacitance >= 0.0)
-                {
-                    return Err(ctx.parse_err(
-                        "a MOSFET model needs CGSO/CGDO/CGBO >= 0 and finite".to_string(),
-                    ));
-                }
-                if !(model.cgso * w).is_finite()
-                    || !(model.cgdo * w).is_finite()
-                    || !(model.cgbo * l).is_finite()
-                {
-                    return Err(ctx.parse_err(
-                        "a MOSFET model's effective overlap capacitances must be finite"
-                            .to_string(),
-                    ));
-                }
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
                     d: device.nodes[0],
@@ -2527,8 +2480,6 @@ fn bind_models(
                     model_name: device.model_name,
                     model,
                     beta: model.kp * w / l,
-                    w,
-                    l,
                 });
             }
             'J' => {
@@ -2831,9 +2782,6 @@ fn parse_model(
             (ModelCard::Mos(model), "IS") => model.is = value,
             (ModelCard::Mos(model), "W") => model.w = value,
             (ModelCard::Mos(model), "L") => model.l = value,
-            (ModelCard::Mos(model), "CGSO") => model.cgso = value,
-            (ModelCard::Mos(model), "CGDO") => model.cgdo = value,
-            (ModelCard::Mos(model), "CGBO") => model.cgbo = value,
             // A level this engine cannot honour is the one parameter worth
             // refusing: silently solving a BSIM card with Shichman-Hodges
             // would be wrong by orders of magnitude, not by a capacitance.
@@ -3144,9 +3092,6 @@ fn lower_comparator(
                 is: 1e-14,
                 w: 1.0,
                 l: 1.0,
-                cgso: 0.0,
-                cgdo: 0.0,
-                cgbo: 0.0,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
@@ -3157,8 +3102,6 @@ fn lower_comparator(
                 model_name: "comparator-output".to_string(),
                 model: mos,
                 beta: kp,
-                w: 1.0,
-                l: 1.0,
             });
         }
         ComparatorOutput::PushPull => {

@@ -476,34 +476,6 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
-    fn mosfet_overlap_parameters_scale_with_instance_width_and_length() {
-        let circuit = parse_netlist(
-            "M1 d g s b MOD w=200u l=2u\n\
-             .model MOD NMOS(CGSO=2p CGDO=3p CGBO=4p W=100u L=1u)\n",
-        )
-        .expect("overlap parameters parse");
-        let mosfet = &circuit.mosfets[0];
-        assert_eq!(mosfet.model.cgso, 2e-12);
-        assert_eq!(mosfet.model.cgdo, 3e-12);
-        assert_eq!(mosfet.model.cgbo, 4e-12);
-        assert_eq!(mosfet.w, 200e-6);
-        assert_eq!(mosfet.l, 2e-6);
-        for (actual, expected) in mosfet
-            .overlap_capacitances()
-            .into_iter()
-            .zip([4e-16, 6e-16, 8e-18])
-        {
-            assert!((actual - expected).abs() < expected * 1e-12);
-        }
-
-        for parameter in ["CGSO=-1p", "CGDO=-1p", "CGBO=-1p"] {
-            let error = parse_netlist(&format!("M1 d g s b MOD\n.model MOD NMOS({parameter})\n"))
-                .expect_err("negative overlap capacitance is rejected");
-            assert!(error.to_string().contains("CGSO/CGDO/CGBO"), "{error}");
-        }
-    }
-
-    #[test]
     fn jfet_model_parameters_are_parsed_and_unsupported_levels_are_refused() {
         let circuit =
             parse_netlist("J1 d g s MOD\n.model MOD NJF(VTO=-1.8 BETA=2m LAMBDA=0.02 IS=4p B=1)\n")

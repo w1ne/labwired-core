@@ -123,10 +123,6 @@ pub struct Solver {
     mos_vbd: Vec<f64>,
     /// Each MOSFET's normalised bulk-source junction voltage.
     mos_vbs: Vec<f64>,
-    /// Linear overlap charge and current history for each MOSFET, ordered
-    /// gate-source, gate-drain, then gate-bulk in circuit coordinates.
-    mos_overlap_q: Vec<[f64; 3]>,
-    mos_overlap_i: Vec<[f64; 3]>,
     /// Each JFET's normalised gate-source and gate-drain junction voltages.
     jfet_vgs: Vec<f64>,
     jfet_vgd: Vec<f64>,
@@ -253,8 +249,6 @@ impl Solver {
             mos_vds: vec![0.0; mosfets],
             mos_vbd: vec![0.0; mosfets],
             mos_vbs: vec![0.0; mosfets],
-            mos_overlap_q: vec![[0.0; 3]; mosfets],
-            mos_overlap_i: vec![[0.0; 3]; mosfets],
             jfet_vgs: vec![0.0; jfets],
             jfet_vgd: vec![0.0; jfets],
             jfet_vds: vec![0.0; jfets],
@@ -587,18 +581,6 @@ impl Solver {
                 device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc).0;
             self.bjt_i[index] = [0.0; 2];
         }
-        for index in 0..self.circuit.mosfets.len() {
-            let mosfet = &self.circuit.mosfets[index];
-            let voltages = [
-                node_diff(&self.node_v, mosfet.g, mosfet.s),
-                node_diff(&self.node_v, mosfet.g, mosfet.d),
-                node_diff(&self.node_v, mosfet.g, mosfet.bulk),
-            ];
-            let capacitances = mosfet.overlap_capacitances();
-            self.mos_overlap_q[index] =
-                core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
-            self.mos_overlap_i[index] = [0.0; 3];
-        }
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
@@ -859,30 +841,6 @@ impl Solver {
                     && self.jfet_i[index][junction].to_bits() == i_new.to_bits();
                 self.jfet_q[index][junction] = q_new;
                 self.jfet_i[index][junction] = i_new;
-            }
-        }
-        for index in 0..self.circuit.mosfets.len() {
-            let mosfet = &self.circuit.mosfets[index];
-            let nodes = &self.solution[..self.nodes];
-            let voltages = [
-                node_diff(nodes, mosfet.g, mosfet.s),
-                node_diff(nodes, mosfet.g, mosfet.d),
-                node_diff(nodes, mosfet.g, mosfet.bulk),
-            ];
-            let capacitances = mosfet.overlap_capacitances();
-            for junction in 0..3 {
-                let q_new = capacitances[junction] * voltages[junction];
-                let i_new = match rule {
-                    Integration::BackwardEuler => (q_new - self.mos_overlap_q[index][junction]) / h,
-                    Integration::Trapezoidal => {
-                        2.0 * (q_new - self.mos_overlap_q[index][junction]) / h
-                            - self.mos_overlap_i[index][junction]
-                    }
-                };
-                self.settled &= self.mos_overlap_q[index][junction].to_bits() == q_new.to_bits()
-                    && self.mos_overlap_i[index][junction].to_bits() == i_new.to_bits();
-                self.mos_overlap_q[index][junction] = q_new;
-                self.mos_overlap_i[index][junction] = i_new;
             }
         }
         for index in 0..self.circuit.inductors.len() {
@@ -1701,38 +1659,6 @@ impl Solver {
                 -sign * op.id,
                 &negate(&drain_terms),
             );
-
-            if let Stamp::Transient(h, rule) = stamp {
-                let capacitances = mosfet.overlap_capacitances();
-                let terminals = [
-                    (mosfet.g, mosfet.s),
-                    (mosfet.g, mosfet.d),
-                    (mosfet.g, mosfet.bulk),
-                ];
-                for junction in 0..3 {
-                    let capacitance = capacitances[junction];
-                    if capacitance == 0.0 {
-                        continue;
-                    }
-                    let (positive, negative) = terminals[junction];
-                    let voltage = node_diff(&self.solution[..self.nodes], positive, negative);
-                    let charge = capacitance * voltage;
-                    let (geq, current) = match rule {
-                        Integration::BackwardEuler => (
-                            capacitance / h,
-                            (charge - self.mos_overlap_q[index][junction]) / h,
-                        ),
-                        Integration::Trapezoidal => (
-                            2.0 * capacitance / h,
-                            2.0 * (charge - self.mos_overlap_q[index][junction]) / h
-                                - self.mos_overlap_i[index][junction],
-                        ),
-                    };
-                    let control = [(geq, positive, negative, voltage)];
-                    stamp_linearised(matrix, rhs, dim, positive, current, &control);
-                    stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
-                }
-            }
 
             // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
             // the bulk is the anode and drain/source are the cathodes; the
