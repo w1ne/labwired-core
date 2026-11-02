@@ -350,6 +350,8 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.bjts[1].model.polarity, Polarity::P);
         assert_eq!(circuit.mosfets[0].model.polarity, Polarity::N);
         assert_eq!(circuit.mosfets[1].model.polarity, Polarity::P);
+        assert_eq!(circuit.mosfets[0].model.is, 1e-14);
+        assert_eq!(circuit.mosfets[1].model.is, 1e-14);
         // A PMOS threshold is negative, as in ngspice.
         assert!(circuit.mosfets[1].model.vto < 0.0);
         assert_eq!(circuit.jfets[0].model.polarity, Polarity::N);

@@ -60,12 +60,14 @@
 //! model pasted from a datasheet still runs — with the large-signal DC
 //! behaviour it describes and none of its charge storage. See
 //! [`super::device`] for what that costs.
+//! MOSFET level-1 `IS` is used for its two bulk junction currents; `GAMMA` and
+//! bulk-effect threshold shift remain unmodelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
 //! entirely: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100),
-//! `NMOS`, `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`), `NJF` and `PJF`
-//! (level-1 defaults). Those are *this
-//! engine's* convenience values and are not ngspice's parameter defaults; a
+//! `NMOS`, `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`, bulk `IS=1e-14`),
+//! `NJF` and `PJF` (level-1 defaults). Those are *this engine's* convenience
+//! values and are not ngspice's parameter defaults; a
 //! parameter omitted from a real `.model` line gets ngspice's default, so a
 //! deck written out in full means the same thing to both engines.
 //!
@@ -849,6 +851,8 @@ pub struct MosModel {
     pub kp: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
+    /// Bulk junction saturation current `IS`, amps.
+    pub is: f64,
     /// Default channel width `W`, metres (the element line may override it).
     pub w: f64,
     /// Default channel length `L`, metres (the element line may override it).
@@ -890,6 +894,7 @@ impl MosModel {
             vto: 0.0,
             kp: 2e-5,
             lambda: 0.0,
+            is: 1e-14,
             w: 1e-4,
             l: 1e-4,
         }
@@ -1269,8 +1274,8 @@ pub struct Mosfet {
     pub g: NodeRef,
     /// Source.
     pub s: NodeRef,
-    /// Bulk. Required by the syntax and tied to the channel through `GMIN`,
-    /// but it does not shift the threshold: there is no body effect.
+    /// Bulk. Required by the syntax; its drain and source pn junctions use the
+    /// MOS model's `IS`. It does not shift the threshold: there is no body effect.
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
@@ -2295,8 +2300,8 @@ fn bind_models(
                 let ModelCard::Mos(model) = card else {
                     return Err(wrong_kind("M"));
                 };
-                if model.kp <= 0.0 {
-                    return Err(ctx.parse_err("a MOSFET model needs KP > 0".to_string()));
+                if model.kp <= 0.0 || model.is <= 0.0 {
+                    return Err(ctx.parse_err("a MOSFET model needs KP > 0 and IS > 0".to_string()));
                 }
                 let w = device.width.unwrap_or(model.w);
                 let l = device.length.unwrap_or(model.l);
@@ -2576,6 +2581,7 @@ fn parse_model(
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Mos(model), "IS") => model.is = value,
             (ModelCard::Mos(model), "W") => model.w = value,
             (ModelCard::Mos(model), "L") => model.l = value,
             // A level this engine cannot honour is the one parameter worth
@@ -2875,6 +2881,7 @@ fn lower_comparator(
                 vto: 0.5,
                 kp,
                 lambda: 0.0,
+                is: 1e-14,
                 w: 1.0,
                 l: 1.0,
             };

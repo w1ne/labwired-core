@@ -336,9 +336,8 @@ pub struct MosOp {
 /// ```
 ///
 /// No body effect: `Vth` is `Vto`, which is ngspice's level 1 with its default
-/// `GAMMA = 0`. The bulk terminal is required by the syntax and connected —
-/// [`super::mna`] ties it to drain and source through `GMIN`, which is what a
-/// reverse-biased bulk junction is — but it does not shift the threshold.
+/// `GAMMA = 0`. The bulk terminal's drain and source pn junctions are stamped
+/// by [`super::mna`] using the model's `IS`; they do not shift the threshold.
 pub fn mos_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> MosOp {
     let vgst = vgs - vto;
     if vgst <= 0.0 {

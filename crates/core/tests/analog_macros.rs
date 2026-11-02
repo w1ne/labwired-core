@@ -437,7 +437,10 @@ mod analog {
 
     const OPAMP_HASH: u64 = 0x434d_e1ed_0fe0_c115;
     const ZENER_HASH: u64 = 0x272a_2e74_684b_dc23;
-    const SCHMITT_HASH: u64 = 0xf72e_a892_be8c_9d3a;
+    // The comparator's open-collector MOSFET now includes its reverse-biased
+    // bulk-drain junction, so the Schmitt output trajectory includes that
+    // junction's IS + GMIN leakage. The op-amp and zener hashes are unchanged.
+    const SCHMITT_HASH: u64 = 0xbad1_3c95_8766_f606;
 
     // -----------------------------------------------------------------------
     // Regulators

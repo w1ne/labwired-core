@@ -428,16 +428,21 @@ mod analog {
         );
     }
 
-    /// The fourth terminal is not silently grounded: in cutoff, its two GMIN
-    /// ties to drain and source carry the hand-calculated leakage currents.
-    /// The normalized voltages keep both body junctions reverse biased, and
-    /// the same stamp is checked for NMOS and PMOS.
+    /// The fourth terminal is not silently grounded: in cutoff, its two bulk
+    /// junctions carry the hand-calculated reverse leakage, including GMIN.
+    /// The normalized voltages keep both body diodes reverse biased, and the
+    /// same stamp is checked for NMOS and PMOS.
     #[test]
-    fn mosfet_bulk_terminal_carries_its_two_gmin_ties() {
+    fn mosfet_bulk_terminal_carries_its_two_reverse_junction_currents() {
         let (vds, vbulk) = (0.4, -0.1);
-        let expected_drain = device::GMIN * vds + device::GMIN * (vds - vbulk);
-        let expected_bulk = device::GMIN * (vbulk - vds) + device::GMIN * vbulk;
-        let expected_source = device::GMIN * (0.0 - vds) + device::GMIN * (0.0 - vbulk);
+        let is = 1e-14;
+        let vbd = vbulk - vds;
+        let vbs = vbulk;
+        let bulk_to_drain = is * ((vbd / VT).exp() - 1.0) + device::GMIN * vbd;
+        let bulk_to_source = is * ((vbs / VT).exp() - 1.0) + device::GMIN * vbs;
+        let expected_drain = device::GMIN * vds - bulk_to_drain;
+        let expected_bulk = bulk_to_drain + bulk_to_source;
+        let expected_source = -device::GMIN * vds - bulk_to_source;
 
         for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
             let kind = if polarity == Polarity::N {
@@ -447,7 +452,7 @@ mod analog {
             };
             let netlist = format!(
                 "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc 0\nVbulk b 0 dc {}\n\
-                 M1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP=20u LAMBDA=0)\n",
+                 M1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP=20u LAMBDA=0 IS={is})\n",
                 sign * vds,
                 sign * vbulk,
                 sign
@@ -470,6 +475,49 @@ mod analog {
                 (actual_source - expected_source).abs() < device::GMIN * 1e-3,
                 "{kind}: source current should include its bulk tie; expected {expected_source} A, \
                  got {actual_source} A"
+            );
+        }
+    }
+
+    /// The level-1 bulk junctions conduct from bulk to drain/source for NMOS,
+    /// and in the opposite physical direction for PMOS. With the channel off,
+    /// the two terminal currents reduce to the Shockley equation.
+    #[test]
+    fn mosfet_body_diodes_match_the_shockley_equation_for_both_polarities() {
+        let is = 2e-14;
+        let vbody = 0.55;
+        let expected_each = is * ((vbody / VT).exp() - 1.0) + device::GMIN * vbody;
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NMOS"
+            } else {
+                "PMOS"
+            };
+            let netlist = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVbulk b 0 dc {}\n\
+                 M1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP=20u LAMBDA=0 IS={is})\n",
+                sign * vbody,
+                sign
+            );
+            let solver = build(&netlist);
+            assert_eq!(solver.circuit().mosfets[0].model.is, is);
+
+            let bulk_current = sign * source_current(&solver, "Vbulk");
+            let drain_current = sign * source_current(&solver, "Vd");
+            let source_current = sign * source_current(&solver, "Vs");
+            assert!(
+                relative(bulk_current, 2.0 * expected_each) < 1e-6,
+                "{kind}: bulk should supply both body diode currents ({}) A, got {bulk_current} A",
+                2.0 * expected_each
+            );
+            assert!(
+                relative(drain_current, -expected_each) < 1e-6,
+                "{kind}: drain should receive one body diode current (-{expected_each} A), got {drain_current} A"
+            );
+            assert!(
+                relative(source_current, -expected_each) < 1e-6,
+                "{kind}: source should receive one body diode current (-{expected_each} A), got {source_current} A"
             );
         }
     }

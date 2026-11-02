@@ -111,6 +111,10 @@ pub struct Solver {
     /// Each MOSFET's drain-source voltage in device coordinates, as the
     /// netlist names the terminals. Negative means the device is reversed.
     mos_vds: Vec<f64>,
+    /// Each MOSFET's normalised bulk-drain junction voltage.
+    mos_vbd: Vec<f64>,
+    /// Each MOSFET's normalised bulk-source junction voltage.
+    mos_vbs: Vec<f64>,
     /// Each JFET's normalised gate-source and gate-drain junction voltages.
     jfet_vgs: Vec<f64>,
     jfet_vgd: Vec<f64>,
@@ -126,6 +130,8 @@ pub struct Solver {
     saved_bjt_vbc: Vec<f64>,
     saved_mos_vgs: Vec<f64>,
     saved_mos_vds: Vec<f64>,
+    saved_mos_vbd: Vec<f64>,
+    saved_mos_vbs: Vec<f64>,
     saved_jfet_vgs: Vec<f64>,
     saved_jfet_vgd: Vec<f64>,
     saved_jfet_vds: Vec<f64>,
@@ -225,6 +231,8 @@ impl Solver {
             bjt_vbc: vec![0.0; bjts],
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
+            mos_vbd: vec![0.0; mosfets],
+            mos_vbs: vec![0.0; mosfets],
             jfet_vgs: vec![0.0; jfets],
             jfet_vgd: vec![0.0; jfets],
             jfet_vds: vec![0.0; jfets],
@@ -234,6 +242,8 @@ impl Solver {
             saved_bjt_vbc: vec![0.0; bjts],
             saved_mos_vgs: vec![0.0; mosfets],
             saved_mos_vds: vec![0.0; mosfets],
+            saved_mos_vbd: vec![0.0; mosfets],
+            saved_mos_vbs: vec![0.0; mosfets],
             saved_jfet_vgs: vec![0.0; jfets],
             saved_jfet_vgd: vec![0.0; jfets],
             saved_jfet_vds: vec![0.0; jfets],
@@ -600,6 +610,8 @@ impl Solver {
         self.saved_bjt_vbc.copy_from_slice(&self.bjt_vbc);
         self.saved_mos_vgs.copy_from_slice(&self.mos_vgs);
         self.saved_mos_vds.copy_from_slice(&self.mos_vds);
+        self.saved_mos_vbd.copy_from_slice(&self.mos_vbd);
+        self.saved_mos_vbs.copy_from_slice(&self.mos_vbs);
         self.saved_jfet_vgs.copy_from_slice(&self.jfet_vgs);
         self.saved_jfet_vgd.copy_from_slice(&self.jfet_vgd);
         self.saved_jfet_vds.copy_from_slice(&self.jfet_vds);
@@ -612,6 +624,8 @@ impl Solver {
         self.bjt_vbc.copy_from_slice(&self.saved_bjt_vbc);
         self.mos_vgs.copy_from_slice(&self.saved_mos_vgs);
         self.mos_vds.copy_from_slice(&self.saved_mos_vds);
+        self.mos_vbd.copy_from_slice(&self.saved_mos_vbd);
+        self.mos_vbs.copy_from_slice(&self.saved_mos_vbs);
         self.jfet_vgs.copy_from_slice(&self.saved_jfet_vgs);
         self.jfet_vgd.copy_from_slice(&self.saved_jfet_vgd);
         self.jfet_vds.copy_from_slice(&self.saved_jfet_vds);
@@ -1170,6 +1184,8 @@ impl Solver {
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.s);
             let raw_ds = sign * node_diff(nodes, mosfet.d, mosfet.s);
+            let raw_bd = sign * node_diff(nodes, mosfet.bulk, mosfet.d);
+            let raw_bs = sign * node_diff(nodes, mosfet.bulk, mosfet.s);
 
             // The limiters are SPICE's and assume the channel's own source, so
             // they are applied to the EFFECTIVE voltages — the ones a reversed
@@ -1205,6 +1221,14 @@ impl Solver {
             self.limiter_clamped |= gs != raw_gs || ds != raw_ds;
             self.mos_vgs[index] = gs;
             self.mos_vds[index] = ds;
+
+            let vte = device::THERMAL_VOLTAGE;
+            let critical = device::pn_critical_voltage(mosfet.model.is, 1.0);
+            let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, critical);
+            let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, critical);
+            self.limiter_clamped |= bd != raw_bd || bs != raw_bs;
+            self.mos_vbd[index] = bd;
+            self.mos_vbs[index] = bs;
         }
 
         for index in 0..self.circuit.jfets.len() {
@@ -1344,13 +1368,10 @@ impl Solver {
             let model = mosfet.model;
             let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
 
-            // Below Vto every conductance in the device is zero, so the drain
-            // node would float; the bulk terminal is connected by nothing else
-            // at all. GMIN is what makes an off MOSFET a very large resistor
-            // instead of an open circuit the matrix cannot invert.
+            // Below Vto the channel is off, so GMIN connects drain to source.
+            // The two bulk pn junctions include their own GMIN through
+            // diode_op, and use the model's bulk-junction saturation current.
             conductance(matrix, dim, mosfet.d, mosfet.s, device::GMIN);
-            conductance(matrix, dim, mosfet.bulk, mosfet.d, device::GMIN);
-            conductance(matrix, dim, mosfet.bulk, mosfet.s, device::GMIN);
 
             // A MOSFET is symmetric: when Vds goes negative the terminal the
             // netlist calls the drain IS the source, and the level-1 equations
@@ -1387,8 +1408,34 @@ impl Solver {
                 -sign * op.id,
                 &negate(&drain_terms),
             );
-            // The gate and the bulk carry no DC current in this model, so they
-            // need no stamp of their own beyond the GMIN ties above.
+
+            // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
+            // the bulk is the anode and drain/source are the cathodes; the
+            // polarity sign reverses that orientation for PMOS.
+            let bd = device::diode_op(self.mos_vbd[index], model.is, 1.0);
+            let bd_terms = [(bd.gd, mosfet.bulk, mosfet.d, sign * self.mos_vbd[index])];
+            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bd.id, &bd_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                mosfet.d,
+                -sign * bd.id,
+                &negate(&bd_terms),
+            );
+
+            let bs = device::diode_op(self.mos_vbs[index], model.is, 1.0);
+            let bs_terms = [(bs.gd, mosfet.bulk, mosfet.s, sign * self.mos_vbs[index])];
+            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bs.id, &bs_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                mosfet.s,
+                -sign * bs.id,
+                &negate(&bs_terms),
+            );
+            // The gate carries no DC current in this model.
         }
 
         for (index, jfet) in self.circuit.jfets.iter().enumerate() {
