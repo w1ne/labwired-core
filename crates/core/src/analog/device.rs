@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Device physics for the nonlinear elements: the exponential diode, the
-//! Gummel–Poon BJT with Early effect and high-injection rolloff, the level-1
-//! JFET and MOSFET, plus the constants and voltage-limiting heuristics
-//! Newton–Raphson needs to reach them.
+//! Gummel–Poon BJT with Early effect, high-injection rolloff and base
+//! recombination, the level-1 JFET and MOSFET, plus the constants and
+//! voltage-limiting heuristics Newton–Raphson needs to reach them.
 //!
 //! This module is equations only. It owns no state, touches no matrix, and
 //! knows nothing about nodes: [`super::mna`] calls it with the controlling
@@ -271,9 +271,10 @@ pub struct BjtOp {
     pub gmu: f64,
 }
 
-/// Gummel–Poon transport form with recombination switched off. The base-width
-/// modulation uses the SPICE Early voltages, and `IKF`/`IKR` optionally add
-/// the forward and reverse high-injection terms:
+/// Gummel–Poon transport form. Optional `ISE`/`ISC` terms add the B-E and B-C
+/// base-recombination currents. The base-width modulation uses the SPICE Early
+/// voltages, and `IKF`/`IKR` optionally add forward and reverse high-injection
+/// terms:
 ///
 /// ```text
 /// q1  = 1 / (1 − Vbc/VAF − Vbe/VAR)
@@ -281,8 +282,8 @@ pub struct BjtOp {
 ///     + Is·(exp(Vbc/(Nr·Vt)) − 1)/IKR
 /// qb  = q1·(1 + sqrt(1 + 4·q2))/2
 /// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt))) / qb
-/// Ibe = (Is/Bf)·(exp(Vbe/(Nf·Vt)) − 1)
-/// Ibc = (Is/Br)·(exp(Vbc/(Nr·Vt)) − 1)
+/// Ibe = (Is/Bf)·(exp(Vbe/(Nf·Vt)) − 1) + ISE·(exp(Vbe/(NE·Vt)) − 1)
+/// Ibc = (Is/Br)·(exp(Vbc/(Nr·Vt)) − 1) + ISC·(exp(Vbc/(NC·Vt)) − 1)
 /// Ic  = Ict − Ibc          Ib = Ibe + Ibc          Ie = −(Ic + Ib)
 /// ```
 ///
@@ -303,9 +304,15 @@ pub fn bjt_op(
     var: f64,
     ikf: f64,
     ikr: f64,
+    ise: f64,
+    ne: f64,
+    isc: f64,
+    nc: f64,
 ) -> BjtOp {
     let vtf = nf * THERMAL_VOLTAGE;
     let vtr = nr * THERMAL_VOLTAGE;
+    let vte = ne * THERMAL_VOLTAGE;
+    let vtc = nc * THERMAL_VOLTAGE;
     let forward = exp_clamped(vbe / vtf);
     let reverse = exp_clamped(vbc / vtr);
     let inv_vaf = if vaf > 0.0 && vaf.is_finite() {
@@ -364,12 +371,26 @@ pub fn bjt_op(
             -(d_transport_d_vbc / qb - transport * d_qb_d_vbc / qb_squared),
         )
     };
-    // Early effect changes transport current, not the base junction currents.
-    let gpi = is * forward / vtf / bf;
-    let gmu = is * reverse / vtr / br;
-
-    let ibe = (is / bf) * (forward - 1.0);
-    let ibc = (is / br) * (reverse - 1.0);
+    // Early effect and high injection change transport current. Recombination
+    // is a separate exponential current in each base junction.
+    let (ibe, gpi) = if ise > 0.0 {
+        let exp_be = exp_clamped(vbe / vte);
+        (
+            (is / bf) * (forward - 1.0) + ise * (exp_be - 1.0),
+            is * forward / vtf / bf + ise * exp_be / vte,
+        )
+    } else {
+        ((is / bf) * (forward - 1.0), is * forward / vtf / bf)
+    };
+    let (ibc, gmu) = if isc > 0.0 {
+        let exp_bc = exp_clamped(vbc / vtc);
+        (
+            (is / br) * (reverse - 1.0) + isc * (exp_bc - 1.0),
+            is * reverse / vtr / br + isc * exp_bc / vtc,
+        )
+    } else {
+        ((is / br) * (reverse - 1.0), is * reverse / vtr / br)
+    };
 
     BjtOp {
         ic: ict - ibc,
