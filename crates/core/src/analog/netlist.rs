@@ -5,11 +5,11 @@
 //! Parser for the SPICE subset the in-core analog engine solves.
 //!
 //! The subset is deliberately small, because everything in it has to stay
-//! deterministic in the browser with no dependencies. Anything outside it
-//! (subcircuits, model libraries, AC/DC sweeps, unsupported device
-//! capacitances) is not approximated and not silently dropped: it is a hard
-//! error that names the line and points at the ngspice adapter, which does
-//! support it.
+//! deterministic in the browser with no dependencies. Unsupported elements
+//! and circuit constructs such as subcircuits, model libraries, and AC/DC
+//! sweeps are not approximated or silently dropped: they are a hard error that
+//! names the line and points at the ngspice adapter, which supports a much
+//! larger SPICE subset.
 //!
 //! ## Elements
 //!
@@ -56,7 +56,8 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and BJT
+//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, JFET gate
+//! junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`, and BJT
 //! base-junction depletion capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`
 //! with shared `FC`, every temperature coefficient, `NKF`, terminal
 //! resistances, …) are **accepted and ignored** rather than rejected. BJT
@@ -85,9 +86,10 @@
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
 //! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
-//! transient steps; diode diffusion charge (`TT`) is not modelled. `.model
-//! <name> OPAMP(...)` and `.model <name> COMP(...)`
-//! are this engine's own card types, not ngspice's.
+//! transient steps; diode diffusion charge (`TT`) is not modelled. JFET
+//! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
+//! grading coefficient `M=0.5` is used. `.model <name> OPAMP(...)` and
+//! `.model <name> COMP(...)` are this engine's own card types, not ngspice's.
 //!
 //! ## Directives and comments
 //!
@@ -950,6 +952,14 @@ pub struct JfetModel {
     pub lambda: f64,
     /// Gate-junction saturation current `IS`, amps.
     pub is: f64,
+    /// Zero-bias gate-source depletion capacitance `CGS`, farads.
+    pub cgs: f64,
+    /// Zero-bias gate-drain depletion capacitance `CGD`, farads.
+    pub cgd: f64,
+    /// Gate-junction potential `PB`, volts.
+    pub pb: f64,
+    /// Forward-bias depletion-capacitance coefficient `FC`.
+    pub fc: f64,
 }
 
 impl JfetModel {
@@ -960,6 +970,10 @@ impl JfetModel {
             beta: 1e-4,
             lambda: 0.0,
             is: 1e-14,
+            cgs: 0.0,
+            cgd: 0.0,
+            pb: 1.0,
+            fc: 0.5,
         }
     }
 }
@@ -2475,6 +2489,20 @@ fn bind_models(
                 if model.beta <= 0.0 || model.is <= 0.0 {
                     return Err(ctx.parse_err("a JFET model needs BETA > 0 and IS > 0"));
                 }
+                if !model.cgs.is_finite()
+                    || model.cgs < 0.0
+                    || !model.cgd.is_finite()
+                    || model.cgd < 0.0
+                    || !model.pb.is_finite()
+                    || model.pb <= 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(
+                        ctx.parse_err("a JFET model needs CGS/CGD >= 0, PB > 0 and 0 <= FC < 1")
+                    );
+                }
                 circuit.jfets.push(Jfet {
                     name: device.name,
                     d: device.nodes[0],
@@ -2768,6 +2796,10 @@ fn parse_model(
             (ModelCard::Jfet(model), "BETA") => model.beta = value,
             (ModelCard::Jfet(model), "LAMBDA") => model.lambda = value,
             (ModelCard::Jfet(model), "IS") => model.is = value,
+            (ModelCard::Jfet(model), "CGS") => model.cgs = value,
+            (ModelCard::Jfet(model), "CGD") => model.cgd = value,
+            (ModelCard::Jfet(model), "PB") => model.pb = value,
+            (ModelCard::Jfet(model), "FC") => model.fc = value,
             (ModelCard::Jfet(_), "LEVEL") if value != 1.0 => {
                 return Err(ctx.parse_err(format!(
                     "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \

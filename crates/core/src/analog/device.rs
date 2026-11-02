@@ -4,8 +4,9 @@
 
 //! Device physics for the nonlinear elements: the exponential diode, the
 //! Gummel–Poon BJT with Early effect, high-injection rolloff and base
-//! recombination, the level-1 JFET and MOSFET, plus the constants and
-//! voltage-limiting heuristics Newton–Raphson needs to reach them.
+//! recombination, the level-1 JFET with gate-junction depletion charge, and
+//! the level-1 MOSFET, plus the constants and voltage-limiting heuristics
+//! Newton–Raphson needs to reach them.
 //!
 //! This module is equations only. It owns no state, touches no matrix, and
 //! knows nothing about nodes: [`super::mna`] calls it with the controlling
@@ -16,16 +17,16 @@
 //! ## What is modelled, and what is not
 //!
 //! DC/large-signal behaviour for the nonlinear current equations. Diode
-//! depletion charge (`CJO`, `VJ`, `M`, `FC`) and BJT base-junction depletion
-//! charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`, `FC`) are also integrated in
-//! transient runs; diode diffusion charge, BJT transit-time charge, JFET
-//! `Cgs`/`Cgd`, and MOSFET overlap or channel charge are not. There is no
+//! depletion charge (`CJO`, `VJ`, `M`, `FC`), BJT base-junction depletion
+//! charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`, `FC`), and JFET gate-junction
+//! depletion charge (`CGS`, `CGD`, `PB`, `FC`, with level-1 `M=0.5`) are also
+//! integrated in transient runs; diode diffusion charge, BJT transit-time
+//! charge, and MOSFET overlap or channel charge are not. There is no
 //! temperature model: every parameter is taken at [`TEMPERATURE_K`] as
 //! written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted
 //! and ignored; see [`super::netlist`]. Reverse-recovery and stored charge in
-//! the unsupported junctions still require `adapter: external_process` with
-//! ngspice.
+//! unsupported junctions still require `adapter: external_process` with ngspice.
 //!
 //! ## Determinism
 //!
