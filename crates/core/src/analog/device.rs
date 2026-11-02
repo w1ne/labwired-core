@@ -22,10 +22,10 @@
 //! depletion charge (`CGS`, `CGD`, `PB`, `FC`, with level-1 `M=0.5`) are
 //! integrated in transient runs. MOSFET gate overlap charge (`CGSO`, `CGDO`,
 //! `CGBO`) is integrated as linear capacitance using instance `W` and `L`;
-//! MOSFET channel charge, diode diffusion charge and BJT transit-time charge
-//! are not. There is no
-//! temperature model: every parameter is taken at [`TEMPERATURE_K`] as
-//! written. A `.model` line may
+//! BJT transit-time charge (`TF`/`TR`) is integrated using constant ideal
+//! transit times. MOSFET channel charge and diode diffusion charge are not.
+//! There is no temperature model: every parameter is taken at
+//! [`TEMPERATURE_K`] as written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted
 //! and ignored; see [`super::netlist`]. Reverse-recovery and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
@@ -41,6 +41,8 @@
 //! `analog_devices.rs` pins representative diode, BJT and MOSFET operating
 //! points as raw `f64` bit patterns and checks JFET regions against hand
 //! calculations, so drift or an incorrect equation fails a test.
+
+use super::netlist::BjtModel;
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
@@ -447,6 +449,115 @@ pub fn bjt_op(
         gir,
         gpi,
         gmu,
+    }
+}
+
+/// Transit charge and its derivatives for the forward and reverse BJT
+/// transport junctions. Charge is stored in normalized NPN coordinates; the
+/// MNA caller applies device polarity when it stamps terminal currents.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct BjtTransitCharge {
+    /// Forward base-emitter transport charge, coulombs.
+    pub qbe: f64,
+    /// `∂Qbe/∂Vbe`, farads.
+    pub dqbe_dvbe: f64,
+    /// `∂Qbe/∂Vbc`, farads.
+    pub dqbe_dvbc: f64,
+    /// Reverse base-collector transport charge, coulombs.
+    pub qbc: f64,
+    /// `∂Qbc/∂Vbe`, farads.
+    pub dqbc_dvbe: f64,
+    /// `∂Qbc/∂Vbc`, farads.
+    pub dqbc_dvbc: f64,
+}
+
+/// Ideal Gummel–Poon transit charge for constant `TF` and `TR`:
+///
+/// ```text
+/// Qbe = TF · Is · (exp(Vbe/(NF·Vt)) − 1) / qb  (for Vbe > 0)
+/// Qbc = TR · Is · (exp(Vbc/(NR·Vt)) − 1)
+/// ```
+///
+/// For `Vbe <= 0`, the forward transit charge uses the unscaled junction
+/// current, as ngspice's level-1 BJT model does. `qb` is the same Early-effect
+/// and high-injection base-charge factor used by [`bjt_op`]. Bias-dependent
+/// transit-time extensions (`XTF`, `VTF`, `ITF`) are outside this function.
+pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitCharge {
+    if model.tf == 0.0 && model.tr == 0.0 {
+        return BjtTransitCharge::default();
+    }
+
+    let vtf = model.nf * THERMAL_VOLTAGE;
+    let vtr = model.nr * THERMAL_VOLTAGE;
+    let forward = exp_clamped(vbe / vtf);
+    let reverse = exp_clamped(vbc / vtr);
+    let cbe = model.is * (forward - 1.0);
+    let gbe = model.is * forward / vtf;
+    let cbc = model.is * (reverse - 1.0);
+    let gbc = model.is * reverse / vtr;
+
+    let inv_vaf = if model.vaf > 0.0 && model.vaf.is_finite() {
+        1.0 / model.vaf
+    } else {
+        0.0
+    };
+    let inv_var = if model.var > 0.0 && model.var.is_finite() {
+        1.0 / model.var
+    } else {
+        0.0
+    };
+    let base_width = 1.0 - vbc * inv_vaf - vbe * inv_var;
+
+    let (qb, dqb_dvbe, dqb_dvbc) = if model.ikf.is_infinite() && model.ikr.is_infinite() {
+        let qb = 1.0 / base_width;
+        (qb, qb * qb * inv_var, qb * qb * inv_vaf)
+    } else {
+        let q1 = 1.0 / base_width;
+        let inv_ikf = if model.ikf > 0.0 && model.ikf.is_finite() {
+            1.0 / model.ikf
+        } else {
+            0.0
+        };
+        let inv_ikr = if model.ikr > 0.0 && model.ikr.is_finite() {
+            1.0 / model.ikr
+        } else {
+            0.0
+        };
+        let q2 = inv_ikf * cbe + inv_ikr * cbc;
+        let q2_argument = (1.0 + 4.0 * q2).max(0.0);
+        let sqrt_q2 = if q2_argument > 0.0 {
+            libm::sqrt(q2_argument)
+        } else {
+            1.0
+        };
+        let qb = q1 * (1.0 + sqrt_q2) / 2.0;
+        (
+            qb,
+            q1 * (qb * inv_var + inv_ikf * gbe / sqrt_q2),
+            q1 * (qb * inv_vaf + inv_ikr * gbc / sqrt_q2),
+        )
+    };
+
+    let (qbe, dqbe_dvbe, dqbe_dvbc) = if model.tf == 0.0 {
+        (0.0, 0.0, 0.0)
+    } else if vbe > 0.0 {
+        let qb_squared = qb * qb;
+        (
+            model.tf * cbe / qb,
+            model.tf * (gbe / qb - cbe * dqb_dvbe / qb_squared),
+            -model.tf * cbe * dqb_dvbc / qb_squared,
+        )
+    } else {
+        (model.tf * cbe, model.tf * gbe, 0.0)
+    };
+
+    BjtTransitCharge {
+        qbe,
+        dqbe_dvbe,
+        dqbe_dvbc,
+        qbc: model.tr * cbc,
+        dqbc_dvbe: 0.0,
+        dqbc_dvbc: model.tr * gbc,
     }
 }
 

@@ -22,11 +22,12 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
-//! discovered: diode diffusion charge (`TT`), BJT transit-time charge (`TF`/
-//! `TR`), and MOSFET channel charge. Diode depletion charge through
-//! `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion charge through `CJE`/`CJC`,
-//! JFET gate-junction depletion charge through `CGS`/`CGD`, and MOSFET linear
-//! overlap charge through `CGSO`/`CGDO`/`CGBO` are exercised below. Circuits
+//! discovered: diode diffusion charge (`TT`) and MOSFET channel charge. BJT
+//! constant ideal transit-time charge (`TF`/`TR`) is exercised below. Diode
+//! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
+//! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
+//! `CGS`/`CGD`, and MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`
+//! are exercised below. Circuits
 //! depending on unsupported stored charge still belong to
 //! `adapter: external_process`.
 
@@ -340,6 +341,155 @@ mod analog {
                 (actual - expected).abs() < 1e-8,
                 "{kind} collector coupling: expected {expected} V, got {actual} V"
             );
+        }
+    }
+
+    #[test]
+    fn bjt_transit_charge_matches_transport_equations_and_partials() {
+        let circuit = parse_netlist(
+            "Q1 c b e QMOD\n\
+             .model QMOD NPN(IS=2e-16 NF=1.2 NR=1.1 VAF=40 VAR=70 IKF=2m IKR=5m TF=12n TR=35n)\n",
+        )
+        .expect("transit-time model parses");
+        let model = circuit.bjts[0].model;
+        let (vbe, vbc) = (0.64, 0.35);
+        let charge = device::bjt_transit_charge(vbe, vbc, model);
+        let vtf = model.nf * VT;
+        let vtr = model.nr * VT;
+        let cbe = model.is * ((vbe / vtf).exp() - 1.0);
+        let cbc = model.is * ((vbc / vtr).exp() - 1.0);
+        let qb = (1.0 - vbc / model.vaf - vbe / model.var).recip()
+            * (1.0 + (1.0 + 4.0 * (cbe / model.ikf + cbc / model.ikr)).sqrt())
+            / 2.0;
+        assert!((charge.qbe - model.tf * cbe / qb).abs() < 1e-25);
+        assert!((charge.qbc - model.tr * cbc).abs() < 1e-25);
+
+        let delta = 1e-5;
+        let plus_be = device::bjt_transit_charge(vbe + delta, vbc, model);
+        let minus_be = device::bjt_transit_charge(vbe - delta, vbc, model);
+        let plus_bc = device::bjt_transit_charge(vbe, vbc + delta, model);
+        let minus_bc = device::bjt_transit_charge(vbe, vbc - delta, model);
+        let finite_difference = |plus: f64, minus: f64| (plus - minus) / (2.0 * delta);
+        for (actual, expected) in [
+            (
+                charge.dqbe_dvbe,
+                finite_difference(plus_be.qbe, minus_be.qbe),
+            ),
+            (
+                charge.dqbe_dvbc,
+                finite_difference(plus_bc.qbe, minus_bc.qbe),
+            ),
+            (
+                charge.dqbc_dvbc,
+                finite_difference(plus_bc.qbc, minus_bc.qbc),
+            ),
+        ] {
+            assert!(
+                (actual - expected).abs() < expected.abs() * 2e-5 + 1e-24,
+                "analytic charge derivative {actual} differs from finite difference {expected}"
+            );
+        }
+        assert_eq!(charge.dqbc_dvbe, 0.0);
+
+        let reverse_be = device::bjt_transit_charge(-0.1, vbc, model);
+        let expected_reverse_be = model.tf * model.is * ((-0.1 / vtf).exp() - 1.0);
+        assert!((reverse_be.qbe - expected_reverse_be).abs() < 1e-25);
+    }
+
+    #[test]
+    fn bjt_tf_and_tr_charge_integrate_for_both_polarities_and_rules() {
+        let is = 1e-16;
+        let beta_f = 100.0;
+        let beta_r = 2.0;
+        let resistance = 1e3;
+        let h = 1e-9;
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                for forward in [true, false] {
+                    let tf = if forward { 10e-9 } else { 0.0 };
+                    let tr = if forward { 0.0 } else { 10e-9 };
+                    let (collector_v, emitter_v) = if forward {
+                        (sign * 2.0, 0.0)
+                    } else {
+                        (0.0, sign * 2.0)
+                    };
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
+                         Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\nQ1 c b e QMOD\n\
+                         .model QMOD {kind}(IS={is} BF={beta_f} BR={beta_r} TF={tf} TR={tr})\n"
+                    );
+                    let circuit = parse_netlist(&netlist).expect("BJT transit circuit parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("BJT transit solver builds");
+                    let base = solver.circuit().node("b").expect("base node");
+                    let source = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("base drive exists");
+                    solver.set_voltage_source(source, sign);
+
+                    let charge = |v: f64| {
+                        let voltage = v / VT;
+                        if forward {
+                            tf * is * (voltage.exp() - 1.0)
+                        } else {
+                            tr * is * (voltage.exp() - 1.0)
+                        }
+                    };
+                    let junctions = |v: f64| {
+                        if forward {
+                            (v, v - 2.0)
+                        } else {
+                            (v - 2.0, v)
+                        }
+                    };
+                    let base_current = |vbe: f64, vbc: f64| {
+                        is / beta_f * ((vbe / VT).exp() - 1.0)
+                            + is / beta_r * ((vbc / VT).exp() - 1.0)
+                    };
+                    let initial_v = sign * solver.node_voltage(base);
+                    let mut previous_charge = charge(initial_v);
+                    let mut previous_current = 0.0;
+                    for step in 0..2 {
+                        let charge_current = |v: f64| {
+                            let q = charge(v);
+                            if step == 0 || integration == Integration::BackwardEuler {
+                                (q - previous_charge) / h
+                            } else {
+                                2.0 * (q - previous_charge) / h - previous_current
+                            }
+                        };
+                        let residual = |v: f64| {
+                            let (vbe, vbc) = junctions(v);
+                            (1.0 - v) / resistance
+                                - base_current(vbe, vbc)
+                                - device::GMIN * (vbe + vbc)
+                                - charge_current(v)
+                        };
+                        let mut lo = 0.0;
+                        let mut hi = 1.0;
+                        for _ in 0..100 {
+                            let mid = 0.5 * (lo + hi);
+                            if residual(mid) > 0.0 {
+                                lo = mid;
+                            } else {
+                                hi = mid;
+                            }
+                        }
+                        let expected = 0.5 * (lo + hi);
+                        solver.advance(h).expect("transit charge step solves");
+                        let actual = sign * solver.node_voltage(base);
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} {} step {step}: expected {expected} V, got {actual} V",
+                            if forward { "TF" } else { "TR" }
+                        );
+                        let next_charge = charge(actual);
+                        previous_current = (next_charge - previous_charge) / h;
+                        previous_charge = next_charge;
+                    }
+                }
+            }
         }
     }
 

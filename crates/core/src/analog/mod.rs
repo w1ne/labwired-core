@@ -10,10 +10,11 @@
 //! `external_process` adapter has no browser counterpart. This engine compiles
 //! into the same WASM the playground ships, runs natively too, and adds one
 //! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
-//! subcircuits, model libraries, AC/DC sweeps, diode diffusion charge, BJT
-//! transit-time charge, and MOSFET channel charge by name and points at
-//! `tools/cosim/labwired_ngspice.py`, which supports those features. MOSFET
-//! level-1 overlap charge (`CGSO`/`CGDO`/`CGBO`) is integrated in-core.
+//! subcircuits, model libraries, AC/DC sweeps, diode diffusion charge and
+//! MOSFET channel charge by name and points at
+//! `tools/cosim/labwired_ngspice.py`, which supports those features. BJT
+//! constant `TF`/`TR` transit-time charge and MOSFET level-1 overlap charge
+//! (`CGSO`/`CGDO`/`CGBO`) are integrated in-core.
 //!
 //! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
 //! optional depletion charge), the level-1 JFET (including optional gate

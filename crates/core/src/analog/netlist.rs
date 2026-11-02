@@ -60,10 +60,12 @@
 //! junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`, MOSFET overlap
 //! capacitance `CGSO`/`CGDO`/`CGBO`, and BJT
 //! base-junction depletion capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`
-//! with shared `FC`, every temperature coefficient, `NKF`, terminal
-//! resistances, …) are **accepted and ignored** rather than rejected. BJT
-//! `IKF`/`IKR` high-injection rolloff and `ISE`/`NE`/`ISC`/`NC` base
-//! recombination are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
+//! with shared `FC`, and constant forward/reverse transit times `TF`/`TR`,
+//! every temperature coefficient, bias-dependent transit-time parameters
+//! (`XTF`/`VTF`/`ITF`), `NKF`, terminal resistances, …) are **accepted and
+//! ignored** rather than rejected. BJT `IKF`/`IKR` high-injection rolloff and
+//! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
+//! charge are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
 //! modelled; MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
@@ -90,7 +92,9 @@
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
 //! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
-//! transient steps; diode diffusion charge (`TT`) is not modelled. JFET
+//! transient steps; diode diffusion charge (`TT`) is not modelled. BJT `TF`/`TR`
+//! add ideal transit-time charge based on the forward/reverse transport current;
+//! their bias-dependent extensions (`XTF`, `VTF`, `ITF`) are not modelled. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
 //! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
 //! gate overlap charge based on instance `W`/`L`; channel charge is not
@@ -889,6 +893,12 @@ pub struct BjtModel {
     pub mjc: f64,
     /// Forward-bias depletion-capacitance coefficient `FC`.
     pub fc: f64,
+    /// Ideal forward transit time `TF`, seconds. Zero disables forward
+    /// diffusion charge, matching ngspice's default.
+    pub tf: f64,
+    /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
+    /// diffusion charge, matching ngspice's default.
+    pub tr: f64,
 }
 
 impl BjtModel {
@@ -915,6 +925,8 @@ impl BjtModel {
             vjc: 0.75,
             mjc: 0.33,
             fc: 0.5,
+            tf: 0.0,
+            tr: 0.0,
         }
     }
 }
@@ -2467,9 +2479,13 @@ fn bind_models(
                     || !model.fc.is_finite()
                     || model.fc < 0.0
                     || model.fc >= 1.0
+                    || !model.tf.is_finite()
+                    || model.tf < 0.0
+                    || !model.tr.is_finite()
+                    || model.tr < 0.0
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs CJE/CJC >= 0, VJE/VJC > 0, MJE/MJC >= 0 and 0 <= FC < 1"
+                        "a BJT model needs CJE/CJC/TF/TR >= 0, VJE/VJC > 0, MJE/MJC >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -2823,6 +2839,8 @@ fn parse_model(
             (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
             (ModelCard::Bjt(model), "FC") => model.fc = value,
+            (ModelCard::Bjt(model), "TF") => model.tf = value,
+            (ModelCard::Bjt(model), "TR") => model.tr = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
