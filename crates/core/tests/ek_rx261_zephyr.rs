@@ -7,8 +7,9 @@
 //! Stock Zephyr v4.3.0 `ek_rx261` images on the RX core over the EK-RX261
 //! descriptor, through the same session builder the CLI uses. Fixtures and
 //! their provenance: crates/firmware-ek-rx261-zephyr/build.sh. The hello
-//! image is the `ek_rx261_zephyr` survival gate; these two need the CMT0
-//! tick interrupt through the ICU.
+//! image is the `ek_rx261_zephyr` survival gate; the sync and kernel images
+//! need the CMT0 tick interrupt through the ICU, uart_basic_api the SCI6
+//! RXI/TXI/TEI vectors.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::session::{OpenOptions, Session};
@@ -93,6 +94,46 @@ fn kernel_common_passes_every_suite() {
     assert!(!out.contains("SUITE FAIL"), "{out}");
     assert!(
         out.contains("[common_1cpu]: pass = 1, fail = 0, skip = 1"),
+        "{out}"
+    );
+}
+
+#[test]
+fn uart_basic_api_runs_on_the_sci6_icu_vectors() {
+    // fifo_fill is driven by TXI6/TEI6 (vectors 228/229) and fifo_read and
+    // the pending suite by RXI6 (227); each "Please send" prompt waits for
+    // a line on SCI6. Without the vectors fifo_fill fails its timeout.
+    let mut s = open("ek-rx261-zephyr-uart-basic-api.elf");
+    expect(
+        &mut s,
+        " PASS - test_uart_fifo_fill",
+        Duration::from_secs(2),
+    );
+    for pass in [
+        " PASS - test_uart_fifo_read",
+        " PASS - test_uart_poll_in",
+        " PASS - test_uart_pending",
+    ] {
+        expect(
+            &mut s,
+            "Please send characters to serial console",
+            Duration::from_secs(2),
+        );
+        s.send(b"The quick brown fox jumps over the lazy dog\n");
+        expect(&mut s, pass, Duration::from_secs(2));
+    }
+    expect(
+        &mut s,
+        "PROJECT EXECUTION SUCCESSFUL",
+        Duration::from_secs(2),
+    );
+    let out = s.uart_transcript();
+    assert!(
+        out.contains("[uart_basic_api]: pass = 6, fail = 0, skip = 0"),
+        "{out}"
+    );
+    assert!(
+        out.contains("[uart_basic_api_pending]: pass = 1, fail = 0, skip = 0"),
         "{out}"
     );
 }

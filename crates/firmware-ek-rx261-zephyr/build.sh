@@ -6,6 +6,10 @@
 #     (examples/ek-rx261/zephyr-sync.yaml)
 #   tests/fixtures/ek-rx261-zephyr-kernel-common.elf — tests/kernel/common
 #     (examples/ek-rx261/zephyr-kernel-common.yaml)
+#   tests/fixtures/ek-rx261-zephyr-uart-basic-api.elf —
+#     tests/drivers/uart/uart_basic_api (examples/ek-rx261/
+#     zephyr-uart-basic-api.yaml: the interrupt-driven SCI6 driver on ICU
+#     vectors RXI6/TXI6/TEI6 227/228/229)
 #
 # UNMODIFIED upstream Zephyr v4.3.0 (commit 3568e1b6d5cd) for board target
 # `ek_rx261`, the first Zephyr release with RX261 support, with hal_renesas
@@ -63,3 +67,4 @@ build_one() { # <sample-dir> <fixture-name>
 build_one "samples/hello_world"     "ek-rx261-zephyr-hello.elf"
 build_one "samples/synchronization" "ek-rx261-zephyr-sync.elf"
 build_one "tests/kernel/common"     "ek-rx261-zephyr-kernel-common.elf"
+build_one "tests/drivers/uart/uart_basic_api" "ek-rx261-zephyr-uart-basic-api.elf"

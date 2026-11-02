@@ -1763,7 +1763,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 1bfd8e4fa585789281e3721fc80764a48753bea35c6ad3859714f6edc4b210f8
+    drift_ack_digest: a8bc9f9e1e2b2ae0f4d5f1b0b70583b45579a5c322ac85434a549c56466e621d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2356,7 +2356,7 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2421,6 +2421,12 @@ boards:
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
+    # 2026-11-02 (feat/rx-sci-irq): uart.rs lets an `sci` UART with
+    # `rxi_vector` raise its RXI/TXI/TEI requests as interrupt vectors pended
+    # as-is (the Renesas RX ICU) instead of RA ELC events; from_config reads
+    # that key only in the SCI arm. Only the `sci` layout reaches it. STM32
+    # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -3861,7 +3867,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 025ac97301ba2774c0887173efe6fb7268a313b16112b75a4ae4f44ab208cc60
+    drift_ack_digest: 8a2315e4e13ec78e139f548a1174bf72edf71654c00921622330bfa2a8fd7422
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4442,7 +4448,7 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4503,6 +4509,12 @@ boards:
     # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
     # so these boards' pinned oracles are unaffected. ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-02 (feat/rx-sci-irq): uart.rs lets an `sci` UART with
+    # `rxi_vector` raise its RXI/TXI/TEI requests as interrupt vectors pended
+    # as-is (the Renesas RX ICU) instead of RA ELC events; from_config reads
+    # that key only in the SCI arm. Only the `sci` layout reaches it. STM32
+    # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4910,7 +4922,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 0691e299f2d26b66c52b93beb66a04f1fb00b05d17cc0c445a2721f2d909c241
+    drift_ack_digest: 839a91b752187ec110986a34e2e18a91d63ae0e98745c744da70f1d67b3599ca
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5424,7 +5436,7 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5489,6 +5501,12 @@ boards:
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
+    # 2026-11-02 (feat/rx-sci-irq): uart.rs lets an `sci` UART with
+    # `rxi_vector` raise its RXI/TXI/TEI requests as interrupt vectors pended
+    # as-is (the Renesas RX ICU) instead of RA ELC events; from_config reads
+    # that key only in the SCI arm. Only the `sci` layout reaches it. STM32
+    # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -5950,7 +5968,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8d885a96620113ce20a8d9e06701edb0665a856fc476ad0d43038e82232b9743
+    drift_ack_digest: 48e3dbe1b716f0fc30fed1d3b162c3df00eef4ed4f258a52aefca2038bdb2862
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6534,7 +6552,7 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6599,6 +6617,12 @@ boards:
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
+    # 2026-11-02 (feat/rx-sci-irq): uart.rs lets an `sci` UART with
+    # `rxi_vector` raise its RXI/TXI/TEI requests as interrupt vectors pended
+    # as-is (the Renesas RX ICU) instead of RA ELC events; from_config reads
+    # that key only in the SCI arm. Only the `sci` layout reaches it. STM32
+    # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -7023,7 +7047,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: f05f35b3a044cbc9d5c845d29b33548eedf4c77825b6835b4e51ce44476f5cb9
+    drift_ack_digest: 780a3148225acde1c39a01a78d59445ee12528618df1af9fb98006ec015e0527
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7539,7 +7563,7 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-01
+    drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7604,6 +7628,12 @@ boards:
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
+    # 2026-11-02 (feat/rx-sci-irq): uart.rs lets an `sci` UART with
+    # `rxi_vector` raise its RXI/TXI/TEI requests as interrupt vectors pended
+    # as-is (the Renesas RX ICU) instead of RA ELC events; from_config reads
+    # that key only in the SCI arm. Only the `sci` layout reaches it. STM32
+    # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
+    # SILICON CAPTURE; live re-capture remains pending.
   - id: esp32s3
     # 2026-09-16 (#jit-xtensa-browser): generic Xtensa BB emit core + browser adapter. `xtensa_lx7.rs` gains only `invalidate_for_data_write` — a public forwarder to the existing `maybe_invalidate_for_write` so JIT-committed stores run the same SMC invalidation the S8i/S32i interpreter arms run (no interpreter behavior change; the existing sub-word rules are reused). Hot-block dispatch and every interpreter arm are untouched; the new shapes are browser-only and refused when unsafe. Native interpreter-identity tests in `xtensa_jit/variable.rs`. No silicon capture pins the browser JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
@@ -10493,11 +10523,13 @@ boards:
     # (IR/IER/IPR/SWINTR/FIR) inside the core and USP/ISP switching on PSW.U.
     # Peripherals: SCI6 as the classic SCI (polled), CMT0-3 (`rx_cmt`), the
     # SYSTEM clock handshakes (`rx_sysc`) and the 0xAA-keyed FLASH MEMWAITR
-    # (`rx_flash`). Unmodified Zephyr v4.3.0 hello_world, synchronization and
-    # tests/kernel/common (12 suites, 61 pass + 1 skip) for ek_rx261 start at
-    # the fixed reset vector. PORT/MPC, DTC, BSC and the reset-status block
-    # are declared stubs; SCI interrupts, user-mode privilege checks, the
-    # register banks and FPU exceptions are not modelled. SIM-DERIVED — no
+    # (`rx_flash`). Unmodified Zephyr v4.3.0 hello_world, synchronization,
+    # tests/kernel/common (12 suites, 61 pass + 1 skip) and
+    # tests/drivers/uart/uart_basic_api (7/7, interrupt-driven SCI6 on ICU
+    # vectors 227/228/229) for ek_rx261 start at the fixed reset vector.
+    # PORT/MPC, DTC, BSC and the reset-status block are declared stubs; SCI
+    # ERI, user-mode privilege checks, the register banks and FPU exceptions
+    # are not modelled. SIM-DERIVED — no
     # RX261 bench part. See docs/boards/ek-rx261.md and
     # examples/ek-rx261/VALIDATION.md.
     doc: docs/boards/ek-rx261.md
@@ -10505,7 +10537,7 @@ boards:
     tier: smoke-manual
     offline_tests:
       - "firmware_survival::test_ek_rx261_zephyr_survival"
-      - "ek_rx261_zephyr (synchronization on the CMT0 tick, kernel/common 12 suites)"
+      - "ek_rx261_zephyr (synchronization on the CMT0 tick, kernel/common 12 suites, uart_basic_api on the SCI6 RXI/TXI/TEI vectors)"
       - "rx_tests (25 tests: integer forms and flags, memex sizes, string ops, INT/RTE stack switch, ICU priority/IPL, accumulators, FPU, BFMOV, MOVLI/MOVCO, undefined-instruction trap, snapshot)"
       - "rx_cmt, rx_sysc unit tests (compare match, one live wake, OSCOVFSR, keyed MEMWAITR)"
     models:
