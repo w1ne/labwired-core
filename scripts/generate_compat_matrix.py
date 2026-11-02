@@ -52,10 +52,15 @@ def parse_yaml_fallback(text: str) -> dict:
     result: dict = {"peripherals": []}
     current: dict = {}
     in_peripherals = False
+    # Indent of the `- ` list items directly under `peripherals:`. Any deeper
+    # `- id:` (an `errata:` sub-list, a nested block) belongs to the peripheral
+    # entry above it, not to the peripheral list, and must not start a new one.
+    item_indent: int | None = None
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("#") or not stripped:
             continue
+        indent = len(line) - len(line.lstrip())
         # Block form `peripherals:` or empty inline `peripherals: []`.
         # Inline empty-list is common on minimal chips (atmega328p); treating it
         # as a scalar left result["peripherals"] as the string "[]" and broke
@@ -74,10 +79,17 @@ def parse_yaml_fallback(text: str) -> dict:
                 if val:
                     result[key.strip()] = val
         elif stripped.startswith("- id:"):
-            if current:
-                result["peripherals"].append(current)
-            current = {"id": _scalar(stripped.split(":", 1)[1])}
-        elif stripped.startswith("type:") and current:
+            # Only a list item at the peripheral-entry indent starts a new
+            # peripheral. This is what keeps a peripheral's own `errata:` list
+            # (`- id: "RP2040-E1"`, one level deeper) from becoming a phantom
+            # peripheral that diverges from PyYAML and fails the gate below.
+            if item_indent is None or indent == item_indent:
+                if item_indent is None:
+                    item_indent = indent
+                if current:
+                    result["peripherals"].append(current)
+                current = {"id": _scalar(stripped.split(":", 1)[1])}
+        elif stripped.startswith("type:") and current and indent > (item_indent or 0):
             current["type"] = _scalar(stripped.split(":", 1)[1])
     if current:
         result["peripherals"].append(current)
