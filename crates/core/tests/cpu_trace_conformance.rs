@@ -21,7 +21,7 @@
 //! from the source tree rather than trusting the list below.
 
 use labwired_core::cpu::{
-    Aarch64, Avr, CortexM, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
+    Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
 };
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
@@ -365,6 +365,24 @@ fn cores() -> Vec<CoreUnderTest> {
             sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = Rx::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Mips32",
+            entry: 0x100,
+            // `addiu at, at, 1` ×4 (`0x24210001`, little-endian). The core
+            // leaves reset with Status.ERL set, so KUSEG 0x100 is unmapped
+            // and lands on the RAM bus as is.
+            program: std::iter::repeat_n(0x2421_0001u32.to_le_bytes(), 4)
+                .flatten()
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Mips32::new();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },

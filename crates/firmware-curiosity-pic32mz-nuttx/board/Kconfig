@@ -1,0 +1,7 @@
+config CURIOSITY_PIC32MZ_EF
+	bool
+	default y
+	select ARCH_HAVE_LEDS
+	---help---
+		Microchip Curiosity PIC32MZ EF 2.0 (DM320209): three user LEDs
+		(LED1 RJ7, LED2 RK7, LED3 RJ3) for the user LED driver.
