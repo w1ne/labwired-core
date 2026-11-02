@@ -1403,6 +1403,10 @@ impl SystemBus {
         // are deliberately unbound — nothing drives them.
         bus.wire_esp32c3_spi_pads();
         bus.wire_esp32c3_uart_pads();
+        // ESP32-P4: give each UART its live pad cell so the console TX is a
+        // measurable waveform. No pad routing is claimed (the P4 GPIO is a
+        // declarative register file with no engine). No-op for every other chip.
+        bus.wire_esp32p4_uart_pads();
         // …and the C3's six LEDC outputs (signals 45..50; none on the C6).
         bus.wire_esp32c3_ledc_pads();
         // Same for the S3's I²C0, whose pads reach GPIO through the S3 output

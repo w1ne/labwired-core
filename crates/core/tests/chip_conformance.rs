@@ -89,6 +89,19 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32c6_demo_survival"),
     },
     ChipConf {
+        // ESP32-P4 HP core (RV32IMAFC on silicon; the demo fixture links for
+        // riscv32imc — the interpreter decodes neither A nor F). SIM-DERIVED:
+        // nothing here has been diffed against a real P4 over JTAG, so no
+        // reset_oracle. Bases are from the official espressif/svd esp32p4.svd;
+        // the UART/SYSTIMER/TIMG models are shared engines and the GPIO /
+        // IO_MUX / HP_SYS_CLKRST / interrupt-matrix windows are declarative
+        // register files (see docs/boards/esp32p4-jc4880p443.md).
+        name: "esp32p4",
+        yaml: "configs/chips/esp32p4.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_esp32p4_demo_survival"),
+    },
+    ChipConf {
         // LiteX VexRiscv SoC (RV32IM — the descriptor declares `core: rv32im`,
         // so runs select the standard RV32 profile). SIM-DERIVED: nothing here
         // has been diffed against a silicon capture, so no reset_oracle. The

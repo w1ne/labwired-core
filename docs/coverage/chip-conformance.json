@@ -17,6 +17,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32p4",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "litex-vexriscv",
     "reg_match": 0
   },
