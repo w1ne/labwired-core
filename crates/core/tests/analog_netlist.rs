@@ -325,16 +325,30 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
-    fn bjt_early_voltage_parameters_are_resolved_and_default_to_infinity() {
+    fn bjt_early_and_high_injection_parameters_resolve_and_default_to_infinity() {
         let circuit = parse_netlist(
             "Q1 c b e NPN\nQ2 c2 b2 e2 QMOD\n\
-             .model QMOD NPN(VAF=75 VAR=120)\n",
+             .model QMOD NPN(VAF=75 VAR=120 IKF=5m IKR=2m)\n",
         )
-        .expect("BJT Early voltages parse");
+        .expect("BJT model parameters parse");
         assert_eq!(circuit.bjts[0].model.vaf, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.var, f64::INFINITY);
+        assert_eq!(circuit.bjts[0].model.ikf, f64::INFINITY);
+        assert_eq!(circuit.bjts[0].model.ikr, f64::INFINITY);
         assert_eq!(circuit.bjts[1].model.vaf, 75.0);
         assert_eq!(circuit.bjts[1].model.var, 120.0);
+        assert_eq!(circuit.bjts[1].model.ikf, 5e-3);
+        assert_eq!(circuit.bjts[1].model.ikr, 2e-3);
+    }
+
+    #[test]
+    fn nonpositive_bjt_high_injection_knees_are_rejected() {
+        for parameter in ["IKF=0", "IKR=-1m"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("a zero or negative high-injection knee is invalid");
+            assert!(error.to_string().contains("IKF > 0"), "{error}");
+            assert!(error.to_string().contains("IKR > 0"), "{error}");
+        }
     }
 
     /// A MOSFET `LEVEL` other than 1 is the one parameter that is refused

@@ -429,7 +429,19 @@ mod analog {
                     (is / br) * (reverse - 1.0),
                 )
             };
-            let op = device::bjt_op(vbe, vbc, is, bf, br, nf, nr, vaf, var);
+            let op = device::bjt_op(
+                vbe,
+                vbc,
+                is,
+                bf,
+                br,
+                nf,
+                nr,
+                vaf,
+                var,
+                f64::INFINITY,
+                f64::INFINITY,
+            );
             let (ict_plus, ibe_plus, _) = currents(vbe + delta, vbc);
             let (ict_minus, ibe_minus, _) = currents(vbe - delta, vbc);
             let expected_gif = (ict_plus - ict_minus) / (2.0 * delta);
@@ -475,6 +487,8 @@ mod analog {
             parameters.6,
             0.0,
             0.0,
+            f64::INFINITY,
+            f64::INFINITY,
         );
         let disabled_by_infinity = device::bjt_op(
             parameters.0,
@@ -486,8 +500,144 @@ mod analog {
             parameters.6,
             f64::INFINITY,
             f64::INFINITY,
+            f64::INFINITY,
+            f64::INFINITY,
         );
         assert_eq!(disabled_by_zero, disabled_by_infinity);
+    }
+
+    /// Forward and reverse Gummel–Poon high-injection rolloff, checked against
+    /// the closed-form base charge for both polarities and operation directions.
+    #[test]
+    fn bjt_high_injection_rolloff_matches_gummel_poon_by_hand() {
+        let (is, bf, br, vaf, var, ikf, ikr) = (1e-16, 80.0, 4.0, 35.0, 50.0, 2e-4, 5e-4);
+        for (vbe, vbc) in [(0.75, -4.25), (-4.25, 0.75)] {
+            let forward = (vbe / VT).exp();
+            let reverse = (vbc / VT).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+            let q2 = is * (forward - 1.0) / ikf + is * (reverse - 1.0) / ikr;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
+            let ict = is * (forward - reverse) / qb;
+            let ibe = (is / bf) * (forward - 1.0);
+            let ibc = (is / br) * (reverse - 1.0);
+            let ic = ict - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            let ie = -(ic + ib);
+            let direction = if vbe > 0.0 { "forward" } else { "reverse" };
+
+            for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+                let kind = if polarity == Polarity::N {
+                    "NPN"
+                } else {
+                    "PNP"
+                };
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr})\n",
+                    sign * vbc,
+                    sign * (vbc - vbe),
+                );
+                let solver = build(&netlist);
+                let actual_ic = sign * source_current(&solver, "Vc");
+                let actual_ib = sign * source_current(&solver, "Vb");
+                let actual_ie = sign * source_current(&solver, "Ve");
+
+                assert!(
+                    relative(actual_ic, ic) < 1e-5,
+                    "{kind} {direction}: collector current should be {ic} A, got {actual_ic} A"
+                );
+                assert!(
+                    relative(actual_ib, ib) < 1e-5,
+                    "{kind} {direction}: base current should be {ib} A, got {actual_ib} A"
+                );
+                assert!(
+                    relative(actual_ie, ie) < 1e-5,
+                    "{kind} {direction}: emitter current should be {ie} A, got {actual_ie} A"
+                );
+                if vbe > 0.0 {
+                    assert!(
+                        actual_ic / actual_ib < bf,
+                        "{kind}: IKF must reduce forward beta"
+                    );
+                } else {
+                    assert!(
+                        actual_ie / actual_ib < br,
+                        "{kind}: IKR must reduce reverse beta"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bjt_high_injection_partials_match_finite_difference() {
+        let (is, bf, br, nf, nr, vaf, var, ikf, ikr) =
+            (2e-15, 75.0, 3.0, 1.1, 1.2, 42.0, 65.0, 2e-4, 5e-4);
+        let delta = 1e-7;
+        let transport = |vbe: f64, vbc: f64| {
+            let forward = (vbe / (nf * VT)).exp();
+            let reverse = (vbc / (nr * VT)).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+            let q2 = is * (forward - 1.0) / ikf + is * (reverse - 1.0) / ikr;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
+            is * (forward - reverse) / qb
+        };
+
+        for (vbe, vbc) in [(0.68, -0.1), (-0.1, 0.62)] {
+            let op = device::bjt_op(vbe, vbc, is, bf, br, nf, nr, vaf, var, ikf, ikr);
+            let expected_gif =
+                (transport(vbe + delta, vbc) - transport(vbe - delta, vbc)) / (2.0 * delta);
+            let expected_gir =
+                -(transport(vbe, vbc + delta) - transport(vbe, vbc - delta)) / (2.0 * delta);
+            assert!(
+                relative(op.gif, expected_gif) < 1e-6,
+                "gif: {} vs {expected_gif}",
+                op.gif
+            );
+            assert!(
+                relative(op.gir, expected_gir) < 1e-6,
+                "gir: {} vs {expected_gir}",
+                op.gir
+            );
+        }
+    }
+
+    #[test]
+    fn bjt_high_injection_solves_a_resistively_loaded_collector() {
+        let (vcc, resistance, vbe, is, br, vaf, ikf) = (5.0, 1_000.0, 0.75, 1e-16, 4.0, 50.0, 2e-4);
+        let current_balance = |vc: f64| {
+            let vbc = vbe - vc;
+            let forward = (vbe / VT).exp();
+            let reverse = (vbc / VT).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf);
+            let q2 = is * (forward - 1.0) / ikf;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
+            let ict = is * (forward - reverse) / qb;
+            let ibc = (is / br) * (reverse - 1.0);
+            let collector_current = ict - ibc;
+            (vcc - vc) / resistance - collector_current - device::GMIN * (vc - vbe)
+        };
+        let mut lo = 0.0;
+        let mut hi = vcc;
+        for _ in 0..100 {
+            let mid = (lo + hi) / 2.0;
+            if current_balance(mid) > 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let expected_vc = (lo + hi) / 2.0;
+        let solver = build(
+            "Vcc supply 0 dc 5\nR1 supply c 1k\nVb b 0 dc 0.75\n\
+             Q1 c b 0 QMOD\n.model QMOD NPN(IS=1e-16 BF=80 BR=4 VAF=50 IKF=0.2m)\n",
+        );
+        let collector = solver.circuit().node("c").unwrap();
+        let actual_vc = solver.node_voltage(collector);
+        assert!(
+            (actual_vc - expected_vc).abs() < 1e-8,
+            "loaded collector should settle at {expected_vc} V with IKF rolloff, got {actual_vc} V"
+        );
     }
 
     // -----------------------------------------------------------------------

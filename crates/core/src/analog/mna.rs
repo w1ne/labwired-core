@@ -1338,6 +1338,7 @@ impl Solver {
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
             let op = device::bjt_op(
                 vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr, model.vaf, model.var,
+                model.ikf, model.ikr,
             );
 
             // GMIN across both junctions. Without it a transistor that is fully

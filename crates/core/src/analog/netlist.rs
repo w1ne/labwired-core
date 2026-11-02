@@ -55,12 +55,11 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (every capacitance, every temperature coefficient, `IKF`,
-//! `RD`, `RS`, …) are **accepted and ignored** rather than rejected, so a vendor
-//! model pasted from a datasheet still runs with its large-signal DC behaviour
-//! and none of its charge storage. MOSFET level-1 `GAMMA` and `PHI` do model
-//! body effect; `IS` is used for the two bulk junction currents. See
-//! [`super::device`] for what is and is not modelled.
+//! model (every capacitance, every temperature coefficient, `ISE`, `ISC`,
+//! `NKF`, terminal resistances, …) are **accepted and ignored** rather than
+//! rejected. BJT `IKF`/`IKR` high-injection rolloff and MOSFET level-1 `GAMMA`/
+//! `PHI` body effect are modelled; MOSFET `IS` is used for the two bulk
+//! junction currents. See [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
 //! entirely: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100),
@@ -828,6 +827,12 @@ pub struct BjtModel {
     /// Reverse Early voltage `VAR`, volts. Infinity disables reverse Early
     /// effect, matching ngspice's default.
     pub var: f64,
+    /// Forward beta rolloff knee current `IKF`, amps. Infinity disables
+    /// forward high-injection rolloff, matching ngspice's default.
+    pub ikf: f64,
+    /// Reverse beta rolloff knee current `IKR`, amps. Infinity disables
+    /// reverse high-injection rolloff, matching ngspice's default.
+    pub ikr: f64,
 }
 
 impl BjtModel {
@@ -841,6 +846,8 @@ impl BjtModel {
             nr: 1.0,
             vaf: f64::INFINITY,
             var: f64::INFINITY,
+            ikf: f64::INFINITY,
+            ikr: f64::INFINITY,
         }
     }
 }
@@ -2306,6 +2313,12 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
+                if !(model.ikf > 0.0) || !(model.ikr > 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs IKF > 0 and IKR > 0 (infinity disables high-injection rolloff)"
+                            .to_string(),
+                    ));
+                }
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
@@ -2606,6 +2619,8 @@ fn parse_model(
             (ModelCard::Bjt(model), "NR") => model.nr = value,
             (ModelCard::Bjt(model), "VAF" | "VA") => model.vaf = value,
             (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
+            (ModelCard::Bjt(model), "IKF") => model.ikf = value,
+            (ModelCard::Bjt(model), "IKR") => model.ikr = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,

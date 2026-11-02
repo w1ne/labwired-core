@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Device physics for the nonlinear elements: the exponential diode, the
-//! Gummel–Poon BJT with Early effect, the level-1 JFET and MOSFET, plus the
-//! constants and the voltage-limiting heuristics Newton–Raphson needs to reach
-//! them.
+//! Gummel–Poon BJT with Early effect and high-injection rolloff, the level-1
+//! JFET and MOSFET, plus the constants and voltage-limiting heuristics
+//! Newton–Raphson needs to reach them.
 //!
 //! This module is equations only. It owns no state, touches no matrix, and
 //! knows nothing about nodes: [`super::mna`] calls it with the controlling
@@ -271,20 +271,26 @@ pub struct BjtOp {
     pub gmu: f64,
 }
 
-/// Gummel–Poon transport form with high-injection and recombination terms
-/// switched off. The base-width modulation uses the SPICE Early voltages:
+/// Gummel–Poon transport form with recombination switched off. The base-width
+/// modulation uses the SPICE Early voltages, and `IKF`/`IKR` optionally add
+/// the forward and reverse high-injection terms:
 ///
 /// ```text
 /// q1  = 1 / (1 − Vbc/VAF − Vbe/VAR)
-/// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt))) / q1
+/// q2  = Is·(exp(Vbe/(Nf·Vt)) − 1)/IKF
+///     + Is·(exp(Vbc/(Nr·Vt)) − 1)/IKR
+/// qb  = q1·(1 + sqrt(1 + 4·q2))/2
+/// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt))) / qb
 /// Ibe = (Is/Bf)·(exp(Vbe/(Nf·Vt)) − 1)
 /// Ibc = (Is/Br)·(exp(Vbc/(Nr·Vt)) − 1)
 /// Ic  = Ict − Ibc          Ib = Ibe + Ibc          Ie = −(Ic + Ib)
 /// ```
 ///
-/// With `IKF`/`IKR` infinite, `RB` = `RC` = `RE` = 0 and no capacitances,
-/// this is the portion of ngspice's model represented in-core. A zero or
-/// infinite Early voltage disables its corresponding base-width term.
+/// Infinite `IKF` or `IKR` disables that direction's rolloff term; with both
+/// infinite, the legacy arithmetic is retained exactly. With `RB` = `RC` =
+/// `RE` = 0 and no capacitances, this is the portion of ngspice's model
+/// represented in-core. A zero or infinite Early voltage disables its
+/// corresponding base-width term.
 pub fn bjt_op(
     vbe: f64,
     vbc: f64,
@@ -295,6 +301,8 @@ pub fn bjt_op(
     nr: f64,
     vaf: f64,
     var: f64,
+    ikf: f64,
+    ikr: f64,
 ) -> BjtOp {
     let vtf = nf * THERMAL_VOLTAGE;
     let vtr = nr * THERMAL_VOLTAGE;
@@ -313,14 +321,53 @@ pub fn bjt_op(
     let base_width = 1.0 - vbc * inv_vaf - vbe * inv_var;
     let transport = is * (forward - reverse);
 
-    let gif = is * forward / vtf * base_width - transport * inv_var;
-    // `gir` is minus the derivative of transport current with respect to Vbc.
-    let gir = is * reverse / vtr * base_width + transport * inv_vaf;
+    // Leave the common infinite-knee path in its original form. Besides being
+    // cheaper, preserving the operations keeps existing model cards bit stable.
+    let (ict, gif, gir) = if ikf.is_infinite() && ikr.is_infinite() {
+        (
+            transport * base_width,
+            is * forward / vtf * base_width - transport * inv_var,
+            is * reverse / vtr * base_width + transport * inv_vaf,
+        )
+    } else {
+        let q1 = 1.0 / base_width;
+        let inv_ikf = if ikf > 0.0 && ikf.is_finite() {
+            1.0 / ikf
+        } else {
+            0.0
+        };
+        let inv_ikr = if ikr > 0.0 && ikr.is_finite() {
+            1.0 / ikr
+        } else {
+            0.0
+        };
+        let ibe_injection = is * (forward - 1.0);
+        let ibc_injection = is * (reverse - 1.0);
+        let q2 = inv_ikf * ibe_injection + inv_ikr * ibc_injection;
+        let q2_argument = (1.0 + 4.0 * q2).max(0.0);
+        // ngspice uses 1 when the clamped argument is zero, keeping both qb
+        // and its tangent finite at the limit.
+        let sqrt_q2 = if q2_argument > 0.0 {
+            libm::sqrt(q2_argument)
+        } else {
+            1.0
+        };
+        let qb = q1 * (1.0 + sqrt_q2) / 2.0;
+        let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward / vtf / sqrt_q2);
+        let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr / sqrt_q2);
+        let d_transport_d_vbe = is * forward / vtf;
+        let d_transport_d_vbc = -is * reverse / vtr;
+        let qb_squared = qb * qb;
+        (
+            transport / qb,
+            d_transport_d_vbe / qb - transport * d_qb_d_vbe / qb_squared,
+            -(d_transport_d_vbc / qb - transport * d_qb_d_vbc / qb_squared),
+        )
+    };
     // Early effect changes transport current, not the base junction currents.
     let gpi = is * forward / vtf / bf;
     let gmu = is * reverse / vtr / br;
 
-    let ict = transport * base_width;
     let ibe = (is / bf) * (forward - 1.0);
     let ibc = (is / br) * (reverse - 1.0);
 
