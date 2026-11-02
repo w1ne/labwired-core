@@ -83,7 +83,8 @@ BITS = {
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
 NO_USART_PARTS = {
-    "pic16f610", "pic16f616", "pic16f630", "pic16f676", "pic16f818", "pic16f819"
+    "pic16f610", "pic16f616", "pic16f630", "pic16f676", "pic16f684",
+    "pic16f818", "pic16f819",
 }
 NO_USART_SFRS = {"RCSTA", "TXREG", "TXSTA", "SPBRG"}
 NO_USART_BITS = {"TXIF", "TXEN", "TRMT", "SPEN"}
