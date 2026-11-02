@@ -52,7 +52,7 @@
 //! same input sequence produce bit-identical voltages on every host.
 
 use super::device;
-use super::netlist::{AnalogError, Circuit, NodeRef, POWER_SINK_VMIN};
+use super::netlist::{AnalogError, BjtModel, Circuit, NodeRef, POWER_SINK_VMIN};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
 /// currents. Dense LU is `O(n³)`; at 64 unknowns one step is a few microseconds
@@ -76,6 +76,37 @@ enum Stamp {
     OperatingPoint,
     /// One transient step of length `h` seconds under the given rule.
     Transient(f64, Integration),
+}
+
+/// Linearised total BJT charge for the B-E and B-C branches. Each branch may
+/// depend on both junction voltages through the Gummel–Poon base-charge factor.
+struct BjtChargeOp {
+    q: [f64; 2],
+    /// `[charge branch][Vbe or Vbc]`, in farads.
+    dq: [[f64; 2]; 2],
+}
+
+fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel) -> BjtChargeOp {
+    let transit = device::bjt_transit_charge(vbe, vbc, model);
+    let (qbe, cbe) =
+        device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
+    let (qbc, cbc) =
+        device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc);
+    BjtChargeOp {
+        q: [qbe + transit.qbe, qbc + transit.qbc],
+        dq: [
+            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc],
+            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc],
+        ],
+    }
+}
+
+fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
+    if branch == 0 {
+        model.cje != 0.0 || model.tf != 0.0
+    } else {
+        model.cjc != 0.0 || model.tr != 0.0
+    }
 }
 
 /// One circuit and the state that carries between steps.
@@ -109,8 +140,8 @@ pub struct Solver {
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
     bjt_vbc: Vec<f64>,
-    /// Depletion charge and current history for each BJT, ordered B-E then B-C
-    /// and oriented in normalized device coordinates.
+    /// Total depletion plus transit charge and current history for each BJT,
+    /// ordered B-E then B-C in normalized device coordinates.
     bjt_q: Vec<[f64; 2]>,
     bjt_i: Vec<[f64; 2]>,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
@@ -581,10 +612,7 @@ impl Solver {
             let vbe = sign * node_diff(&self.node_v, bjt.b, bjt.e);
             let vbc = sign * node_diff(&self.node_v, bjt.b, bjt.c);
             let model = bjt.model;
-            self.bjt_q[index][0] =
-                device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc).0;
-            self.bjt_q[index][1] =
-                device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc).0;
+            self.bjt_q[index] = bjt_charge_op(vbe, vbc, model).q;
             self.bjt_i[index] = [0.0; 2];
         }
         for index in 0..self.circuit.mosfets.len() {
@@ -795,23 +823,12 @@ impl Solver {
                 sign * node_diff(nodes, bjt.b, bjt.e),
                 sign * node_diff(nodes, bjt.b, bjt.c),
             ];
-            let parameters = [
-                (model.cje, model.vje, model.mje),
-                (model.cjc, model.vjc, model.mjc),
-            ];
+            let charge = bjt_charge_op(voltages[0], voltages[1], model);
             for junction in 0..2 {
-                let (c0, vj, grading) = parameters[junction];
-                if c0 == 0.0 {
+                if !bjt_charge_active(model, junction) {
                     continue;
                 }
-                let q_new = device::junction_depletion_charge(
-                    voltages[junction],
-                    c0,
-                    vj,
-                    grading,
-                    model.fc,
-                )
-                .0;
+                let q_new = charge.q[junction];
                 let i_new = match rule {
                     Integration::BackwardEuler => (q_new - self.bjt_q[index][junction]) / h,
                     Integration::Trapezoidal => {
@@ -1606,30 +1623,33 @@ impl Solver {
             stamp_linearised(matrix, rhs, dim, bjt.e, -sign * (op.ic + op.ib), &emitter);
 
             if let Stamp::Transient(h, rule) = stamp {
-                let junctions = [(bjt.b, bjt.e, vbe), (bjt.b, bjt.c, vbc)];
-                let parameters = [
-                    (model.cje, model.vje, model.mje),
-                    (model.cjc, model.vjc, model.mjc),
-                ];
+                let charge = bjt_charge_op(vbe, vbc, model);
                 for junction in 0..2 {
-                    let (c0, vj, grading) = parameters[junction];
-                    if c0 == 0.0 {
+                    if !bjt_charge_active(model, junction) {
                         continue;
                     }
-                    let (positive, negative, voltage) = junctions[junction];
-                    let (charge, capacitance) =
-                        device::junction_depletion_charge(voltage, c0, vj, grading, model.fc);
-                    let (geq, current) = match rule {
-                        Integration::BackwardEuler => {
-                            (capacitance / h, (charge - self.bjt_q[index][junction]) / h)
-                        }
-                        Integration::Trapezoidal => (
-                            2.0 * capacitance / h,
-                            2.0 * (charge - self.bjt_q[index][junction]) / h
-                                - self.bjt_i[index][junction],
-                        ),
+                    let (positive, negative) = if junction == 0 {
+                        (bjt.b, bjt.e)
+                    } else {
+                        (bjt.b, bjt.c)
                     };
-                    let control = [(geq, positive, negative, sign * voltage)];
+                    let factor = match rule {
+                        Integration::BackwardEuler => 1.0 / h,
+                        Integration::Trapezoidal => 2.0 / h,
+                    };
+                    let current = match rule {
+                        Integration::BackwardEuler => {
+                            (charge.q[junction] - self.bjt_q[index][junction]) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * (charge.q[junction] - self.bjt_q[index][junction]) / h
+                                - self.bjt_i[index][junction]
+                        }
+                    };
+                    let control = [
+                        (charge.dq[junction][0] * factor, bjt.b, bjt.e, u1),
+                        (charge.dq[junction][1] * factor, bjt.b, bjt.c, u2),
+                    ];
                     stamp_linearised(matrix, rhs, dim, positive, sign * current, &control);
                     stamp_linearised(
                         matrix,

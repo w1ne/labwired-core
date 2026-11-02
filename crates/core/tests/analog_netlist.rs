@@ -400,6 +400,27 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn bjt_transit_time_parameters_resolve_default_to_zero_and_reject_negatives() {
+        let circuit = parse_netlist(
+            "Q1 c b e QMOD\n\
+             .model QMOD NPN(TF=12n TR=35n XTF=2 VTF=1 ITF=10m)\n",
+        )
+        .expect("ideal BJT transit times parse; bias-dependent extensions are ignored");
+        assert_eq!(circuit.bjts[0].model.tf, 12e-9);
+        assert_eq!(circuit.bjts[0].model.tr, 35e-9);
+
+        let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN\n").unwrap();
+        assert_eq!(defaults.bjts[0].model.tf, 0.0);
+        assert_eq!(defaults.bjts[0].model.tr, 0.0);
+
+        for parameter in ["TF=-1n", "TR=-1n"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("negative transit time is invalid");
+            assert!(error.to_string().contains("TF/TR >= 0"), "{error}");
+        }
+    }
+
+    #[test]
     fn nonpositive_bjt_high_injection_knees_are_rejected() {
         for parameter in ["IKF=0", "IKR=-1m"] {
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
