@@ -324,6 +324,19 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.diodes[0].model.rs, 0.568);
     }
 
+    #[test]
+    fn bjt_early_voltage_parameters_are_resolved_and_default_to_infinity() {
+        let circuit = parse_netlist(
+            "Q1 c b e NPN\nQ2 c2 b2 e2 QMOD\n\
+             .model QMOD NPN(VAF=75 VAR=120)\n",
+        )
+        .expect("BJT Early voltages parse");
+        assert_eq!(circuit.bjts[0].model.vaf, f64::INFINITY);
+        assert_eq!(circuit.bjts[0].model.var, f64::INFINITY);
+        assert_eq!(circuit.bjts[1].model.vaf, 75.0);
+        assert_eq!(circuit.bjts[1].model.var, 120.0);
+    }
+
     /// A MOSFET `LEVEL` other than 1 is the one parameter that is refused
     /// rather than ignored: solving a BSIM card with Shichman-Hodges would be
     /// wrong by orders of magnitude, not by a capacitance.

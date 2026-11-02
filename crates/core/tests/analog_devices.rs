@@ -328,23 +328,166 @@ mod analog {
         }
     }
 
-    /// The Early effect is the one missing Gummel–Poon term a user will notice:
-    /// output conductance in the active region is `GMIN`, not `Ic/VAF`. Say so
-    /// with a test rather than only in a doc comment.
+    /// With high-injection terms disabled, Gummel–Poon's base-width factor is
+    /// `1 - Vbc/VAF - Vbe/VAR`. Check all terminal currents against that
+    /// equation in both operating directions and polarities.
     #[test]
-    fn a_bjt_in_the_active_region_has_no_early_effect() {
-        let mut currents = Vec::new();
-        for vce in [2.0, 10.0] {
-            let netlist = format!(
-                "Vb b 0 dc 0.65\nVc c 0 dc {vce}\nQ1 c b 0 NPN\n.model QMOD NPN(IS=1e-16)\n"
-            );
-            currents.push(source_current(&build(&netlist), "Vc"));
+    fn bjt_early_effect_matches_gummel_poon_by_hand() {
+        let (is, bf, br, vaf, var) = (1e-16, 80.0, 4.0, 35.0, 50.0);
+        for (vbe, vbc) in [(0.65, -4.35), (-4.35, 0.65)] {
+            let exp_be = (vbe / VT).exp();
+            let exp_bc = (vbc / VT).exp();
+            let base_width = 1.0 - vbc / vaf - vbe / var;
+            let ict = is * (exp_be - exp_bc) * base_width;
+            let ibe = (is / bf) * (exp_be - 1.0);
+            let ibc = (is / br) * (exp_bc - 1.0);
+            let ic = ict - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            let ie = -(ic + ib);
+
+            for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+                let kind = if polarity == Polarity::N {
+                    "NPN"
+                } else {
+                    "PNP"
+                };
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var})\n",
+                    sign * vbc,
+                    sign * (vbc - vbe),
+                );
+                let solver = build(&netlist);
+                let actual_ic = sign * source_current(&solver, "Vc");
+                let actual_ib = sign * source_current(&solver, "Vb");
+                let actual_ie = sign * source_current(&solver, "Ve");
+                let direction = if vbe > 0.0 { "forward" } else { "reverse" };
+
+                assert!(
+                    relative(actual_ic, ic) < 1e-5,
+                    "{kind} {direction}: collector current should be {ic} A, got {actual_ic} A"
+                );
+                assert!(
+                    relative(actual_ib, ib) < 1e-5,
+                    "{kind} {direction}: base current should be {ib} A, got {actual_ib} A"
+                );
+                assert!(
+                    relative(actual_ie, ie) < 1e-5,
+                    "{kind} {direction}: emitter current should be {ie} A, got {actual_ie} A"
+                );
+            }
         }
-        let slope = (currents[1] - currents[0]).abs() / 8.0;
-        assert!(
-            slope < 10.0 * device::GMIN,
-            "output conductance should be GMIN-sized without VAF, got {slope} S"
+    }
+
+    #[test]
+    fn bjt_early_effect_solves_a_resistively_loaded_collector() {
+        let (vcc, rb, vbe, is, br, vaf) = (5.0, 1000.0, 0.65, 1e-16, 4.0, 50.0);
+        let current_balance = |vc: f64| {
+            let vbc = vbe - vc;
+            let forward = (vbe / VT).exp();
+            let reverse = (vbc / VT).exp();
+            let ict = is * (forward - reverse) * (1.0 - vbc / vaf);
+            let ibc = (is / br) * (reverse - 1.0);
+            let collector_current = ict - ibc;
+            (vcc - vc) / rb - collector_current - device::GMIN * (vc - vbe)
+        };
+        let mut lo = 0.0;
+        let mut hi = vcc;
+        for _ in 0..100 {
+            let mid = (lo + hi) / 2.0;
+            if current_balance(mid) > 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let expected_vc = (lo + hi) / 2.0;
+        let solver = build(
+            "Vcc supply 0 dc 5\nR1 supply c 1k\nVb b 0 dc 0.65\n\
+             Q1 c b 0 QMOD\n.model QMOD NPN(IS=1e-16 BF=80 BR=4 VAF=50)\n",
         );
+        let collector = solver.circuit().node("c").unwrap();
+        let actual_vc = solver.node_voltage(collector);
+        assert!(
+            (actual_vc - expected_vc).abs() < 1e-8,
+            "loaded collector should settle at {expected_vc} V with Early effect, got {actual_vc} V"
+        );
+    }
+
+    #[test]
+    fn bjt_early_effect_partials_match_transport_and_junction_derivatives() {
+        let (is, bf, br, nf, nr, vaf, var) = (2e-15, 75.0, 3.0, 1.1, 1.2, 42.0, 65.0);
+        let delta = 1e-7;
+        for (vbe, vbc) in [(0.62, -0.1), (-0.1, 0.58)] {
+            let currents = |vbe: f64, vbc: f64| {
+                let forward = (vbe / (nf * VT)).exp();
+                let reverse = (vbc / (nr * VT)).exp();
+                let qinv = 1.0 - vbc / vaf - vbe / var;
+                (
+                    is * (forward - reverse) * qinv,
+                    (is / bf) * (forward - 1.0),
+                    (is / br) * (reverse - 1.0),
+                )
+            };
+            let op = device::bjt_op(vbe, vbc, is, bf, br, nf, nr, vaf, var);
+            let (ict_plus, ibe_plus, _) = currents(vbe + delta, vbc);
+            let (ict_minus, ibe_minus, _) = currents(vbe - delta, vbc);
+            let expected_gif = (ict_plus - ict_minus) / (2.0 * delta);
+            let expected_gpi = (ibe_plus - ibe_minus) / (2.0 * delta);
+            let (ict_plus, _, ibc_plus) = currents(vbe, vbc + delta);
+            let (ict_minus, _, ibc_minus) = currents(vbe, vbc - delta);
+            let expected_gir = -(ict_plus - ict_minus) / (2.0 * delta);
+            let expected_gmu = (ibc_plus - ibc_minus) / (2.0 * delta);
+
+            assert!(
+                relative(op.gif, expected_gif) < 1e-6,
+                "gif: {} vs {expected_gif}",
+                op.gif
+            );
+            assert!(
+                relative(op.gir, expected_gir) < 1e-6,
+                "gir: {} vs {expected_gir}",
+                op.gir
+            );
+            assert!(
+                relative(op.gpi, expected_gpi) < 1e-6,
+                "gpi: {} vs {expected_gpi}",
+                op.gpi
+            );
+            assert!(
+                relative(op.gmu, expected_gmu) < 1e-6,
+                "gmu: {} vs {expected_gmu}",
+                op.gmu
+            );
+        }
+    }
+
+    #[test]
+    fn zero_and_infinite_bjt_early_voltages_disable_base_width_modulation() {
+        let parameters = (0.65, -4.35, 1e-16, 100.0, 1.0, 1.0, 1.0);
+        let disabled_by_zero = device::bjt_op(
+            parameters.0,
+            parameters.1,
+            parameters.2,
+            parameters.3,
+            parameters.4,
+            parameters.5,
+            parameters.6,
+            0.0,
+            0.0,
+        );
+        let disabled_by_infinity = device::bjt_op(
+            parameters.0,
+            parameters.1,
+            parameters.2,
+            parameters.3,
+            parameters.4,
+            parameters.5,
+            parameters.6,
+            f64::INFINITY,
+            f64::INFINITY,
+        );
+        assert_eq!(disabled_by_zero, disabled_by_infinity);
     }
 
     // -----------------------------------------------------------------------

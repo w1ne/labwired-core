@@ -55,7 +55,7 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (every capacitance, every temperature coefficient, `VAF`, `IKF`,
+//! model (every capacitance, every temperature coefficient, `IKF`,
 //! `RD`, `RS`, …) are **accepted and ignored** rather than rejected, so a vendor
 //! model pasted from a datasheet still runs with its large-signal DC behaviour
 //! and none of its charge storage. MOSFET level-1 `GAMMA` and `PHI` do model
@@ -822,6 +822,12 @@ pub struct BjtModel {
     pub nf: f64,
     /// Reverse emission coefficient `NR`.
     pub nr: f64,
+    /// Forward Early voltage `VAF`, volts. Infinity disables forward Early
+    /// effect, matching ngspice's default.
+    pub vaf: f64,
+    /// Reverse Early voltage `VAR`, volts. Infinity disables reverse Early
+    /// effect, matching ngspice's default.
+    pub var: f64,
 }
 
 impl BjtModel {
@@ -833,6 +839,8 @@ impl BjtModel {
             br: 1.0,
             nf: 1.0,
             nr: 1.0,
+            vaf: f64::INFINITY,
+            var: f64::INFINITY,
         }
     }
 }
@@ -2292,6 +2300,12 @@ fn bind_models(
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
                 }
+                if !(model.vaf >= 0.0) || !(model.var >= 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs VAF >= 0 and VAR >= 0 (zero disables Early effect)"
+                            .to_string(),
+                    ));
+                }
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
@@ -2590,6 +2604,8 @@ fn parse_model(
             (ModelCard::Bjt(model), "BR") => model.br = value,
             (ModelCard::Bjt(model), "NF") => model.nf = value,
             (ModelCard::Bjt(model), "NR") => model.nr = value,
+            (ModelCard::Bjt(model), "VAF" | "VA") => model.vaf = value,
+            (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,

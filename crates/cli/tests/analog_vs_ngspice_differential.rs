@@ -343,7 +343,7 @@ const DIFFERENTIALS: &[Differential] = &[
                Rc vcc c 2.2k\n\
                Re e 0 470\n\
                Q1 c b e QMOD\n\
-               .model QMOD NPN(IS=1e-14 BF=200 BR=2 NF=1 NR=1)\n",
+               .model QMOD NPN(IS=1e-14 BF=200 BR=2 NF=1 NR=1 VAF=80 VAR=120)\n",
         node: "c",
         sample: 20e-6,
         substeps: 20,

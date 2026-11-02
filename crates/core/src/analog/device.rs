@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Device physics for the nonlinear elements: the exponential diode, the
-//! Ebers–Moll BJT, the level-1 JFET and MOSFET, plus the constants and the
-//! voltage-limiting heuristics Newton–Raphson needs to reach them.
+//! Gummel–Poon BJT with Early effect, the level-1 JFET and MOSFET, plus the
+//! constants and the voltage-limiting heuristics Newton–Raphson needs to reach
+//! them.
 //!
 //! This module is equations only. It owns no state, touches no matrix, and
 //! knows nothing about nodes: [`super::mna`] calls it with the controlling
@@ -270,33 +271,56 @@ pub struct BjtOp {
     pub gmu: f64,
 }
 
-/// Ebers–Moll in transport form, which is Gummel–Poon with the base-width
-/// modulation and high-injection terms switched off:
+/// Gummel–Poon transport form with high-injection and recombination terms
+/// switched off. The base-width modulation uses the SPICE Early voltages:
 ///
 /// ```text
-/// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt)))
+/// q1  = 1 / (1 − Vbc/VAF − Vbe/VAR)
+/// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt))) / q1
 /// Ibe = (Is/Bf)·(exp(Vbe/(Nf·Vt)) − 1)
 /// Ibc = (Is/Br)·(exp(Vbc/(Nr·Vt)) − 1)
 /// Ic  = Ict − Ibc          Ib = Ibe + Ibc          Ie = −(Ic + Ib)
 /// ```
 ///
-/// That is exactly ngspice's BJT with `VAF`/`VAR` infinite, `IKF`/`IKR`
-/// infinite, `RB` = `RC` = `RE` = 0 and no capacitances — the defaults for
-/// every one of those but the resistances, which we simply do not model. The
-/// missing Early effect is the one a user will notice: output conductance in
-/// the active region is `GMIN` here, not `Ic/VAF`.
-pub fn bjt_op(vbe: f64, vbc: f64, is: f64, bf: f64, br: f64, nf: f64, nr: f64) -> BjtOp {
+/// With `IKF`/`IKR` infinite, `RB` = `RC` = `RE` = 0 and no capacitances,
+/// this is the portion of ngspice's model represented in-core. A zero or
+/// infinite Early voltage disables its corresponding base-width term.
+pub fn bjt_op(
+    vbe: f64,
+    vbc: f64,
+    is: f64,
+    bf: f64,
+    br: f64,
+    nf: f64,
+    nr: f64,
+    vaf: f64,
+    var: f64,
+) -> BjtOp {
     let vtf = nf * THERMAL_VOLTAGE;
     let vtr = nr * THERMAL_VOLTAGE;
     let forward = exp_clamped(vbe / vtf);
     let reverse = exp_clamped(vbc / vtr);
+    let inv_vaf = if vaf > 0.0 && vaf.is_finite() {
+        1.0 / vaf
+    } else {
+        0.0
+    };
+    let inv_var = if var > 0.0 && var.is_finite() {
+        1.0 / var
+    } else {
+        0.0
+    };
+    let base_width = 1.0 - vbc * inv_vaf - vbe * inv_var;
+    let transport = is * (forward - reverse);
 
-    let gif = is * forward / vtf;
-    let gir = is * reverse / vtr;
-    let gpi = gif / bf;
-    let gmu = gir / br;
+    let gif = is * forward / vtf * base_width - transport * inv_var;
+    // `gir` is minus the derivative of transport current with respect to Vbc.
+    let gir = is * reverse / vtr * base_width + transport * inv_vaf;
+    // Early effect changes transport current, not the base junction currents.
+    let gpi = is * forward / vtf / bf;
+    let gmu = is * reverse / vtr / br;
 
-    let ict = is * (forward - reverse);
+    let ict = transport * base_width;
     let ibe = (is / bf) * (forward - 1.0);
     let ibc = (is / br) * (reverse - 1.0);
 
