@@ -1,0 +1,35 @@
+# LabWired - Guition JC4880P443 (ESP32-P4) System Configuration
+#
+# Module: Guition JC4880P443 — a 4.3" 480x800 MIPI-DSI touch panel module built
+# around the ESP32-P4, 16 MB PSRAM + 32 MB flash, running LVGL.
+#   - Serial console on UART0 (the module's USB-to-UART bridge / J1 header).
+#   - The MIPI-DSI display and the capacitive touch controller are NOT modelled
+#     at L1 (no DSI controller model exists in the engine; see
+#     examples/esp32p4-guition-jc4880p443/KNOWN_LIMITATIONS.md). Declared as
+#     honest unmodelled stubs, NOT as working panels.
+#
+# SIM-DERIVED / L1 smoke — no silicon diff. See
+# docs/boards/esp32p4-jc4880p443.md.
+
+name: "esp32p4-jc4880p443"
+chip: "../chips/esp32p4.yaml"
+cpu_hz: 360_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io:
+  - id: "rgb_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 51
+    signal: "output"
+    active_high: true
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 35
+    signal: "input"
+    active_high: false
+connectors:
+  - type: "uart"
+    peripheral: "uart0"
+    endpoint: "host_console"

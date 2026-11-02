@@ -548,6 +548,7 @@ fn ram_base(chip: &str) -> u64 {
     match chip {
         "esp32c3" => 0x3FC8_0000,
         "esp32c6" => 0x4080_0000,
+        "esp32p4" => 0x4FF0_0000,
         "esp32" | "esp32s3" | "esp32s3-zero" => 0x3FFC_0000,
         _ => 0x2000_0000,
     }
@@ -834,7 +835,7 @@ fn watch_all_lines(
 
 // ── Family detection ────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Family {
     Stm32F1,
     Stm32V2,
@@ -850,6 +851,7 @@ enum Family {
     /// CLKDIV semantics), so only its own divisor constant is new — the C6's
     /// GPIO matrix exists but no SPI/I2C window is declared on this L1 target.
     Esp32c6,
+    Esp32p4,
     Esp32,
     /// Silicon Labs EFR32 Series 2. ⚠️ "SPI" here is a USART with `CTRL.SYNC` —
     /// the part has no separate SPI peripheral — so both kinds land in the same
@@ -877,6 +879,8 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32c3
     } else if chip == "esp32c6" {
         Family::Esp32c6
+    } else if chip == "esp32p4" {
+        Family::Esp32p4
     } else if chip == "esp32" {
         Family::Esp32
     } else if chip.starts_with("efr32") {
@@ -1026,12 +1030,17 @@ fn drive_uart(
             let _ = machine.bus.write_u32(inst.base + 0x500, 8);
             557u64
         }
-        Family::Esp32c3 | Family::Esp32c6 => {
-            // CLKDIV 115200 from the 80 MHz UART source clock; both the C3 and
-            // the C6 HP core run at 160 MHz → 1388 CPU cycles/bit (10 * 694 *
-            // 160/80 per frame).
+        Family::Esp32c3 | Family::Esp32c6 | Family::Esp32p4 => {
+            // CLKDIV 115200 from the 80 MHz UART source clock. The C3/C6 HP
+            // core runs at 160 MHz → 1388 CPU cycles/bit; the P4 HP core runs
+            // at 360 MHz → 3123 cycles/bit (10 * 694 * 360/80 per frame). The
+            // P4 divisor is the same 694 (same 80 MHz UART source clock).
             let _ = machine.bus.write_u32(inst.base + 0x14, 694);
-            1388u64
+            if family == Family::Esp32p4 {
+                3123u64
+            } else {
+                1388u64
+            }
         }
         Family::Esp32 => {
             // Classic Esp32Uart: CLKDIV @ 0x14. Core 240 MHz / APB 80 MHz.
@@ -1232,7 +1241,7 @@ fn transmit_uart(family: Family, machine: &mut Machine<CortexM>, inst: &BusInsta
             let _ = machine.bus.write_u32(inst.base + 0x008, 1); // TASKS_STARTTX
             true
         }
-        Family::Esp32c3 | Family::Esp32c6 | Family::Esp32 => {
+        Family::Esp32c3 | Family::Esp32c6 | Family::Esp32p4 | Family::Esp32 => {
             // FIFO @ 0x00 on EspUart / Esp32Uart. Also poke TDR for a generic
             // V2 UART that may share the same name on a stub yaml.
             for &b in &PAYLOAD {
@@ -1423,6 +1432,17 @@ fn drive_spi(
             let _ = machine.bus.write_u32(inst.base + 0x14, (1 << 4) | (1 << 2));
             // CMD
         }
+        // ESP32-P4 declares no GPSPI window at L1, so measure_kind returns
+        // Absent before this arm runs. Stated anyway so the honest answer is in
+        // the source: there is no SPI bring-up for the P4.
+        Family::Esp32p4 => {
+            return KindResult::Unsupported {
+                instance: inst.name.clone(),
+                reason: "no SPI window is declared on configs/chips/esp32p4.yaml - \
+                         the SPI0/1/2/3 windows are deliberately unmapped at L1"
+                    .into(),
+            };
+        }
         Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
@@ -1571,6 +1591,10 @@ fn transmit_spi(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstan
             run(machine, PAYLOAD.len() as u64 * 10 * 160 + 256);
             true
         }
+        // ESP32-P4 publishes no SPI/I2C window at L1, so measure_kind returns
+        // Absent before any drive runs. Named explicitly (not folded into
+        // Unknown) so the gap reads as a decision, not an oversight.
+        Family::Esp32p4 => false,
         Family::Unknown => false,
     }
 }
@@ -1700,6 +1724,15 @@ fn drive_i2c(
             // register a transfer needs; `GPIO_I2CROUTE` is deliberately NOT
             // written, which is the difference between this and a pad probe.
             let _ = machine.bus.write_u32(inst.base + 0x04, 1); // EN
+        }
+        // ESP32-P4 declares no I2C window at L1 (see above).
+        Family::Esp32p4 => {
+            return KindResult::Unsupported {
+                instance: inst.name.clone(),
+                reason: "no I2C window is declared on configs/chips/esp32p4.yaml - \
+                         the I2C0 window is deliberately unmapped at L1"
+                    .into(),
+            };
         }
         Family::Unknown => {
             return KindResult::Unsupported {
@@ -1874,6 +1907,10 @@ fn transmit_i2c(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstan
             let _ = machine.bus.write_u32(reg_ctr, 1 << 5); // TRANS_START
             true
         }
+        // ESP32-P4 publishes no SPI/I2C window at L1, so measure_kind returns
+        // Absent before any drive runs. Named explicitly (not folded into
+        // Unknown) so the gap reads as a decision, not an oversight.
+        Family::Esp32p4 => false,
         Family::Unknown => false,
     }
 }

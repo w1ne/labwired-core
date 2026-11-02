@@ -811,6 +811,17 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board. Same bar as the maker-five above:
         // promote when the catalog lands AND a differential exists.
         "esp32c6",
+        // ESP32-P4 HP core. L1 smoke: UART0 console reaches the capture sink
+        // through its own memory map (unified XIP @ 0x4000_0000, HP SRAM @
+        // 0x4FF0_0000) and its own core clock (360 MHz). The UART works through
+        // the shared EspUart twin; the P4 GPIO (a two-bank block), IO_MUX,
+        // HP_SYS_CLKRST and the interrupt matrix are declarative register files
+        // with no engine, and the MIPI-DSI panel + GDMA/DMA2D/LP subsystem are
+        // not modelled. No executing-fidelity differential and no silicon
+        // oracle — the C6's capture does NOT transfer (different map and clock
+        // blocks). Not a bundled-configs.ts catalog board yet. Same bar as the
+        // C6 above: promote when the catalog lands AND a differential exists.
+        "esp32p4",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

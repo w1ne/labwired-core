@@ -2356,7 +2356,16 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    # 2026-11-02 (feat/esp32p4-l1): peripherals/esp_uart.rs gained ONE additive
+    # trait method, `serial_pad_lines`, returning this controller's existing
+    # TX/RX pad cell (`pad_lines_arc`) — the capability seam the ESP32-P4 bus
+    # wiring pass uses instead of an `as_any_mut` downcast. No register, reset
+    # value, byte path, baud timing or interrupt behaviour changed: the new
+    # method's body calls the same `pad_lines_arc` the C3/S3 builders already
+    # call, and nothing reads it unless a chip wires it. peripheral.rs gained
+    # only that method's default (`None`) and its doc. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
+    drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2581,7 +2590,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1bea3abf94dcd2d8822f3415ac8cfab5a76eb687cf513b465bf7787da4a52371
+    drift_ack_digest: 108c1cc68bf6dbfbe9859f06bcf2f70368aaedb57ba6b408cbf8b397dbff2e04
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -8433,8 +8442,15 @@ boards:
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-29
-    drift_ack_digest: 9bf67e33982a546e9231f535016f4c705266f71a0c1faf768262bea62394b98b
+    # 2026-11-02 (feat/esp32p4-l1): watched esp_uart.rs gained ONE additive
+    # trait method, `serial_pad_lines`, returning this controller's existing
+    # TX/RX pad cell (`pad_lines_arc`) — the capability seam the ESP32-P4 bus
+    # wiring pass uses instead of an `as_any_mut` downcast. No register, reset
+    # value, byte path, baud timing or interrupt behaviour changed; the S3 UART
+    # register map and the nine captured reset-state windows are untouched.
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-02
+    drift_ack_digest: 4dc1e2f2b264d4ab682c456667bddd283bbc1a7994cc1db2608d63fb2ef712a4
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -9791,6 +9807,51 @@ boards:
       - crates/core/src/peripherals/esp32c6/modem_lpcon.rs
       - crates/core/src/peripherals/esp_systimer.rs
       - crates/core/src/peripherals/stub.rs
+  - id: esp32p4-jc4880p443
+    # 2026-11-02: first ESP32-P4 part, on the Guition JC4880P443 module. L1
+    # smoke: the UART0 console reaches the capture sink through the P4's own
+    # memory map (unified XIP @ 0x4000_0000, HP SRAM @ 0x4FF0_0000) and its own
+    # core clock (360 MHz), via the shared EspUart twin built with the C6 reg
+    # map. The P4 GPIO (a two-bank block), IO_MUX, HP_SYS_CLKRST and the
+    # interrupt matrix are declarative register files with no engine; the
+    # MIPI-DSI panel, GDMA/DMA2D, USB, H.264/JPEG/ISP and the LP subsystem are
+    # not modelled. SIM-DERIVED — no silicon capture and no executing-fidelity
+    # differential. See docs/boards/esp32p4-jc4880p443.md.
+    doc: docs/boards/esp32p4-jc4880p443.md
+    chip: configs/chips/esp32p4.yaml
+    tier: smoke-manual
+    note: "ESP32-P4 HP core (RV32IMAFC) on the Guition JC4880P443 (16 MB PSRAM, 32 MB flash). Bare-metal riscv32imc L1 smoke prints OK on UART0. The LX7-class LP core is not modelled (HP-core-only scope, as on the C6). The MIPI-DSI panel is NOT modelled — no DSI controller exists in the engine, so the module is not in the part catalog."
+    offline_tests:
+      - "firmware_survival::test_esp32p4_demo_survival"
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/esp_uart.rs
+      - crates/core/src/peripherals/esp_systimer.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32p4/factory.rs
+      - crates/core/src/peripherals/esp32p4/mod.rs
+      - crates/core/src/peripherals/esp32p4/uart.rs
+      - crates/core/src/peripherals/declarative.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/boot/esp32p4_rom.rs
+      - crates/core/src/bus/attach.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - configs/chips/esp32p4.yaml
+      - configs/systems/esp32p4-jc4880p443.yaml
+      - configs/peripherals/esp32p4/clkrst.yaml
+      - configs/peripherals/esp32p4/gpio.yaml
+      - configs/peripherals/esp32p4/interrupt_core0.yaml
+      - configs/peripherals/esp32p4/io_mux.yaml
+      - configs/peripherals/esp32p4/systimer.yaml
+      - configs/peripherals/esp32p4/timg0.yaml
+      - configs/peripherals/esp32p4/timg1.yaml
+      - configs/peripherals/esp32p4/uart0.yaml
+      - configs/peripherals/esp32p4/uart1.yaml
+      - configs/peripherals/esp32p4/uart2.yaml
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

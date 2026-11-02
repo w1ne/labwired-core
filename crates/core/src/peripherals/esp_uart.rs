@@ -929,6 +929,14 @@ impl Peripheral for EspUart {
         self.lines.as_deref()
     }
 
+    /// Serial capability: create the live TX/RX pad cell on first call. Used by
+    /// the ESP32-P4 bus wiring pass, which has no `Esp32c3Gpio`/`Esp32s3Gpio`
+    /// port to bind to (the P4 GPIO is declarative), so it only needs narration
+    /// on.
+    fn serial_pad_lines(&mut self) -> Option<std::sync::Arc<PadLines>> {
+        Some(self.pad_lines_arc())
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.trace.clone())
     }

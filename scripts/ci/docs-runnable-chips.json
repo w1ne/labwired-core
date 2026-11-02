@@ -1,564 +1,568 @@
 {
-  "_comment": [
-    "Every chip this repo documents, and how a person with nothing but the",
-    "installed CLI can run it. Read scripts/ci/docs-runnable-chips.sh for the",
-    "rules; the short version is that each chip must be in exactly one bucket,",
-    "and 'blocked' entries are re-run too so that a fix cannot sit unnoticed.",
-    "",
-    "Firmware comes from the firmware-demos release: prebuilt ELFs, pinned by",
-    "tag AND sha256, so nothing here needs a cross toolchain and a re-uploaded",
-    "asset cannot silently change what the gate proves.",
-    "",
-    "`expect` is a line the firmware itself prints. It is deliberately not an",
-    "exit code: `labwired run` treats a simulation error as a non-fatal end of",
-    "run and still exits 0, so exit status alone proves nothing here."
-  ],
-  "firmware_release": "firmware-demos-v3",
-  "chips": {
-    "dspic33fj32mc204": {
-      "how": "committed",
-      "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
-      "expect": "UART: H"
-    },
-    "rv1103": {
-      "how": "needs-build",
-      "why": "Optional source-built qemu-arm-system reduced Linux direct boot and joint I2C3/UART4 basket acceptance exist at functional 24MHz; default/released CLI cannot run this board. Vendor BSP/SD/ROM boot, complete RV1103 and physical qualification remain unavailable; this is not an installed CLI command"
-    },
-    "esp32": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/esp32.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "esp32s3": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/esp32s3.elf",
-      "expect": "TIER1"
-    },
-    "esp32c3": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/esp32c3.elf",
-      "expect": "TIER1 gpio PASS"
-    },
-    "esp32c6": {
-      "how": "committed",
-      "firmware": "tests/fixtures/esp32c6-demo.elf",
-      "expect": "OK",
-      "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
-    },
-    "nrf52840": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/nrf52840.elf",
-      "expect": "TIER1 gpio PASS"
-    },
-    "nrf54l15": {
-      "how": "example",
-      "script": "examples/nrf54l15-dk/io-smoke.yaml",
-      "expect": "nRF54L15 boot OK",
-      "note": "The README quickstart. Firmware is committed, so a clone is enough."
-    },
-    "nrf54lm20a": {
-      "how": "example",
-      "script": "examples/nrf54lm20a-snake/io-smoke.yaml",
-      "expect": "map rram=ffffffff ram=54120000 p3cnf=00000003",
-      "note": "Snake on an RM67162 AMOLED over SPIM22. Firmware is committed (tests/fixtures/nrf54lm20a-snake.elf), so a clone plus the CLI is the whole prerequisite. The expected map is read back from the model: each value reaches memory or GPIO3 outside the nRF54L15 sibling's map."
-    },
-    "rp2040": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/rp2040.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32f103": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f103.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32f103c4": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103c6": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103r4": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103r4h": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103r6": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103r6h": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103rb": {
-      "how": "needs-build",
-      "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
-    },
-    "stm32f103t4": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f103t6": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
-    },
-    "stm32f401cb": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401cc": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401cd": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401ce": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401rb": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401rc": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401rd": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401re": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401vb": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401vc": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401vd": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f401ve": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f411ceu6": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f411.elf expect='TIER1 clock PASS'."
-    },
-    "stm32h563": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32h563.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32h735": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32h735.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32l476": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32l476.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "mkw41z4": {
-      "how": "committed",
-      "firmware": "tests/fixtures/kw41z-smoke.elf",
-      "expect": "KW41Z_SMOKE_OK"
-    },
-    "efr32mg26": {
-      "how": "committed",
-      "firmware": "tests/fixtures/mg26-smoke.elf",
-      "expect": "MG26 OK",
-      "note": "Bare-metal uart-smoke image for BRD2709A. Same ELF the example builds."
-    },
-    "nrf52832": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/nrf52832.elf",
-      "expect": "TIER1 gpio PASS"
-    },
-    "nrf51822": {
-      "how": "committed",
-      "firmware": "tests/fixtures/microbit-v1-smoke.elf",
-      "expect": "OK",
-      "note": "BBC micro:bit V1 legacy-UART smoke at the S110 application base (no SoftDevice). Same ELF `cargo build -p firmware-nrf51822-demo --release --target thumbv6m-none-eabi` produces; runs through the chip config, not an example script."
-    },
-    "nrf52833": {
-      "how": "committed",
-      "firmware": "tests/fixtures/microbit-v2-smoke.elf",
-      "expect": "OK",
-      "note": "BBC micro:bit v2 UARTE0 EasyDMA smoke. Same ELF `cargo build -p firmware-nrf52833-demo --release --target thumbv7em-none-eabi` produces; runs through the chip config, not an example script."
-    },
-    "nrf5340": {
-      "how": "committed",
-      "firmware": "tests/fixtures/nrf5340-zephyr-hello.elf",
-      "expect": "Booting Zephyr OS",
-      "note": "Unmodified upstream Zephyr on the application core."
-    },
-    "rp2350": {
-      "how": "asset",
-      "release": "firmware-demos-v4",
-      "firmware": "demo-rp2350-smoke.elf",
-      "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
-      "expect": "RP2350_SMOKE_OK"
-    },
-    "esp32s3-zero": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/esp32s3.elf",
-      "expect": "TIER1",
-      "note": "Board variant of esp32s3; runs the same TIER1 image."
-    },
-    "stm32f401cdu6": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
-    },
-    "stm32f405": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f405.elf expect='TIER1 i2c PASS'."
-    },
-    "stm32f407": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f407.elf expect='TIER1 clock PASS'."
-    },
-    "stm32f407ie": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f407ig": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f407ve": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f407vg": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f407ze": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f407zg": {
-      "how": "needs-build",
-      "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
-    },
-    "stm32f767": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f767.elf expect='TIER1 i2c PASS'."
-    },
-    "stm32g474re": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32g474re.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32l073": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32l073.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32wb55": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32wb55.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32wba52": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32wba52.elf",
-      "expect": "TIER1 clock PASS"
-    },
-    "stm32u575": {
-      "how": "needs-build",
-      "why": "First U5 part. The io-smoke firmware is built from source (examples/nucleo-u575zi/io-smoke.yaml expects target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo); no firmware-demos release asset exists yet"
-    },
-    "stm32u5a5zj": {
-      "how": "needs-build",
-      "why": "The U5A5 Nucleo model and source UART smoke are in this repository, but the smoke firmware is built from source (examples/nucleo-u5a5zj/io-smoke.yaml); there is no committed ELF or firmware-demos release asset for an installed CLI"
-    },
-    "stm32u545": {
-      "how": "committed",
-      "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
-      "expect": "OK"
-    },
-    "atmega1281": {
-      "how": "example",
-      "script": "examples/atmega1281-io/io-smoke.yaml",
-      "expect": "1/1 checks",
-      "note": "The 64-pin target uses its AVR-GCC reset image. The CLI smoke asserts the USART0 banner and the PB5 status LED; the Playground uses this same compiled ELF."
-    },
-    "atmega2561": {
-      "how": "example",
-      "script": "examples/atmega2561-io/io-smoke.yaml",
-      "expect": "1/1 checks",
-      "note": "64-pin ATmega2561 on the shared public AVR core. The committed tiny ELF prints `2561 OK` through USART0 and drives PB5; the script verdict is asserted because `labwired test` does not echo the AVR console."
-    },
-    "atmega2560": {
-      "how": "example",
-      "script": "examples/arduino-mega-2560-io/io-smoke.yaml",
-      "expect": "2/2 checks",
-      "note": "AVR runs through a system manifest, not `labwired run`, and `labwired test` does not echo the AVR console, so the expectation is the script verdict line: it asserts the USART0 banner and a report line with A8/A9 read through ADCSRB.MUX5."
-    },
-    "atmega328p": {
-      "how": "example",
-      "script": "examples/arduino-nano-blinky/io-smoke.yaml",
-      "expect": null,
-      "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
-    },
-    "atsamd21g18a": {
-      "how": "committed",
-      "firmware": "tests/fixtures/samd21-smoke.elf",
-      "expect": "samd21 sercom0 up",
-      "note": "Bare-metal SERCOM0 bring-up for the Arduino Zero / Feather M0 class. Same ELF `cargo build -p firmware-samd21-demo --release` produces from crates/firmware-samd21-demo (build from that directory, not the workspace root: its -Tlink.x comes from its own .cargo/config.toml, and a root build links entry 0x0 and boots nowhere while succeeding). Committed so a clone plus the CLI is the whole prerequisite. The expected line is the SECOND the firmware prints, so a model that sets INTFLAG.DRE once and forgets emits only the first and fails here."
-    },
-    "atsamd21e15a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21e16a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21e17a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21e18a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21g15a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21g16a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21g17a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21j15a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21j16a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21j17a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21j18a": {
-      "how": "needs-build",
-      "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
-    },
-    "atsamd21": {
-      "how": "committed",
-      "firmware": "tests/fixtures/atsamd21-nano33-smoke.elf",
-      "expect": "OK",
-      "note": "Arduino Nano 33 IoT UART/LED smoke. Serial1 is SERCOM5."
-    },
-    "atsamd51": {
-      "how": "committed",
-      "firmware": "tests/fixtures/atsamd51-metro-m4-smoke.elf",
-      "expect": "OK",
-      "note": "Adafruit Metro M4 UART/LED smoke. Serial1 is SERCOM3."
-    },
-    "atsamd51-pybadge": {
-      "how": "needs-build",
-      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
-    },
-    "ra4m1": {
-      "how": "committed",
-      "firmware": "tests/fixtures/ra4m1-uno-r4-smoke.elf",
-      "expect": "OK",
-      "note": "Arduino Uno R4 Minima UART/LED smoke. Header Serial is SCI2."
-    },
-    "imxrt1064": {
-      "how": "committed",
-      "firmware": "tests/fixtures/imxrt1064-teensy41-smoke.elf",
-      "expect": "OK",
-      "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
-    },
-    "stm32f746": {
-      "how": "committed",
-      "firmware": "tests/fixtures/stm32f746-discovery-smoke.elf",
-      "expect": "OK",
-      "note": "STM32F746G-DISCO UART/LED smoke. ST-LINK VCP is USART1."
-    },
-    "stm32g071": {
-      "how": "committed",
-      "firmware": "tests/fixtures/nucleo-g071rb-smoke.elf",
-      "expect": "OK",
-      "note": "NUCLEO-G071RB UART/LED smoke. USART2 is the ST-LINK VCP console; RCC uses the dedicated stm32g0 layout."
-    },
-    "stm32g0b1re": {
-      "how": "example",
-      "script": "examples/stm32g0b1re/io-smoke.yaml",
-      "expect": "exti0 port=B falling imr=1",
-      "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
-    },
-    "litex-vexriscv": {
-      "how": "needs-build",
-      "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "mpfs095t": {
-      "how": "needs-build",
-      "why": "The RV64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/mpfs-zephyr-hello.elf prints 'Hello World! mpfs_icicle/polarfire/u54' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "r5f52618bgfp": {
-      "how": "needs-build",
-      "why": "The RX core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/ek-rx261-zephyr-hello.elf prints 'Hello World! ek_rx261/r5f52618bgfp' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "am6234": {
-      "how": "needs-build",
-      "why": "The AArch64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/sk-am62-zephyr-hello.elf prints 'Hello World! sk_am62/am6234/a53' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "pic32mz2048efm144": {
-      "how": "needs-build",
-      "why": "The MIPS core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf prints 'NuttShell (NSH)' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "vegaboard-ri5cy": {
-      "how": "needs-build",
-      "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "arty-litex-vexriscv": {
-      "how": "needs-build",
-      "why": "The LiteX VexRiscv SoC and Control-and-Status model are newer than the released CLI this gate installs. The committed smoke tests/fixtures/arty-litex-smoke.elf prints 'ARTY LITEX SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "dspic33fj32mc202": {
-      "how": "committed",
-      "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "pic16f1829": {
-      "how": "needs-build",
-      "why": "The PIC16 enhanced mid-range core is newer than the released CLI this gate installs. The committed examples/pic16f1829/firmware/pic16f1829-sdcc-uart-smoke.elf prints 'PIC16F1829 OK' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "pic16f877a": {
-      "how": "needs-build",
-      "why": "The PIC16 core and its run path are newer than the released CLI this gate installs. The committed examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf prints 'PIC16F877A OK' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "pic18f4520": {
-      "how": "needs-build",
-      "why": "The PIC18 EUSART/PORT model, the completed PIC18 instruction set and the PIC18 run path are newer than the released CLI this gate installs. The committed examples/pic18f4520/firmware/pic18f4520-sdcc-uart-smoke.elf prints 'PIC18F4520 OK' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "pic24f04ka200": {
-      "how": "committed",
-      "firmware": "examples/pic24f04ka200/firmware/pic24f04ka200-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "pic24f04ka201": {
-      "how": "committed",
-      "firmware": "examples/pic24f04ka201/firmware/pic24f04ka201-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "pic24f08ka101": {
-      "how": "committed",
-      "firmware": "examples/pic24f08ka101/firmware/pic24f08ka101-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "pic24f08ka102": {
-      "how": "committed",
-      "firmware": "examples/pic24f08ka102/firmware/pic24f08ka102-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "pic24f16ka101": {
-      "how": "committed",
-      "firmware": "examples/pic24f16ka101/firmware/pic24f16ka101-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "pic24f16ka102": {
-      "how": "committed",
-      "firmware": "examples/pic24f16ka102/firmware/pic24f16ka102-xc16-uart-smoke.elf",
-      "expect": "UART: HI"
-    },
-    "stm32f072": {
-      "how": "needs-build",
-      "why": "The STM32F0 part is newer than the released CLI this gate installs. The committed smoke tests/fixtures/stm32f072b-disco-smoke.elf prints 'STM32F072B-DISCO SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "sam4s16c": {
-      "how": "needs-build",
-      "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "s32k388": {
-      "how": "needs-build",
-      "why": "The S32K388 part (and the s32k3_siul2 model) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/s32k388-evb-smoke.elf prints 'S32K388 EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "mimxrt595s": {
-      "how": "needs-build",
-      "why": "The MIMXRT595S part (and the lpc_flexcomm_usart/lpc_gpio/rt5xx_ctl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/mimxrt595-evk-smoke.elf prints 'MIMXRT595 EVK SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
-    },
-    "same70q21b": {
-      "how": "needs-build",
-      "why": "The ATSAME70Q21B descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/sam-e70-xplained-smoke.elf prints 'SAM E70 XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
-    },
-    "amap42kp": {
-      "how": "needs-build",
-      "why": "The AMAP42KP part (and the apollo4_gpio/apollo4_pwrctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/apollo4p-evb-smoke.elf prints 'APOLLO4P EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "cc2538sf53": {
-      "how": "needs-build",
-      "why": "The CC2538SF53 part (and the cc2538_pl061_gpio/cc2538_sys_ctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/cc2538dk-smoke.elf prints 'CC2538DK SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "r7fa6m5bh": {
-      "how": "needs-build",
-      "why": "The R7FA6M5BH descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/ek-ra6m5-smoke.elf prints 'EK-RA6M5 SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
-    },
-    "r7fa8m1ah": {
-      "how": "needs-build",
-      "why": "The R7FA8M1AH descriptor and its sci_b/ra8_pfs/ra8_sysc models are newer than the released CLI this gate installs. The committed smoke tests/fixtures/ek-ra8m1-smoke.elf prints 'EK-RA8M1 SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
-    },
-    "stm32l552": {
-      "how": "needs-build",
-      "why": "The STM32L5 part (and the new stm32l5 RCC profile) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/nucleo-l552ze-q-smoke.elf prints 'NUCLEO-L552ZE-Q SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "mk64f12": {
-      "how": "needs-build",
-      "why": "The MK64F12 descriptor is newer than the released CLI this gate installs. The committed smoke tests/fixtures/frdm-k64f-smoke.elf prints 'FRDM-K64F SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
-    },
-    "xck26-rpu": {
-      "how": "needs-build",
-      "why": "The Cortex-R5F core runs only in a source build with --features qemu-arm-system, which the released CLI this gate installs does not carry. The committed tests/fixtures/kv260-r5-zephyr-hello.elf prints 'Hello World! kv260_r5' on such a build (examples/kv260-r5/ci/test.sh); switch to `committed` once a release ships the model"
-    }
+ "_comment": [
+  "Every chip this repo documents, and how a person with nothing but the",
+  "installed CLI can run it. Read scripts/ci/docs-runnable-chips.sh for the",
+  "rules; the short version is that each chip must be in exactly one bucket,",
+  "and 'blocked' entries are re-run too so that a fix cannot sit unnoticed.",
+  "",
+  "Firmware comes from the firmware-demos release: prebuilt ELFs, pinned by",
+  "tag AND sha256, so nothing here needs a cross toolchain and a re-uploaded",
+  "asset cannot silently change what the gate proves.",
+  "",
+  "`expect` is a line the firmware itself prints. It is deliberately not an",
+  "exit code: `labwired run` treats a simulation error as a non-fatal end of",
+  "run and still exits 0, so exit status alone proves nothing here."
+ ],
+ "firmware_release": "firmware-demos-v3",
+ "chips": {
+  "dspic33fj32mc204": {
+   "how": "committed",
+   "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
+   "expect": "UART: H"
+  },
+  "rv1103": {
+   "how": "needs-build",
+   "why": "Optional source-built qemu-arm-system reduced Linux direct boot and joint I2C3/UART4 basket acceptance exist at functional 24MHz; default/released CLI cannot run this board. Vendor BSP/SD/ROM boot, complete RV1103 and physical qualification remain unavailable; this is not an installed CLI command"
+  },
+  "esp32": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/esp32.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "esp32s3": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/esp32s3.elf",
+   "expect": "TIER1"
+  },
+  "esp32c3": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/esp32c3.elf",
+   "expect": "TIER1 gpio PASS"
+  },
+  "esp32c6": {
+   "how": "committed",
+   "firmware": "tests/fixtures/esp32c6-demo.elf",
+   "expect": "OK",
+   "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
+  },
+  "esp32p4": {
+   "how": "needs-build",
+   "why": "The ESP32-P4 chip descriptor and its esp32p4_uart/esp32p4_systimer/esp32p4_timg types are newer than the released CLI this gate installs. The committed smoke tests/fixtures/esp32p4-demo.elf prints OK and is proven in-repo by firmware_survival::test_esp32p4_demo_survival; promote to `committed` after the next release carries the P4."
+  },
+  "nrf52840": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/nrf52840.elf",
+   "expect": "TIER1 gpio PASS"
+  },
+  "nrf54l15": {
+   "how": "example",
+   "script": "examples/nrf54l15-dk/io-smoke.yaml",
+   "expect": "nRF54L15 boot OK",
+   "note": "The README quickstart. Firmware is committed, so a clone is enough."
+  },
+  "nrf54lm20a": {
+   "how": "example",
+   "script": "examples/nrf54lm20a-snake/io-smoke.yaml",
+   "expect": "map rram=ffffffff ram=54120000 p3cnf=00000003",
+   "note": "Snake on an RM67162 AMOLED over SPIM22. Firmware is committed (tests/fixtures/nrf54lm20a-snake.elf), so a clone plus the CLI is the whole prerequisite. The expected map is read back from the model: each value reaches memory or GPIO3 outside the nRF54L15 sibling's map."
+  },
+  "rp2040": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/rp2040.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32f103": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32f103.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32f103c4": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103c6": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103r4": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103r4h": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103r6": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103r6h": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103rb": {
+   "how": "needs-build",
+   "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+  },
+  "stm32f103t4": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f103t6": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401": {
+   "how": "blocked",
+   "firmware": "demo-nucleo-f401.elf",
+   "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+   "expect": null,
+   "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
+  },
+  "stm32f401cb": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401cc": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401cd": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401ce": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401rb": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401rc": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401rd": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401re": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401vb": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401vc": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401vd": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f401ve": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f411ceu6": {
+   "how": "blocked",
+   "firmware": "demo-nucleo-f401.elf",
+   "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+   "expect": null,
+   "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f411.elf expect='TIER1 clock PASS'."
+  },
+  "stm32h563": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32h563.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32h735": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32h735.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32l476": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32l476.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "mkw41z4": {
+   "how": "committed",
+   "firmware": "tests/fixtures/kw41z-smoke.elf",
+   "expect": "KW41Z_SMOKE_OK"
+  },
+  "efr32mg26": {
+   "how": "committed",
+   "firmware": "tests/fixtures/mg26-smoke.elf",
+   "expect": "MG26 OK",
+   "note": "Bare-metal uart-smoke image for BRD2709A. Same ELF the example builds."
+  },
+  "nrf52832": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/nrf52832.elf",
+   "expect": "TIER1 gpio PASS"
+  },
+  "nrf51822": {
+   "how": "committed",
+   "firmware": "tests/fixtures/microbit-v1-smoke.elf",
+   "expect": "OK",
+   "note": "BBC micro:bit V1 legacy-UART smoke at the S110 application base (no SoftDevice). Same ELF `cargo build -p firmware-nrf51822-demo --release --target thumbv6m-none-eabi` produces; runs through the chip config, not an example script."
+  },
+  "nrf52833": {
+   "how": "committed",
+   "firmware": "tests/fixtures/microbit-v2-smoke.elf",
+   "expect": "OK",
+   "note": "BBC micro:bit v2 UARTE0 EasyDMA smoke. Same ELF `cargo build -p firmware-nrf52833-demo --release --target thumbv7em-none-eabi` produces; runs through the chip config, not an example script."
+  },
+  "nrf5340": {
+   "how": "committed",
+   "firmware": "tests/fixtures/nrf5340-zephyr-hello.elf",
+   "expect": "Booting Zephyr OS",
+   "note": "Unmodified upstream Zephyr on the application core."
+  },
+  "rp2350": {
+   "how": "asset",
+   "release": "firmware-demos-v4",
+   "firmware": "demo-rp2350-smoke.elf",
+   "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
+   "expect": "RP2350_SMOKE_OK"
+  },
+  "esp32s3-zero": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/esp32s3.elf",
+   "expect": "TIER1",
+   "note": "Board variant of esp32s3; runs the same TIER1 image."
+  },
+  "stm32f401cdu6": {
+   "how": "blocked",
+   "firmware": "demo-nucleo-f401.elf",
+   "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+   "expect": null,
+   "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
+  },
+  "stm32f405": {
+   "how": "blocked",
+   "firmware": "demo-nucleo-f401.elf",
+   "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+   "expect": null,
+   "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f405.elf expect='TIER1 i2c PASS'."
+  },
+  "stm32f407": {
+   "how": "blocked",
+   "firmware": "demo-nucleo-f401.elf",
+   "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+   "expect": null,
+   "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f407.elf expect='TIER1 clock PASS'."
+  },
+  "stm32f407ie": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f407ig": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f407ve": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f407vg": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f407ze": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f407zg": {
+   "how": "needs-build",
+   "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
+  },
+  "stm32f767": {
+   "how": "blocked",
+   "firmware": "demo-nucleo-f401.elf",
+   "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+   "expect": null,
+   "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f767.elf expect='TIER1 i2c PASS'."
+  },
+  "stm32g474re": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32g474re.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32l073": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32l073.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32wb55": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32wb55.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32wba52": {
+   "how": "committed",
+   "firmware": "tests/fixtures/tier1/stm32wba52.elf",
+   "expect": "TIER1 clock PASS"
+  },
+  "stm32u575": {
+   "how": "needs-build",
+   "why": "First U5 part. The io-smoke firmware is built from source (examples/nucleo-u575zi/io-smoke.yaml expects target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo); no firmware-demos release asset exists yet"
+  },
+  "stm32u5a5zj": {
+   "how": "needs-build",
+   "why": "The U5A5 Nucleo model and source UART smoke are in this repository, but the smoke firmware is built from source (examples/nucleo-u5a5zj/io-smoke.yaml); there is no committed ELF or firmware-demos release asset for an installed CLI"
+  },
+  "stm32u545": {
+   "how": "committed",
+   "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
+   "expect": "OK"
+  },
+  "atmega1281": {
+   "how": "example",
+   "script": "examples/atmega1281-io/io-smoke.yaml",
+   "expect": "1/1 checks",
+   "note": "The 64-pin target uses its AVR-GCC reset image. The CLI smoke asserts the USART0 banner and the PB5 status LED; the Playground uses this same compiled ELF."
+  },
+  "atmega2561": {
+   "how": "example",
+   "script": "examples/atmega2561-io/io-smoke.yaml",
+   "expect": "1/1 checks",
+   "note": "64-pin ATmega2561 on the shared public AVR core. The committed tiny ELF prints `2561 OK` through USART0 and drives PB5; the script verdict is asserted because `labwired test` does not echo the AVR console."
+  },
+  "atmega2560": {
+   "how": "example",
+   "script": "examples/arduino-mega-2560-io/io-smoke.yaml",
+   "expect": "2/2 checks",
+   "note": "AVR runs through a system manifest, not `labwired run`, and `labwired test` does not echo the AVR console, so the expectation is the script verdict line: it asserts the USART0 banner and a report line with A8/A9 read through ADCSRB.MUX5."
+  },
+  "atmega328p": {
+   "how": "example",
+   "script": "examples/arduino-nano-blinky/io-smoke.yaml",
+   "expect": null,
+   "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
+  },
+  "atsamd21g18a": {
+   "how": "committed",
+   "firmware": "tests/fixtures/samd21-smoke.elf",
+   "expect": "samd21 sercom0 up",
+   "note": "Bare-metal SERCOM0 bring-up for the Arduino Zero / Feather M0 class. Same ELF `cargo build -p firmware-samd21-demo --release` produces from crates/firmware-samd21-demo (build from that directory, not the workspace root: its -Tlink.x comes from its own .cargo/config.toml, and a root build links entry 0x0 and boots nowhere while succeeding). Committed so a clone plus the CLI is the whole prerequisite. The expected line is the SECOND the firmware prints, so a model that sets INTFLAG.DRE once and forgets emits only the first and fails here."
+  },
+  "atsamd21e15a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21e16a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21e17a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21e18a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21g15a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21g16a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21g17a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21j15a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21j16a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21j17a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21j18a": {
+   "how": "needs-build",
+   "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs."
+  },
+  "atsamd21": {
+   "how": "committed",
+   "firmware": "tests/fixtures/atsamd21-nano33-smoke.elf",
+   "expect": "OK",
+   "note": "Arduino Nano 33 IoT UART/LED smoke. Serial1 is SERCOM5."
+  },
+  "atsamd51": {
+   "how": "committed",
+   "firmware": "tests/fixtures/atsamd51-metro-m4-smoke.elf",
+   "expect": "OK",
+   "note": "Adafruit Metro M4 UART/LED smoke. Serial1 is SERCOM3."
+  },
+  "atsamd51-pybadge": {
+   "how": "needs-build",
+   "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
+  },
+  "ra4m1": {
+   "how": "committed",
+   "firmware": "tests/fixtures/ra4m1-uno-r4-smoke.elf",
+   "expect": "OK",
+   "note": "Arduino Uno R4 Minima UART/LED smoke. Header Serial is SCI2."
+  },
+  "imxrt1064": {
+   "how": "committed",
+   "firmware": "tests/fixtures/imxrt1064-teensy41-smoke.elf",
+   "expect": "OK",
+   "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
+  },
+  "stm32f746": {
+   "how": "committed",
+   "firmware": "tests/fixtures/stm32f746-discovery-smoke.elf",
+   "expect": "OK",
+   "note": "STM32F746G-DISCO UART/LED smoke. ST-LINK VCP is USART1."
+  },
+  "stm32g071": {
+   "how": "committed",
+   "firmware": "tests/fixtures/nucleo-g071rb-smoke.elf",
+   "expect": "OK",
+   "note": "NUCLEO-G071RB UART/LED smoke. USART2 is the ST-LINK VCP console; RCC uses the dedicated stm32g0 layout."
+  },
+  "stm32g0b1re": {
+   "how": "example",
+   "script": "examples/stm32g0b1re/io-smoke.yaml",
+   "expect": "exti0 port=B falling imr=1",
+   "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
+  },
+  "litex-vexriscv": {
+   "how": "needs-build",
+   "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "mpfs095t": {
+   "how": "needs-build",
+   "why": "The RV64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/mpfs-zephyr-hello.elf prints 'Hello World! mpfs_icicle/polarfire/u54' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "r5f52618bgfp": {
+   "how": "needs-build",
+   "why": "The RX core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/ek-rx261-zephyr-hello.elf prints 'Hello World! ek_rx261/r5f52618bgfp' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "am6234": {
+   "how": "needs-build",
+   "why": "The AArch64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/sk-am62-zephyr-hello.elf prints 'Hello World! sk_am62/am6234/a53' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "pic32mz2048efm144": {
+   "how": "needs-build",
+   "why": "The MIPS core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf prints 'NuttShell (NSH)' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "vegaboard-ri5cy": {
+   "how": "needs-build",
+   "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "arty-litex-vexriscv": {
+   "how": "needs-build",
+   "why": "The LiteX VexRiscv SoC and Control-and-Status model are newer than the released CLI this gate installs. The committed smoke tests/fixtures/arty-litex-smoke.elf prints 'ARTY LITEX SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "dspic33fj32mc202": {
+   "how": "committed",
+   "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "pic16f1829": {
+   "how": "needs-build",
+   "why": "The PIC16 enhanced mid-range core is newer than the released CLI this gate installs. The committed examples/pic16f1829/firmware/pic16f1829-sdcc-uart-smoke.elf prints 'PIC16F1829 OK' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "pic16f877a": {
+   "how": "needs-build",
+   "why": "The PIC16 core and its run path are newer than the released CLI this gate installs. The committed examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf prints 'PIC16F877A OK' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "pic18f4520": {
+   "how": "needs-build",
+   "why": "The PIC18 EUSART/PORT model, the completed PIC18 instruction set and the PIC18 run path are newer than the released CLI this gate installs. The committed examples/pic18f4520/firmware/pic18f4520-sdcc-uart-smoke.elf prints 'PIC18F4520 OK' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "pic24f04ka200": {
+   "how": "committed",
+   "firmware": "examples/pic24f04ka200/firmware/pic24f04ka200-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "pic24f04ka201": {
+   "how": "committed",
+   "firmware": "examples/pic24f04ka201/firmware/pic24f04ka201-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "pic24f08ka101": {
+   "how": "committed",
+   "firmware": "examples/pic24f08ka101/firmware/pic24f08ka101-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "pic24f08ka102": {
+   "how": "committed",
+   "firmware": "examples/pic24f08ka102/firmware/pic24f08ka102-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "pic24f16ka101": {
+   "how": "committed",
+   "firmware": "examples/pic24f16ka101/firmware/pic24f16ka101-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "pic24f16ka102": {
+   "how": "committed",
+   "firmware": "examples/pic24f16ka102/firmware/pic24f16ka102-xc16-uart-smoke.elf",
+   "expect": "UART: HI"
+  },
+  "stm32f072": {
+   "how": "needs-build",
+   "why": "The STM32F0 part is newer than the released CLI this gate installs. The committed smoke tests/fixtures/stm32f072b-disco-smoke.elf prints 'STM32F072B-DISCO SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "sam4s16c": {
+   "how": "needs-build",
+   "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "s32k388": {
+   "how": "needs-build",
+   "why": "The S32K388 part (and the s32k3_siul2 model) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/s32k388-evb-smoke.elf prints 'S32K388 EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "mimxrt595s": {
+   "how": "needs-build",
+   "why": "The MIMXRT595S part (and the lpc_flexcomm_usart/lpc_gpio/rt5xx_ctl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/mimxrt595-evk-smoke.elf prints 'MIMXRT595 EVK SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
+  },
+  "same70q21b": {
+   "how": "needs-build",
+   "why": "The ATSAME70Q21B descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/sam-e70-xplained-smoke.elf prints 'SAM E70 XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
+  },
+  "amap42kp": {
+   "how": "needs-build",
+   "why": "The AMAP42KP part (and the apollo4_gpio/apollo4_pwrctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/apollo4p-evb-smoke.elf prints 'APOLLO4P EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "cc2538sf53": {
+   "how": "needs-build",
+   "why": "The CC2538SF53 part (and the cc2538_pl061_gpio/cc2538_sys_ctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/cc2538dk-smoke.elf prints 'CC2538DK SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "r7fa6m5bh": {
+   "how": "needs-build",
+   "why": "The R7FA6M5BH descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/ek-ra6m5-smoke.elf prints 'EK-RA6M5 SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
+  },
+  "r7fa8m1ah": {
+   "how": "needs-build",
+   "why": "The R7FA8M1AH descriptor and its sci_b/ra8_pfs/ra8_sysc models are newer than the released CLI this gate installs. The committed smoke tests/fixtures/ek-ra8m1-smoke.elf prints 'EK-RA8M1 SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
+  },
+  "stm32l552": {
+   "how": "needs-build",
+   "why": "The STM32L5 part (and the new stm32l5 RCC profile) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/nucleo-l552ze-q-smoke.elf prints 'NUCLEO-L552ZE-Q SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "mk64f12": {
+   "how": "needs-build",
+   "why": "The MK64F12 descriptor is newer than the released CLI this gate installs. The committed smoke tests/fixtures/frdm-k64f-smoke.elf prints 'FRDM-K64F SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+  },
+  "xck26-rpu": {
+   "how": "needs-build",
+   "why": "The Cortex-R5F core runs only in a source build with --features qemu-arm-system, which the released CLI this gate installs does not carry. The committed tests/fixtures/kv260-r5-zephyr-hello.elf prints 'Hello World! kv260_r5' on such a build (examples/kv260-r5/ci/test.sh); switch to `committed` once a release ships the model"
   }
+ }
 }

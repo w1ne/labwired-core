@@ -1,0 +1,4638 @@
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: BT_SELECT
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BT_SEL
+    bit_range:
+    - 31
+    - 0
+    description: GPIO bit select register
+  side_effects: null
+- id: OUT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_ORIG
+    bit_range:
+    - 31
+    - 0
+    description: GPIO output register for GPIO0-31
+  side_effects: null
+- id: OUT_W1TS
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_W1TS
+    bit_range:
+    - 31
+    - 0
+    description: GPIO output set register for GPIO0-31
+  side_effects: null
+- id: OUT_W1TC
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_W1TC
+    bit_range:
+    - 31
+    - 0
+    description: GPIO output clear register for GPIO0-31
+  side_effects: null
+- id: OUT1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_ORIG
+    bit_range:
+    - 24
+    - 0
+    description: GPIO output register for GPIO32-56
+  side_effects: null
+- id: OUT1_W1TS
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT1_W1TS
+    bit_range:
+    - 24
+    - 0
+    description: GPIO output set register for GPIO32-56
+  side_effects: null
+- id: OUT1_W1TC
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT1_W1TC
+    bit_range:
+    - 24
+    - 0
+    description: GPIO output clear register for GPIO32-56
+  side_effects: null
+- id: ENABLE
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: GPIO output enable register for GPIO0-31
+  side_effects: null
+- id: ENABLE_W1TS
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE_W1TS
+    bit_range:
+    - 31
+    - 0
+    description: GPIO output enable set register for GPIO0-31
+  side_effects: null
+- id: ENABLE_W1TC
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE_W1TC
+    bit_range:
+    - 31
+    - 0
+    description: GPIO output enable clear register for GPIO0-31
+  side_effects: null
+- id: ENABLE1
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 24
+    - 0
+    description: GPIO output enable register for GPIO32-56
+  side_effects: null
+- id: ENABLE1_W1TS
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE1_W1TS
+    bit_range:
+    - 24
+    - 0
+    description: GPIO output enable set register for GPIO32-56
+  side_effects: null
+- id: ENABLE1_W1TC
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE1_W1TC
+    bit_range:
+    - 24
+    - 0
+    description: GPIO output enable clear register for GPIO32-56
+  side_effects: null
+- id: STRAP
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STRAPPING
+    bit_range:
+    - 15
+    - 0
+    description: pad strapping register
+  side_effects: null
+- id: IN
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_NEXT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO input register for GPIO0-31
+  side_effects: null
+- id: IN1
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_NEXT
+    bit_range:
+    - 24
+    - 0
+    description: GPIO input register for GPIO32-56
+  side_effects: null
+- id: STATUS
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERRUPT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt status register for GPIO0-31
+  side_effects: null
+- id: STATUS_W1TS
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_W1TS
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt status set register for GPIO0-31
+  side_effects: null
+- id: STATUS_W1TC
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_W1TC
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt status clear register for GPIO0-31
+  side_effects: null
+- id: STATUS1
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERRUPT
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt status register for GPIO32-56
+  side_effects: null
+- id: STATUS1_W1TS
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS1_W1TS
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt status set register for GPIO32-56
+  side_effects: null
+- id: STATUS1_W1TC
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS1_W1TC
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt status clear register for GPIO32-56
+  side_effects: null
+- id: INTR_0
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT_0
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt 0 status register for GPIO0-31
+  side_effects: null
+- id: INTR1_0
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT1_0
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt 0 status register for GPIO32-56
+  side_effects: null
+- id: INTR_1
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT_1
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt 1 status register for GPIO0-31
+  side_effects: null
+- id: INTR1_1
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT1_1
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt 1 status register for GPIO32-56
+  side_effects: null
+- id: STATUS_NEXT
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_INTERRUPT_NEXT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt source register for GPIO0-31
+  side_effects: null
+- id: STATUS_NEXT1
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_INTERRUPT_NEXT1
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt source register for GPIO32-56
+  side_effects: null
+- id: PIN0
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN1
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN2
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN3
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN4
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN5
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN6
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN7
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN8
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN9
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN10
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN11
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN12
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN13
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN14
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN15
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN16
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN17
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN18
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN19
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN20
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN21
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN22
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN23
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN24
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN25
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN26
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN27
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN28
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN29
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN30
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN31
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN32
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN33
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN34
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN35
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN36
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN37
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN38
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN39
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN40
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN41
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN42
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN43
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN44
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN45
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN46
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN47
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN48
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN49
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN50
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN51
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN52
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN53
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN54
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN55
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN56
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: FUNC0_OUT_SEL_CFG
+  address_offset: 1368
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC1_OUT_SEL_CFG
+  address_offset: 1372
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC2_OUT_SEL_CFG
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC3_OUT_SEL_CFG
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC4_OUT_SEL_CFG
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC5_OUT_SEL_CFG
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC6_OUT_SEL_CFG
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC7_OUT_SEL_CFG
+  address_offset: 1396
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC8_OUT_SEL_CFG
+  address_offset: 1400
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC9_OUT_SEL_CFG
+  address_offset: 1404
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC10_OUT_SEL_CFG
+  address_offset: 1408
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC11_OUT_SEL_CFG
+  address_offset: 1412
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC12_OUT_SEL_CFG
+  address_offset: 1416
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC13_OUT_SEL_CFG
+  address_offset: 1420
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC14_OUT_SEL_CFG
+  address_offset: 1424
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC15_OUT_SEL_CFG
+  address_offset: 1428
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC16_OUT_SEL_CFG
+  address_offset: 1432
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC17_OUT_SEL_CFG
+  address_offset: 1436
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC18_OUT_SEL_CFG
+  address_offset: 1440
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC19_OUT_SEL_CFG
+  address_offset: 1444
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC20_OUT_SEL_CFG
+  address_offset: 1448
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC21_OUT_SEL_CFG
+  address_offset: 1452
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC22_OUT_SEL_CFG
+  address_offset: 1456
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC23_OUT_SEL_CFG
+  address_offset: 1460
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC24_OUT_SEL_CFG
+  address_offset: 1464
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC25_OUT_SEL_CFG
+  address_offset: 1468
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC26_OUT_SEL_CFG
+  address_offset: 1472
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC27_OUT_SEL_CFG
+  address_offset: 1476
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC28_OUT_SEL_CFG
+  address_offset: 1480
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC29_OUT_SEL_CFG
+  address_offset: 1484
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC30_OUT_SEL_CFG
+  address_offset: 1488
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC31_OUT_SEL_CFG
+  address_offset: 1492
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC32_OUT_SEL_CFG
+  address_offset: 1496
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC33_OUT_SEL_CFG
+  address_offset: 1500
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC34_OUT_SEL_CFG
+  address_offset: 1504
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC35_OUT_SEL_CFG
+  address_offset: 1508
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC36_OUT_SEL_CFG
+  address_offset: 1512
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC37_OUT_SEL_CFG
+  address_offset: 1516
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC38_OUT_SEL_CFG
+  address_offset: 1520
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC39_OUT_SEL_CFG
+  address_offset: 1524
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC40_OUT_SEL_CFG
+  address_offset: 1528
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC41_OUT_SEL_CFG
+  address_offset: 1532
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC42_OUT_SEL_CFG
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC43_OUT_SEL_CFG
+  address_offset: 1540
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC44_OUT_SEL_CFG
+  address_offset: 1544
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC45_OUT_SEL_CFG
+  address_offset: 1548
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC46_OUT_SEL_CFG
+  address_offset: 1552
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC47_OUT_SEL_CFG
+  address_offset: 1556
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC48_OUT_SEL_CFG
+  address_offset: 1560
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC49_OUT_SEL_CFG
+  address_offset: 1564
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC50_OUT_SEL_CFG
+  address_offset: 1568
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC51_OUT_SEL_CFG
+  address_offset: 1572
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC52_OUT_SEL_CFG
+  address_offset: 1576
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC53_OUT_SEL_CFG
+  address_offset: 1580
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC54_OUT_SEL_CFG
+  address_offset: 1584
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC55_OUT_SEL_CFG
+  address_offset: 1588
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC56_OUT_SEL_CFG
+  address_offset: 1592
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 8
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 11
+    - 11
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: INTR_2
+  address_offset: 1596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT_2
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt 2 status register for GPIO0-31
+  side_effects: null
+- id: INTR1_2
+  address_offset: 1600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT1_2
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt 2 status register for GPIO32-56
+  side_effects: null
+- id: INTR_3
+  address_offset: 1604
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT_3
+    bit_range:
+    - 31
+    - 0
+    description: GPIO interrupt 3 status register for GPIO0-31
+  side_effects: null
+- id: INTR1_3
+  address_offset: 1608
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT1_3
+    bit_range:
+    - 24
+    - 0
+    description: GPIO interrupt 3 status register for GPIO32-56
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 1612
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: set this bit to enable GPIO clock gate
+  side_effects: null
+- id: INT_RAW
+  address_offset: 1792
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMP0_NEG_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: analog comparator pos edge interrupt raw
+  - name: COMP0_POS_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: analog comparator neg edge interrupt raw
+  - name: COMP0_ALL_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: analog comparator neg or pos edge interrupt raw
+  - name: COMP1_NEG_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: analog comparator pos edge interrupt raw
+  - name: COMP1_POS_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: analog comparator neg edge interrupt raw
+  - name: COMP1_ALL_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: analog comparator neg or pos edge interrupt raw
+  - name: BISTOK_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: pad bistok interrupt raw
+  - name: BISTFAIL_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: pad bistfail interrupt raw
+  side_effects: null
+- id: INT_ST
+  address_offset: 1796
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMP0_NEG_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: analog comparator pos edge interrupt status
+  - name: COMP0_POS_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: analog comparator neg edge interrupt status
+  - name: COMP0_ALL_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: analog comparator neg or pos edge interrupt status
+  - name: COMP1_NEG_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: analog comparator pos edge interrupt status
+  - name: COMP1_POS_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: analog comparator neg edge interrupt status
+  - name: COMP1_ALL_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: analog comparator neg or pos edge interrupt status
+  - name: BISTOK_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: pad bistok interrupt status
+  - name: BISTFAIL_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: pad bistfail interrupt status
+  side_effects: null
+- id: INT_ENA
+  address_offset: 1800
+  size: 32
+  access: READ_WRITE
+  reset_value: 255
+  fields:
+  - name: COMP0_NEG_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: analog comparator pos edge interrupt enable
+  - name: COMP0_POS_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: analog comparator neg edge interrupt enable
+  - name: COMP0_ALL_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: analog comparator neg or pos edge interrupt enable
+  - name: COMP1_NEG_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: analog comparator pos edge interrupt enable
+  - name: COMP1_POS_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: analog comparator neg edge interrupt enable
+  - name: COMP1_ALL_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: analog comparator neg or pos edge interrupt enable
+  - name: BISTOK_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: pad bistok interrupt enable
+  - name: BISTFAIL_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: pad bistfail interrupt enable
+  side_effects: null
+- id: INT_CLR
+  address_offset: 1804
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMP0_NEG_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: analog comparator pos edge interrupt clear
+  - name: COMP0_POS_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: analog comparator neg edge interrupt clear
+  - name: COMP0_ALL_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: analog comparator neg or pos edge interrupt clear
+  - name: COMP1_NEG_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: analog comparator pos edge interrupt clear
+  - name: COMP1_POS_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: analog comparator neg edge interrupt clear
+  - name: COMP1_ALL_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: analog comparator neg or pos edge interrupt clear
+  - name: BISTOK_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: pad bistok interrupt enable
+  - name: BISTFAIL_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: pad bistfail interrupt enable
+  side_effects: null
+- id: ZERO_DET0_FILTER_CNT
+  address_offset: 1808
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ZERO_DET0_FILTER_CNT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO analog comparator zero detect filter count
+  side_effects: null
+- id: ZERO_DET1_FILTER_CNT
+  address_offset: 1812
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ZERO_DET1_FILTER_CNT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO analog comparator zero detect filter count
+  side_effects: null
+- id: SEND_SEQ
+  address_offset: 1816
+  size: 32
+  access: READ_WRITE
+  reset_value: 305419896
+  fields:
+  - name: SEND_SEQ
+    bit_range:
+    - 31
+    - 0
+    description: High speed sdio pad bist send sequence
+  side_effects: null
+- id: RECIVE_SEQ
+  address_offset: 1820
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RECIVE_SEQ
+    bit_range:
+    - 31
+    - 0
+    description: High speed sdio pad bist recive sequence
+  side_effects: null
+- id: BISTIN_SEL
+  address_offset: 1824
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: BISTIN_SEL
+    bit_range:
+    - 3
+    - 0
+    description: 'High speed sdio pad bist in pad sel 0:pad39, 1: pad40...'
+  side_effects: null
+- id: BIST_CTRL
+  address_offset: 1828
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: BIST_PAD_OE
+    bit_range:
+    - 0
+    - 0
+    description: High speed sdio pad bist out pad oe
+  - name: BIST_START
+    bit_range:
+    - 1
+    - 1
+    description: High speed sdio pad bist start
+  side_effects: null
+- id: DATE
+  address_offset: 2044
+  size: 32
+  access: READ_WRITE
+  reset_value: 2294787
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: version register
+  side_effects: null
+- id: FUNC1-254_IN_SEL_CFG
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'set this value: s=0-56: connect GPIO[s] to this port. s=0x3F: set this port always high level. s=0x3E: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 7
+    - 7
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+interrupts:
+  GPIO_INT0: 74
+  GPIO_INT1: 75
+  GPIO_INT2: 76
+  GPIO_INT3: 77
+  GPIO_PAD_COMP: 78
+timing: null

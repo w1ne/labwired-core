@@ -1,0 +1,29 @@
+# LabWired - Guition JC4880P443 (ESP32-P4) example system
+#
+# Board wiring per the Guition JC4880P443 module:
+#   - UART0 is the serial console (module USB-to-UART bridge / J1 header).
+#   - The MIPI-DSI panel and the touch controller are NOT modelled at L1.
+#
+# SIM-DERIVED — see ../../docs/boards/esp32p4-jc4880p443.md and
+# KNOWN_LIMITATIONS.md in this directory.
+
+name: "esp32p4-jc4880p443-example"
+chip: "../../configs/chips/esp32p4.yaml"
+external_devices: []
+board_io:
+  - id: "rgb_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 51
+    signal: "output"
+    active_high: true
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 35
+    signal: "input"
+    active_high: false
+connectors:
+  - type: "uart"
+    peripheral: "uart0"
+    endpoint: "host_console"

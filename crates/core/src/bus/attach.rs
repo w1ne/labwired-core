@@ -963,6 +963,27 @@ impl SystemBus {
         }
     }
 
+    /// The ESP32-P4 counterpart of [`Self::wire_esp32c3_uart_pads`].
+    ///
+    /// The P4's GPIO is a two-bank block with no behavioural engine (it is a
+    /// declarative register file), so there is no `Esp32c3Gpio`/`Esp32s3Gpio`
+    /// port to bind the UART's TX lines to. What the P4 console and the bus
+    /// scoreboard need is the UART's OWN live pad cell — creating it is what
+    /// turns narration on, so `wire_lines()` stops being `None` and the TX
+    /// waveform is measurable. No pad routing is claimed: at L1 the console
+    /// shifts bytes regardless of IO_MUX (`wire_esp32p4_uart_pads` says exactly
+    /// that, rather than pretending a route exists).
+    pub(crate) fn wire_esp32p4_uart_pads(&mut self) {
+        for name in ["uart0", "uart1", "uart2"] {
+            let Some(idx) = self.find_peripheral_index_by_name(name) else {
+                continue;
+            };
+            // Capability seam, not a downcast: `serial_pad_lines` creates the
+            // cell on the model that owns it.
+            let _ = self.peripherals[idx].dev.serial_pad_lines();
+        }
+    }
+
     /// The ESP32-S3 counterpart of [`Self::wire_esp32c3_spi_pads`]: bind SPI2
     /// (and SPI3, when the bus carries it) to the S3 output matrix.
     ///

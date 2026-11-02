@@ -156,6 +156,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 EXTMEM / MSPI cache controller (DONE/freeze handshakes).
     "esp32c6_extmem",
     "esp32c6_systimer",
+    // ESP32-P4 (RISC-V HP core) behavioral aliases. The UART head map, SYSTIMER
+    // layout and TIMG head match the C3/C6/S3, but the P4's clock (360 MHz) and
+    // bus are its own, and the type names must be canonical or the fuzzy
+    // `contains("uart")`/`contains("timer")` fallbacks would resolve them to the
+    // STM32 maps.
+    "esp32p4_uart",
+    "esp32p4_systimer",
+    "esp32p4_timg",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",

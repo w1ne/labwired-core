@@ -28,6 +28,7 @@ members = [
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
     "crates/firmware-esp32c6-demo",
+    "crates/firmware-esp32p4-demo",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
     "crates/firmware-f103-conformance",
@@ -263,6 +264,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-esp32c6-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32p4-demo]
 codegen-units = 1
 opt-level = "s"
 

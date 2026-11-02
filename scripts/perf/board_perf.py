@@ -315,6 +315,10 @@ FIXTURES = {
     ("arm", 0x20000000, 0x20010000): ("imxrt", SPIN_CORTEX_M),
     ("riscv", 0x42000000, 0x3FC80000): ("esp32c3", SPIN_RISCV),
     ("riscv", 0x42000000, 0x40800000): ("esp32c6", SPIN_RISCV),
+    # ESP32-P4: unified XIP window at 0x4000_0000 (64 MiB), HP SRAM at
+    # 0x4FF0_0000. Same shared RISC-V interpreter as the C3/C6; the gate
+    # generates the memory.x from these origins.
+    ("riscv", 0x40000000, 0x4FF00000): ("esp32p4", SPIN_RISCV),
     ("xtensa-lx6", 0x400D0000, 0x3FFB0000): ("esp32", SPIN_XTENSA_ESP32),
     ("xtensa-lx7", 0x42000000, 0x3FC88000): ("esp32s3", SPIN_XTENSA_ESP32S3),
     ("avr", 0x00000000, 0x00000100): ("atmega328p", SPIN_AVR),

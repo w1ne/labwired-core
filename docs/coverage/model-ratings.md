@@ -11,6 +11,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | esp32c3 | open | L2 | 40 | — | 2.5 | ≥1× (CI) | [doc](docs/boards/esp32c3.md) |
 | esp32c6 | open | L1 | 68 | — | 3.5 | ≥1× (CI) | — |
+| esp32p4 | open | L1 | 10 | — | 2.2 | ≥1× (CI) | — |
 | litex-vexriscv | open | L1 | 5 | — | — | ≥1× (CI) | [doc](docs/boards/litex-vexriscv.md) |
 | arty-litex-vexriscv | open | L1 | 6 | — | — | ≥1× (CI) | [doc](docs/boards/arty-litex-vexriscv.md) |
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |

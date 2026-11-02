@@ -974,6 +974,25 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"OK\n",
     },
     SurvivalCase {
+        // ESP32-P4 (Guition JC4880P443 module) HP core — RV32IMAFC on silicon
+        // (esp32p4.svd); this fixture links for riscv32imc (no A/F extension —
+        // the interpreter decodes neither). There is no PCR gate on the P4
+        // UARTs at L1, so the smoke only sets the divisor and pushes `OK\n`
+        // through the ESP UART twin's FIFO to the capture sink. The P4's
+        // unified flash window (0x4000_0000) and HP SRAM (0x4FF0_0000) are its
+        // own, so the PC ranges pinned here do not transfer from the C6.
+        // SIM-DERIVED — no silicon diff.
+        name: "esp32p4_demo",
+        core: "rv32imafc",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "esp32p4",
+        system: "esp32p4-jc4880p443",
+        fixture: "esp32p4-demo.elf",
+        valid_pc_ranges: &[(0x4000_0000, 0x403F_FFFF), (0x4FF0_0000, 0x4FFB_FFFF)],
+        expected_uart_output: b"OK\n",
+    },
+    SurvivalCase {
         // LiteX VexRiscv SoC (RV32IM — no compressed, no atomics): the smoke
         // links into the SoC's integrated SRAM (0x10000000) and prints over
         // the LiteX UART at 0x60001800. The chip descriptor declares a generic
@@ -3140,6 +3159,8 @@ survival_gate!(test_riscv_ci_fixture_survival, "riscv_ci_fixture");
 survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
+
+survival_gate!(test_esp32p4_demo_survival, "esp32p4_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 

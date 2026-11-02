@@ -178,6 +178,16 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 - `io_mux` (configs/chips/esp32c6.yaml:231 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
 - `hp_sys` (configs/chips/esp32c6.yaml:256 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
 
+### `esp32p4`
+
+_L1 slice: the UART0 console path is a real engine (the shared EspUart twin, paced at the P4's 360 MHz), and the committed esp32p4-demo fixture boots it with `OK`. Beyond the rubric there is nothing else functional yet — the P4 GPIO (a two-bank block, not the C3/C6 head), IO_MUX, HP_SYS_CLKRST and the interrupt matrix are SVD-derived declarative register files with no behavioural engine, so the smoke is polled and the panel/DSI, GDMA/DMA2D and LP subsystem are unmodelled._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `gpio` (configs/chips/esp32p4.yaml:135 (declarative; configs/peripherals/esp32p4/gpio.yaml)) — CLOSABLE: reset-value register storage; the board_io LED/button are declared but not electrically driven. The P4 GPIO is a TWO-BANK block (OUT1/ENABLE1/IN1/STATUS1), so the C3/C6 single-bank model does not fit; a real bank-aware model is the port path.
+- `io_mux` (configs/chips/esp32p4.yaml:146 (declarative; configs/peripherals/esp32p4/io_mux.yaml)) — CLOSABLE: pad function writes are recorded but never read back or electrically enforced — the demo writes U0TXD's MCU_SEL and the console passes regardless of routing.
+- `clkrst` (configs/chips/esp32p4.yaml:158 (declarative; configs/peripherals/esp32p4/clkrst.yaml)) — CLOSABLE: BAND-AID — the P4 clock/reset block (HP_SYS_CLKRST) is register storage only; no peripheral is gated on CLK_EN0 at L1, so a firmware that relies on a clock gate would run against an ungated twin. The C6 PCR model is the port path.
+- `interrupt_core0` (configs/chips/esp32p4.yaml:168 (declarative; configs/peripherals/esp32p4/interrupt_core0.yaml)) — CLOSABLE: the interrupt matrix source-map registers are storage only; the P4 matrix is not routed through the bus, so UART0's peripheral source never reaches mcause on this target. The smoke is polled.
+
 ### `esp32s3-zero`
 
 _Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the same committed tier-1 ELF, which non-ignored CLI/workspace tests boot under this chip's name and assert through `TIER1 ... PASS` (SYSTIMER runs the clock check; USB-Serial/JTAG is the console of the TMP102 e2e, so neither is a gap). The yaml's IRAM/ROM-thunk/XIP windows are memory-map declarations, not per-chip models, and its eFuse/RTC_CNTL stubs are the shared family stubs listed on the esp32s3 entry. `spi_mem_flash`/`extmem` stay unit-only here too: mask-ROM bring-up reads are not firmware exercise._
