@@ -1602,6 +1602,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-ci-xtensa-flash-boot
+          # Read-only on pull requests; see `core-pr-gate` above.
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       # --release is not a speed preference: each test retires up to 20 M
       # instructions, which a debug build does not finish inside the timeout.

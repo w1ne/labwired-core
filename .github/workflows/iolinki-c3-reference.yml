@@ -27,16 +27,29 @@ jobs:
           python-version: '3.12'
       - name: Install pinned PlatformIO Core
         run: python -m pip install platformio==6.1.19
-      - uses: actions/cache@v4
+      # Restore everywhere, save only off pull requests (step below). This
+      # toolchain cache is ~1.5 GB; `actions/cache@v4` saved a PR-ref copy on
+      # every PR, readable only by that PR, which evicted main's entries out of
+      # the 10 GB budget (see `core-pr-gate` in core-ci.yml).
+      - id: pio-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-iolinki-pio-6.1.19-espressif32-6.10.0-idf-5.4.0
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Build actual native ESP-IDF customer firmware
         run: |
           platformio run -d .iolinki/examples/esp32_l6362a -e esp32c3
           sha256sum .iolinki/examples/esp32_l6362a/.pio/build/esp32c3/firmware.elf
+      - name: Save PlatformIO toolchain cache (main only)
+        if: github.event_name != 'pull_request' && steps.pio-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.platformio
+          key: ${{ steps.pio-cache.outputs.cache-primary-key }}
       - name: Execute genuine ROM boot and actual GPIO ISR in both modes
         env:
           IOLINKI_C3_ELF: ${{ github.workspace }}/.iolinki/examples/esp32_l6362a/.pio/build/esp32c3/firmware.elf
