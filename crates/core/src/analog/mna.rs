@@ -101,6 +101,10 @@ pub struct Solver {
     /// about. Carried across steps: the previous step's answer is the best
     /// first guess there is.
     diode_vj: Vec<f64>,
+    /// Depletion charge and current history for each diode, oriented anode to
+    /// cathode. Charge is sufficient for BE; trap also uses the current.
+    diode_q: Vec<f64>,
+    diode_i: Vec<f64>,
     /// Each BJT's base-emitter voltage in device coordinates.
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
@@ -227,6 +231,8 @@ impl Solver {
             // circuit that has not been powered: the operating-point Newton
             // walks up from there.
             diode_vj: vec![0.0; diodes],
+            diode_q: vec![0.0; diodes],
+            diode_i: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
             mos_vgs: vec![0.0; mosfets],
@@ -536,6 +542,21 @@ impl Solver {
                 self.branch_i[self.circuit.voltage_sources.len() + index] = ic;
             }
         }
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            if diode.model.cjo > 0.0 {
+                self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
+                self.diode_q[index] = device::diode_depletion_charge(
+                    self.diode_vj[index],
+                    diode.model.cjo,
+                    diode.model.vj,
+                    diode.model.m,
+                    diode.model.fc,
+                )
+                .0;
+                self.diode_i[index] = 0.0;
+            }
+        }
     }
 
     /// Integrate one internal step of `h` seconds.
@@ -683,6 +704,34 @@ impl Solver {
             self.cap_v[index] = v_new;
             self.cap_i[index] = i_new;
         }
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            if diode.model.cjo == 0.0 {
+                continue;
+            }
+            let v_new = node_diff(
+                &self.solution[..self.nodes],
+                diode.junction_anode,
+                diode.cathode,
+            );
+            let (q_new, _) = device::diode_depletion_charge(
+                v_new,
+                diode.model.cjo,
+                diode.model.vj,
+                diode.model.m,
+                diode.model.fc,
+            );
+            let i_new = match rule {
+                Integration::BackwardEuler => (q_new - self.diode_q[index]) / h,
+                Integration::Trapezoidal => {
+                    2.0 * (q_new - self.diode_q[index]) / h - self.diode_i[index]
+                }
+            };
+            self.settled &= self.diode_q[index].to_bits() == q_new.to_bits()
+                && self.diode_i[index].to_bits() == i_new.to_bits();
+            self.diode_q[index] = q_new;
+            self.diode_i[index] = i_new;
+        }
         for index in 0..self.circuit.inductors.len() {
             let inductor = &self.circuit.inductors[index];
             let branch = self.nodes + self.circuit.voltage_sources.len() + index;
@@ -822,7 +871,7 @@ impl Solver {
             }
         }
         self.stamp_dependent_sources();
-        self.stamp_devices();
+        self.stamp_devices(stamp);
         if self.node_shunt != 0.0 {
             for node in 0..self.nodes {
                 self.matrix[node * dim + node] += self.node_shunt;
@@ -1301,7 +1350,7 @@ impl Solver {
     /// Nothing here runs for a circuit with no such device: all four vectors
     /// are empty, so a linear netlist takes the same floating-point operations
     /// in the same order it took before this existed.
-    fn stamp_devices(&mut self) {
+    fn stamp_devices(&mut self, stamp: Stamp) {
         let dim = self.dim();
         let matrix = &mut self.matrix;
         let rhs = &mut self.rhs;
@@ -1330,6 +1379,44 @@ impl Solver {
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
+
+            if diode.model.cjo > 0.0 {
+                if let Stamp::Transient(h, rule) = stamp {
+                    let (charge, capacitance) = device::diode_depletion_charge(
+                        vj,
+                        diode.model.cjo,
+                        diode.model.vj,
+                        diode.model.m,
+                        diode.model.fc,
+                    );
+                    let (geq, current) = match rule {
+                        Integration::BackwardEuler => {
+                            (capacitance / h, (charge - self.diode_q[index]) / h)
+                        }
+                        Integration::Trapezoidal => (
+                            2.0 * capacitance / h,
+                            2.0 * (charge - self.diode_q[index]) / h - self.diode_i[index],
+                        ),
+                    };
+                    let charge_control = [(geq, diode.junction_anode, diode.cathode, vj)];
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.junction_anode,
+                        current,
+                        &charge_control,
+                    );
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.cathode,
+                        -current,
+                        &negate(&charge_control),
+                    );
+                }
+            }
         }
 
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {

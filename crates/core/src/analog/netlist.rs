@@ -6,9 +6,10 @@
 //!
 //! The subset is deliberately small, because everything in it has to stay
 //! deterministic in the browser with no dependencies. Anything outside it
-//! (subcircuits, model libraries, AC/DC sweeps, device capacitances) is not
-//! approximated and not silently dropped: it is a hard error that names the
-//! line and points at the ngspice adapter, which does support it.
+//! (subcircuits, model libraries, AC/DC sweeps, unsupported device
+//! capacitances) is not approximated and not silently dropped: it is a hard
+//! error that names the line and points at the ngspice adapter, which does
+//! support it.
 //!
 //! ## Elements
 //!
@@ -55,8 +56,9 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (every capacitance, every temperature coefficient, `NKF`, terminal
-//! resistances, …) are **accepted and ignored** rather than rejected. BJT
+//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, every
+//! temperature coefficient, `NKF`, terminal resistances, …) are **accepted and
+//! ignored** rather than rejected. BJT
 //! `IKF`/`IKR` high-injection rolloff and `ISE`/`NE`/`ISC`/`NC` base
 //! recombination are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
 //! modelled; MOSFET `IS` is used for the two bulk junction currents. See
@@ -81,7 +83,9 @@
 //! at `BV`, default 1 mA) and `NBV` (breakdown emission coefficient, default
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
-//! breakdown existed. `.model <name> OPAMP(...)` and `.model <name> COMP(...)`
+//! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
+//! transient steps; diode diffusion charge (`TT`) is not modelled. `.model
+//! <name> OPAMP(...)` and `.model <name> COMP(...)`
 //! are this engine's own card types, not ngspice's.
 //!
 //! ## Directives and comments
@@ -488,6 +492,16 @@ pub struct DiodeModel {
     /// Breakdown emission coefficient `NBV`. `None` means "same as `N`",
     /// which is ngspice's default.
     pub nbv: Option<f64>,
+    /// Zero-bias junction capacitance `CJO`, farads. Zero disables depletion
+    /// charge, matching ngspice's default.
+    pub cjo: f64,
+    /// Junction potential `VJ`, volts, default 1 V.
+    pub vj: f64,
+    /// Junction grading coefficient `M`, default 0.5.
+    pub m: f64,
+    /// Forward-bias depletion-capacitance transition coefficient `FC`, default
+    /// 0.5.
+    pub fc: f64,
 }
 
 impl Default for DiodeModel {
@@ -499,6 +513,10 @@ impl Default for DiodeModel {
             bv: None,
             ibv: 1e-3,
             nbv: None,
+            cjo: 0.0,
+            vj: 1.0,
+            m: 0.5,
+            fc: 0.5,
         }
     }
 }
@@ -772,6 +790,10 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     bv: None,
     ibv: 1e-3,
     nbv: None,
+    cjo: 0.0,
+    vj: 1.0,
+    m: 0.5,
+    fc: 0.5,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1012,6 +1034,10 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             bv: Some(4.8),
             ibv: 49e-3,
             nbv: None,
+            cjo: 0.0,
+            vj: 1.0,
+            m: 0.5,
+            fc: 0.5,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1024,6 +1050,10 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             bv: Some(6.7),
             ibv: 10e-3,
             nbv: None,
+            cjo: 0.0,
+            vj: 1.0,
+            m: 0.5,
+            fc: 0.5,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -2272,10 +2302,23 @@ fn bind_models(
                 let ModelCard::Diode(model) = card else {
                     return Err(wrong_kind("D"));
                 };
-                if model.is <= 0.0 || model.n <= 0.0 || model.rs < 0.0 {
-                    return Err(
-                        ctx.parse_err("a diode model needs IS > 0, N > 0 and RS >= 0".to_string())
-                    );
+                if model.is <= 0.0
+                    || model.n <= 0.0
+                    || model.rs < 0.0
+                    || !model.cjo.is_finite()
+                    || model.cjo < 0.0
+                    || !model.vj.is_finite()
+                    || model.vj <= 0.0
+                    || !model.m.is_finite()
+                    || model.m < 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(ctx.parse_err(
+                        "a diode model needs IS > 0, N > 0, RS >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                            .to_string(),
+                    ));
                 }
                 let breakdown = match model.bv {
                     None => None,
@@ -2578,6 +2621,10 @@ fn parse_model(
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
             (ModelCard::Diode(model), "NBV") => model.nbv = Some(value),
+            (ModelCard::Diode(model), "CJO") => model.cjo = value,
+            (ModelCard::Diode(model), "VJ") => model.vj = value,
+            (ModelCard::Diode(model), "M") => model.m = value,
+            (ModelCard::Diode(model), "FC") => model.fc = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -2717,6 +2764,10 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     bv: None,
     ibv: 1e-3,
     nbv: None,
+    cjo: 0.0,
+    vj: 1.0,
+    m: 0.5,
+    fc: 0.5,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V

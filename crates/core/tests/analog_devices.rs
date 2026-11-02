@@ -22,11 +22,10 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
-//! discovered: device capacitances. No junction or diffusion charge on the
-//! diode, no `Cje`/`Cjc` on the BJT, no `Cgs`/`Cgd` on the JFET, and no overlap
-//! or channel charge on the MOSFET. A circuit whose behaviour comes from
-//! stored device charge belongs to `adapter: external_process`, not to this
-//! engine.
+//! discovered: diode diffusion charge (`TT`), BJT `Cje`/`Cjc`, JFET `Cgs`/`Cgd`,
+//! and MOSFET overlap or channel charge. Diode depletion charge through
+//! `CJO`/`VJ`/`M`/`FC` is exercised below. Circuits depending on unsupported stored
+//! charge still belong to `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
 // verification command `cargo test -p labwired-core analog` runs all of them.
@@ -137,10 +136,79 @@ mod analog {
         assert_eq!(plain.circuit().node("D1#internal"), None);
     }
 
-    /// A reverse-biased diode conducts its saturation current plus `GMIN*V`
-    /// and nothing else - no junction charge, so no reverse recovery and no
-    /// displacement current. This is the missing-capacitance limitation,
-    /// asserted rather than left implicit.
+    #[test]
+    fn diode_depletion_charge_and_capacitance_match_the_spice_integral() {
+        let cjo: f64 = 4e-12;
+        let vj = 0.75;
+        let m = 0.333;
+        let fc = 0.4;
+        let voltage = 0.25;
+        let x = 1.0 - voltage / vj;
+        let expected_q = cjo * vj / (1.0 - m) * (1.0 - x.powf(1.0 - m));
+        let expected_c = cjo * x.powf(-m);
+        let (charge, capacitance) = device::diode_depletion_charge(voltage, cjo, vj, m, fc);
+        assert!((charge - expected_q).abs() < 1e-26);
+        assert!((capacitance - expected_c).abs() < 1e-25);
+
+        let transition = fc * vj;
+        let (q_before, c_before) =
+            device::diode_depletion_charge(transition - 1e-10, cjo, vj, m, fc);
+        let (q_after, c_after) = device::diode_depletion_charge(transition + 1e-10, cjo, vj, m, fc);
+        assert!(
+            (q_before - q_after).abs() < 3e-21,
+            "charge is continuous at FC: {q_before} vs {q_after}"
+        );
+        assert!(
+            (c_before - c_after).abs() < 1e-20,
+            "capacitance is continuous at FC: {c_before} vs {c_after}"
+        );
+
+        let (q_m1, c_m1) = device::diode_depletion_charge(voltage, cjo, vj, 1.0, fc);
+        assert!((q_m1 + cjo * vj * x.ln()).abs() < 1e-26);
+        assert!((c_m1 - cjo / x).abs() < 1e-25);
+    }
+
+    #[test]
+    fn diode_cjo_integrates_in_backward_euler_and_trapezoidal_steps() {
+        let cjo = 10e-9;
+        let resistance = 1e3;
+        let h = 1e-6;
+        let ratio = resistance * cjo / h;
+        let netlist = format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS=1e-30 CJO={cjo} VJ=1 M=0)\n"
+        );
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let circuit = parse_netlist(&netlist).expect("diode capacitor circuit parses");
+            let mut solver = Solver::new(circuit, integration).expect("solver builds");
+            let out = solver.circuit().node("out").expect("out node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, 1.0);
+            solver.advance(h).expect("first transient step solves");
+            let v1 = solver.node_voltage(out);
+            let expected_v1 = 1.0 / (1.0 + ratio);
+            assert!(
+                (v1 - expected_v1).abs() < 1e-8,
+                "first BE restart step: {v1}"
+            );
+
+            solver.advance(h).expect("second transient step solves");
+            let expected_v2 = match integration {
+                Integration::BackwardEuler => (1.0 + ratio * expected_v1) / (1.0 + ratio),
+                Integration::Trapezoidal => (1.0 + 3.0 * ratio * expected_v1) / (1.0 + 2.0 * ratio),
+            };
+            let v2 = solver.node_voltage(out);
+            assert!(
+                (v2 - expected_v2).abs() < 1e-8,
+                "{integration:?} second step: expected {expected_v2} V, got {v2} V"
+            );
+        }
+    }
+
+    /// A reverse-biased diode with default `CJO=0` conducts its saturation
+    /// current plus `GMIN*V` and has no diffusion charge. This leaves reverse
+    /// recovery outside the in-core model.
     #[test]
     fn a_reverse_biased_diode_carries_only_leakage_with_no_stored_charge() {
         // The built-in `D` card is 1N4148-class.

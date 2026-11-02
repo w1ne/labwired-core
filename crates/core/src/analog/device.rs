@@ -15,15 +15,15 @@
 //!
 //! ## What is modelled, and what is not
 //!
-//! DC/large-signal behaviour only. There are **no device capacitances** in this
-//! first version — no diode junction or diffusion charge, no BJT `Cje`/`Cjc`,
-//! no JFET `Cgs`/`Cgd`, no MOSFET overlap or channel charge — and no temperature
-//! model: every parameter is taken at [`TEMPERATURE_K`] as written. A `.model` line may
-//! carry those parameters (real vendor models do) and they are accepted and
-//! ignored; see [`super::netlist`]. The consequence is concrete: a circuit
-//! whose behaviour comes from stored device charge — reverse-recovery, a
-//! Miller-limited edge, a charge-pump — is not this engine's to solve, and
-//! `adapter: external_process` with ngspice is.
+//! DC/large-signal behaviour for the nonlinear current equations. Diode
+//! depletion charge (`CJO`, `VJ`, `M`, `FC`) is also integrated in transient runs;
+//! diode diffusion charge, BJT `Cje`/`Cjc`, JFET `Cgs`/`Cgd`, and MOSFET
+//! overlap or channel charge are not. There is no temperature model: every
+//! parameter is taken at [`TEMPERATURE_K`] as written. A `.model` line may
+//! carry unmodelled parameters (real vendor models do) and they are accepted
+//! and ignored; see [`super::netlist`]. Reverse-recovery and stored charge in
+//! the unsupported junctions still require `adapter: external_process` with
+//! ngspice.
 //!
 //! ## Determinism
 //!
@@ -110,6 +110,45 @@ pub fn diode_op(v_junction: f64, is: f64, n: f64) -> DiodeOp {
     DiodeOp {
         id: is * (exponential - 1.0) + GMIN * v_junction,
         gd: is * exponential / vte + GMIN,
+    }
+}
+
+/// Diode depletion charge and differential capacitance for SPICE's `CJO`,
+/// `VJ`, grading coefficient `M`, and forward coefficient `FC` model
+/// parameters.
+///
+/// Below the forward transition (`FC·VJ`), this integrates
+/// `C(v) = CJO·(1 − v/VJ)⁻ᴹ`. Above it, the capacitance is continued linearly
+/// from its value at the transition so both charge and capacitance remain
+/// continuous. `Q(v)` is oriented from anode to cathode, just like diode
+/// current. `M = 1` uses the logarithmic charge limit.
+pub fn diode_depletion_charge(v_junction: f64, cjo: f64, vj: f64, m: f64, fc: f64) -> (f64, f64) {
+    if cjo == 0.0 {
+        return (0.0, 0.0);
+    }
+
+    let vfc = fc * vj;
+    let xfc = 1.0 - fc;
+    let pow = |base: f64, exponent: f64| libm::exp(exponent * ln(base));
+    if v_junction < vfc {
+        let x = 1.0 - v_junction / vj;
+        let charge = if m == 1.0 {
+            -cjo * vj * libm::log1p(-v_junction / vj)
+        } else {
+            -cjo * vj / (1.0 - m) * libm::expm1((1.0 - m) * ln(x))
+        };
+        let capacitance = cjo * pow(x, -m);
+        (charge, capacitance)
+    } else {
+        let dv = v_junction - vfc;
+        let cfc = cjo * pow(xfc, -m);
+        let slope = m * cjo * pow(xfc, -1.0 - m) / vj;
+        let qfc = if m == 1.0 {
+            -cjo * vj * libm::log1p(-fc)
+        } else {
+            -cjo * vj / (1.0 - m) * libm::expm1((1.0 - m) * ln(xfc))
+        };
+        (qfc + cfc * dv + 0.5 * slope * dv * dv, cfc + slope * dv)
     }
 }
 
