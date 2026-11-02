@@ -581,6 +581,7 @@ jobs:
             scripts/perf/test_workload_perf.py \
             scripts/ci/test_board_matrix.py \
             scripts/ci/test_chip_coverage.py \
+            scripts/ci/test_part_coverage.py \
             scripts/ci/test_matrix_external_cache.py \
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
@@ -621,6 +622,18 @@ jobs:
       # that adds it. Pure Python, seconds.
       - name: Chip coverage — every chip executed by a CLI gate, or a written reason
         run: python3 scripts/ci/chip_coverage.py --report
+
+      # The same question for PARTS. Every configs/devices/*.yaml is offered in
+      # the Playground catalog, and nothing asked whether any of them is ever
+      # attached to a board: 5 of 122 were attached by no lab and no test when
+      # this landed. Coverage is derived — an example lab whose manifest lists
+      # the part, or an integration test under crates/*/tests/ naming its
+      # `type:` — and configs/ci/part-coverage.yaml holds only what that cannot
+      # see, each with a reason. A new descriptor nothing exercises reddens this
+      # on the PR that adds it, and `min_lab_exercised:` stops a lab deletion
+      # from quietly dropping a part out of the Playground. Pure Python, seconds.
+      - name: Part coverage — every onboarded part exercised, or a written reason
+        run: python3 scripts/ci/part_coverage.py --report
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
