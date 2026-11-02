@@ -183,6 +183,26 @@ mod analog {
             "hot={hot}, 25 °C={at_25_c}, cold={cold}"
         );
 
+        // Independently calculate the Beta resistance and divider voltage.
+        // The adapter must route each temperature into the MNA resistor stamp,
+        // not just move the output in the expected direction.
+        let expected_sense = |temperature_celsius: f64| {
+            let ntc_ohms =
+                10_000.0 * (3950.0 * (1.0 / (temperature_celsius + 273.15) - 1.0 / 298.15)).exp();
+            3.3 * 10_000.0 / (ntc_ohms + 10_000.0)
+        };
+        for (label, actual, temperature_celsius) in [
+            ("cold", cold, -10.0),
+            ("nominal", at_25_c, 25.0),
+            ("hot", hot, 80.0),
+        ] {
+            let expected = expected_sense(temperature_celsius);
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "{label} routed NTC voltage should be {expected} V at {temperature_celsius} °C, got {actual} V"
+            );
+        }
+
         let error = adapter
             .step(CosimStep {
                 time_ns: 400_000,
