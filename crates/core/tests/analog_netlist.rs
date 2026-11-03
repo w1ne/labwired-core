@@ -471,6 +471,52 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn jfet_terminal_resistances_create_internal_nodes_and_validate() {
+        let circuit = parse_netlist("J1 d g s JMOD\n.model JMOD NJF(RD=12 RS=3)\n")
+            .expect("JFET terminal resistances parse");
+        let jfet = &circuit.jfets[0];
+        assert_eq!(jfet.model.rd, 12.0);
+        assert_eq!(jfet.model.rs, 3.0);
+        assert_eq!(circuit.node_count(), 5);
+        assert_eq!(
+            jfet.junction_d,
+            circuit.node("J1#drain").expect("drain junction exists")
+        );
+        assert_eq!(
+            jfet.junction_s,
+            circuit.node("J1#source").expect("source junction exists")
+        );
+        assert_ne!(jfet.junction_d, jfet.d);
+        assert_ne!(jfet.junction_s, jfet.s);
+
+        let defaults = parse_netlist("J1 d g s JMOD\n.model JMOD PJF\n")
+            .expect("omitted JFET terminal resistances default to zero");
+        let jfet = &defaults.jfets[0];
+        assert_eq!(jfet.model.rd, 0.0);
+        assert_eq!(jfet.model.rs, 0.0);
+        assert_eq!(defaults.node_count(), 3);
+        assert_eq!(jfet.junction_d, jfet.d);
+        assert_eq!(jfet.junction_s, jfet.s);
+
+        for parameter in ["RD=-1", "RS=-1"] {
+            let error = parse_netlist(&format!("J1 d g s JMOD\n.model JMOD NJF({parameter})\n"))
+                .expect_err("negative JFET terminal resistance is invalid");
+            assert!(
+                error.to_string().contains("RD/RS >= 0 and finite"),
+                "{error}"
+            );
+        }
+        for parameter in ["RD=inf", "RS=nan"] {
+            parse_netlist(&format!("J1 d g s JMOD\n.model JMOD NJF({parameter})\n"))
+                .expect_err("nonfinite spellings are not SPICE numeric values");
+        }
+
+        let collision = parse_netlist("J1 d g s JMOD\nR1 J1#drain 0 1k\n.model JMOD NJF(RD=10)\n")
+            .expect_err("a user node cannot alias an internal JFET terminal");
+        assert!(collision.to_string().contains("J1#drain"), "{collision}");
+    }
+
+    #[test]
     fn nonpositive_bjt_high_injection_knees_are_rejected() {
         for parameter in ["IKF=0", "IKR=-1m"] {
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))

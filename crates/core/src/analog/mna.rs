@@ -713,8 +713,8 @@ impl Solver {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
             let model = jfet.model;
-            let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.s);
-            let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.d);
+            let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.junction_s);
+            let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.junction_d);
             self.jfet_q[index] = [
                 device::junction_depletion_charge(vgs, model.cgs, model.pb, 0.5, model.fc).0,
                 device::junction_depletion_charge(vgd, model.cgd, model.pb, 0.5, model.fc).0,
@@ -925,8 +925,8 @@ impl Solver {
             let model = jfet.model;
             let nodes = &self.solution[..self.nodes];
             let voltages = [
-                sign * node_diff(nodes, jfet.g, jfet.s),
-                sign * node_diff(nodes, jfet.g, jfet.d),
+                sign * node_diff(nodes, jfet.g, jfet.junction_s),
+                sign * node_diff(nodes, jfet.g, jfet.junction_d),
             ];
             let capacitances = [model.cgs, model.cgd];
             for junction in 0..2 {
@@ -1109,6 +1109,26 @@ impl Solver {
                     bjt.e,
                     bjt.junction_e,
                     1.0 / bjt.model.re,
+                );
+            }
+        }
+        for jfet in &self.circuit.jfets {
+            if jfet.model.rd > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    jfet.d,
+                    jfet.junction_d,
+                    1.0 / jfet.model.rd,
+                );
+            }
+            if jfet.model.rs > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    jfet.junction_s,
+                    jfet.s,
+                    1.0 / jfet.model.rs,
                 );
             }
         }
@@ -1591,9 +1611,9 @@ impl Solver {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
-            let raw_gs = sign * node_diff(nodes, jfet.g, jfet.s);
-            let raw_gd = sign * node_diff(nodes, jfet.g, jfet.d);
-            let raw_ds = sign * node_diff(nodes, jfet.d, jfet.s);
+            let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);
+            let raw_gd = sign * node_diff(nodes, jfet.g, jfet.junction_d);
+            let raw_ds = sign * node_diff(nodes, jfet.junction_d, jfet.junction_s);
             let critical = device::pn_critical_voltage(jfet.model.is, 1.0);
             let gs = device::pn_limit(
                 raw_gs,
@@ -1964,9 +1984,9 @@ impl Solver {
             let sign = jfet.model.polarity.sign();
             let reversed = self.jfet_vds[index] < 0.0;
             let (drain, source, vgs) = if reversed {
-                (jfet.s, jfet.d, self.jfet_vgd[index])
+                (jfet.junction_s, jfet.junction_d, self.jfet_vgd[index])
             } else {
-                (jfet.d, jfet.s, self.jfet_vgs[index])
+                (jfet.junction_d, jfet.junction_s, self.jfet_vgs[index])
             };
             let vds = self.jfet_vds[index].abs();
             let op = device::jfet_op(
@@ -1980,7 +2000,7 @@ impl Solver {
             // The channel's GMIN keeps a cut-off device connected. The gate
             // junctions below each carry their own SPICE GMIN as part of the
             // diode equation.
-            conductance(matrix, dim, jfet.d, jfet.s, device::GMIN);
+            conductance(matrix, dim, jfet.junction_d, jfet.junction_s, device::GMIN);
 
             let channel_terms = [
                 (op.gm, jfet.g, source, sign * vgs),
@@ -1997,8 +2017,8 @@ impl Solver {
             );
 
             for (junction, (cathode, voltage, c0)) in [
-                (jfet.s, self.jfet_vgs[index], jfet.model.cgs),
-                (jfet.d, self.jfet_vgd[index], jfet.model.cgd),
+                (jfet.junction_s, self.jfet_vgs[index], jfet.model.cgs),
+                (jfet.junction_d, self.jfet_vgd[index], jfet.model.cgd),
             ]
             .into_iter()
             .enumerate()
