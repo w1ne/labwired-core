@@ -57,8 +57,9 @@
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and diffusion
-//! charge `TT`, BJT terminal resistances `RB`/`RC`/`RE`, JFET gate-junction
-//! depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
+//! charge `TT`, BJT terminal resistances `RB`/`RC`/`RE`, JFET terminal
+//! resistances `RD`/`RS` and gate-junction depletion capacitance
+//! `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET level-1 channel capacitance from `TOX` and overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
 //! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
@@ -67,8 +68,10 @@
 //! `NKF`, most terminal resistances, …) are **accepted and ignored** rather than
 //! rejected. BJT `IKF`/`IKR` high-injection rolloff and
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
-//! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. MOSFET
-//! level-1 `GAMMA`/`PHI` body effect is also modelled; MOSFET `IS` is used for
+//! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. JFET
+//! terminal resistances `RD`/`RS` create series resistors to its intrinsic
+//! drain/source nodes. MOSFET level-1 `GAMMA`/`PHI` body effect is also
+//! modelled; MOSFET `IS` is used for
 //! the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
@@ -1001,6 +1004,12 @@ pub struct JfetModel {
     pub beta: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
+    /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
+    /// drain node, matching ngspice's default.
+    pub rd: f64,
+    /// Ohmic source terminal resistance `RS`, ohms. Zero disables the internal
+    /// source node, matching ngspice's default.
+    pub rs: f64,
     /// Gate-junction saturation current `IS`, amps.
     pub is: f64,
     /// Zero-bias gate-source depletion capacitance `CGS`, farads.
@@ -1020,6 +1029,8 @@ impl JfetModel {
             vto: if polarity == Polarity::N { -2.0 } else { 2.0 },
             beta: 1e-4,
             lambda: 0.0,
+            rd: 0.0,
+            rs: 0.0,
             is: 1e-14,
             cgs: 0.0,
             cgd: 0.0,
@@ -1478,6 +1489,10 @@ pub struct Jfet {
     pub g: NodeRef,
     /// Source.
     pub s: NodeRef,
+    /// Intrinsic drain after `RD`, or `d` when `RD` is zero.
+    pub junction_d: NodeRef,
+    /// Intrinsic source before `RS`, or `s` when `RS` is zero.
+    pub junction_s: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
     /// Resolved model parameters.
@@ -2637,6 +2652,13 @@ fn bind_models(
                 if model.beta <= 0.0 || model.is <= 0.0 {
                     return Err(ctx.parse_err("a JFET model needs BETA > 0 and IS > 0"));
                 }
+                if !model.rd.is_finite()
+                    || model.rd < 0.0
+                    || !model.rs.is_finite()
+                    || model.rs < 0.0
+                {
+                    return Err(ctx.parse_err("a JFET model needs RD/RS >= 0 and finite"));
+                }
                 if !model.cgs.is_finite()
                     || model.cgs < 0.0
                     || !model.cgd.is_finite()
@@ -2651,11 +2673,31 @@ fn bind_models(
                         ctx.parse_err("a JFET model needs CGS/CGD >= 0, PB > 0 and 0 <= FC < 1")
                     );
                 }
+                let junction_node = |circuit: &mut Circuit,
+                                     terminal: NodeRef,
+                                     resistance: f64,
+                                     suffix: &str|
+                 -> Result<NodeRef, AnalogError> {
+                    if resistance == 0.0 {
+                        return Ok(terminal);
+                    }
+                    let internal_name = format!("{}#{suffix}", device.name);
+                    if circuit.node(&internal_name).is_some() {
+                        return Err(ctx.parse_err(format!(
+                            "internal JFET node `{internal_name}` is already used by the netlist"
+                        )));
+                    }
+                    Ok(circuit.intern(&internal_name))
+                };
+                let junction_d = junction_node(circuit, device.nodes[0], model.rd, "drain")?;
+                let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
                 circuit.jfets.push(Jfet {
                     name: device.name,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
+                    junction_d,
+                    junction_s,
                     model_name: device.model_name,
                     model,
                 });
@@ -2953,6 +2995,8 @@ fn parse_model(
             (ModelCard::Jfet(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Jfet(model), "BETA") => model.beta = value,
             (ModelCard::Jfet(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Jfet(model), "RD") => model.rd = value,
+            (ModelCard::Jfet(model), "RS") => model.rs = value,
             (ModelCard::Jfet(model), "IS") => model.is = value,
             (ModelCard::Jfet(model), "CGS") => model.cgs = value,
             (ModelCard::Jfet(model), "CGD") => model.cgd = value,
