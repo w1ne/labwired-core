@@ -1113,22 +1113,22 @@ impl Solver {
             }
         }
         for mosfet in &self.circuit.mosfets {
-            if mosfet.model.rd > 0.0 {
+            if mosfet.drain_resistance_ohms > 0.0 {
                 conductance(
                     &mut self.matrix,
                     dim,
                     mosfet.d,
                     mosfet.junction_d,
-                    1.0 / mosfet.model.rd,
+                    1.0 / mosfet.drain_resistance_ohms,
                 );
             }
-            if mosfet.model.rs > 0.0 {
+            if mosfet.source_resistance_ohms > 0.0 {
                 conductance(
                     &mut self.matrix,
                     dim,
                     mosfet.junction_s,
                     mosfet.s,
-                    1.0 / mosfet.model.rs,
+                    1.0 / mosfet.source_resistance_ohms,
                 );
             }
         }

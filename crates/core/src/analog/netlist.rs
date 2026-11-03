@@ -24,7 +24,7 @@
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
-//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
+//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
 //! | JFET | `J<name> nd ng ns <model>` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
@@ -60,19 +60,20 @@
 //! charge `TT`, BJT terminal resistances `RB`/`RC`/`RE`, JFET terminal
 //! resistances `RD`/`RS` and gate-junction depletion capacitance
 //! `CGS`/`CGD`/`PB`/`FC`,
-//! MOSFET terminal resistances `RD`/`RS`, level-1 channel capacitance from
-//! `TOX` and overlap capacitance `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
+//! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
+//! level-1 channel capacitance from `TOX` and overlap capacitance
+//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
 //! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
 //! constant forward/reverse transit times `TF`/`TR`, every temperature
 //! coefficient, bias-dependent transit-time parameters (`XTF`/`VTF`/`ITF`),
-//! `NKF`, most terminal resistances, …) are **accepted and ignored** rather than
-//! rejected. BJT `IKF`/`IKR` high-injection rolloff and
+//! `NKF`, and most terminal resistances, …) are **accepted and ignored rather
+//! than rejected**. BJT `IKF`/`IKR` high-injection rolloff and
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
 //! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. JFET
 //! terminal resistances `RD`/`RS` create series resistors to its intrinsic
-//! drain/source nodes. MOSFET `RD`/`RS` do the same; level-1 `GAMMA`/`PHI` body effect is also
-//! modelled; MOSFET `IS` is used for
-//! the two bulk junction currents. `CGSO` and
+//! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
+//! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
+//! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
 //! as linear overlap charge. `TOX`, when present, enables the level-1 Meyer
@@ -976,6 +977,10 @@ pub struct MosModel {
     /// Ohmic source terminal resistance `RS`, ohms. Zero disables the internal
     /// source node, matching ngspice's default.
     pub rs: f64,
+    /// Drain/source diffusion sheet resistance `RSH`, ohms per square. When
+    /// the corresponding direct `RD` or `RS` is zero, the instance's `NRD` or
+    /// `NRS` multiplies this value.
+    pub rsh: f64,
     /// Bulk threshold parameter `GAMMA`, sqrt(V).
     pub gamma: f64,
     /// Surface potential `PHI`, volts.
@@ -1055,6 +1060,7 @@ impl MosModel {
             lambda: 0.0,
             rd: 0.0,
             rs: 0.0,
+            rsh: 0.0,
             gamma: 0.0,
             phi: 0.6,
             is: 1e-14,
@@ -1449,7 +1455,8 @@ pub struct Bjt {
     pub model: BjtModel,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` — a
+/// level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
@@ -1460,9 +1467,11 @@ pub struct Mosfet {
     pub g: NodeRef,
     /// Source.
     pub s: NodeRef,
-    /// Intrinsic drain after `RD`, or `d` when `RD` is zero.
+    /// Intrinsic drain after the effective drain resistance, or `d` when it
+    /// is zero.
     pub junction_d: NodeRef,
-    /// Intrinsic source before `RS`, or `s` when `RS` is zero.
+    /// Intrinsic source before the effective source resistance, or `s` when
+    /// it is zero.
     pub junction_s: NodeRef,
     /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
     /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
@@ -1477,6 +1486,10 @@ pub struct Mosfet {
     pub w: f64,
     /// Instance channel length `L`, metres.
     pub l: f64,
+    /// Effective drain terminal resistance, from `RD` or `RSH·NRD`, ohms.
+    pub drain_resistance_ohms: f64,
+    /// Effective source terminal resistance, from `RS` or `RSH·NRS`, ohms.
+    pub source_resistance_ohms: f64,
 }
 
 impl Mosfet {
@@ -1847,6 +1860,8 @@ struct PendingDevice {
     model_name: String,
     width: Option<f64>,
     length: Option<f64>,
+    nrd: Option<f64>,
+    nrs: Option<f64>,
 }
 
 /// Parse a netlist into a [`Circuit`].
@@ -2065,7 +2080,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let (terminals, shape) = match letter {
                     'D' => (2, "D<name> n+ n- <model>"),
                     'Q' => (3, "Q<name> nc nb ne <model>"),
-                    'M' => (4, "M<name> nd ng ns nb <model> [w=<m>] [l=<m>]"),
+                    'M' => (
+                        4,
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]",
+                    ),
                     _ => (3, "J<name> nd ng ns <model>"),
                 };
                 let rest = &tokens[1..];
@@ -2074,6 +2092,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 }
                 let mut width = None;
                 let mut length = None;
+                let mut nrd = None;
+                let mut nrs = None;
                 for token in &rest[terminals + 1..] {
                     let (key, value) = token
                         .split_once('=')
@@ -2081,6 +2101,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     match key.to_ascii_lowercase().as_str() {
                         "w" if letter == 'M' => width = Some(ctx.value(value, "w")?),
                         "l" if letter == 'M' => length = Some(ctx.value(value, "l")?),
+                        "nrd" if letter == 'M' => nrd = Some(ctx.value(value, "nrd")?),
+                        "nrs" if letter == 'M' => nrs = Some(ctx.value(value, "nrs")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -2090,6 +2112,11 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 }
                 if matches!(width, Some(w) if w <= 0.0) || matches!(length, Some(l) if l <= 0.0) {
                     return Err(ctx.parse_err("w and l must be positive"));
+                }
+                if matches!(nrd, Some(squares) if !squares.is_finite() || squares < 0.0)
+                    || matches!(nrs, Some(squares) if !squares.is_finite() || squares < 0.0)
+                {
+                    return Err(ctx.parse_err("nrd and nrs must be >= 0 and finite"));
                 }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
@@ -2107,6 +2134,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     model_name: rest[terminals].to_string(),
                     width,
                     length,
+                    nrd,
+                    nrs,
                 });
             }
             'E' | 'G' => {
@@ -2206,6 +2235,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     model_name: model_name.to_string(),
                     width: None,
                     length: None,
+                    nrd: None,
+                    nrs: None,
                 });
             }
             'S' => {
@@ -2628,8 +2659,10 @@ fn bind_models(
                     || model.rd < 0.0
                     || !model.rs.is_finite()
                     || model.rs < 0.0
+                    || !model.rsh.is_finite()
+                    || model.rsh < 0.0
                 {
-                    return Err(ctx.parse_err("a MOSFET model needs RD/RS >= 0 and finite"));
+                    return Err(ctx.parse_err("a MOSFET model needs RD/RS/RSH >= 0 and finite"));
                 }
                 if !(model.cgso * w).is_finite()
                     || !(model.cgdo * w).is_finite()
@@ -2667,8 +2700,34 @@ fn bind_models(
                     }
                     Ok(circuit.intern(&internal_name))
                 };
-                let junction_d = junction_node(circuit, device.nodes[0], model.rd, "drain")?;
-                let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
+                // SPICE accepts the model's direct resistance or its sheet
+                // resistance times the instance square count. A nonzero
+                // direct value takes precedence for that terminal.
+                let nrd = device.nrd.unwrap_or(1.0);
+                let nrs = device.nrs.unwrap_or(1.0);
+                let drain_resistance_ohms = if model.rd > 0.0 {
+                    model.rd
+                } else {
+                    model.rsh * nrd
+                };
+                let source_resistance_ohms = if model.rs > 0.0 {
+                    model.rs
+                } else {
+                    model.rsh * nrs
+                };
+                if !drain_resistance_ohms.is_finite()
+                    || !source_resistance_ohms.is_finite()
+                    || (drain_resistance_ohms > 0.0 && !(1.0 / drain_resistance_ohms).is_finite())
+                    || (source_resistance_ohms > 0.0 && !(1.0 / source_resistance_ohms).is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective RD/RS from RSH and NRD/NRS must be finite",
+                    ));
+                }
+                let junction_d =
+                    junction_node(circuit, device.nodes[0], drain_resistance_ohms, "drain")?;
+                let junction_s =
+                    junction_node(circuit, device.nodes[2], source_resistance_ohms, "source")?;
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
                     d: device.nodes[0],
@@ -2682,6 +2741,8 @@ fn bind_models(
                     beta: model.kp * w / l,
                     w,
                     l,
+                    drain_resistance_ohms,
+                    source_resistance_ohms,
                 });
             }
             'J' => {
@@ -3014,6 +3075,7 @@ fn parse_model(
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
             (ModelCard::Mos(model), "RD") => model.rd = value,
             (ModelCard::Mos(model), "RS") => model.rs = value,
+            (ModelCard::Mos(model), "RSH") => model.rsh = value,
             (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
             (ModelCard::Mos(model), "PHI") => model.phi = value,
             (ModelCard::Mos(model), "IS") => model.is = value,
@@ -3333,6 +3395,7 @@ fn lower_comparator(
                 lambda: 0.0,
                 rd: 0.0,
                 rs: 0.0,
+                rsh: 0.0,
                 gamma: 0.0,
                 phi: 0.6,
                 is: 1e-14,
@@ -3356,6 +3419,8 @@ fn lower_comparator(
                 beta: kp,
                 w: 1.0,
                 l: 1.0,
+                drain_resistance_ohms: 0.0,
+                source_resistance_ohms: 0.0,
             });
         }
         ComparatorOutput::PushPull => {

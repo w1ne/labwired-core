@@ -378,7 +378,7 @@ the same circuit and the same routing as `system.yaml`.
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
 | Diode | `D<name> n+ n- <model>` |
 | BJT | `Q<name> nc nb ne <model>` |
-| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
+| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
 | JFET | `J<name> nd ng ns <model>` |
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
@@ -423,7 +423,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> TOX=<m> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> TOX=<m> W=<m> L=<m>)
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -440,9 +440,13 @@ BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
 gate capacitances using the Meyer model; without `TOX`, only explicit overlap
 capacitances are present. Other device capacitances and temperature coefficients,
 `NKF`, and terminal resistances outside the modeled BJT, JFET and MOSFET parameters
-below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE` and JFET
-and MOSFET terminal resistances `RD`/`RS` are modeled as series resistors. Level-1
-MOSFET `GAMMA` and `PHI` model body effect; their defaults are 0 and 0.6 V. MOSFET `LEVEL` other
+below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
+terminal resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` or
+`RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. A
+nonzero direct MOSFET `RD` or `RS` takes precedence for that terminal. `NRD`
+and `NRS` default to one square and may be set to zero to disable the matching
+sheet-resistance path. Level-1 MOSFET `GAMMA` and `PHI` model body effect; their
+defaults are 0 and 0.6 V. MOSFET `LEVEL` other
 than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are refused by name
 because they use different channel equations.
 
@@ -462,9 +466,10 @@ base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
 plus constant transit-time charge from `TF`/`TR` (all default to zero; shared
 `FC` defaults to 0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
 default to zero). Nonzero BJT terminal resistances add probeable internal
-collector, base, or emitter nodes. Nonzero JFET and MOSFET `RD`/`RS` add
-probeable `<element>#drain` and `<element>#source` nodes, respectively. Shichman–Hodges
-MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both default to zero),
+collector, base, or emitter nodes. Nonzero JFET and MOSFET terminal resistances
+add probeable `<element>#drain` and `<element>#source` nodes, respectively.
+Shichman–Hodges MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both
+default to zero) or `RSH` times instance `NRD`/`NRS` (RSH defaults to zero),
 `GAMMA`/`PHI` body effect, linear gate overlap charge from `CGSO`/`CGDO`/`CGBO`,
 and `TOX`-enabled
 intrinsic gate capacitances using ngspice's piecewise Meyer formulation; and
@@ -474,8 +479,7 @@ channel operation, MOSFET body effect, and the tested Meyer bias regions are
 covered by tests. Every parameter is taken at 300.00 K; there is no temperature
 model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not modeled:** the MOSFET sheet-resistance form using `RSH` and
-per-instance `NRD`/`NRS`; a charge-conserving MOSFET channel-charge model; BJT
+**What is not modeled:** a charge-conserving MOSFET channel-charge model; BJT
 bias-dependent transit-time adjustments (`XTF`/`VTF`/`ITF`); and JFET levels
 other than level 1 with `B=1`. The diode's `TT` term is a quasi-static transit-time
 charge model; more detailed non-quasi-static and soft-recovery effects are not
@@ -485,7 +489,8 @@ with `tools/cosim/labwired_ngspice.py`.
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
 as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,
 `<element>#collector`, and `<element>#emitter` nodes, respectively. Nonzero
-JFET and MOSFET `RD`/`RS` add `<element>#drain` and `<element>#source`. These
+JFET and MOSFET drain/source terminal resistances add `<element>#drain` and
+`<element>#source`. These
 nodes count against the 64-unknown ceiling and can be probed.
 
 ### Solver

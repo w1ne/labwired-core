@@ -652,7 +652,7 @@ C1 out 0 100n $ dollar comment
             let error = parse_netlist(&format!("M1 d g s 0 MMOD\n.model MMOD NMOS({parameter})\n"))
                 .expect_err("negative MOSFET terminal resistance is invalid");
             assert!(
-                error.to_string().contains("RD/RS >= 0 and finite"),
+                error.to_string().contains("RD/RS/RSH >= 0 and finite"),
                 "{error}"
             );
         }
@@ -665,6 +665,55 @@ C1 out 0 100n $ dollar comment
             parse_netlist("M1 d g s 0 MMOD\nR1 M1#drain 0 1k\n.model MMOD NMOS(RD=10)\n")
                 .expect_err("a user node cannot alias an internal MOSFET terminal");
         assert!(collision.to_string().contains("M1#drain"), "{collision}");
+    }
+
+    #[test]
+    fn mosfet_sheet_resistance_uses_instance_square_counts() {
+        let circuit = parse_netlist("M1 d g s 0 MMOD nrd=2 nrs=4\n.model MMOD NMOS(RSH=3)\n")
+            .expect("MOSFET sheet resistance and instance square counts parse");
+        let mosfet = &circuit.mosfets[0];
+        assert_eq!(mosfet.model.rsh, 3.0);
+        assert_eq!(mosfet.drain_resistance_ohms, 6.0);
+        assert_eq!(mosfet.source_resistance_ohms, 12.0);
+        assert_ne!(mosfet.junction_d, mosfet.d);
+        assert_ne!(mosfet.junction_s, mosfet.s);
+
+        let defaults = parse_netlist("M1 d g s 0 MMOD\n.model MMOD NMOS(RSH=3)\n")
+            .expect("omitted NRD/NRS default to one square");
+        assert_eq!(defaults.mosfets[0].drain_resistance_ohms, 3.0);
+        assert_eq!(defaults.mosfets[0].source_resistance_ohms, 3.0);
+
+        let direct_overrides_sheet =
+            parse_netlist("M1 d g s 0 MMOD nrd=2 nrs=4\n.model MMOD NMOS(RD=7 RS=8 RSH=3)\n")
+                .expect("direct terminal resistances take precedence");
+        assert_eq!(direct_overrides_sheet.mosfets[0].drain_resistance_ohms, 7.0);
+        assert_eq!(
+            direct_overrides_sheet.mosfets[0].source_resistance_ohms,
+            8.0
+        );
+
+        for parameter in ["RSH=-1", "RSH=inf", "RSH=nan", "RSH=1e999"] {
+            let error = parse_netlist(&format!("M1 d g s 0 MMOD\n.model MMOD NMOS({parameter})\n"))
+                .expect_err("invalid sheet resistance is rejected");
+            if parameter == "RSH=-1" || parameter == "RSH=1e999" {
+                assert!(
+                    error.to_string().contains("RD/RS/RSH >= 0 and finite"),
+                    "{error}"
+                );
+            }
+        }
+        for parameter in ["NRD=-1", "NRS=inf", "NRS=nan", "NRS=1e999"] {
+            let error = parse_netlist(&format!(
+                "M1 d g s 0 MMOD {parameter}\n.model MMOD NMOS(RSH=3)\n"
+            ))
+            .expect_err("invalid diffusion square count is rejected");
+            if parameter == "NRD=-1" || parameter == "NRS=1e999" {
+                assert!(
+                    error.to_string().contains("nrd and nrs must be >= 0"),
+                    "{error}"
+                );
+            }
+        }
     }
 
     #[test]
