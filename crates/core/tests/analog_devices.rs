@@ -284,6 +284,178 @@ mod analog {
         );
     }
 
+    /// Reverse-breakdown transit charge uses the same NBV-dependent junction
+    /// current as the DC avalanche branch. Check that charge through model-card
+    /// RS against a scalar load-line solution and an explicit series resistor,
+    /// for both transient companion rules.
+    #[test]
+    fn diode_breakdown_transit_charge_flows_through_series_resistance() {
+        let (is, n, bv, ibv, nbv, rs, rdrive, cjo, vj, m, fc, tt, h) = (
+            1e-14, 1.2, 5.0, 1e-3, 2.0, 40.0, 1_000.0, 100e-12, 0.8, 0.5, 0.5, 100e-9, 1e-6,
+        );
+        let model = format!(
+            "IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} CJO={cjo} VJ={vj} M={m} FC={fc} TT={tt}"
+        );
+        let modelled = format!(
+            "Vdrive drive 0 dc 0\nRdrive drive a {rdrive}\nD1 a 0 DBV\n\
+             .model DBV D({model} RS={rs})\n"
+        );
+        let explicit = format!(
+            "Vdrive drive 0 dc 0\nRdrive drive a {rdrive}\nRseries a j {rs}\nD1 j 0 DBV\n\
+             .model DBV D({model})\n"
+        );
+        let uncharged = format!(
+            "Vdrive drive 0 dc 0\nRdrive drive a {rdrive}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} RS={rs})\n"
+        );
+        let xbv = device::breakdown_voltage(bv, ibv, is, nbv);
+        let current = |voltage: f64| device::diode_op_breakdown(voltage, is, n, xbv, nbv);
+        let stored_charge = |voltage: f64| {
+            let op = current(voltage);
+            let depletion = device::diode_depletion_charge(voltage, cjo, vj, m, fc).0;
+            let diffusion = device::diode_diffusion_charge(voltage, op, tt).0;
+            depletion + diffusion
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut modelled_solver = Solver::new(
+                parse_netlist(&modelled).expect("breakdown charge model parses"),
+                integration,
+            )
+            .expect("model-card series-resistance solver builds");
+            let mut explicit_solver = Solver::new(
+                parse_netlist(&explicit).expect("explicit series resistor parses"),
+                integration,
+            )
+            .expect("explicit-resistor solver builds");
+            let mut uncharged_solver = Solver::new(
+                parse_netlist(&uncharged).expect("uncharged model parses"),
+                integration,
+            )
+            .expect("uncharged solver builds");
+
+            let modelled_external = modelled_solver.circuit().node("a").expect("external anode");
+            let modelled_junction = modelled_solver
+                .circuit()
+                .node("D1#internal")
+                .expect("model-card RS creates an internal junction");
+            let explicit_external = explicit_solver.circuit().node("a").expect("external anode");
+            let explicit_junction = explicit_solver.circuit().node("j").expect("junction");
+            // All three start at zero bias, where the depletion and diffusion
+            // charge references are both zero, before the reverse avalanche step.
+            for solver in [
+                &mut modelled_solver,
+                &mut explicit_solver,
+                &mut uncharged_solver,
+            ] {
+                solver.advance(h).expect("zero-bias initial step settles");
+            }
+
+            let mut previous_charge = stored_charge(0.0);
+            let mut previous_charge_current = 0.0;
+            for step in 0..2 {
+                let supply = -6.0;
+                // A changed source restarts trapezoidal integration with one
+                // backward-Euler step, then resumes trapezoidal history.
+                let step_integration = if integration == Integration::Trapezoidal && step == 0 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let charge_current = |voltage: f64| {
+                    let q = stored_charge(voltage);
+                    match step_integration {
+                        Integration::BackwardEuler => (q - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (q - previous_charge) / h - previous_charge_current
+                        }
+                    }
+                };
+                let total_current = |voltage: f64| current(voltage).id + charge_current(voltage);
+                let residual =
+                    |voltage: f64| voltage + (rdrive + rs) * total_current(voltage) - supply;
+                let (mut low, mut high) = (-10.0, 0.0);
+                assert!(residual(low) < 0.0 && residual(high) > 0.0);
+                for _ in 0..120 {
+                    let middle = 0.5 * (low + high);
+                    if residual(middle) < 0.0 {
+                        low = middle;
+                    } else {
+                        high = middle;
+                    }
+                }
+                let expected_junction = 0.5 * (low + high);
+                let expected_current = total_current(expected_junction);
+                let expected_external = supply - expected_current * rdrive;
+
+                for solver in [
+                    &mut modelled_solver,
+                    &mut explicit_solver,
+                    &mut uncharged_solver,
+                ] {
+                    solver.set_voltage_source(
+                        solver
+                            .voltage_source_index("Vdrive")
+                            .expect("drive source exists"),
+                        supply,
+                    );
+                    solver
+                        .advance(h)
+                        .expect("reverse-breakdown charge step solves");
+                }
+
+                let actual_junction = modelled_solver.node_voltage(modelled_junction);
+                let actual_external = modelled_solver.node_voltage(modelled_external);
+                let actual_current = source_current(&modelled_solver, "Vdrive");
+                assert!(
+                    expected_junction < -xbv,
+                    "step {step}: expected point must be in breakdown, Vj={expected_junction} V"
+                );
+                assert!(
+                    (actual_junction - expected_junction).abs() < 1e-8,
+                    "{integration:?} step {step}: expected junction {expected_junction} V, got {actual_junction} V"
+                );
+                assert!(
+                    (actual_external - expected_external).abs() < 1e-8,
+                    "{integration:?} step {step}: expected external anode {expected_external} V, got {actual_external} V"
+                );
+                assert!(
+                    (actual_current - expected_current).abs() < 1e-10 + 1e-6 * expected_current.abs(),
+                    "{integration:?} step {step}: expected avalanche terminal current {expected_current} A, got {actual_current} A"
+                );
+                assert!(
+                    (actual_junction - modelled_solver.node_voltage(modelled_external)
+                        + actual_current * rs)
+                        .abs()
+                        < 1e-8,
+                    "model-card RS must carry avalanche current from the external anode to the junction"
+                );
+                assert!(
+                    (actual_external - explicit_solver.node_voltage(explicit_external)).abs() < 1e-8
+                        && (actual_junction - explicit_solver.node_voltage(explicit_junction)).abs()
+                            < 1e-8,
+                    "{integration:?} step {step}: model-card RS and explicit resistor must agree at both terminals"
+                );
+                assert!(
+                    (actual_current - source_current(&explicit_solver, "Vdrive")).abs() < 1e-10,
+                    "{integration:?} step {step}: model-card RS and explicit resistor terminal currents differ"
+                );
+                if step == 0 {
+                    let uncharged_current = source_current(&uncharged_solver, "Vdrive");
+                    assert!(
+                        (actual_current - uncharged_current).abs() > 1e-5,
+                        "reverse-breakdown depletion and transit charge must affect the first-step current, charged {actual_current} A vs uncharged {uncharged_current} A"
+                    );
+                }
+
+                let actual_charge = stored_charge(actual_junction);
+                let actual_charge_current = charge_current(actual_junction);
+                previous_charge = actual_charge;
+                previous_charge_current = actual_charge_current;
+            }
+        }
+    }
+
     /// Ngspice's `ISR`/`NR` branch adds recombination current in forward bias
     /// and holds its value at `−3·N·Vt` farther into reverse bias.
     #[test]
