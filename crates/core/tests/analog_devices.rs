@@ -22,7 +22,8 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
-//! recombination current (`ISR`/`NR`), diffusion charge (`TT`) and BJT forward bias-dependent and reverse
+//! recombination current (`ISR`/`NR`), diffusion charge (`TT`) and soft
+//! reverse recovery (`TT`/`VP`), plus BJT forward bias-dependent and reverse
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
@@ -328,6 +329,98 @@ mod analog {
                 let next_charge = charge(actual);
                 previous_current = (next_charge - previous_charge) / h;
                 previous_charge = next_charge;
+            }
+        }
+    }
+
+    /// `VP` makes the transit charge a first-order state. This step-by-step
+    /// scalar solve checks its implicit BE/trapezoidal equation through a
+    /// forward-to-reverse transition, where the stored charge produces a
+    /// reverse current instead of disappearing in one step.
+    #[test]
+    fn diode_vp_soft_recovery_matches_the_charge_state_equation() {
+        let (is, tt, vp, resistance, h) = (1e-14, 100e-9, 0.2, 1e3, 10e-9);
+        let circuit = parse_netlist(&format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 TT={tt} VP={vp})\n"
+        ))
+        .expect("soft-recovery diode netlist parses");
+
+        let step = |voltage: f64, previous_state: f64, previous_rate: f64, rule: Integration| {
+            let diode = device::diode_op(voltage, is, 1.0);
+            let tau = tt * vp;
+            let (state, rate) = match rule {
+                Integration::BackwardEuler => {
+                    let ratio = tau / h;
+                    let state = (-tt * diode.id + ratio * previous_state) / (1.0 + ratio);
+                    (state, (state - previous_state) / h)
+                }
+                Integration::Trapezoidal => {
+                    let ratio = tau / h;
+                    let state =
+                        (-tt * diode.id + 2.0 * ratio * previous_state + tau * previous_rate)
+                            / (1.0 + 2.0 * ratio);
+                    (state, 2.0 * (state - previous_state) / h - previous_rate)
+                }
+            };
+            (state, rate, -(1.0 - vp) * rate)
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver =
+                Solver::new(circuit.clone(), integration).expect("soft-recovery solver builds");
+            let out = solver.circuit().node("out").expect("output node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            let mut previous_state = -tt * device::diode_op(solver.node_voltage(out), is, 1.0).id;
+            let mut previous_rate = 0.0;
+
+            for (step_index, supply) in [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0]
+                .into_iter()
+                .enumerate()
+            {
+                solver.set_voltage_source(source, supply);
+                let rule = if step_index == 0 || step_index == 4 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let residual = |voltage: f64| {
+                    let (_, _, recovery_current) =
+                        step(voltage, previous_state, previous_rate, rule);
+                    (supply - voltage) / resistance
+                        - device::diode_op(voltage, is, 1.0).id
+                        - recovery_current
+                };
+                let mut low = supply - 10.0;
+                let mut high = supply + 10.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected = 0.5 * (low + high);
+
+                solver
+                    .advance(h)
+                    .expect("soft-recovery transient step solves");
+                let actual = solver.node_voltage(out);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{integration:?} step {step_index}: expected {expected} V, got {actual} V"
+                );
+                if step_index == 4 {
+                    let reverse_current = (supply - actual) / resistance;
+                    assert!(
+                        reverse_current < -1e-4,
+                        "stored forward charge should drive reverse current, got {reverse_current} A"
+                    );
+                }
+                let (next_state, next_rate, _) = step(actual, previous_state, previous_rate, rule);
+                previous_state = next_state;
+                previous_rate = next_rate;
             }
         }
     }

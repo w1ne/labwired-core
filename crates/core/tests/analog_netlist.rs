@@ -343,7 +343,7 @@ C1 out 0 100n $ dollar comment
     fn diode_charge_and_recombination_parameters_resolve_with_vendor_parameters() {
         let circuit = parse_netlist(
             "D1 a 0 D1N4148\n\
-             .model D1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.333 FC=0.4 TT=11.54n \
+             .model D1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.333 FC=0.4 TT=11.54n VP=0.2 \
              VJ=0.75 BV=100 IBV=100u ISR=8p NR=1.8 EG=1.11 XTI=3)\n",
         )
         .expect("a vendor card parses");
@@ -353,6 +353,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.diodes[0].model.nr, 1.8);
         assert_eq!(circuit.diodes[0].model.rs, 0.568);
         assert_eq!(circuit.diodes[0].model.tt, 11.54e-9);
+        assert_eq!(circuit.diodes[0].model.vp, 0.2);
         assert_eq!(circuit.diodes[0].model.cjo, 4e-12);
         assert_eq!(circuit.diodes[0].model.m, 0.333);
         assert_eq!(circuit.diodes[0].model.vj, 0.75);
@@ -362,7 +363,7 @@ C1 out 0 100n $ dollar comment
     #[test]
     fn invalid_diode_model_parameters_are_rejected() {
         for parameters in [
-            "TT=-1n", "CJO=-1p", "VJ=0", "M=-0.1", "FC=-0.1", "FC=1", "ISR=-1p", "NR=0",
+            "TT=-1n", "VP=-0.1", "CJO=-1p", "VJ=0", "M=-0.1", "FC=-0.1", "FC=1", "ISR=-1p", "NR=0",
         ] {
             let text = format!("D1 a 0 DMOD\n.model DMOD D({parameters})\n");
             let error = parse_netlist(&text).expect_err("invalid junction parameters are refused");
