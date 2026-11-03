@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.940928">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="2.273260">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="43b14d4a50f96213429a12a6e9debd9c78e3adffe4aec135acb7c80af47bf272"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.940928">
+  <testcase classname="labwired" name="run" time="2.273260">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: ARTY LITEX SMOKE" time="0.000000">
   </testcase>

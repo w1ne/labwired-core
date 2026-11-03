@@ -93,6 +93,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32f746-smoke.yaml
             system: configs/systems/onboarding/stm32f746.yaml
+          # The shared F7 bare-register smoke exercises this imported F777
+          # profile's modeled RCC, GPIOI, and USART1 blocks.
+          - id: stm32f777
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f777-smoke.yaml
+            system: configs/systems/onboarding/stm32f777.yaml
           - id: stm32f401cdu6-blackpill
             crate: firmware-f401cdu6-blackpill-demo
             target: thumbv7em-none-eabi
