@@ -102,8 +102,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "arraymemory",
         "Renode ArrayMemory window (a raw memory array declared as a peripheral). \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/atsamd21j17d-aft, \
-         onboarding/litex_minerva, onboarding/msp430f2619, onboarding/nucleo_h753zi, \
+         answers reads with zeros. Used by: onboarding/litex_minerva, \
+         onboarding/msp430f2619, onboarding/nucleo_h753zi, \
          onboarding/nuvoton_npcx9 (+4 more).",
     ),
     (
@@ -200,8 +200,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "dwt",
         "Cortex-M Data Watchpoint and Trace unit. Owned by the CPU/debug model, not the bus. \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/atsamd21j17d-aft, \
-         onboarding/atsamd51g19a, onboarding/eos-s3, onboarding/eos-s3-qomu, \
+         answers reads with zeros. Used by: onboarding/atsamd51g19a, \
+         onboarding/eos-s3, onboarding/eos-s3-qomu, \
          onboarding/eos-s3-quickfeather (+10 more).",
     ),
     (
@@ -790,8 +790,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
         "samd21_rtc",
         "Microchip SAMD21 RTC. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/atsamd21j17d-aft.",
+         engine, so the window answers reads with zeros. The current imported SAMD21 \
+         execution profile omits this window.",
     ),
     (
         "scb",

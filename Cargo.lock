@@ -1818,6 +1818,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-samd21-j17d-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-semihost-smoke"
 version = "0.1.0"
 dependencies = [

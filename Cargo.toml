@@ -112,6 +112,7 @@ members = [
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
     "crates/firmware-samd21-demo",
+    "crates/firmware-samd21-j17d-smoke",
     "crates/firmware-arduino-zero-demo",
     "crates/firmware-rp2350-demo",
     "crates/firmware-kw41z-demo",

@@ -1,44 +1,26 @@
-# Validation Report: atsamd21j17d-aft
+# ATSAMD21J17D-AFT execution profile
 
-**Architecture:** ARM Cortex-M0+. General purpose low power microcontroller.
+The imported descriptor now has the J17D memory map: 128 KiB flash at
+`0x00000000` and 16 KiB SRAM at `0x20000000`. Its execution profile contains
+the SAM D21 PM, SYSCTRL, GCLK, and NVMCTRL register banks; modeled PORTA and
+SERCOM0; and the Cortex-M0+ NVIC and SysTick. The imported zero-answering RTC,
+timer, GPIO, and unrelated SERCOM windows are omitted.
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+## Smoke evidence
 
-```text
-[2m2026-10-18T14:39:50.667753Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:50.669570Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
-[2m2026-10-18T14:39:50.670560Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'samd21_gpio' (peripheral 'gpio_a') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:50.670593Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'samd21_gpio' (peripheral 'gpio_b') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:50.670756Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:50.670843Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:50.670854Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:50.670858Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:50.677439Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:50.677458Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:50.677469Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:50.677546Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:50.677569Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:50.677573Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:50.677577Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:50.677581Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:50.677585Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 297.75
-```
+On 2026-11-03, `firmware-samd21-j17d-smoke` ran against
+[`configs/systems/onboarding/atsamd21j17d-aft.yaml`](../../configs/systems/onboarding/atsamd21j17d-aft.yaml)
+for 100,000 instructions. It emitted `samd21 sercom0 up` and passed both
+configured assertions: UART output and the `max_steps` stop reason. The JUnit
+report contains 3 cases (run plus two assertions), all passing.
 
+Evidence files:
 
-## Hardware Coverage Report
+- [Onboarding metrics](../coverage/renode-onboarding/metrics/atsamd21j17d-aft/onboarding-metrics.json)
+- [Simulator result](../coverage/renode-onboarding/metrics/atsamd21j17d-aft/simulation-output/result.json)
+- [UART output](../coverage/renode-onboarding/metrics/atsamd21j17d-aft/simulation-output/uart.log)
+- [JUnit report](../coverage/renode-onboarding/metrics/atsamd21j17d-aft/simulation-output/junit.xml)
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `dwt` | `0xe0001000` | `dwt` |
-| `gclk` | `0x40000c00` | `arraymemory` |
-| `rtc` | `0x40001400` | `samd21_rtc` |
-| `gpio_a` | `0x41004400` | `samd21_gpio` |
-| `gpio_b` | `0x41004480` | `samd21_gpio` |
-| `usart0` | `0x42000800` | `samd5_uart` |
-| `usart1` | `0x42000c00` | `samd5_uart` |
-| `usart2` | `0x42001400` | `samd5_uart` |
-| `tc4` | `0x42003000` | `samd21_timer` |
-| `tc6` | `0x42003800` | `samd21_timer` |
-
-**Total Peripherals:** 10
+This establishes a local LabWired CLI boot and the listed smoke assertions. It
+does not establish complete peripheral coverage, full Renode parity, or
+hardware behavior.

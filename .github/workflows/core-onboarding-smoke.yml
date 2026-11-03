@@ -24,6 +24,7 @@ on:
       - "crates/firmware-stm32f429-smoke/**"
       - "crates/firmware-stm32f042-smoke/**"
       - "crates/firmware-stm32f072-smoke/**"
+      - "crates/firmware-samd21-j17d-smoke/**"
       - "crates/firmware-stm32l071-smoke/**"
       - "crates/firmware-stm32l072-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
@@ -81,6 +82,13 @@ jobs:
             system: examples/rp2040-pio/system.yaml
           # Imported Renode Cortex-M systems. These exercise representative
           # M0/M3/M4/M7 firmware against the exact imported system descriptors.
+          # The SAMD21 J17D profile uses its actual 128 KiB/16 KiB memory map
+          # and only the register windows used by this M0+ bring-up smoke.
+          - id: atsamd21j17d-aft
+            crate: firmware-samd21-j17d-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml
+            system: configs/systems/onboarding/atsamd21j17d-aft.yaml
           - id: stm32f072b_discovery
             crate: firmware-stm32f072b-disco-smoke
             target: thumbv6m-none-eabi

@@ -15,6 +15,11 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "atsamd21j17d-aft": {
+        "crate": "firmware-samd21-j17d-smoke",
+        "target": "thumbv6m-none-eabi",
+        "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml",
+    },
     "efm32g210": {
         "crate": "firmware-efm32g210-smoke",
         "target": "thumbv7m-none-eabi",
