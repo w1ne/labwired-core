@@ -27,8 +27,8 @@
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
 //! `CGS`/`CGD`, MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`,
-//! MOSFET bulk-junction depletion charge through `CBD`/`CBS`, MOSFET intrinsic
-//! channel capacitance from `TOX`, and JFET terminal
+//! MOSFET bulk-junction depletion charge through `CBD`/`CBS` and `CJ`/`CJSW`
+//! geometry, MOSFET intrinsic channel capacitance from `TOX`, and JFET terminal
 //! resistances `RD`/`RS`, and MOSFET terminal resistances from `RD`/`RS` or
 //! `RSH` times per-instance `NRD`/`NRS` are exercised below. Circuits depending
 //! on unsupported stored charge still belong to `adapter: external_process`.
@@ -1669,6 +1669,135 @@ mod analog {
                         );
 
                         let next_charge = charge(expected);
+                        previous_current = match rule {
+                            Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                            Integration::Trapezoidal => {
+                                2.0 * (next_charge - previous_charge) / h - previous_current
+                            }
+                        };
+                        previous_charge = next_charge;
+                    }
+                }
+            }
+        }
+    }
+
+    /// MOS level 1 can derive bottom depletion capacitance from junction area
+    /// (`CJ·AD/AS`) and add sidewall charge from perimeter (`CJSW·PD/PS`). The
+    /// two grading coefficients are independent and both junctions are
+    /// exercised through the transient MNA companion for NMOS/PMOS and both
+    /// integration rules.
+    #[test]
+    fn mosfet_bulk_junction_geometry_integrates_area_and_sidewall_charge() {
+        let cj = 2e-3;
+        let cjsw = 5e-7;
+        let pb = 0.75;
+        let mj = 0.4;
+        let mjsw = 0.2;
+        let fc = 0.5;
+        let resistance = 1e3;
+        let h = 100e-6;
+        let input = 0.6;
+        let charge = |voltage: f64, area: f64, perimeter: f64| {
+            let bottom = device::junction_depletion_charge(voltage, cj * area, pb, mj, fc).0;
+            let sidewall =
+                device::junction_depletion_charge(voltage, cjsw * perimeter, pb, mjsw, fc).0;
+            bottom + sidewall
+        };
+        let solve_voltage = |step_input: f64,
+                             previous_charge: f64,
+                             previous_current: f64,
+                             area: f64,
+                             perimeter: f64,
+                             rule: Integration| {
+            let mut lo = 0.0;
+            let mut hi = step_input + 0.2;
+            for _ in 0..100 {
+                let mid = 0.5 * (lo + hi);
+                let cap_current = match rule {
+                    Integration::BackwardEuler => {
+                        (charge(mid, area, perimeter) - previous_charge) / h
+                    }
+                    Integration::Trapezoidal => {
+                        2.0 * (charge(mid, area, perimeter) - previous_charge) / h
+                            - previous_current
+                    }
+                };
+                if (step_input - mid) / resistance > cap_current {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            0.5 * (lo + hi)
+        };
+
+        for (terminal, drain, source, area, perimeter) in [
+            ("drain", "x", "0", 2e-6, 4e-3),
+            ("source", "0", "x", 3e-6, 5e-3),
+        ] {
+            for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+                let vto = if kind == "NMOS" { 1.0 } else { -1.0 };
+                let netlist = format!(
+                    "V1 in 0 dc {}\nR1 in x {resistance}\n\
+                     M1 {drain} 0 {source} 0 MMOD AD=2e-6 AS=3e-6 PD=4e-3 PS=5e-3\n\
+                     .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 CJ={cj} CJSW={cjsw} \
+                     PB={pb} MJ={mj} MJSW={mjsw} FC={fc})\n",
+                    -sign * input
+                );
+                let circuit = parse_netlist(&netlist).expect("MOSFET geometry capacitance parses");
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let mut solver = Solver::new(circuit.clone(), integration)
+                        .expect("MOSFET geometry capacitance solver builds");
+                    let x = solver.circuit().node("x").expect("junction node");
+                    let source_index = solver
+                        .voltage_source_index("V1")
+                        .expect("driving source exists");
+                    let initial = -sign * solver.node_voltage(x);
+                    assert!((initial - input).abs() < 1e-8);
+                    solver
+                        .advance(h)
+                        .expect("initial geometry charge carries into transient");
+                    let held = -sign * solver.node_voltage(x);
+                    assert!(
+                        (held - initial).abs() < 1e-8,
+                        "operating-point geometry charge must not create a startup impulse"
+                    );
+
+                    let next_input = input + 0.3;
+                    solver.set_voltage_source(source_index, -sign * next_input);
+                    let mut previous_charge = charge(initial, area, perimeter);
+                    let mut previous_current = 0.0;
+                    for step in 0..2 {
+                        let rule = if step == 0 {
+                            Integration::BackwardEuler
+                        } else {
+                            integration
+                        };
+                        let expected = solve_voltage(
+                            next_input,
+                            previous_charge,
+                            previous_current,
+                            area,
+                            perimeter,
+                            rule,
+                        );
+                        if step == 0 {
+                            assert!(
+                                expected > fc * pb,
+                                "{terminal} first step must exercise FC continuation"
+                            );
+                        }
+                        solver
+                            .advance(h)
+                            .expect("MOSFET geometry charge step solves");
+                        let actual = -sign * solver.node_voltage(x);
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {terminal} {integration:?} step {step}: \
+                             expected {expected} V, got {actual} V"
+                        );
+                        let next_charge = charge(expected, area, perimeter);
                         previous_current = match rule {
                             Integration::BackwardEuler => (next_charge - previous_charge) / h,
                             Integration::Trapezoidal => {

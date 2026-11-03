@@ -423,7 +423,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> PB=<v> MJ=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m>)
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -437,7 +437,11 @@ same thing to both engines.
 This engine models diode depletion capacitance from `CJO`/`VJ`/`M`/`FC`,
 BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
 `CJC`/`VJC`/`MJC`, and shared `FC`, and level-1 MOSFET bulk-drain and
-bulk-source depletion capacitance from `CBD`/`CBS` with shared `PB`/`MJ`/`FC`.
+bulk-source depletion capacitance from `CBD`/`CBS` with shared `PB`/`MJ`/`FC`,
+or from bottom-area `CJ` times instance `AD`/`AS` plus sidewall `CJSW` times
+instance `PD`/`PS`, graded with `MJ` and `MJSW` respectively. Explicit `CBD`
+or `CBS` replaces that terminal's `CJ` area term; sidewall capacitance remains
+additive.
 Level-1 MOSFET `TOX` enables intrinsic gate capacitances using the Meyer model;
 without `TOX`, only explicit overlap and bulk-junction capacitances are present.
 Other device capacitances and temperature coefficients,
@@ -474,7 +478,8 @@ add probeable `<element>#drain` and `<element>#source` nodes, respectively.
 Shichman–Hodges MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both
 default to zero) or `RSH` times instance `NRD`/`NRS` (RSH defaults to zero),
 `GAMMA`/`PHI` body effect, nonlinear drain/body and source/body junction charge
-from `CBD`/`CBS`/`PB`/`MJ`/`FC`, linear gate overlap charge from
+from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
+`PB`/`MJ`/`MJSW`/`FC`, linear gate overlap charge from
 `CGSO`/`CGDO`/`CGBO`, and `TOX`-enabled
 intrinsic gate capacitances using ngspice's piecewise Meyer formulation; and
 SPICE JFET level 1 with `B=1`, including its two gate junctions and depletion

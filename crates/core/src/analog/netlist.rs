@@ -24,7 +24,7 @@
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
-//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
+//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
 //! | JFET | `J<name> nd ng ns <model>` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
@@ -65,7 +65,8 @@
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
-//! `PB`/`MJ`/`FC`, and constant forward/reverse transit times `TF`/`TR`, every
+//! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
+//! `AD`/`AS`/`PD`/`PS`, and constant forward/reverse transit times `TF`/`TR`, every
 //! temperature coefficient, bias-dependent transit-time parameters
 //! (`XTF`/`VTF`/`ITF`), `NKF`, and most terminal resistances, …) are **accepted
 //! and ignored rather than rejected**. BJT `IKF`/`IKR` high-injection rolloff and
@@ -78,8 +79,11 @@
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
 //! as linear overlap charge. `CBD` and `CBS` integrate nonlinear bulk junction
-//! charge with the shared `PB`, `MJ`, and `FC` parameters. `TOX`, when present,
-//! enables the level-1 Meyer channel capacitance. See
+//! charge with the shared `PB`, `MJ`, and `FC` parameters; each explicitly
+//! supplied total capacitance takes precedence over `CJ` times its area.
+//! Otherwise `CJ` scales by `AD`/`AS`, and `CJSW` scales independently by
+//! `PD`/`PS`, using `MJSW` for sidewall grading. `TOX`, when present, enables
+//! the level-1 Meyer channel capacitance. See
 //! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
@@ -997,12 +1001,24 @@ pub struct MosModel {
     pub is: f64,
     /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
     pub cbd: f64,
+    /// Whether `CBD` was explicitly supplied; an explicit zero also overrides
+    /// the geometry-derived bottom capacitance `CJ·AD`.
+    pub cbd_given: bool,
     /// Zero-bias bulk-source junction capacitance `CBS`, farads.
     pub cbs: f64,
+    /// Whether `CBS` was explicitly supplied; an explicit zero also overrides
+    /// the geometry-derived bottom capacitance `CJ·AS`.
+    pub cbs_given: bool,
+    /// Zero-bias bottom junction capacitance density `CJ`, F/m².
+    pub cj: f64,
+    /// Zero-bias sidewall junction capacitance density `CJSW`, F/m.
+    pub cjsw: f64,
     /// Bulk junction potential `PB`, volts.
     pub pb: f64,
     /// Bulk junction grading coefficient `MJ`.
     pub mj: f64,
+    /// Bulk junction sidewall grading coefficient `MJSW`.
+    pub mjsw: f64,
     /// Forward-bias depletion-capacitance coefficient `FC`.
     pub fc: f64,
     /// Default channel width `W`, metres (the element line may override it).
@@ -1085,9 +1101,14 @@ impl MosModel {
             phi: 0.6,
             is: 1e-14,
             cbd: 0.0,
+            cbd_given: false,
             cbs: 0.0,
+            cbs_given: false,
+            cj: 0.0,
+            cjsw: 0.0,
             pb: 0.8,
             mj: 0.5,
+            mjsw: 0.5,
             fc: 0.5,
             w: 1e-4,
             l: 1e-4,
@@ -1480,8 +1501,7 @@ pub struct Bjt {
     pub model: BjtModel,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` — a
-/// level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
@@ -1511,6 +1531,14 @@ pub struct Mosfet {
     pub w: f64,
     /// Instance channel length `L`, metres.
     pub l: f64,
+    /// Drain diffusion area `AD`, m², used with model `CJ` when `CBD` is absent.
+    pub ad: f64,
+    /// Source diffusion area `AS`, m², used with model `CJ` when `CBS` is absent.
+    pub as_: f64,
+    /// Drain diffusion perimeter `PD`, metres, used with model `CJSW`.
+    pub pd: f64,
+    /// Source diffusion perimeter `PS`, metres, used with model `CJSW`.
+    pub ps: f64,
     /// Effective drain terminal resistance, from `RD` or `RSH·NRD`, ohms.
     pub drain_resistance_ohms: f64,
     /// Effective source terminal resistance, from `RS` or `RSH·NRS`, ohms.
@@ -1525,6 +1553,49 @@ impl Mosfet {
             self.model.cgdo * self.w,
             self.model.cgbo * self.l,
         ]
+    }
+
+    /// Zero-bias bottom and sidewall capacitances for the selected bulk
+    /// junction, in that order.
+    pub fn bulk_junction_capacitances(&self, drain: bool) -> [f64; 2] {
+        let model = self.model;
+        if drain {
+            [
+                if model.cbd_given {
+                    model.cbd
+                } else {
+                    model.cj * self.ad
+                },
+                model.cjsw * self.pd,
+            ]
+        } else {
+            [
+                if model.cbs_given {
+                    model.cbs
+                } else {
+                    model.cj * self.as_
+                },
+                model.cjsw * self.ps,
+            ]
+        }
+    }
+
+    /// Nonlinear bulk-junction charge and differential capacitance in
+    /// normalized MOSFET coordinates. `drain` selects the bulk-drain junction;
+    /// otherwise the bulk-source junction is used. Explicit `CBD`/`CBS`
+    /// overrides only the bottom-area term; sidewall charge remains additive.
+    pub fn bulk_junction_charge(&self, voltage: f64, drain: bool) -> (f64, f64) {
+        let model = self.model;
+        let [bottom, sidewall] = self.bulk_junction_capacitances(drain);
+        let (bottom_charge, bottom_capacitance) =
+            super::device::junction_depletion_charge(voltage, bottom, model.pb, model.mj, model.fc);
+        let (sidewall_charge, sidewall_capacitance) = super::device::junction_depletion_charge(
+            voltage, sidewall, model.pb, model.mjsw, model.fc,
+        );
+        (
+            bottom_charge + sidewall_charge,
+            bottom_capacitance + sidewall_capacitance,
+        )
     }
 }
 
@@ -1887,6 +1958,10 @@ struct PendingDevice {
     length: Option<f64>,
     nrd: Option<f64>,
     nrs: Option<f64>,
+    ad: Option<f64>,
+    as_: Option<f64>,
+    pd: Option<f64>,
+    ps: Option<f64>,
 }
 
 /// Parse a netlist into a [`Circuit`].
@@ -2107,7 +2182,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     'Q' => (3, "Q<name> nc nb ne <model>"),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]",
                     ),
                     _ => (3, "J<name> nd ng ns <model>"),
                 };
@@ -2119,6 +2194,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut length = None;
                 let mut nrd = None;
                 let mut nrs = None;
+                let mut ad = None;
+                let mut as_ = None;
+                let mut pd = None;
+                let mut ps = None;
                 for token in &rest[terminals + 1..] {
                     let (key, value) = token
                         .split_once('=')
@@ -2128,6 +2207,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "l" if letter == 'M' => length = Some(ctx.value(value, "l")?),
                         "nrd" if letter == 'M' => nrd = Some(ctx.value(value, "nrd")?),
                         "nrs" if letter == 'M' => nrs = Some(ctx.value(value, "nrs")?),
+                        "ad" if letter == 'M' => ad = Some(ctx.value(value, "ad")?),
+                        "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
+                        "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
+                        "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -2142,6 +2225,13 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     || matches!(nrs, Some(squares) if !squares.is_finite() || squares < 0.0)
                 {
                     return Err(ctx.parse_err("nrd and nrs must be >= 0 and finite"));
+                }
+                if [ad, as_, pd, ps]
+                    .into_iter()
+                    .flatten()
+                    .any(|geometry| !geometry.is_finite() || geometry < 0.0)
+                {
+                    return Err(ctx.parse_err("ad, as, pd and ps must be >= 0 and finite"));
                 }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
@@ -2161,6 +2251,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     length,
                     nrd,
                     nrs,
+                    ad,
+                    as_,
+                    pd,
+                    ps,
                 });
             }
             'E' | 'G' => {
@@ -2262,6 +2356,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     length: None,
                     nrd: None,
                     nrs: None,
+                    ad: None,
+                    as_: None,
+                    pd: None,
+                    ps: None,
                 });
             }
             'S' => {
@@ -2684,16 +2782,58 @@ fn bind_models(
                     || model.cbd < 0.0
                     || !model.cbs.is_finite()
                     || model.cbs < 0.0
+                    || !model.cj.is_finite()
+                    || model.cj < 0.0
+                    || !model.cjsw.is_finite()
+                    || model.cjsw < 0.0
                     || !model.pb.is_finite()
                     || model.pb <= 0.0
                     || !model.mj.is_finite()
                     || model.mj < 0.0
+                    || !model.mjsw.is_finite()
+                    || model.mjsw < 0.0
                     || !model.fc.is_finite()
                     || model.fc < 0.0
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a MOSFET model needs CBD/CBS >= 0, PB > 0, MJ >= 0 and 0 <= FC < 1",
+                        "a MOSFET model needs CBD/CBS/CJ/CJSW >= 0, PB > 0, MJ/MJSW >= 0 and 0 <= FC < 1",
+                    ));
+                }
+                let ad = device.ad.unwrap_or(0.0);
+                let as_ = device.as_.unwrap_or(0.0);
+                let pd = device.pd.unwrap_or(0.0);
+                let ps = device.ps.unwrap_or(0.0);
+                let junction_capacitances = [
+                    if model.cbd_given {
+                        model.cbd
+                    } else {
+                        model.cj * ad
+                    },
+                    model.cjsw * pd,
+                    if model.cbs_given {
+                        model.cbs
+                    } else {
+                        model.cj * as_
+                    },
+                    model.cjsw * ps,
+                    (if model.cbd_given {
+                        model.cbd
+                    } else {
+                        model.cj * ad
+                    }) + model.cjsw * pd,
+                    (if model.cbs_given {
+                        model.cbs
+                    } else {
+                        model.cj * as_
+                    }) + model.cjsw * ps,
+                ];
+                if junction_capacitances
+                    .into_iter()
+                    .any(|capacitance| !capacitance.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective junction capacitances from CJ/CJSW and AD/AS/PD/PS must be finite",
                     ));
                 }
                 if !model.rd.is_finite()
@@ -2783,6 +2923,10 @@ fn bind_models(
                     beta: model.kp * w / l,
                     w,
                     l,
+                    ad,
+                    as_,
+                    pd,
+                    ps,
                     drain_resistance_ohms,
                     source_resistance_ohms,
                 });
@@ -3127,10 +3271,19 @@ fn parse_model(
             (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
             (ModelCard::Mos(model), "PHI") => model.phi = value,
             (ModelCard::Mos(model), "IS") => model.is = value,
-            (ModelCard::Mos(model), "CBD") => model.cbd = value,
-            (ModelCard::Mos(model), "CBS") => model.cbs = value,
+            (ModelCard::Mos(model), "CBD") => {
+                model.cbd = value;
+                model.cbd_given = true;
+            }
+            (ModelCard::Mos(model), "CBS") => {
+                model.cbs = value;
+                model.cbs_given = true;
+            }
+            (ModelCard::Mos(model), "CJ") => model.cj = value,
+            (ModelCard::Mos(model), "CJSW") => model.cjsw = value,
             (ModelCard::Mos(model), "PB") => model.pb = value,
             (ModelCard::Mos(model), "MJ") => model.mj = value,
+            (ModelCard::Mos(model), "MJSW") => model.mjsw = value,
             (ModelCard::Mos(model), "FC") => model.fc = value,
             (ModelCard::Mos(model), "W") => model.w = value,
             (ModelCard::Mos(model), "L") => model.l = value,
@@ -3455,9 +3608,14 @@ fn lower_comparator(
                 phi: 0.6,
                 is: 1e-14,
                 cbd: 0.0,
+                cbd_given: false,
                 cbs: 0.0,
+                cbs_given: false,
+                cj: 0.0,
+                cjsw: 0.0,
                 pb: 0.8,
                 mj: 0.5,
+                mjsw: 0.5,
                 fc: 0.5,
                 w: 1.0,
                 l: 1.0,
@@ -3479,6 +3637,10 @@ fn lower_comparator(
                 beta: kp,
                 w: 1.0,
                 l: 1.0,
+                ad: 0.0,
+                as_: 0.0,
+                pd: 0.0,
+                ps: 0.0,
                 drain_resistance_ohms: 0.0,
                 source_resistance_ohms: 0.0,
             });
