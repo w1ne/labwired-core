@@ -1,4 +1,4 @@
-2026-11-03T12:02:39.364803Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_vexriscv.yaml
-2026-11-03T12:02:39.383087Z  INFO labwired_loader: ELF Entry Point: 0x10000000
+2026-11-03T12:10:00.247070Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_vexriscv.yaml
+2026-11-03T12:10:00.268370Z  INFO labwired_loader: ELF Entry Point: 0x10000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · litex_vexriscv-smoke · 4000000 steps · 1.14s

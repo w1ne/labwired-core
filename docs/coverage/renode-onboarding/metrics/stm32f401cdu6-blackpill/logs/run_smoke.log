@@ -1,5 +1,5 @@
-2026-11-03T12:02:55.314259Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
-2026-11-03T12:02:55.316667Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+2026-11-03T12:10:16.385047Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
+2026-11-03T12:10:16.387466Z  INFO labwired_loader: ELF Entry Point: 0x8000009
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · stm32f401cdu6-blackpill-smoke · 64 steps · 0.00s
