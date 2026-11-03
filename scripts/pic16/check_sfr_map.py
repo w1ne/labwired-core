@@ -115,7 +115,7 @@ E_SFRS = {
 E_OPTIONAL_SFRS = {"OSCSTAT": 0x09A}
 E_NO_EUSART_PARTS = {
     "pic16f1503", "pic16f1507", "pic16lf1507", "pic16f1613", "pic16f1707",
-    "pic16lf1707",
+    "pic16lf1707", "pic16lf1703",
 }
 # The two enhanced layouts, keyed by where PIR1 sits: how many PORT/TRIS/LAT
 # addresses the model decodes from PORTA up (`Pic16SfrMap::ports`), and its
