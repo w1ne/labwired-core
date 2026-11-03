@@ -2340,6 +2340,71 @@ mod analog {
         }
     }
 
+    /// Forward body bias uses the level-1 linear continuation of the square
+    /// root. Check its channel current and `gmb` against the hand equation,
+    /// then exercise that same bias through MNA for both polarities and both
+    /// choices of effective source.
+    #[test]
+    fn mosfet_forward_body_effect_uses_the_level1_linear_continuation() {
+        let (kp, w, l, lambda, gamma, phi, vto): (f64, f64, f64, f64, f64, f64, f64) =
+            (20e-6, 100e-6, 10e-6, 0.02, 0.4, 0.7, 1.0);
+        let beta = kp * w / l;
+        let vds = 0.4;
+        let vgs = 3.0;
+        let vbs = 0.2;
+        let is = 1e-30;
+        let root_phi = phi.sqrt();
+        let threshold = vto - gamma * vbs / (2.0 * root_phi);
+        let overdrive = vgs - threshold;
+        let channel = beta * (1.0 + lambda * vds) * vds * (overdrive - 0.5 * vds);
+        let vbd = vbs - vds;
+        let expected = channel + device::GMIN * vds - device::diode_op(vbd, is, 1.0).id;
+
+        let op = device::mos_op(vgs, vds, vto, beta, lambda, gamma, phi, vbs);
+        let dv = 1e-6;
+        let finite_difference_gmb =
+            (device::mos_op(vgs, vds, vto, beta, lambda, gamma, phi, vbs + dv).id
+                - device::mos_op(vgs, vds, vto, beta, lambda, gamma, phi, vbs - dv).id)
+                / (2.0 * dv);
+        assert!(
+            relative(op.id, channel) < 1e-12,
+            "forward body bias should lower Vth by the linear continuation: expected {channel} A, got {} A",
+            op.id
+        );
+        assert!(
+            relative(op.gmb, finite_difference_gmb) < 1e-8,
+            "forward body-effect gmb should match the derivative: expected {finite_difference_gmb} S, got {} S",
+            op.gmb
+        );
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            for reverse in [false, true] {
+                // In reverse operation the physical drain becomes the
+                // effective source, so keep its body bias at +vbs.
+                let (drain, source, supply, bulk) = if reverse {
+                    (0.0, vds, "Vs", vbs)
+                } else {
+                    (vds, 0.0, "Vd", vbs)
+                };
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc {}\nVbulk b 0 dc {}\nM1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP={kp} LAMBDA={lambda} GAMMA={gamma} PHI={phi} IS={is} W={w} L={l})\n",
+                    sign * vgs,
+                    sign * drain,
+                    sign * source,
+                    sign * bulk,
+                    sign * vto,
+                );
+                let solver = build(&netlist);
+                let measured = sign * source_current(&solver, supply);
+                let direction = if reverse { "reverse" } else { "forward" };
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} {direction}: forward-body-biased current should be {expected} A, got {measured} A"
+                );
+            }
+        }
+    }
+
     /// The three level-1 gate overlap parameters become linear G-S, G-D and
     /// G-B capacitances after applying the instance width/length. Each route
     /// is solved as an RC transient for NMOS and PMOS under both integration
