@@ -64,6 +64,7 @@ pub enum AvrModel {
     Attiny204,
     Attiny402,
     Attiny404,
+    Attiny406,
     Attiny804,
     Attiny806,
     Attiny807,
@@ -88,6 +89,8 @@ impl AvrModel {
             AvrModel::Attiny402
         } else if n.contains("attiny404") || n.contains("attiny 404") {
             AvrModel::Attiny404
+        } else if n.contains("attiny406") || n.contains("attiny 406") {
+            AvrModel::Attiny406
         } else if n.contains("attiny804") || n.contains("attiny 804") {
             AvrModel::Attiny804
         } else if n.contains("attiny806") || n.contains("attiny 806") {
@@ -114,7 +117,7 @@ impl AvrModel {
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
-            AvrModel::Attiny402 | AvrModel::Attiny404 => 4 * 1024,
+            AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 4 * 1024,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
             AvrModel::Attiny1604 | AvrModel::Attiny1606 | AvrModel::Attiny1607 => 16 * 1024,
         }
@@ -124,7 +127,7 @@ impl AvrModel {
             AvrModel::Atmega328p => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
-            AvrModel::Attiny402 | AvrModel::Attiny404 => 0x3F00,
+            AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 0x3E00,
             AvrModel::Attiny1604 | AvrModel::Attiny1606 | AvrModel::Attiny1607 => 0x3C00,
         }
@@ -137,6 +140,7 @@ impl AvrModel {
             | AvrModel::Attiny204
             | AvrModel::Attiny402
             | AvrModel::Attiny404
+            | AvrModel::Attiny406
             | AvrModel::Attiny804
             | AvrModel::Attiny806
             | AvrModel::Attiny807
@@ -156,6 +160,7 @@ impl AvrModel {
             | AvrModel::Attiny204
             | AvrModel::Attiny402
             | AvrModel::Attiny404
+            | AvrModel::Attiny406
             | AvrModel::Attiny804
             | AvrModel::Attiny806
             | AvrModel::Attiny807
@@ -183,6 +188,7 @@ impl AvrModel {
                 | AvrModel::Attiny204
                 | AvrModel::Attiny402
                 | AvrModel::Attiny404
+                | AvrModel::Attiny406
                 | AvrModel::Attiny804
                 | AvrModel::Attiny806
                 | AvrModel::Attiny807
@@ -641,6 +647,7 @@ impl Avr {
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
+            | AvrModel::Attiny406
             | AvrModel::Attiny804
             | AvrModel::Attiny806
             | AvrModel::Attiny807
@@ -661,6 +668,7 @@ impl Avr {
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
+            | AvrModel::Attiny406
             | AvrModel::Attiny804
             | AvrModel::Attiny806
             | AvrModel::Attiny807
@@ -3293,6 +3301,7 @@ mod tests {
             ("attiny204", AvrModel::Attiny204, 2 * 1024, 0x3F80, 128),
             ("attiny402", AvrModel::Attiny402, 4 * 1024, 0x3F00, 256),
             ("attiny404", AvrModel::Attiny404, 4 * 1024, 0x3F00, 256),
+            ("attiny406", AvrModel::Attiny406, 4 * 1024, 0x3F00, 256),
             ("attiny804", AvrModel::Attiny804, 8 * 1024, 0x3E00, 512),
             ("attiny806", AvrModel::Attiny806, 8 * 1024, 0x3E00, 512),
             ("attiny807", AvrModel::Attiny807, 8 * 1024, 0x3E00, 512),
