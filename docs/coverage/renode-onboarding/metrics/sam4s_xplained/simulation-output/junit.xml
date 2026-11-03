@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.017570">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.017634">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="cdf197f45686724ced4c22553529553e7a9d1dff055dc093e36192bbe913a1b0"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.017570">
+  <testcase classname="labwired" name="run" time="0.017634">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: SAM4S XPLAINED SMOKE" time="0.000000">
   </testcase>
