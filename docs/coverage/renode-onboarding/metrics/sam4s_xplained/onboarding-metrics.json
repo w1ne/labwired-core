@@ -15,8 +15,8 @@
   "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
   "system": "configs/systems/onboarding/sam4s_xplained.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T18:40:23Z",
-  "finished_at_utc": "2026-11-03T18:40:23Z",
+  "started_at_utc": "2026-11-03T18:47:31Z",
+  "finished_at_utc": "2026-11-03T18:47:32Z",
   "elapsed_seconds": 1,
   "elapsed_ms": 687,
   "failure_stage": "",
@@ -25,13 +25,13 @@
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.261,
-    "build_firmware": 0.153,
-    "run_smoke": 0.265
+    "build_cli": 0.263,
+    "build_firmware": 0.145,
+    "run_smoke": 0.269
   },
   "stages_ms": {
-    "build_cli": 261,
-    "build_firmware": 153,
-    "run_smoke": 265
+    "build_cli": 263,
+    "build_firmware": 145,
+    "run_smoke": 269
   }
 }
