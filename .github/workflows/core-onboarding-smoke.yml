@@ -36,9 +36,13 @@ on:
       - "crates/firmware-nucleo-l452re-p-smoke/**"
       - "crates/firmware-nucleo-wb55rg-demo/**"
       - "crates/firmware-nucleo-wba55cg-smoke/**"
+      - "crates/firmware-nucleo-h503rb-smoke/**"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
+      - "configs/chips/stm32h503rb-nucleo-smoke.yaml"
       - "configs/systems/nucleo-wba55cg-smoke.yaml"
+      - "configs/systems/nucleo-h503rb.yaml"
       - "examples/nucleo-wba55cg/**"
+      - "examples/nucleo-h503rb/**"
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-feather-rp2040-smoke/**"
@@ -150,6 +154,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-wba55cg/onboarding-smoke.yaml
             system: configs/systems/nucleo-wba55cg-smoke.yaml
+          - id: nucleo-h503rb
+            crate: firmware-nucleo-h503rb-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h503rb/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h503rb.yaml
           - id: nucleo-l073rz
             crate: firmware-l073-demo
             target: thumbv6m-none-eabi

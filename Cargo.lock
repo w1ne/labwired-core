@@ -1770,6 +1770,14 @@ name = "firmware-nucleo-g431rb-smoke"
 version = "0.1.0"
 
 [[package]]
+name = "firmware-nucleo-h503rb-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-l452re-p-smoke"
 version = "0.1.0"
 dependencies = [
