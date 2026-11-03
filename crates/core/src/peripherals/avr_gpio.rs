@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ATmega-style 8-bit GPIO port (PINx / DDRx / PORTx layout).
+//! 8-bit AVR GPIO port: classic ATmega PINx / DDRx / PORTx or AVRxt VPORT
+//! DIR / OUT / IN register ordering.
 //!
 //! Parking model so `--watch-gpio portb:5` can observe Arduino Nano
 //! `LED_BUILTIN` (PB5). The AVR interpreter owns the same registers in its
@@ -239,7 +240,7 @@ impl PinPort for AvrGpioPort {
 }
 
 impl Peripheral for AvrGpioPort {
-    /// PIN/DDR/PORT are three bytes moved only by `read`/`write`. There is no
+    /// The selected three-byte GPIO register block moves only by `read`/`write`. There is no
     /// `tick`/`tick_elapsed` override, so the walk calls the trait default,
     /// which returns `PeripheralTickResult::default()` — no IRQ, no DMA
     /// request, no mmio-write, no fired event, for every reachable state.
