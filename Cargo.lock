@@ -2292,6 +2292,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ili9488-tft-lab"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "ina219-power-lab"
 version = "0.1.0"
 dependencies = [

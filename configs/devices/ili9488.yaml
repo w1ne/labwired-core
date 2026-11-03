@@ -88,6 +88,8 @@ metadata:
   label: "ILI9488 TFT"
   summary: "320×480 SPI TFT controller with modelled 18-bit COLMOD."
   detail: "Ilitek ILI9488 against an in-memory 320×480 RGB888 frame (bit-expanded RGB666). COLMOD selects the SPI pixel depth; hardware default and the common 0x66 init are 18-bit / three bytes per pixel. MADCTL MV selects landscape 480×320 addressing. The playground surfaces pixels through the simulator bridge."
+  datasheet: "https://www.bolymin.com.tw/uploadfiles/862/IC-Controller-Datasheet/ili9488.pdf"
+  module: "https://www.buydisplay.com/serial-spi-3-5-inch-tft-lcd-module-in-320x480-optl-touchscreen-ili9488"
   category: spi
   config_keys:
     - name: cs_pin

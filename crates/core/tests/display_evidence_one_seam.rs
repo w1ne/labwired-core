@@ -111,6 +111,7 @@ const DISPLAY_LABS: &[&str] = &[
     "examples/ssd1306-hello-lab/system.yaml",
     "examples/ssd1306-128x32-lab/system.yaml",
     "examples/ili9341-tft-lab/system.yaml",
+    "examples/ili9488-tft-lab/system.yaml",
     "examples/epaper-tricolor-lab/system.yaml",
     "configs/systems/esp32c3-oled-demo.yaml",
     "configs/systems/esp32c3-oled-128x32-workshop.yaml",

@@ -137,6 +137,7 @@ members = [
     "examples/ntc-thermistor-lab",
     "examples/rc-oscilloscope-lab",
     "examples/ili9341-tft-lab",
+    "examples/ili9488-tft-lab",
     "examples/epaper-tricolor-lab",
     "examples/nokia5110-invaders-lab",
     "examples/tier1-fixture/nrf52832",
