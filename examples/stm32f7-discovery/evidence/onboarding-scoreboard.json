@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 1123,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 1.123
+  },
+  "targets": [
+    {
+      "target_id": "stm32f746-discovery",
+      "status": "pass",
+      "crate": "firmware-stm32f746-demo",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/stm32f7-discovery/io-smoke.yaml",
+      "system": "configs/systems/stm32f7-discovery.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T16:44:38Z",
+      "finished_at_utc": "2026-11-03T16:44:39Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1123,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.412,
+        "build_firmware": 0.444,
+        "run_smoke": 0.257
+      },
+      "stages_ms": {
+        "build_cli": 412,
+        "build_firmware": 444,
+        "run_smoke": 257
+      },
+      "_artifact_path": "examples/stm32f7-discovery/evidence"
+    }
+  ]
+}

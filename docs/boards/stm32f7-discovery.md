@@ -13,6 +13,11 @@ DTCM at `0x2000_0000`. LD1 (PI1) is the user LED; the ST-LINK VCP is USART1.
 | Validation         | `firmware_survival::test_stm32f746_discovery_smoke_survival`         |
 | Tier               | **smoke-manual** — boots firmware and prints, **no silicon diff**    |
 
+ST's live product page listed the **STM32F746G-DISCO** as Active and its
+eStore listed it In Stock with Add to Cart enabled on 2026-11-03. See the
+[onboarding record](../../examples/stm32f7-discovery/ONBOARDING.md) and
+[vendor-status evidence](../../examples/stm32f7-discovery/evidence/vendor-status.md).
+
 ## What is proven
 
 A soft-float bare-metal firmware un-gates RCC AHB1/APB2, writes `OK\n` on
