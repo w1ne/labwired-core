@@ -1856,6 +1856,197 @@ mod analog {
         }
     }
 
+    #[test]
+    fn mosfet_ward_dutton_channel_charge_conserves_and_has_analytic_partials() {
+        let cases = [
+            ("zero-drain-bias", 1.6, 0.0, -0.1),
+            ("linear", 1.6, 0.2, -0.1),
+            ("saturated", 1.8, 1.0, -0.1),
+            ("reverse", 1.6, -0.2, -0.1),
+        ];
+        for (kind, polarity) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = polarity;
+            let circuit = parse_netlist(&format!(
+                "M1 d g s b MOD w=2u l=1u\n.model MOD {kind}(VTO={vto} TOX=10n GAMMA=0.35 PHI=0.7 CHARGEMOD=WARD_DUTTON)\n"
+            ))
+            .expect("Ward-Dutton model parses");
+            let mosfet = &circuit.mosfets[0];
+            for (region, vgs, vds, vbs) in cases {
+                let evaluate = |vgs, vds, vbs| {
+                    device::mos_ward_dutton_channel_charge(mosfet, vgs, vds, vbs - vds, vbs)
+                };
+                let charge = evaluate(vgs, vds, vbs);
+                assert!(
+                    charge.q.iter().sum::<f64>().abs() < 1e-25,
+                    "{kind} {region}: terminal charges do not sum to zero: {:?}",
+                    charge.q
+                );
+                let reversed = vds < 0.0;
+                let (vgs_eff, vds_eff, vbs_eff) = if reversed {
+                    (vgs - vds, -vds, vbs - vds)
+                } else {
+                    (vgs, vds, vbs)
+                };
+                let sqrt_phi = 0.7_f64.sqrt();
+                let body_root = if vbs_eff <= 0.0 {
+                    (0.7 - vbs_eff).sqrt()
+                } else {
+                    (sqrt_phi - vbs_eff / (2.0 * sqrt_phi)).max(0.0)
+                };
+                let overdrive = vgs_eff - (1.0 + 0.35 * (body_root - sqrt_phi));
+                let channel_drop = vds_eff.clamp(0.0, overdrive);
+                let denominator = overdrive * channel_drop - 0.5 * channel_drop.powi(2);
+                let cox = 3.453_133e-11 * mosfet.w * mosfet.l / 10e-9;
+                let intervals = 40_000;
+                let mut total_integral = 0.0;
+                let mut drain_integral = 0.0;
+                for point in 0..=intervals {
+                    let x = point as f64 / intervals as f64;
+                    let channel_charge_density = (overdrive.powi(2) - 2.0 * x * denominator).sqrt();
+                    let weight = if point == 0 || point == intervals {
+                        1.0
+                    } else if point % 2 == 0 {
+                        2.0
+                    } else {
+                        4.0
+                    };
+                    total_integral += weight * channel_charge_density;
+                    drain_integral += weight * x * channel_charge_density;
+                }
+                let scale = 1.0 / (3.0 * intervals as f64);
+                let expected_total = cox * total_integral * scale;
+                let expected_drain = cox * drain_integral * scale;
+                let physical_drain_charge = if reversed { charge.q[2] } else { charge.q[1] };
+                assert!(
+                    (charge.q[0] - polarity * expected_total).abs()
+                        < expected_total.abs() * 1e-6,
+                    "{kind} {region}: integrated gate charge differs from the charge-sheet quadrature"
+                );
+                assert!(
+                    (physical_drain_charge + polarity * expected_drain).abs()
+                        < expected_drain.abs() * 1e-6,
+                    "{kind} {region}: drain partition differs from the Ward-Dutton quadrature"
+                );
+                for control in 0..3 {
+                    let jacobian_sum = charge.dq_dv.iter().map(|row| row[control]).sum::<f64>();
+                    assert!(
+                        jacobian_sum.abs() < 1e-25,
+                        "{kind} {region}: Jacobian column {control} does not conserve charge: {jacobian_sum}"
+                    );
+                }
+
+                let delta = 1e-5;
+                for terminal in 0..4 {
+                    for control in 0..3 {
+                        let mut plus = [vgs, vds, vbs];
+                        let mut minus = [vgs, vds, vbs];
+                        plus[control] += delta;
+                        minus[control] -= delta;
+                        let plus = evaluate(plus[0], plus[1], plus[2]).q[terminal];
+                        let minus = evaluate(minus[0], minus[1], minus[2]).q[terminal];
+                        let finite_difference = if vds == 0.0 && control == 1 {
+                            (plus - charge.q[terminal]) / delta * polarity
+                        } else {
+                            (plus - minus) / (2.0 * delta) * polarity
+                        };
+                        let analytic = charge.dq_dv[terminal][control];
+                        assert!(
+                            (analytic - finite_difference).abs()
+                                < finite_difference.abs() * 3e-5 + 1e-24,
+                            "{kind} {region}, terminal {terminal}, control {control}: analytic {analytic}, finite difference {finite_difference}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mosfet_ward_dutton_charge_drives_a_loaded_terminal_for_both_polarities_and_directions() {
+        let width = 2e-6;
+        let length = 1e-6;
+        let tox = 10e-9;
+        let resistance = 1e3;
+        let h = 10e-9;
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            for reverse in [false, true] {
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let (drain, source, sensed_terminal) = if reverse {
+                        ("0", "x", 2)
+                    } else {
+                        ("x", "0", 1)
+                    };
+                    let netlist = format!(
+                        "Vg g 0 dc {}\nRload x 0 {resistance}\nM1 {drain} g {source} 0 MOD w={width} l={length}\n.model MOD {kind}(VTO={} KP=1e-30 IS=1e-30 TOX={tox} CHARGEMOD=WARD_DUTTON)\n",
+                        sign * 1.5,
+                        sign
+                    );
+                    let circuit = parse_netlist(&netlist).expect("MOS channel charge parses");
+                    let mosfet = circuit.mosfets[0].clone();
+                    let mut solver = Solver::new(circuit, integration)
+                        .expect("MOS channel charge solver builds");
+                    let x = solver.circuit().node("x").expect("loaded terminal node");
+                    let gate = solver
+                        .voltage_source_index("Vg")
+                        .expect("gate drive exists");
+                    solver
+                        .advance(h)
+                        .expect("initially biased channel step solves");
+                    let initial_x = solver.node_voltage(x);
+                    assert!(initial_x.abs() < 1e-10);
+
+                    let old_gate = sign * 1.5;
+                    let new_gate = sign * 1.6;
+                    let terminal_charge = |node_voltage: f64, gate_voltage: f64| {
+                        let (vgs, vds, vbd, vbs) = if reverse {
+                            (
+                                sign * (gate_voltage - node_voltage),
+                                sign * -node_voltage,
+                                0.0,
+                                sign * -node_voltage,
+                            )
+                        } else {
+                            (
+                                sign * gate_voltage,
+                                sign * node_voltage,
+                                sign * -node_voltage,
+                                0.0,
+                            )
+                        };
+                        device::mos_ward_dutton_channel_charge(&mosfet, vgs, vds, vbd, vbs).q
+                            [sensed_terminal]
+                    };
+                    let old_charge = terminal_charge(initial_x, old_gate);
+                    let residual = |voltage: f64| {
+                        voltage / resistance + (terminal_charge(voltage, new_gate) - old_charge) / h
+                    };
+                    let mut low = -0.2;
+                    let mut high = 0.2;
+                    assert!(residual(low) * residual(high) < 0.0);
+                    for _ in 0..80 {
+                        let middle = 0.5 * (low + high);
+                        if residual(middle) < 0.0 {
+                            low = middle;
+                        } else {
+                            high = middle;
+                        }
+                    }
+                    let expected = 0.5 * (low + high);
+
+                    solver.set_voltage_source(gate, new_gate);
+                    solver
+                        .advance(h)
+                        .expect("gate step through Ward-Dutton charge solves");
+                    let actual = solver.node_voltage(x);
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} reverse={reverse} {integration:?}: expected {expected} V, got {actual} V"
+                    );
+                }
+            }
+        }
+    }
+
     /// `TOX` produces an intrinsic gate-bulk capacitance in cutoff. A gate
     /// step charges that branch through the resistor for NMOS and PMOS, and
     /// the held bias exercises the selected trapezoidal history after the
