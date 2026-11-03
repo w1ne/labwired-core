@@ -2752,7 +2752,6 @@ pub fn ili9488(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
     dev
 }
 
-
 /// The RM67162 model driven by the SPI controller's own DCX line, which is how
 /// `examples/nrf54lm20a-snake` wires it. The shape the in-crate tests used to
 /// get from `Rm67162::with_controller_dc`.
@@ -4115,5 +4114,4 @@ mod tests {
         serial_command(&mut panel, 0x2b, &[0x00, 0x00, 0x01, 0x3F]); // 0..319
         assert_eq!((panel.col_end, panel.row_end), (479, 319));
     }
-
 }
