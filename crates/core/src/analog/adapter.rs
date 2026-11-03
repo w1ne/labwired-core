@@ -26,6 +26,24 @@
 //! `netlist`, `vdd`, `probes` and `sources` share their spelling with the
 //! ngspice wrapper. A routed resistor is an in-core extension: its numeric
 //! input is resistance in ohms and requires a finite positive value.
+//! A bounded beta-curve NTC can instead be configured as:
+//!
+//! ```yaml
+//! thermistors:
+//!   temperature:
+//!     resistor: Rntc
+//!     r_ref_ohms: 10000
+//!     beta_kelvin: 3950
+//!     reference_c: 25
+//!     min_c: 0
+//!     max_c: 85
+//! ```
+//!
+//! The input is numeric Celsius and starts at `reference_c`. All parameters
+//! and the valid temperature range must be supplied from the chosen part's
+//! data. The initial netlist resistance must equal `r_ref_ohms`; a resistor
+//! may have only one routed owner. This beta approximation does not model
+//! tolerance, self-heating or behavior outside the declared range.
 //!
 //! ## Step semantics
 //!
@@ -72,6 +90,61 @@ impl Probe {
     }
 }
 
+/// A bounded beta approximation for one physical NTC resistor.
+/// The caller must supply coefficients and the range in which they apply.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThermistorConfig {
+    pub resistor: String,
+    pub r_ref_ohms: f64,
+    pub beta_kelvin: f64,
+    pub reference_c: f64,
+    pub min_c: f64,
+    pub max_c: f64,
+}
+
+impl ThermistorConfig {
+    fn validate(&self) -> Result<(), AnalogError> {
+        if self.resistor.trim().is_empty()
+            || !self.r_ref_ohms.is_finite()
+            || self.r_ref_ohms <= 0.0
+            || !self.beta_kelvin.is_finite()
+            || self.beta_kelvin <= 0.0
+            || !self.reference_c.is_finite()
+            || !self.min_c.is_finite()
+            || !self.max_c.is_finite()
+            || self.min_c <= -273.15
+            || self.min_c > self.reference_c
+            || self.reference_c > self.max_c
+        {
+            return Err(AnalogError::Config("thermistor requires positive finite coefficients and a valid temperature range containing the reference".to_string()));
+        }
+        self.resistance(self.min_c)?;
+        self.resistance(self.max_c)?;
+        Ok(())
+    }
+
+    fn resistance(&self, temperature_c: f64) -> Result<f64, AnalogError> {
+        if !temperature_c.is_finite() || temperature_c < self.min_c || temperature_c > self.max_c {
+            return Err(AnalogError::Config(format!(
+                "thermistor temperature must be within {}..{} C",
+                self.min_c, self.max_c
+            )));
+        }
+        let ohms = self.r_ref_ohms
+            * libm::exp(
+                self.beta_kelvin
+                    * (1.0 / (temperature_c + 273.15) - 1.0 / (self.reference_c + 273.15)),
+            );
+        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "thermistor curve produces invalid resistance".to_string(),
+            ));
+        }
+        Ok(ohms)
+    }
+}
+
 /// The `config:` block of an `adapter: analog` model.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalogConfig {
@@ -85,6 +158,8 @@ pub struct AnalogConfig {
     pub probes: BTreeMap<String, String>,
     /// LabWired input name → circuit element (`V`, `I`, `R` or `S`).
     pub sources: BTreeMap<String, String>,
+    /// Input name → explicitly bounded beta-curve thermistor.
+    pub thermistors: BTreeMap<String, ThermistorConfig>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
     /// Ring depth for the oscilloscope trace.
@@ -99,6 +174,7 @@ impl Default for AnalogConfig {
             integration: Integration::BackwardEuler,
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
+            thermistors: BTreeMap::new(),
             trace: Vec::new(),
             trace_samples: super::trace::DEFAULT_TRACE_SAMPLES,
         }
@@ -146,6 +222,10 @@ impl AnalogConfig {
         }
         if let Some(value) = config.get("sources") {
             parsed.sources = string_map(value, "config.sources")?;
+        }
+        if let Some(value) = config.get("thermistors") {
+            parsed.thermistors = serde_yaml::from_value(value.clone())
+                .map_err(|error| AnalogError::Config(format!("config.thermistors: {error}")))?;
         }
         if let Some(value) = config.get("trace") {
             let list = value.as_sequence().ok_or_else(|| {
@@ -199,6 +279,7 @@ enum InputTarget {
     VoltageSource(usize),
     CurrentSource(usize),
     Resistance(usize),
+    Thermistor(usize, ThermistorConfig),
     /// Every switch sharing one control name.
     Switches(Vec<usize>),
 }
@@ -316,6 +397,32 @@ impl AnalogCosimAdapter {
             inputs
                 .entry(switch.ctrl.clone())
                 .or_insert(InputTarget::Switches(indices));
+        }
+
+        for (input, model) in &cfg.thermistors {
+            model.validate()?;
+            if inputs.contains_key(input) {
+                return Err(AnalogError::Config(format!(
+                    "input `{input}` is assigned more than once"
+                )));
+            }
+            let index = solver.resistor_index(&model.resistor).ok_or_else(|| {
+                AnalogError::Config(format!(
+                    "thermistor `{input}` names missing resistor `{}`",
+                    model.resistor
+                ))
+            })?;
+            if inputs.values().any(|target| matches!(target, InputTarget::Resistance(i) | InputTarget::Thermistor(i, _) if *i == index)) {
+                return Err(AnalogError::Config(format!("resistor `{}` has multiple routed owners", model.resistor)));
+            }
+            let initial = solver.circuit().resistors[index].ohms;
+            if !initial.is_finite() || (initial - model.r_ref_ohms).abs() > model.r_ref_ohms * 1e-9
+            {
+                return Err(AnalogError::Config(format!(
+                    "thermistor `{input}` initial resistor must match r_ref_ohms"
+                )));
+            }
+            inputs.insert(input.clone(), InputTarget::Thermistor(index, model.clone()));
         }
 
         let sample_width = probes.len() + trace_extra.len();
@@ -453,6 +560,18 @@ impl AnalogCosimAdapter {
                     SimulationError::Other(format!("analog input `{name}`: {error}"))
                 })?;
             }
+            InputTarget::Thermistor(index, model) => {
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!("analog input `{name}` drives a thermistor; temperature must be numeric Celsius")));
+                }
+                let celsius = self.numeric(name, value, "Celsius")?;
+                let ohms = model.resistance(celsius).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
             InputTarget::Switches(indices) => {
                 let closed = match value {
                     CosimSignalValue::Bool(state) => *state,
@@ -517,6 +636,7 @@ impl CosimAdapter for AnalogCosimAdapter {
 
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
         match self.inputs.get(name)? {
+            InputTarget::Thermistor(_, model) => Some(CosimSignalValue::F64(model.reference_c)),
             InputTarget::Resistance(index) => Some(CosimSignalValue::F64(
                 self.solver.circuit().resistors[*index].ohms,
             )),
@@ -531,7 +651,8 @@ impl CosimAdapter for AnalogCosimAdapter {
             InputTarget::Switches(_) => CosimInputKind::Bool,
             InputTarget::VoltageSource(_)
             | InputTarget::CurrentSource(_)
-            | InputTarget::Resistance(_) => CosimInputKind::Number,
+            | InputTarget::Resistance(_)
+            | InputTarget::Thermistor(_, _) => CosimInputKind::Number,
         })
     }
 
