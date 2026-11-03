@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.916571">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.951346">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="b177acb4a309a91747fea1eabd9e6cc0bedce84cb10a382b494a9bf1ae7b8f16"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.916571">
+  <testcase classname="labwired" name="run" time="0.951346">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO-L552ZE-Q SMOKE" time="0.000000">
   </testcase>
