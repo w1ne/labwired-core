@@ -1,0 +1,18 @@
+# Narrow chip metadata for the Arduino Nano ESP32 red-RGB-LED smoke.
+# The Xtensa S3 builder installs its internal models programmatically. This
+# descriptor names only the real GPIO model used by this board profile.
+name: "esp32s3-arduino-nano-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "16384KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"

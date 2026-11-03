@@ -1,0 +1,26 @@
+{
+  "board": "arduino-nano-esp32",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "source": "#include <Arduino.h>\n\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n  digitalWrite(LED_BUILTIN, HIGH);\n}\n\nvoid loop() {\n  delay(1000);\n}\n",
+  "oracle": {
+    "gpio": [
+      {
+        "pin": "GPIO48",
+        "state": "high"
+      }
+    ]
+  },
+  "result": {
+    "status": "failed",
+    "run_status": "pass",
+    "stop_reason": "max_steps",
+    "oracle_results": [
+      {
+        "kind": "gpio",
+        "passed": false,
+        "detail": "GPIO48 is low, expected high (gpio_pins pad)"
+      }
+    ]
+  }
+}

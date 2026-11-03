@@ -17,6 +17,8 @@ The shared ESP32-S3 chip yamls are:
   authoritative wiring code that this yaml documents.
 - `configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml` — board-specific narrow
   descriptor for the UART0-only DevKitC smoke below.
+- `configs/chips/esp32s3-arduino-nano-smoke.yaml` — board-specific narrow
+  descriptor for the Arduino Nano ESP32 GPIO46 LED smoke.
 
 ## Status at a glance
 
@@ -25,9 +27,9 @@ The shared ESP32-S3 chip yamls are:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0-only profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 UART0 smoke](../../examples/esp32-s3-devkitc-1-n16r8/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0-only profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 UART0 smoke](../../examples/esp32-s3-devkitc-1-n16r8/) · [Arduino Nano ESP32 GPIO smoke](../../examples/arduino-nano-esp32/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
 | Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; hosted DevKitC UART0 oracle evidence in the example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
@@ -47,6 +49,21 @@ power faults is not covered.
 The board's USB-to-UART bridge, native USB, PSRAM, Wi-Fi/BLE, buttons and LEDs
 are outside the verified scope. The broader `configs/chips/esp32s3.yaml` still
 declares a `system_stub`; this UART0-only board profile does not reference it.
+
+## Arduino Nano ESP32 GPIO smoke
+
+The narrow Nano ESP32 profile names the real `esp32s3_gpio` model and binds the
+board's active-low red RGB LED to GPIO46. Its hosted smoke drives GPIO46 low
+through the ESP-IDF GPIO API and the oracle confirms the final GPIO pad state.
+The hosted verifier assumes an ideal supply rail, so reset behavior under
+power faults is not covered. The board pin map, vendor status, and verification
+record are in [`docs/boards/arduino-nano-esp32.md`](arduino-nano-esp32.md) and
+[`examples/arduino-nano-esp32/`](../../examples/arduino-nano-esp32/).
+
+The hosted catalog's default I²C map (GPIO8/GPIO9) conflicts with Arduino's
+published A4/A5 map (GPIO11/GPIO12). The Nano profile makes no I²C claim until
+that catalog discrepancy is resolved; Wi-Fi/Bluetooth, PSRAM, native USB, ADC,
+timer, and SPI are also outside the smoke.
 
 ## Peripherals (esp32s3-zero, Plan 2/4 model)
 

@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "status": "model_verified",
+  "proven": true,
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+      "address": "0x0",
+      "pc": "0x0"
+    }
+  ],
+  "unmodeled_faults": [
+    {
+      "access": "unpowered_rail_assumed",
+      "pc": "0x0",
+      "count": 1,
+      "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+      "address": "0x0"
+    }
+  ],
+  "verification": "GPIO46 is low (gpio_pins pad). Model-verified deterministically.",
+  "run_status": "pass",
+  "stop_reason": "max_steps",
+  "oracle_results": [
+    {
+      "kind": "gpio",
+      "passed": true,
+      "detail": "GPIO46 is low (gpio_pins pad)"
+    }
+  ],
+  "diagnosis": {
+    "faulting_pc": "0x40378a56",
+    "summary": "Ran the full 20000000-step budget without halting, having produced 5 lines of firmware serial output and 10 boot-log lines. The firmware was running and reporting, so this is either a long-running program that needs a larger budget or an infinite loop / busy-wait on a status bit that never changes (e.g. polling a peripheral the twin does not model).",
+    "hint": "Re-run with a larger max_steps (try 200000000; the ceiling for this run path is 225000000). Otherwise check for spin-loops that wait on a hardware status bit, and prefer software delay loops over peripheral-flag polls. Consult docs/firmware-scaffolds/README.md for the list of modeled peripherals."
+  }
+}

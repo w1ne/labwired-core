@@ -1,0 +1,26 @@
+{
+  "outcome": "MODEL_ONLY",
+  "source": "LabWired hosted board list/describe, checked 2026-11-03 UTC",
+  "board": "arduino-nano-esp32",
+  "chip": "esp32s3",
+  "diagram_mcu_component_type": "esp32-s3-devkitc-1",
+  "tested_gpio": "GPIO46",
+  "hosted_led_builtin_probe": {
+    "status": "failed",
+    "oracle": {
+      "pin": "GPIO48",
+      "state": "high"
+    },
+    "observed": "GPIO48 is low",
+    "note": "The hosted Arduino profile did not apply the Nano's documented LED_BUILTIN/D13 alias. The accepted smoke uses the physical GPIO46 API instead."
+  },
+  "hosted_catalog_i2c_claim": {
+    "sda": "GPIO8",
+    "scl": "GPIO9"
+  },
+  "vendor_documented_i2c_header": {
+    "sda": "A4 / GPIO11",
+    "scl": "A5 / GPIO12"
+  },
+  "gap": "The hosted catalog I2C mapping conflicts with Arduino's published Nano ESP32 pin map. I2C is not part of this smoke or system profile."
+}

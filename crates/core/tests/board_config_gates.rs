@@ -48,6 +48,25 @@ fn atsamd21_from_config_builds() {
 }
 
 #[test]
+fn arduino_nano_esp32_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/arduino-nano-esp32.yaml",
+        "esp32s3 / arduino-nano-esp32 must build",
+    );
+    assert_eq!(chip.name, "esp32s3-arduino-nano-smoke");
+    assert_eq!(chip.flash.base, 0x4200_0000);
+    assert_eq!(chip.flash.size, 16 * 1024 * 1024);
+    assert!(
+        bus.find_peripheral_index_by_name("gpio").is_some(),
+        "bus must expose esp32s3_gpio for the red RGB LED on GPIO46"
+    );
+    assert!(
+        bus.find_peripheral_index_by_name("i2c0").is_none(),
+        "the focused Nano ESP32 smoke profile must omit the unresolved I2C pin map"
+    );
+}
+
+#[test]
 fn atsamd51_from_config_builds() {
     let (chip, bus) = from_config(
         "configs/systems/metro-m4.yaml",

@@ -1,0 +1,24 @@
+{
+  "board": "arduino-nano-esp32",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "diagram": {
+    "board": "arduino-nano-esp32",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "esp32-s3-devkitc-1"
+      }
+    ],
+    "wires": []
+  },
+  "oracle": {
+    "gpio": [
+      {
+        "pin": "GPIO46",
+        "state": "low"
+      }
+    ]
+  },
+  "source": "#include <Arduino.h>\n#include <driver/gpio.h>\n\nvoid setup() {\n  gpio_set_direction(GPIO_NUM_46, GPIO_MODE_OUTPUT); // RGB red, active low\n  gpio_set_level(GPIO_NUM_46, 0);\n}\n\nvoid loop() {\n  delay(1000);\n}\n"
+}
