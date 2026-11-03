@@ -440,7 +440,7 @@ input at a different element.
 
 ```text
 .model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms>)
-.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n>)
+.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> RB=<ohms> RBM=<ohms> IRB=<a>)
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
@@ -469,9 +469,10 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
-Other device capacitances, temperature coefficients, and terminal resistances
-outside the modeled BJT, JFET and MOSFET parameters below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
-terminal resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` or
+Other device capacitances, temperature coefficients and terminal resistances
+outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
+are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
+current; JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
 `RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
 explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
 terminal, including an explicit zero that disables its sheet-resistance path.
@@ -506,7 +507,10 @@ plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
 adjustment and reverse transit-time charge from `TR` (all default to zero;
 `XTF`/`ITF` default to zero and `VTF` to infinity; shared `FC` defaults to
 0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
-default to zero). Nonzero BJT terminal resistances add probeable internal
+default to zero). `RBM` defaults to `RB` and `IRB` defaults to infinity, so
+omitting either leaves the base resistance fixed; with `RBM < RB` and finite
+`IRB`, the base resistance falls from `RB` toward `RBM` as base current rises.
+Nonzero BJT terminal resistances add probeable internal
 collector, base, or emitter nodes. Nonzero JFET and MOSFET terminal resistances
 add probeable `<element>#drain` and `<element>#source` nodes, respectively.
 Shichman–Hodges MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both

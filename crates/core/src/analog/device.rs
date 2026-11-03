@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Device physics for the nonlinear elements: the exponential diode, the
-//! Gummel–Poon BJT with Early effect, high-injection rolloff and base
-//! recombination, the level-1 JFET with its Parker–Skellern fit and
-//! gate-junction depletion charge, and
+//! Gummel–Poon BJT with Early effect, high-injection rolloff, base
+//! recombination and bias-dependent base resistance, the level-1 JFET with its
+//! Parker–Skellern fit and gate-junction depletion charge, and
 //! the level-1 MOSFET, plus the constants and voltage-limiting heuristics
 //! Newton–Raphson needs to reach them.
 //!
@@ -573,6 +573,41 @@ pub fn bjt_op_with_nkf(
         gpi,
         gmu,
     }
+}
+
+/// Ngspice's level-1 Gummel–Poon base-spreading resistance for the current
+/// flowing into the base. `RBM` defaults to `RB` and `IRB` defaults to
+/// infinity, so an omitted transition leaves the old fixed resistor exactly
+/// unchanged.
+///
+/// The interpolation is the SPICE3/ngspice form:
+///
+/// ```text
+/// x = max(Ib / IRB, 1e-9)
+/// z = (sqrt(1 + 14.59025·x) − 1) / (2.4317·sqrt(x))
+/// RB(Ib) = RBM + 3·(RB − RBM)·(tan(z) − z)/(z·tan²(z))
+/// ```
+pub fn bjt_base_resistance(model: BjtModel, base_current: f64) -> f64 {
+    let rb = model.rb;
+    let rbm = model.rbm.unwrap_or(rb);
+    if rb == 0.0 || rbm == rb || model.irb.is_infinite() {
+        return rb;
+    }
+
+    let ratio = (base_current / model.irb).max(1e-9);
+    if ratio.is_infinite() {
+        return rbm;
+    }
+    let sqrt_ratio = libm::sqrt(ratio);
+    let z = (libm::sqrt(1.0 + 14.59025 * ratio) - 1.0) / (2.4317 * sqrt_ratio);
+    let tan_z = libm::tan(z);
+    let transition = 3.0 * (tan_z - z) / (z * tan_z * tan_z);
+    rbm + (rb - rbm) * transition
+}
+
+/// Whether `RBM`/`IRB` make the BJT base resistor depend on bias.
+pub fn bjt_has_bias_dependent_base_resistance(model: BjtModel) -> bool {
+    model.rb > 0.0 && model.irb.is_finite() && model.rbm.is_some_and(|rbm| rbm < model.rb)
 }
 
 /// Transit charge and its derivatives for the forward and reverse BJT

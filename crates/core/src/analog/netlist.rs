@@ -64,8 +64,8 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT terminal resistances
-//! `RB`/`RC`/`RE`, JFET terminal
+//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB` and
+//! terminal resistances `RB`/`RC`/`RE`, JFET terminal
 //! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
 //! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
@@ -1090,9 +1090,16 @@ pub struct BjtModel {
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
-    /// Ohmic base terminal resistance `RB`, ohms. Zero disables the internal
-    /// base node, matching ngspice's default.
+    /// Zero-bias base terminal resistance `RB`, ohms. Zero disables the
+    /// internal base node, matching ngspice's default.
     pub rb: f64,
+    /// Minimum high-current base resistance `RBM`, ohms. `None` means RBM=RB,
+    /// ngspice's default, so the base resistance stays fixed.
+    pub rbm: Option<f64>,
+    /// Base current where resistance falls halfway from RB to RBM (`IRB`),
+    /// amps. Infinity disables the current-dependent transition, ngspice's
+    /// default.
+    pub irb: f64,
     /// Ohmic collector terminal resistance `RC`, ohms. Zero disables the
     /// internal collector node, matching ngspice's default.
     pub rc: f64,
@@ -1132,6 +1139,8 @@ impl BjtModel {
             itf: 0.0,
             tr: 0.0,
             rb: 0.0,
+            rbm: None,
+            irb: f64::INFINITY,
             rc: 0.0,
             re: 0.0,
         }
@@ -3074,12 +3083,19 @@ fn bind_models(
                 }
                 if !model.rb.is_finite()
                     || model.rb < 0.0
+                    || model
+                        .rbm
+                        .is_some_and(|rbm| !rbm.is_finite() || rbm < 0.0 || rbm > model.rb)
+                    || !(model.irb > 0.0)
+                    || model.irb.is_nan()
                     || !model.rc.is_finite()
                     || model.rc < 0.0
                     || !model.re.is_finite()
                     || model.re < 0.0
                 {
-                    return Err(ctx.parse_err("a BJT model needs RB/RC/RE >= 0".to_string()));
+                    return Err(ctx.parse_err(
+                        "a BJT model needs RB/RC/RE >= 0, 0 <= RBM <= RB and IRB > 0".to_string(),
+                    ));
                 }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
@@ -3665,6 +3681,8 @@ fn parse_model(
             (ModelCard::Bjt(model), "ITF") => model.itf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
+            (ModelCard::Bjt(model), "RBM") => model.rbm = Some(value),
+            (ModelCard::Bjt(model), "IRB") => model.irb = value,
             (ModelCard::Bjt(model), "RC") => model.rc = value,
             (ModelCard::Bjt(model), "RE") => model.re = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,

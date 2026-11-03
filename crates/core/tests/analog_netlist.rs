@@ -491,6 +491,8 @@ C1 out 0 100n $ dollar comment
         assert_eq!(bjt.model.rb, 12.0);
         assert_eq!(bjt.model.rc, 3.0);
         assert_eq!(bjt.model.re, 0.5);
+        assert_eq!(bjt.model.rbm, None);
+        assert_eq!(bjt.model.irb, f64::INFINITY);
         assert_eq!(circuit.node_count(), 6);
         assert_eq!(
             bjt.junction_b,
@@ -525,6 +527,21 @@ C1 out 0 100n $ dollar comment
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
                 .expect_err("negative BJT terminal resistance is invalid");
             assert!(error.to_string().contains("RB/RC/RE >= 0"), "{error}");
+        }
+
+        let rolloff = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN(RB=60 RBM=10 IRB=2m)\n")
+            .expect("current-dependent BJT base-resistance parameters parse");
+        assert_eq!(rolloff.bjts[0].model.rb, 60.0);
+        assert_eq!(rolloff.bjts[0].model.rbm, Some(10.0));
+        assert_eq!(rolloff.bjts[0].model.irb, 2e-3);
+
+        for parameters in ["RB=10 RBM=11", "RBM=-1", "IRB=0", "IRB=-1"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n"))
+                .expect_err("invalid current-dependent base-resistance parameters are refused");
+            assert!(
+                error.to_string().contains("0 <= RBM <= RB and IRB > 0"),
+                "{error}"
+            );
         }
 
         let collision = parse_netlist("Q1 c b e QMOD\nR1 Q1#base 0 1k\n.model QMOD NPN(RB=10)\n")

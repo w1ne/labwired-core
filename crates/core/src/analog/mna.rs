@@ -1301,7 +1301,7 @@ impl Solver {
             );
         }
         for bjt in &self.circuit.bjts {
-            if bjt.model.rb > 0.0 {
+            if bjt.model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(bjt.model) {
                 conductance(
                     &mut self.matrix,
                     dim,
@@ -2043,6 +2043,14 @@ impl Solver {
                 vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr, model.vaf, model.var,
                 model.ikf, model.ikr, model.ise, model.ne, model.isc, model.nc, model.nkf,
             );
+
+            // The Gummel–Poon base resistance is updated from the transistor's
+            // base current on each Newton pass, following ngspice's RBM/IRB
+            // conductance stamp. Fixed RB remains in the linear build path.
+            if device::bjt_has_bias_dependent_base_resistance(model) {
+                let resistance = device::bjt_base_resistance(model, op.ib);
+                conductance(matrix, dim, bjt.b, bjt.junction_b, 1.0 / resistance);
+            }
 
             // GMIN across both junctions. Without it a transistor that is fully
             // off leaves its base and collector tied to the rest of the circuit

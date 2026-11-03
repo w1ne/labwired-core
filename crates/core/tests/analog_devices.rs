@@ -35,7 +35,8 @@
 //! MOSFET bulk-junction depletion charge through `CBD`/`CBS` and `CJ`/`CJSW`
 //! geometry, MOSFET intrinsic channel capacitance from `TOX`, and JFET terminal
 //! resistances `RD`/`RS`, and MOSFET terminal resistances from `RD`/`RS` or
-//! `RSH` times per-instance `NRD`/`NRS` are exercised below. Circuits depending
+//! `RSH` times per-instance `NRD`/`NRS`, and BJT current-dependent base
+//! resistance through `RBM`/`IRB` are exercised below. Circuits depending
 //! on unsupported stored charge still belong to `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
@@ -1099,6 +1100,59 @@ mod analog {
                     "{kind} {source}: expected {expected_current} A, got {actual_current} A"
                 );
             }
+        }
+    }
+
+    /// Ngspice's RBM/IRB law makes the base spreading resistance fall from RB
+    /// toward RBM as the solved base current rises. This drives both an NPN and
+    /// PNP through that transition and checks the voltage drop/current ratio
+    /// against the closed-form resistance interpolation.
+    #[test]
+    fn bjt_base_resistance_rolls_off_with_bias_for_both_polarities() {
+        let (rb, rbm, irb) = (50.0, 5.0, 100e-6);
+        let expected_resistance = |base_current: f64| {
+            let x = (base_current / irb).max(1e-9);
+            let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
+            let tan_z = z.tan();
+            rbm + 3.0 * (rb - rbm) * (tan_z - z) / (z * tan_z * tan_z)
+        };
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let mut measured = Vec::new();
+            for drive in [0.75, 0.82] {
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc {}\nQ1 c b 0 QMOD\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=1 VAF=0 VAR=0 RB={rb} RBM={rbm} IRB={irb})\n",
+                    sign * drive,
+                    sign * 5.0,
+                );
+                let solver = build(&netlist);
+                let base = solver
+                    .circuit()
+                    .node("b")
+                    .expect("external base node")
+                    .expect("base is not ground");
+                let internal_base = solver
+                    .circuit()
+                    .node("Q1#base")
+                    .expect("internal base node")
+                    .expect("internal base is not ground");
+                let base_current = sign * source_current(&solver, "Vb");
+                let base_drop = sign
+                    * (solver.node_voltage(Some(base)) - solver.node_voltage(Some(internal_base)));
+                let actual_resistance = base_drop / base_current;
+                let expected = expected_resistance(base_current);
+                assert!(base_current > 0.0, "{kind}: expected forward base current");
+                assert!(
+                    relative(actual_resistance, expected) < 1e-5,
+                    "{kind} at {drive} V: expected RB={expected} Ω from Ib={base_current} A, got {actual_resistance} Ω"
+                );
+                measured.push(actual_resistance);
+            }
+            assert!(
+                measured[1] < measured[0],
+                "{kind}: base resistance should roll off with increasing base current, got {measured:?}"
+            );
         }
     }
 
