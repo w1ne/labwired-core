@@ -653,6 +653,10 @@ pub enum ComparatorOutput {
 /// from each input to `v−`; zero disables those paths. Neither has temperature
 /// dependence.
 ///
+/// `CMRR`, when present, converts common-mode input voltage relative to the
+/// supply midpoint into input-referred differential voltage using
+/// `10^(−CMRR/20)`. Omission gives ideal common-mode rejection.
+///
 /// `CINCM` is the common-mode capacitance from each input to `v−`; `CIND` is
 /// the differential capacitance between the inputs. Both are fixed linear
 /// capacitances with no voltage or temperature dependence. `IQ` is a fixed
@@ -687,6 +691,8 @@ pub struct OpAmpModel {
     pub cin_diff: f64,
     /// Quiescent current drawn from `v+` to `v−`, amps.
     pub iq: f64,
+    /// Common-mode rejection ratio in dB. `None` means ideal rejection.
+    pub cmrr: Option<f64>,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -707,6 +713,7 @@ impl Default for OpAmpModel {
             cin_cm: 0.0,
             cin_diff: 0.0,
             iq: 0.0,
+            cmrr: None,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -1414,6 +1421,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             cin_cm: 0.0,
             cin_diff: 0.0,
             iq: 0.0,
+            cmrr: None,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -3508,6 +3516,7 @@ fn parse_model(
             (ModelCard::OpAmp(model), "RIN") => model.rin = value,
             (ModelCard::OpAmp(model), "RINCM") => model.rin_cm = value,
             (ModelCard::OpAmp(model), "IQ") => model.iq = value,
+            (ModelCard::OpAmp(model), "CMRR") => model.cmrr = Some(value),
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
@@ -3528,7 +3537,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -3903,6 +3912,20 @@ fn check_common_mode_input_resistance(ctx: &LineCtx<'_>, rin_cm: f64) -> Result<
     Ok(())
 }
 
+/// Convert an optional op-amp CMRR in dB into common-mode-to-differential gain.
+fn check_common_mode_rejection(
+    ctx: &LineCtx<'_>,
+    cmrr_db: Option<f64>,
+) -> Result<f64, AnalogError> {
+    let Some(cmrr_db) = cmrr_db else {
+        return Ok(0.0);
+    };
+    if !cmrr_db.is_finite() || cmrr_db < 0.0 {
+        return Err(ctx.parse_err("CMRR must be finite and non-negative"));
+    }
+    Ok(libm::pow(10.0, -cmrr_db / 20.0))
+}
+
 /// Quiescent supply current flows only from `v+` to `v−` in these macro cards.
 fn check_quiescent_current(ctx: &LineCtx<'_>, iq: f64) -> Result<(), AnalogError> {
     if !iq.is_finite() || iq < 0.0 {
@@ -3966,6 +3989,7 @@ fn lower_opamp(
     check_input_resistance(ctx, model.rin)?;
     check_common_mode_input_resistance(ctx, model.rin_cm)?;
     check_quiescent_current(ctx, model.iq)?;
+    let cm_gain = check_common_mode_rejection(ctx, model.cmrr)?;
     let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rg = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rg;
@@ -3984,6 +4008,13 @@ fn lower_opamp(
     let p = lower.node("p");
     // gm·(v(in+) − v(in−)) flows from ground through the source into p.
     lower.vccs("g", None, p, inp, inn, gm);
+    if cm_gain > 0.0 {
+        // The input-referred error is the common-mode voltage relative to the
+        // midpoint of the supply rails, attenuated by 10^(−CMRR/20).
+        let gcm = 0.5 * gm * cm_gain;
+        lower.vccs("gcmp", None, p, inp, vee, gcm);
+        lower.vccs("gcmm", None, p, inn, vcc, gcm);
+    }
     lower.resistor("rg", p, None, rg);
     lower.capacitor("cg", p, None, cg);
     if model.vos != 0.0 {

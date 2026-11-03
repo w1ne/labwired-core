@@ -185,6 +185,40 @@ mod analog {
     }
 
     #[test]
+    fn opamp_common_mode_rejection_uses_supply_midpoint_and_db_scale() {
+        let (aol, rout, load, attenuation) = (100.0, 100.0, 10e3, 0.01);
+        for common_mode in [-1.0, 0.0, 1.0] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc -5\n\
+                 Vp inp 0 dc {common_mode}\nVm inn 0 dc {common_mode}\n\
+                 Rl out 0 {load}\nX1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW=1meg ROUT={rout} CMRR=40)\n"
+            ));
+            let expected = aol * attenuation * common_mode * load / (load + rout);
+            let actual = v(&solver, "out");
+            assert!(
+                (actual - expected).abs() < 3e-6,
+                "common-mode input {common_mode} V: out = {actual} V, expected {expected} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_common_mode_rejection_must_be_finite_and_non_negative() {
+        for (cmrr, message) in [
+            ("CMRR=-1", "CMRR must be finite and non-negative"),
+            ("CMRR=1e999", "CMRR must be finite and non-negative"),
+        ] {
+            let error = parse_netlist(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc -5\nX1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL=100 GBW=1meg ROUT=100 {cmrr})\n"
+            ))
+            .unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[test]
     fn opamp_input_bias_current_drops_across_both_input_source_resistances() {
         let (aol, rout, load, ibias) = (100.0, 100.0, 10e3, 10e-9);
         // Equal 1 V sources leave a 0.5 mV differential after the same bias
