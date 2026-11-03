@@ -1,5 +1,5 @@
-2026-11-03T13:45:37.187861Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_wba52cg.yaml
-2026-11-03T13:45:37.189396Z  INFO labwired_loader: ELF Entry Point: 0x8000801
+2026-11-03T13:54:32.444786Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_wba52cg.yaml
+2026-11-03T13:54:32.446359Z  INFO labwired_loader: ELF Entry Point: 0x8000801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  5/5 checks · nucleo_wba52cg-smoke · 4000000 steps · 0.93s
+PASS  5/5 checks · nucleo_wba52cg-smoke · 4000000 steps · 1.14s
