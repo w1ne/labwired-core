@@ -538,6 +538,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
 | `soil-moisture` | Analog | Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage) |
+| `sound-sensor` | Analog | Analog microphone sound-level module (A0 on ADC) |
 | `tmp36` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |
 | `xl4015` | Analog | Adjustable XL4015 buck; Vout setpoint observed through a ÷11 ADC divider |
 | `can-bridge` | CAN | Boundary between a CAN controller and traffic from outside the simulation |
