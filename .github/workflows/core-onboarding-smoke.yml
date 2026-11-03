@@ -18,6 +18,7 @@ on:
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
+      - "crates/firmware-stm32f746-demo/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-stm32h743-smoke/**"
       - "crates/firmware-stm32f429-smoke/**"
@@ -131,6 +132,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32h743-smoke.yaml
             system: configs/systems/onboarding/stm32h743.yaml
+          # The STM32F746G Discovery fixture is limited to the imported
+          # Cortex-M7, bounded memory, RCC, GPIOI, and USART1 smoke surface.
+          - id: stm32f7_discovery-bb
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml
+            system: configs/systems/onboarding/stm32f7_discovery-bb.yaml
           # The L071 smoke exercises the shared STM32L0 RCC/GPIO/USART2 model
           # surface with a Cortex-M0+ binary built for the ARMv6-M ISA.
           - id: stm32l071
