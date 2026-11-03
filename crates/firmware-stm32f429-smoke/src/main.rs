@@ -84,7 +84,7 @@ fn main() -> ! {
     }
 
     set_led(false);
-    send(b"STM32F429 profile smoke\r\n");
+    send(b"STM32F4 shared profile smoke\n");
 
     loop {
         set_led(true);

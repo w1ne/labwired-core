@@ -6,7 +6,7 @@ inputs:
 limits:
   max_steps: 800000
 assertions:
-  - uart_contains: "STM32F429 profile smoke"
+  - uart_contains: "STM32F4 shared profile smoke"
   - gpio_edges:
       pin: "gpioPortD:12"
       min_edges: 1

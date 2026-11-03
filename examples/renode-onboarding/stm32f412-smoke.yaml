@@ -1,0 +1,14 @@
+# Cortex-M4 smoke against the imported STM32F412 system using the shared F4
+# register fixture. It exercises USART2, GPIOA, GPIOD and the F4 RCC subset.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f429-smoke"
+  system: "../../configs/systems/onboarding/stm32f412.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "STM32F4 shared profile smoke"
+  - gpio_edges:
+      pin: "gpioPortD:12"
+      min_edges: 1
+  - expected_stop_reason: max_steps

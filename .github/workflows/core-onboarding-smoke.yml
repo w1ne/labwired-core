@@ -151,13 +151,20 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/stm32f072-smoke.yaml
             system: configs/systems/onboarding/stm32f072.yaml
-          # The dedicated F4 smoke exercises this imported F429 profile's
-          # RCC, GPIOA/GPIOD, and classic USART2 subset.
+          # The shared F4 smoke exercises this imported F429 profile's RCC,
+          # GPIOA/GPIOD and classic USART2 subset.
           - id: stm32f429
             crate: firmware-stm32f429-smoke
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32f429-smoke.yaml
             system: configs/systems/onboarding/stm32f429.yaml
+          # Reuse the F4 register fixture against the exact imported F412
+          # system, with a separate bounded profile and measured assertions.
+          - id: stm32f412
+            crate: firmware-stm32f429-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f412-smoke.yaml
+            system: configs/systems/onboarding/stm32f412.yaml
           - id: nrf52840
             crate: firmware-nrf52840-demo
             target: thumbv7em-none-eabi
