@@ -47,7 +47,7 @@ use crate::cosim::{CosimAdapter, CosimInputKind, CosimSignalValue, CosimStep, Co
 use crate::{SimResult, SimulationError};
 
 use super::mna::Solver;
-use super::netlist::{parse_netlist, AnalogError, NodeRef};
+use super::netlist::{parse_netlist, AnalogError, Circuit, NodeRef};
 use super::trace::{AnalogChannel, AnalogTrace, AnalogTraceHandle};
 
 pub use super::mna::Integration;
@@ -227,6 +227,31 @@ impl AnalogCosimAdapter {
     /// operating point and seed the trace with it.
     pub fn from_netlist(netlist: &str, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
         let circuit = parse_netlist(netlist)?;
+        Self::from_circuit(circuit, cfg)
+    }
+
+    fn from_circuit(circuit: Circuit, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
+        if !circuit.ignored_model_parameters.is_empty() {
+            let details = circuit
+                .ignored_model_parameters
+                .iter()
+                .map(|item| format!("{}:{} (line {})", item.model, item.parameter, item.line))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(AnalogError::Config(format!(
+                "in-core analog model cannot represent parameters: {details}. Use a host-provided ngspice adapter, or native external_process with ngspice"
+            )));
+        }
+        if let Some(line) = circuit.ignored_temperature_directives.first() {
+            return Err(AnalogError::Config(format!(
+                "in-core analog simulation cannot honor temperature settings (line {line}; .temp or .options); use a host-provided ngspice adapter, or native external_process with ngspice"
+            )));
+        }
+        if let Some(line) = circuit.ignored_control_directives.first() {
+            return Err(AnalogError::Config(format!(
+                "in-core analog simulation cannot execute .control scripts (line {line}); use a host-provided ngspice adapter, or native external_process with ngspice"
+            )));
+        }
         let solver = Solver::new(circuit, cfg.integration)?;
 
         let mut probes = Vec::with_capacity(cfg.probes.len());
@@ -318,6 +343,12 @@ impl AnalogCosimAdapter {
         if cfg.probes.is_empty() {
             return Err(AnalogError::Config(
                 "config.probes is required: an analog model with no probe produces no outputs"
+                    .to_string(),
+            ));
+        }
+        if config.config.contains_key("allow_ignored_model_parameters") {
+            return Err(AnalogError::Config(
+                "config.allow_ignored_model_parameters is not supported; use a host-provided ngspice adapter or native external_process with ngspice"
                     .to_string(),
             ));
         }

@@ -551,3 +551,37 @@ fn nonlinear_devices_match_ngspice_on_the_same_deck() {
         );
     }
 }
+
+#[test]
+fn cli_reports_unsupported_model_parameters_before_running() {
+    let dir = labwired_cli::test_support::unique_temp_dir("analog-model-omission");
+    std::fs::create_dir_all(&dir).unwrap();
+    let system = dir.join("system.yaml");
+    let manifest = r#"
+name: fidelity-cli
+chip: stm32f401
+cosim_models:
+  - id: vendor_circuit
+    adapter: analog
+    step_ns: 100000
+    config:
+      netlist_text: |
+        V1 in 0 dc 1
+        R1 in out 1k
+        D1 out 0 vendor
+        .model vendor D(IS=2n CJO=4p)
+      probes: { out: "v(out)" }
+"#;
+    std::fs::write(&system, manifest).unwrap();
+    let output = Command::new(cli_binary())
+        .arg("cosim-step")
+        .arg(&system)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "unsupported model must not run");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("vendor_circuit") && stderr.contains("CJO") && stderr.contains("ngspice"),
+        "{stderr}"
+    );
+}

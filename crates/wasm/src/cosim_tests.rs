@@ -1260,3 +1260,28 @@ cosim_models:
     sim.cosim = None;
     assert!(sim.ensure_cosim_healthy().is_ok());
 }
+
+#[test]
+fn browser_analog_adapter_reports_unsupported_model_parameters() {
+    let error = attach_error(
+        r#"
+name: wasm-analog-model-coverage
+chip: stm32f401
+cosim_models:
+  - id: vendor_circuit
+    adapter: analog
+    step_ns: 100000
+    config:
+      netlist_text: |
+        V1 in 0 dc 1
+        R1 in out 1k
+        D1 out 0 vendor
+        .model vendor D(IS=2n CJO=4p)
+      probes: { out: "v(out)" }
+"#,
+    );
+    assert!(
+        error.contains("vendor_circuit") && error.contains("CJO") && error.contains("ngspice"),
+        "{error}"
+    );
+}
