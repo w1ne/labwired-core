@@ -1,0 +1,36 @@
+# Narrow RP2350 profile for the Raspberry Pi Pico 2 smoke.
+# This deliberately declares only the blocks used by the working smoke; the
+# full chip profile is configs/chips/rp2350.yaml and still contains explicit
+# POWMAN/TBMAN stubs and broader unverified peripheral coverage.
+name: "rp2350-pico2-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 150_000_000
+reset_vector_offset: 0x0
+
+flash:
+  base: 0x10000000
+  size: "2048KB"
+ram:
+  base: 0x20000000
+  size: "520KB"
+
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40070000
+    size: "1KB"
+    config:
+      profile: "pl011"
+
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"

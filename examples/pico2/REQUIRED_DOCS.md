@@ -9,6 +9,8 @@
    etc. differ from RP2040):
    https://github.com/raspberrypi/pico-sdk/tree/master/src/rp2350/hardware_regs
 3. CHIP_ID = `0x30004927` (sysinfo.h / RP2350 datasheet SYSINFO).
+4. RP2350 SDK IO_BANK0 definitions, including `GPIO_FUNC_SIO = 5`:
+   https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2350/hardware_structs/include/hardware/structs/io_bank0.h
 
 ## Board
 

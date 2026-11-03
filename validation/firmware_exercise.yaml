@@ -868,7 +868,7 @@ chips:
 
   - id: rp2350
     arch: cortex-m33
-    headline: "No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed bare-metal M33 UART0 smoke, PR-gated as firmware_survival::test_rp2350_demo_survival (case firmware_survival.rs:1523-1533) and rebuilt by the nightly coverage-matrix cell examples/rp2350-demo/io-smoke.yaml (core-coverage-matrix-smoke.yml:276-283); strict_onboarding builds and runs the same ELF through examples/pico2/io-smoke.yaml in the nightly core-full workspace step (core-ci.yml:2062; cross-build-excluded from the PR shards — scripts/ci/workspace-test-shards.json strict_onboarding entry). It proves the RP2350 base map (UART0 at 0x40070000, not the RP2040's 0x40034000) and that a cortex-m-rt image boots from XIP flash 0x10000000; its only other MMIO is a scratch store into the PIO0 window used as a mocked LED (crates/firmware-rp2350-demo/src/main.rs:9-10), so no PIO program is loaded and no state machine is observed. rp2350_clkrst_profile.rs (3 unit tests) pins the moved CLOCKS/RESETS/XOSC/PLL map. Beyond the rubric SYSINFO/XIP_CTRL are engine-less declarative files and POWERMAN/TBMAN are zero stubs; PIO0/1/2 are the shared RP2040 PIO model (9 pio.rs unit tests; hardware_fidelity.rs:194-268 drives it at the RP2040 base, and the PIO onboarding lane boots the rp2040 descriptor, not this one), so all three are firmware-untouched here."
+    headline: "No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). The Pico 2 board system uses the narrow configs/chips/rp2350-pico2-smoke.yaml slice. Its firmware-pico2-demo binary writes the UART0 PL011 data register and selects SIO for GP25, then toggles the SIO output; examples/pico2/io-smoke.yaml asserts the UART transcript and eight GPIO edges. This is a local CLI smoke, with no silicon capture or USB/ROM startup claim. The broader configs/chips/rp2350.yaml remains separate: POWMAN/TICKS and TBMAN are explicit zero stubs, while SYSINFO/XIP_CTRL are declarative; PIO0/1/2 reuse the RP2040 model and are not exercised by this Pico 2 smoke. The older firmware_survival::test_rp2350_demo_survival and examples/rp2350-demo/io-smoke.yaml still cover the generic UART0 boot path."
     functional: []
     advanced_unit_only: [PIO0, PIO1, PIO2]
     advanced_dead: []
@@ -877,6 +877,14 @@ chips:
       - {p: "POWERMAN/TICKS", ev: "configs/chips/rp2350.yaml:68-71 (type stub)", note: "CLOSABLE: 48 KiB zero window — reads 0 and writes are dropped, with no power sequencing and no TICKS time source; no firmware opens it."}
       - {p: xip_ctrl, ev: "configs/chips/rp2350.yaml:124-129 (type declarative; configs/peripherals/rp2350/xip_ctrl.yaml)", note: "CLOSABLE: declarative cache-control storage — no XIP cache behaviour; firmware executes out of the flash region through the flat memory map and never opens the window."}
       - {p: tbman, ev: "configs/chips/rp2350.yaml:156-160 (type stub)", note: "STRUCTURAL: zero window — PLATFORM reads 0, which is the pico-sdk's ASIC path and the correct answer for the twin (configs/chips/rp2350.yaml:156-160); no firmware polls it."}
+
+  - id: rp2350-pico2-smoke
+    arch: cortex-m33
+    headline: "Narrow smoke-only descriptor slice used by configs/systems/pico2.yaml. The Pico 2 board firmware smoke exercises UART0, the modeled IO_BANK0 function selector, and SIO GP25 output. This is a profile slice for the RP2350, not a separate chip or a claim that the broader RP2350 descriptor is fully bootable; ROM, USB, TrustZone, second-core, Hazard3, PADS_BANK0 electrical behavior, and PIO v2 remain out of scope."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
 
   - id: nrf51822
     arch: cortex-m0

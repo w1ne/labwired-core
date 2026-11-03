@@ -2217,7 +2217,7 @@ jobs:
         # (firmware-l476-demo / six-step). Soft-float eabi alone is not enough;
         # without the hard-float target, cargo test --workspace fails mid-suite
         # with E0463 can't find crate for `core`. Nightly already installs it.
-        # thumbv8m.main-none-eabi is required by firmware-rp2350-demo for the
+        # thumbv8m.main-none-eabi is required by firmware-pico2-demo for the
         # pico2 strict-onboarding io-smoke (RP2350 / Cortex-M33).
         # riscv32imc-unknown-none-elf is required by firmware-esp32c6-demo.
         # strict_onboarding builds examples/esp32c6-devkitc/io-smoke.yaml, whose

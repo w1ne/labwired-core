@@ -7,6 +7,7 @@ TARGET=""
 SCRIPT=""
 SYSTEM=""
 OUT_DIR=""
+FIRMWARE_BUILD_DIR=""
 PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
 
@@ -34,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --out-dir)
       OUT_DIR="$2"
+      shift 2
+      ;;
+    --firmware-build-dir)
+      FIRMWARE_BUILD_DIR="$2"
       shift 2
       ;;
     --profile)
@@ -166,7 +171,9 @@ run_smoke_output_dir="${OUT_DIR}/simulation-output"
 mkdir -p "${run_smoke_output_dir}"
 
 # No RUSTFLAGS here. A firmware crate passes its own linker script from its
-# build.rs, so `cargo build -p <crate> --target <t>` links on its own.
+# build.rs, so `cargo build -p <crate> --target <t>` links on its own. Set
+# --firmware-build-dir when its .cargo/config.toml is crate-local and must be
+# loaded for the build (as for the RP2350 Pico 2 image).
 #
 # ⚠️ Exactly one place may pass `-Tlink.x`. This block used to add it for every
 # thumbv6m target; when firmware-rp2040-pio-onboarding's build.rs started
@@ -175,16 +182,23 @@ mkdir -p "${run_smoke_output_dir}"
 # already defined". This gate does not run on pull requests, so that break
 # only appeared on main.
 
+run_firmware_build() {
+  local args=(build -p "${CRATE}" --target "${TARGET}")
+  if [[ "${PROFILE}" == "release" ]]; then
+    args+=(--release)
+  fi
+
+  if [[ -n "${FIRMWARE_BUILD_DIR}" ]]; then
+    (cd "${FIRMWARE_BUILD_DIR}" && cargo "${args[@]}")
+  else
+    cargo "${args[@]}"
+  fi
+}
+
 if ! run_stage build_cli cargo build -p labwired-cli; then
   :
-elif [[ "${PROFILE}" == "release" ]]; then
-  if ! run_stage build_firmware cargo build -p "${CRATE}" --release --target "${TARGET}"; then
-    :
-  elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
-    :
-  fi
 else
-  if ! run_stage build_firmware cargo build -p "${CRATE}" --target "${TARGET}"; then
+  if ! run_stage build_firmware run_firmware_build; then
     :
   elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
     :

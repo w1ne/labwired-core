@@ -8782,11 +8782,13 @@ boards:
     doc: docs/boards/rp2350.md
     chip: configs/chips/rp2350.yaml
     tier: smoke-manual
-    note: "Pico 2 / RP2350: UART0 smoke (examples/pico2) with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/bootrom/PIO v2/dual-core; no silicon bench."
+    note: "Raspberry Pi Pico 2 / RP2350: local CLI smoke checks UART0 PL011 data-register capture and eight GP25 SIO edges using the narrow rp2350-pico2-smoke descriptor and firmware-pico2-demo. The broader RP2350 profile retains POWMAN/TICKS and TBMAN stubs. USB/ROM startup, TrustZone, PIO v2, the second core, and silicon parity are not validated."
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/rp2350.yaml
+      - configs/chips/rp2350-pico2-smoke.yaml
+      - configs/systems/pico2.yaml
       - crates/core/src/peripherals/rp2040_clocks.rs
       - crates/core/src/peripherals/rp2040
       - configs/peripherals/rp2350

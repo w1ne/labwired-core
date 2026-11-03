@@ -25,7 +25,7 @@ The models column is a content digest over everything that board's `models` list
 | `microbit-v1` | 🟡 smoke-manual | — | `f5bb1c2afed9e84d` | no silicon capture |
 | `microbit-v2` | 🟡 smoke-manual | — | `8bc28cfc874e5a00` | no silicon capture |
 | `rp2040` | ⚪ structural | — | `cec781250d27fde5` | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | `521bc2559aecb7a6` | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | `7cd4d38073290737` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `8b2014cf9018180e` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `4f247c0016126d77` | no silicon capture |
 | `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `bd4d6a493d4ca066` | no silicon capture |
@@ -49,6 +49,7 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `a52ca3d6e2e9f454` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `ce18a3409645e33d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b03c28d7252087fd` | no silicon capture |
+| `nucleo-g0b1re` | 🟡 smoke-manual | — | `45fb205cb374b88f` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `9f8af370ee4a1463` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `3e16d2c983814a38` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `85c2a74fa11ccb26` | no silicon capture |
@@ -203,7 +204,7 @@ The models column is a content digest over everything that board's `models` list
 ## `rp2350` — 🟡 smoke-manual
 
 - Doc: [`docs/boards/rp2350.md`](rp2350.md)  ·  Chip: `configs/chips/rp2350.yaml`
-- Note: Pico 2 / RP2350: UART0 smoke (examples/pico2) with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/bootrom/PIO v2/dual-core; no silicon bench.
+- Note: Raspberry Pi Pico 2 / RP2350: local CLI smoke checks UART0 PL011 data-register capture and eight GP25 SIO edges using the narrow rp2350-pico2-smoke descriptor and firmware-pico2-demo. The broader RP2350 profile retains POWMAN/TICKS and TBMAN stubs. USB/ROM startup, TrustZone, PIO v2, the second core, and silicon parity are not validated.
 - Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 
@@ -415,6 +416,15 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_nucleo_g071rb_smoke_survival
   - offline (CI): board_config_gates::stm32g071_from_config_builds
+- Drift status: **no silicon capture**
+
+## `nucleo-g0b1re` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/nucleo-g0b1re.md`](nucleo-g0b1re.md)  ·  Chip: `configs/chips/stm32g0b1re.yaml`
+- Note: NUCLEO-G0B1RE (STM32G0B1RET6, Cortex-M0+). The board-specific smoke prints OK over USART2 (ST-LINK VCP, PA2/PA3) and asserts at least eight PA5 transitions on LD4 using the existing STM32G0 GPIO/UART models. SIM-DERIVED; no silicon diff or executing-fidelity differential. SYSCFG remains a zero-answering stub and the profile omits unsupported peripherals.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): scripts/onboarding_smoke.sh --target-id nucleo-g0b1re --crate firmware-stm32g0-demo --target thumbv6m-none-eabi --script examples/nucleo-g0b1re/io-smoke.yaml --system configs/systems/nucleo-g0b1re.yaml --out-dir examples/nucleo-g0b1re/evidence
+  - offline (CI): core-coverage-matrix-smoke cell nucleo-g0b1re
 - Drift status: **no silicon capture**
 
 ## `esp32c6-devkitc` — 🟡 smoke-manual

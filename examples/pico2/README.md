@@ -1,33 +1,41 @@
-# Pico 2 (RP2350) Onboarding Example
+# Raspberry Pi Pico 2 (RP2350)
 
-Run all commands from `core/`.
+This system profile is intentionally limited to peripherals with a runnable
+model and smoke: the RP2350's UART0 data-register path, IO_BANK0 function
+selection for GP25, and SIO output driving the onboard user LED. The working
+chip slice is [`configs/chips/rp2350-pico2-smoke.yaml`](../../configs/chips/rp2350-pico2-smoke.yaml);
+the broader RP2350 descriptor remains separate and has additional gaps.
 
-## Purpose
+## Run
 
-Deterministic bring-up for Raspberry Pi Pico 2 (RP2350, dual Cortex-M33,
-2 MB XIP flash @ `0x10000000`, 520 KB SRAM @ `0x20000000`) reusing the
-RP2040 behavioural models with the `rp2350` clock/reset profile (moved
-APB map from rp2350 addressmap.h).
-
-## Quick Run
+From the repository root:
 
 ```bash
-rustup target add thumbv8m.main-none-eabi   # once
-RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2350-demo \
-  --release --target thumbv8m.main-none-eabi
-cargo run -q -p labwired-cli -- test \
-  --script examples/pico2/uart-smoke.yaml \
-  --output-dir out/pico2/uart-smoke \
-  --no-uart-stdout
+scripts/onboarding_smoke.sh \
+  --target-id pico2 \
+  --crate firmware-pico2-demo \
+  --target thumbv8m.main-none-eabi \
+  --script examples/pico2/io-smoke.yaml \
+  --system configs/systems/pico2.yaml \
+  --firmware-build-dir crates/firmware-pico2-demo \
+  --out-dir examples/pico2/evidence
 ```
 
-Expected result:
-1. smoke test passes (exit 0)
-2. UART contains `RP2350_SMOKE_OK`
+The smoke expects the `PICO2_SMOKE_OK` UART transcript and at least eight GP25
+edges. The committed `evidence/` directory records the build and simulation.
 
-## Files
+## Vendor status checked 2026-11-03
 
-1. `system.yaml`: board mapping (LED on GP25 via SIO).
-2. `uart-smoke.yaml`: deterministic UART oracle.
-3. `REQUIRED_DOCS.md`: source-grounding references.
-4. `EXTERNAL_COMPONENTS.md`: external component declaration.
+Raspberry Pi's [Pico 2 product page](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
+said **“Available now from $5”** and **“will remain in production until at
+least January 2040.”**
+
+## Scope and limitations
+
+- GP25 is the only board-level pin represented here, as the onboard LED.
+- UART0 output is captured from PL011 data-register writes. USB CDC, the
+  physical UART waveform, and USB boot/flash are not proven.
+- The smoke system uses the narrow RP2350 slice. It omits POWMAN/TICKS, TBMAN,
+  PADS_BANK0 electrical controls, TrustZone, the second core, Hazard3 RISC-V,
+  PIO v2 behavior, and USB enumeration.
+- This is repository simulation evidence. No physical Pico 2 capture exists.

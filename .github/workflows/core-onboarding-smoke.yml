@@ -17,6 +17,7 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
+      - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/cli/**"
@@ -71,6 +72,12 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          - id: pico2
+            crate: firmware-pico2-demo
+            firmware_build_dir: crates/firmware-pico2-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/pico2/io-smoke.yaml
+            system: configs/systems/pico2.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +103,7 @@ jobs:
             --target "${{ matrix.target }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
+            --firmware-build-dir "${{ matrix.firmware_build_dir }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600
 

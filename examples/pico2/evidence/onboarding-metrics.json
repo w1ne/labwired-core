@@ -1,0 +1,28 @@
+{
+  "target_id": "pico2",
+  "status": "pass",
+  "crate": "firmware-pico2-demo",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/pico2/io-smoke.yaml",
+  "system": "configs/systems/pico2.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T10:34:14Z",
+  "finished_at_utc": "2026-11-03T10:34:15Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1082,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.294,
+    "build_firmware": 0.507,
+    "run_smoke": 0.27
+  },
+  "stages_ms": {
+    "build_cli": 294,
+    "build_firmware": 507,
+    "run_smoke": 270
+  }
+}
