@@ -5,6 +5,7 @@
 use labwired_core::peripherals::components::declarative_analog::DeclarativeAnalogKit;
 use labwired_core::sim_input::SimInput;
 
+// Integration coverage: descriptor lookup -> kit construction -> live SimInput -> ADC millivolts.
 #[test]
 fn sound_sensor_tracks_the_declared_sound_envelope() {
     let yaml = labwired_config::embedded_device_yaml("sound-sensor")
