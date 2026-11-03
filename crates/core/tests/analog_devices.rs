@@ -1945,21 +1945,24 @@ mod analog {
         }
     }
 
-    /// During a base step, junction and transit charge draw displacement
-    /// current through all three BJT terminals. Model-card RB/RC/RE must match
-    /// explicit resistors around a resistance-free transistor, for both
-    /// channel polarities and transient companion rules.
+    /// During a base step, Early effect, high-injection rolloff, base
+    /// recombination, and junction/transit charge interact while displacement
+    /// current flows through all three BJT terminals. Model-card RB/RC/RE must
+    /// match explicit resistors around the same transistor, for both channel
+    /// polarities and transient companion rules.
     #[test]
     fn bjt_transient_charge_matches_explicit_terminal_resistors_for_both_polarities() {
         let (rb, rc, re) = (31.0, 18.0, 7.0);
         let (h, drive_resistance) = (1e-9, 1e3);
+        let bjt_physics = "IS=1e-15 BF=100 BR=4 VAF=50 VAR=75 \
+            IKF=150u IKR=80u ISE=1e-12 NE=1.5 ISC=2e-12 NC=1.8";
         let charge = "CJE=60p CJC=40p VJE=1 MJE=0 VJC=1 MJC=0 TF=20n TR=5n";
 
         for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
             for (kind, sign, collector_v, emitter_v) in
                 [("NPN", 1.0, 3.0, 0.0), ("PNP", -1.0, 0.0, 3.0)]
             {
-                let model_card = format!("IS=1e-15 BF=100 BR=4 RB={rb} RC={rc} RE={re} {charge}");
+                let model_card = format!("{bjt_physics} RB={rb} RC={rc} RE={re} {charge}");
                 let modelled = format!(
                     "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
                      Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
@@ -1969,13 +1972,13 @@ mod analog {
                     "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
                      Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
                      Rbase b qb {rb}\nRcollector c qc {rc}\nRemitter e qe {re}\n\
-                     Q1 qc qb qe QMOD\n.model QMOD {kind}(IS=1e-15 BF=100 BR=4 {charge})\n"
+                     Q1 qc qb qe QMOD\n.model QMOD {kind}({bjt_physics} {charge})\n"
                 );
                 let no_charge = format!(
                     "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
                      Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
                      Q1 c b e QMOD\n\
-                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 RB={rb} RC={rc} RE={re})\n"
+                     .model QMOD {kind}({bjt_physics} RB={rb} RC={rc} RE={re})\n"
                 );
 
                 let mut model = Solver::new(
