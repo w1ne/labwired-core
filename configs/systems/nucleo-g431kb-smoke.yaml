@@ -1,0 +1,6 @@
+# NUCLEO-G431KB board-connected path used by the narrow VCP smoke profile.
+# ST UM2397 default solder bridges connect USART2 PA2/PA3 to STLINK-V3E VCP.
+name: "nucleo-g431kb-smoke"
+chip: "../chips/stm32g431kb-nucleo-smoke.yaml"
+debug_uart: "usart2"
+external_devices: []

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000943">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="00d0c692b35c999f7622ae3a4f92e06321a95293fe6b300ef9e7205b354d389f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000943">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO_G431KB_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

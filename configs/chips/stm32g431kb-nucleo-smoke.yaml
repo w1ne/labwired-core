@@ -1,0 +1,51 @@
+# Narrow NUCLEO-G431KB profile for the board-connected USART2 VCP smoke.
+# Only RCC, GPIOA and USART2 are exposed here. Other MCU peripherals and the
+# board's user LED/button paths are deliberately outside this smoke profile.
+#
+# Sources:
+# - ST UM2397, STM32G4 Nucleo-32 board (MB1430), §§1, 6.6.4:
+#   MCU identity and memory; default USART2 VCP on PA2/PA3.
+#   https://www.st.com/resource/en/user_manual/um2397-stm32g4-nucleo32-board-mb1430-stmicroelectronics.pdf
+# - ST RM0440, STM32G4 reference manual: RCC, GPIO and USART register maps.
+#   https://www.st.com/resource/en/reference_manual/dm00355726-stm32g4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+
+name: "stm32g431kb-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+# The smoke keeps the reset HSI16 clock and does not switch the PLL.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32g4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1enr", bit: 17 }

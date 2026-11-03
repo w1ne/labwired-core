@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-g431kb",
+  "status": "pass",
+  "crate": "firmware-nucleo-g431kb-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-g431kb/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-g431kb-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T13:36:33Z",
+  "finished_at_utc": "2026-11-03T13:36:50Z",
+  "elapsed_seconds": 17,
+  "elapsed_ms": 16597,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 15.854,
+    "build_firmware": 0.453,
+    "run_smoke": 0.279
+  },
+  "stages_ms": {
+    "build_cli": 15854,
+    "build_firmware": 453,
+    "run_smoke": 279
+  }
+}
