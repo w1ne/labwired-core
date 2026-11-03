@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.175960">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="d1e900aa54c5bf9c3bfc57ec30cde66367de7e9cbe09f5173362c54878be8449"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.175960">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F429 profile smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioPortD:12 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
