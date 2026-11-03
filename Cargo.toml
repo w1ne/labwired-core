@@ -36,6 +36,7 @@ members = [
     "crates/firmware-f401cdu6-blackpill-demo",
     "crates/firmware-f407-demo",
     "crates/firmware-h563-demo",
+    "crates/firmware-nucleo-h723zg-smoke",
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-stm32u575-demo",
