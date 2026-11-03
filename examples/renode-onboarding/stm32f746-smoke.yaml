@@ -1,0 +1,13 @@
+# Cortex-M7 smoke against the imported STM32F746 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo"
+  system: "../../configs/systems/onboarding/stm32f746.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioPortI:1"
+      min_edges: 1
+  - expected_stop_reason: max_steps

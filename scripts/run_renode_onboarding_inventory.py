@@ -35,6 +35,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32f4_discovery-smoke.yaml",
     },
+    "stm32f746": {
+        "crate": "firmware-stm32f746-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/stm32f746-smoke.yaml",
+    },
     "stm32f401cdu6-blackpill": {
         "crate": "firmware-f401cdu6-blackpill-demo",
         "target": "thumbv7em-none-eabi",
