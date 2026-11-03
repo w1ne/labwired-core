@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.000620">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="3f8e8d2e83d52f9a526643096e5c7955f8e033a2fc2b5c4e7dfafbab128e6ad0"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000620">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: UNO_R4_WIFI_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: port1:2 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

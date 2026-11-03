@@ -40,6 +40,7 @@ on:
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h723zg-smoke/**"
       - "crates/firmware-nucleo-c071rb-smoke/**"
+      - "crates/firmware-uno-r4-wifi-smoke/**"
       - "crates/firmware-xiao-nrf54l15-smoke/**"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
       - "configs/chips/stm32h503rb-nucleo-smoke.yaml"
@@ -47,6 +48,9 @@ on:
       - "configs/systems/nucleo-wba55cg-smoke.yaml"
       - "configs/systems/nucleo-h503rb.yaml"
       - "configs/systems/nucleo-c071rb.yaml"
+      - "configs/chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml"
+      - "configs/systems/arduino-uno-r4-wifi.yaml"
+      - "examples/arduino-uno-r4-wifi/**"
       - "examples/nucleo-wba55cg/**"
       - "examples/nucleo-h503rb/**"
       - "examples/nucleo-c071rb/**"
@@ -107,6 +111,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/arduino-uno-r4-minima/io-smoke.yaml
             system: configs/systems/arduino-uno-r4-minima.yaml
+          - id: arduino-uno-r4-wifi
+            crate: firmware-uno-r4-wifi-smoke
+            target: thumbv7em-none-eabi
+            script: examples/arduino-uno-r4-wifi/io-smoke.yaml
+            system: configs/systems/arduino-uno-r4-wifi.yaml
           - id: nucleo-f072rb
             crate: firmware-nucleo-f072rb-smoke
             target: thumbv6m-none-eabi

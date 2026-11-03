@@ -20,6 +20,7 @@ members = [
     "crates/firmware-atsamd51-demo",
     "crates/firmware-atsamd51-pybadge-demo",
     "crates/firmware-ra4m1-demo",
+    "crates/firmware-uno-r4-wifi-smoke",
     "crates/firmware-imxrt1064-demo",
     "crates/firmware-itm-smoke",
     "crates/firmware-stm32f746-demo",
