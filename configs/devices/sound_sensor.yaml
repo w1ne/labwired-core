@@ -1,0 +1,34 @@
+# Common LM393-class microphone sound sensor module — declarative analog source.
+#
+# The real module's A0 output is an envelope/amplitude level set by its analog
+# front-end and trimmer. The twin deliberately models the observable module
+# output, not room acoustics: the host drives a normalized 0..100 % sound level
+# and A0 follows 0..3.3 V linearly. D0 is the module comparator output and is
+# intentionally not modelled here; firmware that needs a threshold should read
+# A0 and apply the threshold in software.
+type: sound-sensor
+
+behavior:
+  primitive: analog_source
+  analog:
+    curve:
+      - [0, 0]
+      - [100, 3300]
+    below_first: clamp
+    above_last:
+      clamp: true
+    encode: trunc
+
+metadata:
+  label: Sound Sensor
+  summary: Analog microphone sound-level module (A0 on ADC).
+  detail: >-
+    Module-level model for common microphone + LM393 sound-sensor breakouts.
+    Drive the `sound` channel from 0..100 % and A0 follows 0..3.3 V. This is
+    an audio pulse/envelope source for threshold and clap-detection firmware,
+    not a waveform-accurate acoustic or microphone model. D0 comparator output
+    is not modelled.
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
+  inputs:
+    - { key: sound, label: Sound level, unit: "%", min: 0, max: 100, default: 0 }
