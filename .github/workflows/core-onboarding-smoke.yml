@@ -115,6 +115,12 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g210-smoke.yaml
             system: configs/systems/onboarding/efm32g210.yaml
+          # The G232 smoke links its firmware at the imported 0x08000000 flash base.
+          - id: efm32g232
+            crate: firmware-efm32g232-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g232-smoke.yaml
+            system: configs/systems/onboarding/efm32g232.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima
