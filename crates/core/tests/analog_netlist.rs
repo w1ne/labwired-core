@@ -422,6 +422,55 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn bjt_terminal_resistances_create_internal_junction_nodes_and_validate() {
+        let circuit = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN(RB=12 RC=3 RE=0.5)\n")
+            .expect("BJT terminal resistances parse");
+        let bjt = &circuit.bjts[0];
+        assert_eq!(bjt.model.rb, 12.0);
+        assert_eq!(bjt.model.rc, 3.0);
+        assert_eq!(bjt.model.re, 0.5);
+        assert_eq!(circuit.node_count(), 6);
+        assert_eq!(
+            bjt.junction_b,
+            circuit.node("Q1#base").expect("base junction exists")
+        );
+        assert_eq!(
+            bjt.junction_c,
+            circuit
+                .node("Q1#collector")
+                .expect("collector junction exists")
+        );
+        assert_eq!(
+            bjt.junction_e,
+            circuit.node("Q1#emitter").expect("emitter junction exists")
+        );
+        assert_ne!(bjt.junction_b, bjt.b);
+        assert_ne!(bjt.junction_c, bjt.c);
+        assert_ne!(bjt.junction_e, bjt.e);
+
+        let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN\n")
+            .expect("omitted terminal resistances default to zero");
+        let bjt = &defaults.bjts[0];
+        assert_eq!(bjt.model.rb, 0.0);
+        assert_eq!(bjt.model.rc, 0.0);
+        assert_eq!(bjt.model.re, 0.0);
+        assert_eq!(defaults.node_count(), 3);
+        assert_eq!(bjt.junction_b, bjt.b);
+        assert_eq!(bjt.junction_c, bjt.c);
+        assert_eq!(bjt.junction_e, bjt.e);
+
+        for parameter in ["RB=-1", "RC=-1", "RE=-1"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("negative BJT terminal resistance is invalid");
+            assert!(error.to_string().contains("RB/RC/RE >= 0"), "{error}");
+        }
+
+        let collision = parse_netlist("Q1 c b e QMOD\nR1 Q1#base 0 1k\n.model QMOD NPN(RB=10)\n")
+            .expect_err("a user node cannot alias an internal BJT junction");
+        assert!(collision.to_string().contains("Q1#base"), "{collision}");
+    }
+
+    #[test]
     fn nonpositive_bjt_high_injection_knees_are_rejected() {
         for parameter in ["IKF=0", "IKR=-1m"] {
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))

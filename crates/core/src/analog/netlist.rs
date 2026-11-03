@@ -57,17 +57,19 @@
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and diffusion
-//! charge `TT`, JFET gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
+//! charge `TT`, BJT terminal resistances `RB`/`RC`/`RE`, JFET gate-junction
+//! depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET level-1 channel capacitance from `TOX` and overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
 //! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
 //! constant forward/reverse transit times `TF`/`TR`, every temperature
 //! coefficient, bias-dependent transit-time parameters (`XTF`/`VTF`/`ITF`),
-//! `NKF`, terminal resistances, …) are **accepted and ignored** rather than
+//! `NKF`, most terminal resistances, …) are **accepted and ignored** rather than
 //! rejected. BJT `IKF`/`IKR` high-injection rolloff and
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
-//! charge are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
-//! modelled; MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
+//! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. MOSFET
+//! level-1 `GAMMA`/`PHI` body effect is also modelled; MOSFET `IS` is used for
+//! the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
 //! as linear overlap charge. `TOX`, when present, enables the level-1 Meyer
@@ -96,7 +98,9 @@
 //! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
 //! transient steps; `TT` adds quasi-static diffusion charge. BJT `TF`/`TR`
 //! add ideal transit-time charge based on the forward/reverse transport current;
-//! their bias-dependent extensions (`XTF`, `VTF`, `ITF`) are not modelled. JFET
+//! `RB`/`RC`/`RE` add series resistance between the external terminals and
+//! probeable internal junction nodes when nonzero. Their bias-dependent
+//! transit-time extensions (`XTF`, `VTF`, `ITF`) are not modelled. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
 //! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
 //! gate overlap charge based on instance `W`/`L`; `TOX` enables the level-1
@@ -906,6 +910,15 @@ pub struct BjtModel {
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
+    /// Ohmic base terminal resistance `RB`, ohms. Zero disables the internal
+    /// base node, matching ngspice's default.
+    pub rb: f64,
+    /// Ohmic collector terminal resistance `RC`, ohms. Zero disables the
+    /// internal collector node, matching ngspice's default.
+    pub rc: f64,
+    /// Ohmic emitter terminal resistance `RE`, ohms. Zero disables the
+    /// internal emitter node, matching ngspice's default.
+    pub re: f64,
 }
 
 impl BjtModel {
@@ -934,6 +947,9 @@ impl BjtModel {
             fc: 0.5,
             tf: 0.0,
             tr: 0.0,
+            rb: 0.0,
+            rc: 0.0,
+            re: 0.0,
         }
     }
 }
@@ -1399,6 +1415,15 @@ pub struct Bjt {
     pub b: NodeRef,
     /// Emitter.
     pub e: NodeRef,
+    /// Collector junction node. Equals `c` when `RC = 0`, else the internal
+    /// node `<name>#collector`.
+    pub junction_c: NodeRef,
+    /// Base junction node. Equals `b` when `RB = 0`, else the internal node
+    /// `<name>#base`.
+    pub junction_b: NodeRef,
+    /// Emitter junction node. Equals `e` when `RE = 0`, else the internal
+    /// node `<name>#emitter`.
+    pub junction_e: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
     /// Resolved model parameters.
@@ -2505,11 +2530,42 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
+                if !model.rb.is_finite()
+                    || model.rb < 0.0
+                    || !model.rc.is_finite()
+                    || model.rc < 0.0
+                    || !model.re.is_finite()
+                    || model.re < 0.0
+                {
+                    return Err(ctx.parse_err("a BJT model needs RB/RC/RE >= 0".to_string()));
+                }
+                let junction_node = |circuit: &mut Circuit,
+                                     terminal: NodeRef,
+                                     resistance: f64,
+                                     suffix: &str|
+                 -> Result<NodeRef, AnalogError> {
+                    if resistance == 0.0 {
+                        return Ok(terminal);
+                    }
+                    let internal_name = format!("{}#{suffix}", device.name);
+                    if circuit.node(&internal_name).is_some() {
+                        return Err(ctx.parse_err(format!(
+                            "internal BJT node `{internal_name}` is already used by the netlist"
+                        )));
+                    }
+                    Ok(circuit.intern(&internal_name))
+                };
+                let junction_c = junction_node(circuit, device.nodes[0], model.rc, "collector")?;
+                let junction_b = junction_node(circuit, device.nodes[1], model.rb, "base")?;
+                let junction_e = junction_node(circuit, device.nodes[2], model.re, "emitter")?;
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
+                    junction_c,
+                    junction_b,
+                    junction_e,
                     model_name: device.model_name,
                     model,
                 });
@@ -2869,6 +2925,9 @@ fn parse_model(
             (ModelCard::Bjt(model), "FC") => model.fc = value,
             (ModelCard::Bjt(model), "TF") => model.tf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
+            (ModelCard::Bjt(model), "RB") => model.rb = value,
+            (ModelCard::Bjt(model), "RC") => model.rc = value,
+            (ModelCard::Bjt(model), "RE") => model.re = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,

@@ -677,8 +677,8 @@ impl Solver {
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
-            let vbe = sign * node_diff(&self.node_v, bjt.b, bjt.e);
-            let vbc = sign * node_diff(&self.node_v, bjt.b, bjt.c);
+            let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
+            let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
             let model = bjt.model;
             self.bjt_q[index] = bjt_charge_op(vbe, vbc, model).q;
             self.bjt_i[index] = [0.0; 2];
@@ -897,8 +897,8 @@ impl Solver {
             let model = bjt.model;
             let nodes = &self.solution[..self.nodes];
             let voltages = [
-                sign * node_diff(nodes, bjt.b, bjt.e),
-                sign * node_diff(nodes, bjt.b, bjt.c),
+                sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
+                sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
             ];
             let charge = bjt_charge_op(voltages[0], voltages[1], model);
             for junction in 0..2 {
@@ -1082,6 +1082,35 @@ impl Solver {
                 resistor.b,
                 1.0 / resistor.resistance_ohms(),
             );
+        }
+        for bjt in &self.circuit.bjts {
+            if bjt.model.rb > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.b,
+                    bjt.junction_b,
+                    1.0 / bjt.model.rb,
+                );
+            }
+            if bjt.model.rc > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.c,
+                    bjt.junction_c,
+                    1.0 / bjt.model.rc,
+                );
+            }
+            if bjt.model.re > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.e,
+                    bjt.junction_e,
+                    1.0 / bjt.model.re,
+                );
+            }
         }
         for (index, switch) in self.circuit.switches.iter().enumerate() {
             let ohms = if self.switch_closed[index] {
@@ -1492,8 +1521,8 @@ impl Solver {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
-            let raw_be = sign * node_diff(nodes, bjt.b, bjt.e);
-            let raw_bc = sign * node_diff(nodes, bjt.b, bjt.c);
+            let raw_be = sign * node_diff(nodes, bjt.junction_b, bjt.junction_e);
+            let raw_bc = sign * node_diff(nodes, bjt.junction_b, bjt.junction_c);
             let vtf = bjt.model.nf * device::THERMAL_VOLTAGE;
             let vtr = bjt.model.nr * device::THERMAL_VOLTAGE;
             let crit_f = device::pn_critical_voltage(bjt.model.is, bjt.model.nf);
@@ -1695,25 +1724,35 @@ impl Solver {
             // off leaves its base and collector tied to the rest of the circuit
             // by nothing at all, and the matrix is singular on a netlist the
             // user can see is connected.
-            conductance(matrix, dim, bjt.b, bjt.e, device::GMIN);
-            conductance(matrix, dim, bjt.b, bjt.c, device::GMIN);
+            conductance(matrix, dim, bjt.junction_b, bjt.junction_e, device::GMIN);
+            conductance(matrix, dim, bjt.junction_b, bjt.junction_c, device::GMIN);
 
             // Controlling voltages in circuit coordinates: u1 = v(b) − v(e),
             // u2 = v(b) − v(c). The device sees sign·u1 and sign·u2.
             let u1 = sign * vbe;
             let u2 = sign * vbc;
             let collector = [
-                (op.gif, bjt.b, bjt.e, u1),
-                (-op.gir - op.gmu, bjt.b, bjt.c, u2),
+                (op.gif, bjt.junction_b, bjt.junction_e, u1),
+                (-op.gir - op.gmu, bjt.junction_b, bjt.junction_c, u2),
             ];
-            let base = [(op.gpi, bjt.b, bjt.e, u1), (op.gmu, bjt.b, bjt.c, u2)];
+            let base = [
+                (op.gpi, bjt.junction_b, bjt.junction_e, u1),
+                (op.gmu, bjt.junction_b, bjt.junction_c, u2),
+            ];
             let emitter = [
-                (-op.gif - op.gpi, bjt.b, bjt.e, u1),
-                (op.gir, bjt.b, bjt.c, u2),
+                (-op.gif - op.gpi, bjt.junction_b, bjt.junction_e, u1),
+                (op.gir, bjt.junction_b, bjt.junction_c, u2),
             ];
-            stamp_linearised(matrix, rhs, dim, bjt.c, sign * op.ic, &collector);
-            stamp_linearised(matrix, rhs, dim, bjt.b, sign * op.ib, &base);
-            stamp_linearised(matrix, rhs, dim, bjt.e, -sign * (op.ic + op.ib), &emitter);
+            stamp_linearised(matrix, rhs, dim, bjt.junction_c, sign * op.ic, &collector);
+            stamp_linearised(matrix, rhs, dim, bjt.junction_b, sign * op.ib, &base);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                bjt.junction_e,
+                -sign * (op.ic + op.ib),
+                &emitter,
+            );
 
             if let Stamp::Transient(h, rule) = stamp {
                 let charge = bjt_charge_op(vbe, vbc, model);
@@ -1722,9 +1761,9 @@ impl Solver {
                         continue;
                     }
                     let (positive, negative) = if junction == 0 {
-                        (bjt.b, bjt.e)
+                        (bjt.junction_b, bjt.junction_e)
                     } else {
-                        (bjt.b, bjt.c)
+                        (bjt.junction_b, bjt.junction_c)
                     };
                     let factor = match rule {
                         Integration::BackwardEuler => 1.0 / h,
@@ -1740,8 +1779,18 @@ impl Solver {
                         }
                     };
                     let control = [
-                        (charge.dq[junction][0] * factor, bjt.b, bjt.e, u1),
-                        (charge.dq[junction][1] * factor, bjt.b, bjt.c, u2),
+                        (
+                            charge.dq[junction][0] * factor,
+                            bjt.junction_b,
+                            bjt.junction_e,
+                            u1,
+                        ),
+                        (
+                            charge.dq[junction][1] * factor,
+                            bjt.junction_b,
+                            bjt.junction_c,
+                            u2,
+                        ),
                     ];
                     stamp_linearised(matrix, rhs, dim, positive, sign * current, &control);
                     stamp_linearised(
