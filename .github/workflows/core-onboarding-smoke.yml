@@ -115,6 +115,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g210-smoke.yaml
             system: configs/systems/onboarding/efm32g210.yaml
+          # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
+          # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
+          - id: arduino_uno_r4_minima
+            crate: firmware-ra4m1-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml
+            system: configs/systems/onboarding/arduino_uno_r4_minima.yaml
           - id: stm32f4_discovery
             crate: firmware-f4-discovery-smoke
             target: thumbv7em-none-eabi

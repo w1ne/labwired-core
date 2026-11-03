@@ -25,6 +25,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv6m-none-eabi",
         "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml",
     },
+    "arduino_uno_r4_minima": {
+        "crate": "firmware-ra4m1-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml",
+    },
     "efm32g210": {
         "crate": "firmware-efm32g210-smoke",
         "target": "thumbv7m-none-eabi",
