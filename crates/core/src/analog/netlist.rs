@@ -67,7 +67,7 @@
 //! resistances `RD`/`RS` and gate-junction depletion capacitance
 //! `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
-//! level-1 channel capacitance from `TOX`, gate overlap capacitance
+//! level-1 channel charge from `TOX`, gate overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
@@ -89,7 +89,8 @@
 //! supplied total capacitance takes precedence over `CJ` times its area.
 //! Otherwise `CJ` scales by `AD`/`AS`, and `CJSW` scales independently by
 //! `PD`/`PS`, using `MJSW` for sidewall grading. `TOX`, when present, enables
-//! the level-1 Meyer channel capacitance. See
+//! intrinsic channel charge: Meyer by default, or the engine-specific
+//! Ward–Dutton terminal-charge model with `CHARGEMOD=WARD_DUTTON`. See
 //! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
@@ -119,8 +120,9 @@
 //! probeable internal junction nodes when nonzero. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
 //! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
-//! gate overlap charge based on instance `W`/`L`; `TOX` enables the level-1
-//! Meyer intrinsic gate capacitances. `.model <name> OPAMP(...)` and
+//! gate overlap charge based on instance `W`/`L`; `TOX` enables intrinsic
+//! channel charge (Meyer by default, or engine-specific Ward–Dutton with
+//! `CHARGEMOD=WARD_DUTTON`). `.model <name> OPAMP(...)` and
 //! `.model <name> COMP(...)` are this engine's own card types, not ngspice's.
 //!
 //! ## Directives and comments
@@ -997,6 +999,15 @@ impl BjtModel {
     }
 }
 
+/// Intrinsic MOSFET channel charge formulation selected by the model card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MosChannelChargeModel {
+    /// ngspice-compatible piecewise Meyer capacitance model.
+    Meyer,
+    /// Engine-specific Ward–Dutton inversion-charge partition.
+    WardDutton,
+}
+
 /// Resolved parameters of a `.model <name> NMOS|PMOS(...)` card, SPICE
 /// level 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1064,10 +1075,13 @@ pub struct MosModel {
     pub cgdo: f64,
     /// Gate-bulk overlap capacitance per unit length `CGBO`, F/m.
     pub cgbo: f64,
-    /// Gate oxide thickness `TOX`, metres. When present, enables the level-1
-    /// Meyer intrinsic gate capacitances; absent means no intrinsic channel
-    /// capacitance, matching ngspice's level-1 behavior.
+    /// Gate oxide thickness `TOX`, metres. When present, enables intrinsic
+    /// channel charge; absent means no intrinsic channel capacitance, matching
+    /// ngspice's level-1 behavior.
     pub tox: Option<f64>,
+    /// Intrinsic channel charge formulation. `WardDutton` is an engine
+    /// extension selected by `CHARGEMOD=WARD_DUTTON`; `Meyer` is the default.
+    pub channel_charge_model: MosChannelChargeModel,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -1149,6 +1163,7 @@ impl MosModel {
             cgdo: 0.0,
             cgbo: 0.0,
             tox: None,
+            channel_charge_model: MosChannelChargeModel::Meyer,
         }
     }
 }
@@ -3011,6 +3026,13 @@ fn bind_models(
                         ));
                     }
                 }
+                if model.channel_charge_model == MosChannelChargeModel::WardDutton
+                    && model.tox.is_none()
+                {
+                    return Err(ctx.parse_err(
+                        "MOSFET `CHARGEMOD=WARD_DUTTON` needs `TOX` to define oxide charge",
+                    ));
+                }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
                                      resistance: f64,
@@ -3299,6 +3321,20 @@ fn parse_model(
                         return Err(ctx.parse_err(format!(
                             "comparator `OUTPUT={other}` is not `OC` (open collector), \
                              `OD` (open drain) or `PP` (push-pull)"
+                        )))
+                    }
+                };
+                continue;
+            }
+        }
+        if let ModelCard::Mos(model) = &mut card {
+            if param.eq_ignore_ascii_case("CHARGEMOD") {
+                model.channel_charge_model = match raw.to_ascii_uppercase().as_str() {
+                    "MEYER" => MosChannelChargeModel::Meyer,
+                    "WARD_DUTTON" | "WARD-DUTTON" => MosChannelChargeModel::WardDutton,
+                    other => {
+                        return Err(ctx.parse_err(format!(
+                            "MOSFET `CHARGEMOD={other}` is not `MEYER` or `WARD_DUTTON`"
                         )))
                     }
                 };
@@ -3772,6 +3808,7 @@ fn lower_comparator(
                 cgdo: 0.0,
                 cgbo: 0.0,
                 tox: None,
+                channel_charge_model: MosChannelChargeModel::Meyer,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,

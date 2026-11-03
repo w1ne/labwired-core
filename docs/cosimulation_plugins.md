@@ -423,7 +423,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -442,8 +442,13 @@ or from bottom-area `CJ` times instance `AD`/`AS` plus sidewall `CJSW` times
 instance `PD`/`PS`, graded with `MJ` and `MJSW` respectively. Explicit `CBD`
 or `CBS` replaces that terminal's `CJ` area term; sidewall capacitance remains
 additive.
-Level-1 MOSFET `TOX` enables intrinsic gate capacitances using the Meyer model;
-without `TOX`, only explicit overlap and bulk-junction capacitances are present.
+Level-1 MOSFET `TOX` enables intrinsic channel charge. `CHARGEMOD` defaults to
+`MEYER`, which follows ngspice's piecewise capacitance model. The engine-specific
+`CHARGEMOD=WARD_DUTTON` selects a charge-based long-channel inversion model with
+Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobian.
+It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
+capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
+is not a portable ngspice model-card parameter.
 Other device capacitances and temperature coefficients,
 `NKF`, and terminal resistances outside the modeled BJT, JFET and MOSFET parameters
 below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
@@ -483,15 +488,20 @@ default to zero) or `RSH` times instance `NRD`/`NRS` (RSH defaults to zero),
 from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
 `PB`/`MJ`/`MJSW`/`FC`, linear gate overlap charge from
 `CGSO`/`CGDO`/`CGBO`, and `TOX`-enabled
-intrinsic gate capacitances using ngspice's piecewise Meyer formulation; and
+intrinsic channel charge using either ngspice's piecewise Meyer formulation or
+the opt-in Ward–Dutton charge partition; and
 SPICE JFET level 1 with `B=1`, including its two gate junctions and depletion
 charge. MOSFET and JFET channel-length modulation, both polarities, reverse
-channel operation, MOSFET body effect, and the tested Meyer bias regions are
-covered by tests. Every parameter is taken at 300.00 K; there is no temperature
+channel operation, MOSFET body effect, Meyer bias regions, and Ward–Dutton
+charge conservation and transient terminal response are covered by tests. Every
+parameter is taken at 300.00 K; there is no temperature
 model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not modeled:** a charge-conserving MOSFET channel-charge model; and JFET levels
-other than level 1 with `B=1`. The diode's `TT` term is a quasi-static transit-time
+**What is not modeled:** Ward–Dutton mode includes strong-inversion channel
+charge only; it omits intrinsic accumulation/depletion charge. Select Meyer
+mode when that piecewise channel capacitance is needed. Non-quasi-static MOSFET
+effects, and JFET levels other than level 1 with `B=1`, remain unsupported.
+The diode's `TT` term is a quasi-static transit-time
 charge model; more detailed non-quasi-static and soft-recovery effects are not
 modeled. Circuits needing those features belong on `adapter: external_process`
 with `tools/cosim/labwired_ngspice.py`.

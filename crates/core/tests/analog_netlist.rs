@@ -655,6 +655,35 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn mosfet_charge_model_selects_ward_dutton_and_requires_tox() {
+        let circuit =
+            parse_netlist("M1 d g s b MOD\n.model MOD NMOS(VTO=1 TOX=10n CHARGEMOD=WARD_DUTTON)\n")
+                .expect("Ward-Dutton channel charge parses");
+        assert_eq!(
+            circuit.mosfets[0].model.channel_charge_model,
+            labwired_core::analog::MosChannelChargeModel::WardDutton
+        );
+
+        let default = parse_netlist("M1 d g s b MOD\n.model MOD NMOS(TOX=10n)\n")
+            .expect("Meyer remains the default model");
+        assert_eq!(
+            default.mosfets[0].model.channel_charge_model,
+            labwired_core::analog::MosChannelChargeModel::Meyer
+        );
+
+        for setting in ["CHARGEMOD=NOPE", "CHARGEMOD=1"] {
+            let error = parse_netlist(&format!(
+                "M1 d g s b MOD\n.model MOD NMOS(TOX=10n {setting})\n"
+            ))
+            .expect_err("unknown channel charge mode is rejected");
+            assert!(error.to_string().contains("CHARGEMOD"), "{error}");
+        }
+        let error = parse_netlist("M1 d g s b MOD\n.model MOD NMOS(CHARGEMOD=WARD_DUTTON)\n")
+            .expect_err("charge-conserving mode needs an oxide thickness");
+        assert!(error.to_string().contains("needs `TOX`"), "{error}");
+    }
+
+    #[test]
     fn mosfet_bulk_junction_capacitance_parameters_parse_and_validate() {
         let circuit = parse_netlist(
             "M1 d g s b MOD AD=2e-12 AS=3e-12 PD=4e-6 PS=5e-6\n\

@@ -24,9 +24,9 @@
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
 //! using ideal transit times with ngspice's forward `XTF`/`VTF`/`ITF` bias
-//! adjustment. MOSFET intrinsic gate capacitance from
-//! `TOX` uses the level-1 Meyer model; its three G-S/G-D/G-B branches are
-//! integrated in transient runs. MOSFET bulk depletion charge integrates
+//! adjustment. MOSFET intrinsic channel charge from `TOX` uses the level-1
+//! Meyer model by default; opt-in Ward–Dutton mode integrates strong-inversion
+//! terminal charge with an analytic Jacobian. MOSFET bulk depletion charge integrates
 //! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
@@ -50,6 +50,7 @@
 //! calculations, so drift or an incorrect equation fails a test.
 
 use super::netlist::BjtModel;
+use super::netlist::{MosChannelChargeModel, Mosfet};
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
@@ -767,6 +768,227 @@ pub fn mos_meyer_capacitance_halves(
             cox * (1.0 - vdsat * vdsat / vddif2) / 3.0,
             0.0,
         ]
+    }
+}
+
+/// Terminal charges and their derivatives for one intrinsic MOSFET channel.
+///
+/// `q` is ordered gate, physical drain, physical source, bulk. `dq_dv` columns
+/// are derivatives with respect to physical `VGS`, `VDS`, and `VBS`; rows use
+/// the same order as `q`. For the Ward–Dutton model the four terminal charges
+/// sum to zero at every bias, and the Jacobian rows do too.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MosChannelChargeOp {
+    /// Intrinsic terminal charges, coulombs.
+    pub q: [f64; 4],
+    /// `∂Qterminal/∂(VGS,VDS,VBS)`, farads.
+    pub dq_dv: [[f64; 3]; 4],
+}
+
+/// Forward-mode dual number for the three independent MOSFET terminal
+/// voltages. It keeps the charge Jacobian analytic across the smooth portions
+/// of the piecewise long-channel model without a finite-difference step size.
+#[derive(Debug, Clone, Copy)]
+struct Dual3 {
+    value: f64,
+    derivative: [f64; 3],
+}
+
+impl Dual3 {
+    fn constant(value: f64) -> Self {
+        Self {
+            value,
+            derivative: [0.0; 3],
+        }
+    }
+
+    fn variable(value: f64, index: usize) -> Self {
+        let mut derivative = [0.0; 3];
+        derivative[index] = 1.0;
+        Self { value, derivative }
+    }
+
+    fn sqrt(self) -> Self {
+        let root = libm::sqrt(self.value);
+        Self {
+            value: root,
+            derivative: self.derivative.map(|partial| partial / (2.0 * root)),
+        }
+    }
+}
+
+impl core::ops::Add for Dual3 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            value: self.value + rhs.value,
+            derivative: core::array::from_fn(|i| self.derivative[i] + rhs.derivative[i]),
+        }
+    }
+}
+
+impl core::ops::Sub for Dual3 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            value: self.value - rhs.value,
+            derivative: core::array::from_fn(|i| self.derivative[i] - rhs.derivative[i]),
+        }
+    }
+}
+
+impl core::ops::Mul for Dual3 {
+    type Output = Self;
+
+    #[allow(clippy::suspicious_arithmetic_impl)] // product rule for forward derivatives
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self {
+            value: self.value * rhs.value,
+            derivative: core::array::from_fn(|i| {
+                self.derivative[i] * rhs.value + self.value * rhs.derivative[i]
+            }),
+        }
+    }
+}
+
+impl core::ops::Div for Dual3 {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        let denominator = rhs.value * rhs.value;
+        Self {
+            value: self.value / rhs.value,
+            derivative: core::array::from_fn(|i| {
+                (self.derivative[i] * rhs.value - self.value * rhs.derivative[i]) / denominator
+            }),
+        }
+    }
+}
+
+impl core::ops::Neg for Dual3 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            value: -self.value,
+            derivative: self.derivative.map(|partial| -partial),
+        }
+    }
+}
+
+/// Ward–Dutton partition of the level-1 long-channel inversion charge.
+///
+/// The channel charge density follows the same square-law gradual-channel
+/// relation as [`mos_op`]. In strong inversion, the channel's total charge and
+/// drain share are integrated along the channel; the source share is the
+/// remainder. This conserves intrinsic terminal charge and gives a consistent
+/// analytic Jacobian for the MNA transient stamp. It deliberately models only
+/// inversion charge: accumulation/depletion gate charge remains available via
+/// the default Meyer formulation, selected by `CHARGEMOD=MEYER`.
+pub fn mos_ward_dutton_channel_charge(
+    mosfet: &Mosfet,
+    vgs: f64,
+    vds: f64,
+    vbd: f64,
+    vbs: f64,
+) -> MosChannelChargeOp {
+    if mosfet.model.channel_charge_model != MosChannelChargeModel::WardDutton {
+        return MosChannelChargeOp {
+            q: [0.0; 4],
+            dq_dv: [[0.0; 3]; 4],
+        };
+    }
+    let Some(tox) = mosfet.model.tox else {
+        return MosChannelChargeOp {
+            q: [0.0; 4],
+            dq_dv: [[0.0; 3]; 4],
+        };
+    };
+
+    let vgs = Dual3::variable(vgs, 0);
+    let vds = Dual3::variable(vds, 1);
+    let vbs = Dual3::variable(vbs, 2);
+    let sign = mosfet.model.polarity.sign();
+    let reversed = vds.value < 0.0;
+    let (vgs_eff, vds_eff, vbs_eff) = if reversed {
+        (
+            vgs - vds,
+            -vds,
+            // `vbd` is the normalized bulk-to-physical-drain voltage; in
+            // reverse operation the physical drain is the effective source.
+            Dual3 {
+                value: vbd,
+                derivative: [0.0, -1.0, 1.0],
+            },
+        )
+    } else {
+        (vgs, vds, vbs)
+    };
+
+    let model = mosfet.model;
+    let threshold = if model.gamma == 0.0 {
+        Dual3::constant(sign * model.vto)
+    } else {
+        let sqrt_phi = libm::sqrt(model.phi);
+        let body_root = if vbs_eff.value <= 0.0 {
+            (Dual3::constant(model.phi) - vbs_eff).sqrt()
+        } else {
+            let linear = Dual3::constant(sqrt_phi) - vbs_eff / Dual3::constant(2.0 * sqrt_phi);
+            if linear.value < 0.0 {
+                Dual3::constant(0.0)
+            } else {
+                linear
+            }
+        };
+        Dual3::constant(sign * model.vto)
+            + Dual3::constant(model.gamma) * (body_root - Dual3::constant(sqrt_phi))
+    };
+    let overdrive = vgs_eff - threshold;
+    if overdrive.value <= 0.0 {
+        return MosChannelChargeOp {
+            q: [0.0; 4],
+            dq_dv: [[0.0; 3]; 4],
+        };
+    }
+
+    let channel_drop = if vds_eff.value >= overdrive.value {
+        overdrive
+    } else {
+        vds_eff
+    };
+    let r = channel_drop / overdrive;
+    let r2 = r * r;
+    let cox = Dual3::constant(OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.l / tox);
+    let total_magnitude = cox * overdrive * (Dual3::constant(1.0) - r + r2 / Dual3::constant(3.0))
+        / (Dual3::constant(1.0) - r / Dual3::constant(2.0));
+    let drain_share = (Dual3::constant(0.5) - Dual3::constant(2.5) * r / Dual3::constant(3.0)
+        + Dual3::constant(0.5) * r2
+        - r2 * r / Dual3::constant(10.0))
+        / ((Dual3::constant(1.0) - r / Dual3::constant(2.0))
+            * (Dual3::constant(1.0) - r / Dual3::constant(2.0)));
+    let drain_magnitude = cox * overdrive * drain_share;
+    let qg = total_magnitude;
+    let qd_eff = -drain_magnitude;
+    // Form source charge as the exact remainder, so the charge vector closes
+    // by construction rather than relying on two separately rounded formulas.
+    let qs_eff = -(qg + qd_eff);
+    let qb = Dual3::constant(0.0);
+    let mut terminal = if reversed {
+        [qg, qs_eff, qd_eff, qb]
+    } else {
+        [qg, qd_eff, qs_eff, qb]
+    };
+    for q in &mut terminal {
+        q.value *= sign;
+    }
+
+    MosChannelChargeOp {
+        q: terminal.map(|q| q.value),
+        // The physical charge and physical voltage polarity both change sign
+        // for PMOS, so their signs cancel in the capacitance Jacobian.
+        dq_dv: terminal.map(|q| q.derivative),
     }
 }
 

@@ -55,7 +55,8 @@
 
 use super::device;
 use super::netlist::{
-    AnalogError, BjtModel, Circuit, DiodeModel, Mosfet, NodeRef, POWER_SINK_VMIN,
+    AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
+    POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -123,6 +124,9 @@ fn mos_channel_capacitance_halves(
     vbd: f64,
     vbs: f64,
 ) -> [f64; 3] {
+    if mosfet.model.channel_charge_model != MosChannelChargeModel::Meyer {
+        return [0.0; 3];
+    }
     let Some(tox) = mosfet.model.tox else {
         return [0.0; 3];
     };
@@ -234,6 +238,9 @@ pub struct Solver {
     mos_channel_i: Vec<[f64; 3]>,
     /// Previous endpoint Meyer capacitance halves, in the same order.
     mos_channel_cap_half: Vec<[f64; 3]>,
+    /// Intrinsic Ward–Dutton terminal charges and currents, G-D-S-B order.
+    mos_conserving_q: Vec<[f64; 4]>,
+    mos_conserving_i: Vec<[f64; 4]>,
     /// Each JFET's normalised gate-source and gate-drain junction voltages.
     jfet_vgs: Vec<f64>,
     jfet_vgd: Vec<f64>,
@@ -368,6 +375,8 @@ impl Solver {
             mos_channel_q: vec![[0.0; 3]; mosfets],
             mos_channel_i: vec![[0.0; 3]; mosfets],
             mos_channel_cap_half: vec![[0.0; 3]; mosfets],
+            mos_conserving_q: vec![[0.0; 4]; mosfets],
+            mos_conserving_i: vec![[0.0; 4]; mosfets],
             jfet_vgs: vec![0.0; jfets],
             jfet_vgd: vec![0.0; jfets],
             jfet_vds: vec![0.0; jfets],
@@ -728,6 +737,16 @@ impl Solver {
                 core::array::from_fn(|junction| 2.0 * channel_caps[junction] * voltages[junction]);
             self.mos_channel_i[index] = [0.0; 3];
             self.mos_channel_cap_half[index] = channel_caps;
+
+            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+                let vgs = sign * node_diff(&self.node_v, mosfet.g, mosfet.junction_s);
+                let vds = sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s);
+                let vbd = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d);
+                let vbs = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s);
+                self.mos_conserving_q[index] =
+                    device::mos_ward_dutton_channel_charge(mosfet, vgs, vds, vbd, vbs).q;
+                self.mos_conserving_i[index] = [0.0; 4];
+            }
         }
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
@@ -1049,6 +1068,33 @@ impl Solver {
                 self.mos_channel_q[index][junction] = q_new;
                 self.mos_channel_i[index][junction] = i_new;
                 self.mos_channel_cap_half[index][junction] = channel_caps[junction];
+            }
+
+            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+                let charge = device::mos_ward_dutton_channel_charge(
+                    mosfet,
+                    self.mos_vgs[index],
+                    self.mos_vds[index],
+                    self.mos_vbd[index],
+                    self.mos_vbs[index],
+                );
+                for terminal in 0..4 {
+                    let q_new = charge.q[terminal];
+                    let i_new = match rule {
+                        Integration::BackwardEuler => {
+                            (q_new - self.mos_conserving_q[index][terminal]) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * (q_new - self.mos_conserving_q[index][terminal]) / h
+                                - self.mos_conserving_i[index][terminal]
+                        }
+                    };
+                    self.settled &= self.mos_conserving_q[index][terminal].to_bits()
+                        == q_new.to_bits()
+                        && self.mos_conserving_i[index][terminal].to_bits() == i_new.to_bits();
+                    self.mos_conserving_q[index][terminal] = q_new;
+                    self.mos_conserving_i[index][terminal] = i_new;
+                }
             }
         }
         for index in 0..self.circuit.inductors.len() {
@@ -2009,39 +2055,82 @@ impl Solver {
                     stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
                 }
 
-                let channel_caps = mos_channel_capacitance_halves(
-                    mosfet,
-                    vgs,
-                    vds,
-                    self.mos_vbd[index],
-                    self.mos_vbs[index],
-                );
-                let terminals = [mosfet.junction_s, mosfet.junction_d, mosfet.bulk];
-                for junction in 0..3 {
-                    let capacitance =
-                        self.mos_channel_cap_half[index][junction] + channel_caps[junction];
-                    if capacitance == 0.0 {
-                        continue;
-                    }
-                    let positive = mosfet.g;
-                    let negative = terminals[junction];
-                    let voltage = node_diff(&self.solution[..self.nodes], positive, negative);
-                    let charge_delta =
-                        (voltage - self.mos_channel_v[index][junction]) * capacitance;
-                    let factor = match rule {
+                if model.channel_charge_model == MosChannelChargeModel::WardDutton {
+                    let charge = device::mos_ward_dutton_channel_charge(
+                        mosfet,
+                        vgs,
+                        vds,
+                        self.mos_vbd[index],
+                        self.mos_vbs[index],
+                    );
+                    let terminals = [mosfet.g, mosfet.junction_d, mosfet.junction_s, mosfet.bulk];
+                    let controls = [
+                        (mosfet.g, mosfet.junction_s),
+                        (mosfet.junction_d, mosfet.junction_s),
+                        (mosfet.bulk, mosfet.junction_s),
+                    ];
+                    let voltages = controls.map(|(positive, negative)| {
+                        node_diff(&self.solution[..self.nodes], positive, negative)
+                    });
+                    let scale = match rule {
                         Integration::BackwardEuler => 1.0 / h,
                         Integration::Trapezoidal => 2.0 / h,
                     };
-                    let geq = factor * capacitance;
-                    let current = match rule {
-                        Integration::BackwardEuler => charge_delta / h,
-                        Integration::Trapezoidal => {
-                            2.0 * charge_delta / h - self.mos_channel_i[index][junction]
+                    for (terminal, &node) in terminals.iter().enumerate() {
+                        let charge_delta =
+                            charge.q[terminal] - self.mos_conserving_q[index][terminal];
+                        let current = match rule {
+                            Integration::BackwardEuler => charge_delta / h,
+                            Integration::Trapezoidal => {
+                                2.0 * charge_delta / h - self.mos_conserving_i[index][terminal]
+                            }
+                        };
+                        let control: [(f64, NodeRef, NodeRef, f64); 3] =
+                            core::array::from_fn(|control| {
+                                (
+                                    scale * charge.dq_dv[terminal][control],
+                                    controls[control].0,
+                                    controls[control].1,
+                                    voltages[control],
+                                )
+                            });
+                        stamp_linearised(matrix, rhs, dim, node, current, &control);
+                    }
+                } else {
+                    let channel_caps = mos_channel_capacitance_halves(
+                        mosfet,
+                        vgs,
+                        vds,
+                        self.mos_vbd[index],
+                        self.mos_vbs[index],
+                    );
+                    let terminals = [mosfet.junction_s, mosfet.junction_d, mosfet.bulk];
+                    for junction in 0..3 {
+                        let capacitance =
+                            self.mos_channel_cap_half[index][junction] + channel_caps[junction];
+                        if capacitance == 0.0 {
+                            continue;
                         }
-                    };
-                    let control = [(geq, positive, negative, voltage)];
-                    stamp_linearised(matrix, rhs, dim, positive, current, &control);
-                    stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                        let positive = mosfet.g;
+                        let negative = terminals[junction];
+                        let voltage = node_diff(&self.solution[..self.nodes], positive, negative);
+                        let charge_delta =
+                            (voltage - self.mos_channel_v[index][junction]) * capacitance;
+                        let factor = match rule {
+                            Integration::BackwardEuler => 1.0 / h,
+                            Integration::Trapezoidal => 2.0 / h,
+                        };
+                        let geq = factor * capacitance;
+                        let current = match rule {
+                            Integration::BackwardEuler => charge_delta / h,
+                            Integration::Trapezoidal => {
+                                2.0 * charge_delta / h - self.mos_channel_i[index][junction]
+                            }
+                        };
+                        let control = [(geq, positive, negative, voltage)];
+                        stamp_linearised(matrix, rhs, dim, positive, current, &control);
+                        stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                    }
                 }
             }
 

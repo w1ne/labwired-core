@@ -10,13 +10,14 @@
 //! `external_process` adapter has no browser counterpart. This engine compiles
 //! into the same WASM the playground ships, runs natively too, and adds one
 //! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
-//! subcircuits, model libraries, AC/DC sweeps and charge-conserving MOSFET
-//! channel charge by name and points at `tools/cosim/labwired_ngspice.py`,
-//! which supports those features. The solver integrates diode `TT`, BJT
+//! subcircuits, model libraries and AC/DC sweeps by name and points at
+//! `tools/cosim/labwired_ngspice.py`, which supports those features. The solver
+//! integrates diode `TT`, BJT
 //! `TF`/`TR` with forward `XTF`/`VTF`/`ITF`, and `RB`/`RC`/`RE`, MOSFET
 //! terminal resistances (`RD`/`RS` or
-//! `RSH` times instance `NRD`/`NRS`), and level-1 gate overlap charge
-//! (`CGSO`/`CGDO`/`CGBO`) in-core.
+//! `RSH` times instance `NRD`/`NRS`), level-1 gate overlap charge
+//! (`CGSO`/`CGDO`/`CGBO`), and either Meyer or opt-in Ward–Dutton MOSFET
+//! channel charge in-core.
 //!
 //! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
 //! optional depletion and transit-time charge), the level-1 JFET (including
@@ -44,10 +45,10 @@ pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
     ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
-    MosModel, Mosfet, MutualInductor, NodeRef, NtcModel, OpAmpModel, Polarity, PowerSink,
-    RegulatorKind, RegulatorModel, Resistor, Switch, Vccs, Vcvs, VoltageSource,
-    VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE,
-    POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
+    MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NtcModel, OpAmpModel,
+    Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor, Switch, Vccs, Vcvs,
+    VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,
