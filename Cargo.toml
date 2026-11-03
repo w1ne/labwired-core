@@ -104,6 +104,7 @@ members = [
     "crates/firmware-stm32f042-smoke",
     "crates/firmware-stm32f072-smoke",
     "crates/firmware-stm32l071-smoke",
+    "crates/firmware-stm32l072-smoke",
     "crates/firmware-xiao-nrf52840-sense-demo",
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",

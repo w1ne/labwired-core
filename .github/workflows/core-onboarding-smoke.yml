@@ -24,6 +24,7 @@ on:
       - "crates/firmware-stm32f042-smoke/**"
       - "crates/firmware-stm32f072-smoke/**"
       - "crates/firmware-stm32l071-smoke/**"
+      - "crates/firmware-stm32l072-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -137,6 +138,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/stm32l071-smoke.yaml
             system: configs/systems/onboarding/stm32l071.yaml
+          # The L072 smoke exercises its imported system's bounded STM32L0 RCC,
+          # GPIOA, and USART2 profile with an ARMv6-M Cortex-M0+ binary.
+          - id: stm32l072
+            crate: firmware-stm32l072-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32l072-smoke.yaml
+            system: configs/systems/onboarding/stm32l072.yaml
           # The F042 profile is limited to its modeled F0 RCC, GPIOA, and
           # modern USART1 surfaces exercised by this ARMv6-M fixture.
           - id: stm32f042

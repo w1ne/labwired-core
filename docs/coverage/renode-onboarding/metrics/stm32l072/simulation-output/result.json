@@ -1,0 +1,477 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 800000,
+  "cycles": 800000,
+  "instructions": 800000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 800000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 800000
+    }
+  },
+  "limits": {
+    "max_steps": 800000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32L072 profile smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortA:5",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      3517,
+      10,
+      100000,
+      3221225472,
+      1342177304,
+      2097152,
+      25,
+      536891360,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536891360,
+      134218147,
+      134218186
+    ],
+    "pc": 134218186,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "a444a55b2cc5f1986f21f629d0b3d5278a44bae1983baf149cb60914274560be",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32l072-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l072.yaml",
+    "script": "examples/renode-onboarding/stm32l072-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 800000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortA",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 366,
+            "value": 1
+          },
+          {
+            "cycle": 30372,
+            "value": 0
+          },
+          {
+            "cycle": 60380,
+            "value": 1
+          },
+          {
+            "cycle": 90386,
+            "value": 0
+          },
+          {
+            "cycle": 120394,
+            "value": 1
+          },
+          {
+            "cycle": 150400,
+            "value": 0
+          },
+          {
+            "cycle": 180408,
+            "value": 1
+          },
+          {
+            "cycle": 210414,
+            "value": 0
+          },
+          {
+            "cycle": 240422,
+            "value": 1
+          },
+          {
+            "cycle": 270428,
+            "value": 0
+          },
+          {
+            "cycle": 300436,
+            "value": 1
+          },
+          {
+            "cycle": 330442,
+            "value": 0
+          },
+          {
+            "cycle": 360450,
+            "value": 1
+          },
+          {
+            "cycle": 390456,
+            "value": 0
+          },
+          {
+            "cycle": 420464,
+            "value": 1
+          },
+          {
+            "cycle": 450470,
+            "value": 0
+          },
+          {
+            "cycle": 480478,
+            "value": 1
+          },
+          {
+            "cycle": 510484,
+            "value": 0
+          },
+          {
+            "cycle": 540492,
+            "value": 1
+          },
+          {
+            "cycle": 570498,
+            "value": 0
+          },
+          {
+            "cycle": 600506,
+            "value": 1
+          },
+          {
+            "cycle": 630512,
+            "value": 0
+          },
+          {
+            "cycle": 660520,
+            "value": 1
+          },
+          {
+            "cycle": 690526,
+            "value": 0
+          },
+          {
+            "cycle": 720534,
+            "value": 1
+          },
+          {
+            "cycle": 750540,
+            "value": 0
+          },
+          {
+            "cycle": 780548,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 41,
+            "state": "0"
+          },
+          {
+            "cycle": 366,
+            "state": "1"
+          },
+          {
+            "cycle": 30372,
+            "state": "0"
+          },
+          {
+            "cycle": 60380,
+            "state": "1"
+          },
+          {
+            "cycle": 90386,
+            "state": "0"
+          },
+          {
+            "cycle": 120394,
+            "state": "1"
+          },
+          {
+            "cycle": 150400,
+            "state": "0"
+          },
+          {
+            "cycle": 180408,
+            "state": "1"
+          },
+          {
+            "cycle": 210414,
+            "state": "0"
+          },
+          {
+            "cycle": 240422,
+            "state": "1"
+          },
+          {
+            "cycle": 270428,
+            "state": "0"
+          },
+          {
+            "cycle": 300436,
+            "state": "1"
+          },
+          {
+            "cycle": 330442,
+            "state": "0"
+          },
+          {
+            "cycle": 360450,
+            "state": "1"
+          },
+          {
+            "cycle": 390456,
+            "state": "0"
+          },
+          {
+            "cycle": 420464,
+            "state": "1"
+          },
+          {
+            "cycle": 450470,
+            "state": "0"
+          },
+          {
+            "cycle": 480478,
+            "state": "1"
+          },
+          {
+            "cycle": 510484,
+            "state": "0"
+          },
+          {
+            "cycle": 540492,
+            "state": "1"
+          },
+          {
+            "cycle": 570498,
+            "state": "0"
+          },
+          {
+            "cycle": 600506,
+            "state": "1"
+          },
+          {
+            "cycle": 630512,
+            "state": "0"
+          },
+          {
+            "cycle": 660520,
+            "state": "1"
+          },
+          {
+            "cycle": 690526,
+            "state": "0"
+          },
+          {
+            "cycle": 720534,
+            "state": "1"
+          },
+          {
+            "cycle": 750540,
+            "state": "0"
+          },
+          {
+            "cycle": 780548,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 27
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortA",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32L072 profile smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 512,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 512,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 0.78,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 20480,
+    "main_stack_high_water_bytes": 32,
+    "main_stack_free_min_bytes": 20448,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536891392,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 20480,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 20448,
+    "heap_base": 536870912,
+    "heap_top": 536891392
+  },
+  "metrics": {
+    "cycles": 800000,
+    "instructions": 800000,
+    "steps_executed": 800000,
+    "memory_reads": 284,
+    "memory_writes": 86,
+    "peripheral_accesses": 88,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218186,
+        "count": 1055,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134218184,
+        "count": 1054,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134218182,
+        "count": 1016,
+        "symbol": "firmware_stm32l072_smoke::delay"
+      }
+    ]
+  }
+}
