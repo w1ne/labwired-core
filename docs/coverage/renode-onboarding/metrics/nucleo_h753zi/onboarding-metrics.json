@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nucleo_h753zi-smoke.yaml",
   "system": "configs/systems/onboarding/nucleo_h753zi.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T14:16:27Z",
-  "finished_at_utc": "2026-11-03T14:16:31Z",
-  "elapsed_seconds": 4,
-  "elapsed_ms": 3745,
+  "started_at_utc": "2026-11-03T14:23:57Z",
+  "finished_at_utc": "2026-11-03T14:23:59Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1983,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.696,
-    "build_firmware": 0.266,
-    "run_smoke": 2.761
+    "build_cli": 0.262,
+    "build_firmware": 0.147,
+    "run_smoke": 1.565
   },
   "stages_ms": {
-    "build_cli": 696,
-    "build_firmware": 266,
-    "run_smoke": 2761
+    "build_cli": 262,
+    "build_firmware": 147,
+    "run_smoke": 1565
   }
 }
