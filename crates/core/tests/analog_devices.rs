@@ -4615,6 +4615,137 @@ mod analog {
         }
     }
 
+    /// Channel, overlap and bulk-junction charge must all land on the
+    /// intrinsic MOSFET terminals before RD/RS carry their displacement
+    /// currents. Compare one combined transient against the same model with
+    /// explicit resistors, for both polarities and integration rules; a
+    /// charge stamp attached to an external terminal or a replaced charge
+    /// history will make the solved trajectories diverge.
+    #[test]
+    fn mosfet_combined_charge_physics_flows_through_terminal_resistances() {
+        let (rd, rs) = (800.0, 500.0);
+        let (width, length, h) = (100e-6, 10e-6, 10e-12);
+        let model_params = "TOX=10n CHARGEMOD=WARD_DUTTON CGSO=10n CGDO=10n \
+            CGBO=10n CBD=100p CBS=100p PB=1 MJ=0";
+
+        for (kind, sign, vd, vs, vb) in [
+            ("NMOS", 1.0, 2.5, 0.0, 0.0),
+            ("PMOS", -1.0, 0.0, -2.5, -2.5),
+        ] {
+            let vto = sign;
+            let model_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 M1 d g s b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 {model_params} RD={rd} RS={rs})\n",
+                sign * 1.2,
+            );
+            let explicit_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 RDM d di {rd}\nRSM si s {rs}\n\
+                 M1 di g si b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 {model_params})\n",
+                sign * 1.2,
+            );
+            let uncharged = model_resistances.replace(model_params, "");
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistances).expect("combined MOSFET charge model parses"),
+                    integration,
+                )
+                .expect("combined MOSFET charge solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistances)
+                        .expect("explicit-resistor MOSFET model parses"),
+                    integration,
+                )
+                .expect("explicit-resistor MOSFET solver builds");
+                let mut without_charge = Solver::new(
+                    parse_netlist(&uncharged).expect("uncharged MOSFET model parses"),
+                    integration,
+                )
+                .expect("uncharged MOSFET solver builds");
+
+                let model_nodes = ["d", "s", "b", "M1#drain", "M1#source"]
+                    .map(|name| model.circuit().node(name).expect("model terminal node"));
+                let explicit_nodes = ["d", "s", "b", "di", "si"].map(|name| {
+                    explicit
+                        .circuit()
+                        .node(name)
+                        .expect("explicit terminal node")
+                });
+                let uncharged_nodes = ["d", "s", "b", "M1#drain", "M1#source"]
+                    .map(|name| without_charge.circuit().node(name).expect("uncharged node"));
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+                let uncharged_gate = without_charge
+                    .voltage_source_index("Vg")
+                    .expect("uncharged gate source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit operating point settles");
+                without_charge
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (actual, expected) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(actual) - explicit.node_voltage(expected)).abs() < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                model.set_voltage_source(model_gate, sign * 3.0);
+                explicit.set_voltage_source(explicit_gate, sign * 3.0);
+                without_charge.set_voltage_source(uncharged_gate, sign * 3.0);
+
+                let mut largest_charge_effect = 0.0_f64;
+                for step in 0..3 {
+                    model.advance(h).expect("combined model charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("combined explicit-resistor charge step solves");
+                    without_charge
+                        .advance(h)
+                        .expect("uncharged comparison step solves");
+
+                    for (index, (actual_node, expected_node)) in model_nodes
+                        .iter()
+                        .copied()
+                        .zip(explicit_nodes.iter().copied())
+                        .enumerate()
+                    {
+                        let actual = model.node_voltage(actual_node);
+                        let expected = explicit.node_voltage(expected_node);
+                        largest_charge_effect = largest_charge_effect.max(
+                            (actual - without_charge.node_voltage(uncharged_nodes[index])).abs(),
+                        );
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} step {step} terminal {index}: model-card resistances give {actual} V, explicit resistors give {expected} V"
+                        );
+                    }
+                    for source in ["Vg", "Vd", "Vs", "Vb"] {
+                        assert!(
+                            (source_current(&model, source) - source_current(&explicit, source)).abs()
+                                < 1e-10,
+                            "{kind} {integration:?} step {step} {source}: model-card resistances and explicit resistors must carry the same combined charge current"
+                        );
+                    }
+                }
+                assert!(
+                    largest_charge_effect > 1e-7,
+                    "{kind} {integration:?}: combined MOSFET charge must measurably affect the terminal voltages"
+                );
+            }
+        }
+    }
+
     /// Drain bulk-junction depletion charge is attached to the intrinsic
     /// drain. With model-card `RD`, its transient current must cross that
     /// resistor exactly as it does when the resistor is explicit in the
