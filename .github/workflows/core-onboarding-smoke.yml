@@ -41,6 +41,7 @@ on:
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-feather-rp2040-smoke/**"
+      - "crates/firmware-feather-m4-express-smoke/**"
       - "crates/firmware-pico-w-smoke/**"
       - "crates/firmware-nano-rp2040-connect-smoke/**"
       - "crates/firmware-pico2-demo/**"
@@ -240,6 +241,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/adafruit-feather-rp2040/io-smoke.yaml
             system: configs/systems/adafruit-feather-rp2040.yaml
+          - id: feather-m4-express
+            crate: firmware-feather-m4-express-smoke
+            target: thumbv7em-none-eabi
+            script: examples/feather-m4-express/io-smoke.yaml
+            system: configs/systems/feather-m4-express.yaml
           - id: raspberry-pi-pico-w
             crate: firmware-pico-w-smoke
             target: thumbv6m-none-eabi

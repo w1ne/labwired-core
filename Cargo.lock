@@ -1325,6 +1325,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-feather-m4-express-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-feather-rp2040-smoke"
 version = "0.1.0"
 dependencies = [

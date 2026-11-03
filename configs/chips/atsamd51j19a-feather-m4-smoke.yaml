@@ -1,0 +1,30 @@
+# Focused ATSAMD51J19A profile for the Adafruit Feather M4 Express D13 smoke.
+# Only PORTA (the on-board D13 LED on PA23) and SysTick are exposed. The
+# smoke uses the reset clock and does not claim USB, SERCOM, QSPI, NeoPixel,
+# DAC/ADC, crypto, charger, or other SAMD51 peripherals.
+name: "atsamd51j19a-feather-m4-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x00000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "192KB"
+
+pins:
+  # Feather D13 / LED_BUILTIN — PA23, per Adafruit feather_m4 variant.
+  PA23: { gpio: porta, bit: 23, functions: [{ type: gpio, peripheral: porta }] }
+
+peripherals:
+  - id: "porta"
+    type: "gpio"
+    base_address: 0x41008000
+    size: "128B"
+    config:
+      profile: "sam_port"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010

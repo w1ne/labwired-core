@@ -1,0 +1,28 @@
+{
+  "target_id": "feather-m4-express",
+  "status": "pass",
+  "crate": "firmware-feather-m4-express-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/feather-m4-express/io-smoke.yaml",
+  "system": "configs/systems/feather-m4-express.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T19:40:23Z",
+  "finished_at_utc": "2026-11-03T19:40:24Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 975,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.339,
+    "build_firmware": 0.374,
+    "run_smoke": 0.253
+  },
+  "stages_ms": {
+    "build_cli": 339,
+    "build_firmware": 374,
+    "run_smoke": 253
+  }
+}
