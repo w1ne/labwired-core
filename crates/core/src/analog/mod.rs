@@ -20,10 +20,10 @@
 //! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
 //! optional depletion and transit-time charge), the level-1 JFET (including
 //! optional gate-junction depletion charge), and the MOSFET (including
-//! optional linear gate overlap charge) — are solved by Newton–Raphson
-//! iteration inside each time step. A circuit with none of them takes exactly
-//! the code path it took before they existed, down to the floating-point
-//! operation order.
+//! optional bulk-junction depletion and linear gate-overlap charge) — are
+//! solved by Newton–Raphson iteration inside each time step. A circuit with
+//! none of them takes exactly the code path it took before they existed, down
+//! to the floating-point operation order.
 //!
 //! * [`netlist`] — the accepted SPICE subset and its errors.
 //! * [`device`] — the device equations, their limiters and their constants.

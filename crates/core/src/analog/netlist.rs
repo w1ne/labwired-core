@@ -61,13 +61,14 @@
 //! resistances `RD`/`RS` and gate-junction depletion capacitance
 //! `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
-//! level-1 channel capacitance from `TOX` and overlap capacitance
-//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
-//! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
-//! constant forward/reverse transit times `TF`/`TR`, every temperature
-//! coefficient, bias-dependent transit-time parameters (`XTF`/`VTF`/`ITF`),
-//! `NKF`, and most terminal resistances, …) are **accepted and ignored rather
-//! than rejected**. BJT `IKF`/`IKR` high-injection rolloff and
+//! level-1 channel capacitance from `TOX`, gate overlap capacitance
+//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
+//! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
+//! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
+//! `PB`/`MJ`/`FC`, and constant forward/reverse transit times `TF`/`TR`, every
+//! temperature coefficient, bias-dependent transit-time parameters
+//! (`XTF`/`VTF`/`ITF`), `NKF`, and most terminal resistances, …) are **accepted
+//! and ignored rather than rejected**. BJT `IKF`/`IKR` high-injection rolloff and
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
 //! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. JFET
 //! terminal resistances `RD`/`RS` create series resistors to its intrinsic
@@ -76,8 +77,9 @@
 //! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
-//! as linear overlap charge. `TOX`, when present, enables the level-1 Meyer
-//! channel capacitance. See
+//! as linear overlap charge. `CBD` and `CBS` integrate nonlinear bulk junction
+//! charge with the shared `PB`, `MJ`, and `FC` parameters. `TOX`, when present,
+//! enables the level-1 Meyer channel capacitance. See
 //! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
@@ -993,6 +995,16 @@ pub struct MosModel {
     pub phi: f64,
     /// Bulk junction saturation current `IS`, amps.
     pub is: f64,
+    /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
+    pub cbd: f64,
+    /// Zero-bias bulk-source junction capacitance `CBS`, farads.
+    pub cbs: f64,
+    /// Bulk junction potential `PB`, volts.
+    pub pb: f64,
+    /// Bulk junction grading coefficient `MJ`.
+    pub mj: f64,
+    /// Forward-bias depletion-capacitance coefficient `FC`.
+    pub fc: f64,
     /// Default channel width `W`, metres (the element line may override it).
     pub w: f64,
     /// Default channel length `L`, metres (the element line may override it).
@@ -1072,6 +1084,11 @@ impl MosModel {
             gamma: 0.0,
             phi: 0.6,
             is: 1e-14,
+            cbd: 0.0,
+            cbs: 0.0,
+            pb: 0.8,
+            mj: 0.5,
+            fc: 0.5,
             w: 1e-4,
             l: 1e-4,
             cgso: 0.0,
@@ -2663,6 +2680,22 @@ fn bind_models(
                         "a MOSFET model needs CGSO/CGDO/CGBO >= 0 and finite".to_string(),
                     ));
                 }
+                if !model.cbd.is_finite()
+                    || model.cbd < 0.0
+                    || !model.cbs.is_finite()
+                    || model.cbs < 0.0
+                    || !model.pb.is_finite()
+                    || model.pb <= 0.0
+                    || !model.mj.is_finite()
+                    || model.mj < 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs CBD/CBS >= 0, PB > 0, MJ >= 0 and 0 <= FC < 1",
+                    ));
+                }
                 if !model.rd.is_finite()
                     || model.rd < 0.0
                     || !model.rs.is_finite()
@@ -3094,6 +3127,11 @@ fn parse_model(
             (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
             (ModelCard::Mos(model), "PHI") => model.phi = value,
             (ModelCard::Mos(model), "IS") => model.is = value,
+            (ModelCard::Mos(model), "CBD") => model.cbd = value,
+            (ModelCard::Mos(model), "CBS") => model.cbs = value,
+            (ModelCard::Mos(model), "PB") => model.pb = value,
+            (ModelCard::Mos(model), "MJ") => model.mj = value,
+            (ModelCard::Mos(model), "FC") => model.fc = value,
             (ModelCard::Mos(model), "W") => model.w = value,
             (ModelCard::Mos(model), "L") => model.l = value,
             (ModelCard::Mos(model), "CGSO") => model.cgso = value,
@@ -3416,6 +3454,11 @@ fn lower_comparator(
                 gamma: 0.0,
                 phi: 0.6,
                 is: 1e-14,
+                cbd: 0.0,
+                cbs: 0.0,
+                pb: 0.8,
+                mj: 0.5,
+                fc: 0.5,
                 w: 1.0,
                 l: 1.0,
                 cgso: 0.0,
