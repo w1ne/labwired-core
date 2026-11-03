@@ -40,6 +40,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml",
     },
+    "stm32l552": {
+        "crate": "firmware-l552ze-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
+    },
     "nucleo_f767zi": {
         "crate": "firmware-stm32f746-demo",
         "target": "thumbv7em-none-eabi",

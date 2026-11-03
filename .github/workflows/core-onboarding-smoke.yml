@@ -93,6 +93,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml
             system: configs/systems/onboarding/stm32f401cdu6-blackpill.yaml
+          - id: stm32l552
+            crate: firmware-l552ze-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/stm32l552-smoke.yaml
+            system: configs/systems/onboarding/stm32l552.yaml
           - id: nrf52840
             crate: firmware-nrf52840-demo
             target: thumbv7em-none-eabi

@@ -1,0 +1,5 @@
+2026-11-03T03:41:56.950739Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l552.yaml
+2026-11-03T03:41:56.952621Z  INFO labwired_loader: ELF Entry Point: 0x8000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  3/3 checks · stm32l552-smoke · 2000000 steps · 0.96s
