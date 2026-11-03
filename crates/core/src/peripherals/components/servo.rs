@@ -87,6 +87,33 @@ impl ServoCal {
         }
     }
 
+    /// TowerPro MG995 metal-gear servo: ~0.5–2.5 ms → 0–180°, 50 Hz.
+    /// Matches the wide Adafruit PWM range (`SERVO_MIN`/`SERVO_MAX` 102..512
+    /// ticks at 50 Hz ≈ 0.5..2.5 ms) used by Project P.I.G. firmware, so a
+    /// mid-scale OFF count of 307 ticks (~1.5 ms) reads ~90°.
+    pub const fn mg995() -> Self {
+        Self {
+            min_us: 500.0,
+            max_us: 2500.0,
+            min_angle: 0.0,
+            max_angle: 180.0,
+            frame_hz: 50.0,
+        }
+    }
+
+    /// TowerPro MG90S micro metal-gear servo: ~0.5–2.5 ms → 0–180°, 50 Hz.
+    /// Same wide pulse window as [`Self::mg995`] so PCA9685 tick maps used by
+    /// Adafruit's library centre at ~90°.
+    pub const fn mg90s() -> Self {
+        Self {
+            min_us: 500.0,
+            max_us: 2500.0,
+            min_angle: 0.0,
+            max_angle: 180.0,
+            frame_hz: 50.0,
+        }
+    }
+
     /// Map a pulse width (µs) to a shaft angle, clamped to the travel range.
     fn pulse_to_angle(&self, pulse_us: f32) -> f32 {
         let span_us = self.max_us - self.min_us;
@@ -172,6 +199,14 @@ impl Servo {
     /// Convenience: an SG90 micro servo on `pin`.
     pub fn sg90(pin: u8) -> Self {
         Self::new(ServoCal::sg90(), pin)
+    }
+
+    pub fn mg995(pin: u8) -> Self {
+        Self::new(ServoCal::mg995(), pin)
+    }
+
+    pub fn mg90s(pin: u8) -> Self {
+        Self::new(ServoCal::mg90s(), pin)
     }
 
     /// Diagram / board_io part id (empty when constructed without one).
@@ -397,7 +432,7 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
     label: std::borrow::Cow::Borrowed("Hobby PWM Servo"),
     summary: std::borrow::Cow::Borrowed("RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty)."),
     detail: std::borrow::Cow::Borrowed("Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC \
-             duty for ledcWrite paths. Type aliases sg90 / mg996r select calibration via config.model \
+             duty for ledcWrite paths. Type aliases sg90 / mg996r / mg995 / mg90s select calibration via config.model \
              or the top-level type string."),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
@@ -410,7 +445,7 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: std::borrow::Cow::Borrowed("model"),
             ty: ConfigType::Str,
-            doc: std::borrow::Cow::Borrowed("Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted."),
+            doc: std::borrow::Cow::Borrowed("Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."),
         },
         ConfigKey {
             name: std::borrow::Cow::Borrowed("ledc_channel"),
@@ -444,6 +479,8 @@ impl PeripheralKit for ServoKit {
         let cal = match model {
             "sg90" => ServoCal::sg90(),
             "mg996r" => ServoCal::mg996r(),
+            "mg995" => ServoCal::mg995(),
+            "mg90s" => ServoCal::mg90s(),
             _ => ServoCal::standard(),
         };
         let pad_odr = ctx.resolve_pin_odr(pin_label);
@@ -674,5 +711,31 @@ mod tests {
         servo.apply_duty_fraction(0.075); // 1500 µs
         let a = servo.angle_degrees();
         assert!((a - 94.7).abs() < 1.0, "sg90 mid={a}");
+    }
+
+    #[test]
+    fn mg995_mid_pulse_is_about_90() {
+        let servo = Servo::mg995(5);
+        // 1.5 ms at 50 Hz → duty 0.075
+        servo.apply_duty_fraction(0.075);
+        let a = servo.angle_degrees();
+        assert!((a - 90.0).abs() < 1.0, "mg995 mid={a}");
+    }
+
+    #[test]
+    fn mg90s_half_ms_is_about_0_and_2_5_ms_is_180() {
+        let servo = Servo::mg90s(5);
+        servo.apply_duty_fraction(0.025); // 0.5 ms
+        assert!(
+            servo.angle_degrees() < 1.0,
+            "mg90s min={}",
+            servo.angle_degrees()
+        );
+        servo.apply_duty_fraction(0.125); // 2.5 ms
+        assert!(
+            (servo.angle_degrees() - 180.0).abs() < 1.0,
+            "mg90s max={}",
+            servo.angle_degrees()
+        );
     }
 }

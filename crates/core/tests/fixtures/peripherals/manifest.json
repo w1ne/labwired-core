@@ -3074,7 +3074,7 @@
       "device_type": "servo",
       "label": "Hobby PWM Servo",
       "summary": "RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty).",
-      "detail": "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC duty for ledcWrite paths. Type aliases sg90 / mg996r select calibration via config.model or the top-level type string.",
+      "detail": "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC duty for ledcWrite paths. Type aliases sg90 / mg996r / mg995 / mg90s select calibration via config.model or the top-level type string.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
@@ -3086,7 +3086,7 @@
         {
           "name": "model",
           "ty": "str",
-          "doc": "Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted."
+          "doc": "Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."
         },
         {
           "name": "ledc_channel",

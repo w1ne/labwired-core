@@ -17,6 +17,7 @@
 //! the former IR component engine (and its `ir_component_equivalence.rs`) was
 //! retired in Phase B, leaving one declarative stack.
 
+use labwired_core::inspect::InspectOpts;
 use labwired_core::peripherals::components::{GenericI2cDevice, Pca9685};
 use labwired_core::peripherals::esp32s3::tmp102::Tmp102;
 use labwired_core::peripherals::i2c::I2cDevice;
@@ -355,6 +356,76 @@ fn pca9685_servo_angle_observable_matches_across_duties_including_raw_zero() {
     // Out-of-range channel and unknown observable are None.
     assert_eq!(decl.observable("servo_angle", 16), None);
     assert_eq!(decl.observable("nope", 0), None);
+}
+
+#[test]
+fn pca9685_artifacts_expose_prescale_period_off_counts_and_angles() {
+    // Adafruit setPWMFreq(50) → PRE_SCALE 121; setPWM mid → OFF 307.
+    let mut decl = declarative("pca9685");
+    let ops = vec![
+        Op::Start,
+        Op::Write(0x00),
+        Op::Write(0x10), // MODE1 SLEEP so PRE_SCALE is writable on silicon
+        Op::Start,
+        Op::Write(0xFE),
+        Op::Write(121), // PRE_SCALE for ~50 Hz
+        Op::Start,
+        Op::Write(0x00),
+        Op::Write(0xA1), // AI | ALLCALL, leave sleep
+        // LED0..LED4 OFF = 307 (0x133)
+        Op::Start,
+        Op::Write(0x06),
+        Op::Write(0x00),
+        Op::Write(0x00),
+        Op::Write(0x33),
+        Op::Write(0x01), // ch0
+        Op::Write(0x00),
+        Op::Write(0x00),
+        Op::Write(0x33),
+        Op::Write(0x01), // ch1
+        Op::Write(0x00),
+        Op::Write(0x00),
+        Op::Write(0x33),
+        Op::Write(0x01), // ch2
+        Op::Write(0x00),
+        Op::Write(0x00),
+        Op::Write(0x33),
+        Op::Write(0x01), // ch3
+        Op::Write(0x00),
+        Op::Write(0x00),
+        Op::Write(0x33),
+        Op::Write(0x01), // ch4
+    ];
+    for op in &ops {
+        match op {
+            Op::Start => decl.start(),
+            Op::Write(b) => decl.write(*b),
+            Op::Read => {
+                let _ = decl.read();
+            }
+        }
+    }
+    decl.stop();
+
+    let arts = I2cDevice::artifacts(&decl, "pca", &InspectOpts::default());
+    let art = arts
+        .iter()
+        .find(|a| a.kind == "i2c_registers")
+        .expect("i2c_registers artifact");
+    let meta = &art.meta;
+    assert_eq!(meta["prescale"], 121);
+    let period = meta["pwm_period_ms"].as_f64().expect("pwm_period_ms");
+    assert!((period - 20.0).abs() < 0.5, "period_ms={period} want ~20");
+    for ch in 0..5 {
+        assert_eq!(meta["off_counts"][ch.to_string()], 307, "off_counts[{ch}]");
+        let angle = meta["observables"]["servo_angle"][ch.to_string()]
+            .as_f64()
+            .expect("servo_angle");
+        assert!(
+            (angle - 90.0).abs() < 6.0,
+            "servo_angle[{ch}]={angle} want ~90"
+        );
+    }
 }
 
 // ─── TMP102 ─────────────────────────────────────────────────────────────────

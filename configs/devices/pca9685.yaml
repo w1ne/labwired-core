@@ -38,10 +38,13 @@
 #     is the mask coinciding with the right answer, NOT full-OFF being honoured:
 #     write OFF_H = 0x12 (full OFF set *and* a nonzero count) and this model
 #     reports an angle while silicon holds the output fully off.
-#   * PRE_SCALE = 0x1E (200 Hz). There is no PWM frequency, no output waveform
-#     and no oscillator in this model — `servo_angle` reads the OFF count
-#     directly. Changing PRE_SCALE changes nothing here; on silicon it rescales
-#     every pulse width. Note the datasheet also forbids writing PRE_SCALE
+#   * PRE_SCALE = 0x1E (200 Hz). There is still no output waveform generator —
+#     LEDn pins do not toggle in this model — but the inspect artifact reports
+#     `prescale` and `pwm_period_ms = 4096 * (PRE_SCALE + 1) / 25e3` from the
+#     internal 25 MHz oscillator (datasheet Rev. 4 §7.3.1), so a firmware write
+#     of PRE_SCALE = 121 proves as ~20 ms. `servo_angle` still linearises the
+#     OFF count against a fixed 20 ms frame (Adafruit / SG90 convention); it
+#     does not rescale with PRE_SCALE. The datasheet forbids writing PRE_SCALE
 #     unless MODE1 SLEEP is set; that rule is not enforced either.
 #   * MODE1 RESTART / EXTCLK / SLEEP / AI. Only AI has behaviour (the pointer
 #     auto-increment below). SLEEP reads back set at reset but gates nothing.

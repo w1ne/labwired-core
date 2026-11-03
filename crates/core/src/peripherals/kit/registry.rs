@@ -234,6 +234,8 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // Hobby servo calibrations as top-level type strings.
     ("sg90", "servo"),
     ("mg996r", "servo"),
+    ("mg995", "servo"),
+    ("mg90s", "servo"),
     // WS2812 synonym for neopixel kit.
     ("ws2812", "neopixel"),
     // STEP/DIR driver family.
