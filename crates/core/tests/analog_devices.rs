@@ -653,6 +653,98 @@ mod analog {
         }
     }
 
+    /// Depletion and diffusion charge are two parts of the same stored
+    /// junction charge. Exercise their sum in a solved transient circuit,
+    /// including the forward-bias continuation above `FC·VJ`, under both
+    /// integration rules.
+    #[test]
+    fn diode_depletion_and_transit_charge_sum_across_forward_transition() {
+        let (is, cjo, vj, m, fc, tt, resistance, h): (f64, f64, f64, f64, f64, f64, f64, f64) =
+            (1e-14, 100e-12, 0.8, 0.5, 0.5, 100e-9, 1e3, 100e-9);
+        let netlist = format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} CJO={cjo} VJ={vj} M={m} FC={fc} TT={tt})\n"
+        );
+        let circuit = parse_netlist(&netlist).expect("combined diode charge model parses");
+        let v_transition = fc * vj;
+
+        // Independent SPICE charge integral with its linear continuation
+        // above FC·VJ. Diffusion storage excludes the solver's GMIN shunt.
+        let xfc = 1.0 - fc;
+        let qfc = cjo * vj / (1.0 - m) * (1.0 - xfc.powf(1.0 - m));
+        let cfc = cjo * xfc.powf(-m);
+        let slope = m * cjo * xfc.powf(-1.0 - m) / vj;
+        let depletion_charge = |voltage: f64| {
+            if voltage < v_transition {
+                let x = 1.0 - voltage / vj;
+                cjo * vj / (1.0 - m) * (1.0 - x.powf(1.0 - m))
+            } else {
+                let dv = voltage - v_transition;
+                qfc + cfc * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let junction_current = |voltage: f64| is * ((voltage / VT).exp() - 1.0);
+        let conduction_current = |voltage: f64| junction_current(voltage) + 1e-12 * voltage;
+        let stored_charge =
+            |voltage: f64| depletion_charge(voltage) + tt * junction_current(voltage);
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver = Solver::new(circuit.clone(), integration)
+                .expect("combined diode charge solver builds");
+            let out = solver.circuit().node("out").expect("output node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, 1.0);
+
+            let mut previous_charge = 0.0;
+            let mut previous_current = 0.0;
+            for step in 0..2 {
+                let charge_current = |voltage: f64| {
+                    let next_charge = stored_charge(voltage);
+                    if step == 0 || integration == Integration::BackwardEuler {
+                        (next_charge - previous_charge) / h
+                    } else {
+                        2.0 * (next_charge - previous_charge) / h - previous_current
+                    }
+                };
+                let residual = |voltage: f64| {
+                    (1.0 - voltage) / resistance
+                        - conduction_current(voltage)
+                        - charge_current(voltage)
+                };
+                let mut lo = 0.0;
+                let mut hi = 1.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (lo + hi);
+                    if residual(mid) > 0.0 {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                let expected = 0.5 * (lo + hi);
+
+                solver
+                    .advance(h)
+                    .expect("combined diode charge step solves");
+                let actual = solver.node_voltage(out);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{integration:?} step {step}: expected {expected} V, got {actual} V"
+                );
+                if step == 0 {
+                    assert!(
+                        actual > v_transition,
+                        "the first step must enter the forward continuation above FC·VJ={v_transition} V, got {actual} V"
+                    );
+                }
+
+                let next_charge = stored_charge(actual);
+                previous_current = (next_charge - previous_charge) / h;
+                previous_charge = next_charge;
+            }
+        }
+    }
+
     #[test]
     fn bjt_cje_integrates_as_base_emitter_charge_for_both_polarities() {
         let cje = 10e-9;
