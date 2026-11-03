@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `20`
-- booted: `20/245`
-- boot_and_smoke_passed: `20/245`
-- not_run: `225`
-- pass: `20`
+- run_attempted: `21`
+- booted: `21/245`
+- boot_and_smoke_passed: `21/245`
+- not_run: `224`
+- pass: `21`
 - fail: `0`
-- median_elapsed_ms: `870`
-- median_elapsed_seconds: `0.87`
+- median_elapsed_ms: `803`
+- median_elapsed_seconds: `0.803`
 - threshold_seconds: `3600`
-- threshold_met: `20/20`
+- threshold_met: `21/21`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -26,7 +26,7 @@
 | `arduino_101-shield` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `arduino_nano_33_ble` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `arduino_uno_r4_minima` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `2662` | `2.662` | `True` | `n/a` | n/a | n/a |
+| `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `2669` | `2.669` | `True` | `n/a` | n/a | n/a |
 | `arvsom` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `at91rm9200` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `atsamd21j17d-aft` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
@@ -96,14 +96,14 @@
 | `kendryte_k210` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `leon3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_common` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `litex_ibex` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `n/a` | n/a | n/a |
+| `litex_ibex` | `pass` | `True` | `yes` | `yes` | `698` | `0.698` | `True` | `n/a` | n/a | n/a |
 | `litex_linux_vexriscv_sdcard` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_minerva` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_nexys_video_vexriscv_linux` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `litex_picorv32` | `pass` | `True` | `yes` | `yes` | `1912` | `1.912` | `True` | `n/a` | n/a | n/a |
+| `litex_picorv32` | `pass` | `True` | `yes` | `yes` | `1813` | `1.813` | `True` | `n/a` | n/a | n/a |
 | `litex_tock` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `1975` | `1.975` | `True` | `n/a` | n/a | n/a |
+| `litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `1854` | `1.854` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_linux` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_vexriscv_micropython` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_vexriscv_smp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
@@ -133,9 +133,9 @@
 | `mspsim-msp430f5437` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `murax_vexriscv` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `murax_vexriscv_verilated_uart` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `nrf52840` | `pass` | `True` | `yes` | `yes` | `2063` | `2.063` | `True` | `n/a` | n/a | n/a |
+| `nrf52840` | `pass` | `True` | `yes` | `yes` | `2185` | `2.185` | `True` | `n/a` | n/a | n/a |
 | `nrf52840dk_nrf52840` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `744` | `0.744` | `True` | `n/a` | n/a | n/a |
+| `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `769` | `0.769` | `True` | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `nucleo_wba52cg` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `nuvoton_npcx9` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
@@ -171,9 +171,9 @@
 | `sam4s` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `sam4s16c` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `sam4s8b` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `775` | `0.775` | `True` | `n/a` | n/a | n/a |
-| `sam_e70` | `pass` | `True` | `yes` | `yes` | `799` | `0.799` | `True` | `n/a` | n/a | n/a |
-| `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `765` | `0.765` | `True` | `n/a` | n/a | n/a |
+| `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `735` | `0.735` | `True` | `n/a` | n/a | n/a |
+| `sam_e70` | `pass` | `True` | `yes` | `yes` | `697` | `0.697` | `True` | `n/a` | n/a | n/a |
+| `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `753` | `0.753` | `True` | `n/a` | n/a | n/a |
 | `sifive-fu540` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `sifive-fu740` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `simavr-at90usb162` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
@@ -218,28 +218,28 @@
 | `stk3600` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stk3700` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stk3800` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32f042` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `stm32f042` | `pass` | `True` | `yes` | `yes` | `730` | `0.73` | `True` | `n/a` | n/a | n/a |
 | `stm32f072` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `835` | `0.835` | `True` | `n/a` | n/a | n/a |
-| `stm32f103` | `pass` | `True` | `yes` | `yes` | `1181` | `1.181` | `True` | `n/a` | n/a | n/a |
+| `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `803` | `0.803` | `True` | `n/a` | n/a | n/a |
+| `stm32f103` | `pass` | `True` | `yes` | `yes` | `1063` | `1.063` | `True` | `n/a` | n/a | n/a |
 | `stm32f4` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `703` | `0.703` | `True` | `n/a` | n/a | n/a |
+| `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `689` | `0.689` | `True` | `n/a` | n/a | n/a |
 | `stm32f412` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32f429` | `pass` | `True` | `yes` | `yes` | `905` | `0.905` | `True` | `n/a` | n/a | n/a |
-| `stm32f4_discovery` | `pass` | `True` | `yes` | `yes` | `1829` | `1.829` | `True` | `n/a` | n/a | n/a |
+| `stm32f429` | `pass` | `True` | `yes` | `yes` | `854` | `0.854` | `True` | `n/a` | n/a | n/a |
+| `stm32f4_discovery` | `pass` | `True` | `yes` | `yes` | `1966` | `1.966` | `True` | `n/a` | n/a | n/a |
 | `stm32f4_discovery-kit` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32f746` | `pass` | `True` | `yes` | `yes` | `737` | `0.737` | `True` | `n/a` | n/a | n/a |
-| `stm32f777` | `pass` | `True` | `yes` | `yes` | `711` | `0.711` | `True` | `n/a` | n/a | n/a |
+| `stm32f746` | `pass` | `True` | `yes` | `yes` | `701` | `0.701` | `True` | `n/a` | n/a | n/a |
+| `stm32f777` | `pass` | `True` | `yes` | `yes` | `684` | `0.684` | `True` | `n/a` | n/a | n/a |
 | `stm32f7_discovery-bb` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stm32h7` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32h743` | `pass` | `True` | `yes` | `yes` | `2130` | `2.13` | `True` | `n/a` | n/a | n/a |
+| `stm32h743` | `pass` | `True` | `yes` | `yes` | `1856` | `1.856` | `True` | `n/a` | n/a | n/a |
 | `stm32h747` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stm32h747-disco` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stm32h753` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32l071` | `pass` | `True` | `yes` | `yes` | `713` | `0.713` | `True` | `n/a` | n/a | n/a |
+| `stm32l071` | `pass` | `True` | `yes` | `yes` | `724` | `0.724` | `True` | `n/a` | n/a | n/a |
 | `stm32l072` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stm32l151` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `stm32l552` | `pass` | `True` | `yes` | `yes` | `1668` | `1.668` | `True` | `n/a` | n/a | n/a |
+| `stm32l552` | `pass` | `True` | `yes` | `yes` | `1598` | `1.598` | `True` | `n/a` | n/a | n/a |
 | `stm32w108` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `stm32wba52` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `tegra2` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
@@ -247,7 +247,7 @@
 | `tock_veer_el2_sim` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `up_squared_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `ut32m0r500` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1353` | `1.353` | `True` | `n/a` | n/a | n/a |
+| `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1262` | `1.262` | `True` | `n/a` | n/a | n/a |
 | `verilated_ibex` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `versatile` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `vexpress` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
