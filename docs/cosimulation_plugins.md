@@ -423,7 +423,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> TOX=<m> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> PB=<v> MJ=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m>)
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -434,16 +434,18 @@ and a card may be written after the elements that use it. A parameter omitted
 from a card takes **ngspice's** default, so a deck written out in full means the
 same thing to both engines.
 
-This engine models diode depletion capacitance from `CJO`/`VJ`/`M`/`FC` and
+This engine models diode depletion capacitance from `CJO`/`VJ`/`M`/`FC`,
 BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
-`CJC`/`VJC`/`MJC`, and shared `FC`. Level-1 MOSFET `TOX` enables intrinsic
-gate capacitances using the Meyer model; without `TOX`, only explicit overlap
-capacitances are present. Other device capacitances and temperature coefficients,
+`CJC`/`VJC`/`MJC`, and shared `FC`, and level-1 MOSFET bulk-drain and
+bulk-source depletion capacitance from `CBD`/`CBS` with shared `PB`/`MJ`/`FC`.
+Level-1 MOSFET `TOX` enables intrinsic gate capacitances using the Meyer model;
+without `TOX`, only explicit overlap and bulk-junction capacitances are present.
+Other device capacitances and temperature coefficients,
 `NKF`, and terminal resistances outside the modeled BJT, JFET and MOSFET parameters
 below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
 terminal resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` or
-`RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. A
-an explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
+`RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
+explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
 terminal, including an explicit zero that disables its sheet-resistance path.
 `NRD` and `NRS` default to one square and may be set to zero to disable the
 matching sheet-resistance path. Level-1 MOSFET `GAMMA` and `PHI` model body effect; their
@@ -471,8 +473,9 @@ collector, base, or emitter nodes. Nonzero JFET and MOSFET terminal resistances
 add probeable `<element>#drain` and `<element>#source` nodes, respectively.
 Shichman–Hodges MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both
 default to zero) or `RSH` times instance `NRD`/`NRS` (RSH defaults to zero),
-`GAMMA`/`PHI` body effect, linear gate overlap charge from `CGSO`/`CGDO`/`CGBO`,
-and `TOX`-enabled
+`GAMMA`/`PHI` body effect, nonlinear drain/body and source/body junction charge
+from `CBD`/`CBS`/`PB`/`MJ`/`FC`, linear gate overlap charge from
+`CGSO`/`CGDO`/`CGBO`, and `TOX`-enabled
 intrinsic gate capacitances using ngspice's piecewise Meyer formulation; and
 SPICE JFET level 1 with `B=1`, including its two gate junctions and depletion
 charge. MOSFET and JFET channel-length modulation, both polarities, reverse

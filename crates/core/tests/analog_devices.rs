@@ -27,7 +27,8 @@
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
 //! `CGS`/`CGD`, MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`,
-//! MOSFET intrinsic channel capacitance from `TOX`, and JFET terminal
+//! MOSFET bulk-junction depletion charge through `CBD`/`CBS`, MOSFET intrinsic
+//! channel capacitance from `TOX`, and JFET terminal
 //! resistances `RD`/`RS`, and MOSFET terminal resistances from `RD`/`RS` or
 //! `RSH` times per-instance `NRD`/`NRS` are exercised below. Circuits depending
 //! on unsupported stored charge still belong to `adapter: external_process`.
@@ -1561,6 +1562,121 @@ mod analog {
                         (actual_second - expected_second).abs() < 1e-9,
                         "{kind} {parameter} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
                     );
+                }
+            }
+        }
+    }
+
+    /// The two intrinsic body junctions carry nonlinear depletion charge.
+    /// Each is driven into the forward-bias continuation so CBD/CBS, PB, MJ
+    /// and FC participate in the MNA transient for both device polarities and
+    /// companion integration rules.
+    #[test]
+    fn mosfet_bulk_junction_charge_integrates_cbd_and_cbs() {
+        let c0 = 10e-9;
+        let pb = 0.75;
+        let mj = 0.4;
+        let fc = 0.5;
+        let resistance = 1e3;
+        let h = 100e-6;
+        let input = 0.6;
+        let charge = |voltage: f64| device::junction_depletion_charge(voltage, c0, pb, mj, fc).0;
+        let solve_voltage =
+            |step_input: f64, previous_charge: f64, previous_current: f64, rule: Integration| {
+                let mut lo = 0.0;
+                let mut hi = step_input + 0.2;
+                for _ in 0..100 {
+                    let mid = 0.5 * (lo + hi);
+                    let cap_current = match rule {
+                        Integration::BackwardEuler => (charge(mid) - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (charge(mid) - previous_charge) / h - previous_current
+                        }
+                    };
+                    if (step_input - mid) / resistance > cap_current {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                0.5 * (lo + hi)
+            };
+
+        for (parameter, drain, source) in [("CBD", "x", "0"), ("CBS", "0", "x")] {
+            for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+                let (cbd, cbs) = if parameter == "CBD" {
+                    (c0, 0.0)
+                } else {
+                    (0.0, c0)
+                };
+                let vto = if kind == "NMOS" { 1.0 } else { -1.0 };
+                let netlist = format!(
+                    "V1 in 0 dc {}\nR1 in x {resistance}\nM1 {drain} 0 {source} 0 MMOD\n\
+                     .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 CBD={cbd} CBS={cbs} \
+                     PB={pb} MJ={mj} FC={fc})\n",
+                    -sign * input
+                );
+                let circuit = parse_netlist(&netlist).expect("MOSFET bulk capacitance parses");
+                let model = circuit.mosfets[0].model;
+                assert_eq!(model.cbd, cbd);
+                assert_eq!(model.cbs, cbs);
+                assert_eq!(model.pb, pb);
+                assert_eq!(model.mj, mj);
+                assert_eq!(model.fc, fc);
+
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let mut solver = Solver::new(circuit.clone(), integration)
+                        .expect("MOSFET bulk capacitance solver builds");
+                    let x = solver.circuit().node("x").expect("junction node");
+                    let source_index = solver
+                        .voltage_source_index("V1")
+                        .expect("driving source exists");
+                    let initial = -sign * solver.node_voltage(x);
+                    assert!((initial - input).abs() < 1e-8);
+                    solver
+                        .advance(h)
+                        .expect("initial bulk charge carries into transient");
+                    let held = -sign * solver.node_voltage(x);
+                    assert!(
+                        (held - initial).abs() < 1e-8,
+                        "an operating-point junction charge must not create a startup impulse"
+                    );
+
+                    let next_input = input + 0.3;
+                    solver.set_voltage_source(source_index, -sign * next_input);
+
+                    let mut previous_charge = charge(initial);
+                    let mut previous_current = 0.0;
+                    for step in 0..2 {
+                        let rule = if step == 0 {
+                            Integration::BackwardEuler
+                        } else {
+                            integration
+                        };
+                        let expected =
+                            solve_voltage(next_input, previous_charge, previous_current, rule);
+                        if step == 0 {
+                            assert!(
+                                expected > fc * pb,
+                                "first step must exercise the FC continuation"
+                            );
+                        }
+                        solver.advance(h).expect("MOSFET bulk charge step solves");
+                        let actual = -sign * solver.node_voltage(x);
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {parameter} {integration:?} step {step}: expected {expected} V, got {actual} V"
+                        );
+
+                        let next_charge = charge(expected);
+                        previous_current = match rule {
+                            Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                            Integration::Trapezoidal => {
+                                2.0 * (next_charge - previous_charge) / h - previous_current
+                            }
+                        };
+                        previous_charge = next_charge;
+                    }
                 }
             }
         }
