@@ -6,7 +6,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 //
-// STM32G0 UART/LED smoke for NUCLEO-G071RB and NUCLEO-G0B1RE
+// STM32G0 UART/LED smoke for NUCLEO-G070RB, NUCLEO-G071RB, and NUCLEO-G0B1RE
 // (Cortex-M0+, thumbv6m-none-eabi).
 //
 // Bare-register firmware — no HAL. Real STM32G0 register offsets (RM0444),

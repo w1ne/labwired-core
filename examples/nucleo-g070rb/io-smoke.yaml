@@ -1,0 +1,13 @@
+# NUCLEO-G070RB smoke: USART2 through ST-LINK VCP and LD4 on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: ../../target/thumbv6m-none-eabi/release/firmware-stm32g0-demo
+  system: ../../configs/systems/nucleo-g070rb.yaml
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,64 @@
+# STM32G070RB smoke profile for NUCLEO-G070RB.
+#
+# The profile is deliberately limited to the paths exercised by the board
+# smoke: reset-clock RCC, GPIOA/C, SysTick, and USART2. It does not declare
+# untested peripherals as working. Memory and maximum clock follow the live
+# ST STM32G070RB datasheet; the simulated clock is the 16 MHz HSI reset rate
+# used by the smoke firmware. Register addresses and G0 RCC fields follow
+# RM0444 and ST's stm32g070xx CMSIS header.
+name: stm32g070rb-smoke
+arch: arm
+core: cortex-m0+
+cpu_hz: 16000000
+
+flash:
+  base: 0x08000000
+  size: 128KB
+ram:
+  base: 0x20000000
+  size: 36KB
+
+# Board-connected pads used by the Nucleo LED, button, and ST-LINK VCP.
+# Unlisted package pins are outside this smoke profile.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA5: { gpio: gpioa, bit: 5 }
+  PC13: { gpio: gpioc, bit: 13 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: stm32g0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x50000000
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 0 }
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x50000800
+    size: 1KB
+    config:
+      profile: stm32v2
+    clock: { reg: iopenr, bit: 2 }
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    irq: 28
+    config:
+      profile: stm32v2
+    clock: { reg: apbenr1, bit: 17 }

@@ -132,6 +132,7 @@ nav:
     - STM32F767: boards/stm32f767.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
     - NUCLEO-L073RZ: boards/nucleo-l073rz.md
+    - NUCLEO-G070RB: boards/nucleo-g070rb.md
     - NUCLEO-G071RB: boards/nucleo-g071rb.md
     - STM32G0B1RE: boards/stm32g0b1re.md
     - STM32H563: boards/stm32h563.md

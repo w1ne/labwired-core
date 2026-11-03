@@ -19,6 +19,7 @@ on:
       - "examples/**"
       - "crates/firmware-f401-demo/**"
       - "crates/firmware-f446-demo/**"
+      - "crates/firmware-stm32g0-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
@@ -52,6 +53,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f446re/io-smoke.yaml
             system: configs/systems/nucleo-f446re.yaml
+          - id: nucleo-g070rb
+            crate: firmware-stm32g0-demo
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-g070rb/io-smoke.yaml
+            system: configs/systems/nucleo-g070rb.yaml
           - id: nucleo-g474re
             crate: firmware-nucleo_g474re-demo
             firmware_build_dir: examples/nucleo_g474re/board_firmware
