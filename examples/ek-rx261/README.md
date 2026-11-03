@@ -17,6 +17,7 @@ v4.3.0** images for `ek_rx261` start at the fixed reset vector and pass:
 | `zephyr-hello.yaml` | `samples/hello_world` | reset vector → RDP clock setup → C runtime → kernel init → SCI6 console |
 | `zephyr-sync.yaml` | `samples/synchronization` | two threads alternating on a semaphore: CMT0 compare-match interrupts through the ICU, CMT1 cycle counter, `INT #1` context switches, WAIT idle |
 | `zephyr-kernel-common.yaml` | `tests/kernel/common` | 12 ztest suites, 61 pass + 1 skip: atomics, bitarray, byteorder, clock, irq_offload (`INT`), timeout order, errno/thread context, printk, pow2 |
+| `zephyr-uart-basic-api.yaml` | `tests/drivers/uart/uart_basic_api` | 7/7 pass on the interrupt-driven SCI driver: fifo_fill on TXI6/TEI6, fifo_read and pending on RXI6 (ICU vectors 228/229/227), poll_in/poll_out, config_get/configure |
 
 ```sh
 cargo run -q -p labwired-cli -- test --script examples/ek-rx261/zephyr-hello.yaml
@@ -26,6 +27,6 @@ examples/ek-rx261/ci/test.sh
 
 Rebuild the fixtures (byte-identical): `crates/firmware-ek-rx261-zephyr/build.sh`.
 
-Not modelled yet: PORT/MPC pin control (so no LEDs or switches), SCI
-interrupts (the console is polled), DTC, group interrupts, IRQ pins, the
+Not modelled yet: PORT/MPC pin control (so no LEDs or switches), SCI6
+ERI (receive-error interrupt), DTC, group interrupts, IRQ pins, the
 RXv3 register banks and user-mode privilege checks. See `VALIDATION.md`.
