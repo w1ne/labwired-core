@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-wb55rg",
+  "status": "pass",
+  "crate": "firmware-nucleo-wb55rg-demo",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-wb55rg/io-smoke.yaml",
+  "system": "configs/systems/mb1355c.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T19:01:05Z",
+  "finished_at_utc": "2026-11-03T19:01:22Z",
+  "elapsed_seconds": 18,
+  "elapsed_ms": 17103,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 15.333,
+    "build_firmware": 0.149,
+    "run_smoke": 1.611
+  },
+  "stages_ms": {
+    "build_cli": 15333,
+    "build_firmware": 149,
+    "run_smoke": 1611
+  }
+}

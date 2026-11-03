@@ -1,10 +1,9 @@
-# LabWired - NUCLEO-WB55RG (MB1355C) demo firmware smoke
+# LabWired - NUCLEO-WB55RG (MB1355C) onboarding smoke
 #
 # Build: cargo build -p firmware-nucleo-wb55rg-demo --release --target thumbv7em-none-eabi
 #
-# LD1 PB5, LD2 PB0, LD3 PB1 (active high) run as a light and a heartbeat goes out on LPUART1 (PA2).
-# The heartbeat reports the state READ BACK from the GPIO ODR register, so
-# `uart_ordered` asserts the pad really changed level, in order.
+# LD1 PB5, LD2 PB0, LD3 PB1 are active high; the heartbeat uses USART1 on
+# PB6/PB7, the default ST-LINK VCP pins. The message reports GPIO ODR state.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-wb55rg-demo"
@@ -18,4 +17,13 @@ assertions:
       - "hb=1 ld1=off"
       - "hb=2 ld2=on"
       - "hb=3 ld2=off"
+  - gpio_edges:
+      pin: "gpiob:5"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpiob:1"
+      min_edges: 2
   - expected_stop_reason: max_steps

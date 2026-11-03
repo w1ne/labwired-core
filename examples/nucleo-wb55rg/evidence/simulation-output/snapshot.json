@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1207960596,
+      1073821724,
+      0,
+      537067494,
+      429496730,
+      100,
+      123648,
+      537067504,
+      57,
+      0,
+      19,
+      5,
+      61,
+      537067492,
+      134220960,
+      134220854
+    ],
+    "pc": 134220854,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "3c23397435af65437c73bb57ac6a42824838306ed1c761073c9b5ed8e9879483",
+  "config": {
+    "firmware": "examples/nucleo-wb55rg/../../target/thumbv7em-none-eabi/release/firmware-nucleo-wb55rg-demo",
+    "system": "examples/nucleo-wb55rg/../../configs/systems/mb1355c.yaml",
+    "script": "examples/nucleo-wb55rg/io-smoke.yaml"
+  }
+}

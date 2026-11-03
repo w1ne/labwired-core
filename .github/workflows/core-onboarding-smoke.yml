@@ -31,6 +31,7 @@ on:
       - "crates/firmware-nucleo-g431kb-smoke/**"
       - "crates/firmware-nucleo-g431rb-smoke/**"
       - "crates/firmware-nucleo-l452re-p-smoke/**"
+      - "crates/firmware-nucleo-wb55rg-demo/**"
       - "crates/firmware-nucleo-wba55cg-smoke/**"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
       - "configs/systems/nucleo-wba55cg-smoke.yaml"
@@ -65,6 +66,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: nucleo-wb55rg
+            crate: firmware-nucleo-wb55rg-demo
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-wb55rg/io-smoke.yaml
+            system: configs/systems/mb1355c.yaml
           - id: esp32c6-devkitc
             crate: firmware-esp32c6-demo
             target: riscv32imc-unknown-none-elf

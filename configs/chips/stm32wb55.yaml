@@ -9,7 +9,8 @@ cpu_hz: 64_000_000
 
 flash:
   base: 0x08000000
-  size: "512KB"
+  # The NUCLEO-WB55RG/MB1355 carries STM32WB55RGV6, which has 1 MiB of flash.
+  size: "1MiB"
 ram:
   base: 0x20000000
   size: "256KB"
