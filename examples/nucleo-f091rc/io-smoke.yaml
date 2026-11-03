@@ -1,0 +1,13 @@
+# NUCLEO-F091RC: USART2 output and repeated LD2 GPIOA5 transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-f091rc-smoke"
+  system: "../../configs/systems/nucleo-f091rc.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "NUCLEO_F091RC_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

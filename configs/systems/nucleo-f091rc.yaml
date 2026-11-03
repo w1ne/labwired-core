@@ -1,0 +1,14 @@
+# NUCLEO-F091RC board profile. Only LD2 and the USART2 VCP path used by the
+# onboarding smoke are attached; B1, shields and other board features are not
+# part of this descriptor.
+name: nucleo-f091rc
+chip: "../chips/stm32f091rc-nucleo-smoke.yaml"
+debug_uart: usart2
+external_devices: []
+board_io:
+  - id: led_ld2
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true
