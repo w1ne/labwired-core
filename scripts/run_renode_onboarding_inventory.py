@@ -65,6 +65,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv8m.main-none-eabi",
         "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
     },
+    "nucleo_wba52cg": {
+        "crate": "firmware-nucleo-wba52cg-demo",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/nucleo_wba52cg-smoke.yaml",
+    },
     "stm32h743": {
         "crate": "firmware-stm32h743-smoke",
         "target": "thumbv7em-none-eabi",

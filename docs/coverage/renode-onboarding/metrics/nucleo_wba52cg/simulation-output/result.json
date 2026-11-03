@@ -1,0 +1,636 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO-WBA52CG ready"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "hb=0 ld1=on",
+          "hb=1 ld1=off",
+          "hb=2 ld2=on",
+          "hb=3 ld2=off"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortB:4",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortA:9",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1107428372,
+      1073821724,
+      272,
+      537001958,
+      61,
+      0,
+      123648,
+      537001968,
+      1107428352,
+      134221968,
+      429496730,
+      57,
+      4,
+      537001956,
+      19,
+      134221834
+    ],
+    "pc": 134221834,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "0cc4ec6e86dc52b12a5811309161a9d3feb7c5ab8caeba25b2216e1ec2cead69",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-wba52cg-demo",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_wba52cg.yaml",
+    "script": "examples/renode-onboarding/nucleo_wba52cg-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1174539264,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1107427328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1107428352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortB",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 53,
+            "value": 1
+          },
+          {
+            "cycle": 199,
+            "value": 0
+          },
+          {
+            "cycle": 206559,
+            "value": 1
+          },
+          {
+            "cycle": 1238374,
+            "value": 0
+          },
+          {
+            "cycle": 1444734,
+            "value": 1
+          },
+          {
+            "cycle": 2476577,
+            "value": 0
+          },
+          {
+            "cycle": 2682951,
+            "value": 1
+          },
+          {
+            "cycle": 3714836,
+            "value": 0
+          },
+          {
+            "cycle": 3921210,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 51,
+            "state": "0"
+          },
+          {
+            "cycle": 53,
+            "state": "1"
+          },
+          {
+            "cycle": 199,
+            "state": "0"
+          },
+          {
+            "cycle": 206559,
+            "state": "1"
+          },
+          {
+            "cycle": 1238374,
+            "state": "0"
+          },
+          {
+            "cycle": 1444734,
+            "state": "1"
+          },
+          {
+            "cycle": 2476577,
+            "state": "0"
+          },
+          {
+            "cycle": 2682951,
+            "state": "1"
+          },
+          {
+            "cycle": 3714836,
+            "state": "0"
+          },
+          {
+            "cycle": 3921210,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 9
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpioPortA",
+        "pin": 9,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 62,
+            "value": 1
+          },
+          {
+            "cycle": 412924,
+            "value": 0
+          },
+          {
+            "cycle": 619284,
+            "value": 1
+          },
+          {
+            "cycle": 1651099,
+            "value": 0
+          },
+          {
+            "cycle": 1857459,
+            "value": 1
+          },
+          {
+            "cycle": 2889330,
+            "value": 0
+          },
+          {
+            "cycle": 3095704,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 58,
+            "state": "0"
+          },
+          {
+            "cycle": 62,
+            "state": "1"
+          },
+          {
+            "cycle": 412924,
+            "state": "0"
+          },
+          {
+            "cycle": 619284,
+            "state": "1"
+          },
+          {
+            "cycle": 1651099,
+            "state": "0"
+          },
+          {
+            "cycle": 1857459,
+            "state": "1"
+          },
+          {
+            "cycle": 2889330,
+            "state": "0"
+          },
+          {
+            "cycle": 3095704,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 7
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortB",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpioPortA",
+      "number": 9,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO-WBA52CG ready",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=0 ld1=on",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=1 ld1=off",
+        "cycle_lo": 200000,
+        "cycle": 210000,
+        "end_cycle": 210000
+      },
+      {
+        "text": "hb=2 ld2=on",
+        "cycle_lo": 410000,
+        "cycle": 420000,
+        "end_cycle": 420000
+      },
+      {
+        "text": "hb=3 ld2=off",
+        "cycle_lo": 610000,
+        "cycle": 620000,
+        "end_cycle": 620000
+      },
+      {
+        "text": "hb=4 ld3=on",
+        "cycle_lo": 820000,
+        "cycle": 830000,
+        "end_cycle": 830000
+      },
+      {
+        "text": "hb=5 ld3=off",
+        "cycle_lo": 1030000,
+        "cycle": 1040000,
+        "end_cycle": 1040000
+      },
+      {
+        "text": "hb=6 ld1=on",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "hb=7 ld1=off",
+        "cycle_lo": 1440000,
+        "cycle": 1450000,
+        "end_cycle": 1450000
+      },
+      {
+        "text": "hb=8 ld2=on",
+        "cycle_lo": 1650000,
+        "cycle": 1660000,
+        "end_cycle": 1660000
+      },
+      {
+        "text": "hb=9 ld2=off",
+        "cycle_lo": 1850000,
+        "cycle": 1860000,
+        "end_cycle": 1860000
+      },
+      {
+        "text": "hb=10 ld3=on",
+        "cycle_lo": 2060000,
+        "cycle": 2070000,
+        "end_cycle": 2070000
+      },
+      {
+        "text": "hb=11 ld3=off",
+        "cycle_lo": 2270000,
+        "cycle": 2280000,
+        "end_cycle": 2280000
+      },
+      {
+        "text": "hb=12 ld1=on",
+        "cycle_lo": 2470000,
+        "cycle": 2480000,
+        "end_cycle": 2480000
+      },
+      {
+        "text": "hb=13 ld1=off",
+        "cycle_lo": 2680000,
+        "cycle": 2690000,
+        "end_cycle": 2690000
+      },
+      {
+        "text": "hb=14 ld2=on",
+        "cycle_lo": 2880000,
+        "cycle": 2890000,
+        "end_cycle": 2890000
+      },
+      {
+        "text": "hb=15 ld2=off",
+        "cycle_lo": 3090000,
+        "cycle": 3100000,
+        "end_cycle": 3100000
+      },
+      {
+        "text": "hb=16 ld3=on",
+        "cycle_lo": 3300000,
+        "cycle": 3310000,
+        "end_cycle": 3310000
+      },
+      {
+        "text": "hb=17 ld3=off",
+        "cycle_lo": 3500000,
+        "cycle": 3510000,
+        "end_cycle": 3510000
+      },
+      {
+        "text": "hb=18 ld1=on",
+        "cycle_lo": 3710000,
+        "cycle": 3720000,
+        "end_cycle": 3720000
+      },
+      {
+        "text": "hb=19 ld1=off",
+        "cycle_lo": 3920000,
+        "cycle": 3930000,
+        "end_cycle": 3930000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4300,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 4300,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.41,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 28,
+    "main_stack_free_min_bytes": 131044,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131044,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 622,
+    "memory_writes": 96,
+    "peripheral_accesses": 3876959,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134221826,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221834,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221856,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221864,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221894,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221928,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221852,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221890,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221920,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221916,
+        "count": 314,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221822,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221848,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221860,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221902,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221830,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221886,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpioPortB",
+      "offset": 20,
+      "accesses": 76296
+    }
+  }
+}

@@ -24,6 +24,7 @@ on:
       - "crates/firmware-stm32f042-smoke/**"
       - "crates/firmware-stm32f072-smoke/**"
       - "crates/firmware-stm32l071-smoke/**"
+      - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -115,6 +116,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/stm32l552-smoke.yaml
             system: configs/systems/onboarding/stm32l552.yaml
+          # The WBA52 profile is limited to the modeled Cortex-M33, RCC,
+          # GPIOA/GPIOB and USART1 surfaces exercised by this smoke.
+          - id: nucleo_wba52cg
+            crate: firmware-nucleo-wba52cg-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/nucleo_wba52cg-smoke.yaml
+            system: configs/systems/onboarding/nucleo_wba52cg.yaml
           # The imported H743 profile is limited to H7 RCC, GPIOA/GPIOD,
           # USART3, and the memory used by the shared H7 register smoke.
           - id: stm32h743
