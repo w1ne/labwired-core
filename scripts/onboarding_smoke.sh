@@ -9,9 +9,41 @@ SYSTEM=""
 OUT_DIR=""
 PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
+INVENTORY_ONLY="false"
+NOT_RUN_REASON=""
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/onboarding_smoke.sh --target-id ID --system PATH --out-dir DIR [options]
+
+Smoke mode options:
+  --crate NAME --target TRIPLE --script PATH
+  --profile release|debug
+  --threshold-seconds N
+
+Inventory-only mode (records an explicit not_run result when no runnable
+firmware/smoke mapping exists):
+  --inventory-only [--not-run-reason TEXT]
+
+Common options:
+  --help, -h
+EOF
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --inventory-only)
+      INVENTORY_ONLY="true"
+      shift
+      ;;
+    --not-run-reason)
+      NOT_RUN_REASON="$2"
+      shift 2
+      ;;
     --target-id)
       TARGET_ID="$2"
       shift 2
@@ -51,12 +83,25 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for required in TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR; do
+for required in TARGET_ID SYSTEM OUT_DIR; do
   if [[ -z "${!required}" ]]; then
     echo "Missing required argument: ${required}" >&2
     exit 2
   fi
 done
+
+if [[ "${INVENTORY_ONLY}" != "true" ]]; then
+  for required in CRATE TARGET SCRIPT; do
+    if [[ -z "${!required}" ]]; then
+      echo "Missing required argument: ${required}" >&2
+      exit 2
+    fi
+  done
+fi
+
+if [[ "${INVENTORY_ONLY}" == "true" && -z "${NOT_RUN_REASON}" ]]; then
+  NOT_RUN_REASON="No platform-specific firmware crate and smoke script are mapped for this imported descriptor."
+fi
 
 mkdir -p "${OUT_DIR}/logs"
 
@@ -64,6 +109,7 @@ status="pass"
 failure_stage=""
 first_error_signature=""
 failure_hint=""
+run_attempted="false"
 
 build_cli_ms=""
 build_firmware_ms=""
@@ -175,19 +221,30 @@ mkdir -p "${run_smoke_output_dir}"
 # already defined". This gate does not run on pull requests, so that break
 # only appeared on main.
 
-if ! run_stage build_cli cargo build -p labwired-cli; then
+if [[ "${INVENTORY_ONLY}" == "true" ]]; then
+  status="not_run"
+  failure_stage="not_configured"
+  first_error_signature="${NOT_RUN_REASON}"
+  failure_hint="Add a compatible firmware build and smoke script before claiming a boot result."
+elif ! run_stage build_cli cargo build -p labwired-cli; then
   :
 elif [[ "${PROFILE}" == "release" ]]; then
   if ! run_stage build_firmware cargo build -p "${CRATE}" --release --target "${TARGET}"; then
     :
-  elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
-    :
+  else
+    run_attempted="true"
+    if ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+      :
+    fi
   fi
 else
   if ! run_stage build_firmware cargo build -p "${CRATE}" --target "${TARGET}"; then
     :
-  elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
-    :
+  else
+    run_attempted="true"
+    if ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+      :
+    fi
   fi
 fi
 
@@ -196,15 +253,18 @@ run_finished_iso="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 elapsed_ms=$((run_finished_ms - run_started_ms))
 elapsed_seconds=$(((elapsed_ms + 999) / 1000))
 threshold_met=false
-if [[ "${elapsed_seconds}" -le "${THRESHOLD_SECONDS}" ]]; then
+if [[ "${INVENTORY_ONLY}" == "true" ]]; then
+  elapsed_ms=0
+  elapsed_seconds=0
+elif [[ "${elapsed_seconds}" -le "${THRESHOLD_SECONDS}" ]]; then
   threshold_met=true
 fi
 
-if [[ "${status}" != "pass" ]]; then
+if [[ "${status}" == "fail" ]]; then
   failure_hint="$(infer_failure_hint "${failure_stage}" "${first_error_signature}")"
 fi
 
-export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE
+export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE INVENTORY_ONLY run_attempted
 export run_started_iso run_finished_iso elapsed_seconds elapsed_ms
 export status failure_stage first_error_signature threshold_met THRESHOLD_SECONDS
 export build_cli_ms build_firmware_ms run_smoke_ms
@@ -223,9 +283,35 @@ def parse_int(name: str):
     value = os.environ.get(name, "")
     return int(value) if value.strip() else None
 
+def parse_seconds(name: str):
+    value = parse_int(name)
+    return round(value / 1000.0, 3) if value is not None else None
+
+run_attempted = os.environ.get("run_attempted", "false").lower() == "true"
+result_path = out_dir / "simulation-output" / "result.json"
+booted = None
+boot_evidence = None
+if run_attempted:
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        instructions = int(result.get("instructions", 0))
+        booted = instructions > 0
+        boot_evidence = {
+            "result_path": str(result_path.relative_to(out_dir)),
+            "instructions": instructions,
+            "stop_reason": result.get("stop_reason"),
+        }
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        booted = False
+
 metrics = {
     "target_id": os.environ["TARGET_ID"],
     "status": status,
+    "measurement_mode": "inventory_only" if os.environ.get("INVENTORY_ONLY", "false").lower() == "true" else "smoke",
+    "run_attempted": run_attempted,
+    "booted": booted,
+    "boot_evidence": boot_evidence,
+    "smoke_passed": True if status == "pass" and run_attempted else False if run_attempted else None,
     "crate": os.environ["CRATE"],
     "target_triple": os.environ["TARGET"],
     "script": os.environ["SCRIPT"],
@@ -241,9 +327,9 @@ metrics = {
     "threshold_seconds": int(os.environ["THRESHOLD_SECONDS"]),
     "threshold_met": threshold_met,
     "stages_seconds": {
-        "build_cli": round((parse_int("build_cli_ms") or 0) / 1000.0, 3),
-        "build_firmware": round((parse_int("build_firmware_ms") or 0) / 1000.0, 3),
-        "run_smoke": round((parse_int("run_smoke_ms") or 0) / 1000.0, 3),
+        "build_cli": parse_seconds("build_cli_ms"),
+        "build_firmware": parse_seconds("build_firmware_ms"),
+        "run_smoke": parse_seconds("run_smoke_ms"),
     },
     "stages_ms": {
         "build_cli": parse_int("build_cli_ms"),
@@ -256,6 +342,9 @@ summary_lines = [
     f"# Onboarding Smoke: {metrics['target_id']}",
     "",
     f"- status: `{metrics['status']}`",
+    f"- run_attempted: `{metrics['run_attempted']}`",
+    f"- booted: `{metrics['booted']}`",
+    f"- smoke_passed: `{metrics['smoke_passed']}`",
     f"- elapsed_seconds: `{metrics['elapsed_seconds']}`",
     f"- elapsed_ms: `{metrics['elapsed_ms']}`",
     f"- threshold_seconds: `{metrics['threshold_seconds']}`",
@@ -267,10 +356,14 @@ summary_lines = [
 
 out_dir.mkdir(parents=True, exist_ok=True)
 (out_dir / "onboarding-metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-(out_dir / "onboarding-summary.md").write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+summary_path = out_dir / "onboarding-summary.md"
+if metrics["measurement_mode"] == "inventory_only":
+    summary_path.unlink(missing_ok=True)
+else:
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
 PY
 
-if [[ "${status}" != "pass" ]]; then
+if [[ "${status}" == "fail" ]]; then
   echo "Onboarding smoke failed at stage: ${failure_stage}" >&2
   echo "Signature: ${first_error_signature}" >&2
   echo "Hint: ${failure_hint}" >&2

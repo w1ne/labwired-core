@@ -1,0 +1,33 @@
+{
+  "target_id": "litex_zephyr_vexriscv_i2s",
+  "status": "not_run",
+  "measurement_mode": "inventory_only",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "",
+  "target_triple": "",
+  "script": "",
+  "system": "configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T02:30:05Z",
+  "finished_at_utc": "2026-11-03T02:30:05Z",
+  "elapsed_seconds": 0,
+  "elapsed_ms": 0,
+  "failure_stage": "not_configured",
+  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
+  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "threshold_seconds": 3600,
+  "threshold_met": false,
+  "stages_seconds": {
+    "build_cli": null,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": null,
+    "build_firmware": null,
+    "run_smoke": null
+  }
+}
