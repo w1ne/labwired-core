@@ -28,6 +28,10 @@ on:
       - "crates/firmware-nucleo-g431kb-smoke/**"
       - "crates/firmware-nucleo-g431rb-smoke/**"
       - "crates/firmware-nucleo-l452re-p-smoke/**"
+      - "crates/firmware-nucleo-wba55cg-smoke/**"
+      - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-wba55cg-smoke.yaml"
+      - "examples/nucleo-wba55cg/**"
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
@@ -99,6 +103,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-l452re-p/onboarding-smoke.yaml
             system: configs/systems/nucleo-l452re-p-smoke.yaml
+          - id: nucleo-wba55cg
+            crate: firmware-nucleo-wba55cg-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-wba55cg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-wba55cg-smoke.yaml
           - id: nucleo-l073rz
             crate: firmware-l073-demo
             target: thumbv6m-none-eabi

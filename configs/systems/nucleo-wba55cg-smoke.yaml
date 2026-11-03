@@ -1,0 +1,45 @@
+# NUCLEO-WBA55CG paths modeled for this smoke:
+#   - USART1 PA8/PB12 -> default ST-LINK VCP1
+#   - LD1 blue user LED -> PB4, active low
+# Other board peripherals, including the 2.4 GHz radio, are outside this profile.
+name: "nucleo-wba55cg-smoke"
+chip: "../chips/stm32wba55cg-nucleo-smoke.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_ld1_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 4
+    signal: "output"
+    active_high: false
+  - id: "led_ld2_green"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 9
+    signal: "output"
+    active_high: false
+  - id: "led_ld3_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 8
+    signal: "output"
+    active_high: false
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
+  - id: "button_b2"
+    kind: "button"
+    peripheral: "gpiob"
+    pin: 6
+    signal: "input"
+    active_high: true
+  - id: "button_b3"
+    kind: "button"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "input"
+    active_high: true

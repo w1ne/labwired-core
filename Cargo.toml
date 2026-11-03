@@ -85,6 +85,7 @@ members = [
     "crates/firmware-nucleo-g431kb-smoke",
     "crates/firmware-nucleo-g431rb-smoke",
     "crates/firmware-nucleo-l452re-p-smoke",
+    "crates/firmware-nucleo-wba55cg-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",

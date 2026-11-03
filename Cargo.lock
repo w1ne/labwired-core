@@ -1748,6 +1748,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-wba55cg-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-perf-spin"
 version = "0.25.0"
 dependencies = [

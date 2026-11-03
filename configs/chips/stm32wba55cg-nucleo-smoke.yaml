@@ -1,0 +1,82 @@
+# Narrow STM32WBA55CG profile for the NUCLEO-WBA55CG board-connected smoke.
+# Only RCC, GPIOA/B, SysTick, and USART1 are exposed; the integrated radio and
+# other peripherals are outside this profile.
+#
+# Sources:
+# - ST DS14127, STM32WBA5xxx datasheet: Cortex-M33, 1 MiB flash, 128 KiB SRAM.
+# - ST RM0493: WBA RCC and peripheral register layout.
+# - ST UM3301 Rev 2: default ST-LINK VCP1 is USART1 (PA8 RX, PB12 TX); LD1 is
+#   PB4 and is active low.
+
+name: "stm32wba55cg-nucleo-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 100_000_000
+
+flash:
+  base: 0x08000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+pins:
+  PA8: { gpio: "gpioa", bit: 8, functions: [{ type: uart, peripheral: usart1, role: rx, af: 7 }] }
+  PA9: { gpio: "gpioa", bit: 9, functions: [{ type: gpio, peripheral: gpioa }] }
+  PB4: { gpio: "gpiob", bit: 4, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB6: { gpio: "gpiob", bit: 6, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB7: { gpio: "gpiob", bit: 7, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB8: { gpio: "gpiob", bit: 8, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB12: { gpio: "gpiob", bit: 12, functions: [{ type: uart, peripheral: usart1, role: tx, af: 7 }] }
+  PC13: { gpio: "gpioc", bit: 13, functions: [{ type: gpio, peripheral: gpioc }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x46020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/rcc.yaml"
+      profile: "stm32wba"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/gpioa.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/gpiob.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x42020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/gpioc.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 2 }
+
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 46
+    config:
+      debug_schema: "../peripherals/stm32wba52/usart1.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb2enr", bit: 14 }

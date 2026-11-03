@@ -1,0 +1,13 @@
+# NUCLEO-WBA55CG: default USART1 VCP1 output plus LD1 (PB4) GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-wba55cg-smoke"
+  system: "../../configs/systems/nucleo-wba55cg-smoke.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NUCLEO_WBA55CG_OK"
+  - gpio_edges:
+      pin: "gpiob:4"
+      min_edges: 8
+  - expected_stop_reason: max_steps

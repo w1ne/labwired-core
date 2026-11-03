@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 876,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 0.876
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-wba55cg",
+      "status": "pass",
+      "crate": "firmware-nucleo-wba55cg-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-wba55cg/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-wba55cg-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T16:07:44Z",
+      "finished_at_utc": "2026-11-03T16:07:45Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 876,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.275,
+        "build_firmware": 0.295,
+        "run_smoke": 0.297
+      },
+      "stages_ms": {
+        "build_cli": 275,
+        "build_firmware": 295,
+        "run_smoke": 297
+      },
+      "_artifact_path": "examples/nucleo-wba55cg/evidence"
+    }
+  ]
+}
