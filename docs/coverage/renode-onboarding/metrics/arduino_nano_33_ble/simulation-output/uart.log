@@ -1,0 +1,16 @@
+ARDUINO NANO 33 BLE SMOKE
+cpu=nrf52840 uart=uarte0
+rgb=red out=00012040
+rgb=green out=01002040
+rgb=blue out=01012000
+hb=0 out=01012000
+hb=1 out=01012000
+hb=2 out=01012000
+hb=3 out=01012000
+hb=4 out=01012000
+hb=5 out=01012000
+hb=6 out=01012000
+hb=7 out=01012000
+hb=8 out=01012000
+hb=9 out=01012000
+hb=10 out=01012000

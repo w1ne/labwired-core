@@ -1,33 +1,37 @@
 {
   "target_id": "arduino_nano_33_ble",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
-  "crate": "",
-  "target_triple": "",
-  "script": "",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-arduino-nano-33-ble-smoke",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
   "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T02:30:01Z",
-  "finished_at_utc": "2026-11-03T02:30:01Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-03T23:49:22Z",
+  "finished_at_utc": "2026-11-03T23:49:44Z",
+  "elapsed_seconds": 22,
+  "elapsed_ms": 21586,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
-    "build_firmware": null,
-    "run_smoke": null
+    "build_cli": 19.162,
+    "build_firmware": 0.705,
+    "run_smoke": 1.707
   },
   "stages_ms": {
-    "build_cli": null,
-    "build_firmware": null,
-    "run_smoke": null
+    "build_cli": 19162,
+    "build_firmware": 705,
+    "run_smoke": 1707
   }
 }

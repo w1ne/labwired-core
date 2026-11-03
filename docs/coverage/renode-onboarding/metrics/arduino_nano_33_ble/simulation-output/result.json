@@ -1,0 +1,380 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ARDUINO NANO 33 BLE SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=nrf52840 uart=uarte0",
+          "rgb=red out=00012040",
+          "rgb=green out=01002040",
+          "rgb=blue out=01012000",
+          "hb=0 out=01012000",
+          "hb=1 out=01012000"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      28992,
+      16850944,
+      537133040,
+      0,
+      10,
+      1073751364,
+      0,
+      537133040,
+      1073750304,
+      4294967016,
+      1342178564,
+      1,
+      2,
+      537132904,
+      537132980,
+      3220
+    ],
+    "pc": 3220,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "37e397403647167b65d50a8fba74ce02c3fd38657c5d1e91f46c954389052a0f",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-arduino-nano-33-ble-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/arduino_nano_33_ble.yaml",
+    "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073750016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio0",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ARDUINO NANO 33 BLE SMOKE",
+        "cycle_lo": 140000,
+        "cycle": 150000,
+        "end_cycle": 150000
+      },
+      {
+        "text": "cpu=nrf52840 uart=uarte0",
+        "cycle_lo": 280000,
+        "cycle": 290000,
+        "end_cycle": 290000
+      },
+      {
+        "text": "rgb=red out=00012040",
+        "cycle_lo": 340000,
+        "cycle": 350000,
+        "end_cycle": 410000
+      },
+      {
+        "text": "rgb=green out=01002040",
+        "cycle_lo": 470000,
+        "cycle": 480000,
+        "end_cycle": 530000
+      },
+      {
+        "text": "rgb=blue out=01012000",
+        "cycle_lo": 600000,
+        "cycle": 610000,
+        "end_cycle": 660000
+      },
+      {
+        "text": "hb=0 out=01012000",
+        "cycle_lo": 660000,
+        "cycle": 670000,
+        "end_cycle": 760000
+      },
+      {
+        "text": "hb=1 out=01012000",
+        "cycle_lo": 970000,
+        "cycle": 980000,
+        "end_cycle": 1060000
+      },
+      {
+        "text": "hb=2 out=01012000",
+        "cycle_lo": 1280000,
+        "cycle": 1290000,
+        "end_cycle": 1370000
+      },
+      {
+        "text": "hb=3 out=01012000",
+        "cycle_lo": 1580000,
+        "cycle": 1590000,
+        "end_cycle": 1680000
+      },
+      {
+        "text": "hb=4 out=01012000",
+        "cycle_lo": 1890000,
+        "cycle": 1900000,
+        "end_cycle": 1980000
+      },
+      {
+        "text": "hb=5 out=01012000",
+        "cycle_lo": 2200000,
+        "cycle": 2210000,
+        "end_cycle": 2290000
+      },
+      {
+        "text": "hb=6 out=01012000",
+        "cycle_lo": 2500000,
+        "cycle": 2510000,
+        "end_cycle": 2600000
+      },
+      {
+        "text": "hb=7 out=01012000",
+        "cycle_lo": 2810000,
+        "cycle": 2820000,
+        "end_cycle": 2900000
+      },
+      {
+        "text": "hb=8 out=01012000",
+        "cycle_lo": 3120000,
+        "cycle": 3130000,
+        "end_cycle": 3210000
+      },
+      {
+        "text": "hb=9 out=01012000",
+        "cycle_lo": 3420000,
+        "cycle": 3430000,
+        "end_cycle": 3520000
+      },
+      {
+        "text": "hb=10 out=01012000",
+        "cycle_lo": 3730000,
+        "cycle": 3740000,
+        "end_cycle": 3830000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4964,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 4964,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 262144,
+    "flash_used_pct": 0.47,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 262144,
+    "main_stack_high_water_bytes": 148,
+    "main_stack_free_min_bytes": 261908,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537133056,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 262144,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 261908,
+    "heap_base": 536870912,
+    "heap_top": 537133056
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 2029,
+    "memory_writes": 1638,
+    "peripheral_accesses": 2809106,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2990,
+        "count": 234,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2994,
+        "count": 234,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      },
+      {
+        "pc": 2988,
+        "count": 196,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      },
+      {
+        "pc": 2984,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2996,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 3204,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 3284,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 3340,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2762,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 3010,
+        "count": 157,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      },
+      {
+        "pc": 3156,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 3220,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2760,
+        "count": 156,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      },
+      {
+        "pc": 2766,
+        "count": 156,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      },
+      {
+        "pc": 2782,
+        "count": 156,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      },
+      {
+        "pc": 2784,
+        "count": 156,
+        "symbol": "firmware_arduino_nano_33_ble_smoke::tx"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpio0",
+      "offset": 1284,
+      "accesses": 170977
+    }
+  }
+}

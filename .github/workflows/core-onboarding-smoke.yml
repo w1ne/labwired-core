@@ -121,6 +121,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g232-smoke.yaml
             system: configs/systems/onboarding/efm32g232.yaml
+          # The Nano 33 BLE imported profile exposes only its actual nRF52840
+          # memory, UARTE0, and GPIO0 smoke surface.
+          - id: arduino_nano_33_ble
+            crate: firmware-arduino-nano-33-ble-smoke
+            target: thumbv7em-none-eabihf
+            script: examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml
+            system: configs/systems/onboarding/arduino_nano_33_ble.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima
@@ -357,7 +364,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

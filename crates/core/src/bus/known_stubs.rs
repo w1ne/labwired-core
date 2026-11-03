@@ -421,8 +421,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "Renode board LED. LabWired models board LEDs through `board_io` / external devices, \
          not as a bus peripheral, so the imported entry is inert. Renode-imported onboarding \
          descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/arduino_101-shield, onboarding/arduino_nano_33_ble, \
-         onboarding/arty_litex_vexriscv, onboarding/brd4116a, onboarding/brd4117a (+30 more).",
+         by: onboarding/arduino_101-shield, onboarding/arty_litex_vexriscv, \
+         onboarding/brd4116a, onboarding/brd4117a (+30 more).",
     ),
     (
         "lis2ds12",
@@ -481,13 +481,13 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
         "lsm9ds1_imu",
         "ST LSM9DS1 IMU. Renode-imported onboarding descriptor; no model in this engine, so \
-         the window answers reads with zeros. Used by: onboarding/arduino_nano_33_ble.",
+         the window answers reads with zeros. No current imported descriptor exposes it.",
     ),
     (
         "lsm9ds1_magnetic",
         "ST LSM9DS1 magnetometer. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/arduino_nano_33_ble.",
+         engine, so the window answers reads with zeros. No current imported descriptor \
+         exposes it.",
     ),
     (
         "max32650_gcr",
