@@ -113,6 +113,7 @@ E_SFRS = {
 # the PIRx/PIEx interrupt scan, ports, OSCSTAT ready bits). A part may lack
 # the register, but then no other SFR may sit at the address.
 E_OPTIONAL_SFRS = {"OSCSTAT": 0x09A}
+E_NO_EUSART_PARTS = {"pic16f1503"}
 # The two enhanced layouts, keyed by where PIR1 sits: how many PORT/TRIS/LAT
 # addresses the model decodes from PORTA up (`Pic16SfrMap::ports`), and its
 # PIR/PIE list. PIC16F161x has PORTA-C only, so its PIR1-5/PIE1-5 start one
@@ -262,6 +263,8 @@ def check_enhanced(part: str) -> list[str]:
     pir1 = addrs.get("PIR1") if addrs.get("PIR1") in E_LAYOUTS else 0x011
     required, optional = e_layout_sfrs(pir1)
     for names, want in {**E_SFRS, **required}.items():
+        if part in E_NO_EUSART_PARTS and names[0] in {"TXREG", "SPBRGL", "RCSTA", "TXSTA"}:
+            continue
         if not any(addrs.get(n) == want for n in names):
             bad.append(f"{names[0]} at {addrs.get(names[0])!r}, model {want:#x}")
     for name, want in {**E_OPTIONAL_SFRS, **optional}.items():
@@ -273,6 +276,10 @@ def check_enhanced(part: str) -> list[str]:
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
     for reg_names, bit_names, want in E_BITS:
+        if part in E_NO_EUSART_PARTS and (
+                reg_names[0] in {"TXSTA", "RCSTA"}
+                or (reg_names[0] == "PIR1" and bit_names[0] == "TXIF")):
+            continue
         reg = next((r for r in reg_names if r in regs), None)
         got = None if reg is None else next(
             (regs[reg][b] for b in bit_names if b in regs[reg]), None)
@@ -401,7 +408,10 @@ def enhanced_geometry(part: str):
         sys.exit(f"error: {part}: pic14devices.txt {flash_words} words, lkr {lkr_words}")
     h = header(part)
     pir1 = int(re.search(r"#define\s+PIR1_ADDR\s+0x([0-9A-Fa-f]+)", h)[1], 16)
-    return flash_words, port_masks(part), E_MAPS[(pir1, osc_ready(h))]
+    map_name = E_MAPS[(pir1, osc_ready(h))]
+    if part in E_NO_EUSART_PARTS:
+        map_name = map_name.replace("_MAP", "_NO_EUSART_MAP")
+    return flash_words, port_masks(part), map_name
 
 
 def enhanced_row(part: str) -> str:
