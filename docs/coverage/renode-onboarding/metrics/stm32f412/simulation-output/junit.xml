@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.180118">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.187710">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="a2ed18ee1405772aeba3839864927a27ac9bfb24662fcf5dcf16688ecc5b7775"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.180118">
+  <testcase classname="labwired" name="run" time="0.187710">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32F4 shared profile smoke" time="0.000000">
   </testcase>
