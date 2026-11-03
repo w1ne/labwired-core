@@ -1,0 +1,28 @@
+{
+  "target_id": "seeed-xiao-rp2350",
+  "status": "pass",
+  "crate": "firmware-xiao-rp2350-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/seeed-xiao-rp2350/io-smoke.yaml",
+  "system": "configs/systems/seeed-xiao-rp2350.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T22:33:41Z",
+  "finished_at_utc": "2026-11-03T22:33:42Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1053,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.27,
+    "build_firmware": 0.465,
+    "run_smoke": 0.306
+  },
+  "stages_ms": {
+    "build_cli": 270,
+    "build_firmware": 465,
+    "run_smoke": 306
+  }
+}

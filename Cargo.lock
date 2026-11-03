@@ -2074,6 +2074,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-xiao-rp2350-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

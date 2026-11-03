@@ -68,6 +68,7 @@ on:
       - "crates/firmware-nano-rp2040-connect-smoke/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/firmware-pico2-w-smoke/**"
+      - "crates/firmware-xiao-rp2350-smoke/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-nucleo-u545re-smoke/**"
@@ -298,6 +299,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/raspberry-pi-pico-2-w/io-smoke.yaml
             system: configs/systems/raspberry-pi-pico-2-w.yaml
+          - id: seeed-xiao-rp2350
+            crate: firmware-xiao-rp2350-smoke
+            firmware_build_dir: crates/firmware-xiao-rp2350-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/seeed-xiao-rp2350/io-smoke.yaml
+            system: configs/systems/seeed-xiao-rp2350.yaml
           - id: pico
             crate: firmware-rp2040-demo
             target: thumbv6m-none-eabi

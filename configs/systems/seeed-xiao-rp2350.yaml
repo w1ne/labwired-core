@@ -1,0 +1,12 @@
+# Seeed Studio XIAO RP2350, scoped to the active-low yellow USER LED on GP25.
+# The RGB LED, USB, battery path, and untested header GPIO are not represented.
+name: "seeed-xiao-rp2350"
+chip: "../chips/rp2350-xiao-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: false

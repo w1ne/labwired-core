@@ -125,6 +125,7 @@ members = [
     "crates/firmware-feather-m4-express-smoke",
     "crates/firmware-pico-w-smoke",
     "crates/firmware-xiao-rp2040-smoke",
+    "crates/firmware-xiao-rp2350-smoke",
     "crates/firmware-nano-rp2040-connect-smoke",
     "crates/firmware-pico2-w-smoke",
     "crates/firmware-samd21-demo",
@@ -416,6 +417,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-pico2-w-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-xiao-rp2350-smoke]
 codegen-units = 1
 opt-level = "s"
 
