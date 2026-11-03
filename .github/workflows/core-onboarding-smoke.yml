@@ -113,6 +113,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/sam4s_xplained-smoke.yaml
             system: configs/systems/onboarding/sam4s_xplained.yaml
+          # Narrowed SAM E70 import: only its existing PMC, PIOC, and USART1
+          # models remain in the execution profile.
+          - id: sam_e70
+            crate: firmware-sam-e70-renode-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam_e70-smoke.yaml
+            system: configs/systems/onboarding/sam_e70.yaml
           # Imported RISC-V systems narrowed to modeled CPU, memory and
           # peripheral surfaces before these smokes run.
           - id: litex_vexriscv

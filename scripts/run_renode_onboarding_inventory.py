@@ -55,6 +55,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
     },
+    "sam_e70": {
+        "crate": "firmware-sam-e70-renode-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/sam_e70-smoke.yaml",
+    },
     "litex_vexriscv": {
         "crate": "firmware-litex-vexriscv-smoke",
         "target": "riscv32im-unknown-none-elf",

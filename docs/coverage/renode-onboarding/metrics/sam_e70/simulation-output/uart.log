@@ -1,0 +1,6 @@
+SAM E70 RENODE PROFILE SMOKE
+cpu=cortex-m7 uart=usart1
+pmc pcsr0=00005000
+led=off odsr=00000100
+led=on odsr=00000000
+led=off odsr=00000100

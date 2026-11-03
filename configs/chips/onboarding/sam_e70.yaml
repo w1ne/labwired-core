@@ -4,45 +4,47 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (its 256 MiB flash at 0x08000000
-# and 256 MiB RAM at 0x20000000 are not the SAM E70 map: 2 MiB flash at
-# 0x00400000, 384 KiB SRAM at 0x20400000 per Zephyr samx7xx21.dtsi). The
-# promoted SAM E70 part is configs/chips/same70q21b.yaml (board:
-# configs/systems/sam-e70-xplained.yaml).
+# Renode imported `sam_e70` execution slice for ATSAME70Q21B.
+#
+# Memory geometry follows the promoted part descriptor and Zephyr's
+# samx7xx21.dtsi: 2 MiB flash at 0x00400000 and 384 KiB SRAM at 0x20400000.
+# This profile intentionally includes only the existing PMC, PIOC, and USART1
+# models. The imported Renode platform's GEM, PHY, TRNG,
+# and Python PMC_SR windows are omitted; watchdog, matrix, and other system
+# blocks are omitted because they are not modeled here. Firmware that touches
+# those addresses is outside this profile's claim.
 name: sam_e70
 arch: arm
+core: cortex-m7
+registers_count: 120
+cpu_hz: 12000000
 flash:
-  base: 134217728
-  size: 268435456B
+  base: 0x00400000
+  size: 2048KB
 ram:
-  base: 536870912
-  size: 268435456B
+  base: 0x20400000
+  size: 384KB
+flash_boot_alias: false
+pins:
+  PC8: { gpio: pioC, bit: 8 }
 peripherals:
-- id: usart0
-  type: sam_usart
+- id: pmc
+  type: sam4s_pmc
   bus: sysbus
-  base_address: 1073889280
+  base_address: 0x400E0600
+  size: 512
+  irq: 5
+- id: pioC
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 0x400E1200
+  size: 512
+  irq: 12
 - id: usart1
-  type: sam_usart
+  type: uart
   bus: sysbus
-  base_address: 1073905664
-- id: usart2
-  type: sam_usart
-  bus: sysbus
-  base_address: 1073922048
-- id: gem
-  type: cadencegem
-  bus: sysbus
-  base_address: 1074069504
-- id: phy
-  type: ethernetphysicallayer
-  bus: gem
-  base_address: 0
-- id: trng
-  type: sam_trng
-  bus: sysbus
-  base_address: 1074200576
-- id: PMC_SR
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074660968
+  base_address: 0x40028000
+  size: 256
+  irq: 14
+  config:
+    profile: sam

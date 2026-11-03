@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.007405">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.007251">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="b902db3b51f14802baff0a7d57ab57df05ac20d79eacea8148eba612d5e50e86"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.007405">
+  <testcase classname="labwired" name="run" time="0.007251">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: OK" time="0.000000">
   </testcase>
