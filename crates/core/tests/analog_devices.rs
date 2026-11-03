@@ -22,8 +22,8 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
-//! diffusion charge (`TT`) and BJT constant ideal transit-time charge
-//! (`TF`/`TR`) are exercised below. Diode
+//! diffusion charge (`TT`) and BJT forward bias-dependent and reverse
+//! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
 //! `CGS`/`CGD`, MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`,
@@ -436,12 +436,12 @@ mod analog {
     }
 
     #[test]
-    fn bjt_transit_charge_matches_transport_equations_and_partials() {
+    fn bjt_bias_dependent_transit_charge_matches_spice_and_partials() {
         let circuit = parse_netlist(
             "Q1 c b e QMOD\n\
-             .model QMOD NPN(IS=2e-16 NF=1.2 NR=1.1 VAF=40 VAR=70 IKF=2m IKR=5m TF=12n TR=35n)\n",
+             .model QMOD NPN(IS=2e-16 NF=1.2 NR=1.1 VAF=40 VAR=70 IKF=2m IKR=5m TF=12n TR=35n XTF=2.5 VTF=0.6 ITF=80n)\n",
         )
-        .expect("transit-time model parses");
+        .expect("bias-dependent transit-time model parses");
         let model = circuit.bjts[0].model;
         let (vbe, vbc) = (0.64, 0.35);
         let charge = device::bjt_transit_charge(vbe, vbc, model);
@@ -452,7 +452,8 @@ mod analog {
         let qb = (1.0 - vbc / model.vaf - vbe / model.var).recip()
             * (1.0 + (1.0 + 4.0 * (cbe / model.ikf + cbc / model.ikr)).sqrt())
             / 2.0;
-        assert!((charge.qbe - model.tf * cbe / qb).abs() < 1e-25);
+        let tf_adjustment = model.xtf * (vbc / model.vtf).exp() * (cbe / (cbe + model.itf)).powi(2);
+        assert!((charge.qbe - model.tf * cbe * (1.0 + tf_adjustment) / qb).abs() < 1e-25);
         assert!((charge.qbc - model.tr * cbc).abs() < 1e-25);
 
         let delta = 1e-5;
@@ -488,7 +489,7 @@ mod analog {
     }
 
     #[test]
-    fn bjt_tf_and_tr_charge_integrate_for_both_polarities_and_rules() {
+    fn bjt_bias_dependent_tf_and_tr_charge_integrate_for_both_polarities_and_rules() {
         let is = 1e-16;
         let beta_f = 100.0;
         let beta_r = 2.0;
@@ -499,6 +500,9 @@ mod analog {
             for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
                 for forward in [true, false] {
                     let tf = if forward { 10e-9 } else { 0.0 };
+                    let xtf = if forward { 2.0 } else { 0.0 };
+                    let vtf = 0.8;
+                    let itf = 25e-6;
                     let tr = if forward { 0.0 } else { 10e-9 };
                     let (collector_v, emitter_v) = if forward {
                         (sign * 2.0, 0.0)
@@ -508,7 +512,7 @@ mod analog {
                     let netlist = format!(
                         "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
                          Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\nQ1 c b e QMOD\n\
-                         .model QMOD {kind}(IS={is} BF={beta_f} BR={beta_r} TF={tf} TR={tr})\n"
+                         .model QMOD {kind}(IS={is} BF={beta_f} BR={beta_r} TF={tf} TR={tr} XTF={xtf} VTF={vtf} ITF={itf})\n"
                     );
                     let circuit = parse_netlist(&netlist).expect("BJT transit circuit parses");
                     let mut solver =
@@ -519,19 +523,22 @@ mod analog {
                         .expect("base drive exists");
                     solver.set_voltage_source(source, sign);
 
-                    let charge = |v: f64| {
-                        let voltage = v / VT;
-                        if forward {
-                            tf * is * (voltage.exp() - 1.0)
-                        } else {
-                            tr * is * (voltage.exp() - 1.0)
-                        }
-                    };
                     let junctions = |v: f64| {
                         if forward {
                             (v, v - 2.0)
                         } else {
                             (v - 2.0, v)
+                        }
+                    };
+                    let charge = |v: f64| {
+                        let (vbe, vbc) = junctions(v);
+                        let current = is * ((vbe / VT).exp() - 1.0);
+                        if forward {
+                            tf * current
+                                * (1.0
+                                    + xtf * (vbc / vtf).exp() * (current / (current + itf)).powi(2))
+                        } else {
+                            tr * is * ((vbc / VT).exp() - 1.0)
                         }
                     };
                     let base_current = |vbe: f64, vbc: f64| {

@@ -72,12 +72,12 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, and constant forward/reverse transit times `TF`/`TR`, every
-//! temperature coefficient, bias-dependent transit-time parameters
-//! (`XTF`/`VTF`/`ITF`), `NKF`, and most terminal resistances, …) are **accepted
+//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
+//! resistances, …) are **accepted
 //! and ignored rather than rejected**. BJT `IKF`/`IKR` high-injection rolloff and
-//! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
-//! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. JFET
+//! `ISE`/`NE`/`ISC`/`NC` base recombination and `TF`/`TR` transit-time charge,
+//! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
+//! resistances `RB`/`RC`/`RE` are modelled. JFET
 //! terminal resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
@@ -113,10 +113,10 @@
 //! equation, and with it unset the diode is exactly what it was before
 //! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
 //! transient steps; `TT` adds quasi-static diffusion charge. BJT `TF`/`TR`
-//! add ideal transit-time charge based on the forward/reverse transport current;
+//! add transit-time charge based on the forward/reverse transport current;
+//! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias;
 //! `RB`/`RC`/`RE` add series resistance between the external terminals and
-//! probeable internal junction nodes when nonzero. Their bias-dependent
-//! transit-time extensions (`XTF`, `VTF`, `ITF`) are not modelled. JFET
+//! probeable internal junction nodes when nonzero. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
 //! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
 //! gate overlap charge based on instance `W`/`L`; `TOX` enables the level-1
@@ -938,6 +938,15 @@ pub struct BjtModel {
     /// Ideal forward transit time `TF`, seconds. Zero disables forward
     /// diffusion charge, matching ngspice's default.
     pub tf: f64,
+    /// Forward transit-time bias coefficient `XTF`. Zero disables the
+    /// `VBC`/current-dependent adjustment, matching ngspice's default.
+    pub xtf: f64,
+    /// Voltage scale `VTF` for the forward transit-time `VBC` dependence,
+    /// volts. Infinity disables that voltage dependence, matching ngspice's default.
+    pub vtf: f64,
+    /// High-current scale `ITF` for the forward transit-time adjustment,
+    /// amps. Zero disables current suppression, matching ngspice's default.
+    pub itf: f64,
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
@@ -977,6 +986,9 @@ impl BjtModel {
             mjc: 0.33,
             fc: 0.5,
             tf: 0.0,
+            xtf: 0.0,
+            vtf: f64::INFINITY,
+            itf: 0.0,
             tr: 0.0,
             rb: 0.0,
             rc: 0.0,
@@ -2831,11 +2843,17 @@ fn bind_models(
                     || model.fc >= 1.0
                     || !model.tf.is_finite()
                     || model.tf < 0.0
+                    || !model.xtf.is_finite()
+                    || model.xtf < 0.0
+                    || !(model.vtf >= 0.0)
+                    || model.vtf.is_nan()
+                    || !model.itf.is_finite()
+                    || model.itf < 0.0
                     || !model.tr.is_finite()
                     || model.tr < 0.0
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs CJE/CJC/TF/TR >= 0, VJE/VJC > 0, MJE/MJC >= 0 and 0 <= FC < 1"
+                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3380,6 +3398,9 @@ fn parse_model(
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
             (ModelCard::Bjt(model), "FC") => model.fc = value,
             (ModelCard::Bjt(model), "TF") => model.tf = value,
+            (ModelCard::Bjt(model), "XTF") => model.xtf = value,
+            (ModelCard::Bjt(model), "VTF") => model.vtf = value,
+            (ModelCard::Bjt(model), "ITF") => model.itf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
             (ModelCard::Bjt(model), "RC") => model.rc = value,

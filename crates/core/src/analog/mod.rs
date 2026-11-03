@@ -13,7 +13,8 @@
 //! subcircuits, model libraries, AC/DC sweeps and charge-conserving MOSFET
 //! channel charge by name and points at `tools/cosim/labwired_ngspice.py`,
 //! which supports those features. The solver integrates diode `TT`, BJT
-//! `TF`/`TR` and `RB`/`RC`/`RE`, MOSFET terminal resistances (`RD`/`RS` or
+//! `TF`/`TR` with forward `XTF`/`VTF`/`ITF`, and `RB`/`RC`/`RE`, MOSFET
+//! terminal resistances (`RD`/`RS` or
 //! `RSH` times instance `NRD`/`NRS`), and level-1 gate overlap charge
 //! (`CGSO`/`CGDO`/`CGBO`) in-core.
 //!

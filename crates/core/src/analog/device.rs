@@ -23,7 +23,8 @@
 //! with level-1 `M=0.5`) are integrated in transient runs. MOSFET gate overlap
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
-//! using constant ideal transit times. MOSFET intrinsic gate capacitance from
+//! using ideal transit times with ngspice's forward `XTF`/`VTF`/`ITF` bias
+//! adjustment. MOSFET intrinsic gate capacitance from
 //! `TOX` uses the level-1 Meyer model; its three G-S/G-D/G-B branches are
 //! integrated in transient runs. MOSFET bulk depletion charge integrates
 //! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
@@ -490,17 +491,19 @@ pub struct BjtTransitCharge {
     pub dqbc_dvbc: f64,
 }
 
-/// Ideal Gummel–Poon transit charge for constant `TF` and `TR`:
+/// Gummel–Poon transit charge for `TF` and `TR`:
 ///
 /// ```text
-/// Qbe = TF · Is · (exp(Vbe/(NF·Vt)) − 1) / qb  (for Vbe > 0)
+/// Qbe = TF · If · (1 + XTF · exp(Vbc/VTF) · (If/(If+ITF))²) / qb
+/// Qbe = TF · If                                         (for Vbe <= 0)
 /// Qbc = TR · Is · (exp(Vbc/(NR·Vt)) − 1)
 /// ```
 ///
-/// For `Vbe <= 0`, the forward transit charge uses the unscaled junction
-/// current, as ngspice's level-1 BJT model does. `qb` is the same Early-effect
-/// and high-injection base-charge factor used by [`bjt_op`]. Bias-dependent
-/// transit-time extensions (`XTF`, `VTF`, `ITF`) are outside this function.
+/// For `Vbe <= 0`, forward transit charge uses the unscaled junction current,
+/// as ngspice's level-1 BJT model does. `qb` is the same Early-effect and
+/// high-injection base-charge factor used by [`bjt_op`]. `VTF = 0` disables
+/// only the exponential voltage dependence; the default infinity makes its
+/// exponential equal one. `ITF = 0` disables current suppression.
 pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitCharge {
     if model.tf == 0.0 && model.tr == 0.0 {
         return BjtTransitCharge::default();
@@ -561,11 +564,47 @@ pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitChar
         (0.0, 0.0, 0.0)
     } else if vbe > 0.0 {
         let qb_squared = qb * qb;
-        (
-            model.tf * cbe / qb,
-            model.tf * (gbe / qb - cbe * dqb_dvbe / qb_squared),
-            -model.tf * cbe * dqb_dvbc / qb_squared,
-        )
+        if model.xtf == 0.0 {
+            // Preserve the legacy expression and operation order for cards
+            // that do not request the bias-dependent extension.
+            (
+                model.tf * cbe / qb,
+                model.tf * (gbe / qb - cbe * dqb_dvbe / qb_squared),
+                -model.tf * cbe * dqb_dvbc / qb_squared,
+            )
+        } else {
+            let voltage_factor = if model.vtf == 0.0 {
+                1.0
+            } else {
+                exp_clamped(vbc / model.vtf)
+            };
+            let current_ratio = if model.itf == 0.0 {
+                1.0
+            } else {
+                cbe / (cbe + model.itf)
+            };
+            let boost = model.xtf * voltage_factor * current_ratio * current_ratio;
+            let dboost_dvbe = if model.itf == 0.0 {
+                0.0
+            } else {
+                let current_denominator = cbe + model.itf;
+                model.xtf * voltage_factor * 2.0 * current_ratio * model.itf * gbe
+                    / (current_denominator * current_denominator)
+            };
+            let dboost_dvbc = if model.vtf == 0.0 || model.vtf.is_infinite() {
+                0.0
+            } else {
+                boost / model.vtf
+            };
+            let adjusted_current = cbe * (1.0 + boost);
+            (
+                model.tf * adjusted_current / qb,
+                model.tf
+                    * (gbe * (1.0 + boost) + cbe * dboost_dvbe - adjusted_current * dqb_dvbe / qb)
+                    / qb,
+                model.tf * (cbe * dboost_dvbc - adjusted_current * dqb_dvbc / qb) / qb,
+            )
+        }
     } else {
         (model.tf * cbe, model.tf * gbe, 0.0)
     };
