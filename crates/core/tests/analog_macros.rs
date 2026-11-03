@@ -168,6 +168,42 @@ mod analog {
     }
 
     #[test]
+    fn opamp_input_bias_current_drops_across_both_input_source_resistances() {
+        let (aol, rout, load, ibias) = (100.0, 100.0, 10e3, 10e-9);
+        // Equal 1 V sources leave a 0.5 mV differential after the same bias
+        // current flows through the unequal source resistances. Reversing the
+        // current and the resistor order checks the signed-current convention.
+        for (current, r_plus, r_minus) in [(ibias, 50e3, 100e3), (-ibias, 100e3, 50e3)] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp {r_plus}\nRm vm inn {r_minus}\nRl out 0 {load}\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW=1meg ROUT={rout} IBIAS={current})\n"
+            ));
+            let differential = current * (r_minus - r_plus);
+            let gain_node = aol * differential;
+            let expected = gain_node * load / (load + rout);
+            let actual = v(&solver, "out");
+            assert!(
+                // Ignore the clamp diodes' reverse leakage at the gain node.
+                (actual - expected).abs() < 1e-5,
+                "IBIAS={current}: out = {actual} V, expected {expected} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_input_bias_current_must_be_finite() {
+        let error = parse_netlist("X1 inp inn vcc vee out AMP\n.model AMP OPAMP(IBIAS=1e999)\n")
+            .expect_err("an infinite input bias current cannot be stamped");
+        assert!(
+            error.to_string().contains("IBIAS must be finite"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn a_saturated_opamp_sits_at_its_rails_less_the_drop() {
         // LM358: DROP_HI = 1.5 V, DROP_LO = 0. Open loop, driven both ways,
         // into 10 kΩ through ROUT = 50 Ω: the high rail reads 10.5 V · 10 k /

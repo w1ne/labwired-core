@@ -76,7 +76,8 @@
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
 //! resistances, …) are **accepted
-//! and ignored rather than rejected**. BJT `IKF`/`IKR` high-injection rolloff and
+//! and ignored rather than rejected**. OPAMP `IBIAS` models equal signed DC
+//! currents at both input pins. BJT `IKF`/`IKR` high-injection rolloff and
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and `TF`/`TR` transit-time charge,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
@@ -634,10 +635,15 @@ pub enum ComparatorOutput {
 /// Newton walk a saturated output back into the linear region. The rails come
 /// from the `v+`/`v−` pins, so the same card works at ±15 V and at 3.3 V.
 ///
-/// What it does not model: input bias current, input capacitance, slew-rate
-/// limiting beyond what the pole gives, output current limiting, and supply
+/// `IBIAS` draws the same signed DC current from each input into `v−`; a
+/// negative value sources current from `v−` into both inputs. This is a simple
+/// constant-current approximation, with no input bias temperature dependence.
+///
+/// What it does not model: input capacitance, slew-rate limiting beyond what
+/// the pole gives, output current limiting, and supply
 /// current — the output stage's current returns through ground, not through
-/// the supply pins. Only the clamp current reaches `v+`/`v−`.
+/// the supply pins. Clamp current reaches `v+`/`v−`; input bias current reaches
+/// `v−`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OpAmpModel {
     /// DC open-loop gain `AOL`, V/V.
@@ -648,6 +654,9 @@ pub struct OpAmpModel {
     pub rout: f64,
     /// Input offset voltage `VOS`, volts, added to `v(in+) − v(in−)`.
     pub vos: f64,
+    /// Signed DC bias current at each input, amps; positive current flows
+    /// from the input pin into `v−`.
+    pub ibias: f64,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -661,6 +670,7 @@ impl Default for OpAmpModel {
             gbw: 1e6,
             rout: 100.0,
             vos: 0.0,
+            ibias: 0.0,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -1328,6 +1338,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             gbw: 0.7e6,
             rout: 50.0,
             vos: 0.0,
+            ibias: 0.0,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -3415,6 +3426,7 @@ fn parse_model(
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
             (ModelCard::OpAmp(model), "VOS") => model.vos = value,
+            (ModelCard::OpAmp(model), "IBIAS") => model.ibias = value,
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
@@ -3428,7 +3440,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     DROP_HI, DROP_LO"
+                     IBIAS, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -3766,6 +3778,9 @@ fn lower_opamp(
     if model.drop_hi < 0.0 || model.drop_lo < 0.0 {
         return Err(ctx.parse_err("DROP_HI and DROP_LO must not be negative"));
     }
+    if !model.ibias.is_finite() {
+        return Err(ctx.parse_err("IBIAS must be finite"));
+    }
     let rg = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rg;
     let cg = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rg);
@@ -3781,6 +3796,10 @@ fn lower_opamp(
     lower.capacitor("cg", p, None, cg);
     if model.vos != 0.0 {
         lower.current("ios", None, p, gm * model.vos);
+    }
+    if model.ibias != 0.0 {
+        lower.current("ibp", inp, vee, model.ibias);
+        lower.current("ibn", inn, vee, model.ibias);
     }
     let hi = lower.offset_rail("hi", vcc, model.drop_hi, true);
     let lo = lower.offset_rail("lo", vee, model.drop_lo, false);
