@@ -713,6 +713,73 @@ fn a_model_voltage_lands_on_the_adc_channel_of_its_pad() {
     assert_eq!(adc_channel_count(&mut bus, 0), 2047);
 }
 
+/// Close the analog-to-ADC path with the real in-core netlist solver. A routed
+/// temperature changes the Beta NTC resistance, the divider moves PA0, the
+/// descriptor resolves PA0 to ADC1_IN0, and the ADC converts the routed level.
+#[test]
+fn an_in_core_ntc_netlist_drives_the_resolved_adc_channel() {
+    let mut bus = f401_bus();
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            100_000,
+            &[("temperature", "ui.ntc.temperature_c")],
+            &[("v_sense", "board.analog.pa0_volts")],
+            "Vcc vcc 0 dc 3.3\n\
+             Rntc vcc sense 10k beta=3950 tnom=25 temp=25\n\
+             Rpull sense 0 10k\n",
+            &[("v_sense", "v(sense)")],
+            &[("temperature", "Rntc")],
+            3.3,
+        )],
+    );
+
+    assert_eq!(adc_channel_count(&mut bus, 0), 0xFFFF);
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the analog model reads the routed temperature");
+        cycles += 8_400; // One 100 us model boundary at the F401's 84 MHz.
+        let (_, errors) = session.advance_to(cycles, &mut bus).expect("step netlist");
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let volts = match session.signals().get("board.analog.pa0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("netlist did not publish PA0 voltage: {other:?}"),
+        };
+        let (count, reference_v) = adc_readback(&mut bus, 0);
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor();
+        let expected_count = (routed_mv * 4095.0 / (reference_v * 1000.0)).floor() as u16;
+
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved NTC divider should be {expected_volts} V, got {volts} V"
+        );
+        assert_eq!(
+            count, expected_count,
+            "the resolved ADC channel should convert the routed {volts} V at {temperature_c} °C"
+        );
+        samples.push((temperature_c, volts, count));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "an NTC divider rises as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the resolved ADC reading follows the physical voltage: {samples:?}"
+    );
+    assert_eq!(
+        samples[1].2, 2047,
+        "25 °C puts the matched divider at half scale"
+    );
+}
+
 /// VDDA is independent from the routed pad voltage. The ADC holds the pin in
 /// millivolts and converts it against the reference present at acquisition.
 #[test]
