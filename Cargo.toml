@@ -93,6 +93,7 @@ members = [
     "crates/firmware-frdm-k64f-smoke",
     "crates/firmware-arduino-nano-33-ble-smoke",
     "crates/firmware-litex-vexriscv-smoke",
+    "crates/firmware-litex-ibex-smoke",
     "crates/firmware-nucleo-wb55rg-demo",
     "crates/firmware-nucleo-wba52cg-demo",
     "crates/firmware-feather-f405-demo",

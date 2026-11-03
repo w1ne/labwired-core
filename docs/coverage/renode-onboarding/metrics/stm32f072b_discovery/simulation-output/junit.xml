@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.092752">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.094953">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="995afa703234b8b6b88ad2d31cc83f67f294273e69211256b73bbe5f7ba31514"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.092752">
+  <testcase classname="labwired" name="run" time="0.094953">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32F072B-DISCO SMOKE" time="0.000000">
   </testcase>

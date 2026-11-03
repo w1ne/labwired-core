@@ -1,21 +1,23 @@
-name: litex_ibex
-arch: arm
-flash:
-  base: 536870912
-  size: 1048576
-ram:
-  base: 16777216
-  size: 8192B
+# Narrowed LiteX Ibex profile for the imported Renode system. The generated
+# descriptor called this ARM and omitted the architectural CPU profile. This
+# profile keeps the RV32IMC core, memory, LiteX UART, and CSR32 timer used by
+# the exact-system smoke; the unexercised SoC controller is not claimed.
+
+name: "litex_ibex"
+arch: "riscv"
+core: "rv32imc_zicsr_zifencei"
+
+flash: { base: 0x20000000, size: "1MiB" }
+ram: { base: 0x01000000, size: "8KiB" }
+flash_boot_alias: false
 peripherals:
-- id: ctrl
-  type: litex_soc_controller
-  bus: sysbus
-  base_address: 2181038080
-- id: uart
-  type: litex_uart
-  bus: sysbus
-  base_address: 2181046272
-- id: timer0
-  type: litex_timer_csr32
-  bus: sysbus
-  base_address: 2181048320
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x82002000
+    size: "2KB"
+    irq: 2
+  - id: "timer0"
+    type: "litex_timer_csr32"
+    base_address: 0x82002800
+    size: "2KB"
+    irq: 1

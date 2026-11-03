@@ -20,4 +20,4 @@ workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
    Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/gdbstub)
    Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/labwired-fuzz)
    Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 13.46s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 14.26s
