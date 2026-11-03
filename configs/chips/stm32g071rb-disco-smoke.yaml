@@ -1,0 +1,54 @@
+# Narrow STM32G071B-DISCO profile for the ST-LINK Virtual COM path.
+#
+# It exposes only the STM32G071RB core, RCC, GPIOB pins PB8/PB9, and USART3.
+# The board's OLED, USB-C/Power Delivery path, current monitors, joystick,
+# reed sensor, and ST-LINK implementation are outside this profile.
+#
+# Sources:
+# - ST UM2401, STM32G0 Discovery kit for USB Type-C and Power Delivery,
+#   §§9.14 and 10.1: USART3/USART4 VCP and CN1 PB8/PB9 assignment.
+#   https://www.st.com/resource/en/user_manual/dm00496511-stm32g0-discovery-kit-for-usb-type-c-and-power-delivery-stmicroelectronics.pdf
+# - ST RM0444 / DS12232: G0 RCC, GPIO, USART3 registers and device memory.
+#   https://www.st.com/resource/en/reference_manual/dm00371828-stm32g0x1-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+
+name: "stm32g071rb-disco-smoke"
+arch: "arm"
+core: "cortex-m0+"
+# The smoke keeps the reset HSI16 clock and does not configure the PLL.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "36KB"
+
+pins:
+  PB8: { gpio: "gpiob", bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx }] }
+  PB9: { gpio: "gpiob", bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32g0"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x50000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 1 }
+
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 29
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apbenr1", bit: 18 }

@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 17351,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 17.351
+  },
+  "targets": [
+    {
+      "target_id": "stm32g071b-disco",
+      "status": "pass",
+      "crate": "firmware-stm32g071b-disco-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/stm32g071b-disco/onboarding-smoke.yaml",
+      "system": "configs/systems/stm32g071b-disco.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T14:56:24Z",
+      "finished_at_utc": "2026-11-03T14:56:41Z",
+      "elapsed_seconds": 18,
+      "elapsed_ms": 17351,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 16.597,
+        "build_firmware": 0.482,
+        "run_smoke": 0.26
+      },
+      "stages_ms": {
+        "build_cli": 16597,
+        "build_firmware": 482,
+        "run_smoke": 260
+      },
+      "_artifact_path": "examples/stm32g071b-disco/evidence"
+    }
+  ]
+}

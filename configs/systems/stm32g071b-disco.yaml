@@ -1,0 +1,12 @@
+# STM32G071B-DISCO smoke system.
+#
+# ST UM2401 §9.14 identifies USART3 (or USART4) as the ST-LINK/V2-1 VCP.
+# This profile selects USART3; PB8/PB9 are its TX/RX pins on the default
+# CN1 user-connector assignment. The board's USB-C/PD analyzer, OLED, current
+# monitors, joystick, and reed sensor are deliberately outside the model.
+
+name: "stm32g071b-disco"
+chip: "../chips/stm32g071rb-disco-smoke.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io: []

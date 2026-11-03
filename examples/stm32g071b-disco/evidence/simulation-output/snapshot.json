@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073760284,
+      10,
+      3221225472,
+      3221225472,
+      0,
+      0,
+      0,
+      536907760,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536907760,
+      134218665,
+      134218642
+    ],
+    "pc": 134218642,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "8d61b4503056f1b2ce870b9c2fb1105cb9045528c3b192b12806d798d7046740",
+  "config": {
+    "firmware": "examples/stm32g071b-disco/../../target/thumbv6m-none-eabi/release/firmware-stm32g071b-disco-smoke",
+    "system": "examples/stm32g071b-disco/../../configs/systems/stm32g071b-disco.yaml",
+    "script": "examples/stm32g071b-disco/onboarding-smoke.yaml"
+  }
+}

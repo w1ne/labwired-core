@@ -1860,6 +1860,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32g071b-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-stm32g0b1-demo"
 version = "0.1.0"
 dependencies = [
