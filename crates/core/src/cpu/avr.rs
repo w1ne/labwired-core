@@ -60,6 +60,7 @@ pub enum AvrModel {
     Atmega328p,
     Atmega1281,
     Atmega2560,
+    Attiny202,
     Attiny402,
     Attiny404,
     Attiny804,
@@ -74,7 +75,9 @@ impl AvrModel {
     /// names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
-        if n.contains("attiny402") || n.contains("attiny 402") {
+        if n.contains("attiny202") || n.contains("attiny 202") {
+            AvrModel::Attiny202
+        } else if n.contains("attiny402") || n.contains("attiny 402") {
             AvrModel::Attiny402
         } else if n.contains("attiny404") || n.contains("attiny 404") {
             AvrModel::Attiny404
@@ -95,6 +98,7 @@ impl AvrModel {
             AvrModel::Atmega328p => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
+            AvrModel::Attiny202 => 2 * 1024,
             AvrModel::Attiny402 | AvrModel::Attiny404 => 4 * 1024,
             AvrModel::Attiny804 => 8 * 1024,
             AvrModel::Attiny1604 => 16 * 1024,
@@ -104,6 +108,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
+            AvrModel::Attiny202 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 => 0x3F00,
             AvrModel::Attiny804 => 0x3E00,
             AvrModel::Attiny1604 => 0x3C00,
@@ -113,7 +118,8 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
-            AvrModel::Attiny402
+            AvrModel::Attiny202
+            | AvrModel::Attiny402
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny1604 => 0x3FFF,
@@ -126,7 +132,8 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
-            AvrModel::Attiny402
+            AvrModel::Attiny202
+            | AvrModel::Attiny402
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny1604 => AVR_ADC_INPUT_BASE,
@@ -147,7 +154,11 @@ impl AvrModel {
     pub fn uses_avrxt_data_map(self) -> bool {
         matches!(
             self,
-            AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny804 | AvrModel::Attiny1604
+            AvrModel::Attiny202
+                | AvrModel::Attiny402
+                | AvrModel::Attiny404
+                | AvrModel::Attiny804
+                | AvrModel::Attiny1604
         )
     }
 }
@@ -597,6 +608,7 @@ impl Avr {
         match self.model {
             AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Attiny202 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
             | AvrModel::Attiny804
@@ -612,6 +624,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Attiny202 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
             | AvrModel::Attiny804
@@ -3238,6 +3251,7 @@ mod tests {
     #[test]
     fn tinyavr_0_series_selects_exact_avrxt_flash_and_sram_geometry() {
         for (name, model, flash_size, sram_start, sram_len) in [
+            ("attiny202", AvrModel::Attiny202, 2 * 1024, 0x3F80, 128),
             ("attiny402", AvrModel::Attiny402, 4 * 1024, 0x3F00, 256),
             ("attiny404", AvrModel::Attiny404, 4 * 1024, 0x3F00, 256),
             ("attiny804", AvrModel::Attiny804, 8 * 1024, 0x3E00, 512),
