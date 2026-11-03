@@ -160,6 +160,36 @@ fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
     adc_readback(bus, channel).0
 }
 
+/// Convert one routed input through the F401's firmware-visible ADC1 registers.
+/// This catches a route that reaches the injected-input slot but is not the
+/// channel selected by SQR3 or never reaches DR after software start.
+fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+    const RCC_BASE: u64 = 0x4002_3800;
+    const ADC1_BASE: u64 = 0x4001_2000;
+    const ADC1EN: u32 = 1 << 8;
+    const ADON: u32 = 1;
+    const SWSTART: u32 = 1 << 30;
+    const EOC: u32 = 1 << 1;
+
+    // Firmware must enable the APB2 clock before ADC MMIO reaches the block.
+    let apb2enr = bus.read_u32(RCC_BASE + 0x44).expect("read APB2ENR");
+    bus.write_u32(RCC_BASE + 0x44, apb2enr | ADC1EN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_BASE + 0x34, u32::from(channel))
+        .expect("select SQR3 SQ1 channel");
+    bus.write_u32(ADC1_BASE + 0x08, ADON)
+        .expect("power up ADC1");
+    bus.write_u32(ADC1_BASE + 0x08, ADON | SWSTART)
+        .expect("software-start ADC1 conversion");
+    for _ in 0..15 {
+        bus.tick_peripherals_fully();
+    }
+    let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
+    assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
+    bus.read_u32(ADC1_BASE + 0x4c)
+        .expect("read firmware-visible ADC1 DR")
+}
+
 /// Drive a GPIO output latch the way firmware does — an MMIO store to ODR.
 fn write_odr_bit(bus: &mut SystemBus, pad: &str, level: bool) {
     let (addr, bit) = SystemBus::resolve_pin_odr_pub(bus, pad).expect("pad resolves to an ODR");
@@ -762,6 +792,11 @@ fn an_in_core_ntc_netlist_drives_the_resolved_adc_channel() {
         assert_eq!(
             count, expected_count,
             "the resolved ADC channel should convert the routed {volts} V at {temperature_c} °C"
+        );
+        assert_eq!(
+            f401_adc_convert(&mut bus, 0),
+            u32::from(expected_count),
+            "firmware reading ADC1_DR should see the routed PA0 sample at {temperature_c} °C"
         );
         samples.push((temperature_c, volts, count));
     }
