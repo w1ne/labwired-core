@@ -2,7 +2,7 @@
 //!
 //! Boots SPI1 + PA4 (CS) / PB0 (D/C) / PB1 (RESET), runs the ILI9488 init
 //! sequence with COLMOD 0x66 (18-bit / three bytes per pixel), and paints a
-//! 160×16 cyan band so io-smoke can assert rgb888 colour evidence.
+//! full-frame cyan fill so io-smoke can assert rgb888 colour evidence.
 
 #![no_std]
 #![no_main]
