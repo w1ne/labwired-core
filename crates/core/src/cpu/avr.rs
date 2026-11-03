@@ -66,6 +66,7 @@ pub enum AvrModel {
     Attiny404,
     Attiny804,
     Attiny806,
+    Attiny807,
     Attiny1604,
     Attiny1607,
 }
@@ -90,6 +91,8 @@ impl AvrModel {
             AvrModel::Attiny804
         } else if n.contains("attiny806") || n.contains("attiny 806") {
             AvrModel::Attiny806
+        } else if n.contains("attiny807") || n.contains("attiny 807") {
+            AvrModel::Attiny807
         } else if n.contains("attiny1604") || n.contains("attiny 1604") {
             AvrModel::Attiny1604
         } else if n.contains("attiny1607") || n.contains("attiny 1607") {
@@ -109,7 +112,7 @@ impl AvrModel {
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
             AvrModel::Attiny402 | AvrModel::Attiny404 => 4 * 1024,
-            AvrModel::Attiny804 | AvrModel::Attiny806 => 8 * 1024,
+            AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
             AvrModel::Attiny1604 | AvrModel::Attiny1607 => 16 * 1024,
         }
     }
@@ -119,7 +122,7 @@ impl AvrModel {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 => 0x3F00,
-            AvrModel::Attiny804 | AvrModel::Attiny806 => 0x3E00,
+            AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 0x3E00,
             AvrModel::Attiny1604 | AvrModel::Attiny1607 => 0x3C00,
         }
     }
@@ -133,6 +136,7 @@ impl AvrModel {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
+            | AvrModel::Attiny807
             | AvrModel::Attiny1604
             | AvrModel::Attiny1607 => 0x3FFF,
         }
@@ -150,6 +154,7 @@ impl AvrModel {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
+            | AvrModel::Attiny807
             | AvrModel::Attiny1604
             | AvrModel::Attiny1607 => AVR_ADC_INPUT_BASE,
         }
@@ -175,6 +180,7 @@ impl AvrModel {
                 | AvrModel::Attiny404
                 | AvrModel::Attiny804
                 | AvrModel::Attiny806
+                | AvrModel::Attiny807
                 | AvrModel::Attiny1604
                 | AvrModel::Attiny1607
         )
@@ -631,6 +637,7 @@ impl Avr {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
+            | AvrModel::Attiny807
             | AvrModel::Attiny1604
             | AvrModel::Attiny1607 => false,
         }
@@ -649,6 +656,7 @@ impl Avr {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
+            | AvrModel::Attiny807
             | AvrModel::Attiny1604
             | AvrModel::Attiny1607 => false,
         }
@@ -3279,6 +3287,7 @@ mod tests {
             ("attiny404", AvrModel::Attiny404, 4 * 1024, 0x3F00, 256),
             ("attiny804", AvrModel::Attiny804, 8 * 1024, 0x3E00, 512),
             ("attiny806", AvrModel::Attiny806, 8 * 1024, 0x3E00, 512),
+            ("attiny807", AvrModel::Attiny807, 8 * 1024, 0x3E00, 512),
             ("attiny1604", AvrModel::Attiny1604, 16 * 1024, 0x3C00, 1024),
             ("attiny1607", AvrModel::Attiny1607, 16 * 1024, 0x3C00, 1024),
         ] {
