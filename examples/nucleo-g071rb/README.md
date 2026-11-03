@@ -2,6 +2,31 @@
 
 Run all commands from `core/`.
 
+## Board-connected smoke lane
+
+The committed onboarding lane now uses the board-connected USART2 VCP on PA2/PA3
+and the LD4 LED on PA5. Its narrow system profile is
+`configs/systems/nucleo-g071rb-smoke.yaml`; it declares only RCC, GPIOA and
+USART2, with no zero-answering stubs and no claims for the board button or other
+chip peripherals. The firmware prints `NUCLEO_G071RB_OK` and repeatedly toggles
+LD4. Reproduce it with:
+
+```bash
+scripts/onboarding_smoke.sh \
+  --target-id nucleo-g071rb \
+  --crate firmware-nucleo-g071rb-smoke \
+  --target thumbv6m-none-eabi \
+  --script examples/nucleo-g071rb/onboarding-smoke.yaml \
+  --system configs/systems/nucleo-g071rb-smoke.yaml \
+  --out-dir examples/nucleo-g071rb/evidence
+```
+
+The committed build, simulation output and vendor-status receipt are in
+[`evidence/`](evidence/). A separate hosted Arduino oracle smoke is recorded in
+[`evidence/hosted-verification.md`](evidence/hosted-verification.md); it checks
+the same USART2 marker and PA5 high state, with the hosted twin's stated ideal
+VDD assumption.
+
 ## Purpose
 
 Deterministic bring-up smoke for the ST NUCLEO-G071RB (STM32G071RB,

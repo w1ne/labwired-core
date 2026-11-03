@@ -1,5 +1,14 @@
 # NUCLEO-G071RB (ST STM32G071RB) — UART/LED smoke
 
+The customer-board onboarding lane adds a narrow, board-connected profile at
+[`configs/systems/nucleo-g071rb-smoke.yaml`](../../configs/systems/nucleo-g071rb-smoke.yaml).
+It exposes only RCC, GPIOA, USART2 and the LD4 LED wiring, and is exercised by
+the committed USART2/PA5 smoke in
+[`examples/nucleo-g071rb/evidence/`](../../examples/nucleo-g071rb/evidence/).
+The live vendor status receipt is included there. This lane does not claim
+support for the board button, ST-LINK itself, USB, or peripherals outside that
+profile.
+
 An ST **STM32G071RB** Nucleo-64 board — single-core **Cortex-M0+ (ARMv6-M)**,
 128 KB flash, 36 KB SRAM, up to 64 MHz. This page covers the modelled slice:
 core + SysTick, the **G0 RCC** layout, GPIO on the `0x50000000` IOPORT bus,

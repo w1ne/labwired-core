@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 15261,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 15.261
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-g071rb",
+      "status": "pass",
+      "crate": "firmware-nucleo-g071rb-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/nucleo-g071rb/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-g071rb-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-03T13:11:09Z",
+      "finished_at_utc": "2026-11-03T13:11:24Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15261,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 14.604,
+        "build_firmware": 0.3,
+        "run_smoke": 0.346
+      },
+      "stages_ms": {
+        "build_cli": 14604,
+        "build_firmware": 300,
+        "run_smoke": 346
+      },
+      "_artifact_path": "examples/nucleo-g071rb/evidence"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Board-connected NUCLEO-G071RB smoke: USART2 output and LD4 GPIOA/PA5 edges.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-g071rb-smoke"
+  system: "../../configs/systems/nucleo-g071rb-smoke.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - uart_contains: "NUCLEO_G071RB_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps
