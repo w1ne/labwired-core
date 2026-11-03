@@ -9757,6 +9757,31 @@ boards:
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/wwdg.rs
+
+  # ── STM32G0B1RE ──────────────────────────────────────────────────────────────
+  # The NUCLEO-G0B1RE board smoke uses USART2 (ST-LINK VCP) and LD4/PA5.
+  # SIM-DERIVED: no board-level silicon capture or differential is available.
+  - id: nucleo-g0b1re
+    doc: docs/boards/nucleo-g0b1re.md
+    chip: configs/chips/stm32g0b1re.yaml
+    tier: smoke-manual
+    note: "NUCLEO-G0B1RE (STM32G0B1RET6, Cortex-M0+). The board-specific smoke prints OK over USART2 (ST-LINK VCP, PA2/PA3) and asserts at least eight PA5 transitions on LD4 using the existing STM32G0 GPIO/UART models. SIM-DERIVED; no silicon diff or executing-fidelity differential. SYSCFG remains a zero-answering stub and the profile omits unsupported peripherals."
+    offline_tests:
+      - "scripts/onboarding_smoke.sh --target-id nucleo-g0b1re --crate firmware-stm32g0-demo --target thumbv6m-none-eabi --script examples/nucleo-g0b1re/io-smoke.yaml --system configs/systems/nucleo-g0b1re.yaml --out-dir examples/nucleo-g0b1re/evidence"
+      - "core-coverage-matrix-smoke cell nucleo-g0b1re"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - configs/chips/stm32g0b1re.yaml
+      - configs/systems/nucleo-g0b1re.yaml
+      - crates/firmware-stm32g0-demo/src/main.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/timer.rs
   - id: esp32c6-devkitc
     doc: docs/boards/esp32c6-devkitc.md
     chip: configs/chips/esp32c6.yaml

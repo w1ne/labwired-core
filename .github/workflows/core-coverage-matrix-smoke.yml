@@ -172,6 +172,15 @@ jobs:
             profile_dir: release
             script: examples/nucleo-g071rb/uart-smoke.yaml
             system: examples/nucleo-g071rb/system.yaml
+          # STM32G0B1RE / NUCLEO-G0B1RE — the same USART2 VCP/LD4 smoke on
+          # the G0B1 chip slice, which includes its board-connected USART2.
+          - id: nucleo-g0b1re
+            target: thumbv6m-none-eabi
+            crate: firmware-stm32g0-demo
+            profile: release
+            profile_dir: release
+            script: examples/nucleo-g0b1re/io-smoke.yaml
+            system: configs/systems/nucleo-g0b1re.yaml
           # The H735 telematics lab — the Cortex-M7 cell, and the only one here
           # whose script asserts PIXELS rather than a UART transcript.
           #

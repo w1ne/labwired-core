@@ -6,7 +6,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 //
-// NUCLEO-G071RB UART/LED smoke (Cortex-M0+, thumbv6m-none-eabi).
+// STM32G0 UART/LED smoke for NUCLEO-G071RB and NUCLEO-G0B1RE
+// (Cortex-M0+, thumbv6m-none-eabi).
 //
 // Bare-register firmware — no HAL. Real STM32G0 register offsets (RM0444),
 // so the same binary runs on physical silicon and in the simulator:
@@ -23,8 +24,8 @@
 //   3. USART2 TDR writes leave the part as UART bytes: `OK\n`.
 //   4. LD4 (PA5) toggles via BSRR (visible to board_io / logic capture).
 //
-// ST-LINK VCP wiring / AF from UM2505 and DS12232 Table 13: USART2 is AF1
-// on PA2 (TX) / PA3 (RX); LD4 is PA5.
+// ST-LINK VCP wiring and PA5 LED are documented in UM2505/UM2324. USART2
+// uses AF1 on PA2 (TX) / PA3 (RX) in the STM32G0 family.
 
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;

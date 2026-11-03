@@ -4,9 +4,9 @@
  * This software is released under the MIT License.
  * See the LICENSE file in the project root for full license information.
  *
- * STM32G071RB: 128 KB flash @ 0x08000000, 36 KB SRAM @ 0x20000000
- * (DS12232; SRAM is 36 KB even though the CMSIS header's SRAM_SIZE_MAX is
- * the family maximum of 32 KB).
+ * Conservative STM32G0 link bounds: 128 KB flash and 36 KB SRAM, matching
+ * the smaller G071RB variant. This image also fits the NUCLEO-G0B1RE's larger
+ * 512 KB flash / 128 KB SRAM profile.
  */
 
 MEMORY

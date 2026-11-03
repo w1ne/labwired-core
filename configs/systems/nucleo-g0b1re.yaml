@@ -1,0 +1,25 @@
+# LabWired - NUCLEO-G0B1RE system manifest
+#
+# Board wiring per ST UM2324 / MB1360 schematic:
+#   - LD4 user LED on PA5, active high.
+#   - B1 user button on PC13, active low.
+#   - USART2 PA2 (TX) / PA3 (RX) connects to the on-board ST-LINK VCP.
+#
+# This board profile claims only the paths represented by the STM32G0B1RE
+# chip slice. It does not imply USB, debug-probe, or unlisted peripheral models.
+name: "nucleo-g0b1re"
+chip: "../chips/stm32g0b1re.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

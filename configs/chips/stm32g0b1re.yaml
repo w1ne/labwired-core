@@ -1,10 +1,11 @@
-# STM32G0B1RE IO-Link firmware slice; not a full-chip validation claim.
+# STM32G0B1RE narrow firmware slice; not a full-chip validation claim.
 # Sources: ST stm32g0b1re.pdf and RM0444; pinned ST CMSIS
 # stm32g0b1xx.h f576c24e123edf3332988ecd49512c0f35f85186.
 # 512KiB flash; expose the 128KiB parity-protected SRAM bank only.
 # Firmware resets HSI/APB/AHB to 16MHz; no PLL or alternate clock support
-# is asserted by this slice. Only the peripherals used by the reference
-# firmware are included. GPIO EXTI excludes SWIER/internal event lines.
+# is asserted by this slice. Only peripherals used by the existing reference
+# firmware and Nucleo board smoke are included. GPIO EXTI excludes SWIER and
+# internal event lines.
 name: stm32g0b1re
 arch: arm
 core: cortex-m0+
@@ -125,6 +126,18 @@ peripherals:
   clock:
     reg: apbenr2
     bit: 14
+- id: usart2
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 28
+  config:
+    profile: stm32v2
+  # RCC_APBENR1.USART2EN (bit 17, RM0444 §5.4.14). NUCLEO-G0B1RE routes
+  # PA2/PA3 to the on-board ST-LINK virtual COM port (UM2324 §6.9).
+  clock:
+    reg: apbenr1
+    bit: 17
 - id: tim2
   type: timer
   base_address: 0x40000000

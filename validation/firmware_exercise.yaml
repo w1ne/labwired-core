@@ -555,7 +555,7 @@ chips:
 
   - id: stm32g0b1re
     arch: cortex-m0plus
-    headline: "No tier-1 target. This is the narrow IO-Link customer firmware descriptor: the PR-triggered iolinki-reference workflow builds pinned STM32G0B1RE/TIOL112 sources and requires g0_reference_firmware in both execution modes, asserting TIM2 at 1 MHz, the actual falling-edge WAKE ISR clearing FPR, and USART1 configured for COM2. GPIO mux/polarity/W1C and AF1 UART pad routing have separate regressions. This proves startup and interrupt prerequisites, not electrical C/Q, master exchange or physical hardware. No beyond-rubric functional device read or advanced peripheral is modeled by this slice; SYSCFG is the only declared non-rubric block and remains a stub."
+    headline: "No tier-1 target. The NUCLEO-G0B1RE smoke now runs the shared G0 UART/LED firmware against the STM32G0B1RE profile, asserting USART2 output through the ST-LINK VCP and at least eight LD4/PA5 edges; it exercises the board's real GPIO and UART paths. Separately, the PR-triggered iolinki-reference workflow builds pinned STM32G0B1RE/TIOL112 sources and requires g0_reference_firmware in both execution modes, asserting TIM2 at 1 MHz, the actual falling-edge WAKE ISR clearing FPR, and USART1 configured for COM2. GPIO mux/polarity/W1C and AF1 UART pad routing have separate regressions. All evidence is simulator-derived, not a silicon capture; the IO-Link test proves startup and interrupt prerequisites, not electrical C/Q or master exchange. No beyond-rubric functional device read or advanced peripheral is modeled by this slice; SYSCFG is the only declared non-rubric block and remains a stub."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
