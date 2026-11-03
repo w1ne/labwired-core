@@ -120,11 +120,11 @@ jobs:
             system: examples/arduino-uno-r4-minima/system.yaml
           - id: teensy-41
             target: thumbv7em-none-eabi
-            crate: firmware-imxrt1064-demo
+            crate: firmware-teensy41-smoke
             profile: release
             profile_dir: release
-            script: examples/teensy-41/uart-smoke.yaml
-            system: examples/teensy-41/system.yaml
+            script: examples/teensy-41/onboarding-smoke.yaml
+            system: configs/systems/teensy-41.yaml
           - id: stm32f7-discovery
             target: thumbv7em-none-eabi
             crate: firmware-stm32f746-demo

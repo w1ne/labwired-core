@@ -1,37 +1,46 @@
-# Teensy 4.1 (NXP i.MX RT106x) — UART/LED smoke
+# Teensy 4.1 (NXP MIMXRT1062) — D13 GPIO smoke
 
-A Cortex-M7 board on the i.MX RT1060 family. The chip yaml is the RT1064-class
-descriptor (MIMXRT1062 on the real Teensy 4.1 is the same RT1060 core with
-different flash); soft-float images linked in DTCM are what the engine runs.
+The focused board profile uses the exact MIMXRT1062 MCU identity and exposes
+only the CCM clock controller and GPIO2 path used by the onboard D13 LED. The
+smoke image runs from a small DTCM slice; it does not simulate external flash or
+XIP boot.
 
 ## Status at a glance
 
 | Aspect             | Status                                                              |
 |--------------------|---------------------------------------------------------------------|
-| Chip yaml          | [`configs/chips/imxrt1064.yaml`](../../configs/chips/imxrt1064.yaml) |
+| Chip yaml          | [`configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml`](../../configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml) |
 | System yaml        | [`configs/systems/teensy-41.yaml`](../../configs/systems/teensy-41.yaml) |
-| Committed ELF      | `tests/fixtures/imxrt1064-teensy41-smoke.elf`                        |
-| Validation         | `firmware_survival::test_imxrt1064_teensy41_smoke_survival`          |
-| Tier               | **smoke-manual** — boots firmware and prints, **no silicon diff**    |
+| Smoke crate        | `firmware-teensy41-smoke`                                            |
+| Evidence           | [`examples/teensy-41/evidence/`](../../examples/teensy-41/evidence/) |
+| Tier               | **smoke-manual** — GPIO behavior in the local model; no silicon diff |
 
-## What is proven
+## What the smoke exercises
 
-A bare-metal firmware un-gates the peripheral clocks in `CCM CCGR`, routes the
-LED pin through IOMUXC, writes `OK\n` on LPUART6, and toggles GPIO2_IO03
-(pin 13 / LED_BUILTIN) through the DR_TOGGLE register. CCM and IOMUXC are
-behavioural models, not stubs.
+Bare-metal firmware enables the GPIO2 clock in CCM, configures GPIO2_IO03 as an
+output, and repeatedly toggles the D13 LED through `DR_TOGGLE`. PJRC maps D13
+to GPIO_B0_03, and the MIMXRT1062 SVD states that its mux reset value is `0x5`
+(ALT5/GPIO2_IO03). IOMUXC is absent from this simulator profile, which maps
+D13 directly to GPIO2_IO03. The smoke validates the modeled GPIO output; it
+does not validate the silicon pad mux or its reset route.
 
-## What is not proven
+## Scope limits
 
-No silicon diff and no executing-fidelity differential; FlexSPI is a stub
-window and the XIP path is skipped (images run from DTCM). GPT/PIT/DMA and
-the USB blocks are unmodelled.
+The profile does not claim Serial1/LPUART6 pin routing, IOMUXC alternate
+functions, FlexSPI/XIP, USB, Ethernet, SD, optional PSRAM, GPT, PIT, or DMA.
+Those blocks are absent from this focused board descriptor. The older
+`imxrt1064` LPUART smoke remains only as an internal peripheral regression
+fixture; it is not evidence for the physical board's serial path. No physical
+board capture is claimed.
 
-## How to run
+## Vendor status
 
-```bash
-labwired test --system configs/systems/teensy-41.yaml \
-  --firmware tests/fixtures/imxrt1064-teensy41-smoke.elf
-```
+PJRC links Teensy 4.1 purchases through SparkFun, which listed the board in
+stock at $31.50 during the 2026-11-03 check. NXP lists the exact
+MIMXRT1062DVJ6B as Active. See the recorded live URLs and statuses in
+[`examples/teensy-41/evidence/vendor-status.md`](../../examples/teensy-41/evidence/vendor-status.md).
 
-The onboarding smoke lives in [`examples/teensy-41/`](../../examples/teensy-41/).
+## Reproduce
+
+See [`examples/teensy-41/VALIDATION.md`](../../examples/teensy-41/VALIDATION.md)
+for the smoke command and acceptance criteria.

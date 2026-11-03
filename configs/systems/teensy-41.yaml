@@ -4,11 +4,12 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Teensy 4.1 (MIMXRT1062 silicon; chip yaml is the RT1064-class cousin).
-# SIM-DERIVED — not silicon-verified. LED on GPIO2_IO03 (pin 13); Serial1 = LPUART6.
+# Focused Teensy 4.1 profile: onboard D13 LED through GPIO2_IO03.
+# This profile omits Serial1 because IOMUXC alternate-function routing is not
+# modeled; it also omits USB, Ethernet, SD, FlexSPI/XIP, and other peripherals.
 
 name: "teensy-41"
-chip: "../chips/imxrt1064.yaml"
+chip: "../chips/mimxrt1062-teensy41-gpio-smoke.yaml"
 external_devices: []
 board_io:
   - id: "led_d13"
@@ -17,7 +18,3 @@ board_io:
     pin: 3   # GPIO2_IO03 — PJRC Teensy 4.1 pin 13 / LED_BUILTIN
     signal: "output"
     active_high: true
-connectors:
-  - type: "uart"
-    peripheral: "lpuart6"
-    endpoint: "host_console"

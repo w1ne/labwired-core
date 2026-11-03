@@ -1256,18 +1256,18 @@
       "uart": {
         "state": "proven",
         "file": "crates/core/tests/firmware_survival.rs",
-        "test": "test_imxrt1064_teensy41_smoke_survival",
-        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on LPUART6 Serial1.",
+        "test": "test_imxrt1064_lpuart_regression_fixture_survival",
+        "signal": "internal imxrt1064 ELF fixture booted in-sim; direct LPUART6 capture matches 'OK' and does not prove a Teensy Serial1 pin route.",
         "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
       },
       "spi": {
         "state": "none",
-        "gap": "Teensy 4.1 twin models LPUART6 + GPIO2 only; LPSPI is not modelled.",
+        "gap": "The imxrt1064 peripheral fixture has no LPSPI model; the focused Teensy 4.1 board profile omits this block.",
         "lane": "none"
       },
       "i2c": {
         "state": "none",
-        "gap": "Teensy 4.1 twin models LPUART6 + GPIO2 only; LPI2C is not modelled.",
+        "gap": "The imxrt1064 peripheral fixture has no LPI2C model; the focused Teensy 4.1 board profile omits this block.",
         "lane": "none"
       }
     },

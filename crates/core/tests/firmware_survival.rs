@@ -1919,16 +1919,16 @@ DONE\r\n",
         expected_uart_output: b"OK",
     },
     SurvivalCase {
-        // Teensy 4.1 / i.MX RT106x (chip yaml imxrt1064, RT1064-class cousin of
-        // MIMXRT1062): CCM CCGR ungating, LPUART6 DATA "OK\n", GPIO2_IO03
-        // DR_TOGGLE. Soft-float image linked in DTCM (XIP skipped).
-        name: "imxrt1064_teensy41_smoke",
+        // Internal imxrt1064 LPUART/GPIO regression fixture, not a Teensy 4.1
+        // board smoke: the serial sink is direct and bypasses IOMUXC pin routing.
+        // Soft-float image is linked in DTCM (XIP skipped).
+        name: "imxrt1064_lpuart_regression_fixture",
         core: "cortex-m7",
         family: CpuFamily::CortexM,
         hal: Hal::Bare,
         chip: "imxrt1064",
-        system: "teensy-41",
-        fixture: "imxrt1064-teensy41-smoke.elf",
+        system: "imxrt1064-lpuart-fixture",
+        fixture: "imxrt1064-lpuart-regression.elf",
         valid_pc_ranges: &[(0x2000_0000, 0x2001_FFFF)],
         expected_uart_output: b"OK",
     },
@@ -3287,8 +3287,8 @@ survival_gate!(
 survival_gate!(test_ra4m1_uno_r4_smoke_survival, "ra4m1_uno_r4_smoke");
 
 survival_gate!(
-    test_imxrt1064_teensy41_smoke_survival,
-    "imxrt1064_teensy41_smoke"
+    test_imxrt1064_lpuart_regression_fixture_survival,
+    "imxrt1064_lpuart_regression_fixture"
 );
 
 survival_gate!(

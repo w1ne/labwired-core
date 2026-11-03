@@ -576,11 +576,18 @@ _L2 on the conformance board (silicon reset oracle, 243/243 registers — docs/c
 
 ### `imxrt1064`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed Teensy 4.1 smoke ELF, PR-gated as firmware_survival::test_imxrt1064_teensy41_smoke_survival (case firmware_survival.rs:1359-1372) and rebuilt by the nightly coverage-matrix cell examples/teensy-41/uart-smoke.yaml (core-coverage-matrix-smoke.yml:96-102); it un-gates CCM CCGR0/CCGR3, configures GPIO2_IO03 and prints OK over LPUART6 from a soft-float image linked in DTCM because FlexSPI/XIP is not modelled — the chip yaml deliberately claims neither 4 MiB SiP flash nor FlexSPI (configs/chips/imxrt1064.yaml:7-9). board_config_gates.rs builds the same descriptor. Beyond the rubric there are exactly two blocks, both below; the CCM is the clock class and is firmware-driven._
+_No tier-1 target. The committed ELF is an internal RT1064-class LPUART/GPIO peripheral regression fixture, not a Teensy 4.1 board smoke: `firmware_survival::test_imxrt1064_lpuart_regression_fixture_survival` captures LPUART6 directly, bypassing IOMUXC pad routing. The image runs from DTCM because FlexSPI/XIP is not modelled. The focused Teensy board smoke instead uses the exact MIMXRT1062 GPIO profile below. The older class descriptor retains two unused shims, listed here; the board profile omits them._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
 - `flexspi` (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.
+
+### `mimxrt1062-teensy41-gpio-smoke`
+
+_No tier-1 target. The focused Teensy 4.1 descriptor uses the exact MIMXRT1062 identity and only CCM/GPIO2. PJRC maps D13 to GPIO_B0_03, and the vendor SVD states the mux resets to ALT5/GPIO2_IO03; the simulator maps D13 directly to GPIO2_IO03 and does not validate IOMUXC or the silicon pad route. It makes no Serial1 claim. Image execution is linked into DTCM; external flash/XIP and unrelated peripherals are omitted._
+
+**Functional device/protocol reads**:
+- Teensy 4.1 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy41-smoke` · `examples/teensy-41/onboarding-smoke.yaml` + `examples/teensy-41/evidence/simulation-output/result.json` (nightly CI)
 
 ### `mkw41z4`
 

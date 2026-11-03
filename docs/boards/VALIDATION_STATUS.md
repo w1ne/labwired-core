@@ -46,7 +46,7 @@ The models column is a content digest over everything that board's `models` list
 | `nano-33-iot` | 🟡 smoke-manual | — | `34cd71641a215f8f` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `5f6cf7273ed8f7d4` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `4fcc55aad06ad323` | no silicon capture |
-| `teensy-41` | 🟡 smoke-manual | — | `a52ca3d6e2e9f454` | no silicon capture |
+| `teensy-41` | 🟡 smoke-manual | — | `39fecdba4ef47a78` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `ce18a3409645e33d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b03c28d7252087fd` | no silicon capture |
 | `nucleo-g0b1re` | 🟡 smoke-manual | — | `45fb205cb374b88f` | no silicon capture |
@@ -396,10 +396,10 @@ The models column is a content digest over everything that board's `models` list
 
 ## `teensy-41` — 🟡 smoke-manual
 
-- Doc: [`docs/boards/teensy-41.md`](teensy-41.md)  ·  Chip: `configs/chips/imxrt1064.yaml`
-- Note: Teensy 4.1 (MIMXRT1062 silicon; RT1064-class chip yaml). Bare-metal UART/LED smoke prints OK on LPUART6 after CCM CCGR ungating, toggles GPIO2_IO03; images run from DTCM (XIP skipped), FlexSPI is a stub. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Doc: [`docs/boards/teensy-41.md`](teensy-41.md)  ·  Chip: `configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml`
+- Note: Focused MIMXRT1062 profile exercises CCM clock ungating and GPIO2_IO03 toggles for the onboard D13 LED. UART/IOMUXC routing and FlexSPI/XIP are omitted. Local model smoke only; no physical-board capture.
 - Silicon: none — not validated against real hardware.
-  - offline (CI): firmware_survival::test_imxrt1064_teensy41_smoke_survival
+  - offline (CI): board_config_gates::teensy41_gpio_from_config_builds
 - Drift status: **no silicon capture**
 
 ## `stm32f7-discovery` — 🟡 smoke-manual

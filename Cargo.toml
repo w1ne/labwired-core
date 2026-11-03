@@ -22,6 +22,7 @@ members = [
     "crates/firmware-ra4m1-demo",
     "crates/firmware-uno-r4-wifi-smoke",
     "crates/firmware-imxrt1064-demo",
+    "crates/firmware-teensy41-smoke",
     "crates/firmware-itm-smoke",
     "crates/firmware-stm32f746-demo",
     "crates/firmware-ci-fixture",

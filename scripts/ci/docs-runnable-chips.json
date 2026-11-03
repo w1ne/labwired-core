@@ -415,9 +415,9 @@
     },
     "imxrt1064": {
       "how": "committed",
-      "firmware": "tests/fixtures/imxrt1064-teensy41-smoke.elf",
+      "firmware": "tests/fixtures/imxrt1064-lpuart-regression.elf",
       "expect": "OK",
-      "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
+      "note": "Internal i.MX RT1064-class peripheral regression image linked in DTCM. Direct LPUART6 capture is not Teensy 4.1 pin-routing evidence."
     },
     "stm32f746": {
       "how": "committed",

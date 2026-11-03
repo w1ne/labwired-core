@@ -1,0 +1,7 @@
+# Internal regression fixture for the RT1064-class LPUART model. This is not a
+# Teensy 4.1 board description: it captures the peripheral stream directly and
+# does not represent IOMUXC pin routing, FlexSPI/XIP, or physical board wiring.
+name: "imxrt1064-lpuart-fixture"
+chip: "../chips/imxrt1064.yaml"
+external_devices: []
+debug_uart: "lpuart6"

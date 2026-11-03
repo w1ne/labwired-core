@@ -1,0 +1,37 @@
+# Focused MIMXRT1062 profile for the Teensy 4.1 onboard D13 LED smoke.
+# The image runs from a small DTCM slice; FlexSPI/XIP is intentionally absent.
+# Only the modeled CCM and GPIO2 blocks are exposed. PJRC maps D13 to
+# GPIO_B0_03; NXP's MIMXRT1062 SVD states that its SW_MUX_CTL reset value is
+# 0x5 (ALT5/GPIO2_IO03). IOMUXC is omitted, so the simulator maps this GPIO
+# directly and does not validate the hardware pad mux or reset route.
+
+name: "mimxrt1062-teensy41-gpio-smoke"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 150
+cpu_hz: 600_000_000
+
+# Simulation image placement in DTCM, split for the Cortex-M runtime linker.
+# This does not model the board's external program flash or XIP boot path.
+flash:
+  base: 0x20000000
+  size: "64KB"
+ram:
+  base: 0x20010000
+  size: "64KB"
+
+pins:
+  D13: { gpio: "gpio2", bit: 3, functions: [{ type: gpio, peripheral: gpio2 }] }
+
+peripherals:
+  - id: "ccm"
+    type: "imx_ccm"
+    base_address: 0x400FC000
+    size: "4KB"
+
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x401BC000
+    size: "256B"
+    config:
+      profile: "imxrt"

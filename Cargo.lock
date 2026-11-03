@@ -2025,6 +2025,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-teensy41-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-uart-echo-fixture"
 version = "0.25.0"
 dependencies = [
