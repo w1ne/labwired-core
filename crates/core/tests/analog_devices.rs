@@ -2942,6 +2942,94 @@ mod analog {
         }
     }
 
+    /// Gate-drain overlap charge belongs to the intrinsic drain when model
+    /// card `RD` inserts a series resistance. Its transient must therefore
+    /// create the same internal-node trajectory as an explicit resistor, and
+    /// match the hand-derived RC companion equation for both polarities and
+    /// integration rules.
+    #[test]
+    fn mosfet_gate_drain_overlap_charge_flows_through_drain_resistance() {
+        let (resistance, capacitance, width, h, input) = (1e3, 1e-12, 100e-6, 1e-9, 1.0);
+        let ratio = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let model_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 M1 d g s b MMOD w={width}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CGDO=10n RD={resistance})\n"
+            );
+            let explicit_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 RDM d di {resistance}\nM1 di g s b MMOD w={width}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 CGDO=10n)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistance).expect("MOSFET RD overlap model parses"),
+                    integration,
+                )
+                .expect("MOSFET RD overlap solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistance)
+                        .expect("explicit MOSFET drain resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit MOSFET resistor solver builds");
+
+                let model_internal = model
+                    .circuit()
+                    .node("M1#drain")
+                    .expect("model-card RD creates the intrinsic drain");
+                let explicit_internal = explicit
+                    .circuit()
+                    .node("di")
+                    .expect("explicit resistor creates the intrinsic drain");
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+
+                model.set_voltage_source(model_gate, sign * input);
+                explicit.set_voltage_source(explicit_gate, sign * input);
+
+                let expected_first = sign * input * ratio / (1.0 + ratio);
+                let expected_second = match integration {
+                    Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
+                    Integration::Trapezoidal => {
+                        ratio * (3.0 * expected_first - sign * input) / (1.0 + 2.0 * ratio)
+                    }
+                };
+
+                for (step, expected) in [expected_first, expected_second].into_iter().enumerate() {
+                    model.advance(h).expect("model-card RD overlap step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor overlap step solves");
+
+                    let actual = model.node_voltage(model_internal);
+                    let reference = explicit.node_voltage(explicit_internal);
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} step {step}: CGDO should put the intrinsic drain at {expected} V, got {actual} V"
+                    );
+                    assert!(
+                        (actual - reference).abs() < 1e-10,
+                        "{kind} {integration:?} step {step}: model-card RD gives {actual} V, explicit drain resistance gives {reference} V"
+                    );
+                    if step == 0 {
+                        assert!(
+                            sign * actual > 0.1,
+                            "{kind} CGDO displacement current must create a measurable RD drop"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// The two intrinsic body junctions carry nonlinear depletion charge.
     /// Each is driven into the forward-bias continuation so CBD/CBS, PB, MJ
     /// and FC participate in the MNA transient for both device polarities and
