@@ -1153,6 +1153,111 @@ mod analog {
         }
     }
 
+    /// The transient stamp must use the same Early-effect and high-injection
+    /// base charge as the BJT transport model. Solve a driven base node with
+    /// both junction depletion charge, forward transit charge, and the two
+    /// recombination branches active; compare the MNA result with an
+    /// independent scalar charge-balance calculation for NPN and PNP.
+    #[test]
+    fn bjt_transit_charge_uses_early_and_high_injection_base_charge_in_transient() {
+        let (is, bf, br, vaf, var, ikf, ikr) = (1e-16, 80.0, 4.0, 35.0, 50.0, 0.2e-3, 0.5e-3);
+        let (ise, ne, isc, nc) = (1e-13, 1.5, 2e-13, 2.0);
+        let (tf, tr, cje, cjc) = (20e-9, 30e-9, 60e-12, 40e-12);
+        let (drive, resistance, collector, h) = (0.95, 1e3, 3.0, 1e-6);
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let netlist = format!(
+                    "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
+                     Vc c 0 dc {}\nVe e 0 dc 0\nQ1 c b e QMOD\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} ISE={ise} NE={ne} ISC={isc} NC={nc} TF={tf} TR={tr} CJE={cje} CJC={cjc} VJE=1 MJE=0 VJC=1 MJC=0)\n",
+                    sign * collector,
+                );
+                let circuit = parse_netlist(&netlist).expect("combined BJT model parses");
+                let mut solver =
+                    Solver::new(circuit, integration).expect("combined BJT solver builds");
+                let base = solver.circuit().node("b").expect("base node");
+                let drive_source = solver
+                    .voltage_source_index("Vdrive")
+                    .expect("base drive source");
+                let previous_v = sign * solver.node_voltage(base);
+                solver.set_voltage_source(drive_source, sign * drive);
+
+                let base_width_and_charge = |vbe: f64, vbc: f64| {
+                    let forward = (vbe / VT).exp();
+                    let reverse = (vbc / VT).exp();
+                    let cbe = is * (forward - 1.0);
+                    let cbc = is * (reverse - 1.0);
+                    let base_width = 1.0 - vbc / vaf - vbe / var;
+                    let q1 = 1.0 / base_width;
+                    let q2 = cbe / ikf + cbc / ikr;
+                    let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
+                    (qb, cbe, cbc, forward, reverse)
+                };
+                let base_current_and_charge = |vbe: f64, vbc: f64| {
+                    let (qb, cbe, cbc, forward, reverse) = base_width_and_charge(vbe, vbc);
+                    let ibe = (is / bf) * (forward - 1.0) + ise * ((vbe / (ne * VT)).exp() - 1.0);
+                    let ibc = (is / br) * (reverse - 1.0) + isc * ((vbc / (nc * VT)).exp() - 1.0);
+                    let qbe = if vbe > 0.0 { tf * cbe / qb } else { tf * cbe };
+                    let qbc = tr * cbc;
+                    let junction_charge = cje * vbe + cjc * vbc;
+                    (
+                        ibe + ibc,
+                        junction_charge + qbe + qbc,
+                        qb,
+                        qbe,
+                        junction_charge,
+                    )
+                };
+                let previous_vbc = previous_v - collector;
+                let (_, previous_charge, _, _, _) =
+                    base_current_and_charge(previous_v, previous_vbc);
+                let residual = |vbe: f64| {
+                    let vbc = vbe - collector;
+                    let (base_current, charge, _, _, _) = base_current_and_charge(vbe, vbc);
+                    (drive - vbe) / resistance
+                        - base_current
+                        - device::GMIN * (vbe + vbc)
+                        - (charge - previous_charge) / h
+                };
+                let mut lo = 0.0;
+                let mut hi = drive;
+                for _ in 0..100 {
+                    let mid = 0.5 * (lo + hi);
+                    if residual(mid) > 0.0 {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                let expected = 0.5 * (lo + hi);
+                let (_, _, qb, transit_charge, junction_charge) =
+                    base_current_and_charge(expected, expected - collector);
+                assert!(
+                    qb > 1.1,
+                    "{kind}: selected bias must activate high injection (qb={qb})"
+                );
+                assert!(
+                    transit_charge.abs() > 1e-13,
+                    "{kind}: transit charge must affect the solved base (QTF={transit_charge} C)"
+                );
+                assert!(
+                    (junction_charge - previous_charge).abs() > 1e-13,
+                    "{kind}: junction depletion charge must affect the transient"
+                );
+
+                solver
+                    .advance(h)
+                    .expect("combined BJT transient step solves");
+                let actual = sign * solver.node_voltage(base);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{kind} {integration:?}: Early/high-injection transit charge and junction charge predict {expected} V, got {actual} V"
+                );
+            }
+        }
+    }
+
     /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
     /// saturation current plus `GMIN*V` and has no stored charge.
     #[test]
