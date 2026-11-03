@@ -21,9 +21,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT" || exit 2
 
 TARGET=thumbv7m-none-eabi
-# The F103 I2C sensor labs shipped as playground demos. Add a lab here when it
+# The F103 I2C sensor labs shipped as playground demos, plus the ILI9488 SPI TFT
+# lab (18-bit COLMOD / rgb888). Add a lab here when it
 # gets an io-smoke.yaml and a demo release asset.
-DEFAULT_LABS="ads1115-adc-lab adxl345-sensor-lab bme280-weather-lab ds3231-rtc-lab ina219-power-lab mpu6050-sensor-lab vl53l1x-tof-lab"
+DEFAULT_LABS="ads1115-adc-lab adxl345-sensor-lab bme280-weather-lab ds3231-rtc-lab ina219-power-lab mpu6050-sensor-lab vl53l1x-tof-lab ili9488-tft-lab"
 LABS="${LAB_SMOKE_LABS:-$DEFAULT_LABS}"
 
 CLI="${1:-${LABWIRED_CLI:-}}"
