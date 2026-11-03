@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
   "system": "configs/systems/onboarding/stm32l552.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T05:50:18Z",
-  "finished_at_utc": "2026-11-03T05:50:19Z",
+  "started_at_utc": "2026-11-03T05:58:29Z",
+  "finished_at_utc": "2026-11-03T05:58:31Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1576,
+  "elapsed_ms": 1590,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.262,
-    "build_firmware": 0.14,
-    "run_smoke": 1.164
+    "build_cli": 0.279,
+    "build_firmware": 0.146,
+    "run_smoke": 1.154
   },
   "stages_ms": {
-    "build_cli": 262,
-    "build_firmware": 140,
-    "run_smoke": 1164
+    "build_cli": 279,
+    "build_firmware": 146,
+    "run_smoke": 1154
   }
 }

@@ -1,5 +1,5 @@
-2026-11-03T05:50:09.568797Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
-2026-11-03T05:50:09.573309Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-03T05:58:21.334086Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
+2026-11-03T05:58:21.338554Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · nucleo_f767zi-smoke · 800000 steps · 0.00s
