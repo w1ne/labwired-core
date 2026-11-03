@@ -3118,6 +3118,64 @@ mod analog {
         }
     }
 
+    /// Gate-bulk overlap charge must conserve terminal current: the charge
+    /// taken from the gate is returned through the bulk-side load. Checking
+    /// only the bulk-node voltage would miss a one-sided G-B charge stamp.
+    #[test]
+    fn mosfet_gate_bulk_overlap_conserves_terminal_charge() {
+        let (resistance, capacitance, h, input) = (1e3, 1e-12, 1e-9, 0.2);
+        let ratio = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let netlist = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nRbulk b 0 {resistance}\n\
+                 M1 d g s b MMOD w=100u l=100u\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 CGBO=10n)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut solver = Solver::new(
+                    parse_netlist(&netlist).expect("MOSFET CGBO model parses"),
+                    integration,
+                )
+                .expect("MOSFET CGBO solver builds");
+                let bulk = solver.circuit().node("b").expect("bulk load node");
+                let gate = solver.voltage_source_index("Vg").expect("gate source");
+
+                solver.advance(h).expect("initial operating point settles");
+                solver.set_voltage_source(gate, sign * input);
+                solver.advance(h).expect("CGBO transient step solves");
+
+                // The first step after the gate edge uses backward Euler for
+                // both integration rules. The overlap capacitance is
+                // CGBO·L = 10 nF/m · 100 µm = 1 pF.
+                // The two intrinsic bulk junctions each contribute their
+                // documented GMIN conductance to the grounded drain/source.
+                let expected_bulk =
+                    sign * input * ratio / (1.0 + ratio + 2.0 * device::GMIN * resistance);
+                let actual_bulk = solver.node_voltage(bulk);
+                assert!(
+                    (actual_bulk - expected_bulk).abs() < 1e-10,
+                    "{kind} {integration:?}: CGBO should move the bulk node to {expected_bulk} V, got {actual_bulk} V"
+                );
+
+                let gate_current = source_current(&solver, "Vg");
+                let bulk_return_current =
+                    actual_bulk / resistance + 2.0 * device::GMIN * actual_bulk;
+                let expected_charge_current = capacitance * (sign * input - actual_bulk) / h;
+                assert!(
+                    (gate_current - expected_charge_current).abs() < 1e-10,
+                    "{kind} {integration:?}: gate current {gate_current} A should match CGBO charge current {expected_charge_current} A"
+                );
+                assert!(
+                    (gate_current - bulk_return_current).abs() < 1e-10,
+                    "{kind} {integration:?}: gate charge current {gate_current} A should return through the bulk load at {bulk_return_current} A"
+                );
+            }
+        }
+    }
+
     /// The two intrinsic body junctions carry nonlinear depletion charge.
     /// Each is driven into the forward-bias continuation so CBD/CBS, PB, MJ
     /// and FC participate in the MNA transient for both device polarities and
