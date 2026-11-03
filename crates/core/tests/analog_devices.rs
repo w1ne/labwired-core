@@ -440,6 +440,89 @@ mod analog {
         }
     }
 
+    /// The diffusion charge must use the same high-injection-limited junction
+    /// current as the diode's conductive stamp. Exercise the interaction in a
+    /// solved transient circuit: an ideal `TT·I` charge would produce a
+    /// measurably different node voltage once the base current is well above
+    /// `IK`.
+    #[test]
+    fn diode_high_injection_scales_transit_charge_in_transient_steps() {
+        let (is, ik, tt, resistance, h) = (1e-14, 100e-6, 100e-9, 1e3, 1e-6);
+        let circuit = parse_netlist(&format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 IK={ik} TT={tt})\n"
+        ))
+        .expect("high-injection diode with transit charge parses");
+
+        // Independent forward-current transform from the SPICE IK equation.
+        // GMIN is outside the high-injection correction and carries no stored
+        // charge, so it is included in I(V) but excluded from Q(V).
+        let base_current = |voltage: f64| is * ((voltage / VT).exp() - 1.0);
+        let current = |voltage: f64| {
+            let base = base_current(voltage);
+            base / (1.0 + (base / ik).sqrt()) + device::GMIN * voltage
+        };
+        let charge = |voltage: f64| {
+            let base = base_current(voltage);
+            tt * base / (1.0 + (base / ik).sqrt())
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver =
+                Solver::new(circuit.clone(), integration).expect("transit solver builds");
+            let out = solver.circuit().node("out").expect("output node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, 2.0);
+
+            let mut previous_charge = charge(solver.node_voltage(out));
+            let mut previous_current = 0.0;
+            for step in 0..2 {
+                let rule = if step == 0 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let residual = |voltage: f64| {
+                    let next_charge = charge(voltage);
+                    let charge_current = match rule {
+                        Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (next_charge - previous_charge) / h - previous_current
+                        }
+                    };
+                    (2.0 - voltage) / resistance - current(voltage) - charge_current
+                };
+                let mut low = 0.0;
+                let mut high = 2.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected = 0.5 * (low + high);
+                solver
+                    .advance(h)
+                    .expect("high-injection transit-charge step solves");
+                let actual = solver.node_voltage(out);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{integration:?} step {step}: expected {expected} V, got {actual} V"
+                );
+
+                let next_charge = charge(actual);
+                previous_current = (next_charge - previous_charge) / h;
+                previous_charge = next_charge;
+                assert!(
+                    base_current(actual) / ik > 10.0,
+                    "the solved junction must be in high injection; V={actual} V"
+                );
+            }
+        }
+    }
+
     /// `VP` makes the transit charge a first-order state. This step-by-step
     /// scalar solve checks its implicit BE/trapezoidal equation through a
     /// forward-to-reverse transition, where the stored charge produces a
