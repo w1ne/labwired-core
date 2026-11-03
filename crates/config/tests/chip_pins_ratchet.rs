@@ -99,7 +99,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // this part specifically because it is the first nRF with FOUR ports: P3.04
     // resolves to gpio3 bit 4, and the chip declares gpio3.
     "nrf54lm20a",
-    "rp2040",
     "rp2350",
     "stm32f103",
     "stm32f401",

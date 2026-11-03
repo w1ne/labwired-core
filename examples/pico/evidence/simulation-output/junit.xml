@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.063413">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="04bf7a42b680108fd62245b62f8d8a5aa70bd9960ddb75e3cf694e860ef8f637"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.063413">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: RP2040_SMOKE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: sio:25 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,28 @@
+{
+  "target_id": "pico",
+  "status": "pass",
+  "crate": "firmware-rp2040-demo",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/pico/io-smoke.yaml",
+  "system": "configs/systems/rp2040-pico.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T10:59:51Z",
+  "finished_at_utc": "2026-11-03T10:59:52Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1231,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.267,
+    "build_firmware": 0.497,
+    "run_smoke": 0.458
+  },
+  "stages_ms": {
+    "build_cli": 267,
+    "build_firmware": 497,
+    "run_smoke": 458
+  }
+}

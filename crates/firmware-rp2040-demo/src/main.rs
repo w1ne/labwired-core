@@ -9,8 +9,13 @@ const UART0_BASE: u32 = 0x40034000;
 const RESETS_BASE: u32 = 0x4000C000;
 const CLOCKS_BASE: u32 = 0x40008000;
 const IO_BANK0_BASE: u32 = 0x40014000;
-// We'll use a mocked "LED" mapped to a scratch register or standard PIO base for demonstration
-const MOCK_LED_REG: *mut u32 = 0x50200000 as *mut u32;
+const SIO_BASE: u32 = 0xD0000000;
+const GPIO25_CTRL: *mut u32 = (IO_BANK0_BASE + 0x04 + 25 * 8) as *mut u32;
+const SIO_GPIO_OUT_SET: *mut u32 = (SIO_BASE + 0x14) as *mut u32;
+const SIO_GPIO_OUT_CLR: *mut u32 = (SIO_BASE + 0x18) as *mut u32;
+const SIO_GPIO_OE_SET: *mut u32 = (SIO_BASE + 0x24) as *mut u32;
+const LED_PIN: u32 = 25;
+const GPIO_FUNC_SIO: u32 = 5;
 
 // RESETS (RP2040 datasheet §2.14, pp.174-178): RESET @ 0x00, RESET_DONE @ 0x08.
 // Every peripheral comes out of power-on HELD IN RESET — RESET's reset value is
@@ -116,24 +121,31 @@ fn uart0_init() {
 
 #[entry]
 fn main() -> ! {
-    let mut led_state = 0u32;
-
     uart0_init();
 
+    // Raspberry Pi Pico's onboard LED is driven by GP25. Select SIO and enable
+    // the output, then use the real GPIO_OUT_SET / GPIO_OUT_CLR registers.
+    unsafe {
+        core::ptr::write_volatile(GPIO25_CTRL, GPIO_FUNC_SIO);
+        core::ptr::write_volatile(SIO_GPIO_OE_SET, 1 << LED_PIN);
+    }
+
     loop {
-        // "Blink" the mocked LED by toggling the register
-        led_state ^= 1;
-        unsafe {
-            core::ptr::write_volatile(MOCK_LED_REG, led_state);
-        }
+        unsafe { core::ptr::write_volatile(SIO_GPIO_OUT_SET, 1 << LED_PIN) };
+        delay(1000);
+        unsafe { core::ptr::write_volatile(SIO_GPIO_OUT_CLR, 1 << LED_PIN) };
 
         // Write a message to UART
         print_uart("RP2040_SMOKE_OK\n");
 
         // Small delay
-        for _ in 0..1000u32 {
-            cortex_m::asm::nop();
-        }
+        delay(1000);
+    }
+}
+
+fn delay(n: u32) {
+    for _ in 0..n {
+        cortex_m::asm::nop();
     }
 }
 

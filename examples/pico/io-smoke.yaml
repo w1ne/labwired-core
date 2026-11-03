@@ -1,0 +1,13 @@
+# Raspberry Pi Pico 1 smoke: UART0 PL011 output and the onboard GP25 LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-rp2040-demo"
+  system: "../../configs/systems/rp2040-pico.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "RP2040_SMOKE_OK"
+  - gpio_edges:
+      pin: "sio:25"
+      min_edges: 8
+  - expected_stop_reason: max_steps

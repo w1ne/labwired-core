@@ -24,7 +24,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52832` | ⚪ structural | — | `8f02168f89d0f96b` | no silicon capture |
 | `microbit-v1` | 🟡 smoke-manual | — | `f5bb1c2afed9e84d` | no silicon capture |
 | `microbit-v2` | 🟡 smoke-manual | — | `8bc28cfc874e5a00` | no silicon capture |
-| `rp2040` | ⚪ structural | — | `cec781250d27fde5` | no silicon capture |
+| `rp2040` | ⚪ structural | — | `9de1038f7c2f34b2` | no silicon capture |
 | `rp2350` | 🟡 smoke-manual | — | `7cd4d38073290737` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `8b2014cf9018180e` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `4f247c0016126d77` | no silicon capture |
@@ -40,7 +40,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f401cdu6` | 🔵 sim-validated (deep model, no HW diff) | — | `29c898432fe7c485` | no silicon capture |
 | `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `c30719289a38cd6f` | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `8e15ceb9199dcb95` | no silicon capture |
-| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `1c810ab44c930217` | no silicon capture |
+| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `52faec3134d0c988` | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `858f95ca97bceb0d` | no silicon capture |
 | `ci-fixture-riscv` | ⚪ structural | — | `1ec4215eeef625e4` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `34cd71641a215f8f` | no silicon capture |
@@ -197,7 +197,7 @@ The models column is a content digest over everything that board's `models` list
 ## `rp2040` — ⚪ structural
 
 - Doc: [`docs/boards/rp2040.md`](rp2040.md)  ·  Chip: `configs/chips/rp2040.yaml`
-- Note: Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip) + hardware spinlocks (SPINLOCK0..31 try-lock/release), PL022 SPI0 (loopback transfer), DW_apb_i2c I2C0 (no-slave address-NACK abort), the XIP_SSI flash controller (boot2 QSPI bring-up: SSI shift engine + W25Q-style RDSR/WREN/WRSR responder, so the stage-2 bootloader and pico-sdk flash_enable_xip_via_boot2 complete), a TBMAN storage stub (running_on_fpga probe), and the PL011 UART0 console. Each is exercised by the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) which reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 is declared but has no test coverage. No silicon bench.
+- Note: Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip) + hardware spinlocks (SPINLOCK0..31 try-lock/release), PL022 SPI0 (loopback transfer), DW_apb_i2c I2C0 (no-slave address-NACK abort), the XIP_SSI flash controller (boot2 QSPI bring-up: SSI shift engine + W25Q-style RDSR/WREN/WRSR responder, so the stage-2 bootloader and pico-sdk flash_enable_xip_via_boot2 complete), a TBMAN storage stub (running_on_fpga probe), and the PL011 UART0 console. The Pico 1 smoke builds firmware-rp2040-demo and asserts UART0 output plus at least eight GP25 SIO edges; the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) separately reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 has a separate onboarding gate. No silicon bench; the board smoke does not exercise TBMAN or USB CDC.
 - Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 
@@ -349,9 +349,10 @@ The models column is a content digest over everything that board's `models` list
 ## `stm32g474re` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/stm32g474re.md`](stm32g474re.md)  ·  Chip: `configs/chips/stm32g474re.yaml`
-- Note: STM32G474RE (Cortex-M4, RM0440). Boots UNMODIFIED upstream Zephyr hello_world (board nucleo_g474re), is covered by the tier-1 fast-boot fixture, and now has a NUCLEO-G474RE LPUART1 + PA5 LED onboarding smoke. No G474 silicon diff — no bench part.
+- Note: STM32G474RE (Cortex-M4, RM0440). Boots UNMODIFIED upstream Zephyr hello_world (board nucleo_g474re), is covered by the tier-1 fast-boot fixture, and has a NUCLEO-G474RE LPUART1 + PA5 LED onboarding smoke in examples/nucleo_g474re/uart-smoke.yaml. No G474 silicon diff — no bench part.
 - Silicon: none — not validated against real hardware.
-  - offline (CI): firmware_survival::stm32g474_zephyr; `examples/nucleo_g474re/uart-smoke.yaml`
+  - offline (CI): firmware_survival::stm32g474_zephyr
+  - offline (CI): examples/nucleo_g474re/uart-smoke.yaml
 - Drift status: **no silicon capture**
 
 ## `stm32wb55` — 🔵 sim-validated (deep model, no HW diff)

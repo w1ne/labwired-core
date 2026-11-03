@@ -17,6 +17,7 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
+      - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
@@ -84,6 +85,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/pico2/io-smoke.yaml
             system: configs/systems/pico2.yaml
+          - id: pico
+            crate: firmware-rp2040-demo
+            target: thumbv6m-none-eabi
+            script: examples/pico/io-smoke.yaml
+            system: configs/systems/rp2040-pico.yaml
 
     steps:
       - uses: actions/checkout@v4
