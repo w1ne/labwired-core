@@ -111,6 +111,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32f4_discovery-smoke.yaml
             system: configs/systems/onboarding/stm32f4_discovery.yaml
+          # Exercise the same bounded F4 smoke surface on the imported generic
+          # STM32F4 system, whose profile omits its untested peripherals.
+          - id: stm32f4
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f4-smoke.yaml
+            system: configs/systems/onboarding/stm32f4.yaml
           - id: stm32f746
             crate: firmware-stm32f746-demo
             target: thumbv7em-none-eabi
