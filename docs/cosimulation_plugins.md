@@ -402,13 +402,14 @@ and `in-`, and `RINCM`, a fixed resistance from each input to `V−`. `RIN=0` or
 `RINCM=0`, or omission, disables those paths. Both cards accept `CMRR` in dB.
 It converts common-mode input voltage relative to the supply midpoint into
 input-referred differential voltage by `10^(−CMRR/20)`; omission means ideal
-common-mode rejection. OPAMP cards also accept output rail drops and optional
-`IOLIM`; below the limit the output follows `ROUT`, and above it the symmetric
-output current is clamped to `±IOLIM`. COMP cards accept hysteresis and
-open-collector or push-pull outputs. These parameters have no temperature
-dependence. Slew-rate limiting beyond the modeled pole and signal- or
-load-dependent supply current are not modeled. The hand-calculated macro tests
-are in `crates/core/tests/analog_macros.rs`.
+common-mode rejection. OPAMP cards also accept output rail drops, optional
+`IOLIM`, and optional `SR` in volts per second. `SR` caps the gain-node
+capacitor current to `Cg·SR`, so large-signal ramps are slew limited while
+settled DC gain and smaller-signal finite-GBW response are preserved. COMP
+cards accept hysteresis and open-collector or push-pull outputs. These
+parameters have no temperature dependence. Signal- or load-dependent supply
+current is not modeled. The hand-calculated macro tests are in
+`crates/core/tests/analog_macros.rs`.
 
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are

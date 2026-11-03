@@ -185,6 +185,94 @@ mod analog {
     }
 
     #[test]
+    fn opamp_sr_limits_large_signal_slew_and_preserves_small_signal_gbw() {
+        let (aol, gbw, sr, h) = (1e5, 1e6, 1e6, 100e-9);
+        let rg = MACRO_GAIN_RESISTANCE;
+        let gm = aol / rg;
+        let cg = aol / (2.0 * core::f64::consts::PI * gbw * rg);
+        let current_limit = cg * sr;
+        let expected = |input: f64| {
+            let current = gm * input;
+            if current.abs() >= current_limit {
+                current.clamp(-current_limit, current_limit) / (cg / h)
+            } else {
+                current / (1.0 / rg + cg / h)
+            }
+        };
+        let netlist = format!(
+            "Vcc vcc 0 dc 1000\nVee vee 0 dc -1000\n\
+             Vinp inp 0 dc 0\nVinn inn 0 dc 0\n\
+             X1 inp inn vcc vee out AMP\n\
+             .model AMP OPAMP(AOL={aol} GBW={gbw} ROUT=1 SR={sr})\n"
+        );
+
+        for large_input in [-5.0, 5.0] {
+            let mut large = build(&netlist);
+            let input = large.voltage_source_index("Vinp").expect("input source");
+            let initial = v(&large, "out");
+            large.set_voltage_source(input, large_input);
+            large
+                .advance(h)
+                .expect("slew-limited large-signal step solves");
+            let actual = v(&large, "out") - initial;
+            assert!(
+                (actual - expected(large_input)).abs() < 1e-7,
+                "large input step {large_input} V: expected {} V, got {actual} V",
+                expected(large_input)
+            );
+            assert!(actual.abs() / h <= sr * (1.0 + 1e-6));
+        }
+
+        let mut small = build(&netlist);
+        let input = small.voltage_source_index("Vinp").expect("input source");
+        small.set_voltage_source(input, 1e-3);
+        small.advance(h).expect("small-signal step solves");
+        let actual = v(&small, "out");
+        let expected = gm * 1e-3 / (1.0 / rg + cg / h);
+        assert!(
+            (actual - expected).abs() < 1e-8,
+            "below SR, the one-pole response must remain linear: expected {expected} V, got {actual} V"
+        );
+    }
+
+    #[test]
+    fn opamp_sr_preserves_settled_open_loop_dc_gain() {
+        let (aol, gbw, sr, input, vos, cm_gain) = (1e5, 1e6, 1e6, 0.2, 100e-6, 1e-3);
+        let netlist = |slew| {
+            format!(
+                "Vcc vcc 0 dc 1meg\nVee vee 0 dc -1meg\n\
+                 Vinp inp 0 dc {input}\nVinn inn 0 dc 0\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW={gbw} ROUT=1 VOS={vos} CMRR=60{slew})\n"
+            )
+        };
+        let linear = build(&netlist(""));
+        let slew_limited = build(&netlist(&format!(" SR={sr}")));
+        let expected = aol * (input + vos + cm_gain * input / 2.0);
+
+        for (name, solver) in [("without SR", &linear), ("with SR", &slew_limited)] {
+            let actual = v(solver, "out");
+            assert!(
+                (actual - expected).abs() < 0.1,
+                "{name} settled output should retain AOL: expected {expected} V, got {actual} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_sr_must_be_finite_and_positive() {
+        for sr in ["0", "-1", "1e999"] {
+            let error = parse_netlist(&format!(
+                "Vcc vcc 0 dc 5\nX1 inp inn vcc 0 out AMP\n\
+                 .model AMP OPAMP(AOL=100 GBW=1meg ROUT=100 SR={sr})\n"
+            ))
+            .expect_err("SR must be a finite positive slew rate")
+            .to_string();
+            assert!(error.contains("SR must be finite and positive"), "{error}");
+        }
+    }
+
+    #[test]
     fn opamp_common_mode_rejection_uses_supply_midpoint_and_db_scale() {
         let (aol, rout, load, attenuation) = (100.0, 100.0, 10e3, 0.01);
         for common_mode in [-1.0, 0.0, 1.0] {

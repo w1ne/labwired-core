@@ -84,8 +84,9 @@
 //! differential voltage;
 //! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
 //! models differential capacitance between the inputs, `IQ` models a
-//! constant quiescent current from `V+` to `V−`, and OPAMP `IOLIM` clamps the
-//! output current symmetrically. BJT
+//! constant quiescent current from `V+` to `V−`, OPAMP `IOLIM` clamps the
+//! output current symmetrically, and OPAMP `SR` caps the gain-node capacitor
+//! current for large-signal slew. BJT
 //! high-injection rolloff from `IKF`/`IKR` with optional `NKF` (default
 //! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
@@ -633,6 +634,7 @@ pub enum ComparatorOutput {
 /// ```text
 ///   gain node p:  G  = AOL/Rg · (v(in+) − v(in−) + VOS)  into p
 ///                 Rg = 1 MΩ   and   Cg = AOL/(2π·GBW·Rg)   from p to ground
+///                 optional SR limits the Cg current to ±(Cg·SR)
 ///   clamps:       D  p → (v+ − DROP_HI)      D  (v− + DROP_LO) → p
 ///   output:       Thevenin v(p) behind ROUT, i.e.  G = 1/ROUT into out,
 ///                 R = ROUT from out to ground; optional IOLIM clamps the
@@ -666,13 +668,18 @@ pub enum ComparatorOutput {
 /// output follows the normal Thevenin source and `ROUT`; above it, the output
 /// current is held at `±IOLIM`. Omission leaves the output stage unlimited.
 ///
+/// `SR` (volts/second) optionally caps the gain-node capacitor current to
+/// `Cg · SR`, where `Cg = AOL/(2π·GBW·Rg)`. A large input step therefore
+/// cannot move the gain node faster than the selected slew rate. The limit
+/// acts on transient capacitor current only; it preserves settled DC gain.
+/// Omission preserves the linear one-pole response.
+///
 /// `CINCM` is the common-mode capacitance from each input to `v−`; `CIND` is
 /// the differential capacitance between the inputs. Both are fixed linear
 /// capacitances with no voltage or temperature dependence. `IQ` is a fixed
 /// quiescent current from `v+` to `v−`, independent of signal and output load.
 ///
-/// What it does not model: slew-rate limiting beyond what the pole gives and
-/// signal- or load-dependent supply current. The
+/// What it does not model: signal- or load-dependent supply current. The
 /// output stage's current returns through ground, not through the supply pins.
 /// Clamp current reaches `v+`/`v−`; input bias current reaches `v−`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -705,6 +712,9 @@ pub struct OpAmpModel {
     /// Symmetric output current limit, amps. `None` leaves the output stage
     /// unlimited, preserving the ordinary Thevenin `ROUT` behavior.
     pub ilim: Option<f64>,
+    /// Large-signal output slew rate `SR`, volts per second. `None` leaves the
+    /// gain-node capacitor current unlimited, preserving the one-pole response.
+    pub sr: Option<f64>,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -727,6 +737,7 @@ impl Default for OpAmpModel {
             iq: 0.0,
             cmrr: None,
             ilim: None,
+            sr: None,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -1457,6 +1468,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             iq: 0.0,
             cmrr: None,
             ilim: None,
+            sr: None,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -1673,6 +1685,39 @@ pub struct OutputCurrentLimit {
     /// Small-signal output resistance, ohms.
     pub rout: f64,
     /// Symmetric output-current limit, amps.
+    pub ilim: f64,
+}
+
+/// A slew-limited op-amp compensation-stage transconductance.
+///
+/// At an operating point it contributes the full `gm · error` current. During
+/// transient steps it compensates the gain-node `Rg` path and clamps only the
+/// capacitor current to `±ilim`, preserving settled gain while limiting
+/// `Cg · dV/dt`. `error` includes differential input, common-mode error
+/// relative to the supply midpoint, and input offset voltage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SlewLimitedVccs {
+    /// Element name (`<X name>#g`).
+    pub name: String,
+    /// Terminal the current leaves the circuit at.
+    pub p: NodeRef,
+    /// Terminal the current returns to the circuit at.
+    pub n: NodeRef,
+    /// Non-inverting input pin.
+    pub input_plus: NodeRef,
+    /// Inverting input pin.
+    pub input_minus: NodeRef,
+    /// Positive supply pin, used for the common-mode reference.
+    pub vcc: NodeRef,
+    /// Negative supply pin, used for the common-mode reference.
+    pub vee: NodeRef,
+    /// Transconductance, siemens.
+    pub gm: f64,
+    /// Common-mode error gain (linear, not dB).
+    pub cm_gain: f64,
+    /// Input offset voltage, volts.
+    pub vos: f64,
+    /// Symmetric gain-node capacitor current limit, amps.
     pub ilim: f64,
 }
 
@@ -1948,6 +1993,8 @@ pub struct Circuit {
     pub power_sinks: Vec<PowerSink>,
     /// Op-amp output stages with an explicit `IOLIM`.
     pub output_current_limits: Vec<OutputCurrentLimit>,
+    /// Op-amp compensation stages with an explicit `SR`.
+    pub slew_limited_vccs: Vec<SlewLimitedVccs>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
 }
@@ -2050,6 +2097,7 @@ impl Circuit {
             || self.ccvs.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
             || self.output_current_limits.iter().any(|e| matches(&e.name))
+            || self.slew_limited_vccs.iter().any(|e| matches(&e.name))
             || pending_mutuals.iter().any(|e| matches(&e.name))
     }
 
@@ -2066,6 +2114,7 @@ impl Circuit {
             || !self.jfets.is_empty()
             || !self.power_sinks.is_empty()
             || !self.output_current_limits.is_empty()
+            || !self.slew_limited_vccs.is_empty()
     }
 
     /// True when any independent source carries a transient function, so the
@@ -3592,6 +3641,7 @@ fn parse_model(
             (ModelCard::OpAmp(model), "IQ") => model.iq = value,
             (ModelCard::OpAmp(model), "CMRR") => model.cmrr = Some(value),
             (ModelCard::OpAmp(model), "IOLIM") => model.ilim = Some(value),
+            (ModelCard::OpAmp(model), "SR") => model.sr = Some(value),
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
@@ -3613,7 +3663,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, SR, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -4091,6 +4141,18 @@ fn lower_opamp(
     let rg = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rg;
     let cg = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rg);
+    let slew_current_limit = if let Some(sr) = model.sr {
+        if !sr.is_finite() || sr <= 0.0 {
+            return Err(ctx.parse_err("SR must be finite and positive"));
+        }
+        let ilim = cg * sr;
+        if !ilim.is_finite() || ilim <= 0.0 {
+            return Err(ctx.parse_err("SR and macro parameters produce an invalid slew current"));
+        }
+        Some(ilim)
+    } else {
+        None
+    };
 
     let mut lower = Lowering {
         circuit,
@@ -4103,20 +4165,37 @@ fn lower_opamp(
         lower.current("iq", vcc, vee, model.iq);
     }
     let p = lower.node("p");
-    // gm·(v(in+) − v(in−)) flows from ground through the source into p.
-    lower.vccs("g", None, p, inp, inn, gm);
-    if cm_gain > 0.0 {
-        // The input-referred error is the common-mode voltage relative to the
-        // midpoint of the supply rails, attenuated by 10^(−CMRR/20).
-        let gcm = 0.5 * gm * cm_gain;
-        lower.vccs("gcmp", None, p, inp, vee, gcm);
-        lower.vccs("gcmm", None, p, inn, vcc, gcm);
+    if let Some(ilim) = slew_current_limit {
+        let source = SlewLimitedVccs {
+            name: lower.name("g"),
+            p: None,
+            n: p,
+            input_plus: inp,
+            input_minus: inn,
+            vcc,
+            vee,
+            gm,
+            cm_gain,
+            vos: model.vos,
+            ilim,
+        };
+        lower.circuit.slew_limited_vccs.push(source);
+    } else {
+        // gm·(v(in+) − v(in−)) flows from ground through the source into p.
+        lower.vccs("g", None, p, inp, inn, gm);
+        if cm_gain > 0.0 {
+            // The input-referred error is the common-mode voltage relative to
+            // the midpoint of the supply rails, attenuated by 10^(−CMRR/20).
+            let gcm = 0.5 * gm * cm_gain;
+            lower.vccs("gcmp", None, p, inp, vee, gcm);
+            lower.vccs("gcmm", None, p, inn, vcc, gcm);
+        }
+        if model.vos != 0.0 {
+            lower.current("ios", None, p, gm * model.vos);
+        }
     }
     lower.resistor("rg", p, None, rg);
     lower.capacitor("cg", p, None, cg);
-    if model.vos != 0.0 {
-        lower.current("ios", None, p, gm * model.vos);
-    }
     if ibias_plus != 0.0 {
         lower.current("ibp", inp, vee, ibias_plus);
     }

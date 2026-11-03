@@ -56,7 +56,7 @@
 use super::device;
 use super::netlist::{
     AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
-    POWER_SINK_VMIN,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -345,6 +345,8 @@ pub struct Solver {
     sink_point: Vec<[f64; 3]>,
     /// Drive-to-output voltage for each op-amp output current limiter.
     output_limit_point: Vec<f64>,
+    /// Input-referred error for each slew-limited op-amp gain stage.
+    slew_limit_point: Vec<f64>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
@@ -359,6 +361,7 @@ pub struct Solver {
     saved_jfet_vds: Vec<f64>,
     saved_sink_point: Vec<[f64; 3]>,
     saved_output_limit_point: Vec<f64>,
+    saved_slew_limit_point: Vec<f64>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -432,6 +435,7 @@ impl Solver {
         let jfets = circuit.jfets.len();
         let sinks = circuit.power_sinks.len();
         let output_limits = circuit.output_current_limits.len();
+        let slew_limits = circuit.slew_limited_vccs.len();
 
         let mut solver = Self {
             circuit,
@@ -480,6 +484,7 @@ impl Solver {
             jfet_i: vec![[0.0; 2]; jfets],
             sink_point: vec![[0.0; 3]; sinks],
             output_limit_point: vec![0.0; output_limits],
+            slew_limit_point: vec![0.0; slew_limits],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
@@ -492,6 +497,7 @@ impl Solver {
             saved_jfet_vds: vec![0.0; jfets],
             saved_sink_point: vec![[0.0; 3]; sinks],
             saved_output_limit_point: vec![0.0; output_limits],
+            saved_slew_limit_point: vec![0.0; slew_limits],
             node_shunt: 0.0,
             limiter_clamped: false,
             nonlinear,
@@ -944,6 +950,8 @@ impl Solver {
         self.saved_sink_point.copy_from_slice(&self.sink_point);
         self.saved_output_limit_point
             .copy_from_slice(&self.output_limit_point);
+        self.saved_slew_limit_point
+            .copy_from_slice(&self.slew_limit_point);
     }
 
     fn restore_linearisation(&mut self) {
@@ -960,6 +968,8 @@ impl Solver {
         self.sink_point.copy_from_slice(&self.saved_sink_point);
         self.output_limit_point
             .copy_from_slice(&self.saved_output_limit_point);
+        self.slew_limit_point
+            .copy_from_slice(&self.saved_slew_limit_point);
     }
 
     /// One step of exactly `h`, no retry.
@@ -1931,6 +1941,17 @@ impl Solver {
             self.output_limit_point[index] =
                 node_diff(&self.solution[..self.nodes], limit.drive, limit.output);
         }
+        for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            let nodes = &self.solution[..self.nodes];
+            let common_mode = 0.5
+                * (node_diff(nodes, source.input_plus, None)
+                    + node_diff(nodes, source.input_minus, None)
+                    - node_diff(nodes, source.vcc, None)
+                    - node_diff(nodes, source.vee, None));
+            self.slew_limit_point[index] = node_diff(nodes, source.input_plus, source.input_minus)
+                + source.cm_gain * common_mode
+                + source.vos;
+        }
     }
 
     /// Stamp every nonlinear device's companion model at its current
@@ -2521,6 +2542,67 @@ impl Solver {
             };
             let control = [(-conductance, limit.drive, limit.output, delta)];
             stamp_linearised(matrix, rhs, dim, limit.output, -current, &control);
+        }
+
+        // A finite SR limits only the gain-node capacitor current. The Rg
+        // current is excluded so the settled open-loop gain remains AOL. The
+        // same input error carries offset and CMRR through the limiter.
+        for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            let error = self.slew_limit_point[index];
+            let nodes = &self.solution[..self.nodes];
+            let gain_voltage = node_diff(nodes, source.n, source.p);
+            let capacitor_current = source.gm * error - gain_voltage / MACRO_GAIN_RESISTANCE;
+            // Slew rate constrains dV/dt, not the operating point. At t=0 the
+            // capacitor is open, so preserve the unconstrained AOL equation.
+            let saturated =
+                !matches!(stamp, Stamp::OperatingPoint) && capacitor_current.abs() >= source.ilim;
+            let current = if matches!(stamp, Stamp::OperatingPoint) {
+                source.gm * error
+            } else {
+                gain_voltage / MACRO_GAIN_RESISTANCE
+                    + capacitor_current.clamp(-source.ilim, source.ilim)
+            };
+            let gm = if saturated { 0.0 } else { source.gm };
+            let cm_half = 0.5 * source.cm_gain;
+            let gain_node_slope = if saturated {
+                -1.0 / MACRO_GAIN_RESISTANCE
+            } else {
+                0.0
+            };
+            let control = [
+                (
+                    gm * (1.0 + cm_half),
+                    source.input_plus,
+                    None,
+                    node_diff(nodes, source.input_plus, None),
+                ),
+                (
+                    gm * (-1.0 + cm_half),
+                    source.input_minus,
+                    None,
+                    node_diff(nodes, source.input_minus, None),
+                ),
+                (
+                    -gm * cm_half,
+                    source.vcc,
+                    None,
+                    node_diff(nodes, source.vcc, None),
+                ),
+                (
+                    -gm * cm_half,
+                    source.vee,
+                    None,
+                    node_diff(nodes, source.vee, None),
+                ),
+                (
+                    gain_node_slope,
+                    source.p,
+                    source.n,
+                    node_diff(nodes, source.p, source.n),
+                ),
+            ];
+            stamp_linearised(matrix, rhs, dim, source.p, current, &control);
+            stamp_linearised(matrix, rhs, dim, source.n, -current, &negate(&control));
         }
     }
 }
