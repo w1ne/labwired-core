@@ -8,6 +8,7 @@ SCRIPT=""
 SYSTEM=""
 OUT_DIR=""
 FIRMWARE_BUILD_DIR=""
+FIRMWARE_BUILD_SCRIPT=""
 PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
 
@@ -41,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       FIRMWARE_BUILD_DIR="$2"
       shift 2
       ;;
+    --firmware-build-script)
+      FIRMWARE_BUILD_SCRIPT="$2"
+      shift 2
+      ;;
     --profile)
       PROFILE="$2"
       shift 2
@@ -56,12 +61,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for required in TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR; do
+for required in TARGET_ID SCRIPT SYSTEM OUT_DIR; do
   if [[ -z "${!required}" ]]; then
     echo "Missing required argument: ${required}" >&2
     exit 2
   fi
 done
+
+if [[ -z "${FIRMWARE_BUILD_SCRIPT}" ]]; then
+  for required in CRATE TARGET; do
+    if [[ -z "${!required}" ]]; then
+      echo "Missing required argument: ${required} (or pass --firmware-build-script)" >&2
+      exit 2
+    fi
+  done
+fi
 
 mkdir -p "${OUT_DIR}/logs"
 
@@ -183,6 +197,11 @@ mkdir -p "${run_smoke_output_dir}"
 # only appeared on main.
 
 run_firmware_build() {
+  if [[ -n "${FIRMWARE_BUILD_SCRIPT}" ]]; then
+    "${FIRMWARE_BUILD_SCRIPT}"
+    return
+  fi
+
   local args=(build -p "${CRATE}" --target "${TARGET}")
   if [[ "${PROFILE}" == "release" ]]; then
     args+=(--release)
@@ -218,7 +237,7 @@ if [[ "${status}" != "pass" ]]; then
   failure_hint="$(infer_failure_hint "${failure_stage}" "${first_error_signature}")"
 fi
 
-export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE
+export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE FIRMWARE_BUILD_SCRIPT
 export run_started_iso run_finished_iso elapsed_seconds elapsed_ms
 export status failure_stage first_error_signature threshold_met THRESHOLD_SECONDS
 export build_cli_ms build_firmware_ms run_smoke_ms
@@ -265,6 +284,8 @@ metrics = {
         "run_smoke": parse_int("run_smoke_ms"),
     },
 }
+if os.environ.get("FIRMWARE_BUILD_SCRIPT"):
+    metrics["firmware_build_script"] = os.environ["FIRMWARE_BUILD_SCRIPT"]
 
 summary_lines = [
     f"# Onboarding Smoke: {metrics['target_id']}",
