@@ -7,11 +7,11 @@
 name: sam4s_xplained
 arch: arm
 flash:
-  base: 134217728
-  size: 4194304B
+  base: 4194304
+  size: 1048576B
 ram:
   base: 536870912
-  size: 4194304B
+  size: 131072B
 peripherals:
 - id: LED
   type: led
@@ -55,10 +55,11 @@ peripherals:
   renode_type: sam4s_dacc
   bus: sysbus
   base_address: 1073987584
-- id: PMC_SR
-  type: pythonperipheral
+- id: pmc
+  type: sam4s_pmc
   bus: sysbus
-  base_address: 1074660456
+  base_address: 1074660352
+  size: 512
 - id: uart0
   type: sam_usart
   bus: sysbus

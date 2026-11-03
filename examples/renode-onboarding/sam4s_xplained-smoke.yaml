@@ -1,0 +1,17 @@
+# Cortex-M4 smoke against the imported SAM4S Xplained platform descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-smoke"
+  system: "../../configs/systems/onboarding/sam4s_xplained.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "SAM4S XPLAINED SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m4 uart=uart0"
+      - "led=on odsr=00000400"
+      - "led=off odsr=00000000"
+      - "btn=1"
+      - "hb=0 odsr=00000000 btn=1"
+      - "hb=1 odsr=00000000 btn=1"
+  - expected_stop_reason: max_steps

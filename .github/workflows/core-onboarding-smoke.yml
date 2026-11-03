@@ -93,6 +93,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nucleo_f767zi-smoke.yaml
             system: configs/systems/onboarding/nucleo_f767zi.yaml
+          - id: sam4s_xplained
+            crate: firmware-sam4s-xplained-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s_xplained-smoke.yaml
+            system: configs/systems/onboarding/sam4s_xplained.yaml
           # Imported RISC-V systems narrowed to modeled CPU, memory and
           # peripheral surfaces before these smokes run.
           - id: litex_vexriscv

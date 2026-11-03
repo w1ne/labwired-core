@@ -1,0 +1,433 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "SAM4S XPLAINED SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m4 uart=uart0",
+          "led=on odsr=00000400",
+          "led=off odsr=00000000",
+          "btn=1",
+          "hb=0 odsr=00000000 btn=1",
+          "hb=1 odsr=00000000 btn=1"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      67319,
+      24,
+      0,
+      6,
+      1074660884,
+      6,
+      32,
+      537001944,
+      429496730,
+      87,
+      537001956,
+      98,
+      0,
+      537001944,
+      4197997,
+      4199392
+    ],
+    "pc": 4199392,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "cdf197f45686724ced4c22553529553e7a9d1dff055dc093e36192bbe913a1b0",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml",
+    "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "LED",
+        "kind": "native",
+        "base": 10,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "Button",
+        "kind": "native",
+        "base": 5,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sram_bb",
+        "kind": "native",
+        "base": 570425344,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tc0_1_2",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tc3_4_5",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 1073889280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 1073971200,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dacc",
+        "kind": "native",
+        "base": 1073987584,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pmc",
+        "kind": "native",
+        "base": 1074660352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1074660864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1074661376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "eefc",
+        "kind": "native",
+        "base": 1074661888,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rstc",
+        "kind": "native",
+        "base": 1074664448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wdt",
+        "kind": "native",
+        "base": 1074664528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "peripheral_bb",
+        "kind": "native",
+        "base": 1107296256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "crc",
+        "kind": "native",
+        "base": 1074020352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioA",
+        "kind": "native",
+        "base": 1074662912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioB",
+        "kind": "native",
+        "base": 1074663424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioC",
+        "kind": "native",
+        "base": 1074663936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twi1",
+        "kind": "native",
+        "base": 1073856512,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twi0",
+        "kind": "native",
+        "base": 1073840128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SAM4S XPLAINED SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=cortex-m4 uart=uart0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=on odsr=00000400",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=off odsr=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "btn=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=0 odsr=00000000 btn=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=1 odsr=00000000 btn=1",
+        "cycle_lo": 600000,
+        "cycle": 610000,
+        "end_cycle": 610000
+      },
+      {
+        "text": "hb=2 odsr=00000000 btn=1",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "hb=3 odsr=00000000 btn=1",
+        "cycle_lo": 1800000,
+        "cycle": 1810000,
+        "end_cycle": 1810000
+      },
+      {
+        "text": "hb=4 odsr=00000000 btn=1",
+        "cycle_lo": 2400000,
+        "cycle": 2410000,
+        "end_cycle": 2410000
+      },
+      {
+        "text": "hb=5 odsr=00000000 btn=1",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "hb=6 odsr=00000000 btn=1",
+        "cycle_lo": 3600000,
+        "cycle": 3610000,
+        "end_cycle": 3610000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 5476,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 5476,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.52,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 28,
+    "main_stack_free_min_bytes": 131036,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131036,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 896,
+    "memory_writes": 52,
+    "peripheral_accesses": 568,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4199392,
+        "count": 5233,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 4199390,
+        "count": 5197,
+        "symbol": "firmware_sam4s_xplained_smoke::spin"
+      },
+      {
+        "pc": 4199388,
+        "count": 5195,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}
