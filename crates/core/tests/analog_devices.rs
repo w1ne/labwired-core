@@ -3287,6 +3287,123 @@ mod analog {
         }
     }
 
+    /// During a gate step, intrinsic channel charge draws displacement current
+    /// through the MOSFET's external drain/source terminals. The model-card
+    /// `RD`/`RS` implementation must behave like the same resistors placed
+    /// explicitly outside a resistance-free device, including both transient
+    /// companion rules and both channel polarities.
+    #[test]
+    fn mosfet_channel_charge_matches_explicit_terminal_resistors_during_transients() {
+        let (rd, rs) = (800.0, 500.0);
+        let width = 10e-6;
+        let length = 1e-6;
+        let h = 10e-12;
+
+        for (kind, sign, vd, vs, vb) in [
+            ("NMOS", 1.0, 2.5, 0.0, 0.0),
+            ("PMOS", -1.0, 0.0, -2.5, -2.5),
+        ] {
+            let model_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 M1 d g s b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 TOX=10n CHARGEMOD=WARD_DUTTON RD={rd} RS={rs})\n",
+                sign * 1.2,
+                sign
+            );
+            let explicit_resistances = format!(
+                "Vg g 0 dc {}\nVd d 0 dc {vd}\nVs s 0 dc {vs}\nVb b 0 dc {vb}\n\
+                 RDM d di {rd}\nRSM si s {rs}\n\
+                 M1 di g si b MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={} KP=20u LAMBDA=0.02 IS=1e-30 \
+                 TOX=10n CHARGEMOD=WARD_DUTTON)\n",
+                sign * 1.2,
+                sign
+            );
+            let no_channel_charge = model_resistances.replace("TOX=10n CHARGEMOD=WARD_DUTTON ", "");
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistances).expect("MOSFET terminal model parses"),
+                    integration,
+                )
+                .expect("MOSFET terminal solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistances).expect("explicit resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit resistor solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&no_channel_charge).expect("uncharged MOSFET model parses"),
+                    integration,
+                )
+                .expect("uncharged MOSFET solver builds");
+
+                let model_nodes = ["d", "s", "M1#drain", "M1#source"]
+                    .map(|name| model.circuit().node(name).expect("model node"));
+                let explicit_nodes = ["d", "s", "di", "si"]
+                    .map(|name| explicit.circuit().node(name).expect("explicit node"));
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (model_node, explicit_node) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(model_node) - explicit.node_voltage(explicit_node))
+                            .abs()
+                            < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                model.set_voltage_source(model_gate, sign * 3.0);
+                explicit.set_voltage_source(explicit_gate, sign * 3.0);
+                let uncharged_gate = uncharged
+                    .voltage_source_index("Vg")
+                    .expect("uncharged gate source");
+                uncharged.set_voltage_source(uncharged_gate, sign * 3.0);
+                for step in 0..3 {
+                    model.advance(h).expect("model channel-charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor channel-charge step solves");
+                    uncharged.advance(h).expect("uncharged MOSFET step solves");
+
+                    let mut charge_effect = 0.0_f64;
+                    for (label, model_node, explicit_node) in [
+                        ("external drain", model_nodes[0], explicit_nodes[0]),
+                        ("external source", model_nodes[1], explicit_nodes[1]),
+                        ("intrinsic drain", model_nodes[2], explicit_nodes[2]),
+                        ("intrinsic source", model_nodes[3], explicit_nodes[3]),
+                    ] {
+                        let actual = model.node_voltage(model_node);
+                        let expected = explicit.node_voltage(explicit_node);
+                        charge_effect =
+                            charge_effect.max((actual - uncharged.node_voltage(model_node)).abs());
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} step {step} {label}: model-card resistance gives {actual} V, explicit series resistor gives {expected} V"
+                        );
+                    }
+                    if step == 0 {
+                        assert!(
+                            charge_effect > 1e-7,
+                            "{kind} {integration:?}: the channel-charge step must measurably affect the terminal voltages, got a largest charged/uncharged difference of {charge_effect} V"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// The model's sheet resistance is multiplied by each instance's drain
     /// and source square counts, and those effective resistors participate in
     /// the solved channel path for both MOS polarities.
