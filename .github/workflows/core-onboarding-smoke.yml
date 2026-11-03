@@ -250,6 +250,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/sifive-fe310-smoke.yaml
             system: configs/systems/onboarding/sifive-fe310.yaml
+          # Mi-V profile follows Renode's CPU/memory map and keeps only the
+          # CoreUART path exercised by the smoke.
+          - id: miv_rv32
+            crate: firmware-miv-rv32-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv_rv32-smoke.yaml
+            system: configs/systems/onboarding/miv_rv32.yaml
 
     steps:
       - uses: actions/checkout@v4

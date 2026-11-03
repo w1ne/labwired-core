@@ -71,7 +71,10 @@ fn main() -> ! {
                 | (0b01 << 10),
         );
         let afrl = read_volatile(GPIOA_AFRL);
-        write_volatile(GPIOA_AFRL, (afrl & !((0xF << 8) | (0xF << 12))) | (4 << 8) | (4 << 12));
+        write_volatile(
+            GPIOA_AFRL,
+            (afrl & !((0xF << 8) | (0xF << 12))) | (4 << 8) | (4 << 12),
+        );
 
         // The fixture checks register behavior and UART capture, not baud timing.
         write_volatile(USART2_BRR, 0x45);
