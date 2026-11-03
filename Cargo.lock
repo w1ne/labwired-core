@@ -1786,6 +1786,10 @@ name = "firmware-nucleo-g431rb-smoke"
 version = "0.1.0"
 
 [[package]]
+name = "firmware-nucleo-g491re-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-nucleo-h503rb-smoke"
 version = "0.1.0"
 dependencies = [
