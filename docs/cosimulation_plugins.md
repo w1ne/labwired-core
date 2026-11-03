@@ -399,12 +399,12 @@ Both cards model finite gain and bandwidth, output resistance, offset voltage,
 constant input bias and offset currents, fixed input capacitances, fixed
 quiescent supply current, `RIN`, a fixed differential resistance between `in+`
 and `in-`, and `RINCM`, a fixed resistance from each input to `V−`. `RIN=0` or
-`RINCM=0`, or omission, disables those paths. OPAMP cards also accept output
-rail drops and `CMRR` in dB. CMRR converts common-mode input voltage relative to
-the supply midpoint into input-referred differential voltage by
-`10^(−CMRR/20)`; omission means ideal common-mode rejection. COMP cards accept
-hysteresis and open-collector or push-pull outputs. These parameters have no
-temperature dependence. Slew-rate
+`RINCM=0`, or omission, disables those paths. Both cards accept `CMRR` in dB.
+It converts common-mode input voltage relative to the supply midpoint into
+input-referred differential voltage by `10^(−CMRR/20)`; omission means ideal
+common-mode rejection. OPAMP cards also accept output rail drops. COMP cards
+accept hysteresis and open-collector or push-pull outputs. These parameters
+have no temperature dependence. Slew-rate
 limiting beyond the modeled pole, output current limiting, and signal- or
 load-dependent supply current are not modeled. The hand-calculated macro tests
 are in `crates/core/tests/analog_macros.rs`.
