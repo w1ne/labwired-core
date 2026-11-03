@@ -91,6 +91,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stm32f103-smoke.yaml
             system: configs/systems/onboarding/stm32f103.yaml
+          # The EFM32G210 import is narrowed to its Cortex-M3, memory, and
+          # model-backed USART0 path exercised by this firmware.
+          - id: efm32g210
+            crate: firmware-efm32g210-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g210-smoke.yaml
+            system: configs/systems/onboarding/efm32g210.yaml
           - id: stm32f4_discovery
             crate: firmware-f4-discovery-smoke
             target: thumbv7em-none-eabi

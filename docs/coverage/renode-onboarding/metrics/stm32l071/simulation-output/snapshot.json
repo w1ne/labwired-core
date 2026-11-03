@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c3b85eae22cb7e42e8c711f77633260b2b4b77a50c16f5557e7ead948b463fd2",
+  "firmware_hash": "4ffffc927d33689203c1c515381fe7fd6124b7fd268a4ab26a5d0f9f8112535a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32l071-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l071.yaml",

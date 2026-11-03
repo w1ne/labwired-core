@@ -15,6 +15,11 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "efm32g210": {
+        "crate": "firmware-efm32g210-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/efm32g210-smoke.yaml",
+    },
     "nrf52840": {
         "crate": "firmware-nrf52840-demo",
         "target": "thumbv7em-none-eabi",

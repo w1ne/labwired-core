@@ -83,6 +83,7 @@ members = [
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-sam-e70-xplained-smoke",
     "crates/firmware-sam-e70-renode-smoke",
+    "crates/firmware-efm32g210-smoke",
     "crates/firmware-cc2538dk-smoke",
     "crates/firmware-ek-ra6m5-smoke",
     "crates/firmware-ek-ra8m1-smoke",
