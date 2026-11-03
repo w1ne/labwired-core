@@ -1,0 +1,8 @@
+{
+  "tool": "labwired_verify",
+  "board": "nucleo-u5a5zj-q",
+  "status": "blocked_before_model_run",
+  "ok": false,
+  "reason": "The hosted Zephyr build stopped before compiling firmware: its Python is 3.11.2, while the installed Zephyr requires Python 3.12 or later.",
+  "interpretation": "This is not a model_verified result and does not contradict the separate local simulator smoke in simulation-output/result.json."
+}

@@ -1,0 +1,5 @@
+2026-11-03T22:56:47.994349Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/stm32u5a5zj.yaml
+2026-11-03T22:56:48.061709Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  5/5 checks · onboarding-smoke · 100000 steps · 0.03s
