@@ -1,0 +1,15 @@
+# NUCLEO-G431RB board-connected smoke profile (STM32G431RBT6, MB1367).
+# ST UM2505: LD2 is PA5; the default STLINK-V3E VCP route is LPUART1 PA2/PA3.
+# The descriptor intentionally exposes only this LED and serial path.
+
+name: "nucleo-g431rb"
+chip: "../chips/stm32g431rb-nucleo-smoke.yaml"
+debug_uart: "lpuart1"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

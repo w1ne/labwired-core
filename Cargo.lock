@@ -1716,6 +1716,10 @@ name = "firmware-nucleo-g431kb-smoke"
 version = "0.1.0"
 
 [[package]]
+name = "firmware-nucleo-g431rb-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-nucleo-wb55rg-demo"
 version = "0.1.0"
 dependencies = [

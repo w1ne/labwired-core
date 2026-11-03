@@ -82,6 +82,7 @@ members = [
     "crates/firmware-stm32g071b-disco-smoke",
     "crates/firmware-nucleo-g0b1re-smoke",
     "crates/firmware-nucleo-g431kb-smoke",
+    "crates/firmware-nucleo-g431rb-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
