@@ -4,8 +4,16 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Narrowed imported Renode profile for the LiteX PicoRV32 system. Renode's
+# litex_picorv32.repl uses RV32IMC and the LiteX UART/timer aliases. Ethernet,
+# SPI flash control, and other devices are outside this execution profile.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/litex_picorv32.repl
+# UART alias: https://github.com/renode/renode/blob/master/platforms/cpus/litex_common.repl
+
 name: litex_picorv32
-arch: arm
+arch: riscv
+core: "rv32imc"
+cpu_hz: 100_000_000
 flash:
   base: 536870912
   size: 33554432B
@@ -13,11 +21,15 @@ ram:
   base: 268435456
   size: 262144B
 peripherals:
+- id: uart
+  type: litex_uart
+  bus: sysbus
+  base_address: 3758102528
+  size: 2KB
+  irq: 3
 - id: timer0
   type: litex_timer
   bus: sysbus
   base_address: 3758104576
-- id: phy
-  type: ethernetphysicallayer
-  bus: eth
-  base_address: 0
+  size: 2KB
+  irq: 4

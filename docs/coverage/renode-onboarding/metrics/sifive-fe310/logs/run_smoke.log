@@ -1,4 +1,4 @@
-2026-11-03T05:16:42.986607Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
-2026-11-03T05:16:42.989621Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+2026-11-03T05:25:56.352194Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
+2026-11-03T05:25:56.355127Z  INFO labwired_loader: ELF Entry Point: 0x20000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · sifive-fe310-smoke · 100000 steps · 0.02s

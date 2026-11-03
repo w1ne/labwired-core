@@ -132,6 +132,11 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/litex_ibex-smoke.yaml
             system: configs/systems/onboarding/litex_ibex.yaml
+          - id: litex_picorv32
+            crate: firmware-litex-picorv32-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/litex_picorv32-smoke.yaml
+            system: configs/systems/onboarding/litex_picorv32.yaml
           - id: arty_litex_vexriscv
             crate: firmware-arty-litex-smoke
             target: riscv32im-unknown-none-elf

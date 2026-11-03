@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.098220">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="111b7dbc4830f6b062ba5e32fd44b998533b257917582396635ad54bc0c9d7b9"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.098220">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: LITEX PICORV32 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=rv32imc uart=litex&quot;, &quot;mul=00000143&quot;, &quot;timer=running&quot;, &quot;timer=zero&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
