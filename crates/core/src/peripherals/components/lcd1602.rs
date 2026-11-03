@@ -177,8 +177,10 @@ impl Lcd1602 {
         }
     }
 
-    /// The visible 2×16 panel as 32 characters: row 0 first, then row 1, with no
-    /// separator — callers slice `[..16]` and `[16..]`.
+    /// The visible 2×16 panel as 32 Unicode scalars: row 0 first, then row 1,
+    /// with no separator. Prefer `chars()` (or JS/TS `.slice` on BMP text) for
+    /// row splits — Rust byte ranges like `[..16]` can panic mid-glyph when `°`
+    /// is present.
     ///
     /// Printable ASCII (`0x20`…`0x7E`) passes through. HD44780 ROM code `0xDF`
     /// (A00 table degree glyph, what LiquidCrystal_I2C sketches write as
