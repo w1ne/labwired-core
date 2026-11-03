@@ -3847,6 +3847,32 @@
       "inputs": []
     },
     {
+      "device_type": "sound-sensor",
+      "label": "Sound Sensor",
+      "summary": "Analog microphone sound-level module (A0 on ADC).",
+      "detail": "Module-level model for common microphone + LM393 sound-sensor breakouts. Drive the `sound` channel from 0..100 % and A0 follows 0..3.3 V. This is an audio pulse/envelope source for threshold and clap-detection firmware, not a waveform-accurate acoustic or microphone model. D0 comparator output is not modelled.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "sound",
+          "label": "Sound level",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
       "device_type": "dc-motor",
       "label": "Brushed DC motor",
       "summary": "Configurable deterministic brushed DC motor plant",
