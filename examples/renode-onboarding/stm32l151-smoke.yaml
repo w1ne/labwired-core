@@ -1,0 +1,10 @@
+# Cortex-M3 USART smoke against the narrowed imported STM32L151 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke"
+  system: "../../configs/systems/onboarding/stm32l151.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "STM32L151 Cortex-M3 smoke"
+  - expected_stop_reason: max_steps
