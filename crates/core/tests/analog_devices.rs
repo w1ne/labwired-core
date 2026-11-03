@@ -1997,6 +1997,134 @@ mod analog {
         }
     }
 
+    /// The transient base current includes displacement current, but ngspice's
+    /// RBM/IRB law is controlled by the transistor's conduction base current.
+    /// Step a charged NPN and PNP through the MNA solver and check the external
+    /// base drop against that law at the solved intrinsic junction voltages.
+    #[test]
+    fn bjt_bias_dependent_base_resistance_uses_conduction_current_during_transients() {
+        let (rb, rbm, irb) = (50.0, 5.0, 100e-6);
+        let (h, drive_resistance) = (1e-6, 1e3);
+        let charge = "CJE=60p CJC=40p VJE=1 MJE=0 VJC=1 MJC=0 TF=20n TR=5n";
+        let expected_resistance = |base_current: f64| {
+            let x = (base_current / irb).max(1e-9);
+            let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
+            let tan_z = z.tan();
+            rbm + 3.0 * (rb - rbm) * (tan_z - z) / (z * tan_z * tan_z)
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign, collector_v, emitter_v) in
+                [("NPN", 1.0, 3.0, 0.0), ("PNP", -1.0, 0.0, 3.0)]
+            {
+                let initial_base = emitter_v + sign * 0.7;
+                let modelled = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {initial_base}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 VAF=0 VAR=0 \
+                     RB={rb} RBM={rbm} IRB={irb} {charge})\n"
+                );
+                let uncharged = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {initial_base}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 VAF=0 VAR=0 \
+                     RB={rb} RBM={rbm} IRB={irb})\n"
+                );
+                let mut model = Solver::new(
+                    parse_netlist(&modelled).expect("charged BJT model parses"),
+                    integration,
+                )
+                .expect("charged BJT solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&uncharged).expect("uncharged BJT model parses"),
+                    integration,
+                )
+                .expect("uncharged BJT solver builds");
+                let model_drive = model
+                    .voltage_source_index("Vdrive")
+                    .expect("model base-drive source");
+                let uncharged_drive = uncharged
+                    .voltage_source_index("Vdrive")
+                    .expect("uncharged base-drive source");
+                let external_base = model.circuit().node("b").expect("external base");
+                let internal_base = model.circuit().node("Q1#base").expect("intrinsic base");
+                let internal_collector = model.circuit().bjts[0].junction_c;
+                let internal_emitter = model.circuit().bjts[0].junction_e;
+                let uncharged_base = uncharged.circuit().node("b").expect("external base");
+
+                model.advance(h).expect("charged operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                let driven_base = emitter_v + sign * 0.701;
+                model.set_voltage_source(model_drive, driven_base);
+                uncharged.set_voltage_source(uncharged_drive, driven_base);
+                model.advance(h).expect("charged BJT transient solves");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged BJT transient solves");
+
+                let vbe = sign
+                    * (model.node_voltage(internal_base) - model.node_voltage(internal_emitter));
+                let vbc = sign
+                    * (model.node_voltage(internal_base) - model.node_voltage(internal_collector));
+                let model_card = model.circuit().bjts[0].model;
+                let op = device::bjt_op_with_nkf(
+                    vbe,
+                    vbc,
+                    model_card.is,
+                    model_card.bf,
+                    model_card.br,
+                    model_card.nf,
+                    model_card.nr,
+                    model_card.vaf,
+                    model_card.var,
+                    model_card.ikf,
+                    model_card.ikr,
+                    model_card.ise,
+                    model_card.ne,
+                    model_card.isc,
+                    model_card.nc,
+                    model_card.nkf,
+                );
+                let base_current = sign * source_current(&model, "Vdrive");
+                let base_drop =
+                    sign * (model.node_voltage(external_base) - model.node_voltage(internal_base));
+                let actual_resistance = base_drop / base_current;
+                let expected = expected_resistance(op.ib);
+                let total_current_resistance = expected_resistance(base_current);
+                let uncharged_voltage = uncharged.node_voltage(uncharged_base);
+                let charged_voltage = model.node_voltage(external_base);
+
+                assert!(
+                    op.ib > 0.0,
+                    "{kind} {integration:?}: expected forward conduction current, Vbe={vbe} V, Vbc={vbc} V, Ib={} A",
+                    op.ib
+                );
+                assert!(
+                    (base_current - op.ib).abs() > 1e-8,
+                    "{kind} {integration:?}: the transient must add measurable base displacement current, source={base_current} A, conduction={}",
+                    op.ib
+                );
+                assert!(
+                    relative(expected, total_current_resistance) > 1e-3,
+                    "{kind} {integration:?}: displacement current must select a distinct RBM/IRB resistance; conduction predicts {expected} Ω while total current predicts {total_current_resistance} Ω"
+                );
+                assert!(
+                    (charged_voltage - uncharged_voltage).abs() > 1e-7,
+                    "{kind} {integration:?}: stored charge must move the solved external base, charged={charged_voltage} V, uncharged={uncharged_voltage} V"
+                );
+                assert!(
+                    relative(actual_resistance, expected) < 1e-5,
+                    "{kind} {integration:?}: RBM/IRB should use conduction Ib={} A and give {expected} Ω, got {actual_resistance} Ω from total base current {base_current} A",
+                    op.ib
+                );
+            }
+        }
+    }
+
     /// Ngspice's RBM/IRB law makes the base spreading resistance fall from RB
     /// toward RBM as the solved base current rises. This drives both an NPN and
     /// PNP through that transition and checks the voltage drop/current ratio
