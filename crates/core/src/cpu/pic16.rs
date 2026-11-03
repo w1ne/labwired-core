@@ -222,6 +222,14 @@ pub const PIC16_CLASSIC_NO_USART_MAP: Pic16SfrMap = Pic16SfrMap {
     ..PIC16_CLASSIC_MAP
 };
 
+/// PIC16F84A: no peripheral interrupt registers and no asynchronous USART.
+/// File-register address 0x0C is general-purpose RAM on this part.
+pub const PIC16_CLASSIC_F84A_MAP: Pic16SfrMap = Pic16SfrMap {
+    pir: &[],
+    pie: &[],
+    ..PIC16_CLASSIC_NO_USART_MAP
+};
+
 /// The PIC16F182x/F193x enhanced mid-range layout (DS40001440E Table 3-8):
 /// ports at 0x00C, TRIS at 0x08C, LAT at 0x10C, PIR1-4 at 0x011, PIE1-4 at
 /// 0x091, TMR0 0x015, OPTION_REG 0x095, PCON 0x096, OSCSTAT 0x09A (HFIOFR, HFIOFL,
@@ -317,6 +325,18 @@ const fn dev_no_usart(
     }
 }
 
+const fn dev_f84a(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+) -> Pic16Device {
+    Pic16Device {
+        map: PIC16_CLASSIC_F84A_MAP,
+        ..dev(name, flash_words, port_masks, aliases)
+    }
+}
+
 /// A classic row whose part has its own registers at some of the bank-2/3
 /// SFR mirror addresses (see [`Pic16Device::own_sfrs`]).
 const fn dev_own(
@@ -375,13 +395,20 @@ const fn edev(
 /// SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F84A and friends), except PIC16F610/616/630/631/676/677/684/685/716/785,
-/// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; enhanced
+/// (PIC16F84A and friends), except PIC16F84A/610/616/630/631/676/677/684/685/716/785,
+/// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; PIC16F84A
+/// uses `PIC16_CLASSIC_F84A_MAP` because 0x0C is GPR and has no PIR/PIE registers; enhanced
 /// parts without an EUSART (PIC16F1503/1507/1613/1703/1707), parts with
 /// comparator SFRs at LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx,
 /// and for now the PIC16F157x (their headers match, but gputils 1.4.0 has no
 /// processor entry for them, so no lkr cross-check or SDCC firmware build).
 const PIC16_DEVICES: &[Pic16Device] = &[
+    dev_f84a(
+        "pic16f84a",
+        1024,
+        [0x1F, 0xFF, 0x00, 0x00, 0x00],
+        &[(0x08C, 0x0CF, 0x00C)],
+    ),
     dev_no_usart(
         "pic16f610",
         1024,
@@ -3588,6 +3615,43 @@ mod tests {
 
         cpu.write_data(0x70, 0x5A);
         assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-1 alias");
+    }
+
+    #[test]
+    fn pic16f84a_uses_exact_no_pir_no_usart_geometry() {
+        let device = pic16_device("pic16f84a").expect("F84A row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0x1F, 0xFF, 0x00, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+        assert!(device.map.pir.is_empty());
+        assert!(device.map.pie.is_empty());
+
+        let mut cpu = Pic16::for_chip_name("PIC16F84A");
+        assert_eq!(cpu.flash_words(), 1024);
+        for (address, value) in [
+            (0x0C, 0x5A),
+            (0x18, 0xA1),
+            (0x19, 0xA2),
+            (0x98, 0xA3),
+            (0x99, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+        assert_eq!(cpu.read_data(0x08C), 0x5A, "bank-1 GPR alias");
+
+        cpu.write_data(0x85, 0x00);
+        cpu.write_data(0x05, 0xFF);
+        assert_eq!(cpu.read_data(0x05), 0x1F, "PORTA RA0-RA4");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xFF, "PORTB");
+        cpu.write_data(0x07, 0xFF);
+        assert_eq!(cpu.read_data(0x07), 0x00, "unimplemented PORTC");
     }
 
     #[test]
