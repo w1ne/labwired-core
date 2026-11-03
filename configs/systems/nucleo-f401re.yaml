@@ -1,6 +1,6 @@
 # LabWired - NUCLEO-F401RE Demo System Configuration
 name: "nucleo-f401re"
-chip: "../chips/stm32f401.yaml"
+chip: "../chips/stm32f401re.yaml"
 external_devices: []
 board_io:
   - id: "led2_pa5"

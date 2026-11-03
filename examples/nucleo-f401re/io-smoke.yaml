@@ -1,10 +1,13 @@
-# LabWired - NUCLEO-F401RE IO/UART smoke test
+# NUCLEO-F401RE: USART2 output and repeated LD2 GPIOA5 transitions.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401-demo"
-  system: "./system.yaml"
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f401re-smoke"
+  system: "../../configs/systems/nucleo-f401re.yaml"
 limits:
-  max_steps: 64
+  max_steps: 10000
 assertions:
-  - uart_contains: "OK"
+  - uart_contains: "NUCLEO_F401RE_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
   - expected_stop_reason: max_steps

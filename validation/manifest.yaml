@@ -8498,12 +8498,13 @@ boards:
   - id: stm32f401
     doc: docs/boards/stm32f401.md
     chip: configs/chips/stm32f401.yaml
-    tier: smoke-manual
-    note: "UART2 'smoke pass' is a manual runbook (examples/nucleo-f401re/VALIDATION.md) + a CI build step — no automated UART assertion."
+    tier: sim-validated
+    note: "NUCLEO-F401RE uses the exact stm32f401re descriptor and has a CI onboarding smoke asserting USART2 output plus GPIOA5 edges. Simulator evidence only; no silicon capture. No explicit zero-answering stub windows are declared; omitted peripheral windows are unsupported."
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f401.yaml
+      - configs/chips/stm32f401re.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
       # board records no silicon capture, so there is no "silicon-verified"

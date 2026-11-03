@@ -23,3 +23,9 @@ name = "firmware-f401-hbridge"
 path = "src/hbridge.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-nucleo-f401re-smoke"
+path = "src/nucleo_f401re_smoke.rs"
+test = false
+bench = false

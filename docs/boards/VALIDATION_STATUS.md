@@ -19,7 +19,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `780a3148225acde1` | ⚠ drift acked 2026-11-02, expires 2026-12-02 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `9bf67e33982a546e` | ⚠ drift acked 2026-10-29, expires 2026-11-28 (re-capture pending) |
 | `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `d4c0fe8b1bc606db` | no silicon capture |
-| `stm32f401` | 🟡 smoke-manual | — | `00c7fff3901752d0` | no silicon capture |
+| `stm32f401` | 🔵 sim-validated (deep model, no HW diff) | — | `841cc08f7c709ee3` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `c86f46db9070b2cf` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `8f02168f89d0f96b` | no silicon capture |
 | `microbit-v1` | 🟡 smoke-manual | — | `f5bb1c2afed9e84d` | no silicon capture |
@@ -157,10 +157,10 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): session_builder_xtensa::esp32s3_fixture_prints_expected_uart_via_build_machine (same fixture via examples/esp32s3-zero/tier1-smoke.yaml)
 - Drift status: **no silicon capture**
 
-## `stm32f401` — 🟡 smoke-manual
+## `stm32f401` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/stm32f401.md`](stm32f401.md)  ·  Chip: `configs/chips/stm32f401.yaml`
-- Note: UART2 'smoke pass' is a manual runbook (examples/nucleo-f401re/VALIDATION.md) + a CI build step — no automated UART assertion.
+- Note: NUCLEO-F401RE uses the exact stm32f401re descriptor and has a CI onboarding smoke asserting USART2 output plus GPIOA5 edges. Simulator evidence only; no silicon capture. No explicit zero-answering stub windows are declared; omitted peripheral windows are unsupported.
 - Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 

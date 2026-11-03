@@ -17,6 +17,7 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
+      - "crates/firmware-f401-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
@@ -40,6 +41,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: nucleo-f401re
+            crate: firmware-f401-demo
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f401re/io-smoke.yaml
+            system: configs/systems/nucleo-f401re.yaml
           - id: nucleo-g474re
             crate: firmware-nucleo_g474re-demo
             firmware_build_dir: examples/nucleo_g474re/board_firmware
