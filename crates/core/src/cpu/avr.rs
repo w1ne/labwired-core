@@ -46,9 +46,9 @@ pub const SRAM_START: u16 = 0x0100;
 /// vector numbers are remapped on entry ([`mega2560_vector`]).
 ///
 /// The tinyAVR 0-series uses an AVRxt data map: the register file is separate,
-/// I/O occupies data addresses 0x0000..=0x0FFF, and ATtiny404 SRAM is at
-/// 0x3F00..=0x3FFF. Its common instruction execution is shared, but its
-/// peripherals and interrupt controller are not yet modelled.
+/// I/O occupies data addresses 0x0000..=0x0FFF, and SRAM begins at a device-
+/// specific address below 0x4000. Its common instruction execution is shared,
+/// but its peripherals and interrupt controller are not yet modelled.
 ///
 /// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
 /// 328P's; the registers are stored only), output-compare pads (PWM
@@ -60,18 +60,28 @@ pub enum AvrModel {
     Atmega328p,
     Atmega1281,
     Atmega2560,
+    Attiny402,
     Attiny404,
+    Attiny804,
+    Attiny1604,
 }
 
 impl AvrModel {
     /// The model a chip descriptor names. atmega1281 selects the 128 KB
     /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
-    /// 256 KB three-byte-PC mega core; attiny404 selects the AVRxt 0-series
-    /// data map. Other names default to the ATmega328P.
+    /// 256 KB three-byte-PC mega core; the listed tinyAVR 0-series parts
+    /// select the AVRxt data map and their exact flash/SRAM geometry. Other
+    /// names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
-        if n.contains("attiny404") || n.contains("attiny 404") {
+        if n.contains("attiny402") || n.contains("attiny 402") {
+            AvrModel::Attiny402
+        } else if n.contains("attiny404") || n.contains("attiny 404") {
             AvrModel::Attiny404
+        } else if n.contains("attiny804") || n.contains("attiny 804") {
+            AvrModel::Attiny804
+        } else if n.contains("attiny1604") || n.contains("attiny 1604") {
+            AvrModel::Attiny1604
         } else if n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
@@ -85,21 +95,28 @@ impl AvrModel {
             AvrModel::Atmega328p => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
-            AvrModel::Attiny404 => 4 * 1024,
+            AvrModel::Attiny402 | AvrModel::Attiny404 => 4 * 1024,
+            AvrModel::Attiny804 => 8 * 1024,
+            AvrModel::Attiny1604 => 16 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
         match self {
             AvrModel::Atmega328p => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
-            AvrModel::Attiny404 => 0x3F00,
+            AvrModel::Attiny402 | AvrModel::Attiny404 => 0x3F00,
+            AvrModel::Attiny804 => 0x3E00,
+            AvrModel::Attiny1604 => 0x3C00,
         }
     }
     pub fn ramend(self) -> u16 {
         match self {
             AvrModel::Atmega328p => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
-            AvrModel::Attiny404 => 0x3FFF,
+            AvrModel::Attiny402
+            | AvrModel::Attiny404
+            | AvrModel::Attiny804
+            | AvrModel::Attiny1604 => 0x3FFF,
         }
     }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
@@ -109,7 +126,10 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
-            AvrModel::Attiny404 => AVR_ADC_INPUT_BASE,
+            AvrModel::Attiny402
+            | AvrModel::Attiny404
+            | AvrModel::Attiny804
+            | AvrModel::Attiny1604 => AVR_ADC_INPUT_BASE,
         }
     }
     /// `true` when the PC is pushed as 3 bytes (flash above 128 KB).
@@ -125,7 +145,10 @@ impl AvrModel {
     /// addresses for IN/OUT, SBI/CBI and SBIS/SBIC.
     #[inline]
     pub fn uses_avrxt_data_map(self) -> bool {
-        self == AvrModel::Attiny404
+        matches!(
+            self,
+            AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny804 | AvrModel::Attiny1604
+        )
     }
 }
 
@@ -574,7 +597,10 @@ impl Avr {
         match self.model {
             AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
-            AvrModel::Attiny404 => false,
+            AvrModel::Attiny402
+            | AvrModel::Attiny404
+            | AvrModel::Attiny804
+            | AvrModel::Attiny1604 => false,
         }
     }
 
@@ -586,7 +612,10 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
-            AvrModel::Attiny404 => false,
+            AvrModel::Attiny402
+            | AvrModel::Attiny404
+            | AvrModel::Attiny804
+            | AvrModel::Attiny1604 => false,
         }
     }
 
@@ -1100,9 +1129,9 @@ impl Avr {
         }
     }
 
-    /// AVRxt data-space read for ATtiny404. The CPU register file is separate
-    /// from data memory; low addresses are I/O, SRAM starts at 0x3F00, and
-    /// Flash is visible to LD/ST at 0x8000.
+    /// AVRxt data-space read. The CPU register file is separate from data
+    /// memory; low addresses are I/O, SRAM starts at the selected device's
+    /// geometry, and flash is visible to LD/ST at 0x8000.
     fn avrxt_data_read(&self, addr: u16, bus: &dyn Bus) -> SimResult<u8> {
         match addr {
             0x0000..=0x0FFF => match addr {
@@ -1123,14 +1152,16 @@ impl Avr {
             a if (self.sram_start..=self.ramend).contains(&a) => {
                 Ok(self.sram[(a - self.sram_start) as usize])
             }
-            0x8000..=0x8FFF => Ok(self.flash[usize::from(addr - 0x8000)]),
+            a if a >= 0x8000 && usize::from(a - 0x8000) < self.flash.len() => {
+                Ok(self.flash[usize::from(a - 0x8000)])
+            }
             _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
         }
     }
 
-    /// AVRxt data-space write for ATtiny404. I/O writes are retained locally
-    /// and mirrored to an explicitly mapped peripheral window; SRAM writes
-    /// update both the CPU's backing store and the system bus.
+    /// AVRxt data-space write. I/O writes are retained locally and mirrored to
+    /// an explicitly mapped peripheral window; SRAM writes update both the
+    /// CPU's backing store and the system bus.
     fn avrxt_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         match addr {
             0x003D => {
@@ -3202,6 +3233,45 @@ mod tests {
         assert_eq!(cpu.sp, 0x3FFF, "RET restores the AVRxt stack pointer");
         assert_eq!(cpu.sram[0xFF], 0, "return PC high byte was pushed");
         assert_eq!(cpu.sram[0xFE], 9, "return PC low byte was pushed");
+    }
+
+    #[test]
+    fn tinyavr_0_series_selects_exact_avrxt_flash_and_sram_geometry() {
+        for (name, model, flash_size, sram_start, sram_len) in [
+            ("attiny402", AvrModel::Attiny402, 4 * 1024, 0x3F00, 256),
+            ("attiny404", AvrModel::Attiny404, 4 * 1024, 0x3F00, 256),
+            ("attiny804", AvrModel::Attiny804, 8 * 1024, 0x3E00, 512),
+            ("attiny1604", AvrModel::Attiny1604, 16 * 1024, 0x3C00, 1024),
+        ] {
+            let mut cpu = Avr::for_chip_name(name);
+            assert_eq!(cpu.model, model, "{name} selects its exact model");
+            assert_eq!(cpu.flash.len(), flash_size, "{name} flash size");
+            assert_eq!(cpu.sram_start, sram_start, "{name} SRAM start");
+            assert_eq!(cpu.sram.len(), sram_len, "{name} SRAM size");
+            assert_eq!(cpu.ramend, 0x3FFF, "{name} RAMEND");
+            assert!(cpu.model.uses_avrxt_data_map(), "{name} uses AVRxt");
+            cpu.flash[flash_size - 1] = 0xA5;
+            let mut bus = MockBus::new();
+            let last_flash_byte = 0x8000 + (flash_size - 1) as u16;
+            assert_eq!(
+                cpu.avrxt_data_read(last_flash_byte, &bus).unwrap(),
+                0xA5,
+                "{name} final flash byte is mapped"
+            );
+            assert!(
+                matches!(
+                    cpu.avrxt_data_read(last_flash_byte + 1, &bus),
+                    Err(SimulationError::MemoryViolation(_))
+                ),
+                "{name} address after flash is outside the mapped window"
+            );
+
+            // LDI r16,0x5A; STS first SRAM byte,r16; STS last SRAM byte,r16.
+            cpu.load_words(0, &[0xE50A, 0x9300, sram_start, 0x9300, 0x3FFF]);
+            step_n(&mut cpu, &mut bus, 3);
+            assert_eq!(cpu.sram[0], 0x5A, "{name} first SRAM byte");
+            assert_eq!(cpu.sram[sram_len - 1], 0x5A, "{name} last SRAM byte");
+        }
     }
 
     #[test]
