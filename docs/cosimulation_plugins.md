@@ -357,7 +357,7 @@ cosim_models:
       vdd: 3.3                 # volts a boolean input maps to (default 3.3)
       substeps: 10             # internal solver steps per co-sim step
       integration: be          # be (default) | trap
-      probes:  { v_out: "v(out)" }   # output name <- node / branch current
+      probes:  { v_out: "v(out)" }   # output name <- voltage / element current
       sources: { gpio: Vgpio }       # input name  -> V, I or S element
       trace: ["v(in)", "i(Vgpio)"]   # extra oscilloscope channels
       trace_samples: 20000           # ring depth (default 20000)
@@ -365,6 +365,15 @@ cosim_models:
 
 Worked example: [`examples/cosim-spice-rc/system-analog.yaml`](../examples/cosim-spice-rc/system-analog.yaml),
 the same circuit and the same routing as `system.yaml`.
+
+Probes accept a node name, `v(node)`, or `i(element)`, with case-insensitive
+names. Current probes support voltage sources, inductors, `E`/`H` sources,
+and diodes, including the `i(D...)` emitted for an analog LED. A diode probe
+reports amperes flowing from anode to cathode, evaluated at the solved
+internal junction voltage with the same device law as the solver. It includes
+`RS`, configured reverse breakdown, and `GMIN`; reverse current is negative.
+Diode observations add no MNA branch unknown and do not make a diode a valid
+`F`/`H` control branch. Unknown or unsupported probes fail at construction.
 
 ### Netlist subset
 
@@ -419,7 +428,7 @@ input at a different element.
 ### Semiconductor models
 
 ```text
-.model <name> D    (IS=<a> N=<n> RS=<ohms>)
+.model <name> D    (IS=<a> N=<n> RS=<ohms> BV=<v> IBV=<a> NBV=<n>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> W=<m> L=<m>)
@@ -433,7 +442,7 @@ same thing to both engines.
 
 Parameters this engine has no term for — every capacitance (`CJO`, `CJE`,
 `CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, `GAMMA`,
-`PHI`, `BV` — are **accepted and ignored**, so a vendor card pasted off a
+`PHI` — are **accepted and ignored**, so a vendor card pasted off a
 datasheet runs with the large-signal DC behaviour it describes. A MOSFET
 `LEVEL` other than 1 is the one exception and is refused by name: solving a
 BSIM card with Shichman–Hodges would be wrong by orders of magnitude rather
@@ -444,7 +453,8 @@ emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
 `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`). Those are this engine's
 convenience values, not ngspice's parameter defaults.
 
-**What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`;
+**What is modelled:** Shockley diode with `RS`, reverse breakdown (`BV`,
+`IBV`, `NBV`), and SPICE's `GMIN`;
 Ebers–Moll (transport-form Gummel–Poon with `VAF`/`VAR`/`IKF`/`IKR` infinite
 and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1 with channel
 -length modulation, both channel polarities and reverse mode. Every parameter is

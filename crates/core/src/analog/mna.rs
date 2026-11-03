@@ -52,7 +52,7 @@
 //! same input sequence produce bit-identical voltages on every host.
 
 use super::device;
-use super::netlist::{AnalogError, Circuit, NodeRef, POWER_SINK_VMIN};
+use super::netlist::{AnalogError, Circuit, Diode, NodeRef, POWER_SINK_VMIN};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
 /// currents. Dense LU is `O(n³)`; at 64 unknowns one step is a few microseconds
@@ -393,6 +393,18 @@ impl Solver {
     /// flowing from the element's first terminal to its second.
     pub fn branch_current(&self, index: usize) -> f64 {
         self.branch_i[index]
+    }
+
+    /// Current through diode `index`, flowing from anode to cathode, in amps.
+    ///
+    /// Evaluate the stamped device law at the accepted solution, using the
+    /// internal junction behind `RS`, not the external anode or Newton's
+    /// voltage-limited linearisation state. This includes reverse breakdown
+    /// when configured and the same `GMIN` current used in the solve.
+    pub fn diode_current(&self, index: usize) -> f64 {
+        let diode = &self.circuit.diodes[index];
+        let vj = self.node_voltage(diode.junction_anode) - self.node_voltage(diode.cathode);
+        diode_operating_point(diode, vj).id
     }
 
     /// Voltage across capacitor `index`, as carried into the next step.
@@ -968,6 +980,20 @@ pub const NEWTON_VNTOL: f64 = 1e-12;
 /// Absolute floor for a branch current, amps. SPICE's `ABSTOL` is 1e-12.
 pub const NEWTON_ABSTOL: f64 = 1e-15;
 
+/// Share the exact device law between Newton stamping and current observation.
+fn diode_operating_point(diode: &Diode, vj: f64) -> device::DiodeOp {
+    match diode.breakdown {
+        None => device::diode_op(vj, diode.model.is, diode.model.n),
+        Some(xbv) => device::diode_op_breakdown(
+            vj,
+            diode.model.is,
+            diode.model.n,
+            xbv,
+            diode.model.nbv.unwrap_or(diode.model.n),
+        ),
+    }
+}
+
 impl Solver {
     /// Iterate the device stamps until the solution stops moving.
     ///
@@ -1192,16 +1218,7 @@ impl Solver {
                 );
             }
             let vj = self.diode_vj[index];
-            let op = match diode.breakdown {
-                None => device::diode_op(vj, diode.model.is, diode.model.n),
-                Some(xbv) => device::diode_op_breakdown(
-                    vj,
-                    diode.model.is,
-                    diode.model.n,
-                    xbv,
-                    diode.model.nbv.unwrap_or(diode.model.n),
-                ),
-            };
+            let op = diode_operating_point(diode, vj);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
