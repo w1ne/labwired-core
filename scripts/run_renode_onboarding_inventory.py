@@ -65,6 +65,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
     },
+    "arty_litex_vexriscv": {
+        "crate": "firmware-arty-litex-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/arty_litex_vexriscv-smoke.yaml",
+    },
     "vegaboard_ri5cy": {
         "crate": "firmware-vegaboard-ri5cy-smoke",
         "target": "riscv32imc-unknown-none-elf",

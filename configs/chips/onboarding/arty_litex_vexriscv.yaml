@@ -1,71 +1,31 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Narrowed imported Renode profile for the Arty A7 LiteX VexRiscv system.
+# The generated descriptor called this ARM and listed MMCM/Ethernet windows
+# that this engine does not model. Keep only the RV32IM, memory, UART, timer,
+# and Control-and-Status surfaces covered by the exact-import smoke.
+name: "arty_litex_vexriscv"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 100_000_000
 
-name: arty_litex_vexriscv
-arch: arm
-flash:
-  base: 536870912
-  size: 33554432B
-ram:
-  base: 268435456
-  size: 262144B
+flash: { base: 0x20000000, size: "32MiB" }
+ram: { base: 0x10000000, size: "256KB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x0, size: "256KB" }
 peripherals:
-- id: led0
-  type: led
-  bus: cas
-  base_address: 0
-- id: led1
-  type: led
-  bus: cas
-  base_address: 1
-- id: led2
-  type: led
-  bus: cas
-  base_address: 2
-- id: led3
-  type: led
-  bus: cas
-  base_address: 3
-- id: switch0
-  type: button
-  bus: cas
-  base_address: 32
-- id: switch1
-  type: button
-  bus: cas
-  base_address: 33
-- id: switch2
-  type: button
-  bus: cas
-  base_address: 34
-- id: switch3
-  type: button
-  bus: cas
-  base_address: 35
-- id: button0
-  type: button
-  bus: cas
-  base_address: 64
-- id: button1
-  type: button
-  bus: cas
-  base_address: 65
-- id: button2
-  type: button
-  bus: cas
-  base_address: 66
-- id: button3
-  type: button
-  bus: cas
-  base_address: 67
-- id: clock0
-  type: litex_mmcm_csr32
-  bus: sysbus
-  base_address: 3758114816
-- id: phy
-  type: ethernetphysicallayer
-  bus: eth
-  base_address: 0
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x60001800
+    size: "2KB"
+    irq: 2
+  - id: "timer"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    irq: 1
+  - id: "cas"
+    type: "litex_controlandstatus"
+    base_address: 0x60006800
+    size: "2KB"
+    config:
+      buttons_active_low: true

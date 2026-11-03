@@ -127,6 +127,11 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv.yaml
+          - id: arty_litex_vexriscv
+            crate: firmware-arty-litex-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/arty_litex_vexriscv-smoke.yaml
+            system: configs/systems/onboarding/arty_litex_vexriscv.yaml
           - id: vegaboard_ri5cy
             crate: firmware-vegaboard-ri5cy-smoke
             target: riscv32imc-unknown-none-elf
