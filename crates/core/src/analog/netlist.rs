@@ -76,9 +76,10 @@
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
 //! resistances, …) are **accepted
-//! and ignored rather than rejected**. OPAMP `IBIAS` models equal signed DC
-//! currents at both input pins. BJT `IKF`/`IKR` high-injection rolloff and
-//! `ISE`/`NE`/`ISC`/`NC` base recombination and `TF`/`TR` transit-time charge,
+//! and ignored rather than rejected**. OPAMP and COMP `IBIAS` model equal
+//! signed DC currents at both input pins. BJT high-injection rolloff from
+//! `IKF`/`IKR`, base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
+//! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
 //! terminal resistances `RD`/`RS` create series resistors to its intrinsic
@@ -696,6 +697,10 @@ impl Default for OpAmpModel {
 /// `−VOS ± VHYS/2`, a window `VHYS` volts wide, independent of the supply.
 /// `GBW` here sets the response time: the decision node slews at
 /// `2π·GBW·overdrive` volts per second across its 1 V span.
+///
+/// `IBIAS` draws the same signed DC current from each input into `v−`; a
+/// negative value sources current from `v−` into both inputs. This constant
+/// current approximation has no temperature dependence.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ComparatorModel {
     /// DC gain `AOL`, V/V.
@@ -707,6 +712,9 @@ pub struct ComparatorModel {
     pub rout: f64,
     /// Input offset voltage `VOS`, volts.
     pub vos: f64,
+    /// Signed DC bias current at each input, amps; positive current flows
+    /// from the input pin into `v−`.
+    pub ibias: f64,
     /// Hysteresis window `VHYS`, volts. Zero is none.
     pub vhys: f64,
     /// `OUTPUT=OC` (default) or `OUTPUT=PP`.
@@ -720,6 +728,7 @@ impl Default for ComparatorModel {
             gbw: 10e6,
             rout: 60.0,
             vos: 0.0,
+            ibias: 0.0,
             vhys: 0.0,
             output: ComparatorOutput::OpenCollector,
         }
@@ -3433,6 +3442,7 @@ fn parse_model(
             (ModelCard::Comparator(model), "GBW") => model.gbw = value,
             (ModelCard::Comparator(model), "ROUT") => model.rout = value,
             (ModelCard::Comparator(model), "VOS") => model.vos = value,
+            (ModelCard::Comparator(model), "IBIAS") => model.ibias = value,
             (ModelCard::Comparator(model), "VHYS") => model.vhys = value,
             // This engine's own card types have no vendor parameters to
             // tolerate, so a misspelt one is an error rather than a silently
@@ -3477,7 +3487,7 @@ fn parse_model(
             }
             (ModelCard::Comparator(_), other) => {
                 return Err(ctx.parse_err(format!(
-                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, VHYS, \
+                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, VHYS, \
                      OUTPUT"
                 )))
             }
@@ -3823,6 +3833,9 @@ fn lower_comparator(
     if model.vhys < 0.0 {
         return Err(ctx.parse_err("VHYS must not be negative"));
     }
+    if !model.ibias.is_finite() {
+        return Err(ctx.parse_err("IBIAS must be finite"));
+    }
     let rq = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rq;
     let cq = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rq);
@@ -3840,6 +3853,10 @@ fn lower_comparator(
     if model.vos != 0.0 {
         // −gm·VOS into q, i.e. +VOS on v(in+) − v(in−).
         lower.current("ios", q, vee, gm * model.vos);
+    }
+    if model.ibias != 0.0 {
+        lower.current("ibp", inp, vee, model.ibias);
+        lower.current("ibn", inn, vee, model.ibias);
     }
     if model.vhys != 0.0 {
         // gm·VHYS·(v(q) − v(v−) − ½) into q: positive feedback that holds

@@ -204,6 +204,42 @@ mod analog {
     }
 
     #[test]
+    fn comparator_input_bias_current_drops_across_both_input_source_resistances() {
+        let current = 10e-9;
+        for bias in [current, -current] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp 50k\nRm vm inn 100k\nRpu vcc out 10k\n\
+                 X1 inp inn vcc vee out CMP\n\
+                 .model CMP COMP(AOL=10 GBW=1meg ROUT=100 IBIAS={bias})\n"
+            ));
+            let expected_inp = 1.0 - bias * 50e3;
+            let expected_inn = 1.0 - bias * 100e3;
+            let actual_inp = v(&solver, "inp");
+            let actual_inn = v(&solver, "inn");
+            assert!(
+                (actual_inp - expected_inp).abs() < 1e-8,
+                "IBIAS={bias}: in+ = {actual_inp} V, expected {expected_inp} V"
+            );
+            assert!(
+                (actual_inn - expected_inn).abs() < 1e-8,
+                "IBIAS={bias}: in- = {actual_inn} V, expected {expected_inn} V"
+            );
+        }
+    }
+
+    #[test]
+    fn comparator_input_bias_current_must_be_finite() {
+        let error = parse_netlist("X1 inp inn vcc vee out CMP\n.model CMP COMP(IBIAS=1e999)\n")
+            .expect_err("an infinite input bias current cannot be stamped");
+        assert!(
+            error.to_string().contains("IBIAS must be finite"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn a_saturated_opamp_sits_at_its_rails_less_the_drop() {
         // LM358: DROP_HI = 1.5 V, DROP_LO = 0. Open loop, driven both ways,
         // into 10 kΩ through ROUT = 50 Ω: the high rail reads 10.5 V · 10 k /
