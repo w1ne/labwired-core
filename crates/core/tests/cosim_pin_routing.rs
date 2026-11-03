@@ -844,23 +844,32 @@ fn a_model_vdda_reference_sets_adc_full_scale() {
 }
 
 /// The pad form resolves through the chip descriptor's `analog_pins:`, not a
-/// built-in table: on an F401 PC5 is ADC1_IN15, so a model voltage routed to
-/// `board.analog.pc5_volts` must land on channel 15 and leave channel 0 alone.
+/// built-in table: on an F401 PC5 is ADC1_IN15. An in-core netlist's solved
+/// voltage must land on channel 15 and survive a firmware-visible conversion.
 #[test]
-fn the_pad_form_resolves_through_the_descriptor() {
+fn an_in_core_netlist_on_pc5_reaches_adc1_channel_15() {
     let mut bus = f401_bus();
     let mut session = build_session(
         &bus,
-        &[mock_model(
+        &[analog_model(
             100_000,
             &[],
             &[("v_out", "board.analog.pc5_volts")],
-            &[("v_out", serde_yaml::Value::from(1.65))],
+            "Vbias sense 0 dc 1.65\nRload sense 0 1k\n",
+            &[("v_out", "v(sense)")],
+            &[],
+            3.3,
         )],
     );
-    session.advance_to(8_400, &mut bus).expect("step");
+    let (_, errors) = session.advance_to(8_400, &mut bus).expect("step");
+    assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
     assert_eq!(adc_channel_count(&mut bus, 15), 2047);
     assert_eq!(adc_channel_count(&mut bus, 0), 0xFFFF);
+    assert_eq!(
+        f401_adc_convert(&mut bus, 15),
+        2047,
+        "firmware converting ADC1_IN15 must see the netlist's 1.65 V"
+    );
 }
 
 /// On an L476 PA0 is ADC1_IN5, not IN0, and its descriptor records no
