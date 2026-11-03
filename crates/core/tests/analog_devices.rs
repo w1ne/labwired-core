@@ -771,6 +771,60 @@ mod analog {
         }
     }
 
+    #[test]
+    fn bjt_terminal_resistances_match_explicit_series_resistors_for_both_polarities() {
+        let (rb, rc, re) = (31.0, 18.0, 7.0);
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let model = format!("IS=1e-15 BF=100 BR=4 RB={rb} RC={rc} RE={re}");
+            let modelled = format!(
+                "Vc c 0 dc {}\nVdrive drive 0 dc {}\nRdrive drive b 10k\n\
+                 Rload e 0 10k\nQ1 c b e QMOD\n.model QMOD {kind}({model})\n",
+                sign * 5.0,
+                sign * 1.0,
+            );
+            let explicit = format!(
+                "Vc c 0 dc {}\nVdrive drive 0 dc {}\nRdrive drive b 10k\n\
+                 Rload e 0 10k\nRbase b qb {rb}\nRcollector c qc {rc}\n\
+                 Remitter e qe {re}\nQ1 qc qb qe QMOD\n.model QMOD {kind}(IS=1e-15 BF=100 BR=4)\n",
+                sign * 5.0,
+                sign * 1.0,
+            );
+            let actual = build(&modelled);
+            let expected = build(&explicit);
+
+            for (actual_name, expected_name) in [
+                ("c", "c"),
+                ("b", "b"),
+                ("e", "e"),
+                ("Q1#collector", "qc"),
+                ("Q1#base", "qb"),
+                ("Q1#emitter", "qe"),
+            ] {
+                let actual_node = actual.circuit().node(actual_name).expect("node exists");
+                let expected_node = expected
+                    .circuit()
+                    .node(expected_name)
+                    .expect("reference node exists");
+                let actual_voltage = actual.node_voltage(actual_node);
+                let expected_voltage = expected.node_voltage(expected_node);
+                assert!(
+                    (actual_voltage - expected_voltage).abs() < 1e-8,
+                    "{kind} {actual_name}: expected {expected_voltage} V, got {actual_voltage} V"
+                );
+            }
+
+            for source in ["Vc", "Vdrive"] {
+                let actual_current = source_current(&actual, source);
+                let expected_current = source_current(&expected, source);
+                assert!(
+                    (actual_current - expected_current).abs() < 1e-10,
+                    "{kind} {source}: expected {expected_current} A, got {actual_current} A"
+                );
+            }
+        }
+    }
+
     /// With high-injection terms disabled, Gummel–Poon's base-width factor is
     /// `1 - Vbc/VAF - Vbe/VAR`. Check all terminal currents against that
     /// equation in both operating directions and polarities.
