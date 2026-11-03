@@ -2440,6 +2440,78 @@ mod analog {
         }
     }
 
+    /// With the collector-base junction forward biased, both Gummel–Poon base
+    /// recombination branches draw current through the external base resistor.
+    /// Solve that resistor/device current balance independently, then check the
+    /// actual MNA base voltage and drive current for NPN and PNP polarities.
+    #[test]
+    fn bjt_base_recombination_loads_a_resistively_driven_base() {
+        let (is, bf, br, ise, ne, isc, nc, rb, vce, drive) = (
+            1e-16, 80.0, 4.0, 1e-11, 1.5, 5e-10, 2.0, 10_000.0, 0.15, 1.0,
+        );
+        let base_current = |vbe: f64, include_recombination: bool| {
+            let vbc = vbe - vce;
+            let ise = if include_recombination { ise } else { 0.0 };
+            let isc = if include_recombination { isc } else { 0.0 };
+            (is / bf) * ((vbe / VT).exp() - 1.0)
+                + ise * ((vbe / (ne * VT)).exp() - 1.0)
+                + (is / br) * ((vbc / VT).exp() - 1.0)
+                + isc * ((vbc / (nc * VT)).exp() - 1.0)
+                + device::GMIN * (vbe + vbc)
+        };
+        let expected_vbe = |include_recombination: bool| {
+            let mut lo = -0.1;
+            let mut hi = drive;
+            for _ in 0..100 {
+                let mid = (lo + hi) / 2.0;
+                let source_current = (drive - mid) / rb;
+                if source_current > base_current(mid, include_recombination) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let expected = expected_vbe(true);
+        let without_recombination = expected_vbe(false);
+        assert!(expected > vce, "the selected bias must forward-bias B-C");
+        assert!(
+            without_recombination - expected > 0.1,
+            "both recombination branches should materially load the base"
+        );
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let emitter_v = if sign > 0.0 { 0.0 } else { 3.0 };
+            let collector_v = emitter_v + sign * vce;
+            let drive_v = emitter_v + sign * drive;
+            let netlist = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\n\
+                 Vdrive drive 0 dc {drive_v}\nRbase drive b {rb}\n\
+                 Q1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let solver = build(&netlist);
+            let base = solver
+                .circuit()
+                .node("b")
+                .expect("external base node")
+                .expect("base is not ground");
+            let actual_vbe = sign * (solver.node_voltage(Some(base)) - emitter_v);
+            let actual_drive_current = sign * source_current(&solver, "Vdrive");
+            let expected_drive_current = (drive - expected) / rb;
+
+            assert!(
+                (actual_vbe - expected).abs() < 1e-8,
+                "{kind}: both recombination branches predict Vbe={expected} V, got {actual_vbe} V"
+            );
+            assert!(
+                (actual_drive_current - expected_drive_current).abs() < 1e-10,
+                "{kind}: the base drive should supply {expected_drive_current} A, got {actual_drive_current} A"
+            );
+        }
+    }
+
     #[test]
     fn bjt_base_recombination_partials_match_finite_difference() {
         let (is, bf, br, nf, nr, ise, ne, isc, nc) =
