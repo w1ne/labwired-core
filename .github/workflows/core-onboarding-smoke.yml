@@ -191,6 +191,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32h747-disco-smoke.yaml
             system: configs/systems/onboarding/stm32h747-disco.yaml
+          # The generic imported H747 chip descriptor uses the same bounded
+          # Cortex-M7, H7 RCC, GPIOB/GPIOD, and USART3 smoke surface.
+          - id: stm32h747
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h747-smoke.yaml
+            system: configs/systems/onboarding/stm32h747.yaml
           # Reuse the H7 register fixture on the imported NUCLEO-H753ZI board.
           # The smoke also asserts its imported GreenLED attachment at GPIOB.0.
           - id: nucleo_h753zi
