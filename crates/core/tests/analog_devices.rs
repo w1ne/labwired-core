@@ -213,6 +213,77 @@ mod analog {
         );
     }
 
+    /// The reverse-breakdown exponential is stamped at the junction behind
+    /// `RS`, while the external load line sees the anode voltage. Solve that
+    /// load line independently so a model that applies `NBV` at the external
+    /// terminal, or bypasses `RS` in breakdown, cannot pass on the fixed-bias
+    /// equation above.
+    #[test]
+    fn diode_nondefault_breakdown_emission_flows_through_series_resistance() {
+        let (is, n, bv, ibv, nbv, rs, supply, load) =
+            (1e-14, 1.2, 5.0, 1e-3, 2.0, 40.0, -6.0, 1_000.0);
+        let solver = build(&format!(
+            "Vdrive drive 0 dc {supply}\nRload drive a {load}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} RS={rs})\n"
+        ));
+        let diode = &solver.circuit().diodes[0];
+        assert_eq!(diode.model.nbv, Some(nbv));
+        let xbv = device::breakdown_voltage(bv, ibv, is, nbv);
+
+        // Independent reverse-breakdown law and load-line root. GMIN remains
+        // outside the breakdown exponential, as it does in the stamped model.
+        let current_at_junction =
+            |voltage: f64| -is * (-(xbv + voltage) / (nbv * VT)).exp() + device::GMIN * voltage;
+        let load_line = |junction_voltage: f64| {
+            let current = current_at_junction(junction_voltage);
+            (junction_voltage + current * rs - supply) / load + current
+        };
+        let (mut low, mut high) = (-10.0, 0.0);
+        assert!(load_line(low) < 0.0 && load_line(high) > 0.0);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if load_line(mid) < 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let expected_junction = (low + high) / 2.0;
+        assert!(expected_junction < -xbv, "root must be in breakdown");
+        let expected_current = current_at_junction(expected_junction);
+
+        let external_anode = solver
+            .circuit()
+            .node("a")
+            .expect("external anode")
+            .expect("anode is not ground");
+        let internal_junction = solver
+            .circuit()
+            .node("D1#internal")
+            .expect("RS creates a probeable internal junction")
+            .expect("junction is not ground");
+        let actual_anode = solver.node_voltage(Some(external_anode));
+        let actual_junction = solver.node_voltage(Some(internal_junction));
+        let actual_current = source_current(&solver, "Vdrive");
+
+        assert!(
+            (actual_junction - expected_junction).abs() < 1e-8,
+            "NBV={nbv}: expected junction voltage {expected_junction} V, got {actual_junction} V"
+        );
+        assert!(
+            (actual_current - expected_current).abs() < 1e-10,
+            "NBV={nbv}: expected breakdown current {expected_current} A, got {actual_current} A"
+        );
+        assert!(
+            (actual_anode - actual_junction - actual_current * rs).abs() < 1e-8,
+            "RS should carry the reverse current: anode {actual_anode} V, junction {actual_junction} V, current {actual_current} A"
+        );
+        assert!(
+            (actual_current - (supply - actual_anode) / load).abs() < 1e-10,
+            "the external resistor load line should close at the solved anode voltage"
+        );
+    }
+
     /// Ngspice's `ISR`/`NR` branch adds recombination current in forward bias
     /// and holds its value at `−3·N·Vt` farther into reverse bias.
     #[test]
