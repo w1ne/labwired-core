@@ -1,0 +1,362 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1000,
+  "cycles": 1000,
+  "instructions": 1000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000
+    }
+  },
+  "limits": {
+    "max_steps": 1000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO_F303RE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073759260,
+      10,
+      134219584,
+      0,
+      1207959576,
+      32,
+      2097152,
+      536936424,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536936424,
+      134219427,
+      134219498
+    ],
+    "pc": 134219498,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "2ba278b99cf9d6589064be8980e609a9c19e94d7064faf8dc5666df4fc7b26e7",
+  "config": {
+    "firmware": "examples/nucleo-f303re/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f303re-smoke",
+    "system": "examples/nucleo-f303re/../../configs/systems/nucleo-f303re.yaml",
+    "script": "examples/nucleo-f303re/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 1000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 133,
+            "value": 1
+          },
+          {
+            "cycle": 202,
+            "value": 0
+          },
+          {
+            "cycle": 272,
+            "value": 1
+          },
+          {
+            "cycle": 341,
+            "value": 0
+          },
+          {
+            "cycle": 411,
+            "value": 1
+          },
+          {
+            "cycle": 480,
+            "value": 0
+          },
+          {
+            "cycle": 550,
+            "value": 1
+          },
+          {
+            "cycle": 619,
+            "value": 0
+          },
+          {
+            "cycle": 689,
+            "value": 1
+          },
+          {
+            "cycle": 758,
+            "value": 0
+          },
+          {
+            "cycle": 828,
+            "value": 1
+          },
+          {
+            "cycle": 897,
+            "value": 0
+          },
+          {
+            "cycle": 967,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 35,
+            "state": "0"
+          },
+          {
+            "cycle": 133,
+            "state": "1"
+          },
+          {
+            "cycle": 202,
+            "state": "0"
+          },
+          {
+            "cycle": 272,
+            "state": "1"
+          },
+          {
+            "cycle": 341,
+            "state": "0"
+          },
+          {
+            "cycle": 411,
+            "state": "1"
+          },
+          {
+            "cycle": 480,
+            "state": "0"
+          },
+          {
+            "cycle": 550,
+            "state": "1"
+          },
+          {
+            "cycle": 619,
+            "state": "0"
+          },
+          {
+            "cycle": 689,
+            "state": "1"
+          },
+          {
+            "cycle": 758,
+            "state": "0"
+          },
+          {
+            "cycle": 828,
+            "state": "1"
+          },
+          {
+            "cycle": 897,
+            "state": "0"
+          },
+          {
+            "cycle": 967,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 13
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO_F303RE_OK",
+        "cycle_lo": 0,
+        "cycle": 1000,
+        "end_cycle": 1000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1856,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1856,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 65536,
+    "flash_used_pct": 0.35,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 65536,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 65512,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536936448,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 65536,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 65512,
+    "heap_base": 536870912,
+    "heap_top": 536936448
+  },
+  "metrics": {
+    "cycles": 1000,
+    "instructions": 1000,
+    "steps_executed": 1000,
+    "memory_reads": 254,
+    "memory_writes": 32,
+    "peripheral_accesses": 57,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219498,
+        "count": 3,
+        "symbol": "firmware_nucleo_f303re_smoke::spin"
+      }
+    ]
+  }
+}
