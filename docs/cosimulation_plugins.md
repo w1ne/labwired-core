@@ -470,8 +470,10 @@ breakdown when `BV` is set. Gummel–Poon BJT transport with `VAF`/`VAR` base-wi
 `IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
 recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
 base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
-plus constant transit-time charge from `TF`/`TR` (all default to zero; shared
-`FC` defaults to 0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
+plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
+adjustment and reverse transit-time charge from `TR` (all default to zero;
+`XTF`/`ITF` default to zero and `VTF` to infinity; shared `FC` defaults to
+0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
 default to zero). Nonzero BJT terminal resistances add probeable internal
 collector, base, or emitter nodes. Nonzero JFET and MOSFET terminal resistances
 add probeable `<element>#drain` and `<element>#source` nodes, respectively.
@@ -488,8 +490,7 @@ channel operation, MOSFET body effect, and the tested Meyer bias regions are
 covered by tests. Every parameter is taken at 300.00 K; there is no temperature
 model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not modeled:** a charge-conserving MOSFET channel-charge model; BJT
-bias-dependent transit-time adjustments (`XTF`/`VTF`/`ITF`); and JFET levels
+**What is not modeled:** a charge-conserving MOSFET channel-charge model; and JFET levels
 other than level 1 with `B=1`. The diode's `TT` term is a quasi-static transit-time
 charge model; more detailed non-quasi-static and soft-recovery effects are not
 modeled. Circuits needing those features belong on `adapter: external_process`

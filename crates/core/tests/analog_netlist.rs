@@ -429,23 +429,29 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
-    fn bjt_transit_time_parameters_resolve_default_to_zero_and_reject_negatives() {
+    fn bjt_transit_time_parameters_resolve_and_validate() {
         let circuit = parse_netlist(
             "Q1 c b e QMOD\n\
              .model QMOD NPN(TF=12n TR=35n XTF=2 VTF=1 ITF=10m)\n",
         )
-        .expect("ideal BJT transit times parse; bias-dependent extensions are ignored");
+        .expect("ideal and bias-dependent BJT transit parameters parse");
         assert_eq!(circuit.bjts[0].model.tf, 12e-9);
         assert_eq!(circuit.bjts[0].model.tr, 35e-9);
+        assert_eq!(circuit.bjts[0].model.xtf, 2.0);
+        assert_eq!(circuit.bjts[0].model.vtf, 1.0);
+        assert_eq!(circuit.bjts[0].model.itf, 10e-3);
 
         let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN\n").unwrap();
         assert_eq!(defaults.bjts[0].model.tf, 0.0);
         assert_eq!(defaults.bjts[0].model.tr, 0.0);
+        assert_eq!(defaults.bjts[0].model.xtf, 0.0);
+        assert_eq!(defaults.bjts[0].model.vtf, f64::INFINITY);
+        assert_eq!(defaults.bjts[0].model.itf, 0.0);
 
-        for parameter in ["TF=-1n", "TR=-1n"] {
+        for parameter in ["TF=-1n", "TR=-1n", "XTF=-1", "VTF=-1", "ITF=-1"] {
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
-                .expect_err("negative transit time is invalid");
-            assert!(error.to_string().contains("TF/TR >= 0"), "{error}");
+                .expect_err("negative transit parameters are invalid");
+            assert!(error.to_string().contains("TF/TR/XTF/ITF >= 0"), "{error}");
         }
     }
 
