@@ -1,0 +1,18 @@
+# Narrow GPIO-only system profile for Seeed Studio XIAO nRF54L15 (SKU 101991421).
+# The non-Sense board's user LED and user key are modeled through board_io.
+name: "xiao-nrf54l15"
+chip: "../chips/nrf54l15-xiao-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio2"
+    pin: 0
+    signal: "output"
+    active_high: false
+  - id: "user_key"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 0
+    signal: "input"
+    active_high: false

@@ -1,0 +1,17 @@
+# Local mirror for example tooling and strict onboarding discovery.
+name: "xiao-nrf54l15-example"
+chip: "../../configs/chips/nrf54l15-xiao-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio2"
+    pin: 0
+    signal: "output"
+    active_high: false
+  - id: "user_key"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 0
+    signal: "input"
+    active_high: false
