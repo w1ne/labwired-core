@@ -16,6 +16,10 @@ Checked 2026-11-03 against ST's live pages:
   showed **In Stock** and **Add to Cart**.
 - ST's [STM32G0B1RE product page](https://www.st.com/en/microcontrollers-microprocessors/stm32g0b1re.html)
   states **Active** and “Product is in volume production.”
+- ST's eStore currently marks the standalone STM32G0B1RET6 orderable **Out of
+  Stock**; the NUCLEO-G0B1RE board that includes it remains **In Stock**. This
+  onboarding round is for the purchasable board as a system, not the standalone
+  MCU as a separately purchasable part.
 
 ## Board wiring
 
@@ -39,11 +43,21 @@ at least eight PA5 edges while the firmware toggles LD4. The committed run is
 in [`examples/nucleo-g0b1re/evidence`](../../examples/nucleo-g0b1re/evidence/).
 The same smoke is a cell in the nightly coverage-matrix workflow.
 
+The dedicated onboarding lane adds a no-stub descriptor in
+[`configs/systems/nucleo-g0b1re-smoke.yaml`](../../configs/systems/nucleo-g0b1re-smoke.yaml)
+and [`configs/chips/stm32g0b1re-nucleo-smoke.yaml`](../../configs/chips/stm32g0b1re-nucleo-smoke.yaml).
+It boots `firmware-nucleo-g0b1re-smoke`, writes `NUCLEO_G0B1RE_OK` through
+USART2, and asserts at least eight PA5 edges. Build and simulation evidence is
+committed under `examples/nucleo-g0b1re/evidence/no-stub-smoke/`, leaving the
+existing broad-profile smoke evidence intact.
+
 ## Model limits
 
 The STM32G0B1RE profile declares RCC, SysTick, GPIOA/B/C, USART1/2, TIM2,
 EXTI, NVIC, and SYSCFG. SYSCFG remains a zero-answering stub. The board smoke
 exercises GPIOA/PA5 and USART2 only. I2C, SPI, ADC, DMA, FDCAN, USB, PLL
 operation, and GPIO ports D/F are omitted or unsupported by this profile.
+The dedicated onboarding lane uses its smaller descriptor, which omits
+SYSCFG, the button path, and every other unused block.
 No silicon capture or executing-fidelity differential is available, so this
 is simulator evidence and does not claim hardware confirmation.

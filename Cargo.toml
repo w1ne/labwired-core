@@ -79,6 +79,7 @@ members = [
     "crates/firmware-nucleo-f072rb-smoke",
     "crates/firmware-nucleo-f411re-smoke",
     "crates/firmware-nucleo-g071rb-smoke",
+    "crates/firmware-nucleo-g0b1re-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
@@ -276,6 +277,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nucleo-f411re-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-g0b1re-smoke]
 codegen-units = 1
 opt-level = "s"
 

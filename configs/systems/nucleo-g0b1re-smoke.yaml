@@ -1,0 +1,12 @@
+# NUCLEO-G0B1RE board-connected paths used by the no-stub smoke profile.
+# LD4 is PA5; the ST-LINK VCP is USART2 on PA2/PA3 (ST UM2324 / MB1360).
+name: "nucleo-g0b1re-smoke"
+chip: "../chips/stm32g0b1re-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

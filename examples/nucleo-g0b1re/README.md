@@ -27,6 +27,27 @@ The committed `evidence/onboarding-metrics.json` and
 `evidence/logs/run_smoke.log` record the run. `evidence/onboarding-scoreboard.md`
 is generated from that metric.
 
+## Dedicated no-stub onboarding lane
+
+The dedicated lane uses `firmware-nucleo-g0b1re-smoke` and the narrower
+`configs/systems/nucleo-g0b1re-smoke.yaml` descriptor. It enables GPIOA and
+USART2, prints `NUCLEO_G0B1RE_OK` on the VCP, and toggles LD4. Its descriptor
+contains only RCC, GPIOA, and USART2; the broader system's zero-answering
+SYSCFG window is omitted. Logs and scoreboard are stored separately in
+`evidence/no-stub-smoke/`, preserving the older broad-profile run.
+
+Reproduce the dedicated lane from the repository root:
+
+```bash
+scripts/onboarding_smoke.sh \
+  --target-id nucleo-g0b1re \
+  --crate firmware-nucleo-g0b1re-smoke \
+  --target thumbv6m-none-eabi \
+  --script examples/nucleo-g0b1re/onboarding-smoke.yaml \
+  --system configs/systems/nucleo-g0b1re-smoke.yaml \
+  --out-dir examples/nucleo-g0b1re/evidence/no-stub-smoke
+```
+
 ## Model boundary
 
 The chip slice includes RCC, SysTick, GPIOA/B/C, USART1/2, TIM2, EXTI, NVIC,
