@@ -1,0 +1,13 @@
+# NUCLEO-F072RB smoke: USART2 through ST-LINK VCP and LD2 transitions on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-f072rb-smoke"
+  system: "../../configs/systems/nucleo-f072rb.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "NUCLEO_F072RB_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

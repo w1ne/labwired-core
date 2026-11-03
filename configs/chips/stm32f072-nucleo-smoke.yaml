@@ -1,0 +1,64 @@
+# Narrow STM32F072RBT6 model for NUCLEO-F072RB onboarding.
+#
+# This board slice contains only the reset clock block, GPIO ports/pads, SysTick,
+# and USART2 used by the board smoke. Other F072 peripherals (including USB FS,
+# TSC, and CRS) are omitted, so their accesses remain unsupported.
+# Sources: ST DS9826 (STM32F072xB), RM0360, and UM1724 / MB1136 board docs.
+name: stm32f072-nucleo-smoke
+arch: arm
+core: cortex-m0
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 128KB
+ram:
+  base: 0x20000000
+  size: 16KB
+
+# Only pads routed to this smoke's VCP and LD2 are in the pin map.
+pins:
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA5: { gpio: gpioa, bit: 5 }
+  PC13: { gpio: gpioc, bit: 13 }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: 1KB
+    config:
+      profile: stm32f0
+
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: 1KB
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
+      # Preserve the reset AF mode and pull-ups on SWD PA13/PA14.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x48000800
+    size: 1KB
+    clock: { reg: ahbenr, bit: 19 }
+    config:
+      profile: stm32v2
+
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1enr, bit: 17 }
+    config:
+      profile: stm32v2

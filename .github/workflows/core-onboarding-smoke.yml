@@ -20,6 +20,7 @@ on:
       - "crates/firmware-f401-demo/**"
       - "crates/firmware-f446-demo/**"
       - "crates/firmware-stm32g0-demo/**"
+      - "crates/firmware-nucleo-f072rb-smoke/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
@@ -48,6 +49,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/arduino-uno-r4-minima/io-smoke.yaml
             system: configs/systems/arduino-uno-r4-minima.yaml
+          - id: nucleo-f072rb
+            crate: firmware-nucleo-f072rb-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-f072rb/io-smoke.yaml
+            system: configs/systems/nucleo-f072rb.yaml
           - id: nucleo-f401re
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
