@@ -2627,6 +2627,101 @@ mod analog {
         }
     }
 
+    /// Base recombination changes the current that controls RBM/IRB, so both
+    /// effects must be solved together at the intrinsic junctions. Compare the
+    /// MNA result with an independent root of the base-current and spreading-
+    /// resistance equations for NPN and PNP devices.
+    #[test]
+    fn bjt_recombination_sets_bias_dependent_base_resistance() {
+        let (is, bf, br, ise, ne, isc, nc, rb, rbm, irb, drive_resistance, vce, drive) = (
+            1e-16, 80.0, 4.0, 1e-11, 1.5, 5e-10, 2.0, 1000.0, 10.0, 100e-6, 4000.0, 0.15, 1.2,
+        );
+        let base_current = |vbe: f64, include_recombination: bool| {
+            let vbc = vbe - vce;
+            let ise = if include_recombination { ise } else { 0.0 };
+            let isc = if include_recombination { isc } else { 0.0 };
+            (is / bf) * ((vbe / VT).exp() - 1.0)
+                + ise * ((vbe / (ne * VT)).exp() - 1.0)
+                + (is / br) * ((vbc / VT).exp() - 1.0)
+                + isc * ((vbc / (nc * VT)).exp() - 1.0)
+                + device::GMIN * (vbe + vbc)
+        };
+        // Independent transcription of the SPICE RBM/IRB interpolation. The
+        // input is the total base current, including both recombination legs.
+        let base_resistance = |current: f64| {
+            let x = (current / irb).max(1e-9);
+            let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
+            let tan_z = z.tan();
+            rbm + 3.0 * (rb - rbm) * (tan_z - z) / (z * tan_z * tan_z)
+        };
+        let expected_vbe = |include_recombination: bool| {
+            let mut lo = -0.1;
+            let mut hi = drive;
+            for _ in 0..100 {
+                let mid = (lo + hi) / 2.0;
+                let current = base_current(mid, include_recombination);
+                let drive_current = (drive - mid) / (drive_resistance + base_resistance(current));
+                if drive_current > current {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let expected = expected_vbe(true);
+        let without_recombination = expected_vbe(false);
+        let expected_current = base_current(expected, true);
+        let expected_resistance = base_resistance(expected_current);
+        assert!(expected > vce, "the selected bias must forward-bias B-C");
+        assert!(
+            without_recombination - expected > 0.05,
+            "recombination must materially change the bias, with/without={without_recombination}/{expected} V"
+        );
+        assert!(
+            expected_resistance < rb * 0.8 && expected_resistance > rbm,
+            "the solved current should move RB into its transition: {expected_resistance} Ω"
+        );
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let emitter_v = if sign > 0.0 { 0.0 } else { 3.0 };
+            let collector_v = emitter_v + sign * vce;
+            let drive_v = emitter_v + sign * drive;
+            let netlist = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\nVdrive drive 0 dc {drive_v}\nRdrive drive b {drive_resistance}\nQ1 c b e QMOD\n.model QMOD {kind}(IS={is} BF={bf} BR={br} RB={rb} RBM={rbm} IRB={irb} ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let solver = build(&netlist);
+            let base = solver
+                .circuit()
+                .node("b")
+                .expect("external base node")
+                .expect("base is not ground");
+            let internal_base = solver
+                .circuit()
+                .node("Q1#base")
+                .expect("internal base node")
+                .expect("base is not ground");
+            let actual_vbe = sign * (solver.node_voltage(Some(internal_base)) - emitter_v);
+            let actual_current = sign * source_current(&solver, "Vdrive");
+            let actual_base_drop =
+                sign * (solver.node_voltage(Some(base)) - solver.node_voltage(Some(internal_base)));
+
+            assert!(
+                (actual_vbe - expected).abs() < 1e-8,
+                "{kind}: recombination plus RBM/IRB predict intrinsic Vbe={expected} V, got {actual_vbe} V"
+            );
+            assert!(
+                (actual_current - expected_current).abs() < 1e-10,
+                "{kind}: recombination predicts Ib={expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_base_drop - expected_current * expected_resistance).abs() < 1e-8,
+                "{kind}: RB(Ib)={expected_resistance} Ω predicts base drop {} V, got {actual_base_drop} V",
+                expected_current * expected_resistance
+            );
+        }
+    }
+
     #[test]
     fn bjt_base_recombination_partials_match_finite_difference() {
         let (is, bf, br, nf, nr, ise, ne, isc, nc) =
