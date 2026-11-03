@@ -83,6 +83,7 @@ fn build_esp32(
 
     let mut bus = SystemBus::new();
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
+    bus.attach_chip_io_levels(req.chip);
     bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
 
     // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on UART0

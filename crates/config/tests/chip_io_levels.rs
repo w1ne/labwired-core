@@ -50,6 +50,8 @@ fn datasheet_transcriptions() {
     for (chip, volts, vil, vih) in [
         // DS40002061B Table 30-1, VCC 2.4-5.5 V.
         ("atmega328p", 5.0, 0.3, 0.6),
+        // Espressif ESP32 Series Datasheet v5.3, Tables 5-2 and 5-3.
+        ("esp32", 3.3, 0.25, 0.75),
         // DS5319 Table 36, "All I/Os except BOOT0".
         ("stm32f103", 3.3, 0.35, 0.65),
         // DS10086 Table 54.

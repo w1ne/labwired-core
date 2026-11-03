@@ -1,0 +1,61 @@
+# LabWired - EK-RX261 Zephyr tests/drivers/uart/uart_basic_api
+#
+# Unmodified upstream Zephyr v4.3.0 `tests/drivers/uart/uart_basic_api` for
+# `ek_rx261` (rebuild: crates/firmware-ek-rx261-zephyr/build.sh), on the
+# interrupt-driven RX SCI driver (`uart_renesas_rx_sci.c`,
+# CONFIG_UART_INTERRUPT_DRIVEN).
+#
+# Every UART interrupt here is an RX ICU vector: SCI6 raises RXI6/TXI6/TEI6
+# (227/228/229), latched in IRn and taken when IERn and IPRn allow.
+# fifo_fill is driven by TXI/TEI (SCR.TIE/TEIE, read-modify-written),
+# fifo_read and the pending suite by RXI (SCR.RIE, SSR.RDRF), poll_in and
+# poll_out by SSR polling.
+#
+# Like the EK-RA6M5/EK-RA8M1 scripts this writes "The quick brown fox jumps
+# over the lazy dog" after each "Please send characters to serial console"
+# prompt with cycle-timed `uart_injections`. The run is deterministic: the
+# first prompt comes between 30M and 40M cycles of the 64 MHz guest clock
+# (after fifo_fill's 0.5 s sleep, idle-skipped), and the later prompts each
+# wait for input, so 60M/70M/80M cover them. poll_in busy-polls SSR until
+# its byte arrives, which is why the step limit is raised. The run stops at
+# `max_cycles`, idle after the summary.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/ek-rx261-zephyr-uart-basic-api.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 300000000
+  max_cycles: 200000000
+  wall_time_ms: 120000
+uart_injections:
+  - uart: "sci6"
+    bytes: "The quick brown fox jumps over the lazy dog\n"
+    trigger: !after_cycles { cycles: 60000000 }
+  - uart: "sci6"
+    bytes: "The quick brown fox jumps over the lazy dog\n"
+    trigger: !after_cycles { cycles: 70000000 }
+  - uart: "sci6"
+    bytes: "The quick brown fox jumps over the lazy dog\n"
+    trigger: !after_cycles { cycles: 80000000 }
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 ***"
+      - "Running TESTSUITE uart_basic_api"
+      - "This is a FIFO test."
+      - " PASS - test_uart_fifo_fill"
+      - "Please send characters to serial console"
+      - "The quick brown fox jumps over the lazy dog"
+      - " PASS - test_uart_fifo_read"
+      - "Please send characters to serial console"
+      - "The quick brown fox jumps over the lazy dog"
+      - " PASS - test_uart_poll_in"
+      - "This is a POLL test."
+      - " PASS - test_uart_poll_out"
+      - "TESTSUITE uart_basic_api succeeded"
+      - "Please send characters to serial console"
+      - "The quick brown fox jumps over the lazy dog"
+      - " PASS - test_uart_pending"
+      - "SUITE PASS - 100.00% [uart_basic_api]: pass = 6, fail = 0, skip = 0, total = 6"
+      - "SUITE PASS - 100.00% [uart_basic_api_pending]: pass = 1, fail = 0, skip = 0, total = 1"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - expected_stop_reason: max_cycles
