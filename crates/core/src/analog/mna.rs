@@ -692,21 +692,14 @@ impl Solver {
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
             let sign = mosfet.model.polarity.sign();
-            let model = mosfet.model;
             let voltages = [
                 sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
                 sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
             ];
             self.mos_bulk_q[index] = core::array::from_fn(|junction| {
-                let c0 = if junction == 0 { model.cbd } else { model.cbs };
-                device::junction_depletion_charge(
-                    voltages[junction],
-                    c0,
-                    model.pb,
-                    model.mj,
-                    model.fc,
-                )
-                .0
+                mosfet
+                    .bulk_junction_charge(voltages[junction], junction == 0)
+                    .0
             });
             self.mos_bulk_i[index] = [0.0; 2];
 
@@ -984,22 +977,13 @@ impl Solver {
             let mosfet = &self.circuit.mosfets[index];
             let nodes = &self.solution[..self.nodes];
 
-            let model = mosfet.model;
             let voltages = [self.mos_vbd[index], self.mos_vbs[index]];
-            let capacitances = [model.cbd, model.cbs];
             for junction in 0..2 {
-                let c0 = capacitances[junction];
-                if c0 == 0.0 {
+                let drain = junction == 0;
+                if mosfet.bulk_junction_capacitances(drain) == [0.0, 0.0] {
                     continue;
                 }
-                let q_new = device::junction_depletion_charge(
-                    voltages[junction],
-                    c0,
-                    model.pb,
-                    model.mj,
-                    model.fc,
-                )
-                .0;
+                let q_new = mosfet.bulk_junction_charge(voltages[junction], drain).0;
                 let i_new = match rule {
                     Integration::BackwardEuler => (q_new - self.mos_bulk_q[index][junction]) / h,
                     Integration::Trapezoidal => {
@@ -2069,20 +2053,19 @@ impl Solver {
                 &negate(&bs_terms),
             );
 
-            for (history, (junction, voltage, c0)) in [
-                (mosfet.junction_d, self.mos_vbd[index], model.cbd),
-                (mosfet.junction_s, self.mos_vbs[index], model.cbs),
+            for (history, (junction, voltage)) in [
+                (mosfet.junction_d, self.mos_vbd[index]),
+                (mosfet.junction_s, self.mos_vbs[index]),
             ]
             .into_iter()
             .enumerate()
             {
-                if c0 == 0.0 {
+                let drain = history == 0;
+                if mosfet.bulk_junction_capacitances(drain) == [0.0, 0.0] {
                     continue;
                 }
                 if let Stamp::Transient(h, rule) = stamp {
-                    let (charge, capacitance) = device::junction_depletion_charge(
-                        voltage, c0, model.pb, model.mj, model.fc,
-                    );
+                    let (charge, capacitance) = mosfet.bulk_junction_charge(voltage, drain);
                     let (geq, current) = match rule {
                         Integration::BackwardEuler => (
                             capacitance / h,

@@ -25,7 +25,10 @@
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
 //! using constant ideal transit times. MOSFET intrinsic gate capacitance from
 //! `TOX` uses the level-1 Meyer model; its three G-S/G-D/G-B branches are
-//! integrated in transient runs.
+//! integrated in transient runs. MOSFET bulk depletion charge integrates
+//! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
+//! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
+//! and `MJSW` grading coefficients.
 //! There is no temperature model: every parameter is taken at
 //! [`TEMPERATURE_K`] as written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted

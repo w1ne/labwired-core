@@ -622,30 +622,75 @@ C1 out 0 100n $ dollar comment
 
     #[test]
     fn mosfet_bulk_junction_capacitance_parameters_parse_and_validate() {
-        let circuit =
-            parse_netlist("M1 d g s b MOD\n.model MOD NMOS(CBD=2p CBS=3p PB=0.9 MJ=0.4 FC=0.3)\n")
-                .expect("bulk junction capacitance parameters parse");
+        let circuit = parse_netlist(
+            "M1 d g s b MOD AD=2e-12 AS=3e-12 PD=4e-6 PS=5e-6\n\
+             .model MOD NMOS(CBD=2p CBS=3p CJ=4e-3 CJSW=5e-7 PB=0.9 MJ=0.4 MJSW=0.3 FC=0.3)\n",
+        )
+        .expect("bulk junction capacitance parameters parse");
         let model = circuit.mosfets[0].model;
         assert_eq!(model.cbd, 2e-12);
         assert_eq!(model.cbs, 3e-12);
+        assert!(model.cbd_given);
+        assert!(model.cbs_given);
+        assert_eq!(model.cj, 4e-3);
+        assert_eq!(model.cjsw, 5e-7);
         assert_eq!(model.pb, 0.9);
         assert_eq!(model.mj, 0.4);
+        assert_eq!(model.mjsw, 0.3);
         assert_eq!(model.fc, 0.3);
+        let mosfet = &circuit.mosfets[0];
+        assert_eq!(
+            [mosfet.ad, mosfet.as_, mosfet.pd, mosfet.ps],
+            [2e-12, 3e-12, 4e-6, 5e-6]
+        );
 
         let defaults = parse_netlist("M1 d g s b MOD\n.model MOD PMOS\n")
-            .expect("MOSFET bulk junction capacitance defaults parse");
+            .expect("MOSFET junction capacitance defaults parse");
         let model = defaults.mosfets[0].model;
         assert_eq!(model.cbd, 0.0);
         assert_eq!(model.cbs, 0.0);
+        assert!(!model.cbd_given);
+        assert!(!model.cbs_given);
+        assert_eq!(model.cj, 0.0);
+        assert_eq!(model.cjsw, 0.0);
         assert_eq!(model.pb, 0.8);
         assert_eq!(model.mj, 0.5);
+        assert_eq!(model.mjsw, 0.5);
         assert_eq!(model.fc, 0.5);
 
-        for parameter in ["CBD=-1f", "CBS=-1f", "PB=0", "MJ=-0.1", "FC=-0.1", "FC=1"] {
+        for parameter in [
+            "CBD=-1f",
+            "CBS=-1f",
+            "CJ=-1f",
+            "CJSW=-1f",
+            "PB=0",
+            "MJ=-0.1",
+            "MJSW=-0.1",
+            "FC=-0.1",
+            "FC=1",
+        ] {
             let error = parse_netlist(&format!("M1 d g s b MOD\n.model MOD NMOS({parameter})\n"))
                 .expect_err("invalid bulk junction capacitance parameter is rejected");
             assert!(error.to_string().contains("CBD/CBS"), "{error}");
         }
+
+        for parameter in ["AD=-1", "AS=-1", "PD=-1", "PS=-1"] {
+            let error = parse_netlist(&format!("M1 d g s b MOD {parameter}\n.model MOD NMOS\n"))
+                .expect_err("negative diffusion geometry is rejected");
+            assert!(error.to_string().contains("ad, as, pd and ps"), "{error}");
+        }
+
+        let direct_zero = parse_netlist("M1 d g s b MOD AD=1e-6\n.model MOD NMOS(CBD=0 CJ=1e-3)\n")
+            .expect("explicit zero CBD can override area-derived capacitance");
+        let mosfet = &direct_zero.mosfets[0];
+        assert_eq!(mosfet.bulk_junction_capacitances(true), [0.0, 0.0]);
+
+        let overflow =
+            parse_netlist("M1 d g s b MOD PD=1e308\n.model MOD NMOS(CBD=1e308 CJSW=1)\n")
+                .expect_err("the combined effective junction capacitance must be finite");
+        assert!(overflow
+            .to_string()
+            .contains("effective junction capacitances"));
     }
 
     #[test]
