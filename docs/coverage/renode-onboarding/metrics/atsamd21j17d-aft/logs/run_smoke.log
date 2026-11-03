@@ -1,5 +1,5 @@
-2026-11-03T15:06:43.376859Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
-2026-11-03T15:06:43.379732Z  INFO labwired_loader: ELF Entry Point: 0xc1
+2026-11-03T15:14:02.138810Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
+2026-11-03T15:14:02.141660Z  INFO labwired_loader: ELF Entry Point: 0xc1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · atsamd21j17d-aft-smoke · 100000 steps · 0.00s
