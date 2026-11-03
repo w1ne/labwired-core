@@ -1313,6 +1313,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-f446-demo"
+version = "0.25.0"
+
+[[package]]
 name = "firmware-feather-f405-demo"
 version = "0.1.0"
 dependencies = [

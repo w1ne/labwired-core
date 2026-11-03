@@ -1,0 +1,12 @@
+[package]
+name = "firmware-f446-demo"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "firmware-nucleo-f446re-smoke"
+path = "src/nucleo_f446re_smoke.rs"
+test = false
+bench = false

@@ -30,6 +30,7 @@ members = [
     "crates/firmware-esp32c6-demo",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
+    "crates/firmware-f446-demo",
     "crates/firmware-f103-conformance",
     "crates/firmware-f103-fuzztarget",
     "crates/labwired-fuzz",

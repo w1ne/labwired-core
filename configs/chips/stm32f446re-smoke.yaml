@@ -1,0 +1,69 @@
+# LabWired - NUCLEO-F446RE smoke profile
+#
+# This deliberately models only the board paths exercised by the committed
+# smoke: reset-clock RCC writes, GPIOA/GPIOC, USART2 and SysTick. Other F446
+# peripherals are omitted, so firmware that touches them faults as unsupported.
+# No zero-answering peripheral stubs are declared.
+#
+# Sources: ST DS10693 (STM32F446xC/E) for memory/core limits; ST UM1724 for
+# NUCLEO-F446RE board wiring. The board's LED/button/VCP wiring is in the
+# system descriptor, not inferred from the MCU package pin list.
+
+name: "stm32f446re-smoke"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# Smoke stays on reset HSI; this is the initial simulation clock, not the
+# MCU's 180 MHz maximum.
+cpu_hz: 16_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PC13: { gpio: "gpioc", bit: 13 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # SWD/JTAG pins PA13/PA14/PA15 retain their reset alternate function.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      # F446 USART uses the classic SR/DR register map.
+      cr3_mask: 0xFFF
