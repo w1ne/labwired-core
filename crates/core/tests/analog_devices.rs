@@ -4193,6 +4193,122 @@ mod analog {
         }
     }
 
+    /// Source bulk-junction depletion charge is attached to the intrinsic
+    /// source. With model-card `RS`, its transient current must cross that
+    /// resistor exactly as it does when the resistor is explicit in the
+    /// netlist. The constant-capacitance case also has a hand-derived RC
+    /// trajectory, so a missing junction charge cannot pass by matching two
+    /// otherwise identical circuits.
+    #[test]
+    fn mosfet_source_bulk_junction_charge_flows_through_source_resistance() {
+        let (resistance, capacitance, step, h) = (1e3, 100e-12, 1.0, 100e-9);
+        let beta = resistance * capacitance / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = if kind == "NMOS" { 2.0 } else { -2.0 };
+            let model_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 M1 d g s b MMOD\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CBS={capacitance} PB=1 MJ=0 RS={resistance})\n"
+            );
+            let explicit_resistance = format!(
+                "Vg g 0 dc 0\nVd d 0 dc 0\nVs s 0 dc 0\nVb b 0 dc 0\n\
+                 RSM si s {resistance}\nM1 d g si b MMOD\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u LAMBDA=0 IS=1e-30 \
+                 CBS={capacitance} PB=1 MJ=0)\n"
+            );
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut model = Solver::new(
+                    parse_netlist(&model_resistance).expect("MOSFET bulk model parses"),
+                    integration,
+                )
+                .expect("MOSFET bulk solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit_resistance).expect("explicit resistor netlist parses"),
+                    integration,
+                )
+                .expect("explicit resistor solver builds");
+
+                let model_external = model.circuit().node("s").expect("external source");
+                let model_intrinsic = model
+                    .circuit()
+                    .node("M1#source")
+                    .expect("model-card RS creates the intrinsic source");
+                let explicit_external = explicit.circuit().node("s").expect("external source");
+                let explicit_intrinsic = explicit.circuit().node("si").expect("intrinsic source");
+                let model_drive = model.voltage_source_index("Vs").expect("source drive");
+                let explicit_drive = explicit.voltage_source_index("Vs").expect("source drive");
+
+                model.advance(h).expect("model initial point settles");
+                explicit.advance(h).expect("explicit initial point settles");
+                model.set_voltage_source(model_drive, sign * step);
+                explicit.set_voltage_source(explicit_drive, sign * step);
+
+                let (mut previous_voltage, mut previous_current) = (0.0, 0.0);
+                for index in 0..3 {
+                    let rule = if index == 0 {
+                        // The first transient step restarts the companion with
+                        // Backward Euler, regardless of the selected rule.
+                        Integration::BackwardEuler
+                    } else {
+                        integration
+                    };
+                    let expected = match rule {
+                        Integration::BackwardEuler => {
+                            (step + beta * previous_voltage)
+                                / (1.0 + beta + 2.0 * device::GMIN * resistance)
+                        }
+                        Integration::Trapezoidal => {
+                            (step + 2.0 * beta * previous_voltage + resistance * previous_current)
+                                / (1.0 + 2.0 * beta + 2.0 * device::GMIN * resistance)
+                        }
+                    };
+
+                    model.advance(h).expect("model bulk-charge step solves");
+                    explicit
+                        .advance(h)
+                        .expect("explicit-resistor bulk-charge step solves");
+
+                    let actual = sign * model.node_voltage(model_intrinsic);
+                    let reference = sign * explicit.node_voltage(explicit_intrinsic);
+                    assert!(
+                        (actual - expected).abs() < 5e-9,
+                        "{kind} {integration:?} step {index}: intrinsic source should be {expected} V from CBS charge, got {actual} V"
+                    );
+                    assert!(
+                        (actual - reference).abs() < 1e-10,
+                        "{kind} {integration:?} step {index}: model-card RS gives {actual} V, explicit series resistance gives {reference} V"
+                    );
+                    assert!(
+                        (model.node_voltage(model_external)
+                            - explicit.node_voltage(explicit_external))
+                        .abs()
+                            < 1e-12,
+                        "{kind} {integration:?} step {index}: external sources differ"
+                    );
+                    if index == 0 {
+                        assert!(
+                            (step - actual) > 0.1,
+                            "{kind} {integration:?}: CBS displacement current must create a measurable RS drop"
+                        );
+                    }
+
+                    previous_current = match rule {
+                        Integration::BackwardEuler => {
+                            capacitance * (expected - previous_voltage) / h
+                        }
+                        Integration::Trapezoidal => {
+                            2.0 * capacitance * (expected - previous_voltage) / h - previous_current
+                        }
+                    };
+                    previous_voltage = expected;
+                }
+            }
+        }
+    }
+
     /// The model's sheet resistance is multiplied by each instance's drain
     /// and source square counts, and those effective resistors participate in
     /// the solved channel path for both MOS polarities.
