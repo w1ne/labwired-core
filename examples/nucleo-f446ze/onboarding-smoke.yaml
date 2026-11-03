@@ -1,0 +1,19 @@
+# NUCLEO-F446ZE: USART3 VCP banner and all three on-board user LED GPIOs.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f446ze-smoke"
+  system: "../../configs/systems/nucleo-f446ze.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NUCLEO_F446ZE_OK"
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpiob:7"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpiob:14"
+      min_edges: 8
+  - expected_stop_reason: max_steps

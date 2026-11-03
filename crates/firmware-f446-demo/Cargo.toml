@@ -10,3 +10,9 @@ name = "firmware-nucleo-f446re-smoke"
 path = "src/nucleo_f446re_smoke.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-nucleo-f446ze-smoke"
+path = "src/nucleo_f446ze_smoke.rs"
+test = false
+bench = false
