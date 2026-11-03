@@ -28,6 +28,7 @@ on:
       - "crates/firmware-stm32l071-smoke/**"
       - "crates/firmware-stm32l072-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
+      - "crates/firmware-imxrt1064-demo/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -248,6 +249,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nucleo_f767zi-smoke.yaml
             system: configs/systems/onboarding/nucleo_f767zi.yaml
+          # The imported RT1064 slice includes only the modeled CCM, GPIO2,
+          # LPUART6 and DTCM windows exercised by the M7 fixture.
+          - id: imxrt1064
+            crate: firmware-imxrt1064-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/imxrt1064-smoke.yaml
+            system: configs/systems/onboarding/imxrt1064.yaml
           - id: sam4s_xplained
             crate: firmware-sam4s-xplained-smoke
             target: thumbv7em-none-eabi

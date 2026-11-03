@@ -145,6 +145,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
     },
+    "imxrt1064": {
+        "crate": "firmware-imxrt1064-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
+    },
     "sam4s_xplained": {
         "crate": "firmware-sam4s-xplained-smoke",
         "target": "thumbv7em-none-eabi",
