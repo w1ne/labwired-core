@@ -621,6 +621,53 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn mosfet_terminal_resistances_create_internal_nodes_and_validate() {
+        let circuit = parse_netlist("M1 d g s 0 MMOD\n.model MMOD NMOS(RD=12 RS=3)\n")
+            .expect("MOSFET terminal resistances parse");
+        let mosfet = &circuit.mosfets[0];
+        assert_eq!(mosfet.model.rd, 12.0);
+        assert_eq!(mosfet.model.rs, 3.0);
+        assert_eq!(circuit.node_count(), 5);
+        assert_eq!(
+            mosfet.junction_d,
+            circuit.node("M1#drain").expect("drain junction exists")
+        );
+        assert_eq!(
+            mosfet.junction_s,
+            circuit.node("M1#source").expect("source junction exists")
+        );
+        assert_ne!(mosfet.junction_d, mosfet.d);
+        assert_ne!(mosfet.junction_s, mosfet.s);
+
+        let defaults = parse_netlist("M1 d g s 0 MMOD\n.model MMOD PMOS\n")
+            .expect("omitted MOSFET terminal resistances default to zero");
+        let mosfet = &defaults.mosfets[0];
+        assert_eq!(mosfet.model.rd, 0.0);
+        assert_eq!(mosfet.model.rs, 0.0);
+        assert_eq!(defaults.node_count(), 3);
+        assert_eq!(mosfet.junction_d, mosfet.d);
+        assert_eq!(mosfet.junction_s, mosfet.s);
+
+        for parameter in ["RD=-1", "RS=-1"] {
+            let error = parse_netlist(&format!("M1 d g s 0 MMOD\n.model MMOD NMOS({parameter})\n"))
+                .expect_err("negative MOSFET terminal resistance is invalid");
+            assert!(
+                error.to_string().contains("RD/RS >= 0 and finite"),
+                "{error}"
+            );
+        }
+        for parameter in ["RD=inf", "RS=nan"] {
+            parse_netlist(&format!("M1 d g s 0 MMOD\n.model MMOD NMOS({parameter})\n"))
+                .expect_err("nonfinite terminal resistance is invalid");
+        }
+
+        let collision =
+            parse_netlist("M1 d g s 0 MMOD\nR1 M1#drain 0 1k\n.model MMOD NMOS(RD=10)\n")
+                .expect_err("a user node cannot alias an internal MOSFET terminal");
+        assert!(collision.to_string().contains("M1#drain"), "{collision}");
+    }
+
+    #[test]
     fn jfet_model_parameters_are_parsed_and_unsupported_levels_are_refused() {
         let circuit =
             parse_netlist("J1 d g s MOD\n.model MOD NJF(VTO=-1.8 BETA=2m LAMBDA=0.02 IS=4p B=1)\n")

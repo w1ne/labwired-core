@@ -686,8 +686,8 @@ impl Solver {
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
             let voltages = [
-                node_diff(&self.node_v, mosfet.g, mosfet.s),
-                node_diff(&self.node_v, mosfet.g, mosfet.d),
+                node_diff(&self.node_v, mosfet.g, mosfet.junction_s),
+                node_diff(&self.node_v, mosfet.g, mosfet.junction_d),
                 node_diff(&self.node_v, mosfet.g, mosfet.bulk),
             ];
             let capacitances = mosfet.overlap_capacitances();
@@ -699,9 +699,9 @@ impl Solver {
             let channel_caps = mos_channel_capacitance_halves(
                 mosfet,
                 sign * voltages[0],
-                sign * node_diff(&self.node_v, mosfet.d, mosfet.s),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.d),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.s),
+                sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
             );
             self.mos_channel_v[index] = voltages;
             self.mos_channel_q[index] =
@@ -959,8 +959,8 @@ impl Solver {
             let mosfet = &self.circuit.mosfets[index];
             let nodes = &self.solution[..self.nodes];
             let voltages = [
-                node_diff(nodes, mosfet.g, mosfet.s),
-                node_diff(nodes, mosfet.g, mosfet.d),
+                node_diff(nodes, mosfet.g, mosfet.junction_s),
+                node_diff(nodes, mosfet.g, mosfet.junction_d),
                 node_diff(nodes, mosfet.g, mosfet.bulk),
             ];
             let capacitances = mosfet.overlap_capacitances();
@@ -986,7 +986,7 @@ impl Solver {
                 self.mos_vbd[index],
                 self.mos_vbs[index],
             );
-            let terminals = [mosfet.s, mosfet.d, mosfet.bulk];
+            let terminals = [mosfet.junction_s, mosfet.junction_d, mosfet.bulk];
             for junction in 0..3 {
                 let voltage = node_diff(nodes, mosfet.g, terminals[junction]);
                 let capacitance =
@@ -1109,6 +1109,26 @@ impl Solver {
                     bjt.e,
                     bjt.junction_e,
                     1.0 / bjt.model.re,
+                );
+            }
+        }
+        for mosfet in &self.circuit.mosfets {
+            if mosfet.model.rd > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    mosfet.d,
+                    mosfet.junction_d,
+                    1.0 / mosfet.model.rd,
+                );
+            }
+            if mosfet.model.rs > 0.0 {
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    mosfet.junction_s,
+                    mosfet.s,
+                    1.0 / mosfet.model.rs,
                 );
             }
         }
@@ -1558,10 +1578,10 @@ impl Solver {
             let mosfet = &self.circuit.mosfets[index];
             let sign = mosfet.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
-            let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.s);
-            let raw_ds = sign * node_diff(nodes, mosfet.d, mosfet.s);
-            let raw_bd = sign * node_diff(nodes, mosfet.bulk, mosfet.d);
-            let raw_bs = sign * node_diff(nodes, mosfet.bulk, mosfet.s);
+            let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.junction_s);
+            let raw_ds = sign * node_diff(nodes, mosfet.junction_d, mosfet.junction_s);
+            let raw_bd = sign * node_diff(nodes, mosfet.bulk, mosfet.junction_d);
+            let raw_bs = sign * node_diff(nodes, mosfet.bulk, mosfet.junction_s);
 
             // The limiters are SPICE's and assume the channel's own source, so
             // they are applied to the EFFECTIVE voltages — the ones a reversed
@@ -1833,7 +1853,13 @@ impl Solver {
             // Below Vto the channel is off, so GMIN connects drain to source.
             // The two bulk pn junctions include their own GMIN through
             // diode_op, and use the model's bulk-junction saturation current.
-            conductance(matrix, dim, mosfet.d, mosfet.s, device::GMIN);
+            conductance(
+                matrix,
+                dim,
+                mosfet.junction_d,
+                mosfet.junction_s,
+                device::GMIN,
+            );
 
             // A MOSFET is symmetric: when Vds goes negative the terminal the
             // netlist calls the drain IS the source, and the level-1 equations
@@ -1841,9 +1867,9 @@ impl Solver {
             // whole of "reverse mode".
             let reversed = vds < 0.0;
             let (drain, source) = if reversed {
-                (mosfet.s, mosfet.d)
+                (mosfet.junction_s, mosfet.junction_d)
             } else {
-                (mosfet.d, mosfet.s)
+                (mosfet.junction_d, mosfet.junction_s)
             };
             let (vgs_eff, vds_eff) = if reversed {
                 (vgs - vds, -vds)
@@ -1887,8 +1913,8 @@ impl Solver {
             if let Stamp::Transient(h, rule) = stamp {
                 let capacitances = mosfet.overlap_capacitances();
                 let terminals = [
-                    (mosfet.g, mosfet.s),
-                    (mosfet.g, mosfet.d),
+                    (mosfet.g, mosfet.junction_s),
+                    (mosfet.g, mosfet.junction_d),
                     (mosfet.g, mosfet.bulk),
                 ];
                 for junction in 0..3 {
@@ -1922,7 +1948,7 @@ impl Solver {
                     self.mos_vbd[index],
                     self.mos_vbs[index],
                 );
-                let terminals = [mosfet.s, mosfet.d, mosfet.bulk];
+                let terminals = [mosfet.junction_s, mosfet.junction_d, mosfet.bulk];
                 for junction in 0..3 {
                     let capacitance =
                         self.mos_channel_cap_half[index][junction] + channel_caps[junction];
@@ -1955,25 +1981,35 @@ impl Solver {
             // the bulk is the anode and drain/source are the cathodes; the
             // polarity sign reverses that orientation for PMOS.
             let bd = device::diode_op(self.mos_vbd[index], model.is, 1.0);
-            let bd_terms = [(bd.gd, mosfet.bulk, mosfet.d, sign * self.mos_vbd[index])];
+            let bd_terms = [(
+                bd.gd,
+                mosfet.bulk,
+                mosfet.junction_d,
+                sign * self.mos_vbd[index],
+            )];
             stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bd.id, &bd_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
-                mosfet.d,
+                mosfet.junction_d,
                 -sign * bd.id,
                 &negate(&bd_terms),
             );
 
             let bs = device::diode_op(self.mos_vbs[index], model.is, 1.0);
-            let bs_terms = [(bs.gd, mosfet.bulk, mosfet.s, sign * self.mos_vbs[index])];
+            let bs_terms = [(
+                bs.gd,
+                mosfet.bulk,
+                mosfet.junction_s,
+                sign * self.mos_vbs[index],
+            )];
             stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bs.id, &bs_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
-                mosfet.s,
+                mosfet.junction_s,
                 -sign * bs.id,
                 &negate(&bs_terms),
             );

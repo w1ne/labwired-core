@@ -60,8 +60,8 @@
 //! charge `TT`, BJT terminal resistances `RB`/`RC`/`RE`, JFET terminal
 //! resistances `RD`/`RS` and gate-junction depletion capacitance
 //! `CGS`/`CGD`/`PB`/`FC`,
-//! MOSFET level-1 channel capacitance from `TOX` and overlap capacitance
-//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
+//! MOSFET terminal resistances `RD`/`RS`, level-1 channel capacitance from
+//! `TOX` and overlap capacitance `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
 //! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
 //! constant forward/reverse transit times `TF`/`TR`, every temperature
 //! coefficient, bias-dependent transit-time parameters (`XTF`/`VTF`/`ITF`),
@@ -70,7 +70,7 @@
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
 //! charge plus ohmic terminal resistances `RB`/`RC`/`RE` are modelled. JFET
 //! terminal resistances `RD`/`RS` create series resistors to its intrinsic
-//! drain/source nodes. MOSFET level-1 `GAMMA`/`PHI` body effect is also
+//! drain/source nodes. MOSFET `RD`/`RS` do the same; level-1 `GAMMA`/`PHI` body effect is also
 //! modelled; MOSFET `IS` is used for
 //! the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
@@ -970,6 +970,12 @@ pub struct MosModel {
     pub kp: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
+    /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
+    /// drain node, matching ngspice's default.
+    pub rd: f64,
+    /// Ohmic source terminal resistance `RS`, ohms. Zero disables the internal
+    /// source node, matching ngspice's default.
+    pub rs: f64,
     /// Bulk threshold parameter `GAMMA`, sqrt(V).
     pub gamma: f64,
     /// Surface potential `PHI`, volts.
@@ -1047,6 +1053,8 @@ impl MosModel {
             vto: 0.0,
             kp: 2e-5,
             lambda: 0.0,
+            rd: 0.0,
+            rs: 0.0,
             gamma: 0.0,
             phi: 0.6,
             is: 1e-14,
@@ -1452,6 +1460,10 @@ pub struct Mosfet {
     pub g: NodeRef,
     /// Source.
     pub s: NodeRef,
+    /// Intrinsic drain after `RD`, or `d` when `RD` is zero.
+    pub junction_d: NodeRef,
+    /// Intrinsic source before `RS`, or `s` when `RS` is zero.
+    pub junction_s: NodeRef,
     /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
     /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
     pub bulk: NodeRef,
@@ -2612,6 +2624,13 @@ fn bind_models(
                         "a MOSFET model needs CGSO/CGDO/CGBO >= 0 and finite".to_string(),
                     ));
                 }
+                if !model.rd.is_finite()
+                    || model.rd < 0.0
+                    || !model.rs.is_finite()
+                    || model.rs < 0.0
+                {
+                    return Err(ctx.parse_err("a MOSFET model needs RD/RS >= 0 and finite"));
+                }
                 if !(model.cgso * w).is_finite()
                     || !(model.cgdo * w).is_finite()
                     || !(model.cgbo * l).is_finite()
@@ -2632,11 +2651,31 @@ fn bind_models(
                         ));
                     }
                 }
+                let junction_node = |circuit: &mut Circuit,
+                                     terminal: NodeRef,
+                                     resistance: f64,
+                                     suffix: &str|
+                 -> Result<NodeRef, AnalogError> {
+                    if resistance == 0.0 {
+                        return Ok(terminal);
+                    }
+                    let internal_name = format!("{}#{suffix}", device.name);
+                    if circuit.node(&internal_name).is_some() {
+                        return Err(ctx.parse_err(format!(
+                            "internal MOSFET node `{internal_name}` is already used by the netlist"
+                        )));
+                    }
+                    Ok(circuit.intern(&internal_name))
+                };
+                let junction_d = junction_node(circuit, device.nodes[0], model.rd, "drain")?;
+                let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
+                    junction_d,
+                    junction_s,
                     bulk: device.nodes[3],
                     model_name: device.model_name,
                     model,
@@ -2973,6 +3012,8 @@ fn parse_model(
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Mos(model), "RD") => model.rd = value,
+            (ModelCard::Mos(model), "RS") => model.rs = value,
             (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
             (ModelCard::Mos(model), "PHI") => model.phi = value,
             (ModelCard::Mos(model), "IS") => model.is = value,
@@ -3290,6 +3331,8 @@ fn lower_comparator(
                 vto: 0.5,
                 kp,
                 lambda: 0.0,
+                rd: 0.0,
+                rs: 0.0,
                 gamma: 0.0,
                 phi: 0.6,
                 is: 1e-14,
@@ -3305,6 +3348,8 @@ fn lower_comparator(
                 d: out,
                 g: q,
                 s: vee,
+                junction_d: out,
+                junction_s: vee,
                 bulk: vee,
                 model_name: "comparator-output".to_string(),
                 model: mos,
