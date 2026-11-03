@@ -83,8 +83,9 @@
 //! input voltage relative to the supply midpoint into input-referred
 //! differential voltage;
 //! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
-//! models differential capacitance between the inputs, and `IQ` models a
-//! constant quiescent current from `V+` to `V−`. BJT
+//! models differential capacitance between the inputs, `IQ` models a
+//! constant quiescent current from `V+` to `V−`, and OPAMP `IOLIM` clamps the
+//! output current symmetrically. BJT
 //! high-injection rolloff from `IKF`/`IKR` with optional `NKF` (default
 //! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
@@ -634,7 +635,8 @@ pub enum ComparatorOutput {
 ///                 Rg = 1 MΩ   and   Cg = AOL/(2π·GBW·Rg)   from p to ground
 ///   clamps:       D  p → (v+ − DROP_HI)      D  (v− + DROP_LO) → p
 ///   output:       Thevenin v(p) behind ROUT, i.e.  G = 1/ROUT into out,
-///                 R = ROUT from out to ground
+///                 R = ROUT from out to ground; optional IOLIM clamps the
+///                 current once |v(p) − v(out)| / ROUT reaches the limit
 /// ```
 ///
 /// So the DC gain is `AOL`, the single pole sits at `GBW/AOL`, the unity-gain
@@ -660,13 +662,17 @@ pub enum ComparatorOutput {
 /// supply midpoint into input-referred differential voltage using
 /// `10^(−CMRR/20)`. Omission gives ideal common-mode rejection.
 ///
+/// `IOLIM` is an optional, symmetric output-current limit. Below the limit the
+/// output follows the normal Thevenin source and `ROUT`; above it, the output
+/// current is held at `±IOLIM`. Omission leaves the output stage unlimited.
+///
 /// `CINCM` is the common-mode capacitance from each input to `v−`; `CIND` is
 /// the differential capacitance between the inputs. Both are fixed linear
 /// capacitances with no voltage or temperature dependence. `IQ` is a fixed
 /// quiescent current from `v+` to `v−`, independent of signal and output load.
 ///
-/// What it does not model: slew-rate limiting beyond what the pole gives,
-/// output current limiting, and signal- or load-dependent supply current. The
+/// What it does not model: slew-rate limiting beyond what the pole gives and
+/// signal- or load-dependent supply current. The
 /// output stage's current returns through ground, not through the supply pins.
 /// Clamp current reaches `v+`/`v−`; input bias current reaches `v−`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -696,6 +702,9 @@ pub struct OpAmpModel {
     pub iq: f64,
     /// Common-mode rejection ratio in dB. `None` means ideal rejection.
     pub cmrr: Option<f64>,
+    /// Symmetric output current limit, amps. `None` leaves the output stage
+    /// unlimited, preserving the ordinary Thevenin `ROUT` behavior.
+    pub ilim: Option<f64>,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -717,6 +726,7 @@ impl Default for OpAmpModel {
             cin_diff: 0.0,
             iq: 0.0,
             cmrr: None,
+            ilim: None,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -1437,6 +1447,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             cin_diff: 0.0,
             iq: 0.0,
             cmrr: None,
+            ilim: None,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -1635,6 +1646,25 @@ pub struct Vccs {
     pub cn: NodeRef,
     /// Transconductance, siemens.
     pub gm: f64,
+}
+
+/// A symmetric current limit in an op-amp's Norton output stage.
+///
+/// The output current is `clamp((v(drive) − v(output))/ROUT, −IOLIM, IOLIM)`.
+/// The drive node is only a control: the limited output current does not load
+/// the op-amp's internal gain node.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputCurrentLimit {
+    /// Element name (`<X name>#go`).
+    pub name: String,
+    /// Internal op-amp drive node, used as the Thevenin voltage.
+    pub drive: NodeRef,
+    /// External output pin.
+    pub output: NodeRef,
+    /// Small-signal output resistance, ohms.
+    pub rout: f64,
+    /// Symmetric output-current limit, amps.
+    pub ilim: f64,
 }
 
 /// `F<name> n+ n- <vsource> <gain>` — current-controlled current source: a
@@ -1907,6 +1937,8 @@ pub struct Circuit {
     pub ccvs: Vec<Ccvs>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
+    /// Op-amp output stages with an explicit `IOLIM`.
+    pub output_current_limits: Vec<OutputCurrentLimit>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
 }
@@ -2008,6 +2040,7 @@ impl Circuit {
             || self.cccs.iter().any(|e| matches(&e.name))
             || self.ccvs.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
+            || self.output_current_limits.iter().any(|e| matches(&e.name))
             || pending_mutuals.iter().any(|e| matches(&e.name))
     }
 
@@ -2023,6 +2056,7 @@ impl Circuit {
             || !self.mosfets.is_empty()
             || !self.jfets.is_empty()
             || !self.power_sinks.is_empty()
+            || !self.output_current_limits.is_empty()
     }
 
     /// True when any independent source carries a transient function, so the
@@ -3541,6 +3575,7 @@ fn parse_model(
             (ModelCard::OpAmp(model), "RINCM") => model.rin_cm = value,
             (ModelCard::OpAmp(model), "IQ") => model.iq = value,
             (ModelCard::OpAmp(model), "CMRR") => model.cmrr = Some(value),
+            (ModelCard::OpAmp(model), "IOLIM") => model.ilim = Some(value),
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
@@ -3562,7 +3597,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -3780,6 +3815,24 @@ impl Lowering<'_> {
             b,
             farads,
             ic: None,
+        });
+    }
+
+    fn output_current_limit(
+        &mut self,
+        part: &str,
+        drive: NodeRef,
+        output: NodeRef,
+        rout: f64,
+        ilim: f64,
+    ) {
+        let name = self.name(part);
+        self.circuit.output_current_limits.push(OutputCurrentLimit {
+            name,
+            drive,
+            output,
+            rout,
+            ilim,
         });
     }
 
@@ -4010,6 +4063,11 @@ fn lower_opamp(
     check_input_resistance(ctx, model.rin)?;
     check_common_mode_input_resistance(ctx, model.rin_cm)?;
     check_quiescent_current(ctx, model.iq)?;
+    if let Some(ilim) = model.ilim {
+        if !ilim.is_finite() || ilim <= 0.0 {
+            return Err(ctx.parse_err("IOLIM must be finite and positive"));
+        }
+    }
     let cm_gain = check_common_mode_rejection(ctx, model.cmrr)?;
     let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rg = MACRO_GAIN_RESISTANCE;
@@ -4051,9 +4109,13 @@ fn lower_opamp(
     let lo = lower.offset_rail("lo", vee, model.drop_lo, false);
     lower.clamp("dhi", p, hi);
     lower.clamp("dlo", lo, p);
-    // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
-    lower.vccs("go", None, out, p, None, 1.0 / model.rout);
-    lower.resistor("ro", out, None, model.rout);
+    if let Some(ilim) = model.ilim {
+        lower.output_current_limit("go", p, out, model.rout, ilim);
+    } else {
+        // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
+        lower.vccs("go", None, out, p, None, 1.0 / model.rout);
+        lower.resistor("ro", out, None, model.rout);
+    }
     Ok(())
 }
 

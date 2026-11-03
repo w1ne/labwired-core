@@ -597,6 +597,76 @@ mod analog {
     }
 
     #[test]
+    fn opamp_output_current_limit_keeps_rout_below_limit_and_clamps_both_directions() {
+        let unlimited = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 0.5\n\
+             Rl out 0 500\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50)\n",
+        );
+        let limited = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 0.5\n\
+             Rl out 0 500\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        let expected = v(&limited, "X1#p") * 500.0 / (500.0 + 50.0);
+        assert!(
+            (v(&limited, "out") - expected).abs() < 1e-8,
+            "below IOLIM, Rout should set the divider output: got {}, expected {expected}",
+            v(&limited, "out")
+        );
+        assert!(v(&limited, "out") / 500.0 < 10e-3);
+        assert!(
+            (v(&limited, "out") - v(&unlimited, "out")).abs() < 1e-8,
+            "below IOLIM, Rout should retain the unlimited output: limited={}, unlimited={}",
+            v(&limited, "out"),
+            v(&unlimited, "out")
+        );
+
+        // A 100 Ω load asks for 50 mA from the high rail, so 10 mA at the
+        // output pin sets Vout = IOLIM·RL = 1 V.
+        let sourcing = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 1\n\
+             Rl out 0 100\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        assert!(
+            (v(&sourcing, "out") - 1.0).abs() < 1e-8,
+            "source current should clamp at 10 mA: got {} V",
+            v(&sourcing, "out")
+        );
+
+        // Reversing the drive makes the output sink 10 mA from a 5 V pull-up;
+        // the same symmetric limit puts the pin at 4 V.
+        let sinking = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVload load 0 dc 5\nVin inn 0 dc 1\n\
+             Rl load out 100\nX1 0 inn vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        assert!(
+            (v(&sinking, "out") - 4.0).abs() < 1e-8,
+            "sink current should clamp at 10 mA: got {} V",
+            v(&sinking, "out")
+        );
+    }
+
+    #[test]
+    fn opamp_output_current_limit_must_be_finite_and_positive() {
+        for ilim in ["0", "-1m", "1e999"] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(IOLIM={ilim})\n"
+            ))
+            .expect_err("an invalid IOLIM cannot be stamped");
+            assert!(
+                error
+                    .to_string()
+                    .contains("IOLIM must be finite and positive"),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
     fn the_single_pole_sits_at_gbw_over_aol() {
         // Open loop, a 1 mV step: the gain node charges toward AOL·1 mV with
         // tau = Rg·Cg = AOL/(2π·GBW). At one tau it is 63.2 % of the way.

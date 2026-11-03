@@ -343,6 +343,8 @@ pub struct Solver {
     /// Each power sink's linearisation point: `(v(p) − v(n), v(op) − v(on),
     /// i(control))`.
     sink_point: Vec<[f64; 3]>,
+    /// Drive-to-output voltage for each op-amp output current limiter.
+    output_limit_point: Vec<f64>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
@@ -356,6 +358,7 @@ pub struct Solver {
     saved_jfet_vgd: Vec<f64>,
     saved_jfet_vds: Vec<f64>,
     saved_sink_point: Vec<[f64; 3]>,
+    saved_output_limit_point: Vec<f64>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -428,6 +431,7 @@ impl Solver {
         let mosfets = circuit.mosfets.len();
         let jfets = circuit.jfets.len();
         let sinks = circuit.power_sinks.len();
+        let output_limits = circuit.output_current_limits.len();
 
         let mut solver = Self {
             circuit,
@@ -475,6 +479,7 @@ impl Solver {
             jfet_q: vec![[0.0; 2]; jfets],
             jfet_i: vec![[0.0; 2]; jfets],
             sink_point: vec![[0.0; 3]; sinks],
+            output_limit_point: vec![0.0; output_limits],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
@@ -486,6 +491,7 @@ impl Solver {
             saved_jfet_vgd: vec![0.0; jfets],
             saved_jfet_vds: vec![0.0; jfets],
             saved_sink_point: vec![[0.0; 3]; sinks],
+            saved_output_limit_point: vec![0.0; output_limits],
             node_shunt: 0.0,
             limiter_clamped: false,
             nonlinear,
@@ -936,6 +942,8 @@ impl Solver {
         self.saved_jfet_vgd.copy_from_slice(&self.jfet_vgd);
         self.saved_jfet_vds.copy_from_slice(&self.jfet_vds);
         self.saved_sink_point.copy_from_slice(&self.sink_point);
+        self.saved_output_limit_point
+            .copy_from_slice(&self.output_limit_point);
     }
 
     fn restore_linearisation(&mut self) {
@@ -950,6 +958,8 @@ impl Solver {
         self.jfet_vgd.copy_from_slice(&self.saved_jfet_vgd);
         self.jfet_vds.copy_from_slice(&self.saved_jfet_vds);
         self.sink_point.copy_from_slice(&self.saved_sink_point);
+        self.output_limit_point
+            .copy_from_slice(&self.saved_output_limit_point);
     }
 
     /// One step of exactly `h`, no retry.
@@ -1916,6 +1926,11 @@ impl Solver {
                 self.solution[self.nodes + sink.control_branch],
             ];
         }
+
+        for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            self.output_limit_point[index] =
+                node_diff(&self.solution[..self.nodes], limit.drive, limit.output);
+        }
     }
 
     /// Stamp every nonlinear device's companion model at its current
@@ -2481,6 +2496,23 @@ impl Solver {
                 let equivalent = current - g_vin * vin - g_vo * vo - g_ib * ib;
                 rhs[row] -= sign * equivalent;
             }
+        }
+
+        // Op-amp output stages use a Norton current whose small-signal slope is
+        // 1/ROUT. IOLIM clips that current symmetrically; on the flat part its
+        // derivative is zero, so the output settles to the load's voltage at
+        // the limited current instead of asking the gain node to supply more.
+        for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            let delta = self.output_limit_point[index];
+            let unconstrained = delta / limit.rout;
+            let current = unconstrained.clamp(-limit.ilim, limit.ilim);
+            let conductance = if unconstrained.abs() < limit.ilim {
+                1.0 / limit.rout
+            } else {
+                0.0
+            };
+            let control = [(-conductance, limit.drive, limit.output, delta)];
+            stamp_linearised(matrix, rhs, dim, limit.output, -current, &control);
         }
     }
 }
