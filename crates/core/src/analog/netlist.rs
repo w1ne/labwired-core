@@ -58,7 +58,8 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and diffusion
 //! charge `TT`, JFET gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
-//! MOSFET overlap capacitance `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
+//! MOSFET level-1 channel capacitance from `TOX` and overlap capacitance
+//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
 //! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
 //! constant forward/reverse transit times `TF`/`TR`, every temperature
 //! coefficient, bias-dependent transit-time parameters (`XTF`/`VTF`/`ITF`),
@@ -69,7 +70,8 @@
 //! modelled; MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
-//! as linear overlap charge. MOSFET channel charge is not modelled. See
+//! as linear overlap charge. `TOX`, when present, enables the level-1 Meyer
+//! channel capacitance. See
 //! [`super::device`] for what is and is not modelled.
 //!
 //! An element may also name one of seven built-in cards and skip `.model`
@@ -97,8 +99,8 @@
 //! their bias-dependent extensions (`XTF`, `VTF`, `ITF`) are not modelled. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
 //! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
-//! gate overlap charge based on instance `W`/`L`; channel charge is not
-//! modelled. `.model <name> OPAMP(...)` and
+//! gate overlap charge based on instance `W`/`L`; `TOX` enables the level-1
+//! Meyer intrinsic gate capacitances. `.model <name> OPAMP(...)` and
 //! `.model <name> COMP(...)` are this engine's own card types, not ngspice's.
 //!
 //! ## Directives and comments
@@ -965,6 +967,10 @@ pub struct MosModel {
     pub cgdo: f64,
     /// Gate-bulk overlap capacitance per unit length `CGBO`, F/m.
     pub cgbo: f64,
+    /// Gate oxide thickness `TOX`, metres. When present, enables the level-1
+    /// Meyer intrinsic gate capacitances; absent means no intrinsic channel
+    /// capacitance, matching ngspice's level-1 behavior.
+    pub tox: Option<f64>,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -1022,6 +1028,7 @@ impl MosModel {
             cgso: 0.0,
             cgdo: 0.0,
             cgbo: 0.0,
+            tox: None,
         }
     }
 }
@@ -2543,6 +2550,17 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
+                if let Some(tox) = model.tox {
+                    if !tox.is_finite() || tox <= 0.0 {
+                        return Err(ctx.parse_err("a MOSFET model needs TOX > 0 and finite"));
+                    }
+                    let cox = 3.453_133e-11 * w * l / tox;
+                    if !cox.is_finite() {
+                        return Err(ctx.parse_err(
+                            "a MOSFET model's effective oxide capacitance must be finite",
+                        ));
+                    }
+                }
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
                     d: device.nodes[0],
@@ -2862,6 +2880,7 @@ fn parse_model(
             (ModelCard::Mos(model), "CGSO") => model.cgso = value,
             (ModelCard::Mos(model), "CGDO") => model.cgdo = value,
             (ModelCard::Mos(model), "CGBO") => model.cgbo = value,
+            (ModelCard::Mos(model), "TOX") => model.tox = Some(value),
             // A level this engine cannot honour is the one parameter worth
             // refusing: silently solving a BSIM card with Shichman-Hodges
             // would be wrong by orders of magnitude, not by a capacitance.
@@ -3176,6 +3195,7 @@ fn lower_comparator(
                 cgso: 0.0,
                 cgdo: 0.0,
                 cgbo: 0.0,
+                tox: None,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,

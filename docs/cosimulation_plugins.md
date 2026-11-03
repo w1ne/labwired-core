@@ -423,7 +423,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> TOX=<m> W=<m> L=<m>)
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> IS=<a>)
 .model <name> PJF  (...)
@@ -436,12 +436,14 @@ same thing to both engines.
 
 This engine models diode depletion capacitance from `CJO`/`VJ`/`M`/`FC` and
 BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
-`CJC`/`VJC`/`MJC`, and shared `FC`. Other device capacitances, temperature
-coefficients, `NKF`, and BJT terminal resistances `RB`/`RC`/`RE` are accepted
-and ignored, so a vendor card runs with its supported behaviour. Level-1 MOSFET
-`GAMMA` and `PHI` model body effect; their defaults are 0 and 0.6 V. MOSFET
-`LEVEL` other than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are
-refused by name because they use different channel equations.
+`CJC`/`VJC`/`MJC`, and shared `FC`. Level-1 MOSFET `TOX` enables intrinsic
+gate capacitances using the Meyer model; without `TOX`, only explicit overlap
+capacitances are present. Other device capacitances, temperature coefficients,
+`NKF`, and BJT terminal resistances `RB`/`RC`/`RE` are accepted and ignored,
+so a vendor card runs with its supported behaviour. Level-1 MOSFET `GAMMA` and
+`PHI` model body effect; their defaults are 0 and 0.6 V. MOSFET `LEVEL` other
+than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are refused by name
+because they use different channel equations.
 
 Seven built-in cards need no `.model` line at all, which is what a catalog part
 emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
@@ -458,17 +460,18 @@ recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
 base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
 plus constant transit-time charge from `TF`/`TR` (all default to zero; shared
 `FC` defaults to 0.5). Shichman–Hodges MOSFET level 1 with `GAMMA`/`PHI` body
-effect and linear gate overlap charge from `CGSO`/`CGDO`/`CGBO`; and SPICE JFET
-level 1 with `B=1`, including its two gate junctions and depletion charge.
-MOSFET and JFET channel-length modulation, both polarities, reverse channel
-operation and MOSFET body effect are covered by tests. Every parameter is
-taken at 300.00 K; there is no temperature model, which is why decks handed to
-ngspice pin `temp`/`tnom` to 26.85 °C.
+effect, linear gate overlap charge from `CGSO`/`CGDO`/`CGBO`, and `TOX`-enabled
+intrinsic gate capacitances using ngspice's piecewise Meyer formulation; and
+SPICE JFET level 1 with `B=1`, including its two gate junctions and depletion
+charge. MOSFET and JFET channel-length modulation, both polarities, reverse
+channel operation, MOSFET body effect, and the tested Meyer bias regions are
+covered by tests. Every parameter is taken at 300.00 K; there is no temperature
+model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not modeled:** MOSFET channel charge; BJT bias-dependent transit-time
-adjustments (`XTF`/`VTF`/`ITF`) and ohmic terminal resistances; JFET
-drain/source ohmic resistances (`RD`/`RS`); and JFET levels other than level 1
-with `B=1`. The diode's `TT` term is a quasi-static transit-time
+**What is not modeled:** a charge-conserving MOSFET channel-charge model; BJT
+bias-dependent transit-time adjustments (`XTF`/`VTF`/`ITF`) and ohmic terminal
+resistances; JFET drain/source ohmic resistances (`RD`/`RS`); and JFET levels
+other than level 1 with `B=1`. The diode's `TT` term is a quasi-static transit-time
 charge model; more detailed non-quasi-static and soft-recovery effects are not
 modeled. Circuits needing those features belong on `adapter: external_process`
 with `tools/cosim/labwired_ngspice.py`.

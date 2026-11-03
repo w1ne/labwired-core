@@ -52,7 +52,9 @@
 //! same input sequence produce bit-identical voltages on every host.
 
 use super::device;
-use super::netlist::{AnalogError, BjtModel, Circuit, DiodeModel, NodeRef, POWER_SINK_VMIN};
+use super::netlist::{
+    AnalogError, BjtModel, Circuit, DiodeModel, Mosfet, NodeRef, POWER_SINK_VMIN,
+};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
 /// currents. Dense LU is `O(n³)`; at 64 unknowns one step is a few microseconds
@@ -107,6 +109,42 @@ fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
     } else {
         model.cjc != 0.0 || model.tr != 0.0
     }
+}
+
+/// Level-1 Meyer gate-capacitance halves in netlist G-S, G-D, G-B order.
+/// The model's effective source/drain order follows the channel direction, but
+/// the returned history remains attached to the physical netlist terminals.
+fn mos_channel_capacitance_halves(
+    mosfet: &Mosfet,
+    vgs: f64,
+    vds: f64,
+    vbd: f64,
+    vbs: f64,
+) -> [f64; 3] {
+    let Some(tox) = mosfet.model.tox else {
+        return [0.0; 3];
+    };
+    let sign = mosfet.model.polarity.sign();
+    let reversed = vds < 0.0;
+    let (vgs_eff, vds_eff, vbs_eff) = if reversed {
+        (vgs - vds, -vds, vbd)
+    } else {
+        (vgs, vds, vbs)
+    };
+    let cox = device::OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.l / tox;
+    let mut caps = device::mos_meyer_capacitance_halves(
+        vgs_eff,
+        vds_eff,
+        vbs_eff,
+        sign * mosfet.model.vto,
+        mosfet.model.gamma,
+        mosfet.model.phi,
+        cox,
+    );
+    if reversed {
+        caps.swap(0, 1);
+    }
+    caps
 }
 
 fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> device::DiodeOp {
@@ -182,6 +220,14 @@ pub struct Solver {
     /// gate-source, gate-drain, then gate-bulk in circuit coordinates.
     mos_overlap_q: Vec<[f64; 3]>,
     mos_overlap_i: Vec<[f64; 3]>,
+    /// Previous physical G-S, G-D and G-B voltages for intrinsic channel
+    /// charge, in circuit coordinates.
+    mos_channel_v: Vec<[f64; 3]>,
+    /// Integrated intrinsic channel charge and current, in the same order.
+    mos_channel_q: Vec<[f64; 3]>,
+    mos_channel_i: Vec<[f64; 3]>,
+    /// Previous endpoint Meyer capacitance halves, in the same order.
+    mos_channel_cap_half: Vec<[f64; 3]>,
     /// Each JFET's normalised gate-source and gate-drain junction voltages.
     jfet_vgs: Vec<f64>,
     jfet_vgd: Vec<f64>,
@@ -310,6 +356,10 @@ impl Solver {
             mos_vbs: vec![0.0; mosfets],
             mos_overlap_q: vec![[0.0; 3]; mosfets],
             mos_overlap_i: vec![[0.0; 3]; mosfets],
+            mos_channel_v: vec![[0.0; 3]; mosfets],
+            mos_channel_q: vec![[0.0; 3]; mosfets],
+            mos_channel_i: vec![[0.0; 3]; mosfets],
+            mos_channel_cap_half: vec![[0.0; 3]; mosfets],
             jfet_vgs: vec![0.0; jfets],
             jfet_vgd: vec![0.0; jfets],
             jfet_vds: vec![0.0; jfets],
@@ -644,6 +694,20 @@ impl Solver {
             self.mos_overlap_q[index] =
                 core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
             self.mos_overlap_i[index] = [0.0; 3];
+
+            let sign = mosfet.model.polarity.sign();
+            let channel_caps = mos_channel_capacitance_halves(
+                mosfet,
+                sign * voltages[0],
+                sign * node_diff(&self.node_v, mosfet.d, mosfet.s),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.d),
+                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.s),
+            );
+            self.mos_channel_v[index] = voltages;
+            self.mos_channel_q[index] =
+                core::array::from_fn(|junction| 2.0 * channel_caps[junction] * voltages[junction]);
+            self.mos_channel_i[index] = [0.0; 3];
+            self.mos_channel_cap_half[index] = channel_caps;
         }
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
@@ -913,6 +977,37 @@ impl Solver {
                     && self.mos_overlap_i[index][junction].to_bits() == i_new.to_bits();
                 self.mos_overlap_q[index][junction] = q_new;
                 self.mos_overlap_i[index][junction] = i_new;
+            }
+
+            let channel_caps = mos_channel_capacitance_halves(
+                mosfet,
+                self.mos_vgs[index],
+                self.mos_vds[index],
+                self.mos_vbd[index],
+                self.mos_vbs[index],
+            );
+            let terminals = [mosfet.s, mosfet.d, mosfet.bulk];
+            for junction in 0..3 {
+                let voltage = node_diff(nodes, mosfet.g, terminals[junction]);
+                let capacitance =
+                    self.mos_channel_cap_half[index][junction] + channel_caps[junction];
+                let charge_delta = (voltage - self.mos_channel_v[index][junction]) * capacitance;
+                let q_new = self.mos_channel_q[index][junction] + charge_delta;
+                let i_new = match rule {
+                    Integration::BackwardEuler => charge_delta / h,
+                    Integration::Trapezoidal => {
+                        2.0 * charge_delta / h - self.mos_channel_i[index][junction]
+                    }
+                };
+                self.settled &= self.mos_channel_cap_half[index][junction].to_bits()
+                    == channel_caps[junction].to_bits()
+                    && self.mos_channel_v[index][junction].to_bits() == voltage.to_bits()
+                    && self.mos_channel_q[index][junction].to_bits() == q_new.to_bits()
+                    && self.mos_channel_i[index][junction].to_bits() == i_new.to_bits();
+                self.mos_channel_v[index][junction] = voltage;
+                self.mos_channel_q[index][junction] = q_new;
+                self.mos_channel_i[index][junction] = i_new;
+                self.mos_channel_cap_half[index][junction] = channel_caps[junction];
             }
         }
         for index in 0..self.circuit.inductors.len() {
@@ -1745,6 +1840,41 @@ impl Solver {
                             2.0 * (charge - self.mos_overlap_q[index][junction]) / h
                                 - self.mos_overlap_i[index][junction],
                         ),
+                    };
+                    let control = [(geq, positive, negative, voltage)];
+                    stamp_linearised(matrix, rhs, dim, positive, current, &control);
+                    stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                }
+
+                let channel_caps = mos_channel_capacitance_halves(
+                    mosfet,
+                    vgs,
+                    vds,
+                    self.mos_vbd[index],
+                    self.mos_vbs[index],
+                );
+                let terminals = [mosfet.s, mosfet.d, mosfet.bulk];
+                for junction in 0..3 {
+                    let capacitance =
+                        self.mos_channel_cap_half[index][junction] + channel_caps[junction];
+                    if capacitance == 0.0 {
+                        continue;
+                    }
+                    let positive = mosfet.g;
+                    let negative = terminals[junction];
+                    let voltage = node_diff(&self.solution[..self.nodes], positive, negative);
+                    let charge_delta =
+                        (voltage - self.mos_channel_v[index][junction]) * capacitance;
+                    let factor = match rule {
+                        Integration::BackwardEuler => 1.0 / h,
+                        Integration::Trapezoidal => 2.0 / h,
+                    };
+                    let geq = factor * capacitance;
+                    let current = match rule {
+                        Integration::BackwardEuler => charge_delta / h,
+                        Integration::Trapezoidal => {
+                            2.0 * charge_delta / h - self.mos_channel_i[index][junction]
+                        }
                     };
                     let control = [(geq, positive, negative, voltage)];
                     stamp_linearised(matrix, rhs, dim, positive, current, &control);

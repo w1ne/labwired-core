@@ -23,7 +23,9 @@
 //! with level-1 `M=0.5`) are integrated in transient runs. MOSFET gate overlap
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
-//! using constant ideal transit times. MOSFET channel charge is not.
+//! using constant ideal transit times. MOSFET intrinsic gate capacitance from
+//! `TOX` uses the level-1 Meyer model; its three G-S/G-D/G-B branches are
+//! integrated in transient runs.
 //! There is no temperature model: every parameter is taken at
 //! [`TEMPERATURE_K`] as written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted
@@ -71,6 +73,9 @@ pub const THERMAL_VOLTAGE: f64 = BOLTZMANN * TEMPERATURE_K / ELEMENTARY_CHARGE;
 /// floating node" on a circuit that has none. 1 pA/V is below any current a
 /// probe in this engine resolves.
 pub const GMIN: f64 = 1e-12;
+
+/// SiO₂ permittivity used by ngspice's level-1 MOSFET `TOX` model, F/m.
+pub const OXIDE_PERMITTIVITY_F_PER_M: f64 = 3.453_133e-11;
 
 /// Largest argument handed to `exp`.
 ///
@@ -658,6 +663,68 @@ pub fn mos_op(
             gds: 0.5 * lambda * beta * vgst * vgst,
             gmb: betap * vgst * gmb_factor,
         }
+    }
+}
+
+/// ngspice level-1 Meyer gate-capacitance halves in effective-source
+/// coordinates, ordered G-S, G-D, G-B.
+///
+/// `cox` is the total oxide capacitance for this instance (`εox·W·L/TOX`).
+/// The returned values are halves because SPICE averages the previous and
+/// current Meyer capacitances when it integrates the charge over a step. The
+/// model is enabled only when the card supplies `TOX`.
+pub fn mos_meyer_capacitance_halves(
+    vgs: f64,
+    vds: f64,
+    vbs: f64,
+    vto: f64,
+    gamma: f64,
+    phi: f64,
+    cox: f64,
+) -> [f64; 3] {
+    if cox == 0.0 {
+        return [0.0; 3];
+    }
+
+    let threshold = if gamma == 0.0 {
+        vto
+    } else {
+        let sqrt_phi = libm::sqrt(phi);
+        let body_root = if vbs <= 0.0 {
+            libm::sqrt(phi - vbs)
+        } else {
+            (sqrt_phi - vbs / (2.0 * sqrt_phi)).max(0.0)
+        };
+        vto + gamma * (body_root - sqrt_phi)
+    };
+    let vgst = vgs - threshold;
+    let vdsat = vgst.max(0.0).max(0.025);
+
+    if vgst <= -phi {
+        [0.0, 0.0, cox / 2.0]
+    } else if vgst <= -phi / 2.0 {
+        [0.0, 0.0, -vgst * cox / (2.0 * phi)]
+    } else if vgst <= 0.0 {
+        let mut cgs = vgst * cox / (1.5 * phi) + cox / 3.0;
+        let mut cgd = 0.0;
+        let cgb = -vgst * cox / (2.0 * phi);
+        if vds < vdsat {
+            let vddif = 2.0 * vdsat - vds;
+            let vddif2 = vddif * vddif;
+            cgd = cgs * (1.0 - vdsat * vdsat / vddif2);
+            cgs *= 1.0 - (vdsat - vds) * (vdsat - vds) / vddif2;
+        }
+        [cgs, cgd, cgb]
+    } else if vdsat <= vds {
+        [cox / 3.0, 0.0, 0.0]
+    } else {
+        let vddif = 2.0 * vdsat - vds;
+        let vddif2 = vddif * vddif;
+        [
+            cox * (1.0 - (vdsat - vds) * (vdsat - vds) / vddif2) / 3.0,
+            cox * (1.0 - vdsat * vdsat / vddif2) / 3.0,
+            0.0,
+        ]
     }
 }
 

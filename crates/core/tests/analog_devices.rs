@@ -21,14 +21,14 @@
 //! * **The linear path.** Pinned bit patterns taken from the engine *before*
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
-//! What is NOT modelled, and is asserted to be missing rather than left to be
-//! discovered: MOSFET channel charge. Diode diffusion charge (`TT`) and BJT
-//! constant ideal transit-time charge (`TF`/`TR`) are exercised below. Diode
+//! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
+//! diffusion charge (`TT`) and BJT constant ideal transit-time charge
+//! (`TF`/`TR`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
 //! `CGS`/`CGD`, and MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`
-//! are exercised below. Circuits
-//! depending on unsupported stored charge still belong to
+//! and MOSFET intrinsic channel capacitance from `TOX` are exercised below.
+//! Circuits depending on unsupported stored charge still belong to
 //! `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
@@ -1509,6 +1509,159 @@ mod analog {
                 }
             }
         }
+    }
+
+    /// Meyer capacitance halves cover cutoff, depletion, linear and saturated
+    /// channel bias. These are the endpoint values averaged by the transient
+    /// charge companion, not fixed overlap capacitances.
+    #[test]
+    fn mosfet_tox_uses_level1_meyer_capacitance_regions() {
+        let cox = 12e-12;
+        let phi = 0.6;
+        let cases = [
+            ("cutoff", 0.0, 0.0, [0.0, 0.0, 6e-12]),
+            ("depletion", 0.8, 0.0, [1e-12, 1e-12, 2e-12]),
+            ("linear", 1.5, 0.2, [3.4375e-12, 2.4375e-12, 0.0]),
+            ("saturation", 1.5, 0.6, [4e-12, 0.0, 0.0]),
+        ];
+        for (region, vgs, vds, expected) in cases {
+            let actual = device::mos_meyer_capacitance_halves(vgs, vds, 0.0, 1.0, 0.0, phi, cox);
+            for junction in 0..3 {
+                assert!(
+                    (actual[junction] - expected[junction]).abs() < 1e-26,
+                    "{region} Meyer capacitance {junction}: expected {}, got {}",
+                    expected[junction],
+                    actual[junction]
+                );
+            }
+        }
+        assert_eq!(
+            device::mos_meyer_capacitance_halves(1.5, 0.6, 0.0, 1.0, 0.0, phi, 0.0),
+            [0.0; 3],
+            "without TOX, intrinsic channel capacitance is disabled"
+        );
+        for tox in ["0", "-1n"] {
+            let invalid = format!("M1 d g s b MMOD\n.model MMOD NMOS(TOX={tox})\n");
+            let error = parse_netlist(&invalid)
+                .expect_err("non-positive MOS oxide thickness must be rejected")
+                .to_string();
+            assert!(error.contains("TOX"), "unexpected TOX error: {error}");
+        }
+    }
+
+    /// `TOX` produces an intrinsic gate-bulk capacitance in cutoff. A gate
+    /// step charges that branch through the resistor for NMOS and PMOS, and
+    /// the held bias exercises the selected trapezoidal history after the
+    /// first BE step. The operating-point charge must not create a startup
+    /// impulse.
+    #[test]
+    fn mosfet_tox_integrates_channel_charge_for_both_polarities_and_rules() {
+        let width = 2e-6;
+        let length = 1e-6;
+        let tox = 10e-9;
+        let cox = 3.453_133e-11 * width * length / tox;
+        let resistance = 1e3;
+        let h = 10e-12;
+        let gate_step = 0.1;
+        let ratio = resistance * cox / h;
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let vto = sign;
+            let netlist = format!(
+                "Vg g 0 dc {}\nR1 x 0 {resistance}\n\
+                 M1 0 g 0 x MMOD w={width} l={length}\n\
+                 .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 PHI=0.6 TOX={tox})\n",
+                sign * gate_step
+            );
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let mut solver = Solver::new(
+                    parse_netlist(&netlist).expect("MOS TOX model parses"),
+                    integration,
+                )
+                .expect("MOS TOX solver builds");
+                let x = solver.circuit().node("x").expect("bulk node");
+                let source = solver.voltage_source_index("Vg").expect("gate source");
+
+                solver.advance(h).expect("initially biased TOX step solves");
+                assert!(
+                    solver.node_voltage(x).abs() < 1e-10,
+                    "{kind} {integration:?}: operating-point channel charge must not create a startup impulse"
+                );
+
+                solver.set_voltage_source(source, sign * 2.0 * gate_step);
+                solver.advance(h).expect("gate charge step solves");
+                let first = solver.node_voltage(x);
+                let expected_first = sign * gate_step * ratio / (1.0 + ratio);
+                assert!(
+                    (first - expected_first).abs() < 1e-8,
+                    "{kind} {integration:?} first step: expected {expected_first} V, got {first} V"
+                );
+
+                solver.advance(h).expect("held gate charge step solves");
+                let actual_second = solver.node_voltage(x);
+                let expected_second = match integration {
+                    Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
+                    Integration::Trapezoidal => {
+                        ratio * (3.0 * expected_first - sign * gate_step) / (1.0 + 2.0 * ratio)
+                    }
+                };
+                assert!(
+                    (actual_second - expected_second).abs() < 1e-8,
+                    "{kind} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
+                );
+            }
+        }
+    }
+
+    /// With V(d) below V(s), ngspice's Meyer G-S and G-D capacitances swap
+    /// their physical terminals. Keep the transistor current negligible and
+    /// drive a small gate step so the resistor response identifies which
+    /// capacitance the MNA stamp placed on the physical source pin.
+    #[test]
+    fn mosfet_tox_maps_reversed_channel_capacitance_to_physical_pins() {
+        let width = 2e-6;
+        let length = 1e-6;
+        let tox = 10e-9;
+        let cox = 3.453_133e-11 * width * length / tox;
+        let resistance = 1e3;
+        let h = 10e-12;
+        let gate_step = 1e-3;
+        let vgs_eff = 1.5;
+        let vds_eff = 0.2;
+        let vgst = vgs_eff - 1.0;
+        let vdsat = vgst;
+        let vddif = 2.0 * vdsat - vds_eff;
+        let cgd_half = cox * (1.0 - vdsat * vdsat / (vddif * vddif)) / 3.0;
+        let capacitance = 2.0 * cgd_half;
+        let ratio = resistance * capacitance / h;
+        let netlist = format!(
+            "Vg g 0 dc {vgs_eff}\nVbias bias 0 dc 0.2\n\
+             R1 x bias {resistance}\nM1 0 g x 0 MMOD w={width} l={length}\n\
+             .model MMOD NMOS(VTO=1 KP=1e-30 IS=1e-30 TOX={tox})\n"
+        );
+        let mut solver = Solver::new(
+            parse_netlist(&netlist).expect("reversed MOS TOX model parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("reversed MOS TOX solver builds");
+        let x = solver.circuit().node("x").expect("physical source node");
+        let gate = solver.voltage_source_index("Vg").expect("gate source");
+        solver
+            .advance(h)
+            .expect("reverse-biased channel step solves");
+        let initial = solver.node_voltage(x);
+        assert!((initial - 0.2).abs() < 1e-8);
+
+        solver.set_voltage_source(gate, vgs_eff + gate_step);
+        solver
+            .advance(h)
+            .expect("reversed channel gate step solves");
+        let actual = solver.node_voltage(x) - initial;
+        let expected = gate_step * ratio / (1.0 + ratio);
+        assert!(
+            (actual - expected).abs() < 1e-7,
+            "reversed channel should map effective Cgd to physical G-S: expected {expected} V, got {actual} V"
+        );
     }
 
     // -----------------------------------------------------------------------
