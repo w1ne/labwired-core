@@ -443,9 +443,10 @@ capacitances are present. Other device capacitances and temperature coefficients
 below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
 terminal resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` or
 `RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. A
-nonzero direct MOSFET `RD` or `RS` takes precedence for that terminal. `NRD`
-and `NRS` default to one square and may be set to zero to disable the matching
-sheet-resistance path. Level-1 MOSFET `GAMMA` and `PHI` model body effect; their
+an explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
+terminal, including an explicit zero that disables its sheet-resistance path.
+`NRD` and `NRS` default to one square and may be set to zero to disable the
+matching sheet-resistance path. Level-1 MOSFET `GAMMA` and `PHI` model body effect; their
 defaults are 0 and 0.6 V. MOSFET `LEVEL` other
 than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are refused by name
 because they use different channel equations.

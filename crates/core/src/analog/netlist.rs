@@ -974,9 +974,15 @@ pub struct MosModel {
     /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
     /// drain node, matching ngspice's default.
     pub rd: f64,
+    /// Whether the model card explicitly supplied `RD`. When present, this
+    /// value takes precedence over `RSH`, including when it is zero.
+    pub rd_given: bool,
     /// Ohmic source terminal resistance `RS`, ohms. Zero disables the internal
     /// source node, matching ngspice's default.
     pub rs: f64,
+    /// Whether the model card explicitly supplied `RS`. When present, this
+    /// value takes precedence over `RSH`, including when it is zero.
+    pub rs_given: bool,
     /// Drain/source diffusion sheet resistance `RSH`, ohms per square. When
     /// the corresponding direct `RD` or `RS` is zero, the instance's `NRD` or
     /// `NRS` multiplies this value.
@@ -1059,7 +1065,9 @@ impl MosModel {
             kp: 2e-5,
             lambda: 0.0,
             rd: 0.0,
+            rd_given: false,
             rs: 0.0,
+            rs_given: false,
             rsh: 0.0,
             gamma: 0.0,
             phi: 0.6,
@@ -2701,16 +2709,17 @@ fn bind_models(
                     Ok(circuit.intern(&internal_name))
                 };
                 // SPICE accepts the model's direct resistance or its sheet
-                // resistance times the instance square count. A nonzero
-                // direct value takes precedence for that terminal.
+                // resistance times the instance square count. An explicitly
+                // supplied direct value takes precedence for that terminal,
+                // including zero, which disables its series resistor.
                 let nrd = device.nrd.unwrap_or(1.0);
                 let nrs = device.nrs.unwrap_or(1.0);
-                let drain_resistance_ohms = if model.rd > 0.0 {
+                let drain_resistance_ohms = if model.rd_given {
                     model.rd
                 } else {
                     model.rsh * nrd
                 };
-                let source_resistance_ohms = if model.rs > 0.0 {
+                let source_resistance_ohms = if model.rs_given {
                     model.rs
                 } else {
                     model.rsh * nrs
@@ -3073,8 +3082,14 @@ fn parse_model(
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
-            (ModelCard::Mos(model), "RD") => model.rd = value,
-            (ModelCard::Mos(model), "RS") => model.rs = value,
+            (ModelCard::Mos(model), "RD") => {
+                model.rd = value;
+                model.rd_given = true;
+            }
+            (ModelCard::Mos(model), "RS") => {
+                model.rs = value;
+                model.rs_given = true;
+            }
             (ModelCard::Mos(model), "RSH") => model.rsh = value,
             (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
             (ModelCard::Mos(model), "PHI") => model.phi = value,
@@ -3394,7 +3409,9 @@ fn lower_comparator(
                 kp,
                 lambda: 0.0,
                 rd: 0.0,
+                rd_given: false,
                 rs: 0.0,
+                rs_given: false,
                 rsh: 0.0,
                 gamma: 0.0,
                 phi: 0.6,

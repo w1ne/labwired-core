@@ -692,6 +692,18 @@ C1 out 0 100n $ dollar comment
             8.0
         );
 
+        let explicit_zero_disables_sheet =
+            parse_netlist("M1 d g s 0 MMOD nrd=2 nrs=4\n.model MMOD NMOS(RD=0 RS=0 RSH=3)\n")
+                .expect("explicit zero terminal resistances disable the sheet path");
+        assert_eq!(
+            explicit_zero_disables_sheet.mosfets[0].drain_resistance_ohms,
+            0.0
+        );
+        assert_eq!(
+            explicit_zero_disables_sheet.mosfets[0].source_resistance_ohms,
+            0.0
+        );
+
         for parameter in ["RSH=-1", "RSH=inf", "RSH=nan", "RSH=1e999"] {
             let error = parse_netlist(&format!("M1 d g s 0 MMOD\n.model MMOD NMOS({parameter})\n"))
                 .expect_err("invalid sheet resistance is rejected");
