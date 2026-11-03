@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
   "system": "configs/systems/onboarding/nucleo_f767zi.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T13:30:16Z",
-  "finished_at_utc": "2026-11-03T13:30:17Z",
+  "started_at_utc": "2026-11-03T13:37:43Z",
+  "finished_at_utc": "2026-11-03T13:37:44Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 723,
+  "elapsed_ms": 704,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.288,
-    "build_firmware": 0.158,
-    "run_smoke": 0.267
+    "build_cli": 0.269,
+    "build_firmware": 0.152,
+    "run_smoke": 0.271
   },
   "stages_ms": {
-    "build_cli": 288,
-    "build_firmware": 158,
-    "run_smoke": 267
+    "build_cli": 269,
+    "build_firmware": 152,
+    "run_smoke": 271
   }
 }
