@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.014625">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.014547">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="ea4bc0d3b258aeef4b1aac1a81c5aa4732cc47ec6f6c0777b43503576135f23a"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.014625">
+  <testcase classname="labwired" name="run" time="0.014547">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: LITEX IBEX SMOKE" time="0.000000">
   </testcase>
