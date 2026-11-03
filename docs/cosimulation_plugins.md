@@ -494,7 +494,9 @@ recombination current from `ISR`/`NR`, clamped in reverse bias at the
 `−3·N·Vt` boundary; diode depletion charge in transient runs from
 `CJO`/`VJ`/`M`/`FC` (`CJO` defaults to zero) and quasi-static diffusion charge
 from `TT` (defaults to zero), including first-order soft reverse recovery
-when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set. Gummel–Poon BJT
+when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set, with `IBV`
+setting the knee current and optional `NBV` selecting its reverse exponential
+coefficient (default `N`). Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
 recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
@@ -520,8 +522,8 @@ saturation regions for both channel polarities. Other tests cover MOSFET/JFET
 channel-length modulation, reverse-channel operation, MOSFET body effect,
 Meyer bias regions, and Ward–Dutton
 charge conservation and transient terminal response are covered by tests. The
-diode's forward and reverse knee reduction and first-order soft-recovery
-response are exercised in
+diode's forward and reverse knee reduction, non-default reverse-breakdown
+emission coefficient, and first-order soft-recovery response are exercised in
 [`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). Every
 parameter is taken at 300.00 K; there is no temperature
 model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.

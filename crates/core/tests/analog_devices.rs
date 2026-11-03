@@ -26,8 +26,9 @@
 //! current (`ISR`/`NR`), diffusion charge (`TT`) and soft reverse recovery
 //! (`TT`/`VP`), plus BJT forward bias-dependent and reverse
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
-//! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
-//! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
+//! depletion charge through `CJO`/`VJ`/`M`/`FC` and reverse breakdown emission
+//! through `NBV`, BJT base-junction depletion charge through `CJE`/`CJC`,
+//! JFET gate-junction depletion charge through
 //! `CGS`/`CGD` and the Parker–Skellern channel fit `B`, MOSFET linear overlap
 //! charge through `CGSO`/`CGDO`/`CGBO`,
 //! MOSFET bulk-junction depletion charge through `CBD`/`CBS` and `CJ`/`CJSW`
@@ -167,6 +168,46 @@ mod analog {
             relative(source_current(&reverse, "V1"), reverse_current) < 1e-6,
             "reverse knee current should be {reverse_current} A, got {} A",
             source_current(&reverse, "V1")
+        );
+    }
+
+    /// `NBV` controls the reverse-breakdown exponential independently of the
+    /// forward emission coefficient `N`; exercise it through model parsing and
+    /// a solved circuit rather than only through the voltage-fit helper.
+    #[test]
+    fn diode_nondefault_breakdown_emission_matches_the_reverse_current_equation() {
+        let (is, n, bv, ibv, nbv, vd) = (1e-14, 1.2, 5.0, 1e-3, 2.0, -5.05);
+        let solver = build(&format!(
+            "Vd a 0 dc {vd}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv})\n"
+        ));
+        let diode = &solver.circuit().diodes[0];
+        assert_eq!(diode.model.nbv, Some(nbv));
+
+        // At BV, IBV sets the reverse current; below BV, NBV sets its
+        // exponential slope. The tiny correction from ngspice's effective-BV
+        // fit is below 2e-9 relative for these values.
+        let expected = -ibv * ((-vd - bv) / (nbv * VT)).exp() + 1e-12 * vd;
+        let actual = source_current(&solver, "Vd");
+        assert!(
+            (actual - expected).abs() < 1e-10 + 2e-8 * expected.abs(),
+            "NBV={nbv}: expected reverse current {expected} A, got {actual} A"
+        );
+
+        let default = build(&format!(
+            "Vd a 0 dc {vd}\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv})\n"
+        ));
+        let default_current = source_current(&default, "Vd");
+        let expected_default = -ibv * ((-vd - bv) / (n * VT)).exp() + 1e-12 * vd;
+        assert!(
+            (default_current - expected_default).abs()
+                < 1e-10 + 2e-8 * expected_default.abs(),
+            "default NBV=N={n}: expected reverse current {expected_default} A, got {default_current} A"
+        );
+        assert!(
+            (actual - default_current).abs() > 1e-3,
+            "explicit NBV should change current: {actual} A vs default {default_current} A"
         );
     }
 
