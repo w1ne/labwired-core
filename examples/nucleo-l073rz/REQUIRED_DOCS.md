@@ -1,9 +1,10 @@
 # Required source documents — NUCLEO-L073RZ
 
 Every register address, bit field, and pin assignment in this board's chip
-yaml and firmware traces to one of the documents below. They are the
-ground truth for any future fidelity work (the board has no silicon
-validation yet, so the docs *are* the oracle).
+yaml and firmware traces to one of the documents below. They are the primary
+reference for register and pin definitions. Measurements already compared
+against silicon are listed in `VALIDATION.md` and `captures/`; for unmeasured
+peripherals and paths, these documents remain the source of expected behavior.
 
 | Doc | ID | Used for | Notes |
 |-----|----|----------|-------|

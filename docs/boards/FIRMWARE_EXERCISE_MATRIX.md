@@ -400,6 +400,10 @@ _SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared 
 - `WWDG` (configs/chips/stm32g071.yaml:349 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (unlike the L476, no misc fingerprint reads its CR/CFR/SR).
 - `SYSCFG` (configs/chips/stm32g071.yaml:375 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739)) — CLOSABLE: hardcoded StubPeripheral — reads return 0 (plus a canned CCCSR=READY at 0x20 that is an H7-HAL seed, meaningless on G0) and writes are dropped, so EXTI source-select is not modelled; the tier-1 fixture pends its NVIC line via ISPR0 and nothing reads the window back.
 
+### `stm32g070rb-smoke`
+
+_NUCLEO-G070RB onboarding smoke covers the board's USART2 and LED GPIO path; this entry makes no beyond-rubric peripheral claim._
+
 ### `stm32g0b1re`
 
 _No tier-1 target. The NUCLEO-G0B1RE smoke now runs the shared G0 UART/LED firmware against the STM32G0B1RE profile, asserting USART2 output through the ST-LINK VCP and at least eight LD4/PA5 edges; it exercises the board's real GPIO and UART paths. Separately, the PR-triggered iolinki-reference workflow builds pinned STM32G0B1RE/TIOL112 sources and requires g0_reference_firmware in both execution modes, asserting TIM2 at 1 MHz, the actual falling-edge WAKE ISR clearing FPR, and USART1 configured for COM2. GPIO mux/polarity/W1C and AF1 UART pad routing have separate regressions. All evidence is simulator-derived, not a silicon capture; the IO-Link test proves startup and interrupt prerequisites, not electrical C/Q or master exchange. No beyond-rubric functional device read or advanced peripheral is modeled by this slice; SYSCFG is the only declared non-rubric block and remains a stub._
@@ -427,14 +431,14 @@ _SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (`fi
 
 ### `stm32l073`
 
-_Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fixture drift checked on Sundays) drives clock/gpio/timer/dma/irq/i2c/spi/adc/wdt/rtc over USART2 — pwm is n/a, there is no advanced timer — and three PR-gated firmwares run on it: the hardware-validated firmware-l073-demo reads DBGMCU_IDCODE (`DEV=20086447`, asserted byte-for-byte against silicon) and computes CRC-32 by value (`CRC=B874177A`, also silicon-exact), the Arduino serial startup programs PWR_CR.VOS (and chip_conformance's reset oracle pins PWR's reset words), and the Zephyr hello boots. RNG is firmware-driven: the PR-gated demo enables HSI48, completes the DRDY handshake and reads a word (the drawn value is informational — the survival transcript asserts only DEV/CLK/CRC/DMA), and rcc_kernel_clock_gate.rs additionally pins that gate over the production bus. DAC and LPTIM1 are modeled but never exercised; SYSCFG/USB FS/LCD are stubs and WWDG an inert register bank. SCB is a core block installed by `configure_cortex_m` for every Cortex-M part (9 scb.rs tests plus the SCB ratchet at nvic_masking_config_path.rs:163; the fixture's IRQ handler reads ICSR), so it is not listed per-chip._
+_Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fixture drift checked on Sundays) drives clock/gpio/timer/dma/irq/i2c/spi/adc/wdt/rtc over USART2 — pwm is n/a, there is no advanced timer — and three PR-gated firmwares run on it: the hardware-validated firmware-l073-demo reads DBGMCU_IDCODE (`DEV=20086447`, asserted byte-for-byte against silicon) and computes CRC-32 by value (`CRC=B874177A`, also silicon-exact), the Arduino serial startup programs PWR_CR.VOS (and chip_conformance's reset oracle pins PWR's reset words), and the Zephyr hello boots. RNG is firmware-driven: the PR-gated demo enables HSI48, completes the DRDY handshake and reads a word (the drawn value is informational — the survival transcript asserts only DEV/CLK/CRC/DMA), and rcc_kernel_clock_gate.rs additionally pins that gate over the production bus. DAC and LPTIM1 are modeled but never exercised; USB FS and LCD are zero-answering stubs, SYSCFG has an L0 register model, COMP1/2 have control-register storage but no analog comparison behavior, and WWDG is an inert register bank. SCB is a core block installed by `configure_cortex_m` for every Cortex-M part (9 scb.rs tests plus the SCB ratchet at nvic_masking_config_path.rs:163; the fixture's IRQ handler reads ICSR), so it is not listed per-chip._
 
 **Dead** (2 modeled, never exercised): `DAC`, `LPTIM1`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `SYSCFG` (configs/chips/stm32l073.yaml:408 (type: stub; configs/peripherals/stm32l073/syscfg_comp.yaml; docs/coverage/silent-path-census.md:381)) — CLOSABLE: author-declared stub — read 0, writes dropped (examples/nucleo-l073rz/VALIDATION.md:284); the PR-gated Arduino startup read-modify-writes SYSCFG+0x20 during HAL_RCC_OscConfig, but the RMW is fed 0 and its write is dropped, and the tier-1 fixture pends its NVIC line via ISPR0, so nothing depends on the window.
-- `USB FS` (configs/chips/stm32l073.yaml:416 (type: stub; configs/peripherals/stm32l073/usb_fs.yaml)) — CLOSABLE: author-declared stub — read 0, writes dropped (VALIDATION.md:284); the L0 USB-FS device engine (EPnR/CNTR/ISTR/BTABLE/PMA) is not modelled and no gated firmware opens the window.
-- `LCD` (configs/chips/stm32l073.yaml:425 (type: stub; configs/peripherals/stm32l073/lcd.yaml)) — CLOSABLE: author-declared stub — the L073's glass controller (the L072-vs-L073 differentiator) is not modelled and no gated firmware opens the window.
+- `COMP1/2` (configs/chips/stm32l073.yaml:417-424 (syscfg profile stm32l0; crates/core/src/peripherals/syscfg.rs)) — PARTIAL: COMP CSR control fields retain state, but the comparator has no analog inputs or output model; COMPxVALUE remains zero.
+- `USB FS` (configs/chips/stm32l073.yaml:427-433 (type: stub; configs/peripherals/stm32l073/usb_fs.yaml)) — CLOSABLE: explicit zero-answering stub — reads return 0 and writes are dropped; the L0 USB-FS device engine (EPnR/CNTR/ISTR/BTABLE/PMA) is not modeled and no gated firmware opens the window.
+- `LCD` (configs/chips/stm32l073.yaml:436-441 (type: stub; configs/peripherals/stm32l073/lcd.yaml)) — CLOSABLE: explicit zero-answering stub — the L073 glass controller is not modeled and no gated firmware opens the window.
 - `WWDG` (configs/chips/stm32l073.yaml:358 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (the L073 reset capture does not cover its window).
 
 ### `stm32u575`
@@ -714,6 +718,14 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the PMC clock enables (P
 ### `stm32f072`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBENR/APB2ENR), the USART1 console and the four-LED GPIO walk with GPIOC ODR readback are proven by tests/fixtures/stm32f072b-disco-smoke.elf and examples/stm32f072b-disco/io-smoke.yaml. USB, TSC and CRS are declared stubs (examples/stm32f072b-disco/VALIDATION.md), so no advanced blocks exist to list._
+
+### `stm32f072-nucleo-smoke`
+
+_NUCLEO-F072RB onboarding smoke covers the board's USART2 and LED GPIO path; this entry makes no beyond-rubric peripheral claim._
+
+### `stm32f446re-smoke`
+
+_NUCLEO-F446RE onboarding smoke covers the board's USART2 and LED GPIO path; this entry makes no beyond-rubric peripheral claim._
 
 ### `arty-litex-vexriscv`
 

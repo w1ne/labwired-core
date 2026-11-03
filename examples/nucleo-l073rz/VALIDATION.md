@@ -258,6 +258,8 @@ onboarded targets:
    DMA, or the ARMv6-M decoder.
 2. **`strict_onboarding.rs` — `[PASS]`.** `examples/nucleo-l073rz/io-smoke.yaml`
    builds the demo and asserts the same tokens via the CLI test runner.
+   The board is also in the dedicated `core-onboarding-smoke.yml` matrix; this
+   round's build and run receipt is committed under `evidence/`.
 3. **`rcc.rs` unit test** — `test_rcc_l0_layout_and_clock_switch` locks the L0
    register offsets, CR reset (`0x300`), and SW→SWS readback.
 
@@ -276,18 +278,23 @@ and the UART byte stream. Still approximate / unverified against silicon:
    for all ARM cores and would execute an instruction a real M0+ faults on;
    the `thumbv6m-none-eabi` build target is the ISA guardrail. Bit-banding is
    also left enabled though Cortex-M0+ has no bit-band region.
-2. **RCC is the L4 model, not L0.** It is permissive (does not gate on enable
-   bits), so firmware runs, but L4-offset ready flags will not match L0 — the
-   demo polls with bounded spins and never blocks on them.
+2. **RCC uses a dedicated L0 register layout**, with offsets, reset values, and
+   the HSI16 SW→SWS clock-switch path compared against silicon. Other clock
+   sources, dividers, and ready-bit behavior have not had a complete silicon
+   differential.
 3. **I2C / SPI / ADC / EXTI reuse family models** (L4 / `stm32f1` EXTI). Not
    diffed against L0 silicon — re-validate before trusting any bus lab here.
-4. **USB FS, LCD, COMP, SYSCFG are stubs** (read 0, writes dropped).
+4. **USB FS and LCD are explicit zero-answering stubs** (reads return 0, writes
+   are dropped). SYSCFG has an L0 register model, including EXTI port selection.
+   COMP1/2 control-register state is retained, but analog comparison behavior
+   and output status are not modeled.
 5. **Baud is not timed** in the sim (functional UART, not cycle-accurate).
 
 ## To extend coverage
 
-1. Author `examples/nucleo-l073rz/io-smoke.yaml` (turns `[SKIP]` → `[PASS]`).
-2. Add a case to `crates/core/tests/firmware_survival.rs` asserting the
-   captured byte stream above (regression-locks the L0 chip config + decoder).
-3. Validate I2C/SPI/ADC against silicon, replacing the L4 approximations
-   where they diverge.
+1. Validate I2C/SPI data transfers against a real attached device or loopback;
+   the current evidence covers only bare-bus flags.
+2. Differential-check ADC and the remaining RCC/EXTI clock and routing paths
+   against L0 silicon, then replace any family approximations that diverge.
+3. Add behavioral models for the USB FS and LCD controllers, and an analog
+   comparison model for COMP1/2, before claiming those features.

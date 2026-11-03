@@ -26,7 +26,7 @@ for the validation evidence and the full list of fidelity limits see
 | Chip yaml          | `configs/chips/stm32l073.yaml`                  |
 | System yaml        | `configs/systems/nucleo-l073rz.yaml`            |
 | Reference firmware | `crates/firmware-l073-demo/` (thumbv6m)         |
-| Survival tests     | 0 (UART parity captured; survival case TODO)    |
+| Firmware gates     | `test_nucleo_l073rz_smoke_survival`; `examples/nucleo-l073rz/io-smoke.yaml` |
 | Hardware-validated | **Yes (smoke)** — SWD identity + byte-for-byte UART vs silicon |
 | Debug transport    | SWD only (Cortex-M0+ has no JTAG TAP)           |
 
@@ -52,7 +52,9 @@ for the validation evidence and the full list of fidelity limits see
 | TIM2/3/6/7/22, LPTIM1 | ⚠️ present | TIM2 32-bit; others 16-bit; not exercised        |
 | RTC/IWDG/WWDG/DAC | ⚠️ present | mapped, not exercised                              |
 | EXTI       | ⚠️ approx     | single-bank `stm32f1` layout (L0 has <32 lines)             |
-| USB FS, LCD, COMP, SYSCFG | ⛔ stub | reads 0, writes dropped — no fault                          |
+| USB FS, LCD | ⛔ zero stub | reads return 0; writes are dropped — no fault |
+| SYSCFG | ⚠️ register model | L0 register behavior and EXTI port selection; not fully silicon-diffed |
+| COMP1/2 | ⚠️ partial | control-register state retained; analog compare/output behavior is not modeled |
 
 Legend: ✅ silicon-validated · ⚠️ present/approximated/unvalidated · ⛔ stub.
 Full per-peripheral evidence + the documented divergences:

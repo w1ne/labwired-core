@@ -21,6 +21,7 @@ on:
       - "crates/firmware-f446-demo/**"
       - "crates/firmware-stm32g0-demo/**"
       - "crates/firmware-nucleo-f072rb-smoke/**"
+      - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
@@ -54,6 +55,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/nucleo-f072rb/io-smoke.yaml
             system: configs/systems/nucleo-f072rb.yaml
+          - id: nucleo-l073rz
+            crate: firmware-l073-demo
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-l073rz/io-smoke.yaml
+            system: examples/nucleo-l073rz/system.yaml
           - id: nucleo-f401re
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi

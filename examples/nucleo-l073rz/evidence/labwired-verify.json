@@ -1,0 +1,66 @@
+{
+  "date": "2026-11-03",
+  "tool": "labwired_pcb_labwired_verify",
+  "board": "nucleo-l073rz",
+  "language": "arduino",
+  "entry_path": "src/main.ino",
+  "max_steps": 1000000,
+  "diagram": {
+    "version": 1,
+    "board": "nucleo-l073rz",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "nucleo-l073rz"
+      }
+    ],
+    "wires": []
+  },
+  "oracle": {
+    "serial": [
+      {
+        "contains": "L073_ONBOARDING_OK"
+      }
+    ],
+    "gpio": [
+      {
+        "pin": "PA5",
+        "state": "high"
+      }
+    ]
+  },
+  "result": {
+    "status": "model_verified",
+    "run_status": "pass",
+    "stop_reason": "max_steps",
+    "steps_executed": 1000000,
+    "oracle_results": [
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"L073_ONBOARDING_OK\""
+      },
+      {
+        "kind": "gpio",
+        "passed": true,
+        "detail": "PA5 is high (gpio_pins pad)"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+      }
+    ],
+    "unmodeled_faults": [
+      {
+        "access": "unpowered_rail_assumed",
+        "count": 1,
+        "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+      }
+    ],
+    "verification": "serial contains \"L073_ONBOARDING_OK\"; PA5 is high (gpio_pins pad). Model-verified deterministically.",
+    "diagnosis_note": "The sketch's Arduino loop is intentionally persistent; the marker was observed and both oracle clauses passed before the 1,000,000-step budget ended."
+  }
+}
