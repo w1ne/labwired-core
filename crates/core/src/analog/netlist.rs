@@ -18,6 +18,7 @@
 //! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]]` |
 //! | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
+//! | Mutual inductance | `K<name> L<name1> L<name2> <k>` |
 //! | Voltage source | `V<name> n+ n- <source>` |
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
@@ -37,6 +38,11 @@
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
 //! carries one (a `V`, `L`, `E` or `H`).
+//!
+//! A `K` element couples two inductors with signed mutual inductance
+//! `M = k·sqrt(L1·L2)`. Each inductor's terminal order defines its dot
+//! convention: positive `k` gives aiding voltage for currents entering both
+//! first-listed terminals. Coupling lines may precede their inductors.
 //!
 //! `X` is SPICE's subcircuit call, and the in-core engine has no subcircuits.
 //! It accepts an `X` line only when its model names an `OPAMP` or `COMP` card
@@ -338,6 +344,21 @@ pub struct Inductor {
     pub henries: f64,
     /// Initial current `a` → `b`, overriding the operating point.
     pub ic: Option<f64>,
+}
+
+/// `K<name> L<name1> L<name2> <k>` — a pair of magnetically coupled
+/// inductors. `mutual_henries` is signed, so a negative coupling coefficient
+/// reverses the dot convention.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MutualInductor {
+    /// Element name as written.
+    pub name: String,
+    /// Index of the first coupled inductor in [`Circuit::inductors`].
+    pub first: usize,
+    /// Index of the second coupled inductor in [`Circuit::inductors`].
+    pub second: usize,
+    /// Signed mutual inductance in henries: `k·sqrt(L1·L2)`.
+    pub mutual_henries: f64,
 }
 
 /// How an independent source's value depends on time.
@@ -1683,6 +1704,8 @@ pub struct Circuit {
     pub capacitors: Vec<Capacitor>,
     /// Inductors, in netlist order.
     pub inductors: Vec<Inductor>,
+    /// Pairwise mutual inductances, in netlist order.
+    pub mutual_inductors: Vec<MutualInductor>,
     /// Voltage sources, in netlist order.
     pub voltage_sources: Vec<VoltageSource>,
     /// Current sources, in netlist order.
@@ -1790,7 +1813,7 @@ impl Circuit {
         Some(index)
     }
 
-    fn has_element(&self, name: &str) -> bool {
+    fn has_element(&self, name: &str, pending_mutuals: &[PendingMutualInductor]) -> bool {
         let key = name.to_ascii_lowercase();
         let matches = |candidate: &str| candidate.to_ascii_lowercase() == key;
         self.resistors.iter().any(|e| matches(&e.name))
@@ -1808,6 +1831,7 @@ impl Circuit {
             || self.cccs.iter().any(|e| matches(&e.name))
             || self.ccvs.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
+            || pending_mutuals.iter().any(|e| matches(&e.name))
     }
 
     /// True when the circuit holds at least one device whose stamp depends on
@@ -1964,12 +1988,23 @@ struct PendingDevice {
     ps: Option<f64>,
 }
 
+/// A K line held until all its L elements have been parsed.
+struct PendingMutualInductor {
+    line: usize,
+    text: String,
+    name: String,
+    first: String,
+    second: String,
+    coupling: f64,
+}
+
 /// Parse a netlist into a [`Circuit`].
 pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
     let mut ended = false;
     let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
     let mut pending: Vec<PendingDevice> = Vec::new();
+    let mut pending_mutuals: Vec<PendingMutualInductor> = Vec::new();
     let mut in_control = false;
     // Line of every `F`/`H`, in the order they were pushed, for the error when
     // the element they name carries no branch current.
@@ -2028,14 +2063,28 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             .unwrap_or(' ');
         if !matches!(
             letter,
-            'R' | 'C' | 'L' | 'V' | 'I' | 'S' | 'D' | 'Q' | 'M' | 'J' | 'E' | 'G' | 'F' | 'H' | 'X'
+            'R' | 'C'
+                | 'L'
+                | 'K'
+                | 'V'
+                | 'I'
+                | 'S'
+                | 'D'
+                | 'Q'
+                | 'M'
+                | 'J'
+                | 'E'
+                | 'G'
+                | 'F'
+                | 'H'
+                | 'X'
         ) {
             return Err(ctx.unsupported());
         }
         if head.len() < 2 {
             return Err(ctx.parse_err(format!("element `{head}` has no name after `{letter}`")));
         }
-        if circuit.has_element(head) {
+        if circuit.has_element(head, &pending_mutuals) {
             return Err(ctx.parse_err(format!("element `{head}` is declared twice")));
         }
 
@@ -2141,6 +2190,31 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     b,
                     henries,
                     ic,
+                });
+            }
+            'K' => {
+                let rest = &tokens[1..];
+                if rest.len() != 3 {
+                    return Err(ctx.parse_err("expected `K<name> L<name1> L<name2> <k>`"));
+                }
+                if ![rest[0], rest[1]].iter().all(|name| {
+                    name.chars()
+                        .next()
+                        .is_some_and(|letter| letter.eq_ignore_ascii_case(&'L'))
+                }) {
+                    return Err(ctx.parse_err("a K element must name two inductors"));
+                }
+                let coupling = ctx.value(rest[2], "coupling coefficient")?;
+                if !coupling.is_finite() || coupling.abs() > 1.0 {
+                    return Err(ctx.parse_err("coupling coefficient must be finite and in [-1, 1]"));
+                }
+                pending_mutuals.push(PendingMutualInductor {
+                    line: number,
+                    text: line.to_string(),
+                    name: head.to_string(),
+                    first: rest[0].to_string(),
+                    second: rest[1].to_string(),
+                    coupling,
                 });
             }
             'V' | 'I' => {
@@ -2478,6 +2552,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
         }
     }
 
+    bind_mutual_inductors(&mut circuit, pending_mutuals)?;
     bind_models(&mut circuit, &models, pending)?;
     bind_controls(&mut circuit, &controls)?;
     Ok(circuit)
@@ -2542,6 +2617,59 @@ fn bind_controls(
             AnalogError::Config(format!("power sink control `{name}` carries no branch"))
         })?;
         circuit.power_sinks[index].control_branch = branch;
+    }
+    Ok(())
+}
+
+/// Resolve K elements after every inductor is known, allowing forward references.
+fn bind_mutual_inductors(
+    circuit: &mut Circuit,
+    pending: Vec<PendingMutualInductor>,
+) -> Result<(), AnalogError> {
+    for coupling in pending {
+        let ctx = LineCtx {
+            number: coupling.line,
+            text: &coupling.text,
+        };
+        let find_inductor = |name: &str| {
+            circuit
+                .inductors
+                .iter()
+                .position(|inductor| inductor.name.eq_ignore_ascii_case(name))
+        };
+        let first = find_inductor(&coupling.first).ok_or_else(|| {
+            ctx.parse_err(format!(
+                "`{}` is not an inductor in this netlist",
+                coupling.first
+            ))
+        })?;
+        let second = find_inductor(&coupling.second).ok_or_else(|| {
+            ctx.parse_err(format!(
+                "`{}` is not an inductor in this netlist",
+                coupling.second
+            ))
+        })?;
+        if first == second {
+            return Err(ctx.parse_err("a K element must couple two different inductors"));
+        }
+        if circuit.mutual_inductors.iter().any(|existing| {
+            (existing.first == first && existing.second == second)
+                || (existing.first == second && existing.second == first)
+        }) {
+            return Err(ctx.parse_err("the same inductor pair cannot be coupled twice"));
+        }
+        let first_l = circuit.inductors[first].henries;
+        let second_l = circuit.inductors[second].henries;
+        let mutual_henries = coupling.coupling * (first_l.sqrt() * second_l.sqrt());
+        if !mutual_henries.is_finite() {
+            return Err(ctx.parse_err("inductor values produce non-finite mutual inductance"));
+        }
+        circuit.mutual_inductors.push(MutualInductor {
+            name: coupling.name,
+            first,
+            second,
+            mutual_henries,
+        });
     }
     Ok(())
 }

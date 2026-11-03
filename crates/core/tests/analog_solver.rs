@@ -117,6 +117,74 @@ mod analog {
     }
 
     #[test]
+    fn mutually_coupled_inductors_match_the_be_and_trapezoidal_companions() {
+        const L1: f64 = 4e-3;
+        const L2: f64 = 1e-3;
+        const M: f64 = 1e-3; // k = 0.5
+        const R1: f64 = 10.0;
+        const R2: f64 = 20.0;
+        const SOURCE: f64 = 5.0;
+        const H: f64 = 100e-6;
+
+        let circuit = parse_netlist(
+            "V1 drive 0 dc 0\nR1 drive primary 10\nL1 primary 0 4m ic=0\n\
+             R2 secondary 0 20\nL2 secondary 0 1m ic=0\nK1 L1 L2 0.5\n",
+        )
+        .expect("coupled-inductor deck parses");
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver = Solver::new(circuit.clone(), integration).expect("solver builds");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, SOURCE);
+
+            let mut currents = [0.0, 0.0];
+            let mut voltages = [0.0, 0.0];
+            for step in 0..2 {
+                // The first step after changing the source restarts with BE;
+                // the second uses the requested integration rule.
+                let trapezoidal = step != 0 && integration == Integration::Trapezoidal;
+                let scale = if trapezoidal { 2.0 / H } else { 1.0 / H };
+                let previous_term = if trapezoidal {
+                    [
+                        scale * (L1 * currents[0] + M * currents[1]) + voltages[0],
+                        scale * (M * currents[0] + L2 * currents[1]) + voltages[1],
+                    ]
+                } else {
+                    [
+                        scale * (L1 * currents[0] + M * currents[1]),
+                        scale * (M * currents[0] + L2 * currents[1]),
+                    ]
+                };
+                let a = R1 + scale * L1;
+                let b = scale * M;
+                let d = R2 + scale * L2;
+                let determinant = a * d - b * b;
+                let expected = [
+                    (d * (SOURCE + previous_term[0]) - b * previous_term[1]) / determinant,
+                    (a * previous_term[1] - b * (SOURCE + previous_term[0])) / determinant,
+                ];
+
+                solver.advance(H).expect("coupled transient step solves");
+                let actual = [solver.inductor_current(0), solver.inductor_current(1)];
+                for coil in 0..2 {
+                    assert!(
+                        (actual[coil] - expected[coil]).abs() < 1e-11,
+                        "{integration:?} step {step}, coil {coil}: expected {} A, got {} A",
+                        expected[coil],
+                        actual[coil]
+                    );
+                }
+                currents = actual;
+                voltages = [SOURCE - R1 * currents[0], -R2 * currents[1]];
+            }
+            assert!(
+                solver.inductor_current(1) < 0.0,
+                "a positive mutual coupling induces the opposing secondary-loop current"
+            );
+        }
+    }
+
+    #[test]
     fn underdamped_rlc_matches_closed_form() {
         // Series RLC driven by a 1 V step: R = 20 Ω, L = 1 mH, C = 1 uF.
         // alpha = R/2L = 10 000 s^-1, w0 = 1/sqrt(LC) = 31 623 rad/s, so the

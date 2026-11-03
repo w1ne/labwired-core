@@ -22,12 +22,14 @@
 //!
 //! * capacitor → conductance `C/h` in parallel with a current source
 //!   `(C/h)·v_prev`;
-//! * inductor → an extra row `v_a − v_b − (L/h)·i = −(L/h)·i_prev`.
+//! * inductor → an extra row `v_a − v_b − (L/h)·i = −(L/h)·i_prev`;
+//!   coupled inductors add the corresponding mutual terms `−(M/h)·i_other`.
 //!
 //! Trapezoidal (`integration: trap`):
 //!
 //! * capacitor → conductance `2C/h` with source `(2C/h)·v_prev + i_prev`;
-//! * inductor → `v_a − v_b − (2L/h)·i = −(2L/h)·i_prev − v_prev`.
+//! * inductor → `v_a − v_b − (2L/h)·i = −(2L/h)·i_prev − v_prev`;
+//!   coupled inductors add `−(2M/h)·i_other_prev` and the mutual matrix term.
 //!
 //! Trapezoidal is second-order accurate and roughly two orders of magnitude
 //! closer to the closed form at the same step; backward Euler is the default
@@ -1240,6 +1242,22 @@ impl Solver {
             }
         }
         if let Stamp::Transient(h, rule) = stamp {
+            let scale = match rule {
+                Integration::BackwardEuler => 1.0 / h,
+                Integration::Trapezoidal => 2.0 / h,
+            };
+            let branch_base = self.nodes + self.circuit.voltage_sources.len();
+            for mutual in &self.circuit.mutual_inductors {
+                let first = branch_base + mutual.first;
+                let second = branch_base + mutual.second;
+                let coefficient = -scale * mutual.mutual_henries;
+                self.matrix[first * dim + second] += coefficient;
+                self.matrix[second * dim + first] += coefficient;
+                self.rhs[first] -= scale * mutual.mutual_henries * self.ind_i[mutual.second];
+                self.rhs[second] -= scale * mutual.mutual_henries * self.ind_i[mutual.first];
+            }
+        }
+        if let Stamp::Transient(h, rule) = stamp {
             for (index, capacitor) in self.circuit.capacitors.iter().enumerate() {
                 let (geq, ieq) = match rule {
                     Integration::BackwardEuler => {
@@ -1362,6 +1380,17 @@ impl Solver {
                         -(2.0 * inductor.henries / h) * self.ind_i[index] - self.ind_v[index]
                     }
                 };
+            }
+            let scale = match rule {
+                Integration::BackwardEuler => 1.0 / h,
+                Integration::Trapezoidal => 2.0 / h,
+            };
+            let branch_base = self.nodes + self.circuit.voltage_sources.len();
+            for mutual in &self.circuit.mutual_inductors {
+                let first = branch_base + mutual.first;
+                let second = branch_base + mutual.second;
+                self.rhs[first] -= scale * mutual.mutual_henries * self.ind_i[mutual.second];
+                self.rhs[second] -= scale * mutual.mutual_henries * self.ind_i[mutual.first];
             }
             for (index, capacitor) in self.circuit.capacitors.iter().enumerate() {
                 let ieq = match rule {
