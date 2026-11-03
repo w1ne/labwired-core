@@ -1,0 +1,19 @@
+# NUCLEO-L476RG: USART2 VCP output and LD2 GPIO transitions, with the
+# existing firmware demo's SPI1, I2C1, ADC1, and DMA1 readiness checks.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-l476-demo"
+  system: "../../configs/systems/nucleo-l476rg.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "L476-DEMO BOOT"
+  - uart_contains: "SPI1 OK"
+  - uart_contains: "I2C1 OK"
+  - uart_contains: "ADC1 OK"
+  - uart_contains: "DMA1 OK"
+  - uart_contains: "DONE"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 2
+  - expected_stop_reason: max_steps

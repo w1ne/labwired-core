@@ -194,6 +194,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/metro-m4/onboarding-smoke.yaml
             system: configs/systems/metro-m4.yaml
+          - id: nucleo-l476rg
+            crate: firmware-l476-demo
+            target: thumbv7em-none-eabihf
+            script: examples/nucleo-l476rg/io-smoke.yaml
+            system: configs/systems/nucleo-l476rg.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -201,7 +206,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
