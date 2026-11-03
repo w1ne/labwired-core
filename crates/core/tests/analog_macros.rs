@@ -29,6 +29,23 @@ mod analog {
         ((actual - expected) / expected).abs()
     }
 
+    fn macro_input_after_one_tau(x_line: &str, model_line: &str) -> f64 {
+        let resistance = 100e3;
+        let capacitance = 10e-12;
+        let tau = resistance * capacitance;
+        let mut solver = build(&format!(
+            "Vcc vcc 0 dc 5\nVdrive src 0 dc 0\nRdrive src inp {resistance}\n\
+             {x_line}\n{model_line}\n"
+        ));
+        let source = solver.voltage_source_index("Vdrive").expect("drive source");
+        solver.set_voltage_source(source, 1.0);
+        let steps = 10_000u32;
+        for _ in 0..steps {
+            solver.advance(tau / f64::from(steps)).unwrap();
+        }
+        v(&solver, "inp")
+    }
+
     // -----------------------------------------------------------------------
     // Linear dependent sources
     // -----------------------------------------------------------------------
@@ -299,6 +316,51 @@ mod analog {
                 "IOS={offset_current}: in- = {} V, expected {expected_inn} V",
                 v(&solver, "inn")
             );
+        }
+    }
+
+    #[test]
+    fn opamp_and_comparator_input_capacitances_load_the_source_in_transient_runs() {
+        // CINCM loads each input to V−; CIND loads the differential input.
+        // With the negative input held at ground, these 4 pF + 6 pF capacitors
+        // give the driven input a 1 µs time constant through 100 kΩ.
+        let expected = 1.0 - (1.0 + 1.0 / 10_000.0f64).powf(-10_000.0);
+        for (x_line, model_line) in [
+            (
+                "X1 inp 0 vcc 0 out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 CINCM=4p CIND=6p)",
+            ),
+            (
+                "X1 inp 0 vcc 0 out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 CINCM=4p CIND=6p OUTPUT=PP)",
+            ),
+        ] {
+            let actual = macro_input_after_one_tau(x_line, model_line);
+            assert!(
+                (actual - expected).abs() < 1e-5,
+                "{x_line}: input is {actual} V after one tau, expected {expected} V"
+            );
+        }
+    }
+
+    #[test]
+    fn macro_input_capacitances_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for (params, message) in [
+                ("CINCM=-1p", "CINCM must be finite and non-negative"),
+                ("CIND=-1p", "CIND must be finite and non-negative"),
+                ("CINCM=1e999", "CINCM must be finite and non-negative"),
+                ("CIND=1e999", "CIND must be finite and non-negative"),
+            ] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}({params}{output})\n"
+                ))
+                .expect_err("invalid input capacitance must be rejected");
+                assert!(error.to_string().contains(message), "{error}");
+            }
         }
     }
 
