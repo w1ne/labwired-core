@@ -22,6 +22,7 @@ on:
       - "crates/firmware-f4-discovery-smoke/**"
       - "crates/firmware-stm32g0-demo/**"
       - "crates/firmware-nucleo-f072rb-smoke/**"
+      - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
       - "crates/firmware-nucleo-g071rb-smoke/**"
       - "crates/firmware-stm32g071b-disco-smoke/**"
@@ -69,6 +70,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/nucleo-f072rb/io-smoke.yaml
             system: configs/systems/nucleo-f072rb.yaml
+          - id: nucleo-f103rb
+            crate: firmware-nucleo-f103rb-smoke
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-f103rb/io-smoke.yaml
+            system: configs/systems/nucleo-f103rb.yaml
           - id: nucleo-f411re
             crate: firmware-nucleo-f411re-smoke
             target: thumbv7em-none-eabi
