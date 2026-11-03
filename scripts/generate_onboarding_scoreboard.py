@@ -87,7 +87,7 @@ def build_markdown(
         f"- threshold_seconds: `{threshold_seconds}`",
         f"- threshold_met: `{threshold_hits}/{summary['run_attempted']}`",
         "",
-        "> `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass is counted separately. `not_run` means the imported descriptor has no mapped firmware crate and smoke script.",
+        "> `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.",
         "",
         "| Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |",
         "|---|---|---|---|---|---:|---:|---|---|---|---|",

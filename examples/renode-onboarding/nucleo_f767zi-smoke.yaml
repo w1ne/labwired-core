@@ -1,0 +1,10 @@
+# Cortex-M7 UART smoke against the imported Renode NUCLEO-F767ZI system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo"
+  system: "../../configs/systems/onboarding/nucleo_f767zi.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

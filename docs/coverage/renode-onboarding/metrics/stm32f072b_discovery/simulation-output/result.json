@@ -1,0 +1,517 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32F072B-DISCO SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m0 uart=usart1",
+          "led=ld3 odr=00000040",
+          "led=ld4 odr=00000140",
+          "led=ld5 odr=00000340",
+          "led=ld6 odr=000003c0",
+          "btn=1",
+          "hb=0 odr=000003c0 btn=1",
+          "hb=1 odr=000003c0 btn=1"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      67468,
+      1,
+      6,
+      6,
+      98,
+      61,
+      1073821724,
+      536887184,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536887184,
+      134219727,
+      134220926
+    ],
+    "pc": 134220926,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "995afa703234b8b6b88ad2d31cc83f67f294273e69211256b73bbe5f7ba31514",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
+    "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "led",
+        "kind": "native",
+        "base": 6,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart4",
+        "kind": "native",
+        "base": 1073761280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart5",
+        "kind": "native",
+        "base": 1073762304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart6",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart7",
+        "kind": "native",
+        "base": 1073813504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1207960576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortC",
+        "kind": "native",
+        "base": 1207961600,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1207962624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortE",
+        "kind": "native",
+        "base": 1207963648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortF",
+        "kind": "native",
+        "base": 1207964672,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c2",
+        "kind": "i2c",
+        "base": 1073764352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi2",
+        "kind": "native",
+        "base": 1073756160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer3",
+        "kind": "native",
+        "base": 1073742848,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer6",
+        "kind": "native",
+        "base": 1073745920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer7",
+        "kind": "native",
+        "base": 1073746944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer14",
+        "kind": "native",
+        "base": 1073750016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer15",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer16",
+        "kind": "native",
+        "base": 1073824768,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer17",
+        "kind": "native",
+        "base": 1073825792,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "can",
+        "kind": "native",
+        "base": 1073767424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc",
+        "kind": "native",
+        "base": 1073752064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "DMA",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "crc",
+        "kind": "native",
+        "base": 1073885184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32F072B-DISCO SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=cortex-m0 uart=usart1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld3 odr=00000040",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld4 odr=00000140",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld5 odr=00000340",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld6 odr=000003c0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "btn=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=0 odr=000003c0 btn=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=1 odr=000003c0 btn=1",
+        "cycle_lo": 600000,
+        "cycle": 610000,
+        "end_cycle": 610000
+      },
+      {
+        "text": "hb=2 odr=000003c0 btn=1",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "hb=3 odr=000003c0 btn=1",
+        "cycle_lo": 1800000,
+        "cycle": 1810000,
+        "end_cycle": 1810000
+      },
+      {
+        "text": "hb=4 odr=000003c0 btn=1",
+        "cycle_lo": 2400000,
+        "cycle": 2410000,
+        "end_cycle": 2410000
+      },
+      {
+        "text": "hb=5 odr=000003c0 btn=1",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "hb=6 odr=000003c0 btn=1",
+        "cycle_lo": 3600000,
+        "cycle": 3610000,
+        "end_cycle": 3610000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4400,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 4400,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 16384,
+    "flash_used_pct": 3.36,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 16384,
+    "main_stack_high_water_bytes": 84,
+    "main_stack_free_min_bytes": 16260,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536887296,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 16384,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 16260,
+    "heap_base": 536870912,
+    "heap_top": 536887296
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 1022,
+    "memory_writes": 142,
+    "peripheral_accesses": 651,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134220926,
+        "count": 5233,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134220924,
+        "count": 5197,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220922,
+        "count": 5195,
+        "symbol": "firmware_stm32f072b_disco_smoke::spin"
+      }
+    ]
+  }
+}

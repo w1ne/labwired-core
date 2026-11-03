@@ -1,0 +1,1036 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NRF52840_SMOKE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073751364,
+      1073750024,
+      1342178568,
+      8,
+      18,
+      0,
+      1,
+      537133040,
+      67108864,
+      1073741888,
+      4294966032,
+      0,
+      537133020,
+      537133020,
+      1073755392,
+      1274
+    ],
+    "pc": 1274,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "238d5562119cf401dae025fc0853790ec361568eab7bd1dcad0e48e8f6002e09",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nrf52840.yaml",
+    "script": "examples/renode-onboarding/nrf52840-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073750016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc0",
+        "kind": "native",
+        "base": 1073786880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc1",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc2",
+        "kind": "native",
+        "base": 1073889280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wdt",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ppi",
+        "kind": "native",
+        "base": 1073868800,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "clock",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twi0",
+        "kind": "native",
+        "base": 1073754112,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi2",
+        "kind": "native",
+        "base": 1073885184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio0",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio1",
+        "kind": "native",
+        "base": 1342181376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiote",
+        "kind": "native",
+        "base": 1073766400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twi1",
+        "kind": "native",
+        "base": 1073758208,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1073778688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer2",
+        "kind": "native",
+        "base": 1073782784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer3",
+        "kind": "native",
+        "base": 1073848320,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer4",
+        "kind": "native",
+        "base": 1073852416,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2s",
+        "kind": "native",
+        "base": 1073893376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pdm",
+        "kind": "native",
+        "base": 1073860608,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "radio",
+        "kind": "native",
+        "base": 1073745920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rng",
+        "kind": "native",
+        "base": 1073795072,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ecb",
+        "kind": "native",
+        "base": 1073799168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "temp",
+        "kind": "native",
+        "base": 1073790976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "saadc",
+        "kind": "native",
+        "base": 1073770496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pwm0",
+        "kind": "native",
+        "base": 1073856512,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pwm1",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pwm2",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pwm3",
+        "kind": "native",
+        "base": 1073926144,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "qspi",
+        "kind": "native",
+        "base": 1073909760,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nfct",
+        "kind": "native",
+        "base": 1073762304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ficr",
+        "kind": "native",
+        "base": 268435456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uicr",
+        "kind": "native",
+        "base": 268439552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvmc",
+        "kind": "native",
+        "base": 1073864704,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "comp",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "qdec",
+        "kind": "native",
+        "base": 1073815552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "egu0",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "egu1",
+        "kind": "native",
+        "base": 1073827840,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "egu2",
+        "kind": "native",
+        "base": 1073831936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "egu3",
+        "kind": "native",
+        "base": 1073836032,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "egu4",
+        "kind": "native",
+        "base": 1073840128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "egu5",
+        "kind": "native",
+        "base": 1073844224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mwu",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "aar",
+        "kind": "native",
+        "base": 1073803264,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usbd",
+        "kind": "native",
+        "base": 1073901568,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usbregulator",
+        "kind": "native",
+        "base": 1073967104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "acl",
+        "kind": "native",
+        "base": 1073934336,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cryptocell",
+        "kind": "native",
+        "base": 1342349312,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 140000,
+        "cycle": 150000,
+        "end_cycle": 150000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 190000,
+        "cycle": 200000,
+        "end_cycle": 200000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 240000,
+        "cycle": 250000,
+        "end_cycle": 250000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 290000,
+        "cycle": 300000,
+        "end_cycle": 300000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 340000,
+        "cycle": 350000,
+        "end_cycle": 350000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 380000,
+        "cycle": 390000,
+        "end_cycle": 390000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 430000,
+        "cycle": 440000,
+        "end_cycle": 440000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 480000,
+        "cycle": 490000,
+        "end_cycle": 490000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 530000,
+        "cycle": 540000,
+        "end_cycle": 540000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 580000,
+        "cycle": 590000,
+        "end_cycle": 590000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 630000,
+        "cycle": 640000,
+        "end_cycle": 640000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 680000,
+        "cycle": 690000,
+        "end_cycle": 690000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 730000,
+        "cycle": 740000,
+        "end_cycle": 740000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 780000,
+        "cycle": 790000,
+        "end_cycle": 790000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 830000,
+        "cycle": 840000,
+        "end_cycle": 840000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 880000,
+        "cycle": 890000,
+        "end_cycle": 890000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 920000,
+        "cycle": 930000,
+        "end_cycle": 930000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 970000,
+        "cycle": 980000,
+        "end_cycle": 980000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1020000,
+        "cycle": 1030000,
+        "end_cycle": 1030000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1070000,
+        "cycle": 1080000,
+        "end_cycle": 1080000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1120000,
+        "cycle": 1130000,
+        "end_cycle": 1130000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1170000,
+        "cycle": 1180000,
+        "end_cycle": 1180000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1230000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1270000,
+        "cycle": 1280000,
+        "end_cycle": 1280000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1320000,
+        "cycle": 1330000,
+        "end_cycle": 1330000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1370000,
+        "cycle": 1380000,
+        "end_cycle": 1380000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1420000,
+        "cycle": 1430000,
+        "end_cycle": 1430000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1460000,
+        "cycle": 1470000,
+        "end_cycle": 1470000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1510000,
+        "cycle": 1520000,
+        "end_cycle": 1520000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1560000,
+        "cycle": 1570000,
+        "end_cycle": 1570000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1610000,
+        "cycle": 1620000,
+        "end_cycle": 1620000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1660000,
+        "cycle": 1670000,
+        "end_cycle": 1670000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1710000,
+        "cycle": 1720000,
+        "end_cycle": 1720000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1760000,
+        "cycle": 1770000,
+        "end_cycle": 1770000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1810000,
+        "cycle": 1820000,
+        "end_cycle": 1820000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1860000,
+        "cycle": 1870000,
+        "end_cycle": 1870000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1910000,
+        "cycle": 1920000,
+        "end_cycle": 1920000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1960000,
+        "cycle": 1970000,
+        "end_cycle": 1970000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2050000,
+        "cycle": 2060000,
+        "end_cycle": 2060000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2100000,
+        "cycle": 2110000,
+        "end_cycle": 2110000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2150000,
+        "cycle": 2160000,
+        "end_cycle": 2160000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2200000,
+        "cycle": 2210000,
+        "end_cycle": 2210000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2250000,
+        "cycle": 2260000,
+        "end_cycle": 2260000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2300000,
+        "cycle": 2310000,
+        "end_cycle": 2310000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2350000,
+        "cycle": 2360000,
+        "end_cycle": 2360000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2400000,
+        "cycle": 2410000,
+        "end_cycle": 2410000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2450000,
+        "cycle": 2460000,
+        "end_cycle": 2460000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2500000,
+        "cycle": 2510000,
+        "end_cycle": 2510000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2540000,
+        "cycle": 2550000,
+        "end_cycle": 2550000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2590000,
+        "cycle": 2600000,
+        "end_cycle": 2600000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2640000,
+        "cycle": 2650000,
+        "end_cycle": 2650000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2690000,
+        "cycle": 2700000,
+        "end_cycle": 2700000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2740000,
+        "cycle": 2750000,
+        "end_cycle": 2750000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2790000,
+        "cycle": 2800000,
+        "end_cycle": 2800000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2840000,
+        "cycle": 2850000,
+        "end_cycle": 2850000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2890000,
+        "cycle": 2900000,
+        "end_cycle": 2900000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2940000,
+        "cycle": 2950000,
+        "end_cycle": 2950000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2990000,
+        "cycle": 3000000,
+        "end_cycle": 3000000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3040000,
+        "cycle": 3050000,
+        "end_cycle": 3050000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3080000,
+        "cycle": 3090000,
+        "end_cycle": 3090000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3130000,
+        "cycle": 3140000,
+        "end_cycle": 3140000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3180000,
+        "cycle": 3190000,
+        "end_cycle": 3190000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3230000,
+        "cycle": 3240000,
+        "end_cycle": 3240000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3280000,
+        "cycle": 3290000,
+        "end_cycle": 3290000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3330000,
+        "cycle": 3340000,
+        "end_cycle": 3340000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3380000,
+        "cycle": 3390000,
+        "end_cycle": 3390000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3430000,
+        "cycle": 3440000,
+        "end_cycle": 3440000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3480000,
+        "cycle": 3490000,
+        "end_cycle": 3490000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3530000,
+        "cycle": 3540000,
+        "end_cycle": 3540000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3580000,
+        "cycle": 3590000,
+        "end_cycle": 3590000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3620000,
+        "cycle": 3630000,
+        "end_cycle": 3630000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3670000,
+        "cycle": 3680000,
+        "end_cycle": 3680000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3720000,
+        "cycle": 3730000,
+        "end_cycle": 3730000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3770000,
+        "cycle": 3780000,
+        "end_cycle": 3780000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3820000,
+        "cycle": 3830000,
+        "end_cycle": 3830000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3870000,
+        "cycle": 3880000,
+        "end_cycle": 3880000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3920000,
+        "cycle": 3930000,
+        "end_cycle": 3930000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3970000,
+        "cycle": 3980000,
+        "end_cycle": 3980000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1332,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1332,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 262144,
+    "flash_used_pct": 0.13,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 262144,
+    "main_stack_high_water_bytes": 36,
+    "main_stack_free_min_bytes": 262108,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537133056,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 262144,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 262108,
+    "heap_base": 536870912,
+    "heap_top": 537133056
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 1607,
+    "memory_writes": 11,
+    "peripheral_accesses": 1333731,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1274,
+        "count": 4962,
+        "symbol": "firmware_nrf52840_demo::__cortex_m_rt_main"
+      },
+      {
+        "pc": 1276,
+        "count": 4921,
+        "symbol": "firmware_nrf52840_demo::__cortex_m_rt_main"
+      },
+      {
+        "pc": 1270,
+        "count": 4649,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1288,
+        "count": 546,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1284,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1282,
+        "count": 273,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "uart0",
+      "offset": 288,
+      "accesses": 7825
+    }
+  }
+}

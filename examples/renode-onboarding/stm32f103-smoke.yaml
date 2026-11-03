@@ -1,0 +1,10 @@
+# Cortex-M3 UART smoke against the imported Renode STM32F103 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke"
+  system: "../../configs/systems/onboarding/stm32f103.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

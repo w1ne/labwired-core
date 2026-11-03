@@ -1,0 +1,10 @@
+# Cortex-M4 smoke against the imported Renode nRF52840 system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo"
+  system: "../../configs/systems/onboarding/nrf52840.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "NRF52840_SMOKE_OK"
+  - expected_stop_reason: max_steps

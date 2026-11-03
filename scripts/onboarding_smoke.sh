@@ -121,7 +121,11 @@ run_started_iso="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 capture_signature() {
   local log_file="$1"
-  awk 'NF {print; exit}' "${log_file}" | tr -d '\r' | sed -E 's/\x1B\[[0-9;]*[mK]//g' | cut -c1-240
+  awk '
+    NF && first == "" { first = $0 }
+    tolower($0) ~ /error|fail|assertion failed/ { print; found = 1; exit }
+    END { if (!found && first != "") print first }
+  ' "${log_file}" | tr -d '\r' | sed -E 's/\x1B\[[0-9;]*[mK]//g' | cut -c1-240
 }
 
 run_stage() {

@@ -45,30 +45,44 @@ peripherals:
   type: stm32f7_usart
   bus: sysbus
   base_address: 1073813504
+# STM32F072 GPIO uses the MODER/BSRR register layout; the imported generic
+# stm32_gpioport name otherwise resolves to the engine's STM32F1 layout.
 - id: gpioPortA
   type: stm32_gpioport
   bus: sysbus
   base_address: 1207959552
+  config:
+    profile: stm32v2
 - id: gpioPortB
   type: stm32_gpioport
   bus: sysbus
   base_address: 1207960576
+  config:
+    profile: stm32v2
 - id: gpioPortC
   type: stm32_gpioport
   bus: sysbus
   base_address: 1207961600
+  config:
+    profile: stm32v2
 - id: gpioPortD
   type: stm32_gpioport
   bus: sysbus
   base_address: 1207962624
+  config:
+    profile: stm32v2
 - id: gpioPortE
   type: stm32_gpioport
   bus: sysbus
   base_address: 1207963648
+  config:
+    profile: stm32v2
 - id: gpioPortF
   type: stm32_gpioport
   bus: sysbus
   base_address: 1207964672
+  config:
+    profile: stm32v2
 - id: i2c1
   type: stm32f7_i2c
   bus: sysbus

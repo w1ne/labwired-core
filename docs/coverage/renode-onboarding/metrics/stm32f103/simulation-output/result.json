@@ -1,0 +1,475 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073809408,
+      32,
+      2097152,
+      7750,
+      0,
+      0,
+      0,
+      536891376,
+      0,
+      0,
+      0,
+      0,
+      4294947296,
+      536891376,
+      134219291,
+      134219212
+    ],
+    "pc": 134219212,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "b902db3b51f14802baff0a7d57ab57df05ac20d79eacea8148eba612d5e50e86",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
+    "script": "examples/renode-onboarding/stm32f103-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart4",
+        "kind": "native",
+        "base": 1073761280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart5",
+        "kind": "native",
+        "base": 1073762304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c2",
+        "kind": "i2c",
+        "base": 1073764352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1073810432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortC",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortE",
+        "kind": "native",
+        "base": 1073813504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortF",
+        "kind": "native",
+        "base": 1073814528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortG",
+        "kind": "native",
+        "base": 1073815552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer3",
+        "kind": "native",
+        "base": 1073742848,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer4",
+        "kind": "native",
+        "base": 1073743872,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer5",
+        "kind": "native",
+        "base": 1073744896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer6",
+        "kind": "native",
+        "base": 1073745920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer7",
+        "kind": "native",
+        "base": 1073746944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer8",
+        "kind": "native",
+        "base": 1073820672,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer9",
+        "kind": "native",
+        "base": 1073826816,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer10",
+        "kind": "native",
+        "base": 1073827840,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer11",
+        "kind": "native",
+        "base": 1073828864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer12",
+        "kind": "native",
+        "base": 1073747968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer13",
+        "kind": "native",
+        "base": 1073748992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer14",
+        "kind": "native",
+        "base": 1073750016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma2",
+        "kind": "native",
+        "base": 1073873920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1568,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1568,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 536870912,
+    "ram_total_bytes": 268435456,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 20480,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 20464,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536891392,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 20480,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 20464,
+    "heap_base": 536870912,
+    "heap_top": 536891392
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 206,
+    "memory_writes": 6,
+    "peripheral_accesses": 26,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219198,
+        "count": 40,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219072,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219086,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219090,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219100,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219104,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219114,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219118,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219132,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219146,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219162,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219180,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219184,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219212,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219228,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219242,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

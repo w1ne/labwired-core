@@ -71,6 +71,28 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          # Imported Renode Cortex-M systems. These exercise representative
+          # M0/M3/M4/M7 firmware against the exact imported system descriptors.
+          - id: stm32f072b_discovery
+            crate: firmware-stm32f072b-disco-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32f072b_discovery-smoke.yaml
+            system: configs/systems/onboarding/stm32f072b_discovery.yaml
+          - id: stm32f103
+            crate: firmware-nucleo-f103rb-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stm32f103-smoke.yaml
+            system: configs/systems/onboarding/stm32f103.yaml
+          - id: nrf52840
+            crate: firmware-nrf52840-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nrf52840-smoke.yaml
+            system: configs/systems/onboarding/nrf52840.yaml
+          - id: nucleo_f767zi
+            crate: firmware-stm32f746-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nucleo_f767zi-smoke.yaml
+            system: configs/systems/onboarding/nucleo_f767zi.yaml
 
     steps:
       - uses: actions/checkout@v4

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Record imported Renode descriptors that have no runnable smoke mapping."""
+"""Run configured Renode onboarding smokes and record the remaining inventory."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
+SMOKE_MAPPINGS = {
+    "nrf52840": {
+        "crate": "firmware-nrf52840-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
+    },
+    "stm32f072b_discovery": {
+        "crate": "firmware-stm32f072b-disco-smoke",
+        "target": "thumbv6m-none-eabi",
+        "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
+    },
+    "stm32f103": {
+        "crate": "firmware-nucleo-f103rb-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/stm32f103-smoke.yaml",
+    },
+    "nucleo_f767zi": {
+        "crate": "firmware-stm32f746-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
+    },
+}
 
 
 def imported_system(descriptor: Path) -> str:
@@ -46,35 +69,73 @@ def main() -> int:
     if not descriptors:
         parser.error(f"no imported descriptors found under {DESCRIPTOR_ROOT}")
 
-    reason = (
-        "No platform-specific firmware crate and smoke script are mapped for this imported "
-        "descriptor in the existing onboarding workflow; no firmware run was attempted."
+    not_run_reason = (
+        "No compatible firmware crate and smoke script are mapped for this imported "
+        "descriptor; no firmware run was attempted."
     )
+    attempted = 0
+    preserved = 0
     for descriptor in descriptors:
         system = imported_system(descriptor)
         system_path = REPO_ROOT / "configs" / system
         if not system_path.is_file():
             raise FileNotFoundError(f"{descriptor}: referenced system does not exist: {system_path}")
         out_dir = args.metrics_root / descriptor.stem
+        mapping = SMOKE_MAPPINGS.get(descriptor.stem)
+        metrics_path = out_dir / "onboarding-metrics.json"
+        if metrics_path.is_file():
+            try:
+                existing = json.loads(metrics_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+            same_system = existing.get("system") == f"configs/{system}"
+            if mapping is None and same_system and existing.get("measurement_mode") in {
+                "inventory_only",
+                "smoke",
+            }:
+                preserved += 1
+                continue
+
+        command = [
+            "bash",
+            str(SMOKE_RUNNER),
+            "--target-id",
+            descriptor.stem,
+            "--system",
+            f"configs/{system}",
+            "--out-dir",
+            str(out_dir),
+        ]
+        if mapping is None:
+            command.extend(
+                ["--inventory-only", "--not-run-reason", not_run_reason]
+            )
+        else:
+            command.extend(
+                [
+                    "--crate",
+                    mapping["crate"],
+                    "--target",
+                    mapping["target"],
+                    "--script",
+                    mapping["script"],
+                    "--threshold-seconds",
+                    "3600",
+                ]
+            )
+            attempted += 1
+
         result = subprocess.run(
-            [
-                "bash",
-                str(SMOKE_RUNNER),
-                "--inventory-only",
-                "--target-id",
-                descriptor.stem,
-                "--system",
-                f"configs/{system}",
-                "--not-run-reason",
-                reason,
-                "--out-dir",
-                str(out_dir),
-            ],
+            command,
             cwd=REPO_ROOT,
             check=False,
         )
-        if result.returncode != 0:
+        if mapping is None and result.returncode != 0:
             raise SystemExit(f"inventory record failed for {descriptor.stem}: {result.returncode}")
+        if mapping is not None and result.returncode not in (0, 1):
+            raise SystemExit(f"smoke runner failed unexpectedly for {descriptor.stem}: {result.returncode}")
+        if mapping is not None and not metrics_path.is_file():
+            raise SystemExit(f"smoke runner did not write metrics for {descriptor.stem}")
 
     result = subprocess.run(
         [
@@ -96,7 +157,17 @@ def main() -> int:
     )
     if result.returncode != 0:
         raise SystemExit(f"scoreboard generation failed: {result.returncode}")
-    print(f"Recorded {len(descriptors)} imported descriptors; no firmware runs were attempted.")
+    summary = json.loads(args.json_out.read_text(encoding="utf-8"))["summary"]
+    print(
+        f"Recorded {len(descriptors)} imported descriptors; ran {attempted} configured "
+        f"smokes and preserved {preserved} existing measurements."
+    )
+    print(
+        f"Booted: {summary['booted']}/{summary['descriptors_present']}; "
+        f"boot + smoke pass: {summary['boot_and_smoke_passed']}/"
+        f"{summary['descriptors_present']}; not run: {summary['not_run']}; "
+        f"fail: {summary['fail']}."
+    )
     print(f"Markdown scoreboard: {args.markdown_out}")
     print(f"JSON scoreboard: {args.json_out}")
     return 0

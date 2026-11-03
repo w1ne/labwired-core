@@ -1,0 +1,5 @@
+2026-11-03T02:50:00.984969Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072b_discovery.yaml
+2026-11-03T02:50:00.987548Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  3/3 checks · stm32f072b_discovery-smoke · 4000000 steps · 0.13s
