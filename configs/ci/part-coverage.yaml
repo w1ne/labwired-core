@@ -13,7 +13,7 @@
 # only falls, `min_lab_exercised` (parts an example lab attaches — the
 # Playground claim) only rises.
 max_device_only: 1
-min_lab_exercised: 46
+min_lab_exercised: 47
 
 parts:
   apa102:
