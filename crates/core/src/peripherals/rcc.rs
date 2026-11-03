@@ -114,6 +114,9 @@ pub enum RccRegisterLayout {
     /// silicon-pinned AHBENR mask would discard — so the enable registers are
     /// stored unmasked, like an un-pinned F4 part.
     Stm32F0,
+    /// STM32C0 onboarding subset (RM0490 Rev 5). Currently only
+    /// RCC_IOPENR@0x34 is exposed for the NUCLEO-C071RB GPIO smoke.
+    Stm32C0,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -135,8 +138,9 @@ impl FromStr for RccRegisterLayout {
             "stm32wba" | "wba" => Ok(Self::Stm32Wba),
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
+            "stm32c0" | "c0" => Ok(Self::Stm32C0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0",
                 value
             )),
         }
@@ -2590,6 +2594,39 @@ impl RccModel for G0Rcc {
     }
 }
 
+// ── STM32C0 ────────────────────────────────────────────────────────────────
+// NUCLEO-C071RB onboarding currently needs only the GPIOA clock gate. RM0490
+// Rev 5 §6.4.12 gives RCC_IOPENR at offset 0x34, reset 0, with GPIOAEN at bit 0.
+// Keep this profile deliberately small: the C0 clock tree and other RCC
+// registers are outside this smoke model.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct C0Rcc {
+    iopenr: u32,
+}
+
+impl RccModel for C0Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x34 => self.iopenr,
+            _ => {
+                crate::census_reg!("rcc:C0Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x34 => self.iopenr = value,
+            _ => crate::census_reg!("rcc:C0Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 
 /// RCC peripheral — one variant per chip family. Each variant's registers are
@@ -2607,6 +2644,7 @@ pub enum Rcc {
     Stm32G4(G4Rcc),
     Stm32G0(G0Rcc),
     Stm32F0(F0Rcc),
+    Stm32C0(C0Rcc),
 }
 
 impl Default for Rcc {
@@ -2633,6 +2671,7 @@ impl Rcc {
             RccRegisterLayout::Stm32G4 => Self::Stm32G4(G4Rcc::new()),
             RccRegisterLayout::Stm32G0 => Self::Stm32G0(G0Rcc::new()),
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
+            RccRegisterLayout::Stm32C0 => Self::Stm32C0(C0Rcc::default()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
@@ -2806,6 +2845,12 @@ impl Rcc {
                 "csr" => Some(0x60),
                 _ => None,
             },
+            // C0 smoke profile: only IOPENR is currently modeled (RM0490
+            // Rev 5 §6.4.12); unlike G0 it deliberately has no clock-tree map.
+            Self::Stm32C0(_) => match r.as_str() {
+                "iopenr" => Some(0x34),
+                _ => None,
+            },
             // WB (RM0434, 0x4C/0x58/0x60) and WBA (RM0493, H5-style
             // 0x8C/0x9C/0xA4): the six shared slots, read off the instance's
             // own map. `cfgr1` is WBA RCC_CFGR1@0x1C (WB has RCC_CIFR there
@@ -2871,6 +2916,7 @@ impl Rcc {
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
             Self::Stm32F0(r) => r,
+            Self::Stm32C0(r) => r,
         }
     }
 
@@ -2887,6 +2933,7 @@ impl Rcc {
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
             Self::Stm32F0(r) => r,
+            Self::Stm32C0(r) => r,
         }
     }
 }
