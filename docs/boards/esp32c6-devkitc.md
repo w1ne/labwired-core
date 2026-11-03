@@ -1,6 +1,6 @@
 # ESP32-C6-DevKitC-1
 
-Espressif **ESP32-C6** on the **ESP32-C6-DevKitC-1** (v1.2) — single HP core **RISC-V RV32IMAC @ 160 MHz**, 512 KB HP SRAM, 320 KB ROM, 8 MB external SPI flash on the WROOM-1 module, plus an LP core and Wi-Fi 6 / Bluetooth 5 / IEEE 802.15.4 radios on silicon. LabWired's C6 target runs a bare-metal ELF whose console reaches the capture sink.
+Espressif **ESP32-C6** on the **ESP32-C6-DevKitC-1** (v1.2) — single HP core **RISC-V RV32IMAC @ 160 MHz**, 512 KB HP SRAM, 320 KB ROM, 8 MB external SPI flash on the WROOM-1 module, plus an LP core and Wi-Fi 6 / Bluetooth 5 / IEEE 802.15.4 radios on silicon. LabWired's C6 target runs a bare-metal ELF whose UART0 peripheral output reaches the capture sink. This does not prove pad-level propagation or the external USB-to-UART bridge.
 
 This is an **L3 (production-ready)** target by the [target support rubric](../target_support_rubric.md): the full twelve-cell tier-1 row — clock (PCR), GPIO, UART, timer (TIMG), DMA (GDMA), interrupt delivery, I²C, SPI, ADC, PWM (LEDC), watchdog (TIMG MWDT) and RTC (LP_TIMER) — is proven by the tier-1 fixture, and the L2 package (CI lanes, known-limitations file, unsupported-instruction audit) is in place. The C3-shared Espressif IP (UART, GPIO, I²C0, GP-SPI2, LEDC, APB_SARADC, TIMG) is reused where the C6 SVD register head is offset-identical; PCR, GDMA, the MWDT path and LP_TIMER are C6-specific models. No silicon capture exists: register behaviour is SIM-DERIVED.
 
@@ -58,7 +58,7 @@ var the window stays zero.
 |-------------|------|-----------------|--------|
 | TX (J3-2) | GPIO16 | **U0TXD** | USB-to-UART console |
 | RX (J3-3) | GPIO17 | **U0RXD** | USB-to-UART console |
-| — | GPIO8 | **Addressable RGB LED** (WS2812) | Needs RMT frame; pin stub only |
+| — | GPIO8 | **Addressable RGB LED** (WS2812) | Needs RMT frame; omitted from the smoke profile |
 | BOOT (J3-11) | GPIO9 | BOOT button (active low) | Strapping pin; download mode not modelled |
 | D0… | GPIO0–GPIO7 | LP-capable / ADC1 / strapping (MTMS/MTDI) | Advertised via the shared GPIO matrix model |
 | D1… | GPIO10, GPIO11, GPIO15, GPIO18–GPIO23 | Header pins | Not modelled beyond the GPIO window |
@@ -93,7 +93,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | Block | Status | Notes |
 |-------|--------|-------|
 | UART0 / UART1 | ✅ / ⚠️ | Espressif UART IP + 128-byte FIFOs, clocked at 160 MHz (`esp32c6_uart`). Head map only: the C6 register tail (`SLEEP_CONF*`, `CLK_CONF` @0x88, `DATE` @0x8C, `ID` @0x9C) is unmodelled and reads as the C3's old offsets |
-| GPIO matrix | ⚠️ | Shared C3-sized model (26 pins); `board_io` LED/button declared but the RGB LED needs RMT |
+| GPIO matrix | ⚠️ | Shared C3-sized model (26 pins). The DevKitC-1 smoke profile makes no board LED or button claim; its RGB LED needs an RMT WS2812 frame |
 | IO_MUX | ⚠️ | Register-backed stub: pad function writes are recorded, not electrically enforced — the console shifts bytes regardless of routing |
 | USB Serial/JTAG | ⚠️ | `UsbSerialJtag` @ `0x6000_F000` (irq 48); system `debug_uart` still `uart0` |
 | I²C0 | ✅ / ⚠️ | Behavioral command-list engine shared with the C3 (`esp32c3_i2c`), C6 base `0x6000_4000` + source 50 (I2C_EXT0). The C6-only differences (SDA/SCL filter tail) are unmodelled; the C3 matrix-signal pad wiring is applied by the shared wiring pass even though C6 signal ids differ |

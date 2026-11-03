@@ -21,6 +21,7 @@ on:
       - "crates/firmware-f446-demo/**"
       - "crates/firmware-f4-discovery-smoke/**"
       - "crates/firmware-stm32g0-demo/**"
+      - "crates/firmware-esp32c6-demo/**"
       - "crates/firmware-nucleo-f072rb-smoke/**"
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
@@ -64,6 +65,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: esp32c6-devkitc
+            crate: firmware-esp32c6-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c6-devkitc/io-smoke.yaml
+            system: configs/systems/esp32c6-devkitc.yaml
           - id: arduino-uno-r4-minima
             crate: firmware-ra4m1-demo
             target: thumbv7em-none-eabi
@@ -243,7 +249,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

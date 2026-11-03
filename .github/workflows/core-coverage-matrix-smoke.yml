@@ -142,8 +142,8 @@ jobs:
             crate: firmware-esp32c6-demo
             profile: release
             profile_dir: release
-            script: examples/esp32c6-devkitc/uart-smoke.yaml
-            system: examples/esp32c6-devkitc/system.yaml
+            script: examples/esp32c6-devkitc/io-smoke.yaml
+            system: configs/systems/esp32c6-devkitc.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2

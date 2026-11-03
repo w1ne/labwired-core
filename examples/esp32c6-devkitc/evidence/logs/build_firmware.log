@@ -1,0 +1,29 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
+   Compiling critical-section v1.2.0
+   Compiling nb v1.1.0
+   Compiling riscv v0.11.1
+   Compiling riscv-rt v0.12.2
+   Compiling void v1.0.2
+   Compiling riscv v0.10.1
+   Compiling embedded-hal v1.0.0
+   Compiling firmware-esp32c6-demo v0.1.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/firmware-esp32c6-demo)
+   Compiling bit_field v0.10.3
+   Compiling panic-halt v0.2.0
+   Compiling riscv-rt-macros v0.2.2
+   Compiling nb v0.1.3
+   Compiling embedded-hal v0.2.7
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.06s

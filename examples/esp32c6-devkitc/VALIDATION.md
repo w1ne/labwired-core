@@ -21,19 +21,19 @@ cargo build -p firmware-esp32c6-demo --release --target riscv32imc-unknown-none-
 
 Committed copy of the same artifact: `tests/fixtures/esp32c6-demo.elf`.
 
-## 3) Run deterministic UART smoke
+## 3) Run deterministic UART0 console smoke
 
 ```bash
 cargo run -q -p labwired-cli -- test \
-  --script examples/esp32c6-devkitc/uart-smoke.yaml \
-  --output-dir out/esp32c6-devkitc/uart-smoke \
+  --script examples/esp32c6-devkitc/io-smoke.yaml \
+  --output-dir out/esp32c6-devkitc/io-smoke \
   --no-uart-stdout
 ```
 
 Pass criteria:
 
 1. exit code is `0`
-2. UART contains `OK`
+2. UART0 host capture contains `OK`
 
 ## 4) Run firmware survival gate
 

@@ -11,6 +11,14 @@ matter how plausible the register map looks. This is a
 **SIM-DERIVED** target: nothing here has been diffed against live C6 silicon,
 and no firmware beyond the in-tree fixtures/apps has been run.
 
+## DevKitC-1 smoke profile
+
+The board manifest exposes only UART0 to the twin's host capture sink. The
+USB-to-UART bridge and electrical propagation through GPIO16/GPIO17 are not
+modeled. The RGB LED (WS2812), BOOT button, native USB console, and radios are
+omitted from the board profile; the chip-level GPIO model does not imply those
+board devices work.
+
 ## Proven at tier-1 (documented scenarios)
 
 The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:

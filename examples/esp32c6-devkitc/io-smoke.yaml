@@ -1,14 +1,11 @@
 # LabWired - ESP32-C6-DevKitC-1 strict-onboarding smoke test
 #
-# The strict-onboarding gate (crates/core/tests/strict_onboarding.rs) builds
-# this firmware if the declared target path is empty, then runs it and asserts
-# the C6 boot path produced its UART bytes. Same artifact and assertions as
-# uart-smoke.yaml; kept separate because the gate looks for exactly
-# `io-smoke.yaml`.
+# The strict-onboarding gate builds this firmware if the target path is empty,
+# then asserts that the modeled UART0 console produced its UART bytes.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/esp32c6-devkitc.yaml"
 limits:
   max_steps: 200000
 assertions:
