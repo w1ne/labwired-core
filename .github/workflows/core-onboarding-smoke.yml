@@ -36,6 +36,7 @@ on:
       - "examples/nucleo-wba55cg/**"
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
+      - "crates/firmware-feather-rp2040-smoke/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
@@ -201,6 +202,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/pico/io-smoke.yaml
             system: configs/systems/rp2040-pico.yaml
+          - id: adafruit-feather-rp2040
+            crate: firmware-feather-rp2040-smoke
+            target: thumbv6m-none-eabi
+            script: examples/adafruit-feather-rp2040/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2040.yaml
           - id: metro-m4
             crate: firmware-atsamd51-demo
             target: thumbv7em-none-eabi

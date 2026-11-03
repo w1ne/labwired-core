@@ -110,6 +110,7 @@ members = [
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-feather-rp2040-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-arduino-zero-demo",
     "crates/firmware-rp2350-demo",
@@ -399,6 +400,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-feather-rp2040-smoke]
 codegen-units = 1
 opt-level = "s"
 

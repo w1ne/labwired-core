@@ -1,0 +1,12 @@
+# Feather RP2040 D13 LED smoke: IO_BANK0 routes GP13 to SIO, which toggles LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-feather-rp2040-smoke"
+  system: "../../configs/systems/adafruit-feather-rp2040.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "sio:13"
+      min_edges: 8
+  - expected_stop_reason: max_steps
