@@ -1,4 +1,4 @@
-2026-11-03T14:45:36.763425Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nrf52840.yaml
-2026-11-03T14:45:36.767824Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-03T14:52:31.401240Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nrf52840.yaml
+2026-11-03T14:52:31.405482Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  3/3 checks · nrf52840-smoke · 4000000 steps · 1.44s
+PASS  3/3 checks · nrf52840-smoke · 4000000 steps · 1.47s
