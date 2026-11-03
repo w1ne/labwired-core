@@ -62,8 +62,9 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and diffusion
-//! charge `TT`, BJT terminal resistances `RB`/`RC`/`RE`, JFET terminal
+//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion
+//! charge `TT` and soft-recovery parameter `VP`, BJT terminal resistances
+//! `RB`/`RC`/`RE`, JFET terminal
 //! resistances `RD`/`RS` and gate-junction depletion capacitance
 //! `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
@@ -114,7 +115,8 @@
 //! equation, and with it unset the diode is exactly what it was before
 //! breakdown existed. `ISR`/`NR` add its optional recombination-current branch;
 //! `CJO`, `VJ`, `M`, and `FC` add depletion charge to transient steps; `TT`
-//! adds quasi-static diffusion charge. BJT `TF`/`TR`
+//! adds quasi-static diffusion charge, or `TT` with `VP > 0` selects the
+//! first-order soft reverse-recovery model. BJT `TF`/`TR`
 //! add transit-time charge based on the forward/reverse transport current;
 //! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias;
 //! `RB`/`RC`/`RE` add series resistance between the external terminals and
@@ -545,6 +547,10 @@ pub struct DiodeModel {
     /// Forward transit time `TT`, seconds. Zero disables diffusion charge,
     /// matching ngspice's default.
     pub tt: f64,
+    /// Soft reverse-recovery coefficient `VP`. Positive `VP` with positive
+    /// `TT` replaces quasi-static diffusion charge with a first-order charge
+    /// state; zero keeps `Qd = TT·Id`.
+    pub vp: f64,
     /// Reverse breakdown voltage `BV`, volts, positive. `None` is a diode
     /// with no breakdown at all, solved exactly as before `BV` existed.
     pub bv: Option<f64>,
@@ -574,6 +580,7 @@ impl Default for DiodeModel {
             nr: 2.0,
             rs: 0.0,
             tt: 0.0,
+            vp: 0.0,
             bv: None,
             ibv: 1e-3,
             nbv: None,
@@ -854,6 +861,7 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     nr: 2.0,
     rs: 0.0,
     tt: 0.0,
+    vp: 0.0,
     bv: None,
     ibv: 1e-3,
     nbv: None,
@@ -1254,6 +1262,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             nr: 2.0,
             rs: 6.0,
             tt: 0.0,
+            vp: 0.0,
             bv: Some(4.8),
             ibv: 49e-3,
             nbv: None,
@@ -1273,6 +1282,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             nr: 2.0,
             rs: 0.0525,
             tt: 0.0,
+            vp: 0.0,
             bv: Some(6.7),
             ibv: 10e-3,
             nbv: None,
@@ -2778,6 +2788,8 @@ fn bind_models(
                     || model.rs < 0.0
                     || !model.tt.is_finite()
                     || model.tt < 0.0
+                    || !model.vp.is_finite()
+                    || model.vp < 0.0
                     || !model.cjo.is_finite()
                     || model.cjo < 0.0
                     || !model.vj.is_finite()
@@ -2789,7 +2801,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3368,6 +3380,7 @@ fn parse_model(
             (ModelCard::Diode(model), "NR") => model.nr = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
             (ModelCard::Diode(model), "TT") => model.tt = value,
+            (ModelCard::Diode(model), "VP") => model.vp = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
             (ModelCard::Diode(model), "NBV") => model.nbv = Some(value),
@@ -3562,6 +3575,7 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     nr: 2.0,
     rs: 0.0,
     tt: 0.0,
+    vp: 0.0,
     bv: None,
     ibv: 1e-3,
     nbv: None,

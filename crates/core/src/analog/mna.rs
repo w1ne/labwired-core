@@ -174,8 +174,65 @@ fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> de
 fn diode_charge_op(voltage: f64, model: DiodeModel, op: device::DiodeOp) -> (f64, f64) {
     let (q_depletion, c_depletion) =
         device::diode_depletion_charge(voltage, model.cjo, model.vj, model.m, model.fc);
-    let (q_diffusion, c_diffusion) = device::diode_diffusion_charge(voltage, op, model.tt);
+    let (q_diffusion, c_diffusion) = if model.vp > 0.0 && model.tt > 0.0 {
+        (0.0, 0.0)
+    } else {
+        device::diode_diffusion_charge(voltage, op, model.tt)
+    };
     (q_depletion + q_diffusion, c_depletion + c_diffusion)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DiodeRecoveryStep {
+    state: f64,
+    rate: f64,
+    current: f64,
+    conductance: f64,
+}
+
+/// One implicit step of ngspice's `TT`/`VP` soft reverse-recovery equation.
+/// `state` is the normalized charge variable `q` in `q + TT·VP·dq/dt =
+/// -TT·Id`; the diode current receives `-(1−VP)·dq/dt`. At `VP=0` this
+/// reduces to the ordinary `TT·dId/dt` diffusion current, so only positive
+/// `VP` uses this path.
+fn diode_recovery_step(
+    model: DiodeModel,
+    op: device::DiodeOp,
+    previous_state: f64,
+    previous_rate: f64,
+    h: f64,
+    rule: Integration,
+) -> DiodeRecoveryStep {
+    let tau = model.tt * model.vp;
+    let (state, rate, drate_dv) = match rule {
+        Integration::BackwardEuler => {
+            let ratio = tau / h;
+            let denominator = 1.0 + ratio;
+            let state = (-model.tt * op.id + ratio * previous_state) / denominator;
+            let dstate_dv = -model.tt * op.gd / denominator;
+            (state, (state - previous_state) / h, dstate_dv / h)
+        }
+        Integration::Trapezoidal => {
+            let ratio = tau / h;
+            let denominator = 1.0 + 2.0 * ratio;
+            let state = (-model.tt * op.id + 2.0 * ratio * previous_state + tau * previous_rate)
+                / denominator;
+            let dstate_dv = -model.tt * op.gd / denominator;
+            (
+                state,
+                2.0 * (state - previous_state) / h - previous_rate,
+                2.0 * dstate_dv / h,
+            )
+        }
+    };
+    let current = -(1.0 - model.vp) * rate;
+    let conductance = -(1.0 - model.vp) * drate_dv;
+    DiodeRecoveryStep {
+        state,
+        rate,
+        current,
+        conductance,
+    }
 }
 
 fn diode_charge_active(model: DiodeModel) -> bool {
@@ -209,6 +266,10 @@ pub struct Solver {
     /// cathode. Charge is sufficient for BE; trap also uses the current.
     diode_q: Vec<f64>,
     diode_i: Vec<f64>,
+    /// Ngspice's normalized soft-recovery charge state and its derivative.
+    /// These are active only when `VP > 0` and `TT > 0`.
+    diode_recovery_state: Vec<f64>,
+    diode_recovery_rate: Vec<f64>,
     /// Each BJT's base-emitter voltage in device coordinates.
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
@@ -364,6 +425,8 @@ impl Solver {
             diode_vj: vec![0.0; diodes],
             diode_q: vec![0.0; diodes],
             diode_i: vec![0.0; diodes],
+            diode_recovery_state: vec![0.0; diodes],
+            diode_recovery_rate: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
             bjt_q: vec![[0.0; 2]; bjts],
@@ -694,6 +757,10 @@ impl Solver {
                 let op = diode_model_op(self.diode_vj[index], diode.model, diode.breakdown);
                 self.diode_q[index] = diode_charge_op(self.diode_vj[index], diode.model, op).0;
                 self.diode_i[index] = 0.0;
+                if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
+                    self.diode_recovery_state[index] = -diode.model.tt * op.id;
+                    self.diode_recovery_rate[index] = 0.0;
+                }
             }
         }
         for index in 0..self.circuit.bjts.len() {
@@ -934,6 +1001,30 @@ impl Solver {
                 && self.diode_i[index].to_bits() == i_new.to_bits();
             self.diode_q[index] = q_new;
             self.diode_i[index] = i_new;
+        }
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            if diode.model.vp <= 0.0 || diode.model.tt <= 0.0 {
+                continue;
+            }
+            let v_new = node_diff(
+                &self.solution[..self.nodes],
+                diode.junction_anode,
+                diode.cathode,
+            );
+            let op = diode_model_op(v_new, diode.model, diode.breakdown);
+            let recovery = diode_recovery_step(
+                diode.model,
+                op,
+                self.diode_recovery_state[index],
+                self.diode_recovery_rate[index],
+                h,
+                rule,
+            );
+            self.settled &= self.diode_recovery_state[index].to_bits() == recovery.state.to_bits()
+                && self.diode_recovery_rate[index].to_bits() == recovery.rate.to_bits();
+            self.diode_recovery_state[index] = recovery.state;
+            self.diode_recovery_rate[index] = recovery.rate;
         }
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
@@ -1865,6 +1956,41 @@ impl Solver {
                         diode.cathode,
                         -current,
                         &negate(&charge_control),
+                    );
+                }
+            }
+
+            if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
+                if let Stamp::Transient(h, rule) = stamp {
+                    let recovery = diode_recovery_step(
+                        diode.model,
+                        op,
+                        self.diode_recovery_state[index],
+                        self.diode_recovery_rate[index],
+                        h,
+                        rule,
+                    );
+                    let recovery_control = [(
+                        recovery.conductance,
+                        diode.junction_anode,
+                        diode.cathode,
+                        vj,
+                    )];
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.junction_anode,
+                        recovery.current,
+                        &recovery_control,
+                    );
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        diode.cathode,
+                        -recovery.current,
+                        &negate(&recovery_control),
                     );
                 }
             }

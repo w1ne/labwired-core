@@ -18,7 +18,8 @@
 //!
 //! DC/large-signal behaviour for the nonlinear current equations. Diode
 //! depletion charge (`CJO`, `VJ`, `M`, `FC`), recombination current (`ISR`,
-//! `NR`) and diffusion charge (`TT`), BJT
+//! `NR`), quasi-static diffusion charge (`TT`) or soft reverse-recovery charge
+//! (`TT`/`VP`), BJT
 //! base-junction depletion charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`,
 //! `FC`), and JFET gate-junction depletion charge (`CGS`, `CGD`, `PB`, `FC`,
 //! with level-1 `M=0.5`) are integrated in transient runs. MOSFET gate overlap
@@ -34,8 +35,8 @@
 //! There is no temperature model: every parameter is taken at
 //! [`TEMPERATURE_K`] as written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted
-//! and ignored; see [`super::netlist`]. Beyond the quasi-static diode `TT`
-//! term, more detailed reverse-recovery behavior and stored charge in
+//! and ignored; see [`super::netlist`]. Diode soft recovery covers the
+//! first-order `VP` charge state. Other recovery models and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
 //!
 //! ## Determinism
