@@ -1,0 +1,21 @@
+F4-DISCO SMOKE
+hb=0 ld4=on odr=00001000
+hb=1 ld4=off odr=00000000
+hb=2 ld3=on odr=00002000
+hb=3 ld3=off odr=00000000
+hb=4 ld5=on odr=00004000
+hb=5 ld5=off odr=00000000
+hb=6 ld6=on odr=00008000
+hb=7 ld6=off odr=00000000
+hb=8 ld4=on odr=00001000
+hb=9 ld4=off odr=00000000
+hb=10 ld3=on odr=00002000
+hb=11 ld3=off odr=00000000
+hb=12 ld5=on odr=00004000
+hb=13 ld5=off odr=00000000
+hb=14 ld6=on odr=00008000
+hb=15 ld6=off odr=00000000
+hb=16 ld4=on odr=00001000
+hb=17 ld4=off odr=00000000
+hb=18 ld3=on odr=00002000
+hb=19 ld3=off odr=00000000

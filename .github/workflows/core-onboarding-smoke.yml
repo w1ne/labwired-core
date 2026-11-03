@@ -83,6 +83,11 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stm32f103-smoke.yaml
             system: configs/systems/onboarding/stm32f103.yaml
+          - id: stm32f4_discovery
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f4_discovery-smoke.yaml
+            system: configs/systems/onboarding/stm32f4_discovery.yaml
           - id: nrf52840
             crate: firmware-nrf52840-demo
             target: thumbv7em-none-eabi
