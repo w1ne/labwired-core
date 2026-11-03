@@ -794,11 +794,32 @@ pub fn artifact_region_ink(
     Ok((ink, region.w * region.h))
 }
 
-/// Count pixels in `region` whose packed RGB565 value equals `colour`.
+/// Expand an authored RGB565 colour into the RGB888 triple a `serial_color`
+/// panel stores for that wire value.
 ///
-/// Only `rgb565_be` is supported today (ST7789 / ILI9341 / RM67162 family).
-/// Other formats return an error rather than a silent zero — same fail-closed
-/// rule as [`artifact_region_ink`].
+/// Firmware packs RGB565 onto the 18-bit SPI wire as
+/// `(r & 0xF8, g & 0xFC, b << 3 & 0xF8)`; the ST7735R / ILI9488 decoder keeps
+/// the high six bits per channel and bit-expands them into frame memory. Prove
+/// clauses still name colours in RGB565 (`0x07FF`), so this is the one map
+/// from that spelling to the bytes in an `rgb888` artifact.
+pub fn rgb565_to_serial_color_rgb888(colour: u16) -> [u8; 3] {
+    let wire = [
+        ((colour >> 8) as u8) & 0xF8,
+        ((colour >> 3) as u8) & 0xFC,
+        ((colour << 3) as u8) & 0xF8,
+    ];
+    wire.map(|value| {
+        let six = value >> 2;
+        (six << 2) | (six >> 4)
+    })
+}
+
+/// Count pixels in `region` whose packed colour equals `colour`.
+///
+/// `rgb565_be` matches the packed big-endian value directly (ST7789 / ILI9341 /
+/// RM67162). `rgb888` matches the serial-color expansion of that same RGB565
+/// spelling (ILI9488 / ST7735R memory). Other formats return an error rather
+/// than a silent zero — same fail-closed rule as [`artifact_region_ink`].
 pub fn artifact_region_colour_count(
     format: &str,
     meta: &serde_json::Value,
@@ -863,8 +884,31 @@ pub fn artifact_region_colour_count(
             }
             Ok(n)
         }
+        artifact_format::RGB888 => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or_else(|| "rgb888 geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "rgb888 payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            let want = rgb565_to_serial_color_rgb888(colour);
+            let mut n = 0usize;
+            for y in region.y..(region.y + region.h) {
+                for x in region.x..(region.x + region.w) {
+                    let i = (y * pw + x) * 3;
+                    if bytes[i] == want[0] && bytes[i + 1] == want[1] && bytes[i + 2] == want[2] {
+                        n += 1;
+                    }
+                }
+            }
+            Ok(n)
+        }
         other => Err(format!(
-            "colour count is not implemented for framebuffer format '{other}' (only rgb565_be)"
+            "colour count is not implemented for framebuffer format '{other}' (only rgb565_be, rgb888)"
         )),
     }
 }
@@ -1479,6 +1523,30 @@ mod tests {
         assert_eq!(
             artifact_region_colour_count(RGB565_BE, &meta, &bytes, left, red).unwrap(),
             2
+        );
+    }
+
+    #[test]
+    fn colour_count_matches_serial_color_rgb888_expansion_of_rgb565() {
+        use artifact_format::RGB888;
+        // Cyan 0x07FF expands the same way firmware packs RGB666 onto the wire
+        // and serial_color bit-expands into frame memory.
+        let cyan = rgb565_to_serial_color_rgb888(0x07FF);
+        assert_eq!(cyan, [0x00, 0xFF, 0xFB]);
+        let w = 2usize;
+        let h = 1usize;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&cyan);
+        bytes.extend_from_slice(&[0, 0, 0]);
+        let meta = serde_json::json!({ "w": w, "h": h, "unknown_pixels": 0 });
+        let full = PixelRegion { x: 0, y: 0, w, h };
+        assert_eq!(
+            artifact_region_colour_count(RGB888, &meta, &bytes, full, 0x07FF).unwrap(),
+            1
+        );
+        assert_eq!(
+            artifact_region_colour_count(RGB888, &meta, &bytes, full, 0xF800).unwrap(),
+            0
         );
     }
 }

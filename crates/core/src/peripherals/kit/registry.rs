@@ -52,6 +52,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_display::SSD1306_128X32_KIT,
     &components::declarative_display::SH1107_KIT,
     &components::declarative_display::ILI9341_KIT,
+    &components::declarative_display::ILI9488_KIT,
     &components::declarative_display::RM67162_KIT,
     &components::declarative_display::ST7789_KIT,
     &components::inmp441::INMP441_KIT,

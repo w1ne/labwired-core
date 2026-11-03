@@ -1,0 +1,99 @@
+# Ilitek ILI9488 — 320×480 RGB frame memory over 4-wire SPI. Declarative
+# `display` primitive with `serial_color` so COLMOD selects the wire depth.
+#
+# FRAME MEMORY is 320×480 (datasheet address range). A 3.5" 480×320 module is
+# the same controller with MADCTL MV selecting landscape; no glass crop is
+# baked in. Firmware that wants the full panel sends CASET/PASET after MADCTL.
+#
+# COLMOD is modelled. Hardware power-on depth is 18-bit (COLMOD=6); the Nano
+# Pong sketch writes 0x66 and streams three bytes per pixel. Ignoring COLMOD
+# (as ili9341/st7789 do for their fixed RGB565 models) would mis-frame every
+# pixel on this panel. The RAM and artifact are RGB888 bit-expansions of the
+# 6-bit channels — the same encoding as the ST7735R serial_color path.
+#
+# FRAMING comes from the D/C line ONLY. `dc_pin` is required. There is no
+# infer-framing-from-byte-values fallback (Adafruit-style init tables have
+# been measured to decode a parameter 0x2C as RAMWR under that inference).
+#
+# CS ASSERT DOES NOT CLOSE THE PIXEL STREAM (`cs_select: keeps_stream`): a
+# driver that chunks a blit releases CS between bursts and resumes.
+#
+# RGBSET (0x2D) is declared because serial_color requires exactly one LUT
+# load command; RGB666 traffic never consults the LUT. Firmware that never
+# sends it leaves the decoder on the hardware-default depth.
+#
+# NOT modelled: gamma (0xE0/0xE1), power/VCOM (0xC0..0xC5), frame rate / porch
+# / function (0xB0..0xB7), interface set (0xF7), BGR bit rendering, and every
+# undocumented vendor command a stock init sends. An unlisted opcode is
+# consumed and CLOSES the stream; its parameter bytes then arrive with
+# nothing open and are dropped.
+type: ili9488
+
+behavior:
+  primitive: display
+  display:
+    width: 320
+    height: 480
+    pixel_format: rgb888
+    artifact_format: rgb888
+    serial_color: { encoding: st7735r, colmod_var: colmod }
+    # Three bit-expanded RGB666 memory channels per pixel, NOT wire bytes.
+    ram: { bytes: 460800, layout: row_major, stream: command }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    addressing: { modes: [horizontal], default: horizontal }
+    cs_select: keeps_stream
+    # MADCTL D7=MY, D6=MX, D5=MV. MV swaps the legal column/row extents
+    # (0..319×0..479 ↔ 0..479×0..319), so it moves the window clamp as well
+    # as the pixel map.
+    vars: { madctl: 0, colmod: 6 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    supply_gated: true
+    artifact_meta:
+      [display_on, lit, awake, powered, painted_bytes, total_bytes,
+       { var: madctl }, { var: colmod, format: hex8 }]
+    commands:
+      - { opcode: 0x01, name: SWRESET, do: [ { reset_control: true } ] }
+      - { opcode: 0x10, name: SLPIN,  do: [ { awake: false } ] }
+      - { opcode: 0x11, name: SLPOUT, do: [ { awake: true } ] }
+      - { opcode: 0x20, name: INVOFF, do: [ { invert: false } ] }
+      - { opcode: 0x21, name: INVON,  do: [ { invert: true } ] }
+      - { opcode: 0x28, name: DISPOFF, do: [ { display_on: false } ] }
+      - { opcode: 0x29, name: DISPON,  do: [ { display_on: true } ] }
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - opcode: 0x2B
+        name: PASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - { opcode: 0x2C, name: RAMWR, do: [ { ram_write: { reset_cursor: true } } ] }
+      # Declared for serial_color validation; RGB666 writes ignore the LUT.
+      - { opcode: 0x2D, name: RGBSET, args: 128, do: [ { load_rgb_lut: true } ] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [ { set_var: { name: madctl, value: { args: [0] } } } ] }
+      - { opcode: 0x3A, name: COLMOD, args: 1, do: [ { set_var: { name: colmod, value: { args: [0] } } } ] }
+      - { opcode: 0x3C, name: RAMWRCONT, do: [ { ram_write: { reset_cursor: false } } ] }
+
+metadata:
+  label: "ILI9488 TFT"
+  summary: "320×480 SPI TFT controller with modelled 18-bit COLMOD."
+  detail: "Ilitek ILI9488 against an in-memory 320×480 RGB888 frame (bit-expanded RGB666). COLMOD selects the SPI pixel depth; hardware default and the common 0x66 init are 18-bit / three bytes per pixel. MADCTL MV selects landscape 480×320 addressing. The playground surfaces pixels through the simulator bridge."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select GPIO pin label (e.g. \"PB2\")."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part — ABSENT MEANS POWERED. Only an explicit false, which the diagram compiler emits when supply pins are on no net, darkens the panel."

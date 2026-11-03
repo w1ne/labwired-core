@@ -2679,6 +2679,11 @@ display_kit!(
     "ili9341"
 );
 display_kit!(
+    /// ILI Technology ILI9488, 320×480 RGB666 SPI TFT (`ili9488.yaml`).
+    ILI9488_KIT,
+    "ili9488"
+);
+display_kit!(
     /// Raydium RM67162, 240×536 RGB565 AMOLED (`rm67162.yaml`).
     RM67162_KIT,
     "amoled-rm67162"
@@ -2737,6 +2742,16 @@ pub fn ili9341(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
     dev.set_dc_pin(dc_pin);
     dev
 }
+
+/// The ILI9488 model with its two pins wired — 320×480 memory, serial_color
+/// 18-bit COLMOD path.
+pub fn ili9488(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("ili9488").expect("ili9488 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev.set_dc_pin(dc_pin);
+    dev
+}
+
 
 /// The RM67162 model driven by the SPI controller's own DCX line, which is how
 /// `examples/nrf54lm20a-snake` wires it. The shape the in-crate tests used to
@@ -4077,4 +4092,28 @@ mod tests {
             "the fifth byte must overwrite the first, not run off the window"
         );
     }
+
+    #[test]
+    fn ili9488_constructs_and_accepts_colmod_0x66_rgb666_pixels() {
+        let mut panel = ili9488("PB2", "PD7");
+        assert_eq!((panel.width(), panel.height()), (320, 480));
+        assert_eq!(panel.framebuffer().len(), 460_800);
+        assert_eq!(panel.vars["colmod"], 6);
+        // Firmware writes COLMOD=0x66; low three bits select RGB666.
+        serial_command(&mut panel, 0x3a, &[0x66]);
+        assert_eq!(panel.vars["colmod"], 0x66);
+        assert_eq!(serial_artifact(&panel).meta["colmod"], "0x66");
+        // One cyan-ish RGB666 pixel: wire bytes are 6-bit left-aligned;
+        // RAM stores the bit-expanded RGB888 channels.
+        serial_command(&mut panel, 0x2c, &[0x00, 0xFC, 0xFC]);
+        assert_eq!(&panel.framebuffer()[..3], &[0x00, 0xFF, 0xFF]);
+        assert_eq!(panel.known_pixels().map(|k| k[0]), Some(true));
+        // MADCTL MV swaps the legal CASET/PASET extents (landscape 480×320).
+        serial_command(&mut panel, 0x36, &[0x28]);
+        assert_eq!(panel.vars["madctl"], 0x28);
+        serial_command(&mut panel, 0x2a, &[0x00, 0x00, 0x01, 0xDF]); // 0..479
+        serial_command(&mut panel, 0x2b, &[0x00, 0x00, 0x01, 0x3F]); // 0..319
+        assert_eq!((panel.col_end, panel.row_end), (479, 319));
+    }
+
 }
