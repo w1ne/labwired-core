@@ -188,6 +188,8 @@ pub struct Pic16SfrMap {
     pub txreg: u16,
     pub txsta: u16,
     pub spbrg: u16,
+    /// Whether the part implements the asynchronous USART at these addresses.
+    pub has_usart: bool,
     /// PCON (stack overflow/underflow and RESET-instruction flags).
     pub pcon: Option<u16>,
     /// The oscillator status register and the ready bits it always reads
@@ -209,8 +211,15 @@ pub const PIC16_CLASSIC_MAP: Pic16SfrMap = Pic16SfrMap {
     txreg: SFR_TXREG,
     txsta: SFR_TXSTA,
     spbrg: SFR_SPBRG,
+    has_usart: true,
     pcon: None,
     osc_ready: None,
+};
+
+/// The classic no-USART file-register layout used by the PIC16F819.
+pub const PIC16_CLASSIC_NO_USART_MAP: Pic16SfrMap = Pic16SfrMap {
+    has_usart: false,
+    ..PIC16_CLASSIC_MAP
 };
 
 /// The PIC16F182x/F193x enhanced mid-range layout (DS40001440E Table 3-8):
@@ -230,6 +239,7 @@ pub const PIC16E_F182X_MAP: Pic16SfrMap = Pic16SfrMap {
     txreg: 0x19A,
     txsta: 0x19E,
     spbrg: 0x19B,
+    has_usart: true,
     pcon: Some(0x096),
     osc_ready: Some((0x09A, 0x1F)),
 };
@@ -294,6 +304,19 @@ const fn dev(
     }
 }
 
+/// A classic mid-range part without an asynchronous USART.
+const fn dev_no_usart(
+    name: &'static str,
+    flash_words: usize,
+    port_masks: [u8; PIC16_PORT_COUNT as usize],
+    aliases: &'static [(u16, u16, u16)],
+) -> Pic16Device {
+    Pic16Device {
+        map: PIC16_CLASSIC_NO_USART_MAP,
+        ..dev(name, flash_words, port_masks, aliases)
+    }
+}
+
 /// A classic row whose part has its own registers at some of the bank-2/3
 /// SFR mirror addresses (see [`Pic16Device::own_sfrs`]).
 const fn dev_own(
@@ -348,7 +371,8 @@ const fn edev(
 /// match the map; other PIC16C parts lack an SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F630/676/684, 81x, 84A, 716 and friends); enhanced parts without
+/// (PIC16F630/676/684, PIC16F818, PIC16F84A, PIC16F716 and friends), except
+/// PIC16F819 which uses `PIC16_CLASSIC_NO_USART_MAP`; enhanced parts without
 /// an EUSART (PIC16F1503/1507/1613/1703/1707), with comparator SFRs at
 /// LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx, and for now the
 /// PIC16F157x (their headers match, but gputils 1.4.0 has no processor
@@ -757,6 +781,17 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         &[
             (0x0F0, 0x0FF, 0x070),
             (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev_no_usart(
+        "pic16f819",
+        2048,
+        [0xFF, 0xFF, 0x00, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1A0, 0x1EF, 0x020),
             (0x1F0, 0x1FF, 0x070),
         ],
     ),
@@ -1557,9 +1592,11 @@ impl Pic16 {
             self.data[usize::from(SFR_TRISA + 4)] = 0x07;
             self.data[usize::from(SFR_ADCON1)] = 0;
         }
-        self.data[usize::from(map.txsta)] = TXSTA_TRMT;
-        self.data[usize::from(map.rcsta)] = 0;
-        self.data[usize::from(map.spbrg)] = 0;
+        if map.has_usart {
+            self.data[usize::from(map.txsta)] = TXSTA_TRMT;
+            self.data[usize::from(map.rcsta)] = 0;
+            self.data[usize::from(map.spbrg)] = 0;
+        }
     }
 
     /// Load 14-bit instruction words from the reset vector (test fixtures).
@@ -1815,7 +1852,7 @@ impl Pic16 {
             SFR_PCL => self.pc as u8,
             // TXIF is read-only and set while TXREG is empty; a byte leaves
             // the instant it is written here, so it follows TXEN.
-            a if a == map.pir[0] => {
+            a if map.has_usart && a == map.pir[0] => {
                 let pir1 = self.data[usize::from(a)] & !PIR1_TXIF;
                 if self.data[usize::from(map.txsta)] & TXSTA_TXEN != 0 {
                     pir1 | PIR1_TXIF
@@ -1882,15 +1919,15 @@ impl Pic16 {
                     (old & !STATUS_WRITABLE) | (value & STATUS_WRITABLE);
             }
             SFR_PCLATH => self.data[usize::from(SFR_PCLATH)] = value & self.pclath_mask(),
-            a if a == map.pir[0] => self.data[usize::from(a)] = value & !PIR1_TXIF,
+            a if map.has_usart && a == map.pir[0] => self.data[usize::from(a)] = value & !PIR1_TXIF,
             // A TMR0 write also clears the prescaler count.
             a if a == map.tmr0 => {
                 self.data[usize::from(a)] = value;
                 self.tmr0_prescale = 0;
             }
             // TRMT is read-only and stays set.
-            a if a == map.txsta => self.data[usize::from(a)] = value | TXSTA_TRMT,
-            a if a == map.txreg => {
+            a if map.has_usart && a == map.txsta => self.data[usize::from(a)] = value | TXSTA_TRMT,
+            a if map.has_usart && a == map.txreg => {
                 self.data[usize::from(a)] = value;
                 let txsta = self.data[usize::from(map.txsta)];
                 let rcsta = self.data[usize::from(map.rcsta)];
@@ -3195,6 +3232,27 @@ mod tests {
         cpu.write_data(0x87, 0x00);
         cpu.write_data(0x07, 0xFF);
         assert_eq!(cpu.read_data(0x07), 0xFF);
+    }
+
+    #[test]
+    fn pic16f819_uses_its_no_usart_geometry_and_file_registers() {
+        let device = pic16_device("pic16f819").expect("F819 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0xFF, 0xFF, 0x00, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("pic16f819");
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+        // PIR1 bit 4 is not synthesized as TXIF on a part without a USART.
+        cpu.write_data(SFR_PIR1, 0x10);
+        assert_eq!(cpu.read_data(SFR_PIR1), 0x10);
     }
 
     #[test]
