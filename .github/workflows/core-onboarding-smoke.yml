@@ -19,6 +19,7 @@ on:
       - "examples/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-stm32h743-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -110,6 +111,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/stm32l552-smoke.yaml
             system: configs/systems/onboarding/stm32l552.yaml
+          # The imported H743 profile is limited to H7 RCC, GPIOA/GPIOD,
+          # USART3, and the memory used by the shared H7 register smoke.
+          - id: stm32h743
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h743-smoke.yaml
+            system: configs/systems/onboarding/stm32h743.yaml
           - id: nrf52840
             crate: firmware-nrf52840-demo
             target: thumbv7em-none-eabi

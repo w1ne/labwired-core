@@ -1,0 +1,6 @@
+/* Conservative STM32H743 smoke window: 1 MiB flash and 128 KiB DTCM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 1024K
+  RAM : ORIGIN = 0x20000000, LENGTH = 128K
+}

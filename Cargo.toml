@@ -99,6 +99,7 @@ members = [
     "crates/firmware-nucleo-wba52cg-demo",
     "crates/firmware-feather-f405-demo",
     "crates/firmware-stm32h735-dk-demo",
+    "crates/firmware-stm32h743-smoke",
     "crates/firmware-xiao-nrf52840-sense-demo",
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",

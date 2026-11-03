@@ -1,0 +1,13 @@
+# Cortex-M7 register smoke against the narrowed imported STM32H743 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke"
+  system: "../../configs/systems/onboarding/stm32h743.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "STM32H743 profile smoke"
+  - gpio_edges:
+      pin: "gpioPortA:5"
+      min_edges: 1
+  - expected_stop_reason: max_steps
