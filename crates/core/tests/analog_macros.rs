@@ -418,6 +418,61 @@ mod analog {
     }
 
     #[test]
+    fn opamp_and_comparator_differential_input_resistance_draws_between_inputs() {
+        let rin = 10e3;
+        for (x_line, model_line) in [
+            (
+                "X1 inp inn vcc vee out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 RIN=10k)",
+            ),
+            (
+                "X1 inp inn vcc vee out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 RIN=10k OUTPUT=PP)",
+            ),
+        ] {
+            for (vp, vn) in [(0.5, -0.25), (-0.25, 0.5), (0.75, 0.75)] {
+                let solver = build(&format!(
+                    "Vcc vcc 0 dc 5\nVee vee 0 dc -5\n\
+                     Vp inp 0 dc {vp}\nVn inn 0 dc {vn}\n\
+                     Rl out 0 10k\n{x_line}\n{model_line}\n"
+                ));
+                let expected = (vp - vn) / rin;
+                let from_plus = -source_current(&solver, "Vp");
+                let into_minus = source_current(&solver, "Vn");
+                assert!(
+                    (from_plus - expected).abs() < 1e-10,
+                    "{x_line}: in+ current is {from_plus} A, expected {expected} A"
+                );
+                assert!(
+                    (into_minus - expected).abs() < 1e-10,
+                    "{x_line}: in- current is {into_minus} A, expected {expected} A"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn macro_differential_input_resistance_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for value in ["-1", "1e999"] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}(RIN={value}{output})\n"
+                ))
+                .expect_err("invalid differential input resistance must be rejected");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("RIN must be finite and non-negative"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn comparator_input_bias_current_must_be_finite() {
         for (parameter, message) in [
             ("IBIAS=1e999", "IBIAS must be finite"),

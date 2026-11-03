@@ -77,7 +77,8 @@
 //! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
 //! resistances, …) are **accepted
 //! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
-//! average and signed difference of DC currents at the two input pins;
+//! average and signed difference of DC currents at the two input pins; `RIN`
+//! models fixed differential resistance between them;
 //! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
 //! models differential capacitance between the inputs, and `IQ` models a
 //! constant quiescent current from `V+` to `V−`. BJT
@@ -645,6 +646,11 @@ pub enum ComparatorOutput {
 /// values source current from `v−` into the inputs. This is a constant-current
 /// approximation, with no input bias temperature dependence.
 ///
+/// `RIN` is a fixed differential resistance between the inputs. Zero disables
+/// it; a positive value draws `(v(in+) − v(in−))/RIN` from the non-inverting
+/// pin and returns it to the inverting pin. It has no common-mode or
+/// temperature dependence.
+///
 /// `CINCM` is the common-mode capacitance from each input to `v−`; `CIND` is
 /// the differential capacitance between the inputs. Both are fixed linear
 /// capacitances with no voltage or temperature dependence. `IQ` is a fixed
@@ -669,6 +675,8 @@ pub struct OpAmpModel {
     pub ibias: f64,
     /// Signed input offset current `I(+) − I(−)`, amps.
     pub ios: f64,
+    /// Differential resistance between the inputs, ohms; zero disables it.
+    pub rin: f64,
     /// Common-mode input capacitance from each input to `v−`, farads.
     pub cin_cm: f64,
     /// Differential capacitance between the two inputs, farads.
@@ -690,6 +698,7 @@ impl Default for OpAmpModel {
             vos: 0.0,
             ibias: 0.0,
             ios: 0.0,
+            rin: 0.0,
             cin_cm: 0.0,
             cin_diff: 0.0,
             iq: 0.0,
@@ -724,8 +733,10 @@ impl Default for OpAmpModel {
 /// values source current from `v−` into the inputs. This constant-current
 /// approximation has no temperature dependence. `CINCM` is the common-mode
 /// capacitance from each input to `v−`; `CIND` is the differential capacitance
-/// between the inputs. Both are fixed linear capacitances. `IQ` is a fixed
-/// quiescent current from `v+` to `v−`, independent of signal and output load.
+/// between the inputs. Both are fixed linear capacitances. `RIN` is a fixed
+/// differential resistance between the inputs; zero disables it. `IQ` is a
+/// fixed quiescent current from `v+` to `v−`, independent of signal and output
+/// load.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ComparatorModel {
     /// DC gain `AOL`, V/V.
@@ -742,6 +753,8 @@ pub struct ComparatorModel {
     pub ibias: f64,
     /// Signed input offset current `I(+) − I(−)`, amps.
     pub ios: f64,
+    /// Differential resistance between the inputs, ohms; zero disables it.
+    pub rin: f64,
     /// Common-mode input capacitance from each input to `v−`, farads.
     pub cin_cm: f64,
     /// Differential capacitance between the two inputs, farads.
@@ -763,6 +776,7 @@ impl Default for ComparatorModel {
             vos: 0.0,
             ibias: 0.0,
             ios: 0.0,
+            rin: 0.0,
             cin_cm: 0.0,
             cin_diff: 0.0,
             iq: 0.0,
@@ -1386,6 +1400,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             vos: 0.0,
             ibias: 0.0,
             ios: 0.0,
+            rin: 0.0,
             cin_cm: 0.0,
             cin_diff: 0.0,
             iq: 0.0,
@@ -3480,6 +3495,7 @@ fn parse_model(
             (ModelCard::OpAmp(model), "IOS") => model.ios = value,
             (ModelCard::OpAmp(model), "CINCM") => model.cin_cm = value,
             (ModelCard::OpAmp(model), "CIND") => model.cin_diff = value,
+            (ModelCard::OpAmp(model), "RIN") => model.rin = value,
             (ModelCard::OpAmp(model), "IQ") => model.iq = value,
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
@@ -3491,6 +3507,7 @@ fn parse_model(
             (ModelCard::Comparator(model), "IOS") => model.ios = value,
             (ModelCard::Comparator(model), "CINCM") => model.cin_cm = value,
             (ModelCard::Comparator(model), "CIND") => model.cin_diff = value,
+            (ModelCard::Comparator(model), "RIN") => model.rin = value,
             (ModelCard::Comparator(model), "IQ") => model.iq = value,
             (ModelCard::Comparator(model), "VHYS") => model.vhys = value,
             // This engine's own card types have no vendor parameters to
@@ -3499,7 +3516,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, IOS, CINCM, CIND, IQ, DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, IQ, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -3536,7 +3553,7 @@ fn parse_model(
             }
             (ModelCard::Comparator(_), other) => {
                 return Err(ctx.parse_err(format!(
-                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, CINCM, CIND, IQ, VHYS, \
+                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, CINCM, CIND, RIN, IQ, VHYS, \
                      OUTPUT"
                 )))
             }
@@ -3858,6 +3875,14 @@ fn check_input_capacitances(
     Ok(())
 }
 
+/// Check the fixed differential resistance between macro inputs.
+fn check_input_resistance(ctx: &LineCtx<'_>, rin: f64) -> Result<(), AnalogError> {
+    if !rin.is_finite() || rin < 0.0 {
+        return Err(ctx.parse_err("RIN must be finite and non-negative"));
+    }
+    Ok(())
+}
+
 /// Quiescent supply current flows only from `v+` to `v−` in these macro cards.
 fn check_quiescent_current(ctx: &LineCtx<'_>, iq: f64) -> Result<(), AnalogError> {
     if !iq.is_finite() || iq < 0.0 {
@@ -3884,7 +3909,14 @@ fn lower_input_capacitances(
     }
 }
 
-/// Lower an op-amp `X` line; see [`OpAmpModel`] for the circuit.
+/// Lower the macro's differential input resistance as an ordinary MNA resistor.
+fn lower_input_resistance(lower: &mut Lowering<'_>, inp: NodeRef, inn: NodeRef, rin: f64) {
+    if rin > 0.0 {
+        lower.resistor("rin", inp, inn, rin);
+    }
+}
+
+/// Lower an op-amp into the MNA circuit.
 fn lower_opamp(
     circuit: &mut Circuit,
     ctx: &LineCtx<'_>,
@@ -3897,6 +3929,7 @@ fn lower_opamp(
         return Err(ctx.parse_err("DROP_HI and DROP_LO must not be negative"));
     }
     check_input_capacitances(ctx, model.cin_cm, model.cin_diff)?;
+    check_input_resistance(ctx, model.rin)?;
     check_quiescent_current(ctx, model.iq)?;
     let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rg = MACRO_GAIN_RESISTANCE;
@@ -3908,6 +3941,7 @@ fn lower_opamp(
         prefix: device.name.clone(),
     };
     lower_input_capacitances(&mut lower, inp, inn, vee, model.cin_cm, model.cin_diff);
+    lower_input_resistance(&mut lower, inp, inn, model.rin);
     if model.iq > 0.0 {
         lower.current("iq", vcc, vee, model.iq);
     }
@@ -3948,6 +3982,7 @@ fn lower_comparator(
         return Err(ctx.parse_err("VHYS must not be negative"));
     }
     check_input_capacitances(ctx, model.cin_cm, model.cin_diff)?;
+    check_input_resistance(ctx, model.rin)?;
     check_quiescent_current(ctx, model.iq)?;
     let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rq = MACRO_GAIN_RESISTANCE;
@@ -3959,6 +3994,7 @@ fn lower_comparator(
         prefix: device.name.clone(),
     };
     lower_input_capacitances(&mut lower, inp, inn, vee, model.cin_cm, model.cin_diff);
+    lower_input_resistance(&mut lower, inp, inn, model.rin);
     if model.iq > 0.0 {
         lower.current("iq", vcc, vee, model.iq);
     }

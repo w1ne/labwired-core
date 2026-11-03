@@ -380,6 +380,7 @@ the same circuit and the same routing as `system.yaml`.
 | BJT | `Q<name> nc nb ne <model>` |
 | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
 | JFET | `J<name> nd ng ns <model>` |
+| Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE
@@ -390,6 +391,19 @@ an element line is the worst thing a netlist parser can do.
 
 A switch's `<ctrl>` is the name of a routed boolean input, not a circuit node,
 so it needs no `sources:` entry.
+
+### Op-amp and comparator macros
+
+`X` instances use `.model <name> OPAMP(...)` or `.model <name> COMP(...)`.
+Both cards model finite gain and bandwidth, output resistance, offset voltage,
+constant input bias and offset currents, fixed input capacitances, fixed
+quiescent supply current, and `RIN`, a fixed differential resistance between
+`in+` and `in-`. `RIN=0` or omission disables that resistor; it provides no
+common-mode input resistance. OPAMP cards also accept output rail drops; COMP cards accept hysteresis and open-collector or
+push-pull outputs. These parameters have no temperature dependence. Slew-rate
+limiting beyond the modeled pole, output current limiting, and signal- or
+load-dependent supply current are not modeled. The hand-calculated macro tests
+are in `crates/core/tests/analog_macros.rs`.
 
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
