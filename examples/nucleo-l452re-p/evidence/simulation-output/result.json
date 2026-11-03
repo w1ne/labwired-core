@@ -1,0 +1,3750 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 512,
+  "cycles": 512,
+  "instructions": 512,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 512
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 512
+    }
+  },
+  "limits": {
+    "max_steps": 512,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO_L452RE_P_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiob:13",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1207960600,
+      8192,
+      536870912,
+      136,
+      0,
+      0,
+      0,
+      537034736,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537034736,
+      134219531,
+      134219516
+    ],
+    "pc": 134219516,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "aa18fc1bd3edee0cb7665c4a6108b0f44fdbe0d5b87839e69325648806278ec9",
+  "config": {
+    "firmware": "examples/nucleo-l452re-p/../../target/thumbv7em-none-eabi/release/firmware-nucleo-l452re-p-smoke",
+    "system": "examples/nucleo-l452re-p/../../configs/systems/nucleo-l452re-p-smoke.yaml",
+    "script": "examples/nucleo-l452re-p/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [
+          {
+            "name": "CR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSCR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CFGR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PLLCFGR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PLLSAI1CFGR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PLLSAI2CFGR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CIER",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CIFR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CICR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "AHB1RSTR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB2RSTR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB3RSTR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1RSTR1",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1RSTR2",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2RSTR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB1ENR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB2ENR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB3ENR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1ENR1",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1ENR2",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2ENR",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB1SMENR",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB2SMENR",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AHB3SMENR",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1SMENR1",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1SMENR2",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2SMENR",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CCIPR",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BDCR",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CSR",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "ASCR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1207960576,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "ASCR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "lpuart1",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 9,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "UESM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXEIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "M0",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "MME",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMIE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT0",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT1",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT2",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT3",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT4",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT2",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT3",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT4",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "M1",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ADDM7",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWAP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXINV",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXINV",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "TAINV",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSBFIRST",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD0_3",
+                "bits": [
+                  27,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD4_7",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR3",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "HDSEL",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRDIS",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "DDRE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEM",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUS",
+                "bits": [
+                  21,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUFIE",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 12,
+            "size": 32,
+            "value": 8889,
+            "fields": [
+              {
+                "name": "BRR",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 8889
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RQR",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SBKRQ",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MMRQ",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFRQ",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "ISR",
+            "offset": 28,
+            "size": 32,
+            "value": 2097344,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "CTSIF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKF",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEACK",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 1
+              },
+              {
+                "name": "REACK",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "ICR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PECF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FECF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NCF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORECF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLECF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCCF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMCF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUCF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "RDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TDR",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 512,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiob",
+        "pin": 13,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 151,
+            "value": 1
+          },
+          {
+            "cycle": 152,
+            "value": 0
+          },
+          {
+            "cycle": 153,
+            "value": 1
+          },
+          {
+            "cycle": 154,
+            "value": 0
+          },
+          {
+            "cycle": 156,
+            "value": 1
+          },
+          {
+            "cycle": 157,
+            "value": 0
+          },
+          {
+            "cycle": 158,
+            "value": 1
+          },
+          {
+            "cycle": 159,
+            "value": 0
+          },
+          {
+            "cycle": 161,
+            "value": 1
+          },
+          {
+            "cycle": 162,
+            "value": 0
+          },
+          {
+            "cycle": 163,
+            "value": 1
+          },
+          {
+            "cycle": 164,
+            "value": 0
+          },
+          {
+            "cycle": 166,
+            "value": 1
+          },
+          {
+            "cycle": 167,
+            "value": 0
+          },
+          {
+            "cycle": 168,
+            "value": 1
+          },
+          {
+            "cycle": 169,
+            "value": 0
+          },
+          {
+            "cycle": 171,
+            "value": 1
+          },
+          {
+            "cycle": 172,
+            "value": 0
+          },
+          {
+            "cycle": 173,
+            "value": 1
+          },
+          {
+            "cycle": 174,
+            "value": 0
+          },
+          {
+            "cycle": 176,
+            "value": 1
+          },
+          {
+            "cycle": 177,
+            "value": 0
+          },
+          {
+            "cycle": 178,
+            "value": 1
+          },
+          {
+            "cycle": 179,
+            "value": 0
+          },
+          {
+            "cycle": 181,
+            "value": 1
+          },
+          {
+            "cycle": 182,
+            "value": 0
+          },
+          {
+            "cycle": 183,
+            "value": 1
+          },
+          {
+            "cycle": 184,
+            "value": 0
+          },
+          {
+            "cycle": 186,
+            "value": 1
+          },
+          {
+            "cycle": 187,
+            "value": 0
+          },
+          {
+            "cycle": 188,
+            "value": 1
+          },
+          {
+            "cycle": 189,
+            "value": 0
+          },
+          {
+            "cycle": 191,
+            "value": 1
+          },
+          {
+            "cycle": 192,
+            "value": 0
+          },
+          {
+            "cycle": 193,
+            "value": 1
+          },
+          {
+            "cycle": 194,
+            "value": 0
+          },
+          {
+            "cycle": 196,
+            "value": 1
+          },
+          {
+            "cycle": 197,
+            "value": 0
+          },
+          {
+            "cycle": 198,
+            "value": 1
+          },
+          {
+            "cycle": 199,
+            "value": 0
+          },
+          {
+            "cycle": 201,
+            "value": 1
+          },
+          {
+            "cycle": 202,
+            "value": 0
+          },
+          {
+            "cycle": 203,
+            "value": 1
+          },
+          {
+            "cycle": 204,
+            "value": 0
+          },
+          {
+            "cycle": 206,
+            "value": 1
+          },
+          {
+            "cycle": 207,
+            "value": 0
+          },
+          {
+            "cycle": 208,
+            "value": 1
+          },
+          {
+            "cycle": 209,
+            "value": 0
+          },
+          {
+            "cycle": 211,
+            "value": 1
+          },
+          {
+            "cycle": 212,
+            "value": 0
+          },
+          {
+            "cycle": 213,
+            "value": 1
+          },
+          {
+            "cycle": 214,
+            "value": 0
+          },
+          {
+            "cycle": 216,
+            "value": 1
+          },
+          {
+            "cycle": 217,
+            "value": 0
+          },
+          {
+            "cycle": 218,
+            "value": 1
+          },
+          {
+            "cycle": 219,
+            "value": 0
+          },
+          {
+            "cycle": 221,
+            "value": 1
+          },
+          {
+            "cycle": 222,
+            "value": 0
+          },
+          {
+            "cycle": 223,
+            "value": 1
+          },
+          {
+            "cycle": 224,
+            "value": 0
+          },
+          {
+            "cycle": 226,
+            "value": 1
+          },
+          {
+            "cycle": 227,
+            "value": 0
+          },
+          {
+            "cycle": 228,
+            "value": 1
+          },
+          {
+            "cycle": 229,
+            "value": 0
+          },
+          {
+            "cycle": 231,
+            "value": 1
+          },
+          {
+            "cycle": 232,
+            "value": 0
+          },
+          {
+            "cycle": 233,
+            "value": 1
+          },
+          {
+            "cycle": 234,
+            "value": 0
+          },
+          {
+            "cycle": 236,
+            "value": 1
+          },
+          {
+            "cycle": 237,
+            "value": 0
+          },
+          {
+            "cycle": 238,
+            "value": 1
+          },
+          {
+            "cycle": 239,
+            "value": 0
+          },
+          {
+            "cycle": 241,
+            "value": 1
+          },
+          {
+            "cycle": 242,
+            "value": 0
+          },
+          {
+            "cycle": 243,
+            "value": 1
+          },
+          {
+            "cycle": 244,
+            "value": 0
+          },
+          {
+            "cycle": 246,
+            "value": 1
+          },
+          {
+            "cycle": 247,
+            "value": 0
+          },
+          {
+            "cycle": 248,
+            "value": 1
+          },
+          {
+            "cycle": 249,
+            "value": 0
+          },
+          {
+            "cycle": 251,
+            "value": 1
+          },
+          {
+            "cycle": 252,
+            "value": 0
+          },
+          {
+            "cycle": 253,
+            "value": 1
+          },
+          {
+            "cycle": 254,
+            "value": 0
+          },
+          {
+            "cycle": 256,
+            "value": 1
+          },
+          {
+            "cycle": 257,
+            "value": 0
+          },
+          {
+            "cycle": 258,
+            "value": 1
+          },
+          {
+            "cycle": 259,
+            "value": 0
+          },
+          {
+            "cycle": 261,
+            "value": 1
+          },
+          {
+            "cycle": 262,
+            "value": 0
+          },
+          {
+            "cycle": 263,
+            "value": 1
+          },
+          {
+            "cycle": 264,
+            "value": 0
+          },
+          {
+            "cycle": 266,
+            "value": 1
+          },
+          {
+            "cycle": 267,
+            "value": 0
+          },
+          {
+            "cycle": 268,
+            "value": 1
+          },
+          {
+            "cycle": 269,
+            "value": 0
+          },
+          {
+            "cycle": 271,
+            "value": 1
+          },
+          {
+            "cycle": 272,
+            "value": 0
+          },
+          {
+            "cycle": 273,
+            "value": 1
+          },
+          {
+            "cycle": 274,
+            "value": 0
+          },
+          {
+            "cycle": 276,
+            "value": 1
+          },
+          {
+            "cycle": 277,
+            "value": 0
+          },
+          {
+            "cycle": 278,
+            "value": 1
+          },
+          {
+            "cycle": 279,
+            "value": 0
+          },
+          {
+            "cycle": 281,
+            "value": 1
+          },
+          {
+            "cycle": 282,
+            "value": 0
+          },
+          {
+            "cycle": 283,
+            "value": 1
+          },
+          {
+            "cycle": 284,
+            "value": 0
+          },
+          {
+            "cycle": 286,
+            "value": 1
+          },
+          {
+            "cycle": 287,
+            "value": 0
+          },
+          {
+            "cycle": 288,
+            "value": 1
+          },
+          {
+            "cycle": 289,
+            "value": 0
+          },
+          {
+            "cycle": 291,
+            "value": 1
+          },
+          {
+            "cycle": 292,
+            "value": 0
+          },
+          {
+            "cycle": 293,
+            "value": 1
+          },
+          {
+            "cycle": 294,
+            "value": 0
+          },
+          {
+            "cycle": 296,
+            "value": 1
+          },
+          {
+            "cycle": 297,
+            "value": 0
+          },
+          {
+            "cycle": 298,
+            "value": 1
+          },
+          {
+            "cycle": 299,
+            "value": 0
+          },
+          {
+            "cycle": 301,
+            "value": 1
+          },
+          {
+            "cycle": 302,
+            "value": 0
+          },
+          {
+            "cycle": 303,
+            "value": 1
+          },
+          {
+            "cycle": 304,
+            "value": 0
+          },
+          {
+            "cycle": 306,
+            "value": 1
+          },
+          {
+            "cycle": 307,
+            "value": 0
+          },
+          {
+            "cycle": 308,
+            "value": 1
+          },
+          {
+            "cycle": 309,
+            "value": 0
+          },
+          {
+            "cycle": 311,
+            "value": 1
+          },
+          {
+            "cycle": 312,
+            "value": 0
+          },
+          {
+            "cycle": 313,
+            "value": 1
+          },
+          {
+            "cycle": 314,
+            "value": 0
+          },
+          {
+            "cycle": 316,
+            "value": 1
+          },
+          {
+            "cycle": 317,
+            "value": 0
+          },
+          {
+            "cycle": 318,
+            "value": 1
+          },
+          {
+            "cycle": 319,
+            "value": 0
+          },
+          {
+            "cycle": 321,
+            "value": 1
+          },
+          {
+            "cycle": 322,
+            "value": 0
+          },
+          {
+            "cycle": 323,
+            "value": 1
+          },
+          {
+            "cycle": 324,
+            "value": 0
+          },
+          {
+            "cycle": 326,
+            "value": 1
+          },
+          {
+            "cycle": 327,
+            "value": 0
+          },
+          {
+            "cycle": 328,
+            "value": 1
+          },
+          {
+            "cycle": 329,
+            "value": 0
+          },
+          {
+            "cycle": 331,
+            "value": 1
+          },
+          {
+            "cycle": 332,
+            "value": 0
+          },
+          {
+            "cycle": 333,
+            "value": 1
+          },
+          {
+            "cycle": 334,
+            "value": 0
+          },
+          {
+            "cycle": 336,
+            "value": 1
+          },
+          {
+            "cycle": 337,
+            "value": 0
+          },
+          {
+            "cycle": 338,
+            "value": 1
+          },
+          {
+            "cycle": 339,
+            "value": 0
+          },
+          {
+            "cycle": 341,
+            "value": 1
+          },
+          {
+            "cycle": 342,
+            "value": 0
+          },
+          {
+            "cycle": 343,
+            "value": 1
+          },
+          {
+            "cycle": 344,
+            "value": 0
+          },
+          {
+            "cycle": 346,
+            "value": 1
+          },
+          {
+            "cycle": 347,
+            "value": 0
+          },
+          {
+            "cycle": 348,
+            "value": 1
+          },
+          {
+            "cycle": 349,
+            "value": 0
+          },
+          {
+            "cycle": 351,
+            "value": 1
+          },
+          {
+            "cycle": 352,
+            "value": 0
+          },
+          {
+            "cycle": 353,
+            "value": 1
+          },
+          {
+            "cycle": 354,
+            "value": 0
+          },
+          {
+            "cycle": 356,
+            "value": 1
+          },
+          {
+            "cycle": 357,
+            "value": 0
+          },
+          {
+            "cycle": 358,
+            "value": 1
+          },
+          {
+            "cycle": 359,
+            "value": 0
+          },
+          {
+            "cycle": 361,
+            "value": 1
+          },
+          {
+            "cycle": 362,
+            "value": 0
+          },
+          {
+            "cycle": 363,
+            "value": 1
+          },
+          {
+            "cycle": 364,
+            "value": 0
+          },
+          {
+            "cycle": 366,
+            "value": 1
+          },
+          {
+            "cycle": 367,
+            "value": 0
+          },
+          {
+            "cycle": 368,
+            "value": 1
+          },
+          {
+            "cycle": 369,
+            "value": 0
+          },
+          {
+            "cycle": 371,
+            "value": 1
+          },
+          {
+            "cycle": 372,
+            "value": 0
+          },
+          {
+            "cycle": 373,
+            "value": 1
+          },
+          {
+            "cycle": 374,
+            "value": 0
+          },
+          {
+            "cycle": 376,
+            "value": 1
+          },
+          {
+            "cycle": 377,
+            "value": 0
+          },
+          {
+            "cycle": 378,
+            "value": 1
+          },
+          {
+            "cycle": 379,
+            "value": 0
+          },
+          {
+            "cycle": 381,
+            "value": 1
+          },
+          {
+            "cycle": 382,
+            "value": 0
+          },
+          {
+            "cycle": 383,
+            "value": 1
+          },
+          {
+            "cycle": 384,
+            "value": 0
+          },
+          {
+            "cycle": 386,
+            "value": 1
+          },
+          {
+            "cycle": 387,
+            "value": 0
+          },
+          {
+            "cycle": 388,
+            "value": 1
+          },
+          {
+            "cycle": 389,
+            "value": 0
+          },
+          {
+            "cycle": 391,
+            "value": 1
+          },
+          {
+            "cycle": 392,
+            "value": 0
+          },
+          {
+            "cycle": 393,
+            "value": 1
+          },
+          {
+            "cycle": 394,
+            "value": 0
+          },
+          {
+            "cycle": 396,
+            "value": 1
+          },
+          {
+            "cycle": 397,
+            "value": 0
+          },
+          {
+            "cycle": 398,
+            "value": 1
+          },
+          {
+            "cycle": 399,
+            "value": 0
+          },
+          {
+            "cycle": 401,
+            "value": 1
+          },
+          {
+            "cycle": 402,
+            "value": 0
+          },
+          {
+            "cycle": 403,
+            "value": 1
+          },
+          {
+            "cycle": 404,
+            "value": 0
+          },
+          {
+            "cycle": 406,
+            "value": 1
+          },
+          {
+            "cycle": 407,
+            "value": 0
+          },
+          {
+            "cycle": 408,
+            "value": 1
+          },
+          {
+            "cycle": 409,
+            "value": 0
+          },
+          {
+            "cycle": 411,
+            "value": 1
+          },
+          {
+            "cycle": 412,
+            "value": 0
+          },
+          {
+            "cycle": 413,
+            "value": 1
+          },
+          {
+            "cycle": 414,
+            "value": 0
+          },
+          {
+            "cycle": 416,
+            "value": 1
+          },
+          {
+            "cycle": 417,
+            "value": 0
+          },
+          {
+            "cycle": 418,
+            "value": 1
+          },
+          {
+            "cycle": 419,
+            "value": 0
+          },
+          {
+            "cycle": 421,
+            "value": 1
+          },
+          {
+            "cycle": 422,
+            "value": 0
+          },
+          {
+            "cycle": 423,
+            "value": 1
+          },
+          {
+            "cycle": 424,
+            "value": 0
+          },
+          {
+            "cycle": 426,
+            "value": 1
+          },
+          {
+            "cycle": 427,
+            "value": 0
+          },
+          {
+            "cycle": 428,
+            "value": 1
+          },
+          {
+            "cycle": 429,
+            "value": 0
+          },
+          {
+            "cycle": 431,
+            "value": 1
+          },
+          {
+            "cycle": 432,
+            "value": 0
+          },
+          {
+            "cycle": 433,
+            "value": 1
+          },
+          {
+            "cycle": 434,
+            "value": 0
+          },
+          {
+            "cycle": 436,
+            "value": 1
+          },
+          {
+            "cycle": 437,
+            "value": 0
+          },
+          {
+            "cycle": 438,
+            "value": 1
+          },
+          {
+            "cycle": 439,
+            "value": 0
+          },
+          {
+            "cycle": 441,
+            "value": 1
+          },
+          {
+            "cycle": 442,
+            "value": 0
+          },
+          {
+            "cycle": 443,
+            "value": 1
+          },
+          {
+            "cycle": 444,
+            "value": 0
+          },
+          {
+            "cycle": 446,
+            "value": 1
+          },
+          {
+            "cycle": 447,
+            "value": 0
+          },
+          {
+            "cycle": 448,
+            "value": 1
+          },
+          {
+            "cycle": 449,
+            "value": 0
+          },
+          {
+            "cycle": 451,
+            "value": 1
+          },
+          {
+            "cycle": 452,
+            "value": 0
+          },
+          {
+            "cycle": 453,
+            "value": 1
+          },
+          {
+            "cycle": 454,
+            "value": 0
+          },
+          {
+            "cycle": 456,
+            "value": 1
+          },
+          {
+            "cycle": 457,
+            "value": 0
+          },
+          {
+            "cycle": 458,
+            "value": 1
+          },
+          {
+            "cycle": 459,
+            "value": 0
+          },
+          {
+            "cycle": 461,
+            "value": 1
+          },
+          {
+            "cycle": 462,
+            "value": 0
+          },
+          {
+            "cycle": 463,
+            "value": 1
+          },
+          {
+            "cycle": 464,
+            "value": 0
+          },
+          {
+            "cycle": 466,
+            "value": 1
+          },
+          {
+            "cycle": 467,
+            "value": 0
+          },
+          {
+            "cycle": 468,
+            "value": 1
+          },
+          {
+            "cycle": 469,
+            "value": 0
+          },
+          {
+            "cycle": 471,
+            "value": 1
+          },
+          {
+            "cycle": 472,
+            "value": 0
+          },
+          {
+            "cycle": 473,
+            "value": 1
+          },
+          {
+            "cycle": 474,
+            "value": 0
+          },
+          {
+            "cycle": 476,
+            "value": 1
+          },
+          {
+            "cycle": 477,
+            "value": 0
+          },
+          {
+            "cycle": 478,
+            "value": 1
+          },
+          {
+            "cycle": 479,
+            "value": 0
+          },
+          {
+            "cycle": 481,
+            "value": 1
+          },
+          {
+            "cycle": 482,
+            "value": 0
+          },
+          {
+            "cycle": 483,
+            "value": 1
+          },
+          {
+            "cycle": 484,
+            "value": 0
+          },
+          {
+            "cycle": 486,
+            "value": 1
+          },
+          {
+            "cycle": 487,
+            "value": 0
+          },
+          {
+            "cycle": 488,
+            "value": 1
+          },
+          {
+            "cycle": 489,
+            "value": 0
+          },
+          {
+            "cycle": 491,
+            "value": 1
+          },
+          {
+            "cycle": 492,
+            "value": 0
+          },
+          {
+            "cycle": 493,
+            "value": 1
+          },
+          {
+            "cycle": 494,
+            "value": 0
+          },
+          {
+            "cycle": 496,
+            "value": 1
+          },
+          {
+            "cycle": 497,
+            "value": 0
+          },
+          {
+            "cycle": 498,
+            "value": 1
+          },
+          {
+            "cycle": 499,
+            "value": 0
+          },
+          {
+            "cycle": 501,
+            "value": 1
+          },
+          {
+            "cycle": 502,
+            "value": 0
+          },
+          {
+            "cycle": 503,
+            "value": 1
+          },
+          {
+            "cycle": 504,
+            "value": 0
+          },
+          {
+            "cycle": 506,
+            "value": 1
+          },
+          {
+            "cycle": 507,
+            "value": 0
+          },
+          {
+            "cycle": 508,
+            "value": 1
+          },
+          {
+            "cycle": 509,
+            "value": 0
+          },
+          {
+            "cycle": 511,
+            "value": 1
+          },
+          {
+            "cycle": 512,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 45,
+            "state": "0"
+          },
+          {
+            "cycle": 151,
+            "state": "1"
+          },
+          {
+            "cycle": 152,
+            "state": "0"
+          },
+          {
+            "cycle": 153,
+            "state": "1"
+          },
+          {
+            "cycle": 154,
+            "state": "0"
+          },
+          {
+            "cycle": 156,
+            "state": "1"
+          },
+          {
+            "cycle": 157,
+            "state": "0"
+          },
+          {
+            "cycle": 158,
+            "state": "1"
+          },
+          {
+            "cycle": 159,
+            "state": "0"
+          },
+          {
+            "cycle": 161,
+            "state": "1"
+          },
+          {
+            "cycle": 162,
+            "state": "0"
+          },
+          {
+            "cycle": 163,
+            "state": "1"
+          },
+          {
+            "cycle": 164,
+            "state": "0"
+          },
+          {
+            "cycle": 166,
+            "state": "1"
+          },
+          {
+            "cycle": 167,
+            "state": "0"
+          },
+          {
+            "cycle": 168,
+            "state": "1"
+          },
+          {
+            "cycle": 169,
+            "state": "0"
+          },
+          {
+            "cycle": 171,
+            "state": "1"
+          },
+          {
+            "cycle": 172,
+            "state": "0"
+          },
+          {
+            "cycle": 173,
+            "state": "1"
+          },
+          {
+            "cycle": 174,
+            "state": "0"
+          },
+          {
+            "cycle": 176,
+            "state": "1"
+          },
+          {
+            "cycle": 177,
+            "state": "0"
+          },
+          {
+            "cycle": 178,
+            "state": "1"
+          },
+          {
+            "cycle": 179,
+            "state": "0"
+          },
+          {
+            "cycle": 181,
+            "state": "1"
+          },
+          {
+            "cycle": 182,
+            "state": "0"
+          },
+          {
+            "cycle": 183,
+            "state": "1"
+          },
+          {
+            "cycle": 184,
+            "state": "0"
+          },
+          {
+            "cycle": 186,
+            "state": "1"
+          },
+          {
+            "cycle": 187,
+            "state": "0"
+          },
+          {
+            "cycle": 188,
+            "state": "1"
+          },
+          {
+            "cycle": 189,
+            "state": "0"
+          },
+          {
+            "cycle": 191,
+            "state": "1"
+          },
+          {
+            "cycle": 192,
+            "state": "0"
+          },
+          {
+            "cycle": 193,
+            "state": "1"
+          },
+          {
+            "cycle": 194,
+            "state": "0"
+          },
+          {
+            "cycle": 196,
+            "state": "1"
+          },
+          {
+            "cycle": 197,
+            "state": "0"
+          },
+          {
+            "cycle": 198,
+            "state": "1"
+          },
+          {
+            "cycle": 199,
+            "state": "0"
+          },
+          {
+            "cycle": 201,
+            "state": "1"
+          },
+          {
+            "cycle": 202,
+            "state": "0"
+          },
+          {
+            "cycle": 203,
+            "state": "1"
+          },
+          {
+            "cycle": 204,
+            "state": "0"
+          },
+          {
+            "cycle": 206,
+            "state": "1"
+          },
+          {
+            "cycle": 207,
+            "state": "0"
+          },
+          {
+            "cycle": 208,
+            "state": "1"
+          },
+          {
+            "cycle": 209,
+            "state": "0"
+          },
+          {
+            "cycle": 211,
+            "state": "1"
+          },
+          {
+            "cycle": 212,
+            "state": "0"
+          },
+          {
+            "cycle": 213,
+            "state": "1"
+          },
+          {
+            "cycle": 214,
+            "state": "0"
+          },
+          {
+            "cycle": 216,
+            "state": "1"
+          },
+          {
+            "cycle": 217,
+            "state": "0"
+          },
+          {
+            "cycle": 218,
+            "state": "1"
+          },
+          {
+            "cycle": 219,
+            "state": "0"
+          },
+          {
+            "cycle": 221,
+            "state": "1"
+          },
+          {
+            "cycle": 222,
+            "state": "0"
+          },
+          {
+            "cycle": 223,
+            "state": "1"
+          },
+          {
+            "cycle": 224,
+            "state": "0"
+          },
+          {
+            "cycle": 226,
+            "state": "1"
+          },
+          {
+            "cycle": 227,
+            "state": "0"
+          },
+          {
+            "cycle": 228,
+            "state": "1"
+          },
+          {
+            "cycle": 229,
+            "state": "0"
+          },
+          {
+            "cycle": 231,
+            "state": "1"
+          },
+          {
+            "cycle": 232,
+            "state": "0"
+          },
+          {
+            "cycle": 233,
+            "state": "1"
+          },
+          {
+            "cycle": 234,
+            "state": "0"
+          },
+          {
+            "cycle": 236,
+            "state": "1"
+          },
+          {
+            "cycle": 237,
+            "state": "0"
+          },
+          {
+            "cycle": 238,
+            "state": "1"
+          },
+          {
+            "cycle": 239,
+            "state": "0"
+          },
+          {
+            "cycle": 241,
+            "state": "1"
+          },
+          {
+            "cycle": 242,
+            "state": "0"
+          },
+          {
+            "cycle": 243,
+            "state": "1"
+          },
+          {
+            "cycle": 244,
+            "state": "0"
+          },
+          {
+            "cycle": 246,
+            "state": "1"
+          },
+          {
+            "cycle": 247,
+            "state": "0"
+          },
+          {
+            "cycle": 248,
+            "state": "1"
+          },
+          {
+            "cycle": 249,
+            "state": "0"
+          },
+          {
+            "cycle": 251,
+            "state": "1"
+          },
+          {
+            "cycle": 252,
+            "state": "0"
+          },
+          {
+            "cycle": 253,
+            "state": "1"
+          },
+          {
+            "cycle": 254,
+            "state": "0"
+          },
+          {
+            "cycle": 256,
+            "state": "1"
+          },
+          {
+            "cycle": 257,
+            "state": "0"
+          },
+          {
+            "cycle": 258,
+            "state": "1"
+          },
+          {
+            "cycle": 259,
+            "state": "0"
+          },
+          {
+            "cycle": 261,
+            "state": "1"
+          },
+          {
+            "cycle": 262,
+            "state": "0"
+          },
+          {
+            "cycle": 263,
+            "state": "1"
+          },
+          {
+            "cycle": 264,
+            "state": "0"
+          },
+          {
+            "cycle": 266,
+            "state": "1"
+          },
+          {
+            "cycle": 267,
+            "state": "0"
+          },
+          {
+            "cycle": 268,
+            "state": "1"
+          },
+          {
+            "cycle": 269,
+            "state": "0"
+          },
+          {
+            "cycle": 271,
+            "state": "1"
+          },
+          {
+            "cycle": 272,
+            "state": "0"
+          },
+          {
+            "cycle": 273,
+            "state": "1"
+          },
+          {
+            "cycle": 274,
+            "state": "0"
+          },
+          {
+            "cycle": 276,
+            "state": "1"
+          },
+          {
+            "cycle": 277,
+            "state": "0"
+          },
+          {
+            "cycle": 278,
+            "state": "1"
+          },
+          {
+            "cycle": 279,
+            "state": "0"
+          },
+          {
+            "cycle": 281,
+            "state": "1"
+          },
+          {
+            "cycle": 282,
+            "state": "0"
+          },
+          {
+            "cycle": 283,
+            "state": "1"
+          },
+          {
+            "cycle": 284,
+            "state": "0"
+          },
+          {
+            "cycle": 286,
+            "state": "1"
+          },
+          {
+            "cycle": 287,
+            "state": "0"
+          },
+          {
+            "cycle": 288,
+            "state": "1"
+          },
+          {
+            "cycle": 289,
+            "state": "0"
+          },
+          {
+            "cycle": 291,
+            "state": "1"
+          },
+          {
+            "cycle": 292,
+            "state": "0"
+          },
+          {
+            "cycle": 293,
+            "state": "1"
+          },
+          {
+            "cycle": 294,
+            "state": "0"
+          },
+          {
+            "cycle": 296,
+            "state": "1"
+          },
+          {
+            "cycle": 297,
+            "state": "0"
+          },
+          {
+            "cycle": 298,
+            "state": "1"
+          },
+          {
+            "cycle": 299,
+            "state": "0"
+          },
+          {
+            "cycle": 301,
+            "state": "1"
+          },
+          {
+            "cycle": 302,
+            "state": "0"
+          },
+          {
+            "cycle": 303,
+            "state": "1"
+          },
+          {
+            "cycle": 304,
+            "state": "0"
+          },
+          {
+            "cycle": 306,
+            "state": "1"
+          },
+          {
+            "cycle": 307,
+            "state": "0"
+          },
+          {
+            "cycle": 308,
+            "state": "1"
+          },
+          {
+            "cycle": 309,
+            "state": "0"
+          },
+          {
+            "cycle": 311,
+            "state": "1"
+          },
+          {
+            "cycle": 312,
+            "state": "0"
+          },
+          {
+            "cycle": 313,
+            "state": "1"
+          },
+          {
+            "cycle": 314,
+            "state": "0"
+          },
+          {
+            "cycle": 316,
+            "state": "1"
+          },
+          {
+            "cycle": 317,
+            "state": "0"
+          },
+          {
+            "cycle": 318,
+            "state": "1"
+          },
+          {
+            "cycle": 319,
+            "state": "0"
+          },
+          {
+            "cycle": 321,
+            "state": "1"
+          },
+          {
+            "cycle": 322,
+            "state": "0"
+          },
+          {
+            "cycle": 323,
+            "state": "1"
+          },
+          {
+            "cycle": 324,
+            "state": "0"
+          },
+          {
+            "cycle": 326,
+            "state": "1"
+          },
+          {
+            "cycle": 327,
+            "state": "0"
+          },
+          {
+            "cycle": 328,
+            "state": "1"
+          },
+          {
+            "cycle": 329,
+            "state": "0"
+          },
+          {
+            "cycle": 331,
+            "state": "1"
+          },
+          {
+            "cycle": 332,
+            "state": "0"
+          },
+          {
+            "cycle": 333,
+            "state": "1"
+          },
+          {
+            "cycle": 334,
+            "state": "0"
+          },
+          {
+            "cycle": 336,
+            "state": "1"
+          },
+          {
+            "cycle": 337,
+            "state": "0"
+          },
+          {
+            "cycle": 338,
+            "state": "1"
+          },
+          {
+            "cycle": 339,
+            "state": "0"
+          },
+          {
+            "cycle": 341,
+            "state": "1"
+          },
+          {
+            "cycle": 342,
+            "state": "0"
+          },
+          {
+            "cycle": 343,
+            "state": "1"
+          },
+          {
+            "cycle": 344,
+            "state": "0"
+          },
+          {
+            "cycle": 346,
+            "state": "1"
+          },
+          {
+            "cycle": 347,
+            "state": "0"
+          },
+          {
+            "cycle": 348,
+            "state": "1"
+          },
+          {
+            "cycle": 349,
+            "state": "0"
+          },
+          {
+            "cycle": 351,
+            "state": "1"
+          },
+          {
+            "cycle": 352,
+            "state": "0"
+          },
+          {
+            "cycle": 353,
+            "state": "1"
+          },
+          {
+            "cycle": 354,
+            "state": "0"
+          },
+          {
+            "cycle": 356,
+            "state": "1"
+          },
+          {
+            "cycle": 357,
+            "state": "0"
+          },
+          {
+            "cycle": 358,
+            "state": "1"
+          },
+          {
+            "cycle": 359,
+            "state": "0"
+          },
+          {
+            "cycle": 361,
+            "state": "1"
+          },
+          {
+            "cycle": 362,
+            "state": "0"
+          },
+          {
+            "cycle": 363,
+            "state": "1"
+          },
+          {
+            "cycle": 364,
+            "state": "0"
+          },
+          {
+            "cycle": 366,
+            "state": "1"
+          },
+          {
+            "cycle": 367,
+            "state": "0"
+          },
+          {
+            "cycle": 368,
+            "state": "1"
+          },
+          {
+            "cycle": 369,
+            "state": "0"
+          },
+          {
+            "cycle": 371,
+            "state": "1"
+          },
+          {
+            "cycle": 372,
+            "state": "0"
+          },
+          {
+            "cycle": 373,
+            "state": "1"
+          },
+          {
+            "cycle": 374,
+            "state": "0"
+          },
+          {
+            "cycle": 376,
+            "state": "1"
+          },
+          {
+            "cycle": 377,
+            "state": "0"
+          },
+          {
+            "cycle": 378,
+            "state": "1"
+          },
+          {
+            "cycle": 379,
+            "state": "0"
+          },
+          {
+            "cycle": 381,
+            "state": "1"
+          },
+          {
+            "cycle": 382,
+            "state": "0"
+          },
+          {
+            "cycle": 383,
+            "state": "1"
+          },
+          {
+            "cycle": 384,
+            "state": "0"
+          },
+          {
+            "cycle": 386,
+            "state": "1"
+          },
+          {
+            "cycle": 387,
+            "state": "0"
+          },
+          {
+            "cycle": 388,
+            "state": "1"
+          },
+          {
+            "cycle": 389,
+            "state": "0"
+          },
+          {
+            "cycle": 391,
+            "state": "1"
+          },
+          {
+            "cycle": 392,
+            "state": "0"
+          },
+          {
+            "cycle": 393,
+            "state": "1"
+          },
+          {
+            "cycle": 394,
+            "state": "0"
+          },
+          {
+            "cycle": 396,
+            "state": "1"
+          },
+          {
+            "cycle": 397,
+            "state": "0"
+          },
+          {
+            "cycle": 398,
+            "state": "1"
+          },
+          {
+            "cycle": 399,
+            "state": "0"
+          },
+          {
+            "cycle": 401,
+            "state": "1"
+          },
+          {
+            "cycle": 402,
+            "state": "0"
+          },
+          {
+            "cycle": 403,
+            "state": "1"
+          },
+          {
+            "cycle": 404,
+            "state": "0"
+          },
+          {
+            "cycle": 406,
+            "state": "1"
+          },
+          {
+            "cycle": 407,
+            "state": "0"
+          },
+          {
+            "cycle": 408,
+            "state": "1"
+          },
+          {
+            "cycle": 409,
+            "state": "0"
+          },
+          {
+            "cycle": 411,
+            "state": "1"
+          },
+          {
+            "cycle": 412,
+            "state": "0"
+          },
+          {
+            "cycle": 413,
+            "state": "1"
+          },
+          {
+            "cycle": 414,
+            "state": "0"
+          },
+          {
+            "cycle": 416,
+            "state": "1"
+          },
+          {
+            "cycle": 417,
+            "state": "0"
+          },
+          {
+            "cycle": 418,
+            "state": "1"
+          },
+          {
+            "cycle": 419,
+            "state": "0"
+          },
+          {
+            "cycle": 421,
+            "state": "1"
+          },
+          {
+            "cycle": 422,
+            "state": "0"
+          },
+          {
+            "cycle": 423,
+            "state": "1"
+          },
+          {
+            "cycle": 424,
+            "state": "0"
+          },
+          {
+            "cycle": 426,
+            "state": "1"
+          },
+          {
+            "cycle": 427,
+            "state": "0"
+          },
+          {
+            "cycle": 428,
+            "state": "1"
+          },
+          {
+            "cycle": 429,
+            "state": "0"
+          },
+          {
+            "cycle": 431,
+            "state": "1"
+          },
+          {
+            "cycle": 432,
+            "state": "0"
+          },
+          {
+            "cycle": 433,
+            "state": "1"
+          },
+          {
+            "cycle": 434,
+            "state": "0"
+          },
+          {
+            "cycle": 436,
+            "state": "1"
+          },
+          {
+            "cycle": 437,
+            "state": "0"
+          },
+          {
+            "cycle": 438,
+            "state": "1"
+          },
+          {
+            "cycle": 439,
+            "state": "0"
+          },
+          {
+            "cycle": 441,
+            "state": "1"
+          },
+          {
+            "cycle": 442,
+            "state": "0"
+          },
+          {
+            "cycle": 443,
+            "state": "1"
+          },
+          {
+            "cycle": 444,
+            "state": "0"
+          },
+          {
+            "cycle": 446,
+            "state": "1"
+          },
+          {
+            "cycle": 447,
+            "state": "0"
+          },
+          {
+            "cycle": 448,
+            "state": "1"
+          },
+          {
+            "cycle": 449,
+            "state": "0"
+          },
+          {
+            "cycle": 451,
+            "state": "1"
+          },
+          {
+            "cycle": 452,
+            "state": "0"
+          },
+          {
+            "cycle": 453,
+            "state": "1"
+          },
+          {
+            "cycle": 454,
+            "state": "0"
+          },
+          {
+            "cycle": 456,
+            "state": "1"
+          },
+          {
+            "cycle": 457,
+            "state": "0"
+          },
+          {
+            "cycle": 458,
+            "state": "1"
+          },
+          {
+            "cycle": 459,
+            "state": "0"
+          },
+          {
+            "cycle": 461,
+            "state": "1"
+          },
+          {
+            "cycle": 462,
+            "state": "0"
+          },
+          {
+            "cycle": 463,
+            "state": "1"
+          },
+          {
+            "cycle": 464,
+            "state": "0"
+          },
+          {
+            "cycle": 466,
+            "state": "1"
+          },
+          {
+            "cycle": 467,
+            "state": "0"
+          },
+          {
+            "cycle": 468,
+            "state": "1"
+          },
+          {
+            "cycle": 469,
+            "state": "0"
+          },
+          {
+            "cycle": 471,
+            "state": "1"
+          },
+          {
+            "cycle": 472,
+            "state": "0"
+          },
+          {
+            "cycle": 473,
+            "state": "1"
+          },
+          {
+            "cycle": 474,
+            "state": "0"
+          },
+          {
+            "cycle": 476,
+            "state": "1"
+          },
+          {
+            "cycle": 477,
+            "state": "0"
+          },
+          {
+            "cycle": 478,
+            "state": "1"
+          },
+          {
+            "cycle": 479,
+            "state": "0"
+          },
+          {
+            "cycle": 481,
+            "state": "1"
+          },
+          {
+            "cycle": 482,
+            "state": "0"
+          },
+          {
+            "cycle": 483,
+            "state": "1"
+          },
+          {
+            "cycle": 484,
+            "state": "0"
+          },
+          {
+            "cycle": 486,
+            "state": "1"
+          },
+          {
+            "cycle": 487,
+            "state": "0"
+          },
+          {
+            "cycle": 488,
+            "state": "1"
+          },
+          {
+            "cycle": 489,
+            "state": "0"
+          },
+          {
+            "cycle": 491,
+            "state": "1"
+          },
+          {
+            "cycle": 492,
+            "state": "0"
+          },
+          {
+            "cycle": 493,
+            "state": "1"
+          },
+          {
+            "cycle": 494,
+            "state": "0"
+          },
+          {
+            "cycle": 496,
+            "state": "1"
+          },
+          {
+            "cycle": 497,
+            "state": "0"
+          },
+          {
+            "cycle": 498,
+            "state": "1"
+          },
+          {
+            "cycle": 499,
+            "state": "0"
+          },
+          {
+            "cycle": 501,
+            "state": "1"
+          },
+          {
+            "cycle": 502,
+            "state": "0"
+          },
+          {
+            "cycle": 503,
+            "state": "1"
+          },
+          {
+            "cycle": 504,
+            "state": "0"
+          },
+          {
+            "cycle": 506,
+            "state": "1"
+          },
+          {
+            "cycle": 507,
+            "state": "0"
+          },
+          {
+            "cycle": 508,
+            "state": "1"
+          },
+          {
+            "cycle": 509,
+            "state": "0"
+          },
+          {
+            "cycle": 511,
+            "state": "1"
+          },
+          {
+            "cycle": 512,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 290
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiob",
+      "number": 13,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO_L452RE_P_OK",
+        "cycle_lo": 0,
+        "cycle": 512,
+        "end_cycle": 512
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1808,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1808,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 163840,
+    "flash_used_pct": 0.34,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 163840,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 163824,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537034752,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 163840,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 163824,
+    "heap_base": 536870912,
+    "heap_top": 537034752
+  },
+  "metrics": {
+    "cycles": 512,
+    "instructions": 512,
+    "steps_executed": 512,
+    "memory_reads": 187,
+    "memory_writes": 6,
+    "peripheral_accesses": 341,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219516,
+        "count": 2,
+        "symbol": "core::ptr::write_volatile"
+      }
+    ]
+  }
+}

@@ -59,8 +59,8 @@ pub enum RccRegisterLayout {
     /// L4/G4-shaped enable block — AHB1ENR@0x48, AHB2ENR@0x4C, AHB3ENR@0x50,
     /// APB1ENR1@0x58, APB1ENR2@0x5C, APB2ENR@0x60. Offsets verified against
     /// ST's CMSIS `stm32l552xx.h` RCC_TypeDef. Distinct from [`Self::Stm32L4`]
-    /// because L4 has no modeled AHB1ENR/APB1ENR2/AHB3ENR, and LPUART1 (the
-    /// NUCLEO-L552ZE-Q console) is gated on APB1ENR2 bit 0. The part boots on
+    /// because L5 also has AHB1ENR/AHB3ENR and a different clock-tree profile.
+    /// The part boots on
     /// MSI range 6 (4 MHz), CR reset 0x0000_0063. NOT silicon-verified.
     Stm32L5,
     /// STM32L0 family (RM0367). Verified on NUCLEO-L073RZ over SWD.
@@ -1815,9 +1815,11 @@ pub struct L4Rcc {
     pllcfgr: u32,  // 0x0C
     ahbenr: u32,   // AHB2ENR 0x4C (GPIO ports)
     apb1enr: u32,  // APB1ENR1 0x58
+    apb1enr2: u32, // APB1ENR2 0x5C (LPUART1EN bit 0)
     apb2enr: u32,  // 0x60
     ahbrstr: u32,  // AHB2RSTR 0x2C
     apb1rstr: u32, // APB1RSTR1 0x38
+    apb1rstr2: u32, // APB1RSTR2 0x3C
     apb2rstr: u32, // 0x40
     bdcr: u32,     // 0x90 — LSE/RTC backup domain control
     csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
@@ -1897,9 +1899,11 @@ impl RccModel for L4Rcc {
             0x0C => self.pllcfgr,
             0x2C => self.ahbrstr,
             0x38 => self.apb1rstr,
+            0x3C => self.apb1rstr2,
             0x40 => self.apb2rstr,
             0x4C => self.ahbenr,
             0x58 => self.apb1enr,
+            0x5C => self.apb1enr2,
             0x60 => self.apb2enr,
             0x90 => self.bdcr,
             0x94 => self.csr,
@@ -1935,9 +1939,11 @@ impl RccModel for L4Rcc {
             }
             0x2C => self.ahbrstr = value,
             0x38 => self.apb1rstr = value,
+            0x3C => self.apb1rstr2 = value,
             0x40 => self.apb2rstr = value,
             0x4C => self.ahbenr = value,
             0x58 => self.apb1enr = value,
+            0x5C => self.apb1enr2 = value,
             0x60 => self.apb2enr = value,
             // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
             0x90 => {
@@ -2715,10 +2721,11 @@ impl Rcc {
                 "apb2enr" => Some(0x44),
                 _ => None,
             },
-            // L4: AHB2ENR@0x4C, APB1ENR1@0x58, APB2ENR@0x60 (RM0351 §6.4).
+            // L4: AHB2ENR@0x4C, APB1ENR1/2@0x58/0x5C, APB2ENR@0x60 (RM0394 §7.4).
             Self::Stm32L4(_) => match r.as_str() {
                 "ahbenr" | "ahb2enr" => Some(0x4C),
                 "apb1enr" | "apb1enr1" => Some(0x58),
+                "apb1enr2" => Some(0x5C),
                 "apb2enr" => Some(0x60),
                 _ => None,
             },
@@ -3900,6 +3907,17 @@ mod tests {
         );
     }
 
+    /// RM0394 RCC_APB1ENR2 exposes the LPUART1 clock gate on STM32L452.
+    #[test]
+    fn test_rcc_l4_apb1enr2_clock_gate() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32L4);
+        assert_eq!(rcc.rcc_reg_offset("apb1enr2"), Some(0x5C));
+        rcc.write_u32(0x5C, 1).unwrap(); // APB1ENR2.LPUART1EN
+        assert_eq!(rcc.read_u32(0x5C).unwrap(), 1);
+        rcc.write_u32(0x3C, 1).unwrap(); // APB1RSTR2 register storage
+        assert_eq!(rcc.read_u32(0x3C).unwrap(), 1);
+    }
+
     #[test]
     fn test_rcc_l0_layout_and_clock_switch() {
         // Verified against NUCLEO-L073RZ silicon (SWD).
@@ -4109,12 +4127,10 @@ mod tests {
         );
     }
 
-    /// The L5 is NOT an L4 alias: the NUCLEO-L552ZE-Q console is LPUART1,
-    /// gated on APB1ENR2 bit 0 — a register the L4 model does not have. The
-    /// reset clock is MSI range 6 (CR 0x63), and GPIO lives in AHB2ENR@0x4C
-    /// while DMA/CRC live in AHB1ENR@0x48. If the L5 shared the L4 layout, the
-    /// LPUART clock enable would vanish into an unmapped offset and the console
-    /// would stay silent.
+    /// The L5 is NOT an L4 alias: both place APB1ENR2 at 0x5C, but L5 also has
+    /// AHB1ENR/AHB3ENR and a different clock-tree profile. This protects the
+    /// NUCLEO-L552ZE-Q LPUART1 gate at APB1ENR2 bit 0 and its separate DMA/CRC
+    /// clock block at AHB1ENR@0x48.
     #[test]
     fn test_rcc_l5_map_and_msi_reset() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32L5);

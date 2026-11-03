@@ -1,0 +1,17 @@
+# NUCLEO-L452RE-P board paths modeled for this smoke:
+#   - LPUART1 PA2/PA3 -> on-board ST-LINK/V2-1 Virtual COM port (default bridges)
+#   - LD4 green user LED -> PB13, active high
+# ST UM2206 §§6.9-6.10. USB, ST-LINK protocol, button, and unlisted board
+# peripherals are outside this narrow profile.
+name: "nucleo-l452re-p-smoke"
+chip: "../chips/stm32l452re-nucleo-smoke.yaml"
+cpu_hz: 4_000_000
+debug_uart: "lpuart1"
+external_devices: []
+board_io:
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 13
+    signal: "output"
+    active_high: true

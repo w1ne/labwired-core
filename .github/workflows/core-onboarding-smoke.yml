@@ -27,6 +27,7 @@ on:
       - "crates/firmware-nucleo-g0b1re-smoke/**"
       - "crates/firmware-nucleo-g431kb-smoke/**"
       - "crates/firmware-nucleo-g431rb-smoke/**"
+      - "crates/firmware-nucleo-l452re-p-smoke/**"
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-pico2-demo/**"
@@ -93,6 +94,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g431rb/onboarding-smoke.yaml
             system: configs/systems/nucleo-g431rb.yaml
+          - id: nucleo-l452re-p
+            crate: firmware-nucleo-l452re-p-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l452re-p/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l452re-p-smoke.yaml
           - id: nucleo-l073rz
             crate: firmware-l073-demo
             target: thumbv6m-none-eabi
