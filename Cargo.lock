@@ -1806,6 +1806,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-l432kc-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-nucleo-l452re-p-smoke"
 version = "0.1.0"
 dependencies = [

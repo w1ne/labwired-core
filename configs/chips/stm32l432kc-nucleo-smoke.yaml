@@ -1,0 +1,58 @@
+# Focused STM32L432KC profile for NUCLEO-L432KC onboarding smoke.
+# Only the modeled RCC, GPIOA/GPIOB and USART2 paths used by the board smoke
+# are declared. The Nucleo-32 board manual documents LD3 on PB3 and VCP TX on
+# PA2; DS11451 identifies PA2 as USART2_TX (AF7) and PA15 as USART2_RX (AF3).
+# Register layout follows STM32L4 RM0394.
+
+name: "stm32l432kc-nucleo-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 80_000_000
+
+flash:
+  base: 0x08000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: uart2, role: tx }] }
+  PA15: { gpio: "gpioa", bit: 15, functions: [{ type: uart, peripheral: uart2, role: rx }] }
+  PB3: { gpio: "gpiob", bit: 3, functions: [{ type: gpio, peripheral: gpiob }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioa.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiob.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32l476/usart2.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb1enr1", bit: 17 }
