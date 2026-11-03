@@ -440,6 +440,134 @@ mod analog {
         }
     }
 
+    /// Depletion charge and transit charge share the diode's transient branch
+    /// in MNA. Check their combined current against an independently integrated
+    /// charge law while the junction is behind the model's series resistance.
+    #[test]
+    fn diode_depletion_and_transit_charge_combine_through_series_resistance() {
+        let (is, tt, cjo, vj, grading, fc, rs, source_r, h) =
+            (1e-14, 100e-9, 50e-12, 0.75, 0.5, 0.4, 47.0, 1_000.0, 1e-6);
+        let circuit = parse_netlist(&format!(
+            "V1 in 0 dc 0\nR1 in a {source_r}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 RS={rs} CJO={cjo} VJ={vj} M={grading} FC={fc} TT={tt})\n"
+        ))
+        .expect("diode depletion and transit model parses");
+
+        // This is the SPICE depletion-charge integral, written out here rather
+        // than calling the device helper under test. The quadratic continuation
+        // above FC·VJ keeps both charge and capacitance continuous.
+        let depletion_charge = |voltage: f64| {
+            let transition = fc * vj;
+            let x_transition: f64 = 1.0 - fc;
+            let q_transition =
+                cjo * vj / (1.0 - grading) * (1.0 - x_transition.powf(1.0 - grading));
+            let c_transition = cjo * x_transition.powf(-grading);
+            if voltage < transition {
+                let x = 1.0 - voltage / vj;
+                cjo * vj / (1.0 - grading) * (1.0 - x.powf(1.0 - grading))
+            } else {
+                let dv = voltage - transition;
+                let slope = grading * cjo * x_transition.powf(-1.0 - grading) / vj;
+                q_transition + c_transition * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let junction_current =
+            |voltage: f64| is * ((voltage / VT).exp() - 1.0) + device::GMIN * voltage;
+        let charge = |voltage: f64| {
+            let transport_current = is * ((voltage / VT).exp() - 1.0);
+            depletion_charge(voltage) + tt * transport_current
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver =
+                Solver::new(circuit.clone(), integration).expect("diode charge solver builds");
+            let external = solver.circuit().node("a").expect("external anode");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("RS creates the internal junction node")
+                .expect("junction is not ground");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            let mut previous_charge = charge(solver.node_voltage(Some(junction)));
+            let mut previous_charge_current = 0.0;
+
+            for (step, supply) in [0.9, 0.9].into_iter().enumerate() {
+                solver.set_voltage_source(source, supply);
+                // Source changes and operating-point startup use BE even when
+                // trapezoidal integration is selected; the next step exercises
+                // its stored displacement-current history.
+                let rule = if step == 0 || integration == Integration::BackwardEuler {
+                    Integration::BackwardEuler
+                } else {
+                    Integration::Trapezoidal
+                };
+                let charge_current = |voltage: f64| {
+                    let next_charge = charge(voltage);
+                    match rule {
+                        Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (next_charge - previous_charge) / h - previous_charge_current
+                        }
+                    }
+                };
+                let residual = |voltage: f64| {
+                    (supply - voltage) / (source_r + rs)
+                        - junction_current(voltage)
+                        - charge_current(voltage)
+                };
+                let mut low = 0.0;
+                let mut high = supply;
+                for _ in 0..120 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected_junction = 0.5 * (low + high);
+
+                solver
+                    .advance(h)
+                    .expect("combined diode charge step solves");
+                let actual_junction = solver.node_voltage(Some(junction));
+                let actual_current = source_current(&solver, "V1");
+                assert!(
+                    (actual_junction - expected_junction).abs() < 1e-8,
+                    "{integration:?} step {step}: combined depletion/transit charge predicts {expected_junction} V at the junction, got {actual_junction} V"
+                );
+                assert!(
+                    (solver.node_voltage(external) - actual_junction - actual_current * rs).abs()
+                        < 1e-8,
+                    "{integration:?} step {step}: diode RS must drop {actual_current}·{rs} V between the external and internal anodes"
+                );
+                assert!(
+                    (actual_current - junction_current(actual_junction)
+                        - charge_current(actual_junction))
+                    .abs()
+                        < 1e-9,
+                    "{integration:?} step {step}: source current must supply conduction plus both stored-charge currents"
+                );
+                assert!(
+                    depletion_charge(actual_junction) > 1e-12
+                        && tt
+                            * (junction_current(actual_junction) - device::GMIN * actual_junction)
+                            > 1e-12,
+                    "the solved point must carry measurable depletion and transit charge"
+                );
+
+                let next_charge = charge(actual_junction);
+                previous_charge_current = match rule {
+                    Integration::BackwardEuler => (next_charge - previous_charge) / h,
+                    Integration::Trapezoidal => {
+                        2.0 * (next_charge - previous_charge) / h - previous_charge_current
+                    }
+                };
+                previous_charge = next_charge;
+            }
+        }
+    }
+
     /// The diffusion charge must use the same high-injection-limited junction
     /// current as the diode's conductive stamp. Exercise the interaction in a
     /// solved transient circuit: an ideal `TT·I` charge would produce a
