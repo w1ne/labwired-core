@@ -2512,6 +2512,121 @@ mod analog {
         }
     }
 
+    /// The model-card base resistance sits outside both Gummel–Poon
+    /// recombination branches. Solve the current balance through the internal
+    /// base node, then compare it with the same resistor written explicitly.
+    #[test]
+    fn bjt_base_recombination_flows_through_modelled_base_resistance() {
+        let (is, bf, br, ise, ne, isc, nc, rb, drive_resistance, vce, drive) = (
+            1e-16, 80.0, 4.0, 1e-11, 1.5, 5e-10, 2.0, 250.0, 10_000.0, 0.15, 1.0,
+        );
+        let base_current = |vbe: f64, include_recombination: bool| {
+            let vbc = vbe - vce;
+            let ise = if include_recombination { ise } else { 0.0 };
+            let isc = if include_recombination { isc } else { 0.0 };
+            (is / bf) * ((vbe / VT).exp() - 1.0)
+                + ise * ((vbe / (ne * VT)).exp() - 1.0)
+                + (is / br) * ((vbc / VT).exp() - 1.0)
+                + isc * ((vbc / (nc * VT)).exp() - 1.0)
+                + device::GMIN * (vbe + vbc)
+        };
+        let expected_vbe = |include_recombination: bool| {
+            let mut lo = -0.1;
+            let mut hi = drive;
+            for _ in 0..100 {
+                let mid = (lo + hi) / 2.0;
+                let source_current = (drive - mid) / (drive_resistance + rb);
+                if source_current > base_current(mid, include_recombination) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let expected = expected_vbe(true);
+        let without_recombination = expected_vbe(false);
+        assert!(expected > vce, "the selected bias must forward-bias B-C");
+        assert!(
+            without_recombination - expected > 0.1,
+            "recombination must materially load the intrinsic base"
+        );
+
+        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let emitter_v = if sign > 0.0 { 0.0 } else { 3.0 };
+            let collector_v = emitter_v + sign * vce;
+            let drive_v = emitter_v + sign * drive;
+            let model = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\n\
+                 Vdrive drive 0 dc {drive_v}\nRdrive drive b {drive_resistance}\n\
+                 Q1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} RB={rb} \
+                 ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let explicit = format!(
+                "Ve e 0 dc {emitter_v}\nVc c 0 dc {collector_v}\n\
+                 Vdrive drive 0 dc {drive_v}\nRdrive drive b {drive_resistance}\n\
+                 Rbase b qb {rb}\nQ1 c qb e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} \
+                 ISE={ise} NE={ne} ISC={isc} NC={nc})\n"
+            );
+            let actual = build(&model);
+            let reference = build(&explicit);
+            let model_base = actual
+                .circuit()
+                .node("b")
+                .expect("external base node")
+                .expect("base is not ground");
+            let model_intrinsic_base = actual
+                .circuit()
+                .node("Q1#base")
+                .expect("internal base node")
+                .expect("internal base is not ground");
+            let actual_vbe = sign * (actual.node_voltage(Some(model_intrinsic_base)) - emitter_v);
+            let actual_base_current = sign * source_current(&actual, "Vdrive");
+            let actual_base_drop = sign
+                * (actual.node_voltage(Some(model_base))
+                    - actual.node_voltage(Some(model_intrinsic_base)));
+
+            assert!(
+                (actual_vbe - expected).abs() < 1e-8,
+                "{kind}: recombination plus RB predict intrinsic Vbe={expected} V, got {actual_vbe} V"
+            );
+            assert!(
+                (actual_base_current - base_current(expected, true)).abs() < 1e-10,
+                "{kind}: recombination predicts Ib={} A, got {actual_base_current} A",
+                base_current(expected, true)
+            );
+            assert!(
+                (actual_base_drop - actual_base_current * rb).abs() < 1e-8,
+                "{kind}: RB should drop {} V, got {actual_base_drop} V",
+                actual_base_current * rb
+            );
+            for (model_name, reference_name) in
+                [("b", "b"), ("Q1#base", "qb"), ("c", "c"), ("e", "e")]
+            {
+                let model_node = actual.circuit().node(model_name).expect("model node");
+                let reference_node = reference
+                    .circuit()
+                    .node(reference_name)
+                    .expect("reference node");
+                assert!(
+                    (actual.node_voltage(model_node) - reference.node_voltage(reference_node))
+                        .abs()
+                        < 1e-8,
+                    "{kind} {model_name}: model-card RB differs from explicit resistor"
+                );
+            }
+            for source in ["Vdrive", "Vc", "Ve"] {
+                assert!(
+                    (source_current(&actual, source) - source_current(&reference, source)).abs()
+                        < 1e-10,
+                    "{kind} {source}: model-card RB current differs from explicit resistor"
+                );
+            }
+        }
+    }
+
     #[test]
     fn bjt_base_recombination_partials_match_finite_difference() {
         let (is, bf, br, nf, nr, ise, ne, isc, nc) =
