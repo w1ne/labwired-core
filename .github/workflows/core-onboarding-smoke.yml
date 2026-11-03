@@ -39,6 +39,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: nucleo-g474re
+            crate: firmware-nucleo_g474re-demo
+            firmware_build_dir: examples/nucleo_g474re/board_firmware
+            target: thumbv7em-none-eabi
+            script: examples/nucleo_g474re/uart-smoke.yaml
+            system: configs/systems/nucleo_g474re.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi

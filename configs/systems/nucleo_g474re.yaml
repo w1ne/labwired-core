@@ -1,6 +1,8 @@
 schema_version: "1.0"
 name: "nucleo_g474re"
 chip: "../chips/stm32g474re.yaml"
+# ST UM2505 default STLINK-V3E virtual COM port: LPUART1 on PA2/PA3.
+debug_uart: "lpuart1"
 
 board_io:
   - id: "led_user"

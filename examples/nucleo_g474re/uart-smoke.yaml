@@ -1,10 +1,13 @@
-# LabWired - NUCLEO_G474RE UART smoke test
-schema_version: "1.0"
+# NUCLEO-G474RE smoke: default STLINK-V3E VCP on LPUART1 and LD2 on PA5.
+schema_version: "1.2"
 inputs:
   firmware: "./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/nucleo_g474re.yaml"
 limits:
-  max_steps: 64
+  max_steps: 1000000
 assertions:
-  - uart_contains: "OK"
+  - uart_contains: "NUCLEO_G474RE_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
   - expected_stop_reason: max_steps

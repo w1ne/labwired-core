@@ -349,9 +349,9 @@ The models column is a content digest over everything that board's `models` list
 ## `stm32g474re` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/stm32g474re.md`](stm32g474re.md)  ·  Chip: `configs/chips/stm32g474re.yaml`
-- Note: STM32G474RE (Cortex-M4, RM0440). Boots UNMODIFIED upstream Zephyr hello_world (board nucleo_g474re) via firmware_survival::stm32g474_zephyr, and covered by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g474re.elf). No G474 silicon diff — no bench part.
+- Note: STM32G474RE (Cortex-M4, RM0440). Boots UNMODIFIED upstream Zephyr hello_world (board nucleo_g474re), is covered by the tier-1 fast-boot fixture, and now has a NUCLEO-G474RE LPUART1 + PA5 LED onboarding smoke. No G474 silicon diff — no bench part.
 - Silicon: none — not validated against real hardware.
-  - offline (CI): firmware_survival::stm32g474_zephyr
+  - offline (CI): firmware_survival::stm32g474_zephyr; `examples/nucleo_g474re/uart-smoke.yaml`
 - Drift status: **no silicon capture**
 
 ## `stm32wb55` — 🔵 sim-validated (deep model, no HW diff)
