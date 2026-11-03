@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      128128,
+      1966080,
+      536936380,
+      9,
+      1342178564,
+      102,
+      10,
+      536936432,
+      13,
+      536936374,
+      536936422,
+      1073750304,
+      10,
+      536936280,
+      536936374,
+      2360
+    ],
+    "pc": 2360,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e2801292f0414ac470041de2ba9448d1841e3f10dc6da49b098c57d0f91c5001",
+  "config": {
+    "firmware": "examples/nrf52-dk/../../target/thumbv7em-none-eabi/release/firmware-nrf52-dk-demo",
+    "system": "examples/nrf52-dk/../../configs/systems/nrf52-dk.yaml",
+    "script": "examples/nrf52-dk/io-smoke.yaml"
+  }
+}

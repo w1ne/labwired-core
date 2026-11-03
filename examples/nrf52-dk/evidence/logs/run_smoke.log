@@ -1,0 +1,4 @@
+2026-11-03T17:11:17.481721Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/nrf52832.yaml
+2026-11-03T17:11:17.493153Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · io-smoke · 4000000 steps · 1.79s
