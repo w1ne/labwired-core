@@ -7,4 +7,7 @@ limits:
   max_steps: 4000000
 assertions:
   - uart_contains: "NRF52840_SMOKE_OK"
+  - gpio_edges:
+      pin: "gpio0:13"
+      min_edges: 1
   - expected_stop_reason: max_steps

@@ -186,6 +186,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nrf52840-smoke.yaml
             system: configs/systems/onboarding/nrf52840.yaml
+          # The imported DK profile keeps only its modeled P0, LED0 and UARTE0
+          # path; the same fixture asserts UART output and a P0.13 transition.
+          - id: nrf52840dk_nrf52840
+            crate: firmware-nrf52840-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml
+            system: configs/systems/onboarding/nrf52840dk_nrf52840.yaml
           - id: nucleo_f767zi
             crate: firmware-stm32f746-demo
             target: thumbv7em-none-eabi

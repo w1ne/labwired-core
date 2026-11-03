@@ -1,0 +1,2073 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NRF52840_SMOKE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio0:13",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073751364,
+      1073750024,
+      1342178568,
+      8192,
+      8,
+      1,
+      0,
+      537133040,
+      18,
+      0,
+      0,
+      0,
+      537133020,
+      537133020,
+      0,
+      1190
+    ],
+    "pc": 1190,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "4d116b7d9977a6d2a584a743344f681db17f92cc55f0947f8182b38c56cc701a",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nrf52840dk_nrf52840.yaml",
+    "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073750016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio0",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "led0",
+        "kind": "native",
+        "base": 13,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio0",
+        "pin": 13,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 43,
+            "value": 1
+          },
+          {
+            "cycle": 44,
+            "value": 0
+          },
+          {
+            "cycle": 46133,
+            "value": 1
+          },
+          {
+            "cycle": 49135,
+            "value": 0
+          },
+          {
+            "cycle": 95224,
+            "value": 1
+          },
+          {
+            "cycle": 98226,
+            "value": 0
+          },
+          {
+            "cycle": 144315,
+            "value": 1
+          },
+          {
+            "cycle": 147317,
+            "value": 0
+          },
+          {
+            "cycle": 193406,
+            "value": 1
+          },
+          {
+            "cycle": 196408,
+            "value": 0
+          },
+          {
+            "cycle": 242497,
+            "value": 1
+          },
+          {
+            "cycle": 245499,
+            "value": 0
+          },
+          {
+            "cycle": 291588,
+            "value": 1
+          },
+          {
+            "cycle": 294590,
+            "value": 0
+          },
+          {
+            "cycle": 340679,
+            "value": 1
+          },
+          {
+            "cycle": 343681,
+            "value": 0
+          },
+          {
+            "cycle": 389770,
+            "value": 1
+          },
+          {
+            "cycle": 392772,
+            "value": 0
+          },
+          {
+            "cycle": 438861,
+            "value": 1
+          },
+          {
+            "cycle": 441863,
+            "value": 0
+          },
+          {
+            "cycle": 487952,
+            "value": 1
+          },
+          {
+            "cycle": 490954,
+            "value": 0
+          },
+          {
+            "cycle": 537043,
+            "value": 1
+          },
+          {
+            "cycle": 540045,
+            "value": 0
+          },
+          {
+            "cycle": 586134,
+            "value": 1
+          },
+          {
+            "cycle": 589136,
+            "value": 0
+          },
+          {
+            "cycle": 635225,
+            "value": 1
+          },
+          {
+            "cycle": 638227,
+            "value": 0
+          },
+          {
+            "cycle": 684316,
+            "value": 1
+          },
+          {
+            "cycle": 687318,
+            "value": 0
+          },
+          {
+            "cycle": 733407,
+            "value": 1
+          },
+          {
+            "cycle": 736409,
+            "value": 0
+          },
+          {
+            "cycle": 782498,
+            "value": 1
+          },
+          {
+            "cycle": 785500,
+            "value": 0
+          },
+          {
+            "cycle": 831589,
+            "value": 1
+          },
+          {
+            "cycle": 834591,
+            "value": 0
+          },
+          {
+            "cycle": 880680,
+            "value": 1
+          },
+          {
+            "cycle": 883682,
+            "value": 0
+          },
+          {
+            "cycle": 929771,
+            "value": 1
+          },
+          {
+            "cycle": 932773,
+            "value": 0
+          },
+          {
+            "cycle": 978862,
+            "value": 1
+          },
+          {
+            "cycle": 981864,
+            "value": 0
+          },
+          {
+            "cycle": 1027953,
+            "value": 1
+          },
+          {
+            "cycle": 1030955,
+            "value": 0
+          },
+          {
+            "cycle": 1077044,
+            "value": 1
+          },
+          {
+            "cycle": 1080046,
+            "value": 0
+          },
+          {
+            "cycle": 1126135,
+            "value": 1
+          },
+          {
+            "cycle": 1129137,
+            "value": 0
+          },
+          {
+            "cycle": 1175226,
+            "value": 1
+          },
+          {
+            "cycle": 1178228,
+            "value": 0
+          },
+          {
+            "cycle": 1224317,
+            "value": 1
+          },
+          {
+            "cycle": 1227319,
+            "value": 0
+          },
+          {
+            "cycle": 1273408,
+            "value": 1
+          },
+          {
+            "cycle": 1276410,
+            "value": 0
+          },
+          {
+            "cycle": 1322499,
+            "value": 1
+          },
+          {
+            "cycle": 1325501,
+            "value": 0
+          },
+          {
+            "cycle": 1371590,
+            "value": 1
+          },
+          {
+            "cycle": 1374592,
+            "value": 0
+          },
+          {
+            "cycle": 1420681,
+            "value": 1
+          },
+          {
+            "cycle": 1423683,
+            "value": 0
+          },
+          {
+            "cycle": 1469772,
+            "value": 1
+          },
+          {
+            "cycle": 1472774,
+            "value": 0
+          },
+          {
+            "cycle": 1518863,
+            "value": 1
+          },
+          {
+            "cycle": 1521865,
+            "value": 0
+          },
+          {
+            "cycle": 1567954,
+            "value": 1
+          },
+          {
+            "cycle": 1570956,
+            "value": 0
+          },
+          {
+            "cycle": 1617045,
+            "value": 1
+          },
+          {
+            "cycle": 1620047,
+            "value": 0
+          },
+          {
+            "cycle": 1666136,
+            "value": 1
+          },
+          {
+            "cycle": 1669138,
+            "value": 0
+          },
+          {
+            "cycle": 1715227,
+            "value": 1
+          },
+          {
+            "cycle": 1718229,
+            "value": 0
+          },
+          {
+            "cycle": 1764318,
+            "value": 1
+          },
+          {
+            "cycle": 1767320,
+            "value": 0
+          },
+          {
+            "cycle": 1813409,
+            "value": 1
+          },
+          {
+            "cycle": 1816411,
+            "value": 0
+          },
+          {
+            "cycle": 1862500,
+            "value": 1
+          },
+          {
+            "cycle": 1865502,
+            "value": 0
+          },
+          {
+            "cycle": 1911591,
+            "value": 1
+          },
+          {
+            "cycle": 1914593,
+            "value": 0
+          },
+          {
+            "cycle": 1960682,
+            "value": 1
+          },
+          {
+            "cycle": 1963684,
+            "value": 0
+          },
+          {
+            "cycle": 2009773,
+            "value": 1
+          },
+          {
+            "cycle": 2012775,
+            "value": 0
+          },
+          {
+            "cycle": 2058864,
+            "value": 1
+          },
+          {
+            "cycle": 2061866,
+            "value": 0
+          },
+          {
+            "cycle": 2107955,
+            "value": 1
+          },
+          {
+            "cycle": 2110957,
+            "value": 0
+          },
+          {
+            "cycle": 2157046,
+            "value": 1
+          },
+          {
+            "cycle": 2160048,
+            "value": 0
+          },
+          {
+            "cycle": 2206137,
+            "value": 1
+          },
+          {
+            "cycle": 2209139,
+            "value": 0
+          },
+          {
+            "cycle": 2255228,
+            "value": 1
+          },
+          {
+            "cycle": 2258230,
+            "value": 0
+          },
+          {
+            "cycle": 2304319,
+            "value": 1
+          },
+          {
+            "cycle": 2307321,
+            "value": 0
+          },
+          {
+            "cycle": 2353410,
+            "value": 1
+          },
+          {
+            "cycle": 2356412,
+            "value": 0
+          },
+          {
+            "cycle": 2402501,
+            "value": 1
+          },
+          {
+            "cycle": 2405503,
+            "value": 0
+          },
+          {
+            "cycle": 2451592,
+            "value": 1
+          },
+          {
+            "cycle": 2454594,
+            "value": 0
+          },
+          {
+            "cycle": 2500683,
+            "value": 1
+          },
+          {
+            "cycle": 2503685,
+            "value": 0
+          },
+          {
+            "cycle": 2549774,
+            "value": 1
+          },
+          {
+            "cycle": 2552776,
+            "value": 0
+          },
+          {
+            "cycle": 2598865,
+            "value": 1
+          },
+          {
+            "cycle": 2601867,
+            "value": 0
+          },
+          {
+            "cycle": 2647956,
+            "value": 1
+          },
+          {
+            "cycle": 2650958,
+            "value": 0
+          },
+          {
+            "cycle": 2697047,
+            "value": 1
+          },
+          {
+            "cycle": 2700049,
+            "value": 0
+          },
+          {
+            "cycle": 2746138,
+            "value": 1
+          },
+          {
+            "cycle": 2749140,
+            "value": 0
+          },
+          {
+            "cycle": 2795229,
+            "value": 1
+          },
+          {
+            "cycle": 2798231,
+            "value": 0
+          },
+          {
+            "cycle": 2844320,
+            "value": 1
+          },
+          {
+            "cycle": 2847322,
+            "value": 0
+          },
+          {
+            "cycle": 2893411,
+            "value": 1
+          },
+          {
+            "cycle": 2896413,
+            "value": 0
+          },
+          {
+            "cycle": 2942502,
+            "value": 1
+          },
+          {
+            "cycle": 2945504,
+            "value": 0
+          },
+          {
+            "cycle": 2991593,
+            "value": 1
+          },
+          {
+            "cycle": 2994595,
+            "value": 0
+          },
+          {
+            "cycle": 3040684,
+            "value": 1
+          },
+          {
+            "cycle": 3043686,
+            "value": 0
+          },
+          {
+            "cycle": 3089775,
+            "value": 1
+          },
+          {
+            "cycle": 3092777,
+            "value": 0
+          },
+          {
+            "cycle": 3138866,
+            "value": 1
+          },
+          {
+            "cycle": 3141868,
+            "value": 0
+          },
+          {
+            "cycle": 3187957,
+            "value": 1
+          },
+          {
+            "cycle": 3190959,
+            "value": 0
+          },
+          {
+            "cycle": 3237048,
+            "value": 1
+          },
+          {
+            "cycle": 3240050,
+            "value": 0
+          },
+          {
+            "cycle": 3286139,
+            "value": 1
+          },
+          {
+            "cycle": 3289141,
+            "value": 0
+          },
+          {
+            "cycle": 3335230,
+            "value": 1
+          },
+          {
+            "cycle": 3338232,
+            "value": 0
+          },
+          {
+            "cycle": 3384321,
+            "value": 1
+          },
+          {
+            "cycle": 3387323,
+            "value": 0
+          },
+          {
+            "cycle": 3433412,
+            "value": 1
+          },
+          {
+            "cycle": 3436414,
+            "value": 0
+          },
+          {
+            "cycle": 3482503,
+            "value": 1
+          },
+          {
+            "cycle": 3485505,
+            "value": 0
+          },
+          {
+            "cycle": 3531594,
+            "value": 1
+          },
+          {
+            "cycle": 3534596,
+            "value": 0
+          },
+          {
+            "cycle": 3580685,
+            "value": 1
+          },
+          {
+            "cycle": 3583687,
+            "value": 0
+          },
+          {
+            "cycle": 3629776,
+            "value": 1
+          },
+          {
+            "cycle": 3632778,
+            "value": 0
+          },
+          {
+            "cycle": 3678867,
+            "value": 1
+          },
+          {
+            "cycle": 3681869,
+            "value": 0
+          },
+          {
+            "cycle": 3727958,
+            "value": 1
+          },
+          {
+            "cycle": 3730960,
+            "value": 0
+          },
+          {
+            "cycle": 3777049,
+            "value": 1
+          },
+          {
+            "cycle": 3780051,
+            "value": 0
+          },
+          {
+            "cycle": 3826140,
+            "value": 1
+          },
+          {
+            "cycle": 3829142,
+            "value": 0
+          },
+          {
+            "cycle": 3875231,
+            "value": 1
+          },
+          {
+            "cycle": 3878233,
+            "value": 0
+          },
+          {
+            "cycle": 3924322,
+            "value": 1
+          },
+          {
+            "cycle": 3927324,
+            "value": 0
+          },
+          {
+            "cycle": 3973413,
+            "value": 1
+          },
+          {
+            "cycle": 3976415,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 42,
+            "state": "0"
+          },
+          {
+            "cycle": 43,
+            "state": "1"
+          },
+          {
+            "cycle": 44,
+            "state": "0"
+          },
+          {
+            "cycle": 46133,
+            "state": "1"
+          },
+          {
+            "cycle": 49135,
+            "state": "0"
+          },
+          {
+            "cycle": 95224,
+            "state": "1"
+          },
+          {
+            "cycle": 98226,
+            "state": "0"
+          },
+          {
+            "cycle": 144315,
+            "state": "1"
+          },
+          {
+            "cycle": 147317,
+            "state": "0"
+          },
+          {
+            "cycle": 193406,
+            "state": "1"
+          },
+          {
+            "cycle": 196408,
+            "state": "0"
+          },
+          {
+            "cycle": 242497,
+            "state": "1"
+          },
+          {
+            "cycle": 245499,
+            "state": "0"
+          },
+          {
+            "cycle": 291588,
+            "state": "1"
+          },
+          {
+            "cycle": 294590,
+            "state": "0"
+          },
+          {
+            "cycle": 340679,
+            "state": "1"
+          },
+          {
+            "cycle": 343681,
+            "state": "0"
+          },
+          {
+            "cycle": 389770,
+            "state": "1"
+          },
+          {
+            "cycle": 392772,
+            "state": "0"
+          },
+          {
+            "cycle": 438861,
+            "state": "1"
+          },
+          {
+            "cycle": 441863,
+            "state": "0"
+          },
+          {
+            "cycle": 487952,
+            "state": "1"
+          },
+          {
+            "cycle": 490954,
+            "state": "0"
+          },
+          {
+            "cycle": 537043,
+            "state": "1"
+          },
+          {
+            "cycle": 540045,
+            "state": "0"
+          },
+          {
+            "cycle": 586134,
+            "state": "1"
+          },
+          {
+            "cycle": 589136,
+            "state": "0"
+          },
+          {
+            "cycle": 635225,
+            "state": "1"
+          },
+          {
+            "cycle": 638227,
+            "state": "0"
+          },
+          {
+            "cycle": 684316,
+            "state": "1"
+          },
+          {
+            "cycle": 687318,
+            "state": "0"
+          },
+          {
+            "cycle": 733407,
+            "state": "1"
+          },
+          {
+            "cycle": 736409,
+            "state": "0"
+          },
+          {
+            "cycle": 782498,
+            "state": "1"
+          },
+          {
+            "cycle": 785500,
+            "state": "0"
+          },
+          {
+            "cycle": 831589,
+            "state": "1"
+          },
+          {
+            "cycle": 834591,
+            "state": "0"
+          },
+          {
+            "cycle": 880680,
+            "state": "1"
+          },
+          {
+            "cycle": 883682,
+            "state": "0"
+          },
+          {
+            "cycle": 929771,
+            "state": "1"
+          },
+          {
+            "cycle": 932773,
+            "state": "0"
+          },
+          {
+            "cycle": 978862,
+            "state": "1"
+          },
+          {
+            "cycle": 981864,
+            "state": "0"
+          },
+          {
+            "cycle": 1027953,
+            "state": "1"
+          },
+          {
+            "cycle": 1030955,
+            "state": "0"
+          },
+          {
+            "cycle": 1077044,
+            "state": "1"
+          },
+          {
+            "cycle": 1080046,
+            "state": "0"
+          },
+          {
+            "cycle": 1126135,
+            "state": "1"
+          },
+          {
+            "cycle": 1129137,
+            "state": "0"
+          },
+          {
+            "cycle": 1175226,
+            "state": "1"
+          },
+          {
+            "cycle": 1178228,
+            "state": "0"
+          },
+          {
+            "cycle": 1224317,
+            "state": "1"
+          },
+          {
+            "cycle": 1227319,
+            "state": "0"
+          },
+          {
+            "cycle": 1273408,
+            "state": "1"
+          },
+          {
+            "cycle": 1276410,
+            "state": "0"
+          },
+          {
+            "cycle": 1322499,
+            "state": "1"
+          },
+          {
+            "cycle": 1325501,
+            "state": "0"
+          },
+          {
+            "cycle": 1371590,
+            "state": "1"
+          },
+          {
+            "cycle": 1374592,
+            "state": "0"
+          },
+          {
+            "cycle": 1420681,
+            "state": "1"
+          },
+          {
+            "cycle": 1423683,
+            "state": "0"
+          },
+          {
+            "cycle": 1469772,
+            "state": "1"
+          },
+          {
+            "cycle": 1472774,
+            "state": "0"
+          },
+          {
+            "cycle": 1518863,
+            "state": "1"
+          },
+          {
+            "cycle": 1521865,
+            "state": "0"
+          },
+          {
+            "cycle": 1567954,
+            "state": "1"
+          },
+          {
+            "cycle": 1570956,
+            "state": "0"
+          },
+          {
+            "cycle": 1617045,
+            "state": "1"
+          },
+          {
+            "cycle": 1620047,
+            "state": "0"
+          },
+          {
+            "cycle": 1666136,
+            "state": "1"
+          },
+          {
+            "cycle": 1669138,
+            "state": "0"
+          },
+          {
+            "cycle": 1715227,
+            "state": "1"
+          },
+          {
+            "cycle": 1718229,
+            "state": "0"
+          },
+          {
+            "cycle": 1764318,
+            "state": "1"
+          },
+          {
+            "cycle": 1767320,
+            "state": "0"
+          },
+          {
+            "cycle": 1813409,
+            "state": "1"
+          },
+          {
+            "cycle": 1816411,
+            "state": "0"
+          },
+          {
+            "cycle": 1862500,
+            "state": "1"
+          },
+          {
+            "cycle": 1865502,
+            "state": "0"
+          },
+          {
+            "cycle": 1911591,
+            "state": "1"
+          },
+          {
+            "cycle": 1914593,
+            "state": "0"
+          },
+          {
+            "cycle": 1960682,
+            "state": "1"
+          },
+          {
+            "cycle": 1963684,
+            "state": "0"
+          },
+          {
+            "cycle": 2009773,
+            "state": "1"
+          },
+          {
+            "cycle": 2012775,
+            "state": "0"
+          },
+          {
+            "cycle": 2058864,
+            "state": "1"
+          },
+          {
+            "cycle": 2061866,
+            "state": "0"
+          },
+          {
+            "cycle": 2107955,
+            "state": "1"
+          },
+          {
+            "cycle": 2110957,
+            "state": "0"
+          },
+          {
+            "cycle": 2157046,
+            "state": "1"
+          },
+          {
+            "cycle": 2160048,
+            "state": "0"
+          },
+          {
+            "cycle": 2206137,
+            "state": "1"
+          },
+          {
+            "cycle": 2209139,
+            "state": "0"
+          },
+          {
+            "cycle": 2255228,
+            "state": "1"
+          },
+          {
+            "cycle": 2258230,
+            "state": "0"
+          },
+          {
+            "cycle": 2304319,
+            "state": "1"
+          },
+          {
+            "cycle": 2307321,
+            "state": "0"
+          },
+          {
+            "cycle": 2353410,
+            "state": "1"
+          },
+          {
+            "cycle": 2356412,
+            "state": "0"
+          },
+          {
+            "cycle": 2402501,
+            "state": "1"
+          },
+          {
+            "cycle": 2405503,
+            "state": "0"
+          },
+          {
+            "cycle": 2451592,
+            "state": "1"
+          },
+          {
+            "cycle": 2454594,
+            "state": "0"
+          },
+          {
+            "cycle": 2500683,
+            "state": "1"
+          },
+          {
+            "cycle": 2503685,
+            "state": "0"
+          },
+          {
+            "cycle": 2549774,
+            "state": "1"
+          },
+          {
+            "cycle": 2552776,
+            "state": "0"
+          },
+          {
+            "cycle": 2598865,
+            "state": "1"
+          },
+          {
+            "cycle": 2601867,
+            "state": "0"
+          },
+          {
+            "cycle": 2647956,
+            "state": "1"
+          },
+          {
+            "cycle": 2650958,
+            "state": "0"
+          },
+          {
+            "cycle": 2697047,
+            "state": "1"
+          },
+          {
+            "cycle": 2700049,
+            "state": "0"
+          },
+          {
+            "cycle": 2746138,
+            "state": "1"
+          },
+          {
+            "cycle": 2749140,
+            "state": "0"
+          },
+          {
+            "cycle": 2795229,
+            "state": "1"
+          },
+          {
+            "cycle": 2798231,
+            "state": "0"
+          },
+          {
+            "cycle": 2844320,
+            "state": "1"
+          },
+          {
+            "cycle": 2847322,
+            "state": "0"
+          },
+          {
+            "cycle": 2893411,
+            "state": "1"
+          },
+          {
+            "cycle": 2896413,
+            "state": "0"
+          },
+          {
+            "cycle": 2942502,
+            "state": "1"
+          },
+          {
+            "cycle": 2945504,
+            "state": "0"
+          },
+          {
+            "cycle": 2991593,
+            "state": "1"
+          },
+          {
+            "cycle": 2994595,
+            "state": "0"
+          },
+          {
+            "cycle": 3040684,
+            "state": "1"
+          },
+          {
+            "cycle": 3043686,
+            "state": "0"
+          },
+          {
+            "cycle": 3089775,
+            "state": "1"
+          },
+          {
+            "cycle": 3092777,
+            "state": "0"
+          },
+          {
+            "cycle": 3138866,
+            "state": "1"
+          },
+          {
+            "cycle": 3141868,
+            "state": "0"
+          },
+          {
+            "cycle": 3187957,
+            "state": "1"
+          },
+          {
+            "cycle": 3190959,
+            "state": "0"
+          },
+          {
+            "cycle": 3237048,
+            "state": "1"
+          },
+          {
+            "cycle": 3240050,
+            "state": "0"
+          },
+          {
+            "cycle": 3286139,
+            "state": "1"
+          },
+          {
+            "cycle": 3289141,
+            "state": "0"
+          },
+          {
+            "cycle": 3335230,
+            "state": "1"
+          },
+          {
+            "cycle": 3338232,
+            "state": "0"
+          },
+          {
+            "cycle": 3384321,
+            "state": "1"
+          },
+          {
+            "cycle": 3387323,
+            "state": "0"
+          },
+          {
+            "cycle": 3433412,
+            "state": "1"
+          },
+          {
+            "cycle": 3436414,
+            "state": "0"
+          },
+          {
+            "cycle": 3482503,
+            "state": "1"
+          },
+          {
+            "cycle": 3485505,
+            "state": "0"
+          },
+          {
+            "cycle": 3531594,
+            "state": "1"
+          },
+          {
+            "cycle": 3534596,
+            "state": "0"
+          },
+          {
+            "cycle": 3580685,
+            "state": "1"
+          },
+          {
+            "cycle": 3583687,
+            "state": "0"
+          },
+          {
+            "cycle": 3629776,
+            "state": "1"
+          },
+          {
+            "cycle": 3632778,
+            "state": "0"
+          },
+          {
+            "cycle": 3678867,
+            "state": "1"
+          },
+          {
+            "cycle": 3681869,
+            "state": "0"
+          },
+          {
+            "cycle": 3727958,
+            "state": "1"
+          },
+          {
+            "cycle": 3730960,
+            "state": "0"
+          },
+          {
+            "cycle": 3777049,
+            "state": "1"
+          },
+          {
+            "cycle": 3780051,
+            "state": "0"
+          },
+          {
+            "cycle": 3826140,
+            "state": "1"
+          },
+          {
+            "cycle": 3829142,
+            "state": "0"
+          },
+          {
+            "cycle": 3875231,
+            "state": "1"
+          },
+          {
+            "cycle": 3878233,
+            "state": "0"
+          },
+          {
+            "cycle": 3924322,
+            "state": "1"
+          },
+          {
+            "cycle": 3927324,
+            "state": "0"
+          },
+          {
+            "cycle": 3973413,
+            "state": "1"
+          },
+          {
+            "cycle": 3976415,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 164
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio0",
+      "number": 13,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 140000,
+        "cycle": 150000,
+        "end_cycle": 150000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 190000,
+        "cycle": 200000,
+        "end_cycle": 200000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 240000,
+        "cycle": 250000,
+        "end_cycle": 250000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 290000,
+        "cycle": 300000,
+        "end_cycle": 300000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 340000,
+        "cycle": 350000,
+        "end_cycle": 350000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 380000,
+        "cycle": 390000,
+        "end_cycle": 390000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 430000,
+        "cycle": 440000,
+        "end_cycle": 440000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 480000,
+        "cycle": 490000,
+        "end_cycle": 490000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 530000,
+        "cycle": 540000,
+        "end_cycle": 540000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 580000,
+        "cycle": 590000,
+        "end_cycle": 590000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 630000,
+        "cycle": 640000,
+        "end_cycle": 640000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 680000,
+        "cycle": 690000,
+        "end_cycle": 690000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 730000,
+        "cycle": 740000,
+        "end_cycle": 740000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 780000,
+        "cycle": 790000,
+        "end_cycle": 790000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 830000,
+        "cycle": 840000,
+        "end_cycle": 840000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 880000,
+        "cycle": 890000,
+        "end_cycle": 890000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 920000,
+        "cycle": 930000,
+        "end_cycle": 930000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 970000,
+        "cycle": 980000,
+        "end_cycle": 980000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1020000,
+        "cycle": 1030000,
+        "end_cycle": 1030000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1070000,
+        "cycle": 1080000,
+        "end_cycle": 1080000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1120000,
+        "cycle": 1130000,
+        "end_cycle": 1130000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1170000,
+        "cycle": 1180000,
+        "end_cycle": 1180000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1230000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1270000,
+        "cycle": 1280000,
+        "end_cycle": 1280000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1320000,
+        "cycle": 1330000,
+        "end_cycle": 1330000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1370000,
+        "cycle": 1380000,
+        "end_cycle": 1380000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1420000,
+        "cycle": 1430000,
+        "end_cycle": 1430000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1460000,
+        "cycle": 1470000,
+        "end_cycle": 1470000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1510000,
+        "cycle": 1520000,
+        "end_cycle": 1520000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1560000,
+        "cycle": 1570000,
+        "end_cycle": 1570000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1610000,
+        "cycle": 1620000,
+        "end_cycle": 1620000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1660000,
+        "cycle": 1670000,
+        "end_cycle": 1670000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1710000,
+        "cycle": 1720000,
+        "end_cycle": 1720000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1760000,
+        "cycle": 1770000,
+        "end_cycle": 1770000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1810000,
+        "cycle": 1820000,
+        "end_cycle": 1820000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1860000,
+        "cycle": 1870000,
+        "end_cycle": 1870000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1910000,
+        "cycle": 1920000,
+        "end_cycle": 1920000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 1960000,
+        "cycle": 1970000,
+        "end_cycle": 1970000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2050000,
+        "cycle": 2060000,
+        "end_cycle": 2060000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2100000,
+        "cycle": 2110000,
+        "end_cycle": 2110000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2150000,
+        "cycle": 2160000,
+        "end_cycle": 2160000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2200000,
+        "cycle": 2210000,
+        "end_cycle": 2210000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2250000,
+        "cycle": 2260000,
+        "end_cycle": 2260000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2300000,
+        "cycle": 2310000,
+        "end_cycle": 2310000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2350000,
+        "cycle": 2360000,
+        "end_cycle": 2360000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2400000,
+        "cycle": 2410000,
+        "end_cycle": 2410000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2450000,
+        "cycle": 2460000,
+        "end_cycle": 2460000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2500000,
+        "cycle": 2510000,
+        "end_cycle": 2510000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2540000,
+        "cycle": 2550000,
+        "end_cycle": 2550000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2590000,
+        "cycle": 2600000,
+        "end_cycle": 2600000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2640000,
+        "cycle": 2650000,
+        "end_cycle": 2650000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2690000,
+        "cycle": 2700000,
+        "end_cycle": 2700000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2740000,
+        "cycle": 2750000,
+        "end_cycle": 2750000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2790000,
+        "cycle": 2800000,
+        "end_cycle": 2800000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2840000,
+        "cycle": 2850000,
+        "end_cycle": 2850000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2890000,
+        "cycle": 2900000,
+        "end_cycle": 2900000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2940000,
+        "cycle": 2950000,
+        "end_cycle": 2950000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 2990000,
+        "cycle": 3000000,
+        "end_cycle": 3000000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3040000,
+        "cycle": 3050000,
+        "end_cycle": 3050000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3080000,
+        "cycle": 3090000,
+        "end_cycle": 3090000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3130000,
+        "cycle": 3140000,
+        "end_cycle": 3140000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3180000,
+        "cycle": 3190000,
+        "end_cycle": 3190000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3230000,
+        "cycle": 3240000,
+        "end_cycle": 3240000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3280000,
+        "cycle": 3290000,
+        "end_cycle": 3290000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3330000,
+        "cycle": 3340000,
+        "end_cycle": 3340000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3380000,
+        "cycle": 3390000,
+        "end_cycle": 3390000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3430000,
+        "cycle": 3440000,
+        "end_cycle": 3440000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3480000,
+        "cycle": 3490000,
+        "end_cycle": 3490000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3530000,
+        "cycle": 3540000,
+        "end_cycle": 3540000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3580000,
+        "cycle": 3590000,
+        "end_cycle": 3590000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3620000,
+        "cycle": 3630000,
+        "end_cycle": 3630000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3670000,
+        "cycle": 3680000,
+        "end_cycle": 3680000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3720000,
+        "cycle": 3730000,
+        "end_cycle": 3730000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3770000,
+        "cycle": 3780000,
+        "end_cycle": 3780000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3820000,
+        "cycle": 3830000,
+        "end_cycle": 3830000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3870000,
+        "cycle": 3880000,
+        "end_cycle": 3880000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3920000,
+        "cycle": 3930000,
+        "end_cycle": 3930000
+      },
+      {
+        "text": "NRF52840_SMOKE_OK",
+        "cycle_lo": 3970000,
+        "cycle": 3980000,
+        "end_cycle": 3980000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1244,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1244,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 262144,
+    "flash_used_pct": 0.12,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 262144,
+    "main_stack_high_water_bytes": 36,
+    "main_stack_free_min_bytes": 262108,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537133056,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 262144,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 262108,
+    "heap_base": 536870912,
+    "heap_top": 537133056
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 1566,
+    "memory_writes": 11,
+    "peripheral_accesses": 1333596,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1186,
+        "count": 5078,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1190,
+        "count": 4805,
+        "symbol": "firmware_nrf52840_demo::__cortex_m_rt_main"
+      },
+      {
+        "pc": 1192,
+        "count": 4649,
+        "symbol": "firmware_nrf52840_demo::__cortex_m_rt_main"
+      },
+      {
+        "pc": 1206,
+        "count": 469,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1200,
+        "count": 312,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1202,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "uart0",
+      "offset": 288,
+      "accesses": 7861
+    }
+  }
+}

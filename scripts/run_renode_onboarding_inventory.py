@@ -20,6 +20,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
     },
+    "nrf52840dk_nrf52840": {
+        "crate": "firmware-nrf52840-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
+    },
     "stm32f072b_discovery": {
         "crate": "firmware-stm32f072b-disco-smoke",
         "target": "thumbv6m-none-eabi",
