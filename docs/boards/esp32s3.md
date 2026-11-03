@@ -5,7 +5,7 @@ flash, Wi-Fi + BLE 5, USB) is LabWired's reference Xtensa target. All
 declared peripherals are **declarative** — the chip yaml references
 external YAML descriptors under `configs/peripherals/esp32s3/`.
 
-There are two chip yamls for ESP32-S3 today:
+The shared ESP32-S3 chip yamls are:
 
 - `configs/chips/esp32s3.yaml` — minimal declarative model (UART0 + GPIO +
   TIMG0 + INTERRUPT_CORE0) used by older blinky / hello-world examples.
@@ -13,8 +13,10 @@ There are two chip yamls for ESP32-S3 today:
   the [`esp32s3-i2c-tmp102`](../../examples/esp32s3-i2c-tmp102/) demo;
   adds I²C0, SYSTIMER, USB-Serial-JTAG, RTC_CNTL stub, eFuse stub,
   IRAM + ROM-thunks + flash-XIP mapping. **Use this variant for new
-  ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
+  full-featured ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
   authoritative wiring code that this yaml documents.
+- `configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml` — board-specific narrow
+  descriptor for the UART0-only DevKitC smoke below.
 
 ## Status at a glance
 
@@ -23,11 +25,28 @@ There are two chip yamls for ESP32-S3 today:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml)  |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`                   |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0-only profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 UART0 smoke](../../examples/esp32-s3-devkitc-1-n16r8/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; hosted DevKitC UART0 oracle evidence in the example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
+
+## ESP32-S3-DevKitC-1-N16R8 UART0 smoke
+
+The narrow profile at `configs/systems/esp32-s3-devkitc-1-n16r8.yaml` selects
+UART0 as its debug console and declares no external devices. Its chip descriptor
+lists UART0 only and omits the broader S3 YAML's placeholder windows. The
+dedicated Xtensa S3 builder still wires additional internal models in code; this
+smoke makes no claims about those peripherals. The committed Arduino sketch
+sends one marker through `Serial0`; LabWired's hosted model oracle reports
+`model_verified` for that UART0 output. This is model evidence, not a
+physical-board run. The twin's GPIO43 TX / GPIO44 RX mapping is **MODEL_ONLY**,
+and the hosted verifier assumes an ideal VDD rail, so reset behavior under
+power faults is not covered.
+
+The board's USB-to-UART bridge, native USB, PSRAM, Wi-Fi/BLE, buttons and LEDs
+are outside the verified scope. The broader `configs/chips/esp32s3.yaml` still
+declares a `system_stub`; this UART0-only board profile does not reference it.
 
 ## Peripherals (esp32s3-zero, Plan 2/4 model)
 

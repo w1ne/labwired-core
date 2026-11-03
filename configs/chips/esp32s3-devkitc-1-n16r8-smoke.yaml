@@ -1,0 +1,20 @@
+# Minimal chip metadata for the ESP32-S3-DevKitC-1-N16R8 UART0 smoke.
+# The Xtensa S3 builder installs peripherals in code; this descriptor names
+# only the UART0 path exercised by this board profile and omits stub windows.
+name: "esp32s3-devkitc-1-n16r8-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "16384KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"

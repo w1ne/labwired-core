@@ -1,0 +1,23 @@
+{
+  "board": "esp32-s3-devkitc-1-n16r8",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "diagram": {
+    "board": "esp32-s3-devkitc-1-n16r8",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "esp32-s3-devkitc-1-n16r8"
+      }
+    ],
+    "wires": []
+  },
+  "oracle": {
+    "serial": [
+      {
+        "contains": "ESP32_S3_DEVKITC1_N16R8_UART0_OK"
+      }
+    ]
+  },
+  "source": "#include <Arduino.h>\n\nvoid setup() {\n  Serial0.begin(115200);\n  Serial0.println(\"ESP32_S3_DEVKITC1_N16R8_UART0_OK\");\n}\n\nvoid loop() {\n  delay(1000);\n}\n"
+}
