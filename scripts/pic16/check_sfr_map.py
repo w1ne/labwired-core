@@ -113,7 +113,7 @@ E_SFRS = {
 # the PIRx/PIEx interrupt scan, ports, OSCSTAT ready bits). A part may lack
 # the register, but then no other SFR may sit at the address.
 E_OPTIONAL_SFRS = {"OSCSTAT": 0x09A}
-E_NO_EUSART_PARTS = {"pic16f1503", "pic16f1507", "pic16lf1507"}
+E_NO_EUSART_PARTS = {"pic16f1503", "pic16f1507", "pic16lf1507", "pic16f1613"}
 # The two enhanced layouts, keyed by where PIR1 sits: how many PORT/TRIS/LAT
 # addresses the model decodes from PORTA up (`Pic16SfrMap::ports`), and its
 # PIR/PIE list. PIC16F161x has PORTA-C only, so its PIR1-5/PIE1-5 start one
