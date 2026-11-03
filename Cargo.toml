@@ -111,6 +111,7 @@ members = [
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
     "crates/firmware-feather-rp2040-smoke",
+    "crates/firmware-pico-w-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-arduino-zero-demo",
     "crates/firmware-rp2350-demo",

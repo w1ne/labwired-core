@@ -1,0 +1,35 @@
+# Raspberry Pi Pico W (SC0918) board-bound GPIO smoke profile.
+#
+# This descriptor intentionally models only the RP2040 GPIO path used by the
+# smoke: GP0 header pin -> IO_BANK0 -> SIO. It omits the CYW43439 wireless
+# module and the CYW43439-driven onboard LED, so neither is claimed as modeled.
+name: "rp2040-pico-w-smoke"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+cpu_hz: 125_000_000
+flash:
+  base: 0x10000000
+  size: "2048KB"
+ram:
+  base: 0x20000000
+  size: "264KB"
+pins:
+  # RP2040 GP0 is exposed at Raspberry Pi Pico W physical header pin 1.
+  GP0: { gpio: "sio", bit: 0 }
+# The firmware is linked after the RP2040 second-stage bootloader slot.
+reset_vector_offset: 0x100
+peripherals:
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    irq: 13
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/sio.yaml"
