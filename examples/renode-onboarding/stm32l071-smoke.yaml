@@ -1,0 +1,13 @@
+# Cortex-M0+ smoke against the narrowed imported STM32L071 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32l071-smoke"
+  system: "../../configs/systems/onboarding/stm32l071.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "STM32L071 profile smoke"
+  - gpio_edges:
+      pin: "gpioPortA:5"
+      min_edges: 1
+  - expected_stop_reason: max_steps

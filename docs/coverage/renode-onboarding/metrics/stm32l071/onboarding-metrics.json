@@ -1,33 +1,37 @@
 {
   "target_id": "stm32l071",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
-  "crate": "",
-  "target_triple": "",
-  "script": "",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 800000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-stm32l071-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/stm32l071-smoke.yaml",
   "system": "configs/systems/onboarding/stm32l071.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T02:30:10Z",
-  "finished_at_utc": "2026-11-03T02:30:10Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-03T10:03:54Z",
+  "finished_at_utc": "2026-11-03T10:03:55Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 713,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
-    "build_firmware": null,
-    "run_smoke": null
+    "build_cli": 0.276,
+    "build_firmware": 0.146,
+    "run_smoke": 0.28
   },
   "stages_ms": {
-    "build_cli": null,
-    "build_firmware": null,
-    "run_smoke": null
+    "build_cli": 276,
+    "build_firmware": 146,
+    "run_smoke": 280
   }
 }
