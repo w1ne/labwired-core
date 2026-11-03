@@ -652,6 +652,47 @@ mod analog {
     // -----------------------------------------------------------------------
 
     #[test]
+    fn comparator_common_mode_rejection_uses_supply_midpoint_and_db_scale() {
+        // With CMRR=40 dB, a 1.5 V common-mode offset from the 2.5 V supply
+        // midpoint becomes a 15 mV input-referred error. The 10 mV differential
+        // input is therefore below threshold at 1 V common mode, but above it
+        // at the midpoint. Without CMRR, the 1 V case stays above threshold.
+        for (common_mode, cmrr, expect_low) in [
+            (1.0, " CMRR=40", true),
+            (2.5, " CMRR=40", false),
+            (1.0, "", false),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVp inp 0 dc {}\nVn inn 0 dc {}\n\
+                 X1 inp inn vcc 0 out CMP\n\
+                 .model CMP COMP(AOL=1e5 GBW=1meg ROUT=60 OUTPUT=PP{cmrr})\n",
+                common_mode + 5e-3,
+                common_mode - 5e-3,
+            ));
+            let out = v(&solver, "out");
+            if expect_low {
+                assert!(out < 0.1, "common mode {common_mode} V: out = {out} V");
+            } else {
+                assert!(out > 4.9, "common mode {common_mode} V: out = {out} V");
+            }
+        }
+    }
+
+    #[test]
+    fn comparator_common_mode_rejection_must_be_finite_and_non_negative() {
+        for (cmrr, expected) in [
+            ("-1", "CMRR must be finite and non-negative"),
+            ("1e999", "CMRR must be finite and non-negative"),
+        ] {
+            let error = parse_netlist(&format!(
+                "X1 a b vcc vee out CMP\n.model CMP COMP(CMRR={cmrr})\n"
+            ))
+            .expect_err("invalid CMRR must be rejected");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[test]
     fn comparator_input_offset_voltage_shifts_the_switching_threshold_in_both_polarities() {
         // With no hysteresis the documented threshold is V(in+) − V(in−) =
         // −VOS. Check both sides of that shifted threshold, for positive and

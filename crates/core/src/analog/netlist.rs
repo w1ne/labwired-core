@@ -79,7 +79,9 @@
 //! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
-//! equal fixed resistance from each input to `V−`;
+//! equal fixed resistance from each input to `V−`; `CMRR` converts common-mode
+//! input voltage relative to the supply midpoint into input-referred
+//! differential voltage;
 //! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
 //! models differential capacitance between the inputs, and `IQ` models a
 //! constant quiescent current from `V+` to `V−`. BJT
@@ -750,7 +752,9 @@ impl Default for OpAmpModel {
 /// differential resistance between the inputs; zero disables it. `RINCM` is
 /// one fixed resistance from each input to `v−`; zero disables those paths.
 /// `IQ` is a fixed quiescent current from `v+` to `v−`, independent of signal
-/// and output load.
+/// and output load. `CMRR`, when present, converts common-mode input voltage
+/// relative to the supply midpoint into input-referred differential voltage
+/// using `10^(−CMRR/20)`. Omission gives ideal common-mode rejection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ComparatorModel {
     /// DC gain `AOL`, V/V.
@@ -777,6 +781,8 @@ pub struct ComparatorModel {
     pub cin_diff: f64,
     /// Quiescent current drawn from `v+` to `v−`, amps.
     pub iq: f64,
+    /// Common-mode rejection ratio in dB. `None` means ideal rejection.
+    pub cmrr: Option<f64>,
     /// Hysteresis window `VHYS`, volts. Zero is none.
     pub vhys: f64,
     /// `OUTPUT=OC` (default) or `OUTPUT=PP`.
@@ -797,6 +803,7 @@ impl Default for ComparatorModel {
             cin_cm: 0.0,
             cin_diff: 0.0,
             iq: 0.0,
+            cmrr: None,
             vhys: 0.0,
             output: ComparatorOutput::OpenCollector,
         }
@@ -3537,6 +3544,7 @@ fn parse_model(
             (ModelCard::Comparator(model), "RIN") => model.rin = value,
             (ModelCard::Comparator(model), "RINCM") => model.rin_cm = value,
             (ModelCard::Comparator(model), "IQ") => model.iq = value,
+            (ModelCard::Comparator(model), "CMRR") => model.cmrr = Some(value),
             (ModelCard::Comparator(model), "VHYS") => model.vhys = value,
             // This engine's own card types have no vendor parameters to
             // tolerate, so a misspelt one is an error rather than a silently
@@ -3581,7 +3589,7 @@ fn parse_model(
             }
             (ModelCard::Comparator(_), other) => {
                 return Err(ctx.parse_err(format!(
-                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, VHYS, \
+                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, VHYS, \
                      OUTPUT"
                 )))
             }
@@ -3914,7 +3922,7 @@ fn check_common_mode_input_resistance(ctx: &LineCtx<'_>, rin_cm: f64) -> Result<
     Ok(())
 }
 
-/// Convert an optional op-amp CMRR in dB into common-mode-to-differential gain.
+/// Convert an optional macro CMRR in dB into common-mode-to-differential gain.
 fn check_common_mode_rejection(
     ctx: &LineCtx<'_>,
     cmrr_db: Option<f64>,
@@ -4054,6 +4062,7 @@ fn lower_comparator(
     check_input_resistance(ctx, model.rin)?;
     check_common_mode_input_resistance(ctx, model.rin_cm)?;
     check_quiescent_current(ctx, model.iq)?;
+    let cm_gain = check_common_mode_rejection(ctx, model.cmrr)?;
     let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rq = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rq;
@@ -4073,6 +4082,14 @@ fn lower_comparator(
     // i.e. the output should be LOW.
     let q = lower.node("q");
     lower.vccs("g", vee, q, inn, inp, gm);
+    if cm_gain > 0.0 {
+        // The comparator's input polarity is opposite the op-amp's: common-
+        // mode error is subtracted from (v(in−) − v(in+)). Reference it to
+        // the midpoint of the two supply pins and apply the CMRR attenuation.
+        let gcm = 0.5 * gm * cm_gain;
+        lower.vccs("gcmp", q, vee, inp, vee, gcm);
+        lower.vccs("gcmm", q, vee, inn, vcc, gcm);
+    }
     lower.resistor("rq", q, vee, rq);
     lower.capacitor("cq", q, vee, cq);
     if model.vos != 0.0 {
