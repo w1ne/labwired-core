@@ -745,6 +745,251 @@ mod analog {
         }
     }
 
+    /// Depletion charge and soft reverse recovery belong to the intrinsic
+    /// diode junction, behind model-card `RS`. Check the solved junction
+    /// voltage and terminal current against a scalar transient equation, then
+    /// compare `RS` with an explicit resistor for both companion rules. The
+    /// reverse step also has to retain a recovery current that an uncharged
+    /// diode cannot produce.
+    #[test]
+    fn diode_charge_and_recovery_match_series_resistors_during_transients() {
+        let (is, rs, rdrive, cjo, vj, m, fc, tt, vp, h): (
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+            f64,
+        ) = (
+            1e-14, 47.0, 100.0, 100e-12, 0.8, 0.5, 0.5, 100e-9, 0.2, 10e-9,
+        );
+        let charged = format!("CJO={cjo} VJ={vj} M={m} FC={fc} TT={tt} VP={vp}");
+        let modelled = format!(
+            "Vdrive in 0 dc 0\nRdrive in a {rdrive}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} RS={rs} {charged})\n"
+        );
+        let explicit = format!(
+            "Vdrive in 0 dc 0\nRdrive in a {rdrive}\nRseries a j {rs}\nD1 j 0 DMOD\n\
+             .model DMOD D(IS={is} {charged})\n"
+        );
+        let uncharged = format!(
+            "Vdrive in 0 dc 0\nRdrive in a {rdrive}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} RS={rs})\n"
+        );
+
+        // Independent SPICE depletion-charge integral, including its linear
+        // continuation above FC·VJ. VP moves diffusion storage into a first-
+        // order recovery state; its current is kept separate from depletion
+        // current just as the model equations specify.
+        let v_transition = fc * vj;
+        let xfc = 1.0 - fc;
+        let qfc = cjo * vj / (1.0 - m) * (1.0 - xfc.powf(1.0 - m));
+        let cfc = cjo * xfc.powf(-m);
+        let slope = m * cjo * xfc.powf(-1.0 - m) / vj;
+        let depletion_charge = |voltage: f64| {
+            if voltage < v_transition {
+                let x = 1.0 - voltage / vj;
+                cjo * vj / (1.0 - m) * (1.0 - x.powf(1.0 - m))
+            } else {
+                let dv = voltage - v_transition;
+                qfc + cfc * dv + 0.5 * slope * dv * dv
+            }
+        };
+        let junction_current = |voltage: f64| device::diode_op(voltage, is, 1.0).id;
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut model = Solver::new(
+                parse_netlist(&modelled).expect("model-card diode resistance parses"),
+                integration,
+            )
+            .expect("model-card diode solver builds");
+            let mut series = Solver::new(
+                parse_netlist(&explicit).expect("explicit diode resistance parses"),
+                integration,
+            )
+            .expect("explicit-resistor diode solver builds");
+            let mut no_charge = Solver::new(
+                parse_netlist(&uncharged).expect("uncharged diode parses"),
+                integration,
+            )
+            .expect("uncharged diode solver builds");
+
+            let model_external = model.circuit().node("a").expect("model external node");
+            let model_junction = model
+                .circuit()
+                .node("D1#internal")
+                .expect("model-card RS creates the junction node");
+            let series_external = series.circuit().node("a").expect("series external node");
+            let series_junction = series.circuit().node("j").expect("explicit junction node");
+            let no_charge_external = no_charge
+                .circuit()
+                .node("a")
+                .expect("uncharged external node");
+            // Settle all three at the same zero-bias operating point before
+            // applying the waveform, so the comparison covers transient
+            // charge rather than initialization order.
+            model.advance(h).expect("model diode initial step settles");
+            series
+                .advance(h)
+                .expect("explicit diode initial step settles");
+            no_charge
+                .advance(h)
+                .expect("uncharged diode initial step settles");
+
+            let mut previous_depletion_charge = depletion_charge(0.0);
+            let mut previous_depletion_current = 0.0;
+            let mut previous_recovery_state = -tt * junction_current(0.0);
+            let mut previous_recovery_rate = 0.0;
+            for (step, supply) in [2.0, 2.0, 2.0, 2.0, -1.0, -1.0, -1.0]
+                .into_iter()
+                .enumerate()
+            {
+                let rule = if step == 0 || step == 4 {
+                    Integration::BackwardEuler
+                } else {
+                    integration
+                };
+                let old_depletion_charge = previous_depletion_charge;
+                let old_depletion_current = previous_depletion_current;
+                let old_recovery_state = previous_recovery_state;
+                let old_recovery_rate = previous_recovery_rate;
+                let depletion_current = |voltage: f64| {
+                    let charge = depletion_charge(voltage);
+                    match rule {
+                        Integration::BackwardEuler => (charge - old_depletion_charge) / h,
+                        Integration::Trapezoidal => {
+                            2.0 * (charge - old_depletion_charge) / h - old_depletion_current
+                        }
+                    }
+                };
+                let recovery = |voltage: f64| {
+                    let tau = tt * vp;
+                    let current = junction_current(voltage);
+                    let (state, rate) = match rule {
+                        Integration::BackwardEuler => {
+                            let ratio = tau / h;
+                            let state =
+                                (-tt * current + ratio * old_recovery_state) / (1.0 + ratio);
+                            (state, (state - old_recovery_state) / h)
+                        }
+                        Integration::Trapezoidal => {
+                            let ratio = tau / h;
+                            let state = (-tt * current
+                                + 2.0 * ratio * old_recovery_state
+                                + tau * old_recovery_rate)
+                                / (1.0 + 2.0 * ratio);
+                            (
+                                state,
+                                2.0 * (state - old_recovery_state) / h - old_recovery_rate,
+                            )
+                        }
+                    };
+                    (state, rate, -(1.0 - vp) * rate)
+                };
+                let residual = |voltage: f64| {
+                    supply
+                        - voltage
+                        - (rdrive + rs)
+                            * (junction_current(voltage)
+                                + depletion_current(voltage)
+                                + recovery(voltage).2)
+                };
+                let mut low = supply - 10.0;
+                let mut high = supply + 10.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (low + high);
+                    if residual(mid) > 0.0 {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                let expected_junction = 0.5 * (low + high);
+                let expected_current = (supply - expected_junction) / (rdrive + rs);
+                let expected_external = supply - expected_current * rdrive;
+
+                for solver in [&mut model, &mut series, &mut no_charge] {
+                    solver.set_voltage_source(
+                        solver
+                            .voltage_source_index("Vdrive")
+                            .expect("source exists"),
+                        supply,
+                    );
+                    solver.advance(h).expect("diode charge step solves");
+                }
+
+                let actual_junction = model.node_voltage(model_junction);
+                let actual_external = model.node_voltage(model_external);
+                let actual_current = source_current(&model, "Vdrive");
+                assert!(
+                    (actual_junction - expected_junction).abs() < 1e-8,
+                    "{integration:?} step {step}: scalar charge equation predicts junction {expected_junction} V, got {actual_junction} V"
+                );
+                assert!(
+                    (actual_external - expected_external).abs() < 1e-8,
+                    "{integration:?} step {step}: scalar equation predicts external anode {expected_external} V, got {actual_external} V"
+                );
+                assert!(
+                    (actual_current - expected_current).abs()
+                        < 1e-10 + 1e-6 * expected_current.abs(),
+                    "{integration:?} step {step}: scalar equation predicts terminal current {expected_current} A, got {actual_current} A"
+                );
+
+                for (label, actual, equivalent) in [
+                    (
+                        "external anode",
+                        actual_external,
+                        series.node_voltage(series_external),
+                    ),
+                    (
+                        "junction",
+                        actual_junction,
+                        series.node_voltage(series_junction),
+                    ),
+                ] {
+                    assert!(
+                        (actual - equivalent).abs() < 1e-8,
+                        "{integration:?} step {step} {label}: model-card RS gives {actual} V, explicit resistor gives {equivalent} V"
+                    );
+                }
+                assert!(
+                    (actual_current - source_current(&series, "Vdrive")).abs() < 1e-10,
+                    "{integration:?} step {step}: model-card RS and explicit resistor terminal currents differ"
+                );
+
+                if step == 0 {
+                    let charge_effect =
+                        (actual_external - no_charge.node_voltage(no_charge_external)).abs();
+                    assert!(
+                        charge_effect > 1e-7,
+                        "forward depletion/transit charge must affect the external anode, got {charge_effect} V"
+                    );
+                    assert!(
+                        actual_junction > v_transition,
+                        "the forward step must enter the depletion continuation above {v_transition} V, got {actual_junction} V"
+                    );
+                }
+                if step == 4 {
+                    let uncharged_current = source_current(&no_charge, "Vdrive");
+                    assert!(
+                        actual_current < uncharged_current - 1e-4,
+                        "stored forward charge must drive a measurable reverse-recovery current: charged {actual_current} A, uncharged {uncharged_current} A"
+                    );
+                }
+
+                previous_depletion_charge = depletion_charge(actual_junction);
+                previous_depletion_current = depletion_current(actual_junction);
+                let (state, rate, _) = recovery(actual_junction);
+                previous_recovery_state = state;
+                previous_recovery_rate = rate;
+            }
+        }
+    }
+
     #[test]
     fn bjt_cje_integrates_as_base_emitter_charge_for_both_polarities() {
         let cje = 10e-9;
