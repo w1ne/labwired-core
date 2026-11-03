@@ -13,4 +13,7 @@ workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
-    Finished `dev` profile [optimized + debuginfo] target(s) in 0.20s
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.26s
