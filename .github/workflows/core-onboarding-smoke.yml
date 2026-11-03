@@ -154,6 +154,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/nucleo_wba52cg-smoke.yaml
             system: configs/systems/onboarding/nucleo_wba52cg.yaml
+          # Exercise the same bounded WBA52 register surface on the generic
+          # imported MCU system as well as the NUCLEO board profile.
+          - id: stm32wba52
+            crate: firmware-nucleo-wba52cg-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/stm32wba52-smoke.yaml
+            system: configs/systems/onboarding/stm32wba52.yaml
           # The imported H743 profile is limited to H7 RCC, GPIOA/GPIOD,
           # USART3, and the memory used by the shared H7 register smoke.
           - id: stm32h743

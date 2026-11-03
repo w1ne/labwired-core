@@ -1,7 +1,7 @@
 # Narrow STM32WBA52 execution profile. Only the modeled Cortex-M33, RCC,
-# GPIOA/GPIOB, USART1 and memory windows used by the NUCLEO-WBA52CG smoke are
-# represented here. This is not a full MCU peripheral inventory or a
-# density-specific memory claim.
+# GPIOA/GPIOB, USART1 and memory windows exercised by the imported-system and
+# NUCLEO-WBA52CG smokes are represented here. This is not a full MCU peripheral
+# inventory or a density-specific memory claim.
 name: stm32wba52
 arch: arm
 core: cortex-m33
