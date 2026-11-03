@@ -2,7 +2,7 @@
 #
 # Referenced by firmware_survival::test_stm32f767_tier1_survival, which runs the
 # committed Tier-1 fixture (tests/fixtures/tier1/stm32f767.elf) and asserts its
-# TIER1 self-test transcript over UART.
+# TIER1 self-test transcript over USART3, the ST-LINK VCP route.
 name: "nucleo-f767zi"
 chip: "../chips/stm32f767.yaml"
 external_devices: []

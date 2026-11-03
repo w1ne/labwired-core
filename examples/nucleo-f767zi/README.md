@@ -7,23 +7,31 @@ Run all commands from `core/`.
 Deterministic bring-up for NUCLEO-F767ZI (STM32F767ZI, Cortex-M7, 2 MB flash,
 512 KB SRAM) over the shared F4-profile peripheral models (RCC/GPIO/USART/
 SysTick), with the F7-modern-I2C instances on the `stm32l4` profile.
+ST listed the MCU as Active / in volume production and the NUCLEO-F767ZI as
+In Stock on 2026-11-03; see the [live-status receipt](evidence/vendor-status.md).
 
 ## Quick Run
 
 ```bash
-cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-cargo run -q -p labwired-cli -- test --script examples/nucleo-f767zi/uart-smoke.yaml --output-dir out/nucleo-f767zi/uart-smoke --no-uart-stdout
+(cd examples/tier1-fixture/stm32f767 && cargo build -p tier1-fixture-stm32f767 --release --target thumbv7em-none-eabi)
+cargo run -q -p labwired-cli -- test --script examples/nucleo-f767zi/onboarding-smoke.yaml --output-dir out/nucleo-f767zi/onboarding-smoke --no-uart-stdout
 ```
 
-Expected result:
-1. smoke test passes
-2. UART contains `OK`
+The part-specific firmware checks the USART3 VCP setup, board LED GPIO, clock,
+timer, I2C, SPI, ADC, watchdog, and RTC behavior. The expected transcript is
+asserted by [`onboarding-smoke.yaml`](onboarding-smoke.yaml).
 
 ## Firmware reuse note
 
-The smoke firmware is `firmware-f401-demo`, reused unchanged: Thumb-2/v7em
-runs on the M7, and flash/SRAM bases and the USART2 mapping are identical
-across F4/F7. What this proves and what it cannot: VALIDATION.md.
+The separate minimal UART example reuses `firmware-f401-demo`. The onboarding
+smoke builds the F767-specific raw-register fixture from
+[`examples/tier1-fixture/stm32f767`](../tier1-fixture/stm32f767/), so it checks
+the F767 descriptor rather than relying on a sibling board's firmware.
+Validation scope and unsupported peripherals are documented in
+[`VALIDATION.md`](VALIDATION.md) and [`docs/boards/stm32f767.md`](../../docs/boards/stm32f767.md).
+
+The smoke run, stage logs, metrics, and scoreboard are committed under
+[`evidence/`](evidence/).
 
 ## Files
 

@@ -133,6 +133,7 @@ peripherals:
     base_address: 0x40004800
     size: "1KB"
     irq: 39
+    clock: { reg: "apb1enr", bit: 18 }
   - id: "uart1"
     type: "uart"
     base_address: 0x40011000

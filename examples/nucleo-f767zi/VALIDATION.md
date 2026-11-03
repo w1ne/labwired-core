@@ -2,9 +2,10 @@
 
 Run all commands from `core/`.
 
-## 0) Firmware reuse rationale (and its invalidation conditions)
+## 0) Separate minimal UART example (and its invalidation conditions)
 
-The smoke firmware is `firmware-f401-demo`, reused unchanged. Valid because:
+The separate `uart-smoke.yaml` example uses `firmware-f401-demo`, reused
+unchanged. Valid because:
 Thumb-2/v7em is a subset of the M7's ISA, flash base `0x08000000` and SRAM
 base `0x20000000` match, USART2 sits at `0x40004400` on IRQ 38 on both, and
 the F7 RCC covers the F4 bring-up registers this firmware touches. The reuse
@@ -42,7 +43,25 @@ Pass criteria: exit `0`, UART contains `OK`.
 
 Pass criteria: exit `0`, report exists.
 
+## 4) Onboarding smoke (part-specific firmware)
+
+The dedicated onboarding lane builds
+`examples/tier1-fixture/stm32f767/` for `thumbv7em-none-eabi`, then runs
+[`onboarding-smoke.yaml`](onboarding-smoke.yaml) against
+[`configs/systems/nucleo-f767zi.yaml`](../../configs/systems/nucleo-f767zi.yaml).
+It asserts the clock, GPIO, timer, I2C, SPI, ADC, watchdog, and RTC results plus
+the USART3 VCP setup and terminal UART marker. GPIO drives the board's PB0
+user LED; USART3 uses PD8/PD9. The committed invocation evidence is in
+[`evidence/`](evidence/), including the firmware build log and CLI smoke log.
+
+The hosted LabWired verifier catalog currently does not list STM32F767ZI, so
+this round records the repository CLI smoke result and does not label it as a
+hosted `labwired_verify` verdict.
+
 ## Validation record
 
 - 2026-08-05: UART smoke exit 0 (`OK` received) on the feat/stm32f767 branch;
   audit result recorded below once run.
+- 2026-11-03: dedicated source-built F767 peripheral smoke passes in the
+  repository CLI; see [`evidence/onboarding-summary.md`](evidence/onboarding-summary.md)
+  and [`evidence/logs/run_smoke.log`](evidence/logs/run_smoke.log).

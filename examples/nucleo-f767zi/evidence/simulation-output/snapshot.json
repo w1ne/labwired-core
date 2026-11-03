@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      537395172,
+      1000000,
+      497403,
+      1073760256,
+      134221920,
+      2,
+      1073741840,
+      537395184,
+      0,
+      0,
+      0,
+      0,
+      134221986,
+      537395168,
+      134220261,
+      134220272
+    ],
+    "pc": 134220272,
+    "xpsr": 2164260864,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 6000000,
+  "cycles": 6000000,
+  "instructions": 6000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 6000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 6000000
+    }
+  },
+  "limits": {
+    "max_steps": 6000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "985bf34a2b4cfa0cea5eedc10bfc67a5067449ce1271c973d2618d10c027d65e",
+  "config": {
+    "firmware": "examples/nucleo-f767zi/../tier1-fixture/stm32f767/target/thumbv7em-none-eabi/release/tier1-fixture-stm32f767",
+    "system": "examples/nucleo-f767zi/../../configs/systems/nucleo-f767zi.yaml",
+    "script": "examples/nucleo-f767zi/onboarding-smoke.yaml"
+  }
+}
