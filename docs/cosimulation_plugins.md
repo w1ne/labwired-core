@@ -397,9 +397,10 @@ so it needs no `sources:` entry.
 `X` instances use `.model <name> OPAMP(...)` or `.model <name> COMP(...)`.
 Both cards model finite gain and bandwidth, output resistance, offset voltage,
 constant input bias and offset currents, fixed input capacitances, fixed
-quiescent supply current, and `RIN`, a fixed differential resistance between
-`in+` and `in-`. `RIN=0` or omission disables that resistor; it provides no
-common-mode input resistance. OPAMP cards also accept output rail drops; COMP cards accept hysteresis and open-collector or
+quiescent supply current, `RIN`, a fixed differential resistance between `in+`
+and `in-`, and `RINCM`, a fixed resistance from each input to `V−`. `RIN=0` or
+`RINCM=0`, or omission, disables those paths. OPAMP cards also accept output
+rail drops; COMP cards accept hysteresis and open-collector or
 push-pull outputs. These parameters have no temperature dependence. Slew-rate
 limiting beyond the modeled pole, output current limiting, and signal- or
 load-dependent supply current are not modeled. The hand-calculated macro tests

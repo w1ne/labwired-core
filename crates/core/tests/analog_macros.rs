@@ -473,6 +473,60 @@ mod analog {
     }
 
     #[test]
+    fn opamp_and_comparator_common_mode_input_resistance_loads_each_input_to_vminus() {
+        let rin_cm = 100e3;
+        let (input, vminus) = (1.0, -1.0);
+        let expected = (input - vminus) / rin_cm;
+        for (x_line, model_line) in [
+            (
+                "X1 inp inn vcc vee out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 RINCM=100k)",
+            ),
+            (
+                "X1 inp inn vcc vee out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 RINCM=100k OUTPUT=PP)",
+            ),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc {vminus}\n\
+                 Vp inp 0 dc {input}\nVn inn 0 dc {input}\n\
+                 Rl out 0 10k\n{x_line}\n{model_line}\n"
+            ));
+            let from_plus = -source_current(&solver, "Vp");
+            let from_minus = -source_current(&solver, "Vn");
+            assert!(
+                (from_plus - expected).abs() < 1e-10,
+                "{x_line}: in+ current is {from_plus} A, expected {expected} A"
+            );
+            assert!(
+                (from_minus - expected).abs() < 1e-10,
+                "{x_line}: in- current is {from_minus} A, expected {expected} A"
+            );
+        }
+    }
+
+    #[test]
+    fn macro_common_mode_input_resistance_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for value in ["-1", "1e999"] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}(RINCM={value}{output})\n"
+                ))
+                .expect_err("invalid common-mode input resistance must be rejected");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("RINCM must be finite and non-negative"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn comparator_input_bias_current_must_be_finite() {
         for (parameter, message) in [
             ("IBIAS=1e999", "IBIAS must be finite"),
