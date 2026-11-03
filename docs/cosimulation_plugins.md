@@ -420,7 +420,7 @@ input at a different element.
 ### Semiconductor models
 
 ```text
-.model <name> D    (IS=<a> N=<n> RS=<ohms>)
+.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
@@ -434,7 +434,8 @@ and a card may be written after the elements that use it. A parameter omitted
 from a card takes **ngspice's** default, so a deck written out in full means the
 same thing to both engines.
 
-This engine models diode depletion capacitance from `CJO`/`VJ`/`M`/`FC`,
+This engine models diode recombination current from `ISR`/`NR` when `ISR` is
+supplied, diode depletion capacitance from `CJO`/`VJ`/`M`/`FC`,
 BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
 `CJC`/`VJC`/`MJC`, and shared `FC`, and level-1 MOSFET bulk-drain and
 bulk-source depletion capacitance from `CBD`/`CBS` with shared `PB`/`MJ`/`FC`,
@@ -468,10 +469,12 @@ emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
 defaults). The MOSFET values are this engine's convenience values; the JFET
 values use ngspice's level-1 defaults.
 
-**What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`; diode
-depletion charge in transient runs from `CJO`/`VJ`/`M`/`FC` (`CJO` defaults to
-zero) and quasi-static diffusion charge from `TT` (defaults to zero); diode
-breakdown when `BV` is set. Gummel–Poon BJT transport with `VAF`/`VAR` base-width modulation, optional
+**What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`; optional
+recombination current from `ISR`/`NR`, clamped in reverse bias at the
+`−3·N·Vt` boundary; diode depletion charge in transient runs from
+`CJO`/`VJ`/`M`/`FC` (`CJO` defaults to zero) and quasi-static diffusion charge
+from `TT` (defaults to zero); diode breakdown when `BV` is set. Gummel–Poon BJT
+transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
 recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
 base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
