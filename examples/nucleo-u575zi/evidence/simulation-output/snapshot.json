@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073821736,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537657336,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537657336,
+      4294967295,
+      134217774
+    ],
+    "pc": 134217774,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 64,
+  "cycles": 64,
+  "instructions": 64,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 64
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 64
+    }
+  },
+  "limits": {
+    "max_steps": 64,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e8e57f2e480bee109b3f271b49ab50980ea734e3c1a9b2572cbfa4f79c753d8c",
+  "config": {
+    "firmware": "examples/nucleo-u575zi/../../target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo",
+    "system": "examples/nucleo-u575zi/./system.yaml",
+    "script": "examples/nucleo-u575zi/io-smoke.yaml"
+  }
+}
