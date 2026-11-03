@@ -55,6 +55,7 @@ on:
       - "crates/firmware-feather-rp2040-smoke/**"
       - "crates/firmware-feather-m4-express-smoke/**"
       - "crates/firmware-pico-w-smoke/**"
+      - "crates/firmware-xiao-rp2040-smoke/**"
       - "crates/firmware-nano-rp2040-connect-smoke/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/firmware-pico2-w-smoke/**"
@@ -298,6 +299,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/arduino-nano-rp2040-connect/io-smoke.yaml
             system: configs/systems/arduino-nano-rp2040-connect.yaml
+          - id: seeed-xiao-rp2040
+            crate: firmware-xiao-rp2040-smoke
+            target: thumbv6m-none-eabi
+            script: examples/seeed-xiao-rp2040/io-smoke.yaml
+            system: configs/systems/seeed-xiao-rp2040.yaml
           - id: metro-m4
             crate: firmware-atsamd51-demo
             target: thumbv7em-none-eabi

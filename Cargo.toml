@@ -121,6 +121,7 @@ members = [
     "crates/firmware-feather-rp2040-smoke",
     "crates/firmware-feather-m4-express-smoke",
     "crates/firmware-pico-w-smoke",
+    "crates/firmware-xiao-rp2040-smoke",
     "crates/firmware-nano-rp2040-connect-smoke",
     "crates/firmware-pico2-w-smoke",
     "crates/firmware-samd21-demo",
