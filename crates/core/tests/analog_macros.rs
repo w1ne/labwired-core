@@ -618,6 +618,37 @@ mod analog {
     // -----------------------------------------------------------------------
 
     #[test]
+    fn comparator_input_offset_voltage_shifts_the_switching_threshold_in_both_polarities() {
+        // With no hysteresis the documented threshold is V(in+) − V(in−) =
+        // −VOS. Check both sides of that shifted threshold, for positive and
+        // negative offsets, through the open-collector output stage.
+        for (vos, input, expect_sink) in [
+            (50e-3, 0.925, true),
+            (50e-3, 0.975, false),
+            (-50e-3, 1.025, true),
+            (-50e-3, 1.075, false),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVp inp 0 dc {input}\nVn inn 0 dc 1\n\
+                 Rpu vcc out 10k\nX1 inp inn vcc 0 out CMP\n\
+                 .model CMP COMP(AOL=1e5 GBW=1meg ROUT=60 VOS={vos})\n"
+            ));
+            let out = v(&solver, "out");
+            if expect_sink {
+                assert!(
+                    out < 0.1,
+                    "VOS={vos} V, input={input} V: output should sink, got {out} V"
+                );
+            } else {
+                assert!(
+                    out > 4.9,
+                    "VOS={vos} V, input={input} V: output should float high, got {out} V"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn an_open_collector_comparator_sinks_or_floats() {
         for (inp, expect_low) in [(1.0, true), (2.0, false)] {
             let solver = build(&format!(
