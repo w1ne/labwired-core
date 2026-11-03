@@ -194,13 +194,58 @@ mod analog {
     }
 
     #[test]
+    fn opamp_input_offset_current_splits_around_the_average_bias_current() {
+        let (aol, rout, load, ibias, resistance) = (2.0, 100.0, 10e3, 10e-9, 100e3);
+        for ios in [4e-9, -4e-9] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp {resistance}\nRm vm inn {resistance}\nRl out 0 {load}\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW=1meg ROUT={rout} IBIAS={ibias} IOS={ios})\n"
+            ));
+            let input_plus = ibias + 0.5 * ios;
+            let input_minus = ibias - 0.5 * ios;
+            let expected_inp = 1.0 - input_plus * resistance;
+            let expected_inn = 1.0 - input_minus * resistance;
+            assert!(
+                (v(&solver, "inp") - expected_inp).abs() < 1e-8,
+                "IOS={ios}: in+ = {} V, expected {expected_inp} V",
+                v(&solver, "inp")
+            );
+            assert!(
+                (v(&solver, "inn") - expected_inn).abs() < 1e-8,
+                "IOS={ios}: in- = {} V, expected {expected_inn} V",
+                v(&solver, "inn")
+            );
+
+            let differential = expected_inp - expected_inn;
+            let gain_node = aol * differential;
+            let expected_out = gain_node * load / (load + rout);
+            assert!(
+                (v(&solver, "out") - expected_out).abs() < 1e-5,
+                "IOS={ios}: out = {} V, expected {expected_out} V",
+                v(&solver, "out")
+            );
+        }
+    }
+
+    #[test]
     fn opamp_input_bias_current_must_be_finite() {
-        let error = parse_netlist("X1 inp inn vcc vee out AMP\n.model AMP OPAMP(IBIAS=1e999)\n")
-            .expect_err("an infinite input bias current cannot be stamped");
-        assert!(
-            error.to_string().contains("IBIAS must be finite"),
-            "{error}"
-        );
+        for (parameter, message) in [
+            ("IBIAS=1e999", "IBIAS must be finite"),
+            ("IOS=1e999", "IOS must be finite"),
+            (
+                "IBIAS=1.7e308 IOS=1.7e308",
+                "IBIAS and IOS produce a non-finite input current",
+            ),
+        ] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out AMP\n.model AMP OPAMP({parameter})\n"
+            ))
+            .expect_err("non-finite input currents cannot be stamped");
+            assert!(error.to_string().contains(message), "{error}");
+        }
     }
 
     #[test]
@@ -230,13 +275,49 @@ mod analog {
     }
 
     #[test]
+    fn comparator_input_offset_current_splits_around_the_average_bias_current() {
+        let (ibias, ios, resistance) = (10e-9, 4e-9, 100e3);
+        for offset_current in [ios, -ios] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp {resistance}\nRm vm inn {resistance}\nRpu vcc out 10k\n\
+                 X1 inp inn vcc vee out CMP\n\
+                 .model CMP COMP(AOL=10 GBW=1meg ROUT=100 IBIAS={ibias} IOS={offset_current})\n"
+            ));
+            let input_plus = ibias + 0.5 * offset_current;
+            let input_minus = ibias - 0.5 * offset_current;
+            let expected_inp = 1.0 - input_plus * resistance;
+            let expected_inn = 1.0 - input_minus * resistance;
+            assert!(
+                (v(&solver, "inp") - expected_inp).abs() < 1e-8,
+                "IOS={offset_current}: in+ = {} V, expected {expected_inp} V",
+                v(&solver, "inp")
+            );
+            assert!(
+                (v(&solver, "inn") - expected_inn).abs() < 1e-8,
+                "IOS={offset_current}: in- = {} V, expected {expected_inn} V",
+                v(&solver, "inn")
+            );
+        }
+    }
+
+    #[test]
     fn comparator_input_bias_current_must_be_finite() {
-        let error = parse_netlist("X1 inp inn vcc vee out CMP\n.model CMP COMP(IBIAS=1e999)\n")
-            .expect_err("an infinite input bias current cannot be stamped");
-        assert!(
-            error.to_string().contains("IBIAS must be finite"),
-            "{error}"
-        );
+        for (parameter, message) in [
+            ("IBIAS=1e999", "IBIAS must be finite"),
+            ("IOS=1e999", "IOS must be finite"),
+            (
+                "IBIAS=1.7e308 IOS=1.7e308",
+                "IBIAS and IOS produce a non-finite input current",
+            ),
+        ] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out CMP\n.model CMP COMP({parameter})\n"
+            ))
+            .expect_err("non-finite input currents cannot be stamped");
+            assert!(error.to_string().contains(message), "{error}");
+        }
     }
 
     #[test]

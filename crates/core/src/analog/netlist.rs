@@ -76,9 +76,10 @@
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
 //! resistances, …) are **accepted
-//! and ignored rather than rejected**. OPAMP and COMP `IBIAS` model equal
-//! signed DC currents at both input pins. BJT high-injection rolloff from
-//! `IKF`/`IKR`, base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
+//! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
+//! average and signed difference of DC currents at the two input pins. BJT
+//! high-injection rolloff from `IKF`/`IKR`, base recombination from
+//! `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
@@ -636,9 +637,10 @@ pub enum ComparatorOutput {
 /// Newton walk a saturated output back into the linear region. The rails come
 /// from the `v+`/`v−` pins, so the same card works at ±15 V and at 3.3 V.
 ///
-/// `IBIAS` draws the same signed DC current from each input into `v−`; a
-/// negative value sources current from `v−` into both inputs. This is a simple
-/// constant-current approximation, with no input bias temperature dependence.
+/// `IBIAS` is the average signed DC current into `v−`, and `IOS` is the signed
+/// difference `I(+) − I(−)`. The input currents are `IBIAS ± IOS/2`; negative
+/// values source current from `v−` into the inputs. This is a constant-current
+/// approximation, with no input bias temperature dependence.
 ///
 /// What it does not model: input capacitance, slew-rate limiting beyond what
 /// the pole gives, output current limiting, and supply
@@ -655,9 +657,11 @@ pub struct OpAmpModel {
     pub rout: f64,
     /// Input offset voltage `VOS`, volts, added to `v(in+) − v(in−)`.
     pub vos: f64,
-    /// Signed DC bias current at each input, amps; positive current flows
-    /// from the input pin into `v−`.
+    /// Average signed DC bias current, amps; positive current flows from the
+    /// input pins into `v−`.
     pub ibias: f64,
+    /// Signed input offset current `I(+) − I(−)`, amps.
+    pub ios: f64,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -672,6 +676,7 @@ impl Default for OpAmpModel {
             rout: 100.0,
             vos: 0.0,
             ibias: 0.0,
+            ios: 0.0,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -698,9 +703,10 @@ impl Default for OpAmpModel {
 /// `GBW` here sets the response time: the decision node slews at
 /// `2π·GBW·overdrive` volts per second across its 1 V span.
 ///
-/// `IBIAS` draws the same signed DC current from each input into `v−`; a
-/// negative value sources current from `v−` into both inputs. This constant
-/// current approximation has no temperature dependence.
+/// `IBIAS` is the average signed DC current into `v−`, and `IOS` is the signed
+/// difference `I(+) − I(−)`. The input currents are `IBIAS ± IOS/2`; negative
+/// values source current from `v−` into the inputs. This constant-current
+/// approximation has no temperature dependence.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ComparatorModel {
     /// DC gain `AOL`, V/V.
@@ -712,9 +718,11 @@ pub struct ComparatorModel {
     pub rout: f64,
     /// Input offset voltage `VOS`, volts.
     pub vos: f64,
-    /// Signed DC bias current at each input, amps; positive current flows
-    /// from the input pin into `v−`.
+    /// Average signed DC bias current, amps; positive current flows from the
+    /// input pins into `v−`.
     pub ibias: f64,
+    /// Signed input offset current `I(+) − I(−)`, amps.
+    pub ios: f64,
     /// Hysteresis window `VHYS`, volts. Zero is none.
     pub vhys: f64,
     /// `OUTPUT=OC` (default) or `OUTPUT=PP`.
@@ -729,6 +737,7 @@ impl Default for ComparatorModel {
             rout: 60.0,
             vos: 0.0,
             ibias: 0.0,
+            ios: 0.0,
             vhys: 0.0,
             output: ComparatorOutput::OpenCollector,
         }
@@ -1348,6 +1357,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             rout: 50.0,
             vos: 0.0,
             ibias: 0.0,
+            ios: 0.0,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -3436,6 +3446,7 @@ fn parse_model(
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
             (ModelCard::OpAmp(model), "VOS") => model.vos = value,
             (ModelCard::OpAmp(model), "IBIAS") => model.ibias = value,
+            (ModelCard::OpAmp(model), "IOS") => model.ios = value,
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
@@ -3443,6 +3454,7 @@ fn parse_model(
             (ModelCard::Comparator(model), "ROUT") => model.rout = value,
             (ModelCard::Comparator(model), "VOS") => model.vos = value,
             (ModelCard::Comparator(model), "IBIAS") => model.ibias = value,
+            (ModelCard::Comparator(model), "IOS") => model.ios = value,
             (ModelCard::Comparator(model), "VHYS") => model.vhys = value,
             // This engine's own card types have no vendor parameters to
             // tolerate, so a misspelt one is an error rather than a silently
@@ -3450,7 +3462,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, DROP_HI, DROP_LO"
+                     IBIAS, IOS, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -3487,7 +3499,7 @@ fn parse_model(
             }
             (ModelCard::Comparator(_), other) => {
                 return Err(ctx.parse_err(format!(
-                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, VHYS, \
+                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, VHYS, \
                      OUTPUT"
                 )))
             }
@@ -3776,6 +3788,24 @@ fn check_macro(ctx: &LineCtx<'_>, aol: f64, gbw: f64, rout: f64) -> Result<(), A
     Ok(())
 }
 
+/// Split a macro's average input bias current and signed input offset current
+/// into the currents drawn by its non-inverting and inverting pins.
+fn input_bias_currents(ctx: &LineCtx<'_>, ibias: f64, ios: f64) -> Result<(f64, f64), AnalogError> {
+    if !ibias.is_finite() {
+        return Err(ctx.parse_err("IBIAS must be finite"));
+    }
+    if !ios.is_finite() {
+        return Err(ctx.parse_err("IOS must be finite"));
+    }
+    let half_offset = 0.5 * ios;
+    let input_plus = ibias + half_offset;
+    let input_minus = ibias - half_offset;
+    if !input_plus.is_finite() || !input_minus.is_finite() {
+        return Err(ctx.parse_err("IBIAS and IOS produce a non-finite input current"));
+    }
+    Ok((input_plus, input_minus))
+}
+
 /// Lower an op-amp `X` line; see [`OpAmpModel`] for the circuit.
 fn lower_opamp(
     circuit: &mut Circuit,
@@ -3788,9 +3818,7 @@ fn lower_opamp(
     if model.drop_hi < 0.0 || model.drop_lo < 0.0 {
         return Err(ctx.parse_err("DROP_HI and DROP_LO must not be negative"));
     }
-    if !model.ibias.is_finite() {
-        return Err(ctx.parse_err("IBIAS must be finite"));
-    }
+    let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rg = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rg;
     let cg = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rg);
@@ -3807,9 +3835,11 @@ fn lower_opamp(
     if model.vos != 0.0 {
         lower.current("ios", None, p, gm * model.vos);
     }
-    if model.ibias != 0.0 {
-        lower.current("ibp", inp, vee, model.ibias);
-        lower.current("ibn", inn, vee, model.ibias);
+    if ibias_plus != 0.0 {
+        lower.current("ibp", inp, vee, ibias_plus);
+    }
+    if ibias_minus != 0.0 {
+        lower.current("ibn", inn, vee, ibias_minus);
     }
     let hi = lower.offset_rail("hi", vcc, model.drop_hi, true);
     let lo = lower.offset_rail("lo", vee, model.drop_lo, false);
@@ -3833,9 +3863,7 @@ fn lower_comparator(
     if model.vhys < 0.0 {
         return Err(ctx.parse_err("VHYS must not be negative"));
     }
-    if !model.ibias.is_finite() {
-        return Err(ctx.parse_err("IBIAS must be finite"));
-    }
+    let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rq = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rq;
     let cq = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rq);
@@ -3854,9 +3882,11 @@ fn lower_comparator(
         // −gm·VOS into q, i.e. +VOS on v(in+) − v(in−).
         lower.current("ios", q, vee, gm * model.vos);
     }
-    if model.ibias != 0.0 {
-        lower.current("ibp", inp, vee, model.ibias);
-        lower.current("ibn", inn, vee, model.ibias);
+    if ibias_plus != 0.0 {
+        lower.current("ibp", inp, vee, ibias_plus);
+    }
+    if ibias_minus != 0.0 {
+        lower.current("ibn", inn, vee, ibias_minus);
     }
     if model.vhys != 0.0 {
         // gm·VHYS·(v(q) − v(v−) − ½) into q: positive feedback that holds
