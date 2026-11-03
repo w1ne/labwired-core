@@ -22,6 +22,7 @@ on:
       - "crates/firmware-stm32h743-smoke/**"
       - "crates/firmware-stm32f429-smoke/**"
       - "crates/firmware-stm32f042-smoke/**"
+      - "crates/firmware-stm32f072-smoke/**"
       - "crates/firmware-stm32l071-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -135,6 +136,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/stm32f042-smoke.yaml
             system: configs/systems/onboarding/stm32f042.yaml
+          # The F072 smoke exercises the shared F0 RCC, GPIOA and modern
+          # USART1 models against the exact imported generic F072 system.
+          - id: stm32f072
+            crate: firmware-stm32f072-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/stm32f072-smoke.yaml
+            system: configs/systems/onboarding/stm32f072.yaml
           # The dedicated F4 smoke exercises this imported F429 profile's
           # RCC, GPIOA/GPIOD, and classic USART2 subset.
           - id: stm32f429
