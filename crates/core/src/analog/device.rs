@@ -17,17 +17,18 @@
 //! ## What is modelled, and what is not
 //!
 //! DC/large-signal behaviour for the nonlinear current equations. Diode
-//! depletion charge (`CJO`, `VJ`, `M`, `FC`), BJT base-junction depletion
-//! charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`, `FC`), and JFET gate-junction
-//! depletion charge (`CGS`, `CGD`, `PB`, `FC`, with level-1 `M=0.5`) are
-//! integrated in transient runs. MOSFET gate overlap charge (`CGSO`, `CGDO`,
-//! `CGBO`) is integrated as linear capacitance using instance `W` and `L`;
-//! BJT transit-time charge (`TF`/`TR`) is integrated using constant ideal
-//! transit times. MOSFET channel charge and diode diffusion charge are not.
+//! depletion charge (`CJO`, `VJ`, `M`, `FC`) and diffusion charge (`TT`), BJT
+//! base-junction depletion charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`,
+//! `FC`), and JFET gate-junction depletion charge (`CGS`, `CGD`, `PB`, `FC`,
+//! with level-1 `M=0.5`) are integrated in transient runs. MOSFET gate overlap
+//! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
+//! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
+//! using constant ideal transit times. MOSFET channel charge is not.
 //! There is no temperature model: every parameter is taken at
 //! [`TEMPERATURE_K`] as written. A `.model` line may
 //! carry unmodelled parameters (real vendor models do) and they are accepted
-//! and ignored; see [`super::netlist`]. Reverse-recovery and stored charge in
+//! and ignored; see [`super::netlist`]. Beyond the quasi-static diode `TT`
+//! term, more detailed reverse-recovery behavior and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
 //!
 //! ## Determinism
@@ -161,6 +162,16 @@ pub fn junction_depletion_charge(voltage: f64, c0: f64, vj: f64, m: f64, fc: f64
 /// Diode-specific spelling retained for callers that probe the diode model.
 pub fn diode_depletion_charge(v_junction: f64, cjo: f64, vj: f64, m: f64, fc: f64) -> (f64, f64) {
     junction_depletion_charge(v_junction, cjo, vj, m, fc)
+}
+
+/// Ideal diode diffusion charge and its differential capacitance for `TT`.
+///
+/// The quasi-static SPICE model is `Qd = TT·Id`, so `dQd/dV = TT·dId/dV`.
+/// `op` may come from either the ordinary or breakdown diode equation. Its
+/// `GMIN` contribution is removed because the numerical shunt does not carry
+/// minority-carrier storage.
+pub fn diode_diffusion_charge(voltage: f64, op: DiodeOp, tt: f64) -> (f64, f64) {
+    (tt * (op.id - GMIN * voltage), tt * (op.gd - GMIN))
 }
 
 /// Relative tolerance of the breakdown-knee fit in [`breakdown_voltage`].

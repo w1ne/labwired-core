@@ -22,8 +22,8 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
-//! discovered: diode diffusion charge (`TT`) and MOSFET channel charge. BJT
-//! constant ideal transit-time charge (`TF`/`TR`) is exercised below. Diode
+//! discovered: MOSFET channel charge. Diode diffusion charge (`TT`) and BJT
+//! constant ideal transit-time charge (`TF`/`TR`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
 //! `CGS`/`CGD`, and MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`
@@ -170,6 +170,95 @@ mod analog {
         let (q_m1, c_m1) = device::diode_depletion_charge(voltage, cjo, vj, 1.0, fc);
         assert!((q_m1 + cjo * vj * x.ln()).abs() < 1e-26);
         assert!((c_m1 - cjo / x).abs() < 1e-25);
+    }
+
+    /// `TT` adds quasi-static diffusion charge `TT·Id` to the junction. The
+    /// circuit checks the transient equation against a scalar root under both
+    /// integration rules and confirms the operating-point charge is carried
+    /// into the first step without a startup impulse.
+    #[test]
+    fn diode_tt_integrates_diffusion_charge_for_both_integration_rules() {
+        let is = 1e-14;
+        let tt = 100e-9;
+        let resistance = 1e3;
+        let h = 20e-9;
+        let netlist = format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 TT={tt})\n"
+        );
+        let circuit = parse_netlist(&netlist).expect("diode TT model parses");
+        assert_eq!(circuit.diodes[0].model.tt, tt);
+
+        let charge = |voltage: f64| {
+            let op = device::diode_op(voltage, is, 1.0);
+            device::diode_diffusion_charge(voltage, op, tt).0
+        };
+
+        // A diode already at its operating point must not create a transient
+        // current just because its diffusion charge was initialized.
+        let biased_netlist = netlist.replacen("V1 in 0 dc 0", "V1 in 0 dc 1", 1);
+        let mut biased = Solver::new(
+            parse_netlist(&biased_netlist).expect("prebiased diode TT model parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("prebiased diode TT solver builds");
+        let biased_out = biased.circuit().node("out").expect("output node");
+        let initial_biased_voltage = biased.node_voltage(biased_out);
+        biased
+            .advance(h)
+            .expect("operating-point diffusion charge carries into transient");
+        assert!(
+            (biased.node_voltage(biased_out) - initial_biased_voltage).abs() < 1e-9,
+            "initialized diffusion charge must not create a startup impulse"
+        );
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let mut solver =
+                Solver::new(circuit.clone(), integration).expect("diode TT solver builds");
+            let out = solver.circuit().node("out").expect("output node");
+            let source = solver.voltage_source_index("V1").expect("source exists");
+            solver.set_voltage_source(source, 1.0);
+
+            let mut previous_charge = charge(solver.node_voltage(out));
+            let mut previous_current = 0.0;
+            for step in 0..2 {
+                let charge_current = |voltage: f64| {
+                    let next_charge = charge(voltage);
+                    if step == 0 || integration == Integration::BackwardEuler {
+                        (next_charge - previous_charge) / h
+                    } else {
+                        2.0 * (next_charge - previous_charge) / h - previous_current
+                    }
+                };
+                let residual = |voltage: f64| {
+                    (1.0 - voltage) / resistance
+                        - device::diode_op(voltage, is, 1.0).id
+                        - charge_current(voltage)
+                };
+                let mut lo = 0.0;
+                let mut hi = 1.0;
+                for _ in 0..100 {
+                    let mid = 0.5 * (lo + hi);
+                    if residual(mid) > 0.0 {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                let expected = 0.5 * (lo + hi);
+                solver
+                    .advance(h)
+                    .expect("diode diffusion-charge step solves");
+                let actual = solver.node_voltage(out);
+                assert!(
+                    (actual - expected).abs() < 1e-8,
+                    "{integration:?} step {step}: expected {expected} V, got {actual} V"
+                );
+                let next_charge = charge(actual);
+                previous_current = (next_charge - previous_charge) / h;
+                previous_charge = next_charge;
+            }
+        }
     }
 
     #[test]
@@ -493,9 +582,8 @@ mod analog {
         }
     }
 
-    /// A reverse-biased diode with default `CJO=0` conducts its saturation
-    /// current plus `GMIN*V` and has no diffusion charge. This leaves reverse
-    /// recovery outside the in-core model.
+    /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
+    /// saturation current plus `GMIN*V` and has no stored charge.
     #[test]
     fn a_reverse_biased_diode_carries_only_leakage_with_no_stored_charge() {
         // The built-in `D` card is 1N4148-class.

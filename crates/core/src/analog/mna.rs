@@ -52,7 +52,7 @@
 //! same input sequence produce bit-identical voltages on every host.
 
 use super::device;
-use super::netlist::{AnalogError, BjtModel, Circuit, NodeRef, POWER_SINK_VMIN};
+use super::netlist::{AnalogError, BjtModel, Circuit, DiodeModel, NodeRef, POWER_SINK_VMIN};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
 /// currents. Dense LU is `O(n³)`; at 64 unknowns one step is a few microseconds
@@ -107,6 +107,30 @@ fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
     } else {
         model.cjc != 0.0 || model.tr != 0.0
     }
+}
+
+fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> device::DiodeOp {
+    match breakdown {
+        None => device::diode_op(voltage, model.is, model.n),
+        Some(xbv) => device::diode_op_breakdown(
+            voltage,
+            model.is,
+            model.n,
+            xbv,
+            model.nbv.unwrap_or(model.n),
+        ),
+    }
+}
+
+fn diode_charge_op(voltage: f64, model: DiodeModel, op: device::DiodeOp) -> (f64, f64) {
+    let (q_depletion, c_depletion) =
+        device::diode_depletion_charge(voltage, model.cjo, model.vj, model.m, model.fc);
+    let (q_diffusion, c_diffusion) = device::diode_diffusion_charge(voltage, op, model.tt);
+    (q_depletion + q_diffusion, c_depletion + c_diffusion)
+}
+
+fn diode_charge_active(model: DiodeModel) -> bool {
+    model.cjo != 0.0 || model.tt != 0.0
 }
 
 /// One circuit and the state that carries between steps.
@@ -593,16 +617,10 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if diode.model.cjo > 0.0 {
+            if diode_charge_active(diode.model) {
                 self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
-                self.diode_q[index] = device::diode_depletion_charge(
-                    self.diode_vj[index],
-                    diode.model.cjo,
-                    diode.model.vj,
-                    diode.model.m,
-                    diode.model.fc,
-                )
-                .0;
+                let op = diode_model_op(self.diode_vj[index], diode.model, diode.breakdown);
+                self.diode_q[index] = diode_charge_op(self.diode_vj[index], diode.model, op).0;
                 self.diode_i[index] = 0.0;
             }
         }
@@ -788,7 +806,7 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if diode.model.cjo == 0.0 {
+            if !diode_charge_active(diode.model) {
                 continue;
             }
             let v_new = node_diff(
@@ -796,13 +814,8 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let (q_new, _) = device::diode_depletion_charge(
-                v_new,
-                diode.model.cjo,
-                diode.model.vj,
-                diode.model.m,
-                diode.model.fc,
-            );
+            let op = diode_model_op(v_new, diode.model, diode.breakdown);
+            let (q_new, _) = diode_charge_op(v_new, diode.model, op);
             let i_new = match rule {
                 Integration::BackwardEuler => (q_new - self.diode_q[index]) / h,
                 Integration::Trapezoidal => {
@@ -1536,29 +1549,14 @@ impl Solver {
                 );
             }
             let vj = self.diode_vj[index];
-            let op = match diode.breakdown {
-                None => device::diode_op(vj, diode.model.is, diode.model.n),
-                Some(xbv) => device::diode_op_breakdown(
-                    vj,
-                    diode.model.is,
-                    diode.model.n,
-                    xbv,
-                    diode.model.nbv.unwrap_or(diode.model.n),
-                ),
-            };
+            let op = diode_model_op(vj, diode.model, diode.breakdown);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
 
-            if diode.model.cjo > 0.0 {
+            if diode_charge_active(diode.model) {
                 if let Stamp::Transient(h, rule) = stamp {
-                    let (charge, capacitance) = device::diode_depletion_charge(
-                        vj,
-                        diode.model.cjo,
-                        diode.model.vj,
-                        diode.model.m,
-                        diode.model.fc,
-                    );
+                    let (charge, capacitance) = diode_charge_op(vj, diode.model, op);
                     let (geq, current) = match rule {
                         Integration::BackwardEuler => {
                             (capacitance / h, (charge - self.diode_q[index]) / h)

@@ -56,14 +56,14 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, JFET gate
-//! junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`, MOSFET overlap
-//! capacitance `CGSO`/`CGDO`/`CGBO`, and BJT
-//! base-junction depletion capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`
-//! with shared `FC`, and constant forward/reverse transit times `TF`/`TR`,
-//! every temperature coefficient, bias-dependent transit-time parameters
-//! (`XTF`/`VTF`/`ITF`), `NKF`, terminal resistances, …) are **accepted and
-//! ignored** rather than rejected. BJT `IKF`/`IKR` high-injection rolloff and
+//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC` and diffusion
+//! charge `TT`, JFET gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
+//! MOSFET overlap capacitance `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion
+//! capacitance `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`, and
+//! constant forward/reverse transit times `TF`/`TR`, every temperature
+//! coefficient, bias-dependent transit-time parameters (`XTF`/`VTF`/`ITF`),
+//! `NKF`, terminal resistances, …) are **accepted and ignored** rather than
+//! rejected. BJT `IKF`/`IKR` high-injection rolloff and
 //! `ISE`/`NE`/`ISC`/`NC` base recombination and constant `TF`/`TR` transit-time
 //! charge are modelled. MOSFET level-1 `GAMMA`/`PHI` body effect is also
 //! modelled; MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
@@ -92,7 +92,7 @@
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
 //! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
-//! transient steps; diode diffusion charge (`TT`) is not modelled. BJT `TF`/`TR`
+//! transient steps; `TT` adds quasi-static diffusion charge. BJT `TF`/`TR`
 //! add ideal transit-time charge based on the forward/reverse transport current;
 //! their bias-dependent extensions (`XTF`, `VTF`, `ITF`) are not modelled. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
@@ -497,6 +497,9 @@ pub struct DiodeModel {
     pub n: f64,
     /// Ohmic series resistance `RS`. Non-zero adds one internal node.
     pub rs: f64,
+    /// Forward transit time `TT`, seconds. Zero disables diffusion charge,
+    /// matching ngspice's default.
+    pub tt: f64,
     /// Reverse breakdown voltage `BV`, volts, positive. `None` is a diode
     /// with no breakdown at all, solved exactly as before `BV` existed.
     pub bv: Option<f64>,
@@ -523,6 +526,7 @@ impl Default for DiodeModel {
             is: 1e-14,
             n: 1.0,
             rs: 0.0,
+            tt: 0.0,
             bv: None,
             ibv: 1e-3,
             nbv: None,
@@ -800,6 +804,7 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 1.0,
     rs: 0.0,
+    tt: 0.0,
     bv: None,
     ibv: 1e-3,
     nbv: None,
@@ -1094,6 +1099,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             is: 1e-11,
             n: 1.2,
             rs: 6.0,
+            tt: 0.0,
             bv: Some(4.8),
             ibv: 49e-3,
             nbv: None,
@@ -1110,6 +1116,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             is: 1e-12,
             n: 1.0,
             rs: 0.0525,
+            tt: 0.0,
             bv: Some(6.7),
             ibv: 10e-3,
             nbv: None,
@@ -2383,6 +2390,8 @@ fn bind_models(
                 if model.is <= 0.0
                     || model.n <= 0.0
                     || model.rs < 0.0
+                    || !model.tt.is_finite()
+                    || model.tt < 0.0
                     || !model.cjo.is_finite()
                     || model.cjo < 0.0
                     || !model.vj.is_finite()
@@ -2394,7 +2403,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, RS >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, RS >= 0, TT >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -2754,6 +2763,7 @@ fn parse_model(
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
+            (ModelCard::Diode(model), "TT") => model.tt = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
             (ModelCard::Diode(model), "NBV") => model.nbv = Some(value),
@@ -2913,6 +2923,7 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 0.02,
     rs: 0.0,
+    tt: 0.0,
     bv: None,
     ibv: 1e-3,
     nbv: None,
