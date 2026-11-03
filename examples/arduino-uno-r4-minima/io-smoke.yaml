@@ -1,12 +1,16 @@
-# LabWired - Arduino Uno R4 Minima UART smoke test
+# LabWired - Arduino Uno R4 Minima SCI2 and D13 GPIO smoke test
 schema_version: "1.0"
 inputs:
   # Built by: cargo build -p firmware-ra4m1-demo --release --target thumbv7em-none-eabi
   # Survival fixture (same bytes): tests/fixtures/ra4m1-uno-r4-smoke.elf
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-ra4m1-demo"
-  system: "./system.yaml"
+  # Exercise the board descriptor shipped under configs/systems/.
+  system: "../../configs/systems/arduino-uno-r4-minima.yaml"
 limits:
   max_steps: 800000
 assertions:
   - uart_contains: "OK"
+  - gpio_edges:
+      pin: "port1:11"
+      min_edges: 1
   - expected_stop_reason: max_steps

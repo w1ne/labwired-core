@@ -1,0 +1,6 @@
+2026-11-03T11:57:35.941908Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ra4m1.yaml
+2026-11-03T11:57:35.943555Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 799877 of 800000 device cycles (123 interpreted)
+PASS  3/3 checks · io-smoke · 800000 steps · 0.00s

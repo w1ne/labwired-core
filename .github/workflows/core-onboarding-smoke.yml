@@ -43,6 +43,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: arduino-uno-r4-minima
+            crate: firmware-ra4m1-demo
+            target: thumbv7em-none-eabi
+            script: examples/arduino-uno-r4-minima/io-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima.yaml
           - id: nucleo-f401re
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
