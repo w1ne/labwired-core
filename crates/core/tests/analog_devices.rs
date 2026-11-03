@@ -28,8 +28,9 @@
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
 //! `CGS`/`CGD`, MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`,
 //! MOSFET intrinsic channel capacitance from `TOX`, and JFET terminal
-//! resistances `RD`/`RS` are exercised below. Circuits depending on unsupported
-//! stored charge still belong to `adapter: external_process`.
+//! resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` are
+//! exercised below. Circuits depending on unsupported stored charge still
+//! belong to `adapter: external_process`.
 
 // The `analog` module puts every test under `analog::`, so the design's
 // verification command `cargo test -p labwired-core analog` runs all of them.
@@ -1809,6 +1810,54 @@ mod analog {
                 "{kind} gate current should be the two forward junctions: expected \
                  {expected} A, got {measured} A"
             );
+        }
+    }
+
+    /// MOSFET `RD` and `RS` sit outside the intrinsic channel terminals. The
+    /// terminal voltage drops are checked against the solved channel current,
+    /// for both MOS polarities, exercising the model parameters in MNA.
+    #[test]
+    fn mosfet_terminal_resistances_drop_voltage_at_the_intrinsic_nodes() {
+        let resistance = 100.0;
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            for (parameter, terminal) in [("RD", "drain"), ("RS", "source")] {
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     M1 d g s 0 MMOD\n.model MMOD {kind}(VTO={} KP=20u LAMBDA=0 \
+                     IS=1e-30 W=100u L=10u {parameter}={resistance})\n",
+                    sign * 3.0,
+                    sign * 0.4,
+                    sign
+                );
+                let solver = build(&netlist);
+                let external = solver
+                    .circuit()
+                    .node(if terminal == "drain" { "d" } else { "s" })
+                    .expect("external terminal exists");
+                let internal_name = format!("M1#{terminal}");
+                let internal = solver
+                    .circuit()
+                    .node(&internal_name)
+                    .expect("nonzero terminal resistance creates an internal node")
+                    .expect("internal terminal is not ground");
+                let current = sign * source_current(&solver, "Vd");
+                assert!(current > 1e-6, "{kind} {parameter} current is {current} A");
+
+                let (external_voltage, internal_voltage) = (
+                    solver.node_voltage(external),
+                    solver.node_voltage(Some(internal)),
+                );
+                let actual_drop = if parameter == "RD" {
+                    sign * (external_voltage - internal_voltage)
+                } else {
+                    sign * (internal_voltage - external_voltage)
+                };
+                assert!(
+                    relative(actual_drop, current * resistance) < 1e-6,
+                    "{kind} {parameter} should drop {} V, got {actual_drop} V",
+                    current * resistance
+                );
+            }
         }
     }
 

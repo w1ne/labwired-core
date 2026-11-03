@@ -13,8 +13,8 @@
 //! subcircuits, model libraries, AC/DC sweeps and charge-conserving MOSFET
 //! channel charge by name and points at `tools/cosim/labwired_ngspice.py`,
 //! which supports those features. The solver integrates diode `TT`, BJT
-//! `TF`/`TR` and `RB`/`RC`/`RE`, and MOSFET level-1 gate overlap charge
-//! (`CGSO`/`CGDO`/`CGBO`) in-core.
+//! `TF`/`TR` and `RB`/`RC`/`RE`, MOSFET `RD`/`RS` terminal resistances, and
+//! MOSFET level-1 gate overlap charge (`CGSO`/`CGDO`/`CGBO`) in-core.
 //!
 //! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
 //! optional depletion and transit-time charge), the level-1 JFET (including
