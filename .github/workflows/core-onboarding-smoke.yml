@@ -82,6 +82,13 @@ jobs:
             system: examples/rp2040-pio/system.yaml
           # Imported Renode Cortex-M systems. These exercise representative
           # M0/M3/M4/M7 firmware against the exact imported system descriptors.
+          # The SAMD51 profile uses the silicon memory map and only its modeled
+          # MCLK, GCLK, PORTA, and SERCOM3 path.
+          - id: atsamd51g19a
+            crate: firmware-atsamd51-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/atsamd51g19a-smoke.yaml
+            system: configs/systems/onboarding/atsamd51g19a.yaml
           # The SAMD21 J17D profile uses its actual 128 KiB/16 KiB memory map
           # and only the register windows used by this M0+ bring-up smoke.
           - id: atsamd21j17d-aft
