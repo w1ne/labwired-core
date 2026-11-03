@@ -1501,6 +1501,129 @@ mod analog {
         }
     }
 
+    /// During a base step, junction and transit charge draw displacement
+    /// current through all three BJT terminals. Model-card RB/RC/RE must match
+    /// explicit resistors around a resistance-free transistor, for both
+    /// channel polarities and transient companion rules.
+    #[test]
+    fn bjt_transient_charge_matches_explicit_terminal_resistors_for_both_polarities() {
+        let (rb, rc, re) = (31.0, 18.0, 7.0);
+        let (h, drive_resistance) = (1e-9, 1e3);
+        let charge = "CJE=60p CJC=40p VJE=1 MJE=0 VJC=1 MJC=0 TF=20n TR=5n";
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign, collector_v, emitter_v) in
+                [("NPN", 1.0, 3.0, 0.0), ("PNP", -1.0, 0.0, 3.0)]
+            {
+                let model_card = format!("IS=1e-15 BF=100 BR=4 RB={rb} RC={rc} RE={re} {charge}");
+                let modelled = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n.model QMOD {kind}({model_card})\n"
+                );
+                let explicit = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
+                     Rbase b qb {rb}\nRcollector c qc {rc}\nRemitter e qe {re}\n\
+                     Q1 qc qb qe QMOD\n.model QMOD {kind}(IS=1e-15 BF=100 BR=4 {charge})\n"
+                );
+                let no_charge = format!(
+                    "Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                     Vdrive drive 0 dc {emitter_v}\nRdrive drive b {drive_resistance}\n\
+                     Q1 c b e QMOD\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 RB={rb} RC={rc} RE={re})\n"
+                );
+
+                let mut model = Solver::new(
+                    parse_netlist(&modelled).expect("BJT terminal charge model parses"),
+                    integration,
+                )
+                .expect("BJT terminal charge solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit).expect("explicit BJT terminal resistors parse"),
+                    integration,
+                )
+                .expect("explicit-resistor BJT solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&no_charge).expect("uncharged BJT model parses"),
+                    integration,
+                )
+                .expect("uncharged BJT solver builds");
+
+                let model_nodes = ["c", "b", "e", "Q1#collector", "Q1#base", "Q1#emitter"]
+                    .map(|name| model.circuit().node(name).expect("model node"));
+                let explicit_nodes = ["c", "b", "e", "qc", "qb", "qe"]
+                    .map(|name| explicit.circuit().node(name).expect("explicit node"));
+                let model_drive = model
+                    .voltage_source_index("Vdrive")
+                    .expect("model base-drive source");
+                let explicit_drive = explicit
+                    .voltage_source_index("Vdrive")
+                    .expect("explicit base-drive source");
+                let uncharged_drive = uncharged
+                    .voltage_source_index("Vdrive")
+                    .expect("uncharged base-drive source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (model_node, explicit_node) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(model_node) - explicit.node_voltage(explicit_node))
+                            .abs()
+                            < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                let driven_base = emitter_v + sign * 0.9;
+                model.set_voltage_source(model_drive, driven_base);
+                explicit.set_voltage_source(explicit_drive, driven_base);
+                uncharged.set_voltage_source(uncharged_drive, driven_base);
+                model.advance(h).expect("model BJT charge step solves");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor BJT charge step solves");
+                uncharged.advance(h).expect("uncharged BJT step solves");
+
+                let mut charge_effect = 0.0_f64;
+                for (label, model_node, explicit_node) in [
+                    ("external collector", model_nodes[0], explicit_nodes[0]),
+                    ("external base", model_nodes[1], explicit_nodes[1]),
+                    ("external emitter", model_nodes[2], explicit_nodes[2]),
+                    ("intrinsic collector", model_nodes[3], explicit_nodes[3]),
+                    ("intrinsic base", model_nodes[4], explicit_nodes[4]),
+                    ("intrinsic emitter", model_nodes[5], explicit_nodes[5]),
+                ] {
+                    let actual = model.node_voltage(model_node);
+                    let expected = explicit.node_voltage(explicit_node);
+                    charge_effect =
+                        charge_effect.max((actual - uncharged.node_voltage(model_node)).abs());
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} {label}: model-card resistances give {actual} V, explicit resistors give {expected} V"
+                    );
+                }
+                assert!(
+                    charge_effect > 1e-7,
+                    "{kind} {integration:?}: junction/transit charge must measurably affect terminal voltages, got a largest charged/uncharged difference of {charge_effect} V"
+                );
+                for source in ["Vc", "Ve", "Vdrive"] {
+                    let actual = source_current(&model, source);
+                    let expected = source_current(&explicit, source);
+                    assert!(
+                        (actual - expected).abs() < 1e-10,
+                        "{kind} {integration:?} {source}: model-card resistances give {actual} A, explicit resistors give {expected} A"
+                    );
+                }
+            }
+        }
+    }
+
     /// Ngspice's RBM/IRB law makes the base spreading resistance fall from RB
     /// toward RBM as the solved base current rises. This drives both an NPN and
     /// PNP through that transition and checks the voltage drop/current ratio
