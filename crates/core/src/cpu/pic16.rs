@@ -445,6 +445,16 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         &[(0x0A0, 0x0DF, 0x020)],
     ),
     dev_no_usart(
+        "pic16f631",
+        1024,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
+    ),
+    dev_no_usart(
         "pic16f676",
         1024,
         [0x3F, 0x00, 0x3F, 0x00, 0x00],
@@ -3473,6 +3483,43 @@ mod tests {
         assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
         cpu.write_data(0x06, 0xFF);
         assert_eq!(cpu.read_data(0x06), 0x00, "unimplemented PORTB");
+    }
+
+    #[test]
+    fn pic16f631_uses_exact_classic_no_usart_geometry() {
+        let device = pic16_device("pic16f631").expect("F631 row");
+        assert_eq!(device.flash_words, 1024);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert_eq!(
+            device.aliases,
+            &[
+                (0x0F0, 0x0FF, 0x070),
+                (0x170, 0x17F, 0x070),
+                (0x1F0, 0x1FF, 0x070),
+            ]
+        );
+        assert!(!device.enhanced);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F631");
+        assert_eq!(cpu.flash_words(), 1024);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "unimplemented USART address {address:#04x}"
+            );
+        }
+        cpu.write_data(0x11E, 0x5A);
+        assert_eq!(cpu.read_data(0x11E), 0x5A, "ANSEL file register");
+
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0, "PORTB RB4-RB7");
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0xFF);
+        assert_eq!(cpu.read_data(0x07), 0xFF, "PORTC");
     }
 
     #[test]
