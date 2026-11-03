@@ -88,6 +88,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32f4_discovery-smoke.yaml
             system: configs/systems/onboarding/stm32f4_discovery.yaml
+          - id: stm32f401cdu6-blackpill
+            crate: firmware-f401cdu6-blackpill-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml
+            system: configs/systems/onboarding/stm32f401cdu6-blackpill.yaml
           - id: nrf52840
             crate: firmware-nrf52840-demo
             target: thumbv7em-none-eabi

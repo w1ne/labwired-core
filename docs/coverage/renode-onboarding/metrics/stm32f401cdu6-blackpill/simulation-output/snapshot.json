@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073759236,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536969216,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536969216,
+      4294967295,
+      134217760
+    ],
+    "pc": 134217760,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 64,
+  "cycles": 64,
+  "instructions": 64,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 64
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 64
+    }
+  },
+  "limits": {
+    "max_steps": 64,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "afb930aad338140f4da23acbea960515a9ecf20f26b6030ee1e06ddc741c022a",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-demo",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
+    "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml"
+  }
+}
