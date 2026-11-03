@@ -1,4 +1,4 @@
-2026-11-03T12:09:58.363961Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_picorv32.yaml
-2026-11-03T12:09:58.382221Z  INFO labwired_loader: ELF Entry Point: 0x10000000
+2026-11-03T12:16:49.833692Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_picorv32.yaml
+2026-11-03T12:16:49.852423Z  INFO labwired_loader: ELF Entry Point: 0x10000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  3/3 checks · litex_picorv32-smoke · 4000000 steps · 1.15s
+PASS  3/3 checks · litex_picorv32-smoke · 4000000 steps · 1.12s
