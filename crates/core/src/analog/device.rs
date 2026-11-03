@@ -4,7 +4,8 @@
 
 //! Device physics for the nonlinear elements: the exponential diode, the
 //! Gummel–Poon BJT with Early effect, high-injection rolloff and base
-//! recombination, the level-1 JFET with gate-junction depletion charge, and
+//! recombination, the level-1 JFET with its Parker–Skellern fit and
+//! gate-junction depletion charge, and
 //! the level-1 MOSFET, plus the constants and voltage-limiting heuristics
 //! Newton–Raphson needs to reach them.
 //!
@@ -23,7 +24,9 @@
 //! (`TT`/`VP`), BJT
 //! base-junction depletion charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`,
 //! `FC`), and JFET gate-junction depletion charge (`CGS`, `CGD`, `PB`, `FC`,
-//! with level-1 `M=0.5`) are integrated in transient runs. MOSFET gate overlap
+//! with level-1 `M=0.5`) are integrated in transient runs. The level-1 JFET
+//! Parker–Skellern channel fit from `B` (default 1) is solved at each operating
+//! point. MOSFET gate overlap
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
 //! using ideal transit times with ngspice's forward `XTF`/`VTF`/`ITF` bias
@@ -1056,21 +1059,39 @@ pub struct JfetOp {
     pub gds: f64,
 }
 
-/// SPICE JFET level 1 with the Parker–Skellern fitting parameter `B = 1`:
+/// SPICE level-1 JFET with the default Parker–Skellern fit `B=1`.
+///
+/// This five-argument wrapper is retained for callers of the original equation.
+pub fn jfet_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> JfetOp {
+    jfet_op_with_b(vgs, vds, vto, beta, lambda, 1.0, 1.0)
+}
+
+/// SPICE JFET level 1 with the Parker–Skellern fitting parameter `B`:
 ///
 /// ```text
 /// vgst = Vgs − VTO
 /// βp   = BETA·(1 + LAMBDA·Vds)
 ///
+/// bfac = (1 − B) / (PB − VTO)
 /// cutoff      vgst ≤ 0       Id = 0
-/// linear      Vds < vgst     Id = βp·Vds·(2·vgst − Vds)
-/// saturation  Vds ≥ vgst     Id = βp·vgst²
+/// linear      vgst ≥ Vds     Id = βp·Vds·[Vds·(bfac·Vds − B)
+///                                               + vgst·(2B + 3bfac·(vgst−Vds))]
+/// saturation  vgst < Vds     Id = βp·vgst²·(B + vgst·bfac)
 /// ```
 ///
 /// Gate-junction current and the channel's GMIN path are stamped separately by
 /// the MNA solver. `vto` is negative for an N-channel JFET; the caller mirrors
-/// voltages and currents for a P-channel device.
-pub fn jfet_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> JfetOp {
+/// voltages and currents for a P-channel device. `pb` is the gate-junction
+/// potential used by the Parker–Skellern fit.
+pub fn jfet_op_with_b(
+    vgs: f64,
+    vds: f64,
+    vto: f64,
+    beta: f64,
+    lambda: f64,
+    b: f64,
+    pb: f64,
+) -> JfetOp {
     let vgst = vgs - vto;
     if vgst <= 0.0 {
         return JfetOp {
@@ -1081,19 +1102,26 @@ pub fn jfet_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> JfetOp {
     }
 
     let beta_p = beta * (1.0 + lambda * vds);
-    if vds < vgst {
+    let bfac = if b == 1.0 {
+        0.0
+    } else {
+        (1.0 - b) / (pb - vto)
+    };
+    if vgst >= vds {
+        let apart = 2.0 * b + 3.0 * bfac * (vgst - vds);
+        let cpart = vds * (vds * (bfac * vds - b) + vgst * apart);
         JfetOp {
-            id: beta_p * vds * (2.0 * vgst - vds),
-            gm: 2.0 * beta_p * vds,
-            gds: beta
-                * (lambda * vds * (2.0 * vgst - vds)
-                    + (1.0 + lambda * vds) * (2.0 * vgst - 2.0 * vds)),
+            id: beta_p * cpart,
+            gm: beta_p * vds * (apart + 3.0 * bfac * vgst),
+            gds: beta_p * (vgst - vds) * apart + beta * lambda * cpart,
         }
     } else {
+        let bfac_vgst = bfac * vgst;
+        let cpart = vgst * vgst * (b + bfac_vgst);
         JfetOp {
-            id: beta_p * vgst * vgst,
-            gm: 2.0 * beta_p * vgst,
-            gds: beta * lambda * vgst * vgst,
+            id: beta_p * cpart,
+            gm: beta_p * vgst * (2.0 * b + 3.0 * bfac_vgst),
+            gds: beta * lambda * cpart,
         }
     }
 }

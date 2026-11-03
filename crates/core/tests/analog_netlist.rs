@@ -874,20 +874,28 @@ C1 out 0 100n $ dollar comment
 
     #[test]
     fn jfet_model_parameters_are_parsed_and_unsupported_levels_are_refused() {
-        let circuit =
-            parse_netlist("J1 d g s MOD\n.model MOD NJF(VTO=-1.8 BETA=2m LAMBDA=0.02 IS=4p B=1)\n")
-                .expect("level-1 JFET parameters parse");
+        let circuit = parse_netlist(
+            "J1 d g s MOD\n.model MOD NJF(VTO=-1.8 BETA=2m LAMBDA=0.02 IS=4p B=1.2)\n",
+        )
+        .expect("level-1 JFET parameters parse");
         let model = circuit.jfets[0].model;
         assert_eq!(model.vto, -1.8);
         assert_eq!(model.beta, 2e-3);
         assert_eq!(model.lambda, 0.02);
+        assert_eq!(model.b, 1.2);
         assert_eq!(model.is, 4e-12);
 
-        for (card, rejected) in [("NJF(LEVEL=2)", "LEVEL=2"), ("NJF(B=1.2)", "B=1.2")] {
+        for (card, rejected) in [("NJF(LEVEL=2)", "LEVEL=2")] {
             let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD {card}\n"))
                 .expect_err("unsupported JFET equations must be refused");
             assert!(err.to_string().contains(rejected), "{err}");
             assert!(err.to_string().contains("labwired_ngspice.py"), "{err}");
+        }
+
+        for b in ["0", "-0.1", "1e999"] {
+            let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD NJF(B={b})\n"))
+                .expect_err("non-positive or non-finite JFET B must be refused");
+            assert!(err.to_string().contains("B > 0 and finite"), "{err}");
         }
     }
 

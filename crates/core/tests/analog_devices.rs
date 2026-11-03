@@ -28,7 +28,8 @@
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
-//! `CGS`/`CGD`, MOSFET linear overlap charge through `CGSO`/`CGDO`/`CGBO`,
+//! `CGS`/`CGD` and the Parker–Skellern channel fit `B`, MOSFET linear overlap
+//! charge through `CGSO`/`CGDO`/`CGBO`,
 //! MOSFET bulk-junction depletion charge through `CBD`/`CBS` and `CJ`/`CJSW`
 //! geometry, MOSFET intrinsic channel capacitance from `TOX`, and JFET terminal
 //! resistances `RD`/`RS`, and MOSFET terminal resistances from `RD`/`RS` or
@@ -2433,6 +2434,61 @@ mod analog {
                 assert!(
                     relative(measured, expected) < 2e-5,
                     "{label}: expected {expected} A including gate leakage, got {measured} A"
+                );
+            }
+        }
+    }
+
+    /// The Parker–Skellern B fit changes both JFET channel regions. Its
+    /// closed-form current and analytic partials are checked through the
+    /// nonlinear MNA solve for both channel polarities.
+    #[test]
+    fn jfet_parker_skellern_b_matches_both_regions_and_polarities() {
+        let beta = 2e-4;
+        let lambda = 0.02;
+        let is = 1e-30;
+        let b = 1.4;
+        let pb = 0.75;
+        let vto = -2.0;
+        let bfac = (1.0 - b) / (pb - vto);
+        let cases = [(0.0, 0.4), (0.0, 5.0)];
+
+        let channel_current = |vgs: f64, vds: f64| {
+            let vgst = vgs - vto;
+            let beta_p = beta * (1.0 + lambda * vds);
+            if vgst <= 0.0 {
+                0.0
+            } else if vgst >= vds {
+                let apart = 2.0 * b + 3.0 * bfac * (vgst - vds);
+                beta_p * vds * (vds * (bfac * vds - b) + vgst * apart)
+            } else {
+                beta_p * vgst * vgst * (b + vgst * bfac)
+            }
+        };
+
+        for (vgs, vds) in cases {
+            let op = device::jfet_op_with_b(vgs, vds, vto, beta, lambda, b, pb);
+            let dv = 1e-6;
+            let gm = (channel_current(vgs + dv, vds) - channel_current(vgs - dv, vds)) / (2.0 * dv);
+            let gds =
+                (channel_current(vgs, vds + dv) - channel_current(vgs, vds - dv)) / (2.0 * dv);
+            assert!(relative(op.gm, gm) < 1e-8, "Vgs={vgs} Vds={vds}: gm");
+            assert!(relative(op.gds, gds) < 1e-8, "Vgs={vgs} Vds={vds}: gds");
+
+            for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc 0\nJ1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA={beta} LAMBDA={lambda} IS={is} B={b} PB={pb})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vto
+                );
+                let measured = sign * source_current(&build(&netlist), "Vd");
+                let gate_drain_voltage = vgs - vds;
+                let expected = channel_current(vgs, vds) + device::GMIN * vds
+                    - device::diode_op(gate_drain_voltage, is, 1.0).id;
+                assert!(
+                    relative(measured, expected) < 2e-5,
+                    "{kind} Vgs={vgs} Vds={vds}: expected {expected} A, got {measured} A"
                 );
             }
         }

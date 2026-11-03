@@ -66,8 +66,8 @@
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
 //! soft-recovery parameter `VP`, BJT terminal resistances
 //! `RB`/`RC`/`RE`, JFET terminal
-//! resistances `RD`/`RS` and gate-junction depletion capacitance
-//! `CGS`/`CGD`/`PB`/`FC`,
+//! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
+//! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
 //! level-1 channel charge from `TOX`, gate overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
@@ -88,7 +88,8 @@
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
-//! terminal resistances `RD`/`RS` create series resistors to its intrinsic
+//! channel current uses the Parker–Skellern fit `B` (default 1); terminal
+//! resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
 //! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
@@ -1202,7 +1203,7 @@ pub struct MosModel {
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
-/// level 1 with Parker–Skellern `B = 1`.
+/// level 1 with the Parker–Skellern `B` fitting parameter.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct JfetModel {
     /// N-channel or P-channel.
@@ -1213,6 +1214,8 @@ pub struct JfetModel {
     pub beta: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
+    /// Parker–Skellern fitting parameter B for the level-1 channel equation.
+    pub b: f64,
     /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
     /// drain node, matching ngspice's default.
     pub rd: f64,
@@ -1238,6 +1241,7 @@ impl JfetModel {
             vto: if polarity == Polarity::N { -2.0 } else { 2.0 },
             beta: 1e-4,
             lambda: 0.0,
+            b: 1.0,
             rd: 0.0,
             rs: 0.0,
             is: 1e-14,
@@ -3258,6 +3262,9 @@ fn bind_models(
                 {
                     return Err(ctx.parse_err("a JFET model needs RD/RS >= 0 and finite"));
                 }
+                if !model.b.is_finite() || model.b <= 0.0 {
+                    return Err(ctx.parse_err("a JFET model needs B > 0 and finite"));
+                }
                 if !model.cgs.is_finite()
                     || model.cgs < 0.0
                     || !model.cgd.is_finite()
@@ -3654,6 +3661,7 @@ fn parse_model(
             (ModelCard::Jfet(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Jfet(model), "BETA") => model.beta = value,
             (ModelCard::Jfet(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Jfet(model), "B") => model.b = value,
             (ModelCard::Jfet(model), "RD") => model.rd = value,
             (ModelCard::Jfet(model), "RS") => model.rs = value,
             (ModelCard::Jfet(model), "IS") => model.is = value,
@@ -3665,12 +3673,6 @@ fn parse_model(
                 return Err(ctx.parse_err(format!(
                     "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \
                      `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
-                )))
-            }
-            (ModelCard::Jfet(_), "B") if value != 1.0 => {
-                return Err(ctx.parse_err(format!(
-                    "JFET `B={value}` is not modelled in-core; only Parker–Skellern B=1 is. \
-                     Use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
                 )))
             }
             _ => {}

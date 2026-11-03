@@ -2374,12 +2374,14 @@ impl Solver {
                 (jfet.junction_d, jfet.junction_s, self.jfet_vgs[index])
             };
             let vds = self.jfet_vds[index].abs();
-            let op = device::jfet_op(
+            let op = device::jfet_op_with_b(
                 vgs,
                 vds,
                 sign * jfet.model.vto,
                 jfet.model.beta,
                 jfet.model.lambda,
+                jfet.model.b,
+                jfet.model.pb,
             );
 
             // The channel's GMIN keeps a cut-off device connected. The gate

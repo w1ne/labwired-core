@@ -514,9 +514,11 @@ from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
 `CGSO`/`CGDO`/`CGBO`, and `TOX`-enabled
 intrinsic channel charge using either ngspice's piecewise Meyer formulation or
 the opt-in Ward–Dutton charge partition; and
-SPICE JFET level 1 with `B=1`, including its two gate junctions and depletion
-charge. MOSFET and JFET channel-length modulation, both polarities, reverse
-channel operation, MOSFET body effect, Meyer bias regions, and Ward–Dutton
+SPICE JFET level 1 with the Parker–Skellern `B` fit, including its two gate
+junctions and depletion charge. Tests exercise non-unit `B` in the linear and
+saturation regions for both channel polarities. Other tests cover MOSFET/JFET
+channel-length modulation, reverse-channel operation, MOSFET body effect,
+Meyer bias regions, and Ward–Dutton
 charge conservation and transient terminal response are covered by tests. The
 diode's forward and reverse knee reduction and first-order soft-recovery
 response are exercised in
@@ -527,7 +529,7 @@ model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 **What is not modeled:** Ward–Dutton mode includes strong-inversion channel
 charge only; it omits intrinsic accumulation/depletion charge. Select Meyer
 mode when that piecewise channel capacitance is needed. Non-quasi-static MOSFET
-effects, and JFET levels other than level 1 with `B=1`, remain unsupported.
+effects, and JFET levels other than level 1, remain unsupported.
 The diode's `TT` term is a quasi-static transit-time charge model, with the
 first-order `VP` soft-recovery extension when enabled. More detailed
 non-quasi-static effects are not modeled. Circuits needing those features
