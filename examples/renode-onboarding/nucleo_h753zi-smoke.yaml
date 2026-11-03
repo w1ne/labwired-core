@@ -1,0 +1,15 @@
+# Cortex-M7 smoke against the exact imported NUCLEO-H753ZI profile.
+# This exercises the bounded H7 RCC/GPIOB/GPIOD/USART3 model surface and the
+# imported GreenLED attachment on GPIOB pin 0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke"
+  system: "../../configs/systems/onboarding/nucleo_h753zi.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "STM32H7 register smoke"
+  - gpio_edges:
+      pin: "gpioPortB:0"
+      min_edges: 1
+  - expected_stop_reason: max_steps

@@ -1,6 +1,6 @@
 # Imported STM32H743 smoke profile. The imported Renode catalogue listed a
 # wider set of peripherals, including blocks that are stubs in this engine.
-# Keep only the H7 RCC, GPIOA/GPIOD, USART3, flash, and DTCM used by the smoke.
+# Keep only the H7 RCC, GPIOB/GPIOD, USART3, flash, and DTCM used by the smoke.
 # RM0433 documents the H743 memory map; 1 MiB flash is a conservative window for
 # this generic descriptor because it does not distinguish xG from xI density.
 name: stm32h743
@@ -19,9 +19,9 @@ peripherals:
     size: 1KB
     config:
       profile: h7
-  - id: gpioPortA
+  - id: gpioPortB
     type: gpio
-    base_address: 0x58020000
+    base_address: 0x58020400
     size: 1KB
     config:
       profile: stm32v2

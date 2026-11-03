@@ -132,6 +132,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32h743-smoke.yaml
             system: configs/systems/onboarding/stm32h743.yaml
+          # Reuse the H7 register fixture on the imported NUCLEO-H753ZI board.
+          # The smoke also asserts its imported GreenLED attachment at GPIOB.0.
+          - id: nucleo_h753zi
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nucleo_h753zi-smoke.yaml
+            system: configs/systems/onboarding/nucleo_h753zi.yaml
           # The STM32F746G Discovery fixture is limited to the imported
           # Cortex-M7, bounded memory, RCC, GPIOI, and USART1 smoke surface.
           - id: stm32f7_discovery-bb

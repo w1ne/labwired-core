@@ -6,8 +6,8 @@ inputs:
 limits:
   max_steps: 4000000
 assertions:
-  - uart_contains: "STM32H743 profile smoke"
+  - uart_contains: "STM32H7 register smoke"
   - gpio_edges:
-      pin: "gpioPortA:5"
+      pin: "gpioPortB:0"
       min_edges: 1
   - expected_stop_reason: max_steps

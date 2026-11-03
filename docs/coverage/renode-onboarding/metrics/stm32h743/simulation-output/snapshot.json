@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1476526100,
+      1476527124,
       1073760284,
       0,
       103,
@@ -12,15 +12,15 @@
       13,
       537001968,
       10,
-      97,
-      53,
+      98,
+      48,
       61,
       122496,
       537001968,
       104,
-      134220476
+      134220458
     ],
-    "pc": 134220476,
+    "pc": 134220458,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9083a6608c4cea7acb6eef14bc7dcb82c79be3e13942f9dfd024ff58d5ae0fde",
+  "firmware_hash": "dc27e0ad511f864e9e851cb9bd06afbcbcf94c737325e076dea5dd02669aab13",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32h743.yaml",
