@@ -67,6 +67,7 @@ pub enum AvrModel {
     Attiny804,
     Attiny806,
     Attiny1604,
+    Attiny1607,
 }
 
 impl AvrModel {
@@ -91,6 +92,8 @@ impl AvrModel {
             AvrModel::Attiny806
         } else if n.contains("attiny1604") || n.contains("attiny 1604") {
             AvrModel::Attiny1604
+        } else if n.contains("attiny1607") || n.contains("attiny 1607") {
+            AvrModel::Attiny1607
         } else if n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
@@ -107,7 +110,7 @@ impl AvrModel {
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
             AvrModel::Attiny402 | AvrModel::Attiny404 => 4 * 1024,
             AvrModel::Attiny804 | AvrModel::Attiny806 => 8 * 1024,
-            AvrModel::Attiny1604 => 16 * 1024,
+            AvrModel::Attiny1604 | AvrModel::Attiny1607 => 16 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -117,7 +120,7 @@ impl AvrModel {
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 => 0x3F00,
             AvrModel::Attiny804 | AvrModel::Attiny806 => 0x3E00,
-            AvrModel::Attiny1604 => 0x3C00,
+            AvrModel::Attiny1604 | AvrModel::Attiny1607 => 0x3C00,
         }
     }
     pub fn ramend(self) -> u16 {
@@ -130,7 +133,8 @@ impl AvrModel {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
-            | AvrModel::Attiny1604 => 0x3FFF,
+            | AvrModel::Attiny1604
+            | AvrModel::Attiny1607 => 0x3FFF,
         }
     }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
@@ -146,7 +150,8 @@ impl AvrModel {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
-            | AvrModel::Attiny1604 => AVR_ADC_INPUT_BASE,
+            | AvrModel::Attiny1604
+            | AvrModel::Attiny1607 => AVR_ADC_INPUT_BASE,
         }
     }
     /// `true` when the PC is pushed as 3 bytes (flash above 128 KB).
@@ -171,6 +176,7 @@ impl AvrModel {
                 | AvrModel::Attiny804
                 | AvrModel::Attiny806
                 | AvrModel::Attiny1604
+                | AvrModel::Attiny1607
         )
     }
 }
@@ -625,7 +631,8 @@ impl Avr {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
-            | AvrModel::Attiny1604 => false,
+            | AvrModel::Attiny1604
+            | AvrModel::Attiny1607 => false,
         }
     }
 
@@ -642,7 +649,8 @@ impl Avr {
             | AvrModel::Attiny404
             | AvrModel::Attiny804
             | AvrModel::Attiny806
-            | AvrModel::Attiny1604 => false,
+            | AvrModel::Attiny1604
+            | AvrModel::Attiny1607 => false,
         }
     }
 
@@ -3272,6 +3280,7 @@ mod tests {
             ("attiny804", AvrModel::Attiny804, 8 * 1024, 0x3E00, 512),
             ("attiny806", AvrModel::Attiny806, 8 * 1024, 0x3E00, 512),
             ("attiny1604", AvrModel::Attiny1604, 16 * 1024, 0x3C00, 1024),
+            ("attiny1607", AvrModel::Attiny1607, 16 * 1024, 0x3C00, 1024),
         ] {
             let mut cpu = Avr::for_chip_name(name);
             assert_eq!(cpu.model, model, "{name} selects its exact model");
