@@ -28,7 +28,7 @@ enum TwiPhase {
     Mr,
 }
 
-/// ATmega328P geometry (the default model). The ATmega2560 values live on
+/// ATmega328P geometry (the default model). Other AVR values live on
 /// [`AvrModel`]; a CPU built for a chip reads them from its own fields.
 pub const FLASH_SIZE: usize = 32 * 1024;
 pub const RAMEND: u16 = 0x08FF;
@@ -45,6 +45,11 @@ pub const SRAM_START: u16 = 0x0100;
 /// TWI sit at the same data addresses as on the 328P, so they are shared; their
 /// vector numbers are remapped on entry ([`mega2560_vector`]).
 ///
+/// The tinyAVR 0-series uses an AVRxt data map: the register file is separate,
+/// I/O occupies data addresses 0x0000..=0x0FFF, and ATtiny404 SRAM is at
+/// 0x3F00..=0x3FFF. Its common instruction execution is shared, but its
+/// peripherals and interrupt controller are not yet modelled.
+///
 /// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
 /// 328P's; the registers are stored only), output-compare pads (PWM
 /// `analogWrite` levels; the pads follow `PORTx`), Timer3/4/5 and USART1..3
@@ -55,15 +60,19 @@ pub enum AvrModel {
     Atmega328p,
     Atmega1281,
     Atmega2560,
+    Attiny404,
 }
 
 impl AvrModel {
     /// The model a chip descriptor names. atmega1281 selects the 128 KB
     /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
-    /// 256 KB three-byte-PC mega core. Other names default to the ATmega328P.
+    /// 256 KB three-byte-PC mega core; attiny404 selects the AVRxt 0-series
+    /// data map. Other names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
-        if n.contains("1281") {
+        if n.contains("attiny404") || n.contains("attiny 404") {
+            AvrModel::Attiny404
+        } else if n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
@@ -76,18 +85,21 @@ impl AvrModel {
             AvrModel::Atmega328p => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
+            AvrModel::Attiny404 => 4 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
         match self {
             AvrModel::Atmega328p => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
+            AvrModel::Attiny404 => 0x3F00,
         }
     }
     pub fn ramend(self) -> u16 {
         match self {
             AvrModel::Atmega328p => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
+            AvrModel::Attiny404 => 0x3FFF,
         }
     }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
@@ -97,6 +109,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
+            AvrModel::Attiny404 => AVR_ADC_INPUT_BASE,
         }
     }
     /// `true` when the PC is pushed as 3 bytes (flash above 128 KB).
@@ -106,6 +119,13 @@ impl AvrModel {
     /// Whether this model implements EIND, EIJMP and EICALL.
     pub fn supports_eind(self) -> bool {
         self == AvrModel::Atmega2560
+    }
+
+    /// Whether this part uses the AVRxt data-space map and direct I/O
+    /// addresses for IN/OUT, SBI/CBI and SBIS/SBIC.
+    #[inline]
+    pub fn uses_avrxt_data_map(self) -> bool {
+        self == AvrModel::Attiny404
     }
 }
 
@@ -179,6 +199,9 @@ pub struct Avr {
     /// Data-space 0x20..0x1FF (the 328P uses 0x20..0xFF; 0x100..0x1FF is the
     /// ATmega2560's extended I/O).
     pub io: [u8; 0x1E0],
+    /// AVRxt I/O memory, whose data-space addresses start at zero and span
+    /// 0x0000..=0x0FFF. Used by the tinyAVR 0-series model.
+    tiny_io: Vec<u8>,
     pub pending_irq: u64,
     pub cycles: u64,
     pub tcnt0: u8,
@@ -446,6 +469,7 @@ impl Avr {
             flash: vec![0xFF; model.flash_size()],
             sram: vec![0; (ramend as usize + 1) - sram_start as usize],
             io: [0; 0x1E0],
+            tiny_io: vec![0; 0x1000],
             pending_irq: 0,
             cycles: 0,
             tcnt0: 0,
@@ -529,12 +553,28 @@ impl Avr {
         matches!(self.model, AvrModel::Atmega1281 | AvrModel::Atmega2560)
     }
 
+    #[inline]
+    fn is_avrxt(&self) -> bool {
+        self.model.uses_avrxt_data_map()
+    }
+
+    /// Convert a 6-bit IN/OUT/SBI/SBIC I/O operand to a data-space address.
+    #[inline]
+    pub(in crate::cpu::avr) fn io_data_address(&self, io_addr: u8) -> u16 {
+        if self.is_avrxt() {
+            u16::from(io_addr)
+        } else {
+            0x20 + u16::from(io_addr)
+        }
+    }
+
     /// `PINx` of a port this model has.
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Attiny404 => false,
         }
     }
 
@@ -546,6 +586,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Attiny404 => false,
         }
     }
 
@@ -636,6 +677,9 @@ impl Avr {
     }
 
     fn data_read(&self, addr: u16, bus: &dyn Bus) -> SimResult<u8> {
+        if self.is_avrxt() {
+            return self.avrxt_data_read(addr, bus);
+        }
         match addr {
             0x0000..=0x001F => Ok(self.r[addr as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
@@ -750,6 +794,9 @@ impl Avr {
     }
 
     fn data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
+        if self.is_avrxt() {
+            return self.avrxt_data_write(addr, value, bus);
+        }
         match addr {
             0x0000..=0x001F => {
                 self.r[addr as usize] = value;
@@ -1050,6 +1097,68 @@ impl Avr {
                 Ok(())
             }
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
+        }
+    }
+
+    /// AVRxt data-space read for ATtiny404. The CPU register file is separate
+    /// from data memory; low addresses are I/O, SRAM starts at 0x3F00, and
+    /// Flash is visible to LD/ST at 0x8000.
+    fn avrxt_data_read(&self, addr: u16, bus: &dyn Bus) -> SimResult<u8> {
+        match addr {
+            0x0000..=0x0FFF => match addr {
+                // CPU peripheral block starts at 0x30; SP is at 0x3D/0x3E
+                // and SREG at 0x3F (datasheet §8.6).
+                0x003D => Ok(self.sp as u8),
+                0x003E => Ok((self.sp >> 8) as u8),
+                0x003F => Ok(self.sreg),
+                _ => {
+                    let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
+                    if bus.has_mmio_window(mirror) {
+                        bus.read_u8(mirror)
+                    } else {
+                        Ok(self.tiny_io[addr as usize])
+                    }
+                }
+            },
+            a if (self.sram_start..=self.ramend).contains(&a) => {
+                Ok(self.sram[(a - self.sram_start) as usize])
+            }
+            0x8000..=0x8FFF => Ok(self.flash[usize::from(addr - 0x8000)]),
+            _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
+        }
+    }
+
+    /// AVRxt data-space write for ATtiny404. I/O writes are retained locally
+    /// and mirrored to an explicitly mapped peripheral window; SRAM writes
+    /// update both the CPU's backing store and the system bus.
+    fn avrxt_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
+        match addr {
+            0x003D => {
+                self.sp = (self.sp & 0xFF00) | u16::from(value);
+                Ok(())
+            }
+            0x003E => {
+                self.sp = (self.sp & 0x00FF) | (u16::from(value & 0x3F) << 8);
+                Ok(())
+            }
+            0x003F => {
+                self.sreg = value;
+                Ok(())
+            }
+            0x0000..=0x0FFF => {
+                self.tiny_io[addr as usize] = value;
+                let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
+                if bus.has_mmio_window(mirror) {
+                    bus.write_u8(mirror, value)?;
+                }
+                Ok(())
+            }
+            a if (self.sram_start..=self.ramend).contains(&a) => {
+                self.sram[(a - self.sram_start) as usize] = value;
+                bus.write_u8(u64::from(a), value)?;
+                Ok(())
+            }
+            _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
         }
     }
 
@@ -1429,11 +1538,19 @@ impl Avr {
         for seg in &image.segments {
             let addr = seg.start_addr;
             if let Some(d) = strip_avr_data_bias(addr) {
+                // EEPROM is NVMCTRL-backed on AVRxt. Do not misplace a biased
+                // EEPROM image at data-space address zero while NVMCTRL
+                // programming and reads remain unmodelled.
+                if self.is_avrxt() && addr >= AVR_EEPROM_VMA_BIAS {
+                    continue;
+                }
                 // Data / EEPROM space (biased VMA from avr-gcc).
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = d as u16 + i as u16;
                     if (self.sram_start..=self.ramend).contains(&a) {
                         self.sram[(a - self.sram_start) as usize] = *b;
+                    } else if self.is_avrxt() && a < 0x1000 {
+                        self.tiny_io[a as usize] = *b;
                     } else if (0x20..self.sram_start).contains(&a) {
                         self.io[(a - 0x20) as usize] = *b;
                     }
@@ -1823,6 +1940,19 @@ impl Cpu for Avr {
     }
 
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
+        if self.is_avrxt() {
+            self.tiny_io.fill(0);
+            self.r = [0; 32];
+            self.pc = 0;
+            self.sp = self.ramend;
+            self.sreg = 0;
+            self.pending_irq = 0;
+            self.cycles = 0;
+            self.sleeping = false;
+            self.irq_shadow = false;
+            let _ = bus;
+            return Ok(());
+        }
         // MCUCR resets to 0: PUD clear, so the ports' pull-ups come back.
         let mcucr = &mut self.io[usize::from(ADDR_MCUCR - 0x20)];
         if *mcucr & MCUCR_PUD != 0 {
@@ -3026,6 +3156,52 @@ mod tests {
         assert_eq!(cpu.sram.len(), 8 * 1024);
         assert_eq!(cpu.sp, 0x21FF);
         assert!(!cpu.model.three_byte_pc());
+    }
+
+    #[test]
+    fn attiny404_selects_avrxt_geometry_and_runs_call_stack_and_sram_firmware() {
+        let mut cpu = Avr::for_chip_name("attiny404");
+        assert_eq!(cpu.model, AvrModel::Attiny404);
+        assert_eq!(cpu.flash.len(), 4 * 1024);
+        assert_eq!(cpu.sram.len(), 256);
+        assert_eq!(cpu.sp, 0x3FFF);
+        assert!(!cpu.model.three_byte_pc());
+
+        // Exercise direct-address OUT/IN/SBI, store to data SRAM, call a
+        // subroutine (exercising the top-of-SRAM stack), and return. The
+        // ATtiny register file is separate from data memory, so a data access
+        // to 0x0000 must not overwrite r0.
+        cpu.load_words(
+            0,
+            &[
+                0xE402, // LDI r16, 0x42
+                0xB900, // OUT VPORTA.DIR(0x00), r16
+                0xB110, // IN r17, VPORTA.DIR(0x00)
+                0x9A00, // SBI VPORTA.DIR(0x00), 0
+                0x9300, 0x3F00, // STS 0x3F00, r16
+                0x9300, 0x0001, // STS VPORTA.OUT, r16 (data-space I/O)
+                0xD003, // RCALL subroutine four words ahead
+                0xB73D, // IN r19, CPU.SPL(0x3D)
+                0xB74F, // IN r20, CPU.SREG(0x3F)
+                0xCFFF, // loop forever after return
+                0xE021, // subroutine: LDI r18, 1
+                0x9508, // RET
+            ],
+        );
+        let mut bus = MockBus::new();
+        step_n(&mut cpu, &mut bus, 11);
+
+        assert_eq!(cpu.sram[0], 0x42, "STS writes to ATtiny404 SRAM");
+        assert_eq!(cpu.tiny_io[0], 0x43, "data address zero is I/O");
+        assert_eq!(cpu.tiny_io[1], 0x42, "STS writes data-space I/O");
+        assert_eq!(cpu.r[0], 0, "data address zero is not R0");
+        assert_eq!(cpu.r[17], 0x42, "IN reads direct-address AVRxt I/O");
+        assert_eq!(cpu.r[18], 0x01, "subroutine executes after the direct IN");
+        assert_eq!(cpu.r[19], 0xFF, "CPU.SPL is at I/O address 0x3D");
+        assert_eq!(cpu.r[20], 0, "CPU.SREG is at I/O address 0x3F");
+        assert_eq!(cpu.sp, 0x3FFF, "RET restores the AVRxt stack pointer");
+        assert_eq!(cpu.sram[0xFF], 0, "return PC high byte was pushed");
+        assert_eq!(cpu.sram[0xFE], 9, "return PC low byte was pushed");
     }
 
     #[test]
