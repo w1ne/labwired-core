@@ -62,8 +62,9 @@
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (except diode depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion
-//! charge `TT` and soft-recovery parameter `VP`, BJT terminal resistances
+//! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
+//! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
+//! soft-recovery parameter `VP`, BJT terminal resistances
 //! `RB`/`RC`/`RE`, JFET terminal
 //! resistances `RD`/`RS` and gate-junction depletion capacitance
 //! `CGS`/`CGD`/`PB`/`FC`,
@@ -109,7 +110,9 @@
 //! They are *-like* cards — the datasheet's headline numbers, not the vendor's
 //! macro model.
 //!
-//! A diode card may carry `BV` (reverse breakdown voltage), `IBV` (the current
+//! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
+//! knee current) to reduce the Shockley current under high injection. It may
+//! also carry `BV` (reverse breakdown voltage), `IBV` (the current
 //! at `BV`, default 1 mA) and `NBV` (breakdown emission coefficient, default
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
@@ -537,6 +540,12 @@ pub struct DiodeModel {
     pub is: f64,
     /// Emission coefficient `N`.
     pub n: f64,
+    /// Forward high-injection knee current `IK` (also called `IKF`), amps.
+    /// Zero disables the correction, matching ngspice's default.
+    pub ik: f64,
+    /// Reverse high-injection knee current `IKR`, amps. Zero disables the
+    /// correction, matching ngspice's default.
+    pub ikr: f64,
     /// Recombination saturation current `ISR`, amps. Zero means the optional
     /// ngspice recombination branch is disabled, matching an omitted `ISR`.
     pub isr: f64,
@@ -576,6 +585,8 @@ impl Default for DiodeModel {
         Self {
             is: 1e-14,
             n: 1.0,
+            ik: 0.0,
+            ikr: 0.0,
             isr: 0.0,
             nr: 2.0,
             rs: 0.0,
@@ -857,6 +868,8 @@ pub const REGULATOR_LIMIT_GAIN: f64 = 100.0;
 pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 1.0,
+    ik: 0.0,
+    ikr: 0.0,
     isr: 0.0,
     nr: 2.0,
     rs: 0.0,
@@ -1258,6 +1271,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
         "1N4733A" => Some(ModelCard::Diode(DiodeModel {
             is: 1e-11,
             n: 1.2,
+            ik: 0.0,
+            ikr: 0.0,
             isr: 0.0,
             nr: 2.0,
             rs: 6.0,
@@ -1278,6 +1293,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
         "SMAJ5.0A" => Some(ModelCard::Diode(DiodeModel {
             is: 1e-12,
             n: 1.0,
+            ik: 0.0,
+            ikr: 0.0,
             isr: 0.0,
             nr: 2.0,
             rs: 0.0525,
@@ -2781,6 +2798,10 @@ fn bind_models(
                 };
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.ik.is_finite()
+                    || model.ik < 0.0
+                    || !model.ikr.is_finite()
+                    || model.ikr < 0.0
                     || !model.isr.is_finite()
                     || model.isr < 0.0
                     || !model.nr.is_finite()
@@ -2801,7 +2822,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3376,6 +3397,8 @@ fn parse_model(
         match (&mut card, param.as_str()) {
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
+            (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
+            (ModelCard::Diode(model), "IKR") => model.ikr = value,
             (ModelCard::Diode(model), "ISR") => model.isr = value,
             (ModelCard::Diode(model), "NR") => model.nr = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
@@ -3571,6 +3594,8 @@ pub const MACRO_GAIN_RESISTANCE: f64 = 1e6;
 pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 0.02,
+    ik: 0.0,
+    ikr: 0.0,
     isr: 0.0,
     nr: 2.0,
     rs: 0.0,

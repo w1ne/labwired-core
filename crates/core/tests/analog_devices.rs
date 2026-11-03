@@ -22,8 +22,9 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
-//! recombination current (`ISR`/`NR`), diffusion charge (`TT`) and soft
-//! reverse recovery (`TT`/`VP`), plus BJT forward bias-dependent and reverse
+//! forward/reverse high-injection knees (`IK`/`IKF`/`IKR`), recombination
+//! current (`ISR`/`NR`), diffusion charge (`TT`) and soft reverse recovery
+//! (`TT`/`VP`), plus BJT forward bias-dependent and reverse
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
@@ -104,6 +105,68 @@ mod analog {
                 "expected {target_current} A through the loop, got {current} A"
             );
         }
+    }
+
+    /// `IK`/`IKF` and `IKR` reduce forward and reverse junction current at
+    /// high injection. The source voltage is derived from the selected
+    /// junction voltage and the ngspice current transform, so each case checks
+    /// the nonlinear stamp rather than only its parsed model fields.
+    #[test]
+    fn diode_forward_and_reverse_knee_currents_match_the_spice_equation() {
+        let (is, resistance) = (1e-14, 1e3);
+
+        let forward_vd = 0.7;
+        let forward_ik = 100e-6;
+        let forward_base = is * ((forward_vd / VT).exp() - 1.0);
+        let forward_current =
+            forward_base / (1.0 + (forward_base / forward_ik).sqrt()) + device::GMIN * forward_vd;
+        let forward_netlist = format!(
+            "V1 in 0 dc {}\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 IK={forward_ik})\n",
+            forward_vd + forward_current * resistance,
+        );
+        let forward = build(&forward_netlist);
+        let forward_out = forward.circuit().node("out").expect("forward node");
+        assert!(
+            (forward.node_voltage(forward_out) - forward_vd).abs() < 1e-8,
+            "forward junction should be {forward_vd} V, got {} V",
+            forward.node_voltage(forward_out)
+        );
+        assert!(
+            relative(source_current(&forward, "V1"), forward_current) < 1e-7,
+            "forward knee current should be {forward_current} A, got {} A",
+            source_current(&forward, "V1")
+        );
+
+        let reverse_vd = -5.0;
+        let reverse_ikr = 10e-6;
+        let reverse_model = parse_netlist(&format!(
+            "V1 in 0 dc 0\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 BV=5 IBV=1m IKR={reverse_ikr})\n"
+        ))
+        .expect("reverse knee model parses");
+        let diode = &reverse_model.diodes[0];
+        let xbv = diode.breakdown.expect("BV enables reverse breakdown");
+        let reverse_base = -is * (-(xbv + reverse_vd) / VT).exp();
+        let reverse_current =
+            reverse_base / (1.0 + (-reverse_base / reverse_ikr).sqrt()) + device::GMIN * reverse_vd;
+        let reverse_netlist = format!(
+            "V1 in 0 dc {}\nR1 in out {resistance}\nD1 out 0 DMOD\n\
+             .model DMOD D(IS={is} N=1 BV=5 IBV=1m IKR={reverse_ikr})\n",
+            reverse_vd + reverse_current * resistance,
+        );
+        let reverse = build(&reverse_netlist);
+        let reverse_out = reverse.circuit().node("out").expect("reverse node");
+        assert!(
+            (reverse.node_voltage(reverse_out) - reverse_vd).abs() < 1e-7,
+            "reverse junction should be {reverse_vd} V, got {} V",
+            reverse.node_voltage(reverse_out)
+        );
+        assert!(
+            relative(source_current(&reverse, "V1"), reverse_current) < 1e-6,
+            "reverse knee current should be {reverse_current} A, got {} A",
+            source_current(&reverse, "V1")
+        );
     }
 
     /// Ngspice's `ISR`/`NR` branch adds recombination current in forward bias

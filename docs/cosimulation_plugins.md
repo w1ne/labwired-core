@@ -470,10 +470,13 @@ defaults). The MOSFET values are this engine's convenience values; the JFET
 values use ngspice's level-1 defaults.
 
 **What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`; optional
+forward high-injection current limiting from `IK` (also named `IKF`) and
+reverse high-injection limiting from `IKR` (both default to disabled); optional
 recombination current from `ISR`/`NR`, clamped in reverse bias at the
 `−3·N·Vt` boundary; diode depletion charge in transient runs from
 `CJO`/`VJ`/`M`/`FC` (`CJO` defaults to zero) and quasi-static diffusion charge
-from `TT` (defaults to zero); diode breakdown when `BV` is set. Gummel–Poon BJT
+from `TT` (defaults to zero), including first-order soft reverse recovery
+when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set. Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
 recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
@@ -496,7 +499,10 @@ the opt-in Ward–Dutton charge partition; and
 SPICE JFET level 1 with `B=1`, including its two gate junctions and depletion
 charge. MOSFET and JFET channel-length modulation, both polarities, reverse
 channel operation, MOSFET body effect, Meyer bias regions, and Ward–Dutton
-charge conservation and transient terminal response are covered by tests. Every
+charge conservation and transient terminal response are covered by tests. The
+diode's forward and reverse knee reduction and first-order soft-recovery
+response are exercised in
+[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). Every
 parameter is taken at 300.00 K; there is no temperature
 model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
@@ -504,10 +510,10 @@ model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 charge only; it omits intrinsic accumulation/depletion charge. Select Meyer
 mode when that piecewise channel capacitance is needed. Non-quasi-static MOSFET
 effects, and JFET levels other than level 1 with `B=1`, remain unsupported.
-The diode's `TT` term is a quasi-static transit-time
-charge model; more detailed non-quasi-static and soft-recovery effects are not
-modeled. Circuits needing those features belong on `adapter: external_process`
-with `tools/cosim/labwired_ngspice.py`.
+The diode's `TT` term is a quasi-static transit-time charge model, with the
+first-order `VP` soft-recovery extension when enabled. More detailed
+non-quasi-static effects are not modeled. Circuits needing those features
+belong on `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
 as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,

@@ -17,8 +17,9 @@
 //! ## What is modelled, and what is not
 //!
 //! DC/large-signal behaviour for the nonlinear current equations. Diode
-//! depletion charge (`CJO`, `VJ`, `M`, `FC`), recombination current (`ISR`,
-//! `NR`), quasi-static diffusion charge (`TT`) or soft reverse-recovery charge
+//! forward/reverse high-injection current knees (`IK`/`IKF`, `IKR`), depletion
+//! charge (`CJO`, `VJ`, `M`, `FC`), recombination current (`ISR`, `NR`),
+//! quasi-static diffusion charge (`TT`) or soft reverse-recovery charge
 //! (`TT`/`VP`), BJT
 //! base-junction depletion charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`,
 //! `FC`), and JFET gate-junction depletion charge (`CGS`, `CGD`, `PB`, `FC`,

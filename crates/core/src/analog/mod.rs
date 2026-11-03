@@ -12,7 +12,8 @@
 //! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
 //! subcircuits, model libraries and AC/DC sweeps by name and points at
 //! `tools/cosim/labwired_ngspice.py`, which supports those features. The solver
-//! integrates diode `TT`, BJT
+//! integrates diode forward/reverse high-injection knees (`IK`/`IKF`/`IKR`),
+//! diode `TT`, BJT
 //! `TF`/`TR` with forward `XTF`/`VTF`/`ITF`, and `RB`/`RC`/`RE`, MOSFET
 //! terminal resistances (`RD`/`RS` or
 //! `RSH` times instance `NRD`/`NRS`), level-1 gate overlap charge

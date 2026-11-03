@@ -166,6 +166,30 @@ fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> de
     };
     let recombination =
         device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m);
+
+    // ngspice's IK/IKR high-injection correction applies to the junction
+    // current (including recombination) but leaves GMIN outside the clamp.
+    // Preserve the old arithmetic exactly when the selected knee is omitted,
+    // or when the current is too small for the correction to apply.
+    let forward = voltage >= -3.0 * model.n * device::THERMAL_VOLTAGE;
+    let knee = if forward { model.ik } else { model.ikr };
+    let junction_current = op.id + recombination.id - device::GMIN * voltage;
+    let active_current = if forward {
+        junction_current > 1e-18
+    } else {
+        junction_current < -1e-18
+    };
+    if knee > 0.0 && active_current {
+        let root = (junction_current.abs() / knee).sqrt();
+        let denominator = 1.0 + root;
+        let junction_conductance = op.gd + recombination.gd - device::GMIN;
+        let conductance_scale = (1.0 + root / 2.0) / (denominator * denominator);
+        return device::DiodeOp {
+            id: junction_current / denominator + device::GMIN * voltage,
+            gd: junction_conductance * conductance_scale + device::GMIN,
+        };
+    }
+
     op.id += recombination.id;
     op.gd += recombination.gd;
     op
