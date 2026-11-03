@@ -22,7 +22,7 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
-//! diffusion charge (`TT`) and BJT forward bias-dependent and reverse
+//! recombination current (`ISR`/`NR`), diffusion charge (`TT`) and BJT forward bias-dependent and reverse
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
 //! depletion charge through `CJO`/`VJ`/`M`/`FC`, BJT base-junction depletion
 //! charge through `CJE`/`CJC`, JFET gate-junction depletion charge through
@@ -103,6 +103,63 @@ mod analog {
                 "expected {target_current} A through the loop, got {current} A"
             );
         }
+    }
+
+    /// Ngspice's `ISR`/`NR` branch adds recombination current in forward bias
+    /// and holds its value at `−3·N·Vt` farther into reverse bias.
+    #[test]
+    fn diode_recombination_current_matches_the_forward_and_reverse_equations() {
+        let (is, n, isr, nr, vj, m) = (1e-14, 1.3, 2e-8, 2.0, 0.75, 0.4);
+        let recombination_current = |voltage: f64| {
+            let boundary = -3.0 * n * VT;
+            let voltage = voltage.max(boundary);
+            let base = isr * ((voltage / (nr * VT)).exp() - 1.0);
+            let x = 1.0 - voltage / vj;
+            base * (x * x + 0.005).powf(m / 2.0)
+        };
+
+        for vd in [-0.3, -0.02, 0.15, 0.35] {
+            let solver = build(&format!(
+                "Vd a 0 dc {vd}\nD1 a 0 DREC\n.model DREC D(IS={is} N={n} ISR={isr} NR={nr} VJ={vj} M={m})\n"
+            ));
+            let expected =
+                is * ((vd / (n * VT)).exp() - 1.0) + device::GMIN * vd + recombination_current(vd);
+            let actual = source_current(&solver, "Vd");
+            assert!(
+                (actual - expected).abs() < 2e-12 + 2e-8 * expected.abs(),
+                "at Vd={vd} V: expected {expected} A, got {actual} A"
+            );
+        }
+
+        // The analytic tangent also drives a loaded operating point to the
+        // root of the independent diode equation.
+        let supply = 0.35;
+        let resistance = 10_000.0;
+        let diode_current = |voltage: f64| {
+            is * ((voltage / (n * VT)).exp() - 1.0)
+                + device::GMIN * voltage
+                + recombination_current(voltage)
+        };
+        let mut low = 0.0;
+        let mut high = supply;
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if supply - mid - resistance * diode_current(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let expected_vd = (low + high) / 2.0;
+        let solver = build(&format!(
+            "Vs s 0 dc {supply}\nR1 s a {resistance}\nD1 a 0 DREC\n.model DREC D(IS={is} N={n} ISR={isr} NR={nr} VJ={vj} M={m})\n"
+        ));
+        let anode = solver.circuit().node("a").expect("anode");
+        let actual_vd = solver.node_voltage(anode);
+        assert!(
+            (actual_vd - expected_vd).abs() < 1e-8,
+            "expected loaded diode voltage {expected_vd} V, got {actual_vd} V"
+        );
     }
 
     /// `RS` is a real resistor in series with the junction, and it gets the

@@ -17,7 +17,8 @@
 //! ## What is modelled, and what is not
 //!
 //! DC/large-signal behaviour for the nonlinear current equations. Diode
-//! depletion charge (`CJO`, `VJ`, `M`, `FC`) and diffusion charge (`TT`), BJT
+//! depletion charge (`CJO`, `VJ`, `M`, `FC`), recombination current (`ISR`,
+//! `NR`) and diffusion charge (`TT`), BJT
 //! base-junction depletion charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`,
 //! `FC`), and JFET gate-junction depletion charge (`CGS`, `CGD`, `PB`, `FC`,
 //! with level-1 `M=0.5`) are integrated in transient runs. MOSFET gate overlap
@@ -128,6 +129,51 @@ pub fn diode_op(v_junction: f64, is: f64, n: f64) -> DiodeOp {
     DiodeOp {
         id: is * (exponential - 1.0) + GMIN * v_junction,
         gd: is * exponential / vte + GMIN,
+    }
+}
+
+/// Ngspice's optional diode recombination-current branch for `ISR` and `NR`.
+///
+/// In forward operation its current is multiplied by the junction-generation
+/// factor `( (1 − V/VJ)² + 0.005 )^(M/2)`. In reverse operation ngspice holds
+/// the recombination contribution at its value at `−3·N·Vt`, including in
+/// breakdown. An omitted `ISR` is represented by zero and contributes nothing.
+pub fn diode_recombination_op(
+    v_junction: f64,
+    isr: f64,
+    nr: f64,
+    n: f64,
+    vj: f64,
+    m: f64,
+) -> DiodeOp {
+    if isr == 0.0 {
+        return DiodeOp { id: 0.0, gd: 0.0 };
+    }
+
+    let forward_boundary = -3.0 * n * THERMAL_VOLTAGE;
+    let voltage = v_junction.max(forward_boundary);
+    let vte = nr * THERMAL_VOLTAGE;
+    let exponential = exp_clamped(voltage / vte);
+    let base_current = isr * (exponential - 1.0);
+    let x = 1.0 - voltage / vj;
+    let shape = x * x + 0.005;
+    let factor = exp_clamped(0.5 * m * ln(shape));
+    let current = base_current * factor;
+
+    let conductance = if v_junction < forward_boundary {
+        0.0
+    } else {
+        let d_factor_dv = if m == 0.0 {
+            0.0
+        } else {
+            -m * x / vj * exp_clamped((0.5 * m - 1.0) * ln(shape))
+        };
+        isr * exponential / vte * factor + base_current * d_factor_dv
+    };
+
+    DiodeOp {
+        id: current,
+        gd: conductance,
     }
 }
 

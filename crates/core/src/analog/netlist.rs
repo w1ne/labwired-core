@@ -112,8 +112,9 @@
 //! at `BV`, default 1 mA) and `NBV` (breakdown emission coefficient, default
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
-//! breakdown existed. `CJO`, `VJ`, `M`, and `FC` add depletion charge to
-//! transient steps; `TT` adds quasi-static diffusion charge. BJT `TF`/`TR`
+//! breakdown existed. `ISR`/`NR` add its optional recombination-current branch;
+//! `CJO`, `VJ`, `M`, and `FC` add depletion charge to transient steps; `TT`
+//! adds quasi-static diffusion charge. BJT `TF`/`TR`
 //! add transit-time charge based on the forward/reverse transport current;
 //! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias;
 //! `RB`/`RC`/`RE` add series resistance between the external terminals and
@@ -534,6 +535,11 @@ pub struct DiodeModel {
     pub is: f64,
     /// Emission coefficient `N`.
     pub n: f64,
+    /// Recombination saturation current `ISR`, amps. Zero means the optional
+    /// ngspice recombination branch is disabled, matching an omitted `ISR`.
+    pub isr: f64,
+    /// Recombination emission coefficient `NR`, default 2 in ngspice 47.
+    pub nr: f64,
     /// Ohmic series resistance `RS`. Non-zero adds one internal node.
     pub rs: f64,
     /// Forward transit time `TT`, seconds. Zero disables diffusion charge,
@@ -564,6 +570,8 @@ impl Default for DiodeModel {
         Self {
             is: 1e-14,
             n: 1.0,
+            isr: 0.0,
+            nr: 2.0,
             rs: 0.0,
             tt: 0.0,
             bv: None,
@@ -842,6 +850,8 @@ pub const REGULATOR_LIMIT_GAIN: f64 = 100.0;
 pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 1.0,
+    isr: 0.0,
+    nr: 2.0,
     rs: 0.0,
     tt: 0.0,
     bv: None,
@@ -1240,6 +1250,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
         "1N4733A" => Some(ModelCard::Diode(DiodeModel {
             is: 1e-11,
             n: 1.2,
+            isr: 0.0,
+            nr: 2.0,
             rs: 6.0,
             tt: 0.0,
             bv: Some(4.8),
@@ -1257,6 +1269,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
         "SMAJ5.0A" => Some(ModelCard::Diode(DiodeModel {
             is: 1e-12,
             n: 1.0,
+            isr: 0.0,
+            nr: 2.0,
             rs: 0.0525,
             tt: 0.0,
             bv: Some(6.7),
@@ -2757,6 +2771,10 @@ fn bind_models(
                 };
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.isr.is_finite()
+                    || model.isr < 0.0
+                    || !model.nr.is_finite()
+                    || model.nr <= 0.0
                     || model.rs < 0.0
                     || !model.tt.is_finite()
                     || model.tt < 0.0
@@ -2771,7 +2789,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, RS >= 0, TT >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3346,6 +3364,8 @@ fn parse_model(
         match (&mut card, param.as_str()) {
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
+            (ModelCard::Diode(model), "ISR") => model.isr = value,
+            (ModelCard::Diode(model), "NR") => model.nr = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
             (ModelCard::Diode(model), "TT") => model.tt = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
@@ -3538,6 +3558,8 @@ pub const MACRO_GAIN_RESISTANCE: f64 = 1e6;
 pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 0.02,
+    isr: 0.0,
+    nr: 2.0,
     rs: 0.0,
     tt: 0.0,
     bv: None,

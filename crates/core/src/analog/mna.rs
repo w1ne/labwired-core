@@ -154,7 +154,7 @@ fn mos_channel_capacitance_halves(
 }
 
 fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> device::DiodeOp {
-    match breakdown {
+    let mut op = match breakdown {
         None => device::diode_op(voltage, model.is, model.n),
         Some(xbv) => device::diode_op_breakdown(
             voltage,
@@ -163,7 +163,12 @@ fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> de
             xbv,
             model.nbv.unwrap_or(model.n),
         ),
-    }
+    };
+    let recombination =
+        device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m);
+    op.id += recombination.id;
+    op.gd += recombination.gd;
+    op
 }
 
 fn diode_charge_op(voltage: f64, model: DiodeModel, op: device::DiodeOp) -> (f64, f64) {
