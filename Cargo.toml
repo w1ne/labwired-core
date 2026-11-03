@@ -78,6 +78,7 @@ members = [
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
+    "crates/firmware-sifive-fe310-smoke",
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-sam-e70-xplained-smoke",
     "crates/firmware-sam-e70-renode-smoke",
