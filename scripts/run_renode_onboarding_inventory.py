@@ -70,6 +70,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32f4-smoke.yaml",
     },
+    "stm32f4_discovery-kit": {
+        "crate": "firmware-f4-discovery-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml",
+    },
     "stm32f746": {
         "crate": "firmware-stm32f746-demo",
         "target": "thumbv7em-none-eabi",

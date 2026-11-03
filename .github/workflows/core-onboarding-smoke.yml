@@ -127,6 +127,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32f4-smoke.yaml
             system: configs/systems/onboarding/stm32f4.yaml
+          # The Discovery Kit profile exposes only the F4 RCC, USART2, and
+          # GPIO A/D paths asserted by this exact-import smoke.
+          - id: stm32f4_discovery-kit
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml
+            system: configs/systems/onboarding/stm32f4_discovery-kit.yaml
           - id: stm32f746
             crate: firmware-stm32f746-demo
             target: thumbv7em-none-eabi
