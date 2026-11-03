@@ -1,0 +1,15 @@
+[package]
+name = "firmware-nucleo-f411re-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nucleo-f411re-smoke"
+path = "src/main.rs"
+test = false
+bench = false
