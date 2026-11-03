@@ -1,0 +1,13 @@
+# Adafruit Metro M4 Express: real SERCOM3 Serial1 output and D13 GPIO edge.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-atsamd51-demo"
+  system: "../../configs/systems/metro-m4.yaml"
+limits:
+  max_steps: 600000
+assertions:
+  - uart_contains: "METRO_M4_OK"
+  - gpio_edges:
+      pin: "porta:16"
+      min_edges: 1
+  - expected_stop_reason: max_steps

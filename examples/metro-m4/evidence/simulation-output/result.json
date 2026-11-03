@@ -1,0 +1,300 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 600000,
+  "cycles": 600000,
+  "instructions": 600000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 600000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 600000
+    }
+  },
+  "limits": {
+    "max_steps": 600000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "METRO_M4_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "porta:16",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      65536,
+      1090600984,
+      1043,
+      9999,
+      0,
+      0,
+      0,
+      537067504,
+      0,
+      0,
+      0,
+      0,
+      1090551816,
+      537067504,
+      1859,
+      1848
+    ],
+    "pc": 1848,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "a096e7eda87ebc6bbf317e8cb8459d96b2be163dffbfaee4ee974c57a0052f61",
+  "config": {
+    "firmware": "examples/metro-m4/../../target/thumbv7em-none-eabi/release/firmware-atsamd51-demo",
+    "system": "examples/metro-m4/../../configs/systems/metro-m4.yaml",
+    "script": "examples/metro-m4/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "oscctrl",
+        "kind": "native",
+        "base": 1073745920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mclk",
+        "kind": "native",
+        "base": 1073743872,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gclk",
+        "kind": "native",
+        "base": 1073748992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 1090551808,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sercom3",
+        "kind": "native",
+        "base": 1090600960,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 600000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "porta",
+        "pin": 16,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 41769,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 69,
+            "state": "0"
+          },
+          {
+            "cycle": 41769,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 1
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "porta",
+      "number": 16,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "METRO_M4_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 60000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1864,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1864,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 196608,
+    "flash_used_pct": 0.36,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 196608,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 196592,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537067520,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 196608,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 196592,
+    "heap_base": 536870912,
+    "heap_top": 537067520
+  },
+  "metrics": {
+    "cycles": 600000,
+    "instructions": 600000,
+    "steps_executed": 600000,
+    "memory_reads": 363,
+    "memory_writes": 6,
+    "peripheral_accesses": 410776,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1484,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1590,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1720,
+        "count": 39,
+        "symbol": "firmware_atsamd51_demo::putc"
+      },
+      {
+        "pc": 1802,
+        "count": 39,
+        "symbol": "firmware_atsamd51_demo::putc"
+      },
+      {
+        "pc": 1848,
+        "count": 39,
+        "symbol": "firmware_atsamd51_demo::__cortex_m_rt_main"
+      }
+    ]
+  }
+}

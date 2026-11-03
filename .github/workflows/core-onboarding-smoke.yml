@@ -30,6 +30,7 @@ on:
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-atsamd51-demo/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -155,6 +156,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/pico/io-smoke.yaml
             system: configs/systems/rp2040-pico.yaml
+          - id: metro-m4
+            crate: firmware-atsamd51-demo
+            target: thumbv7em-none-eabi
+            script: examples/metro-m4/onboarding-smoke.yaml
+            system: configs/systems/metro-m4.yaml
 
     steps:
       - uses: actions/checkout@v4

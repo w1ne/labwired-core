@@ -380,8 +380,8 @@ The models column is a content digest over everything that board's `models` list
 
 ## `metro-m4` — 🟡 smoke-manual
 
-- Doc: [`docs/boards/metro-m4.md`](metro-m4.md)  ·  Chip: `configs/chips/atsamd51.yaml`
-- Note: Adafruit Metro M4 Express (SAMD51J19A). Bare-metal UART/LED smoke prints OK on SERCOM3 after MCLK APBBMASK + GCLK PCHCTRL[24]; QSPI/USB/NeoPixel are stub windows. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Doc: [`docs/boards/metro-m4.md`](metro-m4.md)  ·  Chip: `configs/chips/atsamd51-metro-m4-smoke.yaml`
+- Note: Adafruit Metro M4 Express (SAMD51J19A). Bare-metal UART/LED smoke configures SERCOM3 on PA22/PA23, prints `METRO_M4_OK`, and toggles D13 on PA16. The focused board profile omits QSPI, USB, and NeoPixel. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_atsamd51_metro_m4_smoke_survival
 - Drift status: **no silicon capture**

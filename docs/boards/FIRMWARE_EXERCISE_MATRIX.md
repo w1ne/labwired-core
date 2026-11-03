@@ -547,11 +547,11 @@ _Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware e
 
 ### `atsamd51`
 
-_No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::test_atsamd51_metro_m4_smoke_survival` (step core-ci.yml:779; case firmware_survival.rs:1336): the committed Metro M4 smoke ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf, built from crates/firmware-atsamd51-demo) writes MCLK.APBBMASK + GCLK PCHCTRL[24] and prints `OK` on Serial1 (crates/firmware-atsamd51-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/metro-m4/io-smoke.yaml) and the nightly coverage-matrix cell `metro-m4` (core-coverage-matrix-smoke.yml:82-88, examples/metro-m4/uart-smoke.yaml). Beyond the rubric the descriptor declares two zero windows, USB and QSPI, that no firmware opens._
+_No tier-1 target. The PR-gated `firmware_survival::test_atsamd51_metro_m4_smoke_survival` runs the committed Metro M4 ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf): firmware gates SERCOM3, selects PA22/PA23 function C, configures the internal-clock USART at 115200 baud, prints `METRO_M4_OK`, then toggles D13 on PA16. The dedicated board profile is configs/chips/atsamd51-metro-m4-smoke.yaml; it uses the pad-aware `samd51_sercom_usart` model and omits the carrier's USB/QSPI windows. The legacy broad configs/chips/atsamd51.yaml remains available and has two explicit zero windows, USB and QSPI; Metro's board system no longer uses that descriptor._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `USB` (configs/chips/atsamd51.yaml:69 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — reads return 0 and writes are dropped, so the SAMD51 native-USB device is not modelled; the PR-gated smoke drives SERCOM3 (Serial1) only and no gated firmware opens the window (docs/boards/metro-m4.md:27-28 lists QSPI/USB/NeoPixel as deliberate stub windows).
-- `QSPI` (configs/chips/atsamd51.yaml:73 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — the SAMD51 QSPI controller (the board's onboard QSPI flash) is not modelled; firmware executes from internal flash and nothing opens the window (docs/boards/metro-m4.md:27-28).
+- `USB` (configs/chips/atsamd51.yaml:69 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window in the legacy broad descriptor; the SAMD51 native-USB device is not modelled. The Metro smoke profile omits this window.
+- `QSPI` (configs/chips/atsamd51.yaml:73 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window in the legacy broad descriptor; the SAMD51 QSPI controller is not modelled. The Metro smoke profile omits this window and firmware executes from internal flash.
 
 ### `atsamd51-pybadge`
 

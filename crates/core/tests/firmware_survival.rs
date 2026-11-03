@@ -1893,13 +1893,13 @@ DONE\r\n",
         expected_uart_output: b"OK",
     },
     SurvivalCase {
-        // SAMD51J19A Metro M4 bare-metal UART smoke: MCLK APBBMASK + GCLK
-        // PCHCTRL[24] SERCOM3_CORE, then three DATA writes of "OK\n" on Serial1.
+        // SAMD51J19A Metro M4 bare-metal UART/LED smoke: clock SERCOM3,
+        // mux PA22/PA23 to its USART pads, send "METRO_M4_OK", and toggle D13.
         name: "atsamd51_metro_m4_smoke",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
         hal: Hal::Bare,
-        chip: "atsamd51",
+        chip: "atsamd51-metro-m4-smoke",
         system: "metro-m4",
         fixture: "atsamd51-metro-m4-smoke.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x0007_FFFF), (0x2000_0000, 0x2002_FFFF)],

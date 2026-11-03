@@ -1,0 +1,66 @@
+# Focused Adafruit Metro M4 Express board profile (SAMD51J19A).
+#
+# This descriptor claims only the exercised Metro paths: SERCOM3 on D1/D0
+# (PA22/PA23), PORTA, the on-board D13 LED (PA16), and OSCCTRL/MCLK/GCLK for
+# the reset DFLL48M clock path. USB, QSPI flash, NeoPixel, and unused MCU
+# peripherals are omitted.
+# The Microchip SAMD51 USART model checks the selected pad mux and clocks the
+# transmitted frames from GCLK; the PORT model carries the LED output.
+
+name: "atsamd51j19a-metro-m4-smoke"
+arch: "arm"
+core: "cortex-m4"
+# The smoke leaves the MCU on its reset DFLL48M clock; it does not configure
+# the board's higher-speed DPLL clock used by full Arduino sketches.
+cpu_hz: 48_000_000
+flash:
+  base: 0x00000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "192KB"
+
+pins:
+  PA16: { gpio: porta, bit: 16, functions: [{ type: gpio, peripheral: porta }] }
+  PA22: { gpio: porta, bit: 22, functions: [{ type: uart, peripheral: sercom3, role: tx }] }
+  PA23: { gpio: porta, bit: 23, functions: [{ type: uart, peripheral: sercom3, role: rx }] }
+
+peripherals:
+  # DFLL48M is GCLK0's source; the clock-tree model reads its live enable
+  # state here when pacing SERCOM3 at the configured baud.
+  - id: "oscctrl"
+    type: "samd51_oscctrl"
+    base_address: 0x40001000
+    size: "256B"
+  - id: "mclk"
+    type: "sam_mclk"
+    base_address: 0x40000800
+    size: "256B"
+  - id: "gclk"
+    type: "samd51_gclk"
+    base_address: 0x40001C00
+    size: "1KB"
+  - id: "porta"
+    type: "gpio"
+    base_address: 0x41008000
+    size: "128B"
+    config:
+      profile: "sam_port"
+  - id: "sercom3"
+    type: "samd51_sercom_usart"
+    base_address: 0x41014000
+    size: "256B"
+    irq: 58
+    clock: { controller: "mclk", reg: "APBBMASK", bit: 10 }
+    config:
+      gclk_id: 24
+      tx_port_base: 0x41008000
+      tx_bit: 22
+      rx_port_base: 0x41008000
+      rx_bit: 23
+      pad_mux: 2
+      txpo: 0
+      rxpo: 1
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010

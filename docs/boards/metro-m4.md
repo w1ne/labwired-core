@@ -1,38 +1,46 @@
 # Adafruit Metro M4 Express (Microchip SAMD51J19A) — UART/LED smoke
 
-A Cortex-M4 board on the SAMD51 family, running at 120 MHz from the DFLL.
-On-board QSPI flash, USB and NeoPixel are **not attached**; this page covers
-the modelled slice: core, PORT A/B, MCLK+GCLK, SERCOM3 as Serial1, SysTick.
+The smoke profile keeps the MCU on its reset DFLL48M clock at 48 MHz; it does
+not configure the Metro M4's higher-speed DPLL clock. The onboarding profile
+covers OSCCTRL/MCLK/GCLK, PORTA, SERCOM3 Serial1 on PA22/PA23, the D13 LED on
+PA16, and SysTick. It omits the board's QSPI flash, native USB, NeoPixel, and
+unused MCU peripherals.
 
 ## Status at a glance
 
 | Aspect             | Status                                                              |
 |--------------------|---------------------------------------------------------------------|
-| Chip yaml          | [`configs/chips/atsamd51.yaml`](../../configs/chips/atsamd51.yaml)   |
+| Chip yaml          | [`configs/chips/atsamd51-metro-m4-smoke.yaml`](../../configs/chips/atsamd51-metro-m4-smoke.yaml) |
 | System yaml        | [`configs/systems/metro-m4.yaml`](../../configs/systems/metro-m4.yaml) |
 | Committed ELF      | `tests/fixtures/atsamd51-metro-m4-smoke.elf`                         |
 | Validation         | `firmware_survival::test_atsamd51_metro_m4_smoke_survival`           |
-| Tier               | **smoke-manual** — boots firmware and prints, **no silicon diff**    |
+| Onboarding evidence | [`examples/metro-m4/evidence/`](../../examples/metro-m4/evidence/)   |
+| Tier               | **smoke-manual** — simulator evidence, **no silicon diff**           |
 
 ## What is proven
 
-A bare-metal firmware enables `MCLK.APBBMASK` bit 10 and `GCLK PCHCTRL[24]`
-(SERCOM3_CORE), then writes `OK\n` on SERCOM3 DATA and toggles PA16 (D13 per
-Adafruit `variants/metro_m4/variant.cpp`). The chip descriptor builds through
-`SystemBus::from_config` (`board_config_gates`). MCLK APB\*MASK and GCLK PCHCTRL
-are behavioural models, not stubs.
+A bare-metal firmware enables `MCLK.APBBMASK` bit 10 and `GCLK PCHCTRL[24]`,
+muxes PA22/PA23 to SERCOM3 PAD0/PAD1, configures 115200-baud USART, transmits
+`METRO_M4_OK`, and toggles PA16. The smoke asserts both the SERCOM3 transcript
+and a PORTA edge. The descriptor builds through `SystemBus::from_config` and
+omits USB/QSPI windows rather than declaring zero-answering models for them.
 
 ## What is not proven
 
-No silicon diff and no executing-fidelity differential; QSPI, USB, NeoPixel
-and unused SERCOMs are deliberate `stub` windows (they answer zeros).
+No silicon diff or executing-fidelity differential is recorded. QSPI, USB,
+NeoPixel, and unused SERCOMs are omitted from the focused board profile.
 DMA/ADC/DAC/EIC and the compare channels are unmodelled.
 
 ## How to run
 
 ```bash
-labwired test --system configs/systems/metro-m4.yaml \
-  --firmware tests/fixtures/atsamd51-metro-m4-smoke.elf
+scripts/onboarding_smoke.sh \
+  --target-id metro-m4 \
+  --crate firmware-atsamd51-demo \
+  --target thumbv7em-none-eabi \
+  --script examples/metro-m4/onboarding-smoke.yaml \
+  --system configs/systems/metro-m4.yaml \
+  --out-dir examples/metro-m4/evidence
 ```
 
 The onboarding smoke lives in [`examples/metro-m4/`](../../examples/metro-m4/).

@@ -49,11 +49,13 @@ fn atsamd21_from_config_builds() {
 
 #[test]
 fn atsamd51_from_config_builds() {
-    let (_chip, bus) = from_config(
+    let (chip, bus) = from_config(
         "configs/systems/metro-m4.yaml",
         "atsamd51 / metro-m4 must build",
     );
-    // Metro M4 Serial1 is SERCOM3 on PA22/PA23 (Adafruit variants/metro_m4/variant.cpp).
+    assert_eq!(chip.name, "atsamd51j19a-metro-m4-smoke");
+    // Metro M4 Serial1 is SERCOM3 on PA22/PA23, and the profile claims only
+    // the modeled board path (Adafruit variants/metro_m4/variant.cpp).
     assert!(
         bus.find_peripheral_index_by_name("sercom3").is_some(),
         "bus must expose sercom3 (Serial1)"
@@ -63,9 +65,23 @@ fn atsamd51_from_config_builds() {
         "bus must expose mclk"
     );
     assert!(
+        bus.find_peripheral_index_by_name("oscctrl").is_some(),
+        "bus must expose oscctrl for the SERCOM3 DFLL48M clock source"
+    );
+    assert!(
         bus.find_peripheral_index_by_name("gclk").is_some(),
         "bus must expose gclk"
     );
+    assert!(
+        bus.find_peripheral_index_by_name("porta").is_some(),
+        "bus must expose porta for the D13 LED and SERCOM3 pads"
+    );
+    for omitted in ["usb", "qspi", "portb"] {
+        assert!(
+            bus.find_peripheral_index_by_name(omitted).is_none(),
+            "the focused Metro M4 smoke profile must omit {omitted}"
+        );
+    }
 }
 
 #[test]

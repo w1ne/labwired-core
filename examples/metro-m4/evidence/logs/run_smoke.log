@@ -1,0 +1,6 @@
+2026-11-03T14:24:45.328616Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/atsamd51-metro-m4-smoke.yaml
+2026-11-03T14:24:45.330590Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 549845 of 600000 device cycles (50155 interpreted)
+PASS  3/3 checks · onboarding-smoke · 600000 steps · 0.05s
