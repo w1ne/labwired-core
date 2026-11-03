@@ -184,6 +184,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32h753-smoke.yaml
             system: configs/systems/onboarding/stm32h753.yaml
+          # The H747 Discovery profile runs only its Cortex-M7 core and keeps
+          # the bounded H7 RCC, GPIOB/GPIOD, and USART3 smoke surface.
+          - id: stm32h747-disco
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h747-disco-smoke.yaml
+            system: configs/systems/onboarding/stm32h747-disco.yaml
           # Reuse the H7 register fixture on the imported NUCLEO-H753ZI board.
           # The smoke also asserts its imported GreenLED attachment at GPIOB.0.
           - id: nucleo_h753zi

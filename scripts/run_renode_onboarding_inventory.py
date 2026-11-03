@@ -120,6 +120,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/stm32h753-smoke.yaml",
     },
+    "stm32h747-disco": {
+        "crate": "firmware-stm32h743-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/stm32h747-disco-smoke.yaml",
+    },
     "nucleo_h753zi": {
         "crate": "firmware-stm32h743-smoke",
         "target": "thumbv7em-none-eabi",
