@@ -766,8 +766,10 @@ mod tests {
         data(&mut dev, 0xDF); // HD44780 A00 degree glyph
 
         let text = dev.text();
+        // `°` is two UTF-8 bytes — compare by chars, not a byte index that
+        // would panic mid-glyph on the degree sign.
         assert_eq!(
-            &text[..3],
+            text.chars().take(3).collect::<String>(),
             " X°",
             "0xDF is the degree sign; other non-ASCII blanks"
         );
