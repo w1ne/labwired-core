@@ -1,7 +1,8 @@
-# External Components — STM32F4-Discovery
+# External Components — STM32F407G-DISC1 (STM32F4-Discovery)
 
 None. The smoke firmware exercises the MCU's own RCC + GPIO + USART2 surface
-only; USART2 is the modelled console UART and needs no external device.
+only. USART2 TX is captured by the simulator; that capture does not model a
+physical USB serial connection or an external device.
 
 The board does carry a LIS302DL/LIS3DSH accelerometer, a CS43L22 audio DAC and
 an MP45DT02 MEMS microphone, and the ST-LINK/V2 provides SWD. **None of these

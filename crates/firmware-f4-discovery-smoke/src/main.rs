@@ -14,8 +14,8 @@
 //!                console pins are read from the PA2/PA3 header pins.
 //!
 //! Each beat lights one LED, prints `hb=<n> <led>=on odr=<hex>`, switches it
-//! off and prints `=off`. The `odr=` field is READ BACK from GPIOD_ODR after
-//! the write, so a passing run reports the pad the firmware actually drove.
+//! off and prints `=off`. The `odr=` field is read back from GPIOD_ODR after
+//! the write. The smoke script separately asserts GPIO edges for LD4/PD12.
 
 #![no_std]
 #![no_main]

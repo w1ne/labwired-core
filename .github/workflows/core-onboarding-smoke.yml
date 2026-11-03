@@ -19,6 +19,7 @@ on:
       - "examples/**"
       - "crates/firmware-f401-demo/**"
       - "crates/firmware-f446-demo/**"
+      - "crates/firmware-f4-discovery-smoke/**"
       - "crates/firmware-stm32g0-demo/**"
       - "crates/firmware-nucleo-f072rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
@@ -123,6 +124,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f446re/io-smoke.yaml
             system: configs/systems/nucleo-f446re.yaml
+          - id: stm32f4-discovery
+            crate: firmware-f4-discovery-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f4-discovery/io-smoke.yaml
+            system: configs/systems/stm32f4-discovery.yaml
           - id: nucleo-f767zi
             crate: tier1-fixture-stm32f767
             firmware_build_dir: examples/tier1-fixture/stm32f767

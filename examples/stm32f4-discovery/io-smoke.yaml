@@ -3,12 +3,12 @@
 # Build: cargo build -p firmware-f4-discovery-smoke --release --target thumbv7em-none-eabi
 #
 # The firmware runs a light over PD12..PD15 (LD4/LD3/LD5/LD6) and prints a
-# heartbeat on USART2 (PA2) whose `odr=` field is READ BACK from GPIOD_ODR
-# after each write, so the assertions check the pad the firmware drove.
+# heartbeat on USART2 (PA2) whose `odr=` field is read back from GPIOD_ODR.
+# Assertions check both the output register state and LD4 GPIO edges.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke"
-  system: "./system.yaml"
+  system: "../../configs/systems/stm32f4-discovery.yaml"
 limits:
   max_steps: 4000000
 assertions:
@@ -18,4 +18,7 @@ assertions:
       - "hb=1 ld4=off odr=00000000"
       - "hb=2 ld3=on odr=00002000"
       - "hb=3 ld3=off odr=00000000"
+  - gpio_edges:
+      pin: "gpiod:12"
+      min_edges: 4
   - expected_stop_reason: max_steps
