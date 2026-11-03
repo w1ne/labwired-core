@@ -37,6 +37,7 @@ on:
       - "crates/firmware-nucleo-wb55rg-demo/**"
       - "crates/firmware-nucleo-wba55cg-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
+      - "crates/firmware-nucleo-h723zg-smoke/**"
       - "crates/firmware-nucleo-c071rb-smoke/**"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
       - "configs/chips/stm32h503rb-nucleo-smoke.yaml"
@@ -163,6 +164,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h503rb/onboarding-smoke.yaml
             system: configs/systems/nucleo-h503rb.yaml
+          - id: nucleo-h723zg
+            crate: firmware-nucleo-h723zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h723zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h723zg.yaml
           - id: nucleo-c071rb
             crate: firmware-nucleo-c071rb-smoke
             target: thumbv6m-none-eabi
