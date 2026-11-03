@@ -385,6 +385,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.bjts[0].model.var, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.ikf, f64::INFINITY);
         assert_eq!(circuit.bjts[0].model.ikr, f64::INFINITY);
+        assert_eq!(circuit.bjts[0].model.nkf, None);
         assert_eq!(circuit.bjts[0].model.ise, 0.0);
         assert_eq!(circuit.bjts[0].model.ne, 1.5);
         assert_eq!(circuit.bjts[0].model.isc, 0.0);
@@ -397,6 +398,25 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.bjts[1].model.ne, 1.6);
         assert_eq!(circuit.bjts[1].model.isc, 4e-12);
         assert_eq!(circuit.bjts[1].model.nc, 1.8);
+    }
+
+    #[test]
+    fn bjt_nkf_exponent_and_legacy_alias_parse_and_validate() {
+        for (parameter, expected) in [("NKF=0.8", 0.8), ("NK=0.7", 0.7)] {
+            let circuit = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect("a finite nonnegative NKF exponent parses");
+            assert_eq!(circuit.bjts[0].model.nkf, Some(expected));
+        }
+
+        for parameter in ["NKF=-0.1"] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("a negative NKF exponent is rejected");
+            assert!(error.to_string().contains("NKF >= 0"), "{error}");
+        }
+        for parameter in ["NKF=inf", "NKF=nan", "NKF=1e999"] {
+            parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
+                .expect_err("a nonfinite NKF exponent is rejected");
+        }
     }
 
     #[test]

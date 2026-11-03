@@ -74,7 +74,7 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, `NKF`, and most terminal
+//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, and most terminal
 //! resistances, …) are **accepted
 //! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
@@ -85,8 +85,8 @@
 //! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
 //! models differential capacitance between the inputs, and `IQ` models a
 //! constant quiescent current from `V+` to `V−`. BJT
-//! high-injection rolloff from `IKF`/`IKR`, base recombination from
-//! `ISE`/`NE`/`ISC`/`NC`, and transit-time
+//! high-injection rolloff from `IKF`/`IKR` with optional `NKF` (default
+//! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
@@ -1038,6 +1038,9 @@ pub struct BjtModel {
     /// Reverse beta rolloff knee current `IKR`, amps. Infinity disables
     /// reverse high-injection rolloff, matching ngspice's default.
     pub ikr: f64,
+    /// Optional high-current beta rolloff exponent `NKF` (`NK`). `None`
+    /// retains ngspice's default square-root form (exponent 0.5).
+    pub nkf: Option<f64>,
     /// Base-emitter recombination saturation current `ISE`, amps. Zero
     /// disables this current, matching ngspice's default.
     pub ise: f64,
@@ -1101,6 +1104,7 @@ impl BjtModel {
             var: f64::INFINITY,
             ikf: f64::INFINITY,
             ikr: f64::INFINITY,
+            nkf: None,
             ise: 0.0,
             ne: 1.5,
             isc: 0.0,
@@ -2988,6 +2992,12 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
+                if model.nkf.is_some_and(|nkf| !nkf.is_finite() || nkf < 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs NKF >= 0 when the high-current beta exponent is supplied"
+                            .to_string(),
+                    ));
+                }
                 if !(model.ise >= 0.0)
                     || !(model.isc >= 0.0)
                     || !(model.ne > 0.0)
@@ -3602,6 +3612,7 @@ fn parse_model(
             (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
             (ModelCard::Bjt(model), "IKF") => model.ikf = value,
             (ModelCard::Bjt(model), "IKR") => model.ikr = value,
+            (ModelCard::Bjt(model), "NKF" | "NK") => model.nkf = Some(value),
             (ModelCard::Bjt(model), "ISE") => model.ise = value,
             (ModelCard::Bjt(model), "NE") => model.ne = value,
             (ModelCard::Bjt(model), "ISC") => model.isc = value,

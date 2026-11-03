@@ -402,7 +402,8 @@ pub struct BjtOp {
 /// q1  = 1 / (1 − Vbc/VAF − Vbe/VAR)
 /// q2  = Is·(exp(Vbe/(Nf·Vt)) − 1)/IKF
 ///     + Is·(exp(Vbc/(Nr·Vt)) − 1)/IKR
-/// qb  = q1·(1 + sqrt(1 + 4·q2))/2
+/// qb  = q1·(1 + (1 + 4·q2)^NKF)/2, when `NKF` is supplied
+///     = q1·(1 + sqrt(1 + 4·q2))/2, otherwise (`NKF=0.5`)
 /// Ict = Is·(exp(Vbe/(Nf·Vt)) − exp(Vbc/(Nr·Vt))) / qb
 /// Ibe = (Is/Bf)·(exp(Vbe/(Nf·Vt)) − 1) + ISE·(exp(Vbe/(NE·Vt)) − 1)
 /// Ibc = (Is/Br)·(exp(Vbc/(Nr·Vt)) − 1) + ISC·(exp(Vbc/(NC·Vt)) − 1)
@@ -430,6 +431,32 @@ pub fn bjt_op(
     ne: f64,
     isc: f64,
     nc: f64,
+) -> BjtOp {
+    bjt_op_with_nkf(
+        vbe, vbc, is, bf, br, nf, nr, vaf, var, ikf, ikr, ise, ne, isc, nc, None,
+    )
+}
+
+/// Gummel–Poon operating point with an optional high-current beta exponent.
+/// `None` keeps the historical square-root path bit-for-bit; `Some(nkf)` uses
+/// the explicit ngspice `NKF` rolloff exponent.
+pub fn bjt_op_with_nkf(
+    vbe: f64,
+    vbc: f64,
+    is: f64,
+    bf: f64,
+    br: f64,
+    nf: f64,
+    nr: f64,
+    vaf: f64,
+    var: f64,
+    ikf: f64,
+    ikr: f64,
+    ise: f64,
+    ne: f64,
+    isc: f64,
+    nc: f64,
+    nkf: Option<f64>,
 ) -> BjtOp {
     let vtf = nf * THERMAL_VOLTAGE;
     let vtr = nr * THERMAL_VOLTAGE;
@@ -474,16 +501,40 @@ pub fn bjt_op(
         let ibc_injection = is * (reverse - 1.0);
         let q2 = inv_ikf * ibe_injection + inv_ikr * ibc_injection;
         let q2_argument = (1.0 + 4.0 * q2).max(0.0);
-        // ngspice uses 1 when the clamped argument is zero, keeping both qb
-        // and its tangent finite at the limit.
-        let sqrt_q2 = if q2_argument > 0.0 {
-            libm::sqrt(q2_argument)
+        let (qb, d_qb_d_vbe, d_qb_d_vbc) = if let Some(nkf) = nkf {
+            // The exponent was introduced as an optional model-card parameter.
+            // Preserve the legacy square-root arithmetic below when omitted.
+            // The clamped zero branch is flat, so its high-injection derivative
+            // is zero rather than dividing by a zero argument.
+            let rolloff = if q2_argument > 0.0 {
+                libm::pow(q2_argument, nkf)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + rolloff) / 2.0;
+            let d_rolloff_d_q2 = if q2_argument > 0.0 {
+                2.0 * rolloff * nkf / q2_argument
+            } else {
+                0.0
+            };
+            (
+                qb,
+                q1 * (qb * inv_var + inv_ikf * is * forward / vtf * d_rolloff_d_q2),
+                q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr * d_rolloff_d_q2),
+            )
         } else {
-            1.0
+            // ngspice uses 1 when the clamped argument is zero, keeping both
+            // qb and its tangent finite at the limit.
+            let sqrt_q2 = if q2_argument > 0.0 {
+                libm::sqrt(q2_argument)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + sqrt_q2) / 2.0;
+            let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward / vtf / sqrt_q2);
+            let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr / sqrt_q2);
+            (qb, d_qb_d_vbe, d_qb_d_vbc)
         };
-        let qb = q1 * (1.0 + sqrt_q2) / 2.0;
-        let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward / vtf / sqrt_q2);
-        let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr / sqrt_q2);
         let d_transport_d_vbe = is * forward / vtf;
         let d_transport_d_vbc = -is * reverse / vtr;
         let qb_squared = qb * qb;
@@ -599,17 +650,36 @@ pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitChar
         };
         let q2 = inv_ikf * cbe + inv_ikr * cbc;
         let q2_argument = (1.0 + 4.0 * q2).max(0.0);
-        let sqrt_q2 = if q2_argument > 0.0 {
-            libm::sqrt(q2_argument)
+        if let Some(nkf) = model.nkf {
+            let rolloff = if q2_argument > 0.0 {
+                libm::pow(q2_argument, nkf)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + rolloff) / 2.0;
+            let d_rolloff_d_q2 = if q2_argument > 0.0 {
+                2.0 * rolloff * nkf / q2_argument
+            } else {
+                0.0
+            };
+            (
+                qb,
+                q1 * (qb * inv_var + inv_ikf * gbe * d_rolloff_d_q2),
+                q1 * (qb * inv_vaf + inv_ikr * gbc * d_rolloff_d_q2),
+            )
         } else {
-            1.0
-        };
-        let qb = q1 * (1.0 + sqrt_q2) / 2.0;
-        (
-            qb,
-            q1 * (qb * inv_var + inv_ikf * gbe / sqrt_q2),
-            q1 * (qb * inv_vaf + inv_ikr * gbc / sqrt_q2),
-        )
+            let sqrt_q2 = if q2_argument > 0.0 {
+                libm::sqrt(q2_argument)
+            } else {
+                1.0
+            };
+            let qb = q1 * (1.0 + sqrt_q2) / 2.0;
+            (
+                qb,
+                q1 * (qb * inv_var + inv_ikf * gbe / sqrt_q2),
+                q1 * (qb * inv_vaf + inv_ikr * gbc / sqrt_q2),
+            )
+        }
     };
 
     let (qbe, dqbe_dvbe, dqbe_dvbc) = if model.tf == 0.0 {

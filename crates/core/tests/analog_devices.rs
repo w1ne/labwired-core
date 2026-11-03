@@ -22,7 +22,8 @@
 //!   Newton iteration existed. Nothing in this branch may move them.
 //!
 //! What remains unsupported is documented in `cosimulation_plugins.md`. Diode
-//! forward/reverse high-injection knees (`IK`/`IKF`/`IKR`), recombination
+//! forward/reverse high-injection knees (`IK`/`IKF`/`IKR`) and the BJT
+//! high-current beta exponent (`NKF`), recombination
 //! current (`ISR`/`NR`), diffusion charge (`TT`) and soft reverse recovery
 //! (`TT`/`VP`), plus BJT forward bias-dependent and reverse
 //! transit-time charge (`TF`/`TR`/`XTF`/`VTF`/`ITF`) are exercised below. Diode
@@ -1351,6 +1352,149 @@ mod analog {
                     );
                 }
             }
+        }
+    }
+
+    /// Explicit `NKF` changes the exponent of the Gummel–Poon high-current
+    /// base-charge term. Exercise the resulting terminal currents through the
+    /// MNA solver rather than only checking that the model card parsed.
+    #[test]
+    fn bjt_nkf_controls_high_injection_rolloff_for_both_polarities_and_directions() {
+        let (is, bf, br, vaf, var, ikf, ikr, nkf) = (1e-16, 80.0, 4.0, 35.0, 50.0, 2e-4, 5e-4, 0.8);
+
+        for (vbe, vbc) in [(0.75, -4.25), (-4.25, 0.75)] {
+            let forward = (vbe / VT).exp();
+            let reverse = (vbc / VT).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+            let q2 = is * (forward - 1.0) / ikf + is * (reverse - 1.0) / ikr;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).powf(nkf)) / 2.0;
+            let ict = is * (forward - reverse) / qb;
+            let ibe = (is / bf) * (forward - 1.0);
+            let ibc = (is / br) * (reverse - 1.0);
+            let ic = ict - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            let ie = -(ic + ib);
+            let direction = if vbe > 0.0 { "forward" } else { "reverse" };
+
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} NKF={nkf})\n",
+                    sign * vbc,
+                    sign * (vbc - vbe),
+                );
+                let solver = build(&netlist);
+                assert_eq!(solver.circuit().bjts[0].model.nkf, Some(nkf));
+                let actual_ic = sign * source_current(&solver, "Vc");
+                let actual_ib = sign * source_current(&solver, "Vb");
+                let actual_ie = sign * source_current(&solver, "Ve");
+
+                assert!(
+                    relative(actual_ic, ic) < 1e-5,
+                    "{kind} {direction} NKF={nkf}: expected Ic={ic} A, got {actual_ic} A"
+                );
+                assert!(
+                    relative(actual_ib, ib) < 1e-5,
+                    "{kind} {direction} NKF={nkf}: expected Ib={ib} A, got {actual_ib} A"
+                );
+                assert!(
+                    relative(actual_ie, ie) < 1e-5,
+                    "{kind} {direction} NKF={nkf}: expected Ie={ie} A, got {actual_ie} A"
+                );
+            }
+        }
+    }
+
+    /// The same NKF-dependent base charge feeds forward transit charge, so a
+    /// non-default exponent must change Qbe as well as the DC transport gain.
+    #[test]
+    fn bjt_nkf_changes_forward_transit_charge() {
+        let (is, nf, nr, vaf, var, ikf, ikr, nkf, tf) =
+            (2e-16, 1.2, 1.1, 40.0, 70.0, 2e-3, 5e-3, 0.8, 12e-9);
+        let circuit = parse_netlist(&format!(
+            "Q1 c b e QMOD\n.model QMOD NPN(IS={is} NF={nf} NR={nr} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} NKF={nkf} TF={tf})\n"
+        ))
+        .expect("NKF transit-charge model parses");
+        let model = circuit.bjts[0].model;
+        let (vbe, vbc) = (0.64, 0.35);
+        let forward = (vbe / (nf * VT)).exp();
+        let reverse = (vbc / (nr * VT)).exp();
+        let cbe = is * (forward - 1.0);
+        let cbc = is * (reverse - 1.0);
+        let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+        let q2 = cbe / ikf + cbc / ikr;
+        let qb = q1 * (1.0 + (1.0 + 4.0 * q2).powf(nkf)) / 2.0;
+        let expected = tf * cbe / qb;
+        let charge = device::bjt_transit_charge(vbe, vbc, model);
+        let actual = charge.qbe;
+        assert!(
+            (actual - expected).abs() < 1e-24 + expected.abs() * 1e-8,
+            "NKF={nkf}: expected Qbe={expected} C, got {actual} C"
+        );
+
+        let delta = 1e-6;
+        let plus_be = device::bjt_transit_charge(vbe + delta, vbc, model).qbe;
+        let minus_be = device::bjt_transit_charge(vbe - delta, vbc, model).qbe;
+        let plus_bc = device::bjt_transit_charge(vbe, vbc + delta, model).qbe;
+        let minus_bc = device::bjt_transit_charge(vbe, vbc - delta, model).qbe;
+        let finite_difference = |plus: f64, minus: f64| (plus - minus) / (2.0 * delta);
+        for (actual, expected) in [
+            (charge.dqbe_dvbe, finite_difference(plus_be, minus_be)),
+            (charge.dqbe_dvbc, finite_difference(plus_bc, minus_bc)),
+        ] {
+            assert!(
+                (actual - expected).abs() < expected.abs() * 2e-5 + 1e-24,
+                "NKF transit-charge derivative {actual} differs from finite difference {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn bjt_nkf_high_injection_partials_match_finite_difference() {
+        let (is, nf, nr, vaf, var, ikf, ikr, nkf) = (2e-15, 1.1, 1.2, 42.0, 65.0, 2e-4, 5e-4, 0.8);
+        let delta = 1e-7;
+        let transport = |vbe: f64, vbc: f64| {
+            let forward = (vbe / (nf * VT)).exp();
+            let reverse = (vbc / (nr * VT)).exp();
+            let q1 = 1.0 / (1.0 - vbc / vaf - vbe / var);
+            let q2 = is * (forward - 1.0) / ikf + is * (reverse - 1.0) / ikr;
+            let qb = q1 * (1.0 + (1.0 + 4.0 * q2).powf(nkf)) / 2.0;
+            is * (forward - reverse) / qb
+        };
+
+        for (vbe, vbc) in [(0.68, -0.1), (-0.1, 0.62)] {
+            let op = device::bjt_op_with_nkf(
+                vbe,
+                vbc,
+                is,
+                75.0,
+                3.0,
+                nf,
+                nr,
+                vaf,
+                var,
+                ikf,
+                ikr,
+                0.0,
+                1.5,
+                0.0,
+                2.0,
+                Some(nkf),
+            );
+            let expected_gif =
+                (transport(vbe + delta, vbc) - transport(vbe - delta, vbc)) / (2.0 * delta);
+            let expected_gir =
+                -(transport(vbe, vbc + delta) - transport(vbe, vbc - delta)) / (2.0 * delta);
+            assert!(
+                relative(op.gif, expected_gif) < 1e-6,
+                "NKF={nkf} gif: {} vs {expected_gif}",
+                op.gif
+            );
+            assert!(
+                relative(op.gir, expected_gir) < 1e-6,
+                "NKF={nkf} gir: {} vs {expected_gir}",
+                op.gir
+            );
         }
     }
 

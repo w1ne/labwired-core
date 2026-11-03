@@ -439,7 +439,7 @@ input at a different element.
 
 ```text
 .model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms>)
-.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
+.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n>)
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
@@ -468,9 +468,8 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
-Other device capacitances and temperature coefficients,
-`NKF`, and terminal resistances outside the modeled BJT, JFET and MOSFET parameters
-below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
+Other device capacitances, temperature coefficients, and terminal resistances
+outside the modeled BJT, JFET and MOSFET parameters below are accepted and ignored. BJT terminal resistances `RB`/`RC`/`RE`, JFET
 terminal resistances `RD`/`RS`, and MOSFET terminal resistances `RD`/`RS` or
 `RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
 explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
@@ -498,7 +497,8 @@ when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set, with `IBV`
 setting the knee current and optional `NBV` selecting its reverse exponential
 coefficient (default `N`). Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
-`IKF`/`IKR` high-injection rolloff (both default to infinity), and B-E/B-C base
+`IKF`/`IKR` high-injection rolloff (both default to infinity) with optional
+`NKF` (also `NK`) exponent (0.5 when omitted), and B-E/B-C base
 recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
 base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
 plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
@@ -524,7 +524,9 @@ Meyer bias regions, and Ward–Dutton
 charge conservation and transient terminal response are covered by tests. The
 diode's forward and reverse knee reduction, non-default reverse-breakdown
 emission coefficient, and first-order soft-recovery response are exercised in
-[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). Every
+[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). BJT `NKF`
+is checked against solved forward/reverse terminal currents and its effect on
+transit charge. Every
 parameter is taken at 300.00 K; there is no temperature
 model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 

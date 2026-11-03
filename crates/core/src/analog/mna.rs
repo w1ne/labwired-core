@@ -2024,9 +2024,9 @@ impl Solver {
             let sign = bjt.model.polarity.sign();
             let model = bjt.model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op(
+            let op = device::bjt_op_with_nkf(
                 vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr, model.vaf, model.var,
-                model.ikf, model.ikr, model.ise, model.ne, model.isc, model.nc,
+                model.ikf, model.ikr, model.ise, model.ne, model.isc, model.nc, model.nkf,
             );
 
             // GMIN across both junctions. Without it a transistor that is fully
