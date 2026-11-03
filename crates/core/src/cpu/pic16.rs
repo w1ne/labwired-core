@@ -375,7 +375,7 @@ const fn edev(
 /// SDCC header or gputils lkr.
 ///
 /// Left out: classic parts without the USART at 0x18/0x19/0x98/0x99
-/// (PIC16F84A and friends), except PIC16F610/616/630/631/676/677/684/685/716,
+/// (PIC16F84A and friends), except PIC16F610/616/630/631/676/677/684/685/716/785,
 /// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; enhanced
 /// parts without an EUSART (PIC16F1503/1507/1613/1703/1707), parts with
 /// comparator SFRs at LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx,
@@ -877,6 +877,16 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         2048,
         [0x1F, 0xFF, 0x00, 0x00, 0x00],
         &[(0x0F0, 0x0FF, 0x070)],
+    ),
+    dev_no_usart(
+        "pic16f785",
+        2048,
+        [0x3F, 0xF0, 0xFF, 0x00, 0x00],
+        &[
+            (0x0F0, 0x0FF, 0x070),
+            (0x170, 0x17F, 0x070),
+            (0x1F0, 0x1FF, 0x070),
+        ],
     ),
     dev_own(
         "pic16lf707",
@@ -3578,6 +3588,40 @@ mod tests {
 
         cpu.write_data(0x70, 0x5A);
         assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-1 alias");
+    }
+
+    #[test]
+    fn pic16f785_uses_exact_no_usart_geometry_and_port_masks() {
+        let device = pic16_device("pic16f785").expect("F785 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0xF0, 0xFF, 0x00, 0x00]);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F785");
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [(0x18, 0xA1), (0x19, 0xA2), (0x98, 0xA3), (0x99, 0xA4)] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#04x}"
+            );
+        }
+
+        cpu.write_data(0x85, 0x00);
+        cpu.write_data(0x05, 0xFF);
+        assert_eq!(cpu.read_data(0x05), 0x3F, "PORTA");
+        cpu.write_data(0x86, 0x00);
+        cpu.write_data(0x06, 0xFF);
+        assert_eq!(cpu.read_data(0x06), 0xF0, "only RB4-RB7 are bonded");
+        cpu.write_data(0x87, 0x00);
+        cpu.write_data(0x07, 0x01);
+        assert_eq!(cpu.read_data(0x07), 0x01, "PORTC");
+
+        cpu.write_data(0x70, 0x5A);
+        assert_eq!(cpu.read_data(0x0F0), 0x5A, "shared bank-1 alias");
+        assert_eq!(cpu.read_data(0x170), 0x5A, "shared bank-2 alias");
+        assert_eq!(cpu.read_data(0x1F0), 0x5A, "shared bank-3 alias");
     }
 
     #[test]

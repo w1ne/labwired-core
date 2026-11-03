@@ -84,7 +84,7 @@ BITS = {
 }
 NO_USART_PARTS = {
     "pic16f610", "pic16f616", "pic16f630", "pic16f676", "pic16f677", "pic16f684", "pic16f685",
-    "pic16f716",
+    "pic16f716", "pic16f785",
     "pic16f818", "pic16f819",
 }
 NO_USART_SFRS = {"RCSTA", "TXREG", "TXSTA", "SPBRG"}
