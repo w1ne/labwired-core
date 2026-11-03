@@ -260,6 +260,13 @@ pub const PIC16E_F151X_MAP: Pic16SfrMap = Pic16SfrMap {
     ..PIC16E_F182X_MAP
 };
 
+/// PIC16F1503 layout without an EUSART. The EUSART file-register addresses
+/// remain ordinary storage on this device.
+pub const PIC16E_F151X_NO_EUSART_MAP: Pic16SfrMap = Pic16SfrMap {
+    has_usart: false,
+    ..PIC16E_F151X_MAP
+};
+
 /// The PIC16(L)F1614/1615/1618/1619 (DS40001769C and DS40001770D, Tables
 /// 3-2 and 3-3): only PORTA-PORTC, and the interrupt registers sit one
 /// address lower, PIR1-5 at 0x010 and PIE1-5 at 0x090. 0x00F/0x08F/0x10F are
@@ -398,7 +405,8 @@ const fn edev(
 /// (PIC16F84A and friends), except PIC16F84A/610/616/630/631/676/677/684/685/716/785,
 /// PIC16F818 and PIC16F819 which use `PIC16_CLASSIC_NO_USART_MAP`; PIC16F84A
 /// uses `PIC16_CLASSIC_F84A_MAP` because 0x0C is GPR and has no PIR/PIE registers; enhanced
-/// parts without an EUSART (PIC16F1503/1507/1613/1703/1707), parts with
+/// parts without an EUSART (except PIC16F1503, which uses
+/// `PIC16E_F151X_NO_EUSART_MAP`; PIC16F1507/1613/1703/1707 remain left out), parts with
 /// comparator SFRs at LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx,
 /// and for now the PIC16F157x (their headers match, but gputils 1.4.0 has no
 /// processor entry for them, so no lkr cross-check or SDCC firmware build).
@@ -946,6 +954,12 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         8192,
         [0x3B, 0xF0, 0xFF, 0x00, 0x00],
         PIC16E_F151X_MAP,
+    ),
+    edev(
+        "pic16f1503",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F151X_NO_EUSART_MAP,
     ),
     edev(
         "pic16f1508",
@@ -3652,6 +3666,42 @@ mod tests {
         assert_eq!(cpu.read_data(0x06), 0xFF, "PORTB");
         cpu.write_data(0x07, 0xFF);
         assert_eq!(cpu.read_data(0x07), 0x00, "unimplemented PORTC");
+    }
+
+    #[test]
+    fn pic16f1503_uses_exact_enhanced_no_eusart_map() {
+        let device = pic16_device("pic16f1503").expect("F1503 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1503");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0x3F, "PORTC");
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0x00, "unimplemented PORTB");
     }
 
     #[test]
