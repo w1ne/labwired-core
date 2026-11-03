@@ -365,6 +365,59 @@ mod analog {
     }
 
     #[test]
+    fn opamp_and_comparator_quiescent_current_flows_between_supply_pins() {
+        let iq = 2e-3;
+        for (x_line, model_line, inputs) in [
+            (
+                "X1 inp inn vcc vee out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 IQ=2m)",
+                "Vinp inp 0 dc 0.25\nVinn inn 0 dc 0",
+            ),
+            (
+                "X1 inp inn vcc vee out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 IQ=2m OUTPUT=PP)",
+                "Vinp inp 0 dc 0\nVinn inn 0 dc 0.25",
+            ),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc -5\n{inputs}\nRl out 0 10k\n\
+                 {x_line}\n{model_line}\n"
+            ));
+            let from_vcc = -source_current(&solver, "Vcc");
+            let into_vee = source_current(&solver, "Vee");
+            assert!(
+                (from_vcc - iq).abs() < 1e-8,
+                "{x_line}: V+ supplies {from_vcc} A, expected {iq} A"
+            );
+            assert!(
+                (into_vee - iq).abs() < 1e-8,
+                "{x_line}: V− returns {into_vee} A, expected {iq} A"
+            );
+        }
+    }
+
+    #[test]
+    fn macro_quiescent_current_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for value in ["-1m", "1e999"] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}(IQ={value}{output})\n"
+                ))
+                .expect_err("invalid quiescent current must be rejected");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("IQ must be finite and non-negative"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn comparator_input_bias_current_must_be_finite() {
         for (parameter, message) in [
             ("IBIAS=1e999", "IBIAS must be finite"),
