@@ -49,6 +49,35 @@ C1 out 0 100n
     }
 
     #[test]
+    fn parses_coupled_inductors_and_resolves_forward_references() {
+        let circuit =
+            parse_netlist("Kx Lprimary Lsecondary -500m\nLprimary p 0 4m\nLsecondary s 0 1m\n")
+                .expect("coupling may precede the referenced inductors");
+
+        assert_eq!(circuit.inductors.len(), 2);
+        assert_eq!(circuit.mutual_inductors.len(), 1);
+        let mutual = &circuit.mutual_inductors[0];
+        assert_eq!(mutual.name, "Kx");
+        assert_eq!(mutual.first, 0);
+        assert_eq!(mutual.second, 1);
+        assert!((mutual.mutual_henries + 1e-3).abs() < 1e-18);
+        assert_eq!(circuit.unknowns(), 4, "K adds no nodes or branch unknowns");
+    }
+
+    #[test]
+    fn refuses_invalid_mutual_inductor_declarations() {
+        for text in [
+            "L1 a 0 1m\nL2 b 0 1m\nK1 L1 L2 1.01\n",
+            "L1 a 0 1m\nK1 L1 Lmissing 0.5\n",
+            "L1 a 0 1m\nK1 L1 L1 0.5\n",
+            "L1 a 0 1m\nR2 b 0 1k\nK1 L1 R2 0.5\n",
+            "L1 a 0 1m\nL2 b 0 1m\nK1 L1 L2 0.5\nK2 L2 L1 0.5\n",
+        ] {
+            assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
+        }
+    }
+
+    #[test]
     fn parses_beta_model_ntc_resistors_with_an_external_temperature() {
         let circuit = parse_netlist(
             "Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950 tnom=25 temp=50\nRpull sense 0 10k\n",
@@ -209,7 +238,6 @@ S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
             "Z1 d g s mesfet",
             "E1 a b POLY(2) c 0 d 0 0 1 1",
             "G1 a b VALUE={V(c)*V(d)}",
-            "K1 L1 L2 0.9",
             ".include models/bsim.lib",
             ".lib vendor.lib tt",
         ] {
