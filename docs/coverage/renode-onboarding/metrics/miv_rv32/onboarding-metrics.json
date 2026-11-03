@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/miv_rv32-smoke.yaml",
   "system": "configs/systems/onboarding/miv_rv32.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T13:54:23Z",
-  "finished_at_utc": "2026-11-03T13:54:24Z",
+  "started_at_utc": "2026-11-03T14:01:42Z",
+  "finished_at_utc": "2026-11-03T14:01:43Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 765,
+  "elapsed_ms": 676,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.318,
-    "build_firmware": 0.149,
-    "run_smoke": 0.286
+    "build_cli": 0.262,
+    "build_firmware": 0.142,
+    "run_smoke": 0.261
   },
   "stages_ms": {
-    "build_cli": 318,
-    "build_firmware": 149,
-    "run_smoke": 286
+    "build_cli": 262,
+    "build_firmware": 142,
+    "run_smoke": 261
   }
 }

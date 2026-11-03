@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nucleo_wba52cg-smoke.yaml",
   "system": "configs/systems/onboarding/nucleo_wba52cg.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T13:54:31Z",
-  "finished_at_utc": "2026-11-03T13:54:33Z",
+  "started_at_utc": "2026-11-03T14:01:50Z",
+  "finished_at_utc": "2026-11-03T14:01:52Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1831,
+  "elapsed_ms": 1782,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.268,
-    "build_firmware": 0.151,
-    "run_smoke": 1.403
+    "build_cli": 0.285,
+    "build_firmware": 0.145,
+    "run_smoke": 1.34
   },
   "stages_ms": {
-    "build_cli": 268,
-    "build_firmware": 151,
-    "run_smoke": 1403
+    "build_cli": 285,
+    "build_firmware": 145,
+    "run_smoke": 1340
   }
 }
