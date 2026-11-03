@@ -1,0 +1,5 @@
+2026-11-03T15:32:28.207335Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/stm32u545re-nucleo-smoke.yaml
+2026-11-03T15:32:28.217393Z  INFO labwired_loader: ELF Entry Point: 0x8000017
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  3/3 checks · onboarding-smoke · 20000 steps · 0.00s

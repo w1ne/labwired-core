@@ -1,0 +1,13 @@
+# NUCLEO-U545RE-Q: USART1 VCP output plus LD2 (PA5) GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-u545re-smoke"
+  system: "../../configs/systems/nucleo-u545re-smoke.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NUCLEO_U545RE_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

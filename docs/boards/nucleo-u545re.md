@@ -30,6 +30,8 @@ U5 IP family, smaller memory map, fewer peripherals, one user LED.
 | Chip yaml | [`configs/chips/stm32u545.yaml`](../../configs/chips/stm32u545.yaml) |
 | System yaml | [`configs/systems/nucleo-u545re.yaml`](../../configs/systems/nucleo-u545re.yaml) |
 | Example | [`examples/nucleo-u545re/`](../../examples/nucleo-u545re/) (`VALIDATION.md` = commands + evidence) |
+| Onboarding smoke | [`onboarding-smoke.yaml`](../../examples/nucleo-u545re/onboarding-smoke.yaml): USART1 VCP marker + LD2 PA5 edges; narrow RCC/GPIOA/USART1 profile |
+| Live vendor receipt | [`vendor-status.md`](../../examples/nucleo-u545re/evidence/vendor-status.md): ST lists the board Active and In Stock (checked 2026-11-03) |
 | Reference firmware | bare-metal blinky (committed ELF), STM32CubeU5 HAL smoke (160 MHz PLL1) |
 | Validation | machine-run pin tests, PR-gated survival, Cube HAL run, Arduino matrix L0-L8; **Zephyr not validated** (see `VALIDATION.md`) |
 | Tier | **sim-validated** |
@@ -91,6 +93,11 @@ Catches U5 boot-path regressions on a 64-pin memory map: PLL1 bring-up, clock
 gating, flash bank geometry, USART1 VCP bytes, LD2 and B1 pin behaviour. It cannot
 catch a divergence from silicon that the validating firmware also avoids; no
 silicon-parity claim is made.
+
+The onboarding smoke uses a separate narrow chip/system pair containing only
+RCC, GPIOA, USART1, and the board's LD2 mapping. It exercises USART1 TX on the
+VCP and transitions on PA5. B1, the other Arduino/Morpho pins, USB, TrustZone,
+and the other MCU peripherals are outside that smoke profile.
 
 ## How to run
 

@@ -32,6 +32,7 @@ on:
       - "crates/firmware-pico2-demo/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-nucleo-u545re-smoke/**"
       - "crates/firmware-atsamd51-demo/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -139,6 +140,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/io-smoke.yaml
             system: configs/systems/nucleo-u575zi.yaml
+          - id: nucleo-u545re
+            crate: firmware-nucleo-u545re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u545re/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u545re-smoke.yaml
           # U5A5 uses the shared U575 demo only for its common Cortex-M33 boot
           # and USART1 `OK` path. Its PKA/HASH/SAES operation coverage remains
           # in the U5A5 SystemBus oracle, not in this board bring-up smoke.

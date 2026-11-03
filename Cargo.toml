@@ -40,6 +40,7 @@ members = [
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-stm32u575-demo",
+    "crates/firmware-nucleo-u545re-smoke",
     "crates/firmware-hil-showcase",
     "crates/firmware-l073-demo",
     "crates/firmware-stm32g0-demo",

@@ -1,0 +1,13 @@
+# NUCLEO-U545RE-Q smoke system, exposing only the board's LD2 and ST-LINK VCP.
+# ST UM3062 / Nucleo BSP: LD2 green is PA5; COM1 is USART1 PA9/PA10 (AF7).
+name: "nucleo-u545re-smoke"
+chip: "../chips/stm32u545re-nucleo-smoke.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_green_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

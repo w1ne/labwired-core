@@ -109,3 +109,17 @@ is no committed Zephyr fixture or `zephyr-matrix` entry.
 - Morpho (CN7/CN10) pin assignments are not documented (UM3062 only).
 - `images/` positions are measured from ST's product photo, not ST's CAD files.
 - No Arduino survival ELF is committed (the matrix lane covers Arduino).
+
+## H. Source-built onboarding smoke (2026-11-03)
+
+The dedicated smoke builds `firmware-nucleo-u545re-smoke` for
+`thumbv8m.main-none-eabi`, then runs it against
+`configs/systems/nucleo-u545re-smoke.yaml`. That profile exposes only RCC,
+GPIOA, USART1, and LD2 on PA5. The test requires `NUCLEO_U545RE_OK`, at least
+eight PA5 transitions, and the configured step-limit stop. Build and simulator
+logs are committed under `evidence/logs/` and
+`evidence/simulation-output/`; `evidence/vendor-status.md` records ST's live
+Active/In Stock listing for the board. This is repo-local CLI evidence, not a
+hardware capture. The hosted `labwired_verify` tool rejected the matching Rust
+source with `LANGUAGE_NOT_SUPPORTED` because its U545 board entry currently
+accepts Arduino only; no hosted oracle verdict is claimed for this Rust image.
