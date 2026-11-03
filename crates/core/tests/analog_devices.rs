@@ -1035,6 +1035,124 @@ mod analog {
         }
     }
 
+    /// BJT depletion and diffusion charge share each junction's transient
+    /// companion. Check the complete base charge in both transport directions:
+    /// the result must include CJE/CJC and TF/TR together for NPN/PNP, under
+    /// both integration rules.
+    #[test]
+    fn bjt_depletion_and_transit_charge_integrate_together() {
+        let (is, beta_f, beta_r) = (1e-14, 100.0, 2.0);
+        let capacitance = 220e-12;
+        let transit_time = 1e-6;
+        let resistance = 1e3;
+        let h = 1e-6;
+        let drive_voltage = 1.0;
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                for forward in [true, false] {
+                    let (collector_v, emitter_v) = if forward {
+                        (sign * 2.0, 0.0)
+                    } else {
+                        (0.0, sign * 2.0)
+                    };
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
+                         Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\nQ1 c b e QMOD\n\
+                         .model QMOD {kind}(IS={is} BF={beta_f} BR={beta_r} CJE={capacitance} CJC={capacitance} VJE=1 MJE=0 VJC=1 MJC=0 TF={transit_time} TR={transit_time})\n"
+                    );
+                    let circuit = parse_netlist(&netlist).expect("BJT charge model parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("BJT charge solver builds");
+                    let base = solver.circuit().node("b").expect("base node");
+                    let source = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("base drive exists");
+                    solver.set_voltage_source(source, sign * drive_voltage);
+
+                    let junctions = |v: f64| {
+                        if forward {
+                            (v, v - 2.0)
+                        } else {
+                            (v - 2.0, v)
+                        }
+                    };
+                    // MJE=MJC=0 makes depletion charge exactly C·V. With
+                    // VAF/VAR and IKF/IKR omitted, the transit-charge qb is 1.
+                    let depletion_charge = |vbe: f64, vbc: f64| capacitance * (vbe + vbc);
+                    let transit_charge = |vbe: f64, vbc: f64| {
+                        transit_time * is * (((vbe / VT).exp() - 1.0) + ((vbc / VT).exp() - 1.0))
+                    };
+                    let charge = |v: f64| {
+                        let (vbe, vbc) = junctions(v);
+                        depletion_charge(vbe, vbc) + transit_charge(vbe, vbc)
+                    };
+                    let base_current = |vbe: f64, vbc: f64| {
+                        is / beta_f * ((vbe / VT).exp() - 1.0)
+                            + is / beta_r * ((vbc / VT).exp() - 1.0)
+                    };
+
+                    let previous_v = sign * solver.node_voltage(base);
+                    let (previous_vbe, previous_vbc) = junctions(previous_v);
+                    let mut previous_charge = charge(previous_v);
+                    let mut previous_current = 0.0;
+                    for step in 0..2 {
+                        let charge_current = |v: f64| {
+                            let delta = charge(v) - previous_charge;
+                            if step == 0 || integration == Integration::BackwardEuler {
+                                delta / h
+                            } else {
+                                2.0 * delta / h - previous_current
+                            }
+                        };
+                        let residual = |v: f64| {
+                            let (vbe, vbc) = junctions(v);
+                            (drive_voltage - v) / resistance
+                                - base_current(vbe, vbc)
+                                - device::GMIN * (vbe + vbc)
+                                - charge_current(v)
+                        };
+                        let mut lo = 0.0;
+                        let mut hi = drive_voltage;
+                        for _ in 0..100 {
+                            let mid = 0.5 * (lo + hi);
+                            if residual(mid) > 0.0 {
+                                lo = mid;
+                            } else {
+                                hi = mid;
+                            }
+                        }
+                        let expected = 0.5 * (lo + hi);
+
+                        solver.advance(h).expect("combined BJT charge step solves");
+                        let actual = sign * solver.node_voltage(base);
+                        assert!(
+                            (actual - expected).abs() < 1e-8,
+                            "{kind} {integration:?} {} step {step}: expected {expected} V, got {actual} V",
+                            if forward { "TF/CJE" } else { "TR/CJC" }
+                        );
+
+                        let (next_vbe, next_vbc) = junctions(actual);
+                        if step == 0 {
+                            let depletion_delta = depletion_charge(next_vbe, next_vbc)
+                                - depletion_charge(previous_vbe, previous_vbc);
+                            let transit_delta = transit_charge(next_vbe, next_vbc)
+                                - transit_charge(previous_vbe, previous_vbc);
+                            assert!(
+                                depletion_delta.abs() > transit_delta.abs() * 0.1
+                                    && transit_delta.abs() > depletion_delta.abs() * 0.1,
+                                "both depletion and transit charge must affect the first step: ΔQdep={depletion_delta} C, ΔQtransit={transit_delta} C"
+                            );
+                        }
+                        let next_charge = charge(actual);
+                        previous_current = (next_charge - previous_charge) / h;
+                        previous_charge = next_charge;
+                    }
+                }
+            }
+        }
+    }
+
     /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
     /// saturation current plus `GMIN*V` and has no stored charge.
     #[test]
