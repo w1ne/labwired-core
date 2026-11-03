@@ -83,12 +83,13 @@ BITS = {
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
 NO_USART_PARTS = {
-    "pic16f610", "pic16f616", "pic16f630", "pic16f676", "pic16f677", "pic16f684", "pic16f685",
+    "pic16f84a", "pic16f610", "pic16f616", "pic16f630", "pic16f676", "pic16f677", "pic16f684", "pic16f685",
     "pic16f716", "pic16f785",
     "pic16f818", "pic16f819",
 }
 NO_USART_SFRS = {"RCSTA", "TXREG", "TXSTA", "SPBRG"}
 NO_USART_BITS = {"TXIF", "TXEN", "TRMT", "SPEN"}
+NO_PIR_PARTS = {"pic16f84a"}
 
 
 # Enhanced mid-range (PIC16F1xxx, 32 banks): the PIC16F182x/F193x layout
@@ -197,9 +198,13 @@ def check(part: str) -> list[str]:
     bits = {name: want for name, want in BITS.items()
             if part not in NO_USART_PARTS or name not in NO_USART_BITS}
     for name, want in sfrs.items():
+        if part in NO_PIR_PARTS and name in {"PIR1", "PIE1"}:
+            continue
         if addrs.get(name) != want:
             bad.append(f"{name} at {addrs.get(name)!r}, model {want:#x}")
     for name, want in OPTIONAL_SFRS.items():
+        if part in NO_PIR_PARTS and name in {"PIR2", "PIE2"}:
+            continue
         if name in addrs and addrs[name] != want:
             bad.append(f"{name} at {addrs[name]:#x}, model {want:#x}")
     for name, want in OPTIONAL_FREE_SFRS.items():
@@ -211,6 +216,8 @@ def check(part: str) -> list[str]:
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
     for name, want in bits.items():
+        if part in NO_PIR_PARTS and name == "PEIE":
+            continue
         found = re.search(rf"#define\s+_{name}\s+0x([0-9A-Fa-f]+)", h)
         if not found or int(found[1], 16) != want:
             bad.append(f"bit {name} {found[1] if found else None}, model {want:#x}")
@@ -342,6 +349,8 @@ def row(part: str) -> str:
     flash_words, masks, aliases, own = geometry(part)
     m = ", ".join(f"0x{x:02X}" for x in masks)
     a = ", ".join(f"(0x{s:03X}, 0x{e:03X}, 0x{t:03X})" for s, e, t in aliases)
+    if part == "pic16f84a":
+        return f'    dev_f84a("{part}", {flash_words}, [{m}], &[{a}]),'
     if own:
         o = ", ".join(f"0x{x:03X}" for x in own)
         return f'    dev_own("{part}", {flash_words}, [{m}], &[{a}], &[{o}]),'
@@ -420,7 +429,7 @@ def committed_rows() -> dict[str, tuple]:
         sys.exit("error: PIC16_DEVICES not found in pic16.rs")
     rows = {}
     for m in re.finditer(
-            r'\b(dev|dev_own|dev_no_usart)\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
+            r'\b(dev|dev_own|dev_no_usart|dev_f84a)\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
             r'(?:,\s*&\[([^\]]*)\])?,?\s*\)',
             table[1], re.S):
         masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[4])]
@@ -441,7 +450,8 @@ def main() -> int:
             mism = check(part)
             want = geometry(part)
             kind = committed[0]
-            expected_kind = ("dev_own" if want[3] else
+            expected_kind = ("dev_f84a" if part == "pic16f84a" else
+                             "dev_own" if want[3] else
                              "dev_no_usart" if part in NO_USART_PARTS else "dev")
             if mism or tuple(want) != committed[1:] or kind != expected_kind:
                 bad += 1
