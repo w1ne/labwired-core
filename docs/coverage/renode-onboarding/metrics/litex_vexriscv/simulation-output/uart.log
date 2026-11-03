@@ -1,0 +1,9 @@
+LITEX VEXRISCV SMOKE
+cpu=rv32im uart=litex
+spi=00000000
+timer=running
+timer=zero
+hb=0 txfull=00000000
+hb=1 txfull=00000000
+hb=2 txfull=00000000
+hb=3 txfull=00000000

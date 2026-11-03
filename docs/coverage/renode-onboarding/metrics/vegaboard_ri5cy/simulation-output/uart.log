@@ -1,0 +1,7 @@
+VEGABOARD RI5CY SMOKE
+cpu=rv32imc uart=lpuart
+mul=0000002a
+hb=0 stat=00c00000
+hb=1 stat=00c00000
+hb=2 stat=00c00000
+hb=3 stat=00c00000

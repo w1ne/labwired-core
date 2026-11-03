@@ -1,33 +1,37 @@
 {
   "target_id": "vegaboard_ri5cy",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
-  "crate": "",
-  "target_triple": "",
-  "script": "",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-vegaboard-ri5cy-smoke",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml",
   "system": "configs/systems/onboarding/vegaboard_ri5cy.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T02:30:10Z",
-  "finished_at_utc": "2026-11-03T02:30:10Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-03T03:03:36Z",
+  "finished_at_utc": "2026-11-03T03:03:38Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1519,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
-    "build_firmware": null,
-    "run_smoke": null
+    "build_cli": 0.264,
+    "build_firmware": 0.353,
+    "run_smoke": 0.891
   },
   "stages_ms": {
-    "build_cli": null,
-    "build_firmware": null,
-    "run_smoke": null
+    "build_cli": 264,
+    "build_firmware": 353,
+    "run_smoke": 891
   }
 }

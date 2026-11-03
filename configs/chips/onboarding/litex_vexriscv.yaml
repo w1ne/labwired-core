@@ -1,23 +1,34 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# LabWired - narrowed LiteX VexRiscv profile for the imported Renode system.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# The generated import called this an ARM platform and omitted the LiteX UART
+# and timer while advertising MMCM and Ethernet blocks that LabWired does not
+# model. Keep only the supported RV32IM, memory, UART, timer, and explicit SPI
+# stub used by the smoke. The full model rationale and sources are in
+# configs/chips/litex-vexriscv.yaml.
 
-name: litex_vexriscv
-arch: arm
-flash:
-  base: 536870912
-  size: 33554432B
-ram:
-  base: 268435456
-  size: 262144B
+name: "litex_vexriscv"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 100_000_000
+
+flash: { base: 0x20000000, size: "32MiB" }
+ram: { base: 0x10000000, size: "256KB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x0, size: "256KB" }
 peripherals:
-- id: clock0
-  type: litex_mmcm_csr32
-  bus: sysbus
-  base_address: 3758114816
-- id: phy
-  type: ethernetphysicallayer
-  bus: eth
-  base_address: 0
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x60001800
+    size: "2KB"
+    irq: 2
+  - id: "timer"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    irq: 1
+  # Declared gap, not a modeled flash controller. Reads answer zeros.
+  - id: "spi_flash_ctrl"
+    type: "stub"
+    base_address: 0x60005000
+    size: "2KB"

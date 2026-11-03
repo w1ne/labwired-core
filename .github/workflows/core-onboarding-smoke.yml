@@ -93,6 +93,18 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nucleo_f767zi-smoke.yaml
             system: configs/systems/onboarding/nucleo_f767zi.yaml
+          # Imported RISC-V systems narrowed to modeled CPU, memory and
+          # peripheral surfaces before these smokes run.
+          - id: litex_vexriscv
+            crate: firmware-litex-vexriscv-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv.yaml
+          - id: vegaboard_ri5cy
+            crate: firmware-vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml
+            system: configs/systems/onboarding/vegaboard_ri5cy.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +112,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

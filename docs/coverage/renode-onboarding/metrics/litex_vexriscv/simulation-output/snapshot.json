@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      268439296,
+      268697456,
+      268634112,
+      0,
+      999424,
+      1125900288,
+      8192,
+      1610620928,
+      3,
+      300325,
+      0,
+      0,
+      274878464,
+      3518435328,
+      98304,
+      175923200,
+      53248,
+      10,
+      3435973837,
+      429496730,
+      61,
+      268697520,
+      108,
+      5,
+      160,
+      6554,
+      117,
+      9998336,
+      1801441280,
+      99999744,
+      1441153024
+    ],
+    "pc": 268436220,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 268435832,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 4000000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 4000000,
+  "cycles": 16000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "940acaf237584cc37e7c1527ba00fbef9019c7329c7a5280655586c0c2398581",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv.yaml",
+    "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml"
+  }
+}

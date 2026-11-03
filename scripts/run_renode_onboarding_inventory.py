@@ -35,6 +35,16 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
     },
+    "litex_vexriscv": {
+        "crate": "firmware-litex-vexriscv-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
+    },
+    "vegaboard_ri5cy": {
+        "crate": "firmware-vegaboard-ri5cy-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml",
+    },
 }
 
 
@@ -44,6 +54,21 @@ def imported_system(descriptor: Path) -> str:
         if separator and key.strip() == "system":
             return value.strip().strip("\"'")
     raise ValueError(f"{descriptor} has no system: reference")
+
+
+def mapped_system(script: Path) -> Path:
+    """Resolve the system the smoke script will actually load."""
+    in_inputs = False
+    for line in script.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" "):
+            in_inputs = line.strip() == "inputs:"
+            continue
+        if in_inputs and line.strip().startswith("system:"):
+            value = line.split(":", 1)[1].strip().strip("\"'")
+            return (script.parent / value).resolve()
+    raise ValueError(f"{script} has no inputs.system reference")
 
 
 def main() -> int:
@@ -111,6 +136,12 @@ def main() -> int:
                 ["--inventory-only", "--not-run-reason", not_run_reason]
             )
         else:
+            script_path = REPO_ROOT / mapping["script"]
+            if mapped_system(script_path) != system_path.resolve():
+                raise ValueError(
+                    f"{descriptor}: smoke script {script_path} loads "
+                    f"{mapped_system(script_path)}, expected imported system {system_path}"
+                )
             command.extend(
                 [
                     "--crate",

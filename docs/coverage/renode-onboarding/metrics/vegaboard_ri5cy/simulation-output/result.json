@@ -1,0 +1,249 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 8001036,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "VEGABOARD RI5CY SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=rv32imc uart=lpuart",
+          "mul=0000002a",
+          "hb=0 stat=00c00000",
+          "hb=1 stat=00c00000",
+          "hb=2 stat=00c00000"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2652,
+      537067376,
+      536872960,
+      0,
+      1374388224,
+      274878464,
+      3518435328,
+      1074012160,
+      10,
+      267016,
+      3221225472,
+      0,
+      1000001536,
+      282624,
+      6554,
+      9998336,
+      429498368,
+      3,
+      3435973837,
+      429496730,
+      61,
+      537067440,
+      160,
+      6554,
+      116,
+      97,
+      5,
+      98304,
+      175923200,
+      53248,
+      999424
+    ],
+    "pc": 652,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 332,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 4000000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "202a0bfda323be57df6873db9fa1ab8c9dc0b8abf6a65f90fd96779d657642da",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/vegaboard_ri5cy.yaml",
+    "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "lpuart0",
+        "kind": "native",
+        "base": 1074012160,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "VEGABOARD RI5CY SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=rv32imc uart=lpuart",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "mul=0000002a",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=0 stat=00c00000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=1 stat=00c00000",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "hb=2 stat=00c00000",
+        "cycle_lo": 2400000,
+        "cycle": 2410000,
+        "end_cycle": 2410000
+      },
+      {
+        "text": "hb=3 stat=00c00000",
+        "cycle_lo": 3600000,
+        "cycle": 3610000,
+        "end_cycle": 3610000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2802,
+    "data_bytes": 0,
+    "bss_bytes": 196608,
+    "flash_used_bytes": 2802,
+    "ram_static_bytes": 196608,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 196608,
+    "flash_used_pct": 0.27,
+    "ram_static_pct": 100.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 8001036,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 4000004,
+    "memory_writes": 47,
+    "peripheral_accesses": 274,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 652,
+        "count": 5235,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 650,
+        "count": 5196,
+        "symbol": "firmware_vegaboard_ri5cy_smoke::spin"
+      },
+      {
+        "pc": 648,
+        "count": 5194,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}

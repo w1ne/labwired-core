@@ -1,0 +1,16 @@
+# RISC-V smoke against the imported Renode Vega RI5CY system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke"
+  system: "../../configs/systems/onboarding/vegaboard_ri5cy.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "VEGABOARD RI5CY SMOKE"
+  - uart_ordered:
+      - "cpu=rv32imc uart=lpuart"
+      - "mul=0000002a"
+      - "hb=0 stat=00c00000"
+      - "hb=1 stat=00c00000"
+      - "hb=2 stat=00c00000"
+  - expected_stop_reason: max_steps

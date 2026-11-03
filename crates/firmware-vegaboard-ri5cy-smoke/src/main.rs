@@ -7,14 +7,9 @@
 //! The board's SoC maps 1 MiB of flash at 0x0, 192 KiB of SRAM at 0x20000000
 //! and an NXP LPUART0 at 0x40042000. The ELF is loaded directly (fast boot).
 //!
-//! Prints:
-//! * a banner and the modelled-surface summary,
-//! * a real multiply (`mul=0000002a`) — the RI5CY core is RV32IMC, so the
-//!   toolchain emits the M extension,
-//! * readbacks of the SCG and PCC windows, which are declared stubs and
-//!   answer zeros — the smoke pins that boundary,
-//! * a heartbeat whose `stat=` field is read back from the LPUART status
-//!   register (0x00c00000 = TDRE|TC idle).
+//! Prints a banner, executes a `mul` instruction (`mul=0000002a`), and emits
+//! a heartbeat whose `stat=` field is read back from the LPUART status
+//! register (0x00c00000 = TDRE|TC idle).
 
 #![no_std]
 #![no_main]
@@ -28,10 +23,6 @@ use riscv_rt::entry;
 const LPUART_DATA: *mut u32 = 0x4004_200C as *mut u32;
 const LPUART_STAT: *const u32 = 0x4004_2004 as *const u32;
 const LPUART_TDRE: u32 = 1 << 23;
-
-/// Declared stubs: the System Clock Generator and the two PCC clock banks.
-const SCG_CSR: *const u32 = 0x4002_C010 as *const u32;
-const PCC0: *const u32 = 0x4002_B000 as *const u32;
 
 fn putc(byte: u8) {
     unsafe {
@@ -87,15 +78,17 @@ fn main() -> ! {
     puts("VEGABOARD RI5CY SMOKE\n");
     puts("cpu=rv32imc uart=lpuart\n");
 
-    let product: u32 = 7u32.wrapping_mul(6);
+    let product: u32;
+    unsafe {
+        core::arch::asm!(
+            "mul {result}, {lhs}, {rhs}",
+            result = out(reg) product,
+            lhs = in(reg) 7u32,
+            rhs = in(reg) 6u32,
+        );
+    }
     puts("mul=");
     put_hex32(product);
-    putc(b'\n');
-
-    puts("scg=");
-    put_hex32(unsafe { core::ptr::read_volatile(SCG_CSR) });
-    puts(" pcc0=");
-    put_hex32(unsafe { core::ptr::read_volatile(PCC0) });
     putc(b'\n');
 
     let mut heartbeat: u32 = 0;

@@ -1,47 +1,15 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# LabWired - narrowed Vega RI5CY profile for the imported Renode system.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# The generated import labelled this RISC-V target as ARM and listed several
+# clock/timer windows that are not modeled. The measured profile keeps only
+# the RV32IMC execution surface, boot flash, SRAM, and modeled LPUART0.
 
-name: vegaboard_ri5cy
-arch: arm
-flash:
-  base: 134217728
-  size: 1048576B
-ram:
-  base: 536870912
-  size: 196608B
+name: "vegaboard_ri5cy"
+arch: "riscv"
+core: "rv32imc"
+flash: { base: 0x00000000, size: "1MiB" }
+ram: { base: 0x20000000, size: "192KiB" }
 peripherals:
-- id: SCG_CSR
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073922064
-- id: pcc0
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073917952
-- id: pcc1
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1090678784
-- id: lpuart0
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1074012160
-- id: lpuart1
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1074016256
-- id: lptmr0
-  type: lowpower_timer
-  bus: sysbus
-  base_address: 1073946624
-- id: lptmr1
-  type: lowpower_timer
-  bus: sysbus
-  base_address: 1073950720
-- id: lptmr2
-  type: lowpower_timer
-  bus: sysbus
-  base_address: 1090695168
+  - id: "lpuart0"
+    type: "nxp_lpuart"
+    base_address: 0x40042000

@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      2652,
+      537067376,
+      536872960,
+      0,
+      1374388224,
+      274878464,
+      3518435328,
+      1074012160,
+      10,
+      267016,
+      3221225472,
+      0,
+      1000001536,
+      282624,
+      6554,
+      9998336,
+      429498368,
+      3,
+      3435973837,
+      429496730,
+      61,
+      537067440,
+      160,
+      6554,
+      116,
+      97,
+      5,
+      98304,
+      175923200,
+      53248,
+      999424
+    ],
+    "pc": 652,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 332,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 4000000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 4000000,
+  "cycles": 8001036,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "202a0bfda323be57df6873db9fa1ab8c9dc0b8abf6a65f90fd96779d657642da",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/vegaboard_ri5cy.yaml",
+    "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml"
+  }
+}
