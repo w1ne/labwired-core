@@ -3628,6 +3628,126 @@ mod analog {
         }
     }
 
+    /// Gate depletion current flows through the JFET's internal drain/source
+    /// resistors during a gate step. Model-card RD/RS must match explicit
+    /// series resistors around a resistance-free level-1 JFET for NJF/PJF and
+    /// both transient companion rules.
+    #[test]
+    fn jfet_gate_charge_matches_explicit_terminal_resistors_during_transients() {
+        let (rd, rs, h) = (800.0, 500.0, 10e-9);
+        let (cgs, cgd, pb, fc) = (200e-12, 100e-12, 0.75, 0.5);
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for (kind, sign, vto) in [("NJF", 1.0, -2.0), ("PJF", -1.0, 2.0)] {
+                let gate_initial = -sign * 3.0;
+                let gate_step = -sign * 1.5;
+                let modelled = format!(
+                    "Vg g 0 dc {gate_initial}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={vto} BETA=200u \
+                     LAMBDA=0.02 IS=1e-30 RD={rd} RS={rs} \
+                     CGS={cgs} CGD={cgd} PB={pb} FC={fc})\n",
+                    sign * 2.5
+                );
+                let explicit = format!(
+                    "Vg g 0 dc {gate_initial}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     RDM d di {rd}\nRSM si s {rs}\n\
+                     J1 di g si JMOD\n.model JMOD {kind}(VTO={vto} BETA=200u \
+                     LAMBDA=0.02 IS=1e-30 CGS={cgs} CGD={cgd} PB={pb} FC={fc})\n",
+                    sign * 2.5
+                );
+                let uncharged = format!(
+                    "Vg g 0 dc {gate_initial}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={vto} BETA=200u \
+                     LAMBDA=0.02 IS=1e-30 RD={rd} RS={rs})\n",
+                    sign * 2.5
+                );
+
+                let mut model = Solver::new(
+                    parse_netlist(&modelled).expect("JFET terminal charge model parses"),
+                    integration,
+                )
+                .expect("JFET terminal charge solver builds");
+                let mut explicit = Solver::new(
+                    parse_netlist(&explicit).expect("explicit JFET resistors parse"),
+                    integration,
+                )
+                .expect("explicit-resistor JFET solver builds");
+                let mut uncharged = Solver::new(
+                    parse_netlist(&uncharged).expect("uncharged JFET model parses"),
+                    integration,
+                )
+                .expect("uncharged JFET solver builds");
+
+                let model_nodes = ["d", "s", "J1#drain", "J1#source", "g"]
+                    .map(|name| model.circuit().node(name).expect("model node"));
+                let explicit_nodes = ["d", "s", "di", "si", "g"]
+                    .map(|name| explicit.circuit().node(name).expect("explicit node"));
+                let model_gate = model.voltage_source_index("Vg").expect("model gate source");
+                let explicit_gate = explicit
+                    .voltage_source_index("Vg")
+                    .expect("explicit gate source");
+                let uncharged_gate = uncharged
+                    .voltage_source_index("Vg")
+                    .expect("uncharged gate source");
+
+                model.advance(h).expect("model operating point settles");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor operating point settles");
+                uncharged
+                    .advance(h)
+                    .expect("uncharged operating point settles");
+                for (model_node, explicit_node) in model_nodes.into_iter().zip(explicit_nodes) {
+                    assert!(
+                        (model.node_voltage(model_node) - explicit.node_voltage(explicit_node))
+                            .abs()
+                            < 1e-9,
+                        "{kind} {integration:?}: initial terminal voltages differ"
+                    );
+                }
+
+                model.set_voltage_source(model_gate, gate_step);
+                explicit.set_voltage_source(explicit_gate, gate_step);
+                uncharged.set_voltage_source(uncharged_gate, gate_step);
+                model.advance(h).expect("model JFET charge step solves");
+                explicit
+                    .advance(h)
+                    .expect("explicit-resistor JFET charge step solves");
+                uncharged.advance(h).expect("uncharged JFET step solves");
+
+                let mut charge_effect = 0.0_f64;
+                for (label, model_node, explicit_node) in [
+                    ("external drain", model_nodes[0], explicit_nodes[0]),
+                    ("external source", model_nodes[1], explicit_nodes[1]),
+                    ("intrinsic drain", model_nodes[2], explicit_nodes[2]),
+                    ("intrinsic source", model_nodes[3], explicit_nodes[3]),
+                    ("gate", model_nodes[4], explicit_nodes[4]),
+                ] {
+                    let actual = model.node_voltage(model_node);
+                    let expected = explicit.node_voltage(explicit_node);
+                    charge_effect =
+                        charge_effect.max((actual - uncharged.node_voltage(model_node)).abs());
+                    assert!(
+                        (actual - expected).abs() < 1e-8,
+                        "{kind} {integration:?} {label}: model-card resistances give {actual} V, explicit resistors give {expected} V"
+                    );
+                }
+                assert!(
+                    charge_effect > 1e-7,
+                    "{kind} {integration:?}: gate depletion charge must measurably affect terminal voltages, got a largest charged/uncharged difference of {charge_effect} V"
+                );
+                for source in ["Vd", "Vg"] {
+                    let actual = source_current(&model, source);
+                    let expected = source_current(&explicit, source);
+                    assert!(
+                        (actual - expected).abs() < 1e-10,
+                        "{kind} {integration:?} {source}: model-card resistances give {actual} A, explicit resistors give {expected} A"
+                    );
+                }
+            }
+        }
+    }
+
     /// Each level-1 JFET gate depletion capacitance is parsed and integrated
     /// as a nonlinear junction charge for NJF and PJF, under both companion
     /// rules. The expected node voltage is solved independently from the
