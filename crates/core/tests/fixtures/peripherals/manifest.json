@@ -1175,6 +1175,38 @@
       "inputs": []
     },
     {
+      "device_type": "ili9488",
+      "label": "ILI9488 TFT",
+      "summary": "320×480 SPI TFT controller with modelled 18-bit COLMOD.",
+      "detail": "Ilitek ILI9488 against an in-memory 320×480 RGB888 frame (bit-expanded RGB666). COLMOD selects the SPI pixel depth; hardware default and the common 0x66 init are 18-bit / three bytes per pixel. MADCTL MV selects landscape 480×320 addressing. The playground surfaces pixels through the simulator bridge.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin label (e.g. \"PB2\")."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback."
+        },
+        {
+          "name": "reset_pin",
+          "ty": "str",
+          "doc": "Active-low hardware reset GPIO. Optional; omit when RESET is tied high or unused."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part — ABSENT MEANS POWERED. Only an explicit false, which the diagram compiler emits when supply pins are on no net, darkens the panel."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "amoled-rm67162",
       "label": "RM67162 AMOLED",
       "summary": "240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C).",
