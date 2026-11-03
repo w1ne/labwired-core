@@ -766,7 +766,11 @@ mod tests {
         data(&mut dev, 0xDF); // HD44780 A00 degree glyph
 
         let text = dev.text();
-        assert_eq!(&text[..3], " X°", "0xDF is the degree sign; other non-ASCII blanks");
+        assert_eq!(
+            &text[..3],
+            " X°",
+            "0xDF is the degree sign; other non-ASCII blanks"
+        );
         assert_eq!(dev.ddram()[0], 0x00, "DDRAM keeps the raw byte");
         assert_eq!(dev.ddram()[2], 0xDF);
     }
