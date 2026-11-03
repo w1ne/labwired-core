@@ -131,6 +131,18 @@ mod analog {
             );
         }
 
+        let (bv, ibv, vd) = (5.0, 1e-3, -6.0);
+        let xbv = device::breakdown_voltage(bv, ibv, is, n);
+        let solver = build(&format!(
+            "Vd a 0 dc {vd}\nD1 a 0 DREC\n.model DREC D(IS={is} N={n} BV={bv} IBV={ibv} ISR={isr} NR={nr} VJ={vj} M={m})\n"
+        ));
+        let expected = device::diode_op_breakdown(vd, is, n, xbv, n).id + recombination_current(vd);
+        let actual = source_current(&solver, "Vd");
+        assert!(
+            (actual - expected).abs() < 2e-12 + 2e-8 * expected.abs(),
+            "at breakdown Vd={vd} V: expected {expected} A, got {actual} A"
+        );
+
         // The analytic tangent also drives a loaded operating point to the
         // root of the independent diode equation.
         let supply = 0.35;
