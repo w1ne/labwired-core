@@ -1,0 +1,6 @@
+# Arduino Nano RP2040 Connect (ABX00052), limited to header TX / RP2040 GP0.
+# NINA-W102 radio, LSM6DSOX IMU and MP34DT06JTR microphone are not modeled.
+name: "arduino-nano-rp2040-connect"
+chip: "../chips/rp2040-nano-rp2040-connect-smoke.yaml"
+external_devices: []
+board_io: []

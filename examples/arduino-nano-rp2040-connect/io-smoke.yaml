@@ -1,0 +1,12 @@
+# Arduino Nano RP2040 Connect: toggle the exposed header TX / GP0 pin.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nano-rp2040-connect-smoke"
+  system: "../../configs/systems/arduino-nano-rp2040-connect.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "sio:0"
+      min_edges: 8
+  - expected_stop_reason: max_steps

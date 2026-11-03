@@ -112,6 +112,7 @@ members = [
     "crates/firmware-rp2040-demo",
     "crates/firmware-feather-rp2040-smoke",
     "crates/firmware-pico-w-smoke",
+    "crates/firmware-nano-rp2040-connect-smoke",
     "crates/firmware-pico2-w-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-arduino-zero-demo",
@@ -402,6 +403,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-pico2-w-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nano-rp2040-connect-smoke]
 codegen-units = 1
 opt-level = "s"
 

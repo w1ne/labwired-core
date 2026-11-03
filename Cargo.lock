@@ -1489,6 +1489,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nano-rp2040-connect-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nrf51822-demo"
 version = "0.1.0"
 dependencies = [
