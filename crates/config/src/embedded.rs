@@ -313,6 +313,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     ),
     (&["mq-6"], include_str!("../../../configs/devices/mq6.yaml")),
     (
+        &["sound-sensor"],
+        include_str!("../../../configs/devices/sound_sensor.yaml"),
+    ),
+    (
         &["soil-moisture"],
         include_str!("../../../configs/devices/soil_moisture.yaml"),
     ),
