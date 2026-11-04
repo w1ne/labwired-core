@@ -1797,6 +1797,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-picosoc-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-ra4m1-demo"
 version = "0.1.0"
 dependencies = [

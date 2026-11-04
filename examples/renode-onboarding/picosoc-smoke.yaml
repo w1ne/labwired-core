@@ -1,0 +1,11 @@
+# Direct-ELF RV32IMC smoke against the imported Renode PicoSoC system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-picosoc-smoke"
+  system: "../../configs/systems/onboarding/picosoc.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "PICOSOC RV32IMC SIMPLEUART SMOKE"
+  - uart_contains: "uart=0x02000004"
+  - expected_stop_reason: max_steps

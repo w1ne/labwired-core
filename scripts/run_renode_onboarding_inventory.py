@@ -292,6 +292,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/murax_vexriscv-smoke.yaml",
     },
+    "picosoc": {
+        "crate": "firmware-picosoc-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/picosoc-smoke.yaml",
+    },
 }
 
 

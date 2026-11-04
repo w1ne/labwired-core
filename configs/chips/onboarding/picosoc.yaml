@@ -1,13 +1,17 @@
 name: picosoc
-arch: arm
+arch: riscv
+core: "rv32imc_zicsr"
 flash:
   base: 16777216
   size: 16777216B
 ram:
-  base: 1073741824
-  size: 262144
+  base: 0
+  size: 16777216B
 peripherals:
 - id: uart
   type: picosoc_simpleuart
   bus: sysbus
-  base_address: 33554436
+  # Model base is the SimpleUART register block start: reg_div@0 and
+  # reg_dat@4. Renode's SimpleUART object is named at the latter address.
+  base_address: 33554432
+  size: 8

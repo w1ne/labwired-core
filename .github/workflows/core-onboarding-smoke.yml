@@ -36,6 +36,7 @@ on:
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
+      - "crates/firmware-picosoc-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -444,6 +445,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/murax_vexriscv-smoke.yaml
             system: configs/systems/onboarding/murax_vexriscv.yaml
+          # PicoSoC's imported profile follows Renode's PicoRV32, SRAM/flash,
+          # and SimpleUART map; the smoke checks the modeled UART path.
+          - id: picosoc
+            crate: firmware-picosoc-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/picosoc-smoke.yaml
+            system: configs/systems/onboarding/picosoc.yaml
 
     steps:
       - uses: actions/checkout@v4
