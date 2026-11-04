@@ -35,6 +35,7 @@ on:
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
       - "crates/firmware-efr32mg24-smoke/**"
+      - "examples/renode-onboarding/brd4186c-smoke.yaml"
       - "crates/firmware-efr32xg22-smoke/**"
       - "crates/firmware-efr32mg12-smoke/**"
       - "crates/firmware-efr32mg1-smoke/**"
@@ -342,6 +343,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/efr32mg24-smoke.yaml
             system: configs/systems/onboarding/efr32mg24.yaml
+          # BRD4186C uses the same EFR32MG24 SoC; the imported profile is
+          # narrowed to the model-backed CMU and USART0 used by this smoke.
+          - id: brd4186c
+            crate: firmware-efr32mg24-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4186c-smoke.yaml
+            system: configs/systems/onboarding/brd4186c.yaml
           # xG22 follows the sourced M33/flash/SRAM map and exercises the
           # modeled Series-2 CMU and USART0; radio and sequencer are omitted.
           - id: efr32xg22

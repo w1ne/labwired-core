@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32wba52-smoke.yaml",
   "system": "configs/systems/onboarding/stm32wba52.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T22:43:12Z",
-  "finished_at_utc": "2026-11-04T22:43:13Z",
+  "started_at_utc": "2026-11-04T23:04:39Z",
+  "finished_at_utc": "2026-11-04T23:04:41Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1750,
+  "elapsed_ms": 1905,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.304,
-    "build_firmware": 0.169,
-    "run_smoke": 1.266
+    "build_cli": 0.297,
+    "build_firmware": 0.198,
+    "run_smoke": 1.392
   },
   "stages_ms": {
-    "build_cli": 304,
-    "build_firmware": 169,
-    "run_smoke": 1266
+    "build_cli": 297,
+    "build_firmware": 198,
+    "run_smoke": 1392
   }
 }

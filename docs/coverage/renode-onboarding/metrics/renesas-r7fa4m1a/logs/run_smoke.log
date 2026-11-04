@@ -1,5 +1,5 @@
-2026-11-04T22:42:36.373525Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas-r7fa4m1a.yaml
-2026-11-04T22:42:36.374766Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-04T23:03:43.363048Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas-r7fa4m1a.yaml
+2026-11-04T23:03:43.364294Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 799877 of 800000 device cycles (123 interpreted)
