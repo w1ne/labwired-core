@@ -1,5 +1,5 @@
-2026-11-04T19:35:47.843703Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32w108.yaml
-2026-11-04T19:35:47.844353Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-04T20:39:02.346703Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32w108.yaml
+2026-11-04T20:39:02.347371Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  1/1 checks · stm32w108-boot-smoke · 100000 steps · 0.00s

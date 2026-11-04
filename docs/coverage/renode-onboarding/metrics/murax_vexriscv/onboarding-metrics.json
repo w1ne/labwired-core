@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/murax_vexriscv-smoke.yaml",
   "system": "configs/systems/onboarding/murax_vexriscv.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T19:34:55Z",
-  "finished_at_utc": "2026-11-04T19:34:56Z",
-  "elapsed_seconds": 1,
-  "elapsed_ms": 742,
+  "started_at_utc": "2026-11-04T20:37:59Z",
+  "finished_at_utc": "2026-11-04T20:38:00Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1052,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.299,
-    "build_firmware": 0.155,
-    "run_smoke": 0.277
+    "build_cli": 0.296,
+    "build_firmware": 0.466,
+    "run_smoke": 0.279
   },
   "stages_ms": {
-    "build_cli": 299,
-    "build_firmware": 155,
-    "run_smoke": 277
+    "build_cli": 296,
+    "build_firmware": 466,
+    "run_smoke": 279
   }
 }

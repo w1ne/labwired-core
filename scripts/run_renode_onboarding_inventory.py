@@ -175,6 +175,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv8m.main-none-eabi",
         "script": "examples/renode-onboarding/efr32mg26-smoke.yaml",
     },
+    "efr32mg1": {
+        "crate": "firmware-efr32mg1-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/efr32mg1-smoke.yaml",
+    },
     "efr32mg12": {
         "crate": "firmware-efr32mg12-smoke",
         "target": "thumbv7em-none-eabi",
