@@ -1,0 +1,12 @@
+# NUCLEO-WBA25CE1 LD1 (PA7) GPIO transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-wba25ce1-smoke"
+  system: "../../configs/systems/nucleo-wba25ce1-smoke.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:7"
+      min_edges: 8
+  - expected_stop_reason: max_steps

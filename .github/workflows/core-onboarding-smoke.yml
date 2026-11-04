@@ -68,6 +68,7 @@ on:
       - "crates/firmware-nucleo-l452re-p-smoke/**"
       - "crates/firmware-nucleo-wb55rg-demo/**"
       - "crates/firmware-nucleo-wba55cg-smoke/**"
+      - "crates/firmware-nucleo-wba25ce1-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h533re-smoke/**"
       - "crates/firmware-nucleo-c5a3zg-smoke/**"
@@ -86,12 +87,14 @@ on:
       - "configs/systems/nrf54l15dk.yaml"
       - "tests/fixtures/nrf54l15-smoke.elf"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
+      - "configs/chips/stm32wba25ceu7-nucleo-smoke.yaml"
       - "configs/chips/stm32h503rb-nucleo-smoke.yaml"
       - "configs/chips/stm32h533re-nucleo-gpio-smoke.yaml"
       - "configs/chips/stm32c5a3zg-nucleo-gpio-smoke.yaml"
       - "configs/chips/stm32c071rb-nucleo-smoke.yaml"
       - "configs/chips/stm32c092rc-nucleo-smoke.yaml"
       - "configs/systems/nucleo-wba55cg-smoke.yaml"
+      - "configs/systems/nucleo-wba25ce1-smoke.yaml"
       - "configs/systems/nucleo-h503rb.yaml"
       - "configs/systems/nucleo-h533re.yaml"
       - "configs/systems/nucleo-c5a3zg.yaml"
@@ -101,6 +104,7 @@ on:
       - "configs/systems/arduino-uno-r4-wifi.yaml"
       - "examples/arduino-uno-r4-wifi/**"
       - "examples/nucleo-wba55cg/**"
+      - "examples/nucleo-wba25ce1/**"
       - "examples/nucleo-h503rb/**"
       - "examples/nucleo-h533re/**"
       - "examples/nucleo-c5a3zg/**"
@@ -345,6 +349,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-wba55cg/onboarding-smoke.yaml
             system: configs/systems/nucleo-wba55cg-smoke.yaml
+          - id: nucleo-wba25ce1
+            crate: firmware-nucleo-wba25ce1-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-wba25ce1/onboarding-smoke.yaml
+            system: configs/systems/nucleo-wba25ce1-smoke.yaml
           - id: nucleo-h503rb
             crate: firmware-nucleo-h503rb-smoke
             target: thumbv8m.main-none-eabi

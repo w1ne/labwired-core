@@ -1,0 +1,41 @@
+# Narrow NUCLEO-WBA25CE1 profile for its user LED GPIO smoke.
+# Only RCC, GPIOA and SysTick are exposed. Radio, USB/ST-LINK and other board
+# peripherals are outside this model.
+# Sources: ST RM0521 and the STM32WBA25 CMSIS device header; see the example README.
+name: "stm32wba25ceu7-nucleo-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+
+pins:
+  PA7: { gpio: "gpioa", bit: 7, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x46020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/rcc.yaml"
+      profile: "stm32wba"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/gpioa.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
