@@ -4106,8 +4106,9 @@ mod tests {
 
     #[test]
     fn enhanced_rows_pick_the_core_flash_and_oscstat_map() {
-        // Left out: no EUSART, 64 banks.
-        for name in ["pic16f1503", "pic16f18855"] {
+        // Left out: 64-bank parts still without an exact row.
+        // pic16f1503 now has an exact enhanced no-EUSART row (see pic16f1503_uses_exact_...).
+        for name in ["pic16f18855"] {
             assert!(pic16_device(name).is_none(), "{name}");
         }
         let names: Vec<_> = PIC16_DEVICES.iter().map(|d| d.name).collect();
