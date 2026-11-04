@@ -1,9 +1,11 @@
-# Narrow board-specific profile for Seeed Studio XIAO nRF54L15.
+# Narrow shared profile for Seeed Studio XIAO nRF54L15 and XIAO nRF54L15 Sense.
 #
 # This profile models reset memory and the three nRF54L GPIO ports. The board
-# header map, active-low user LED and active-low user key are exposed below;
-# USB/SAMD11 debug, UARTE, wireless, ADC, battery management and sensor features
-# are outside this smoke profile.
+# header map, active-low user LED and active-low user key pins are exposed
+# below. Board system profiles select the board IO they actually claim. The
+# Sense-only IMU, microphone, and their power control are not modeled. USB/
+# SAMD11 debug, UARTE, wireless, ADC, and battery management are also outside
+# this smoke profile.
 #
 # Sources: Nordic nRF54L15 Product Specification and Seeed XIAO nRF54L15 board
 # guide / schematic. The GPIO block layout is the nRF54L profile used by

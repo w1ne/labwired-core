@@ -1,0 +1,28 @@
+{
+  "target_id": "xiao-nrf54l15-sense",
+  "status": "pass",
+  "crate": "firmware-xiao-nrf54l15-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/xiao-nrf54l15-sense/onboarding-smoke.yaml",
+  "system": "configs/systems/xiao-nrf54l15-sense.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T16:00:28Z",
+  "finished_at_utc": "2026-11-04T16:00:44Z",
+  "elapsed_seconds": 17,
+  "elapsed_ms": 16775,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 15.884,
+    "build_firmware": 0.565,
+    "run_smoke": 0.315
+  },
+  "stages_ms": {
+    "build_cli": 15884,
+    "build_firmware": 565,
+    "run_smoke": 315
+  }
+}
