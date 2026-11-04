@@ -1087,7 +1087,7 @@ chips:
 
   - id: atsamd51-pybadge
     arch: cortex-m4
-    headline: "No tier-1 target and no firmware runs on this descriptor. It is the atsamd51 descriptor with the PyBadge application layout (reset_vector_offset 0x4000, UF2 bootloader resident below). Its only gate, crates/core/tests/pybadge_config.rs, builds the PyBadge bus from configs/systems/pybadge.yaml and checks the reset SP/PC fetched from a stub vector table at 0x4000; it steps no firmware. The Metro M4 smoke that exercises atsamd51 loads atsamd51.yaml, not this file. Beyond the rubric it declares the same two zero windows as atsamd51, USB and QSPI."
+    headline: "No tier-1 target. The Adafruit PyBadge onboarding smoke (core-onboarding-smoke.yml matrix id adafruit-pybadge; examples/pybadge/onboarding-smoke.yaml) rebuilds firmware-atsamd51-pybadge-demo against the PyBadge system, boots its image behind the resident UF2 bootloader at 0x4000, prints OK on SERCOM1, and asserts at least four PA23 (D13) GPIO edges. The smoke uses examples/pybadge/system.yaml, which narrows the exercised board surface to that UART and LED; the ST7735 display is not attached, and buttons and NeoPixels are not exercised. Its QSPI and native USB windows remain zero stubs, neither accessed by this smoke. The simulator evidence and live board/MCU status receipt are committed under examples/pybadge/evidence/."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
