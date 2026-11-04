@@ -34,6 +34,7 @@ on:
       - "crates/firmware-efm32lg942-smoke/**"
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
+      - "crates/firmware-efr32mg24-smoke/**"
       - "crates/firmware-efr32mg12-smoke/**"
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
@@ -315,6 +316,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/efr32mg26-smoke.yaml
             system: configs/systems/onboarding/efr32mg26.yaml
+          # MG24 follows the xG24 REPL's M33/memory map and uses the modeled
+          # Series-2 CMU and USART0; generated stub peripherals are omitted.
+          - id: efr32mg24
+            crate: firmware-efr32mg24-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/efr32mg24-smoke.yaml
+            system: configs/systems/onboarding/efr32mg24.yaml
           # G890 is bounded to its Cortex-M3 memory map and model-backed USART0.
           - id: efm32g890
             crate: firmware-efm32g842-smoke
