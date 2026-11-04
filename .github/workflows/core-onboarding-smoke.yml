@@ -32,6 +32,7 @@ on:
       - "crates/firmware-nucleo-l011k4-smoke/**"
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
+      - "crates/firmware-nucleo-f413zh-smoke/**"
       - "crates/firmware-nucleo-f410rb-smoke/**"
       - "crates/firmware-nucleo-f439zi-smoke/**"
       - "crates/firmware-nucleo-g071rb-smoke/**"
@@ -186,6 +187,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f411re/io-smoke.yaml
             system: configs/systems/nucleo-f411re.yaml
+          - id: nucleo-f413zh
+            crate: firmware-nucleo-f413zh-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f413zh/io-smoke.yaml
+            system: configs/systems/nucleo-f413zh.yaml
           - id: nucleo-f410rb
             crate: firmware-nucleo-f410rb-smoke
             target: thumbv7em-none-eabi

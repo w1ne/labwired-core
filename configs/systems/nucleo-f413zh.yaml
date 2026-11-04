@@ -1,0 +1,12 @@
+# NUCLEO-F413ZH (STM32F413ZHT6), limited to the tested blue LD2 GPIO path.
+# UM1974 / MB1137 connects LD2 to PB7, active high.
+name: nucleo-f413zh
+chip: "../chips/stm32f413zh-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld2
+    kind: led
+    peripheral: gpiob
+    pin: 7
+    signal: output
+    active_high: true
