@@ -1,0 +1,13 @@
+# NUCLEO-F412ZG (MB1137), limited to the tested LD2 GPIO path.
+# ST UM1974 maps the active-high blue user LED LD2 to PB7. The ST-LINK VCP,
+# other LEDs, USB, Ethernet PHY, and remaining MCU peripherals are not exposed.
+name: nucleo-f412zg
+chip: "../chips/stm32f412zg-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld2_blue
+    kind: led
+    peripheral: gpiob
+    pin: 7
+    signal: output
+    active_high: true

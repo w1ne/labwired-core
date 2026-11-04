@@ -1,0 +1,12 @@
+# NUCLEO-F412ZG: repeatedly toggle the active-high blue LD2 LED on PB7.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f412zg-smoke"
+  system: "../../configs/systems/nucleo-f412zg.yaml"
+limits:
+  max_steps: 256
+assertions:
+  - gpio_edges:
+      pin: "gpiob:7"
+      min_edges: 8
+  - expected_stop_reason: max_steps
