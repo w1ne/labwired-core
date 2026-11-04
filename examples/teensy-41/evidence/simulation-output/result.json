@@ -77,9 +77,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "e43da679ae268f57f213882245adff99eb0ace4206dc23a856c1e8c7a127cd56",
+  "firmware_hash": "de2811588dde3ecfce67cc45ef09d0e302410a5056b53566a4de0239164aff19",
   "config": {
-    "firmware": "examples/teensy-41/../../target/thumbv7em-none-eabi/release/firmware-teensy-41-led-smoke",
+    "firmware": "examples/teensy-41/../../target/thumbv7em-none-eabi/release/firmware-teensy4-led-smoke",
     "system": "examples/teensy-41/../../configs/systems/teensy-41.yaml",
     "script": "examples/teensy-41/onboarding-smoke.yaml"
   },

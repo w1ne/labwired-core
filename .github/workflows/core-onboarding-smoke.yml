@@ -45,6 +45,7 @@ on:
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h723zg-smoke/**"
       - "crates/firmware-nucleo-c071rb-smoke/**"
+      - "crates/firmware-teensy4-smoke/**"
       - "crates/firmware-uno-r4-wifi-smoke/**"
       - "crates/firmware-xiao-nrf54l15-smoke/**"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
@@ -207,6 +208,16 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/nucleo-c071rb/onboarding-smoke.yaml
             system: configs/systems/nucleo-c071rb.yaml
+          - id: teensy-40
+            crate: firmware-teensy4-smoke
+            target: thumbv7em-none-eabi
+            script: examples/teensy-40/onboarding-smoke.yaml
+            system: configs/systems/teensy-40.yaml
+          - id: teensy-41
+            crate: firmware-teensy4-smoke
+            target: thumbv7em-none-eabi
+            script: examples/teensy-41/onboarding-smoke.yaml
+            system: configs/systems/teensy-41.yaml
           - id: xiao-nrf54l15
             crate: firmware-xiao-nrf54l15-smoke
             target: thumbv8m.main-none-eabi

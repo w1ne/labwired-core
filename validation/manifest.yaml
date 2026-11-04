@@ -9672,19 +9672,34 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
 
-  - id: teensy-41
-    doc: docs/boards/teensy-41.md
-    chip: configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml
+  - id: teensy-40
+    doc: docs/boards/teensy-40.md
+    chip: configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml
     tier: smoke-manual
-    note: "Focused MIMXRT1062 profile exercises CCM clock ungating and GPIO2_IO03 toggles for the onboard D13 LED. UART/IOMUXC routing and FlexSPI/XIP are omitted. Local model smoke only; no physical-board capture."
+    note: "Focused MIMXRT1062 profile exercises CCM clock ungating and GPIO2_IO03 toggles for the onboard D13 LED. DTCM-linked image; IOMUXC and external FlexSPI/XIP boot are outside the profile. Local model smoke only; no physical-board capture."
     offline_tests:
-      - "board_config_gates::teensy41_gpio_from_config_builds"
+      - "board_config_gates::teensy4_gpio_from_config_builds"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/imx_ccm.rs
-      - configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml
+      - configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml
+      - configs/systems/teensy-40.yaml
+
+  - id: teensy-41
+    doc: docs/boards/teensy-41.md
+    chip: configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml
+    tier: smoke-manual
+    note: "Focused MIMXRT1062 profile exercises CCM clock ungating and GPIO2_IO03 toggles for the onboard D13 LED. DTCM-linked image; IOMUXC and external FlexSPI/XIP boot are outside the profile. Local model smoke only; no physical-board capture."
+    offline_tests:
+      - "board_config_gates::teensy4_gpio_from_config_builds"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/imx_ccm.rs
+      - configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml
       - configs/systems/teensy-41.yaml
 
   - id: stm32f7-discovery

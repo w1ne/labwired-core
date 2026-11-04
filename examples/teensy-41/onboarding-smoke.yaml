@@ -1,7 +1,7 @@
 # Teensy 4.1: repeated GPIO2_IO03 toggles exercise the onboard D13 LED path.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-teensy-41-led-smoke"
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-teensy4-led-smoke"
   system: "../../configs/systems/teensy-41.yaml"
 limits:
   max_steps: 20000

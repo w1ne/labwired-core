@@ -63,7 +63,6 @@ conventions, new interrupt model, new SVD quirks.
 | **CC2538 / CC26xx** | Zigbee/Thread dev kits | Cortex-M3 / M4F | Opens **TI**, the last large vendor absent from the engine, without paying for a new ISA. |
 | PSoC 6 / XMC | CY8CKIT-062, XMC dev kits | M4 + M0+ | Opens **Infineon**. |
 | RA8M1 | Renesas EK-RA8M1 | Cortex-M85 | New core (Helium/MVE), but the RA family model from RA4M1 carries over. |
-| MIMXRT1062 | Teensy 4.0 | M7 | The exact RT1062 part (the onboarded `imxrt1064` is the RT1064-class cousin); mostly config + fixture. |
 
 ## Explicitly out of scope
 

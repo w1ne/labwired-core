@@ -1,5 +1,5 @@
 [package]
-name = "firmware-teensy41-smoke"
+name = "firmware-teensy4-smoke"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
@@ -11,7 +11,7 @@ cortex-m-rt = "0.7"
 panic-halt = "0.2"
 
 [[bin]]
-name = "firmware-teensy-41-led-smoke"
+name = "firmware-teensy4-led-smoke"
 path = "src/main.rs"
 test = false
 bench = false

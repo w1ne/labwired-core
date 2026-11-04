@@ -9,8 +9,8 @@ are recorded in [`evidence/vendor-status.md`](evidence/vendor-status.md).
 ## Modeled board scope
 
 The focused system in [`configs/systems/teensy-41.yaml`](../../configs/systems/teensy-41.yaml)
-uses [`mimxrt1062-teensy41-gpio-smoke.yaml`](../../configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml)
-and exposes the CCM clock controller plus GPIO2. The smoke firmware enables
+uses [`mimxrt1062-teensy4-gpio-smoke.yaml`](../../configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml),
+the same MIMXRT1062 CCM/GPIO2 profile used by Teensy 4.0. The smoke firmware enables
 GPIO2 and toggles D13 / GPIO2_IO03. PJRC maps D13 to GPIO_B0_03, and the held
 NXP vendor SVD says the mux register resets to `0x5`, selecting ALT5/GPIO2_IO03.
 In this focused simulator profile, IOMUXC is absent and D13 is mapped directly

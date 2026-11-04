@@ -2025,7 +2025,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "firmware-teensy41-smoke"
+name = "firmware-teensy4-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m",

@@ -4,8 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 //
-// Teensy 4.1 D13 LED smoke. This image deliberately exercises only CCM and
-// GPIO2; it does not claim UART, FlexSPI/XIP, USB, Ethernet, or other blocks.
+// Teensy 4.0/4.1 D13 LED smoke. This image deliberately exercises only CCM
+// and GPIO2; it does not claim UART, FlexSPI/XIP, USB, Ethernet, or other blocks.
 
 #![no_std]
 #![no_main]
@@ -20,7 +20,7 @@ const CCM_CCGR0: *mut u32 = 0x400F_C068 as *mut u32;
 // GPIO2 @ 0x401BC000 — GDIR@+0x04, DR_TOGGLE@+0x8C.
 const GPIO2_GDIR: *mut u32 = 0x401B_C004 as *mut u32;
 const GPIO2_DR_TOGGLE: *mut u32 = 0x401B_C08C as *mut u32;
-const LED_D13: u32 = 1 << 3; // GPIO2_IO03 / Teensy 4.1 pin 13 LED.
+const LED_D13: u32 = 1 << 3; // GPIO2_IO03 / Teensy 4.x pin 13 LED.
 
 #[entry]
 fn main() -> ! {

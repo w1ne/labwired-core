@@ -5,7 +5,7 @@ Reproduce the local LabWired engine smoke from the repository root:
 ```bash
 scripts/onboarding_smoke.sh \
   --target-id teensy-41 \
-  --crate firmware-teensy41-smoke \
+  --crate firmware-teensy4-smoke \
   --target thumbv7em-none-eabi \
   --script examples/teensy-41/onboarding-smoke.yaml \
   --system configs/systems/teensy-41.yaml \

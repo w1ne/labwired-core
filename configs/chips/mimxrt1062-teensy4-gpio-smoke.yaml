@@ -1,11 +1,11 @@
-# Focused MIMXRT1062 profile for the Teensy 4.1 onboard D13 LED smoke.
+# Focused MIMXRT1062 profile shared by Teensy 4.0 and 4.1 D13 LED smokes.
 # The image runs from a small DTCM slice; FlexSPI/XIP is intentionally absent.
 # Only the modeled CCM and GPIO2 blocks are exposed. PJRC maps D13 to
-# GPIO_B0_03; NXP's MIMXRT1062 SVD states that its SW_MUX_CTL reset value is
-# 0x5 (ALT5/GPIO2_IO03). IOMUXC is omitted, so the simulator maps this GPIO
+# GPIO_B0_03; NXP's MIMXRT1062 SVD gives its SW_MUX_CTL reset value as 0x5
+# (ALT5/GPIO2_IO03). IOMUXC is omitted, so the simulator maps this GPIO
 # directly and does not validate the hardware pad mux or reset route.
 
-name: "mimxrt1062-teensy41-gpio-smoke"
+name: "mimxrt1062-teensy4-gpio-smoke"
 arch: "arm"
 core: "cortex-m7"
 registers_count: 150

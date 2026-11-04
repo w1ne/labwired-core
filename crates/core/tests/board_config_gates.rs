@@ -14,8 +14,8 @@
 //! for CI attribution.
 //!
 //! Provenance carried over from the retired per-board files:
-//! * `teensy41_gpio_config` — exact MIMXRT1062 profile, narrowed to the
-//!   reset-routed D13 LED's CCM and GPIO2 path. SIM-DERIVED.
+//! * `teensy41_gpio_config` — MIMXRT1062 profile shared by Teensy 4.0/4.1,
+//!   narrowed to the D13 LED's modeled CCM and GPIO2 path. SIM-DERIVED.
 //! * `stm32f746_config` — SIM-DERIVED — F4-class RCC/GPIO/USART reuse +
 //!   Cortex-M7 DTCM map. Not silicon-verified.
 
@@ -126,33 +126,35 @@ fn ra4m1_from_config_builds() {
 }
 
 #[test]
-fn teensy41_gpio_from_config_builds() {
-    let (chip, bus) = from_config(
-        "configs/systems/teensy-41.yaml",
-        "MIMXRT1062 / Teensy 4.1 D13 profile must build",
-    );
+fn teensy4_gpio_from_config_builds() {
+    for system in ["configs/systems/teensy-40.yaml", "configs/systems/teensy-41.yaml"] {
+        let (chip, bus) = from_config(
+            system,
+            "MIMXRT1062 / Teensy 4.x D13 profile must build",
+        );
 
-    assert_eq!(chip.name, "mimxrt1062-teensy41-gpio-smoke");
-    assert_eq!(chip.core.as_deref(), Some("cortex-m7"));
-    // XIP is outside the focused profile; the smoke image is linked into DTCM.
-    assert_eq!(chip.flash.base, 0x2000_0000);
-    assert!(
-        (0x2000_0000..0x2002_0000).contains(&chip.ram.base),
-        "ram must sit in DTCM @ 0x20000000..0x20020000, got {:#x}",
-        chip.ram.base
-    );
+        assert_eq!(chip.name, "mimxrt1062-teensy4-gpio-smoke");
+        assert_eq!(chip.core.as_deref(), Some("cortex-m7"));
+        // XIP is outside the focused profile; the smoke image is linked into DTCM.
+        assert_eq!(chip.flash.base, 0x2000_0000);
+        assert!(
+            (0x2000_0000..0x2002_0000).contains(&chip.ram.base),
+            "ram must sit in DTCM @ 0x20000000..0x20020000, got {:#x}",
+            chip.ram.base
+        );
 
-    assert!(
-        bus.find_peripheral_index_by_name("gpio2").is_some(),
-        "bus must expose gpio2 (LED GPIO2_IO03)"
-    );
-    assert!(
-        bus.find_peripheral_index_by_name("ccm").is_some(),
-        "bus must expose ccm (imx_ccm)"
-    );
-    assert!(bus.find_peripheral_index_by_name("lpuart6").is_none());
-    assert!(bus.find_peripheral_index_by_name("iomuxc").is_none());
-    assert!(bus.find_peripheral_index_by_name("flexspi").is_none());
+        assert!(
+            bus.find_peripheral_index_by_name("gpio2").is_some(),
+            "bus must expose gpio2 (LED GPIO2_IO03)"
+        );
+        assert!(
+            bus.find_peripheral_index_by_name("ccm").is_some(),
+            "bus must expose ccm (imx_ccm)"
+        );
+        assert!(bus.find_peripheral_index_by_name("lpuart6").is_none());
+        assert!(bus.find_peripheral_index_by_name("iomuxc").is_none());
+        assert!(bus.find_peripheral_index_by_name("flexspi").is_none());
+    }
 }
 
 #[test]

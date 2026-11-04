@@ -582,12 +582,13 @@ _No tier-1 target. The committed ELF is an internal RT1064-class LPUART/GPIO per
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
 - `flexspi` (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.
 
-### `mimxrt1062-teensy41-gpio-smoke`
+### `mimxrt1062-teensy4-gpio-smoke`
 
-_No tier-1 target. The focused Teensy 4.1 descriptor uses the exact MIMXRT1062 identity and only CCM/GPIO2. PJRC maps D13 to GPIO_B0_03, and the vendor SVD states the mux resets to ALT5/GPIO2_IO03; the simulator maps D13 directly to GPIO2_IO03 and does not validate IOMUXC or the silicon pad route. It makes no Serial1 claim. Image execution is linked into DTCM; external flash/XIP and unrelated peripherals are omitted._
+_No tier-1 target. The focused Teensy 4.0 and 4.1 descriptors share the MIMXRT1062 profile with only CCM/GPIO2. The board pin maps put D13 on GPIO_B0_03 / GPIO2_IO03; the simulator maps D13 directly and does not validate IOMUXC or the silicon pad route. Images execute from DTCM; external flash/XIP and unrelated peripherals are omitted._
 
 **Functional device/protocol reads**:
-- Teensy 4.1 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy41-smoke` · `examples/teensy-41/onboarding-smoke.yaml` + `examples/teensy-41/evidence/simulation-output/result.json` (nightly CI)
+- Teensy 4.0 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · `examples/teensy-40/onboarding-smoke.yaml` + `examples/teensy-40/evidence/simulation-output/result.json` (nightly CI)
+- Teensy 4.1 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · `examples/teensy-41/onboarding-smoke.yaml` + `examples/teensy-41/evidence/simulation-output/result.json` (nightly CI)
 
 ### `mkw41z4`
 

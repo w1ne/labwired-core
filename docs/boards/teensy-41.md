@@ -1,17 +1,17 @@
 # Teensy 4.1 (NXP MIMXRT1062) — D13 GPIO smoke
 
-The focused board profile uses the exact MIMXRT1062 MCU identity and exposes
-only the CCM clock controller and GPIO2 path used by the onboard D13 LED. The
-smoke image runs from a small DTCM slice; it does not simulate external flash or
-XIP boot.
+The focused board profile uses the MIMXRT1062 identity shared with Teensy 4.0
+and exposes only the CCM clock controller and GPIO2 path used by the onboard
+D13 LED. The smoke image runs from a small DTCM slice; it does not simulate
+external flash or XIP boot.
 
 ## Status at a glance
 
 | Aspect             | Status                                                              |
 |--------------------|---------------------------------------------------------------------|
-| Chip yaml          | [`configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml`](../../configs/chips/mimxrt1062-teensy41-gpio-smoke.yaml) |
+| Chip yaml          | [`configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml`](../../configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml) |
 | System yaml        | [`configs/systems/teensy-41.yaml`](../../configs/systems/teensy-41.yaml) |
-| Smoke crate        | `firmware-teensy41-smoke`                                            |
+| Smoke crate        | `firmware-teensy4-smoke`                                             |
 | Evidence           | [`examples/teensy-41/evidence/`](../../examples/teensy-41/evidence/) |
 | Tier               | **smoke-manual** — GPIO behavior in the local model; no silicon diff |
 
