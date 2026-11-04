@@ -1,0 +1,12 @@
+# Seeed Studio XIAO ESP32-S3: toggle the active-low user LED on GPIO21.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-seeed-xiao-esp32s3-gpio-smoke"
+  system: "../../configs/systems/seeed-xiao-esp32s3.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpio:21"
+      min_edges: 8
+  - expected_stop_reason: max_steps

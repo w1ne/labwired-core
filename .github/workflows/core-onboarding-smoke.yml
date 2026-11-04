@@ -157,6 +157,10 @@ jobs:
             firmware_build_script: examples/esp32-s3-devkitc-1-n16r8/ci/build-firmware.sh
             script: examples/esp32-s3-devkitc-1-n16r8/onboarding-smoke.yaml
             system: configs/systems/esp32-s3-devkitc-1-n16r8.yaml
+          - id: seeed-xiao-esp32s3
+            firmware_build_script: examples/seeed-xiao-esp32s3/ci/build-firmware.sh
+            script: examples/seeed-xiao-esp32s3/onboarding-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32s3.yaml
           - id: nucleo-f302r8
             crate: firmware-nucleo-f302r8-smoke
             target: thumbv7em-none-eabi

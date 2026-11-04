@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 16234,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 16.234
+  },
+  "targets": [
+    {
+      "target_id": "seeed-xiao-esp32s3",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/seeed-xiao-esp32s3/onboarding-smoke.yaml",
+      "system": "configs/systems/seeed-xiao-esp32s3.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T15:32:50Z",
+      "finished_at_utc": "2026-11-04T15:33:06Z",
+      "elapsed_seconds": 17,
+      "elapsed_ms": 16234,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.41,
+        "build_firmware": 0.484,
+        "run_smoke": 0.328
+      },
+      "stages_ms": {
+        "build_cli": 15410,
+        "build_firmware": 484,
+        "run_smoke": 328
+      },
+      "firmware_build_script": "examples/seeed-xiao-esp32s3/ci/build-firmware.sh",
+      "_artifact_path": "examples/seeed-xiao-esp32s3/evidence"
+    }
+  ]
+}
