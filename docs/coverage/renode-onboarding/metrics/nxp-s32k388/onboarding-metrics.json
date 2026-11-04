@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nxp-s32k388-smoke.yaml",
   "system": "configs/systems/onboarding/nxp-s32k388.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T23:03:31Z",
-  "finished_at_utc": "2026-11-04T23:03:32Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1171,
+  "started_at_utc": "2026-11-04T23:19:19Z",
+  "finished_at_utc": "2026-11-04T23:19:19Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 759,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.41,
-    "build_firmware": 0.198,
-    "run_smoke": 0.544
+    "build_cli": 0.281,
+    "build_firmware": 0.178,
+    "run_smoke": 0.288
   },
   "stages_ms": {
-    "build_cli": 410,
-    "build_firmware": 198,
-    "run_smoke": 544
+    "build_cli": 281,
+    "build_firmware": 178,
+    "run_smoke": 288
   }
 }

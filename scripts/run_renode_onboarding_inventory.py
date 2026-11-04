@@ -205,6 +205,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv8m.main-none-eabi",
         "script": "examples/renode-onboarding/brd4186c-smoke.yaml",
     },
+    "brd4402a": {
+        "crate": "firmware-efr32xg22-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/brd4402a-smoke.yaml",
+    },
     "efr32xg22": {
         "crate": "firmware-efr32xg22-smoke",
         "target": "thumbv8m.main-none-eabi",
