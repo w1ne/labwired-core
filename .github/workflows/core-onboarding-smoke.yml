@@ -31,6 +31,7 @@ on:
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
       - "crates/firmware-efm32lg995-smoke/**"
+      - "crates/firmware-efr32mg26-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -161,6 +162,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32lg995-smoke.yaml
             system: configs/systems/onboarding/efm32lg995.yaml
+          # The imported MG26 profile exposes only its Cortex-M33 memory map,
+          # real Series-2 CMU and model-backed USART1 path exercised here.
+          - id: efr32mg26
+            crate: firmware-efr32mg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/efr32mg26-smoke.yaml
+            system: configs/systems/onboarding/efr32mg26.yaml
           # G890 is bounded to its Cortex-M3 memory map and model-backed USART0.
           - id: efm32g890
             crate: firmware-efm32g842-smoke

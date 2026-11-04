@@ -1,0 +1,10 @@
+# Cortex-M33 USART1 smoke against the narrowed imported EFR32MG26 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-efr32mg26-smoke"
+  system: "../../configs/systems/onboarding/efr32mg26.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFR32MG26 Cortex-M33 USART1 smoke"
+  - expected_stop_reason: max_steps
