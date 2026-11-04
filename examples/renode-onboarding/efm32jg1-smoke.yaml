@@ -1,0 +1,10 @@
+# Thumb-compatible USART0 smoke against the narrowed imported EFM32JG1 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-efm32jg1-smoke"
+  system: "../../configs/systems/onboarding/efm32jg1.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32JG1 USART0 smoke"
+  - expected_stop_reason: max_steps
