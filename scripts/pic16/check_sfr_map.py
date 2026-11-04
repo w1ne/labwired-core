@@ -58,10 +58,10 @@ MIRRORS = (0x101, 0x106, 0x181, 0x186)
 
 SFRS = {
     "INDF": 0x00, "TMR0": 0x01, "PCL": 0x02, "STATUS": 0x03, "FSR": 0x04,
-    "PORTA": 0x05, "PORTB": 0x06,
+    "PORTA": 0x05,
     "PCLATH": 0x0A, "INTCON": 0x0B, "PIR1": 0x0C,
     "RCSTA": 0x18, "TXREG": 0x19,
-    "OPTION_REG": 0x81, "TRISA": 0x85, "TRISB": 0x86,
+    "OPTION_REG": 0x81, "TRISA": 0x85,
     "PIE1": 0x8C, "TXSTA": 0x98, "SPBRG": 0x99,
 }
 # Optional SFRs: if the part has them they must be at these addresses.
@@ -69,11 +69,12 @@ OPTIONAL_SFRS = {
     "PORTD": 0x08, "PORTE": 0x09, "TRISD": 0x88, "TRISE": 0x89,
     "PIR2": 0x0D, "PIE2": 0x8D,
 }
-# Optional ports the model always decodes (PORTC reads latch & !TRISC &
-# mask). A part without one (PIC16F627A/628A/648A, PIC16F87/88) gets a zero
-# port mask, so the port reads 0 and ignores writes, as on silicon; the
-# address must then be free in the header.
-OPTIONAL_FREE_SFRS = {"PORTC": 0x07, "TRISC": 0x87}
+# Optional ports the model always decodes (PORTx reads latch & !TRISx & mask).
+# A part without one gets a zero port mask, so the address reads 0 and ignores
+# writes, as on silicon; the address must then be free in the header.
+OPTIONAL_FREE_SFRS = {
+    "PORTB": 0x06, "PORTC": 0x07, "TRISB": 0x86, "TRISC": 0x87,
+}
 # Bit masks the model decodes.
 BITS = {
     "C": 0x01, "DC": 0x02, "Z": 0x04, "NOT_PD": 0x08, "NOT_TO": 0x10,
@@ -81,7 +82,7 @@ BITS = {
     "GIE": 0x80, "PEIE": 0x40,
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
-NO_USART_PARTS = {"pic16f818", "pic16f819"}
+NO_USART_PARTS = {"pic16f630", "pic16f818", "pic16f819"}
 NO_USART_SFRS = {"RCSTA", "TXREG", "TXSTA", "SPBRG"}
 NO_USART_BITS = {"TXIF", "TXEN", "TRMT", "SPEN"}
 
@@ -288,20 +289,37 @@ def check_enhanced(part: str) -> list[str]:
 
 
 def geometry(part: str):
-    """(flash words, port masks, aliases) from the lkr and the header."""
+    """(flash words, port masks, aliases) from the SDCC db, lkr and header."""
     lkr = (lkr_dir() / f"{part[3:]}_g.lkr").read_text()
     pages = re.findall(
         r"CODEPAGE\s+NAME=page\d*\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
-    flash_words = max(int(end, 16) for _, end in pages) + 1
+    program = device_db(part)["program"]
+    flash_words = int(program[:-1]) * 1024 if program.endswith("K") else int(program)
+    code_words = max(int(end, 16) for _, end in pages) + 1
+    if code_words != flash_words:
+        oscval = re.search(
+            r"CODEPAGE\s+NAME=oscval\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
+        osc_start = int(oscval[1], 16) if oscval else None
+        osc_end = int(oscval[2], 16) if oscval else None
+        calibration_words = 0 if not oscval else osc_end - osc_start + 1
+        if (code_words + calibration_words != flash_words or not oscval
+                or osc_start != code_words or osc_end + 1 != flash_words):
+            sys.exit(f"error: {part}: {program} words, but linker code pages expose "
+                     f"{code_words} plus {calibration_words} calibration words")
     groups: dict[str, list[tuple[int, int]]] = {}
     for name, start, end in re.findall(
             r"SHAREBANK\s+NAME=(\w+)\s+START=(0x\w+)\s+END=(0x\w+)", lkr):
-        groups.setdefault(name, []).append((int(start, 16), int(end, 16)))
+        ranges = groups.setdefault(name, [])
+        bank_range = (int(start, 16), int(end, 16))
+        if bank_range not in ranges:
+            ranges.append(bank_range)
     aliases = []
     for ranges in groups.values():
         target = ranges[0][0]
         for start, end in ranges[1:]:
-            aliases.append((start, end, target))
+            alias = (start, end, target)
+            if alias not in aliases:
+                aliases.append(alias)
     h = header(part)
     masks = []
     for port in "ABCDE":
