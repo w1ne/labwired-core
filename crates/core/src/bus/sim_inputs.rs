@@ -95,6 +95,21 @@ impl SystemBus {
         false
     }
 
+    /// Drive the board's shared VDDA / ADC reference in volts. Every ADC
+    /// peripheral that declares reference support takes the same rail value.
+    pub(crate) fn seed_adc_reference_voltage(&mut self, volts: f64) -> bool {
+        if !volts.is_finite() || volts <= 0.0 {
+            return false;
+        }
+        let mut accepted = false;
+        for peripheral in &mut self.peripherals {
+            if peripheral.dev.supports_adc_reference_voltage() {
+                accepted |= peripheral.dev.set_adc_reference_voltage_v(volts);
+            }
+        }
+        accepted
+    }
+
     fn seed_adc_at(&mut self, idx: usize, channel: u8, millivolts: u16) -> bool {
         // Ask through the trait first. `Peripheral::set_adc_channel_input` is
         // where an ADC model says "this is my channel and I took it"; the

@@ -5,25 +5,28 @@
 //! Parser for the SPICE subset the in-core analog engine solves.
 //!
 //! The subset is deliberately small, because everything in it has to stay
-//! deterministic in the browser with no dependencies. Anything outside it
-//! (subcircuits, model libraries, AC/DC sweeps, device capacitances) is not
-//! approximated and not silently dropped: it is a hard error that names the
-//! line and points at the ngspice adapter, which does support it.
+//! deterministic in the browser with no dependencies. Unsupported elements
+//! and circuit constructs such as subcircuits, model libraries, and AC/DC
+//! sweeps are not approximated or silently dropped: they are a hard error that
+//! names the line and points at the ngspice adapter, which supports a much
+//! larger SPICE subset.
 //!
 //! ## Elements
 //!
 //! | Element | Line |
 //! |---|---|
-//! | Resistor | `R<name> n1 n2 <value>` |
+//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]]` |
 //! | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
+//! | Mutual inductance | `K<name> L<name1> L<name2> <k>` |
 //! | Voltage source | `V<name> n+ n- <source>` |
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
-//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
+//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
+//! | JFET | `J<name> nd ng ns <model>` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
@@ -35,6 +38,11 @@
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
 //! carries one (a `V`, `L`, `E` or `H`).
+//!
+//! A `K` element couples two inductors with signed mutual inductance
+//! `M = k·sqrt(L1·L2)`. Each inductor's terminal order defines its dot
+//! convention: positive `k` gives aiding voltage for currents entering both
+//! first-listed terminals. Coupling lines may precede their inductors.
 //!
 //! `X` is SPICE's subcircuit call, and the in-core engine has no subcircuits.
 //! It accepts an `X` line only when its model names an `OPAMP` or `COMP` card
@@ -51,19 +59,60 @@
 //!
 //! ## Models
 //!
-//! `.model <name> D|NPN|PNP|NMOS|PMOS (<param>=<value> ...)` declares a model
+//! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
 //! card; parameters may also be written without the parentheses, and a card may
 //! be declared after the elements that use it. Parameters this engine does not
-//! model (every capacitance, every temperature coefficient, `VAF`, `IKF`,
-//! `GAMMA`, …) are **accepted and ignored** rather than rejected, so a vendor
-//! model pasted from a datasheet still runs — with the large-signal DC
-//! behaviour it describes and none of its charge storage. See
-//! [`super::device`] for what that costs.
+//! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
+//! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
+//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB` and
+//! terminal resistances `RB`/`RC`/`RE`, JFET terminal
+//! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
+//! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
+//! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
+//! level-1 channel charge from `TOX`, gate overlap capacitance
+//! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
+//! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
+//! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
+//! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
+//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, and most terminal
+//! resistances, …) are **accepted
+//! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
+//! average and signed difference of DC currents at the two input pins; `RIN`
+//! models fixed differential resistance between them, and `RINCM` models an
+//! equal fixed resistance from each input to `V−`; `CMRR` converts common-mode
+//! input voltage relative to the supply midpoint into input-referred
+//! differential voltage;
+//! `CINCM` models common-mode capacitance from each input to `V−`, `CIND`
+//! models differential capacitance between the inputs, `IQ` models a
+//! constant quiescent current from `V+` to `V−`, OPAMP `IOLIM` clamps the
+//! output current symmetrically, and OPAMP `SR` caps the gain-node capacitor
+//! current for large-signal slew. BJT
+//! high-injection rolloff from `IKF`/`IKR` with optional `NKF` (default
+//! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
+//! charge from `TF`/`TR`,
+//! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
+//! resistances `RB`/`RC`/`RE` are modelled. JFET
+//! channel current uses the Parker–Skellern fit `B` (default 1); terminal
+//! resistances `RD`/`RS` create series resistors to its intrinsic
+//! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
+//! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
+//! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
+//! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
+//! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
+//! as linear overlap charge. `CBD` and `CBS` integrate nonlinear bulk junction
+//! charge with the shared `PB`, `MJ`, and `FC` parameters; each explicitly
+//! supplied total capacitance takes precedence over `CJ` times its area.
+//! Otherwise `CJ` scales by `AD`/`AS`, and `CJSW` scales independently by
+//! `PD`/`PS`, using `MJSW` for sidewall grading. `TOX`, when present, enables
+//! intrinsic channel charge: Meyer by default, or the engine-specific
+//! Ward–Dutton terminal-charge model with `CHARGEMOD=WARD_DUTTON`. See
+//! [`super::device`] for what is and is not modelled.
 //!
-//! An element may also name one of five built-in cards and skip `.model`
+//! An element may also name one of seven built-in cards and skip `.model`
 //! entirely: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100),
-//! `NMOS`, `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`). Those are *this
-//! engine's* convenience values and are not ngspice's parameter defaults; a
+//! `NMOS`, `PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`, bulk `IS=1e-14`),
+//! `NJF` and `PJF` (level-1 defaults). Those are *this engine's* convenience
+//! values and are not ngspice's parameter defaults; a
 //! parameter omitted from a real `.model` line gets ngspice's default, so a
 //! deck written out in full means the same thing to both engines.
 //!
@@ -74,12 +123,26 @@
 //! They are *-like* cards — the datasheet's headline numbers, not the vendor's
 //! macro model.
 //!
-//! A diode card may carry `BV` (reverse breakdown voltage), `IBV` (the current
+//! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
+//! knee current) to reduce the Shockley current under high injection. It may
+//! also carry `BV` (reverse breakdown voltage), `IBV` (the current
 //! at `BV`, default 1 mA) and `NBV` (breakdown emission coefficient, default
 //! `N`); with `BV` set the diode is solved with ngspice's three-region level-1
 //! equation, and with it unset the diode is exactly what it was before
-//! breakdown existed. `.model <name> OPAMP(...)` and `.model <name> COMP(...)`
-//! are this engine's own card types, not ngspice's.
+//! breakdown existed. `ISR`/`NR` add its optional recombination-current branch;
+//! `CJO`, `VJ`, `M`, and `FC` add depletion charge to transient steps; `TT`
+//! adds quasi-static diffusion charge, or `TT` with `VP > 0` selects the
+//! first-order soft reverse-recovery model. BJT `TF`/`TR`
+//! add transit-time charge based on the forward/reverse transport current;
+//! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias;
+//! `RB`/`RC`/`RE` add series resistance between the external terminals and
+//! probeable internal junction nodes when nonzero. JFET
+//! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
+//! grading coefficient `M=0.5` is used. MOSFET `CGSO`/`CGDO`/`CGBO` add linear
+//! gate overlap charge based on instance `W`/`L`; `TOX` enables intrinsic
+//! channel charge (Meyer by default, or engine-specific Ward–Dutton with
+//! `CHARGEMOD=WARD_DUTTON`). `.model <name> OPAMP(...)` and
+//! `.model <name> COMP(...)` are this engine's own card types, not ngspice's.
 //!
 //! ## Directives and comments
 //!
@@ -226,7 +289,31 @@ impl fmt::Display for AnalogError {
 
 impl std::error::Error for AnalogError {}
 
-/// `R<name> n1 n2 <ohms>`.
+/// Beta-model NTC parameters attached to an `R` element.
+///
+/// Temperature is an external environment input. Self-heating and thermal
+/// inertia are not modelled; at a fixed temperature the part is an ordinary
+/// resistor with `R = R25 · exp(B · (1/T − 1/T25))`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NtcModel {
+    /// Material beta value, in kelvin.
+    pub beta: f64,
+    /// The Celsius temperature at which the resistor's `ohms` value applies.
+    pub nominal_temperature_celsius: f64,
+    /// Current external temperature input, in Celsius.
+    pub temperature_celsius: f64,
+}
+
+impl NtcModel {
+    /// Resistance at `temperature_celsius`, in ohms.
+    pub fn resistance_ohms(self, r25_ohms: f64) -> f64 {
+        let t = self.temperature_celsius + 273.15;
+        let t25 = self.nominal_temperature_celsius + 273.15;
+        r25_ohms * libm::exp(self.beta * (1.0 / t - 1.0 / t25))
+    }
+}
+
+/// `R<name> n1 n2 <ohms> [beta=<K> [tnom=<°C>] [temp=<°C>]]`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resistor {
     /// Element name as written, e.g. `R1`.
@@ -235,8 +322,19 @@ pub struct Resistor {
     pub a: NodeRef,
     /// Second terminal.
     pub b: NodeRef,
-    /// Resistance in ohms.
+    /// Fixed resistance, or NTC resistance at `ntc.nominal_temperature_celsius`.
     pub ohms: f64,
+    /// Optional external-temperature Beta model.
+    pub ntc: Option<NtcModel>,
+}
+
+impl Resistor {
+    /// Resistance at the model's current external temperature, in ohms.
+    pub fn resistance_ohms(&self) -> f64 {
+        self.ntc
+            .map(|ntc| ntc.resistance_ohms(self.ohms))
+            .unwrap_or(self.ohms)
+    }
 }
 
 /// `C<name> n1 n2 <farads> [ic=<volts>]`.
@@ -267,6 +365,21 @@ pub struct Inductor {
     pub henries: f64,
     /// Initial current `a` → `b`, overriding the operating point.
     pub ic: Option<f64>,
+}
+
+/// `K<name> L<name1> L<name2> <k>` — a pair of magnetically coupled
+/// inductors. `mutual_henries` is signed, so a negative coupling coefficient
+/// reverses the dot convention.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MutualInductor {
+    /// Element name as written.
+    pub name: String,
+    /// Index of the first coupled inductor in [`Circuit::inductors`].
+    pub first: usize,
+    /// Index of the second coupled inductor in [`Circuit::inductors`].
+    pub second: usize,
+    /// Signed mutual inductance in henries: `k·sqrt(L1·L2)`.
+    pub mutual_henries: f64,
 }
 
 /// How an independent source's value depends on time.
@@ -440,8 +553,26 @@ pub struct DiodeModel {
     pub is: f64,
     /// Emission coefficient `N`.
     pub n: f64,
+    /// Forward high-injection knee current `IK` (also called `IKF`), amps.
+    /// Zero disables the correction, matching ngspice's default.
+    pub ik: f64,
+    /// Reverse high-injection knee current `IKR`, amps. Zero disables the
+    /// correction, matching ngspice's default.
+    pub ikr: f64,
+    /// Recombination saturation current `ISR`, amps. Zero means the optional
+    /// ngspice recombination branch is disabled, matching an omitted `ISR`.
+    pub isr: f64,
+    /// Recombination emission coefficient `NR`, default 2 in ngspice 47.
+    pub nr: f64,
     /// Ohmic series resistance `RS`. Non-zero adds one internal node.
     pub rs: f64,
+    /// Forward transit time `TT`, seconds. Zero disables diffusion charge,
+    /// matching ngspice's default.
+    pub tt: f64,
+    /// Soft reverse-recovery coefficient `VP`. Positive `VP` with positive
+    /// `TT` replaces quasi-static diffusion charge with a first-order charge
+    /// state; zero keeps `Qd = TT·Id`.
+    pub vp: f64,
     /// Reverse breakdown voltage `BV`, volts, positive. `None` is a diode
     /// with no breakdown at all, solved exactly as before `BV` existed.
     pub bv: Option<f64>,
@@ -450,6 +581,16 @@ pub struct DiodeModel {
     /// Breakdown emission coefficient `NBV`. `None` means "same as `N`",
     /// which is ngspice's default.
     pub nbv: Option<f64>,
+    /// Zero-bias junction capacitance `CJO`, farads. Zero disables depletion
+    /// charge, matching ngspice's default.
+    pub cjo: f64,
+    /// Junction potential `VJ`, volts, default 1 V.
+    pub vj: f64,
+    /// Junction grading coefficient `M`, default 0.5.
+    pub m: f64,
+    /// Forward-bias depletion-capacitance transition coefficient `FC`, default
+    /// 0.5.
+    pub fc: f64,
 }
 
 impl Default for DiodeModel {
@@ -457,10 +598,20 @@ impl Default for DiodeModel {
         Self {
             is: 1e-14,
             n: 1.0,
+            ik: 0.0,
+            ikr: 0.0,
+            isr: 0.0,
+            nr: 2.0,
             rs: 0.0,
+            tt: 0.0,
+            vp: 0.0,
             bv: None,
             ibv: 1e-3,
             nbv: None,
+            cjo: 0.0,
+            vj: 1.0,
+            m: 0.5,
+            fc: 0.5,
         }
     }
 }
@@ -483,9 +634,11 @@ pub enum ComparatorOutput {
 /// ```text
 ///   gain node p:  G  = AOL/Rg · (v(in+) − v(in−) + VOS)  into p
 ///                 Rg = 1 MΩ   and   Cg = AOL/(2π·GBW·Rg)   from p to ground
+///                 optional SR limits the Cg current to ±(Cg·SR)
 ///   clamps:       D  p → (v+ − DROP_HI)      D  (v− + DROP_LO) → p
 ///   output:       Thevenin v(p) behind ROUT, i.e.  G = 1/ROUT into out,
-///                 R = ROUT from out to ground
+///                 R = ROUT from out to ground; optional IOLIM clamps the
+///                 current once |v(p) − v(out)| / ROUT reaches the limit
 /// ```
 ///
 /// So the DC gain is `AOL`, the single pole sits at `GBW/AOL`, the unity-gain
@@ -496,10 +649,39 @@ pub enum ComparatorOutput {
 /// Newton walk a saturated output back into the linear region. The rails come
 /// from the `v+`/`v−` pins, so the same card works at ±15 V and at 3.3 V.
 ///
-/// What it does not model: input bias current, input capacitance, slew-rate
-/// limiting beyond what the pole gives, output current limiting, and supply
-/// current — the output stage's current returns through ground, not through
-/// the supply pins. Only the clamp current reaches `v+`/`v−`.
+/// `IBIAS` is the average signed DC current into `v−`, and `IOS` is the signed
+/// difference `I(+) − I(−)`. The input currents are `IBIAS ± IOS/2`; negative
+/// values source current from `v−` into the inputs. This is a constant-current
+/// approximation, with no input bias temperature dependence.
+///
+/// `RIN` is a fixed differential resistance between the inputs. Zero disables
+/// it; a positive value draws `(v(in+) − v(in−))/RIN` from the non-inverting
+/// pin and returns it to the inverting pin. `RINCM` is one fixed resistance
+/// from each input to `v−`; zero disables those paths. Neither has temperature
+/// dependence.
+///
+/// `CMRR`, when present, converts common-mode input voltage relative to the
+/// supply midpoint into input-referred differential voltage using
+/// `10^(−CMRR/20)`. Omission gives ideal common-mode rejection.
+///
+/// `IOLIM` is an optional, symmetric output-current limit. Below the limit the
+/// output follows the normal Thevenin source and `ROUT`; above it, the output
+/// current is held at `±IOLIM`. Omission leaves the output stage unlimited.
+///
+/// `SR` (volts/second) optionally caps the gain-node capacitor current to
+/// `Cg · SR`, where `Cg = AOL/(2π·GBW·Rg)`. A large input step therefore
+/// cannot move the gain node faster than the selected slew rate. The limit
+/// acts on transient capacitor current only; it preserves settled DC gain.
+/// Omission preserves the linear one-pole response.
+///
+/// `CINCM` is the common-mode capacitance from each input to `v−`; `CIND` is
+/// the differential capacitance between the inputs. Both are fixed linear
+/// capacitances with no voltage or temperature dependence. `IQ` is a fixed
+/// quiescent current from `v+` to `v−`, independent of signal and output load.
+///
+/// What it does not model: signal- or load-dependent supply current. The
+/// output stage's current returns through ground, not through the supply pins.
+/// Clamp current reaches `v+`/`v−`; input bias current reaches `v−`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OpAmpModel {
     /// DC open-loop gain `AOL`, V/V.
@@ -510,6 +692,29 @@ pub struct OpAmpModel {
     pub rout: f64,
     /// Input offset voltage `VOS`, volts, added to `v(in+) − v(in−)`.
     pub vos: f64,
+    /// Average signed DC bias current, amps; positive current flows from the
+    /// input pins into `v−`.
+    pub ibias: f64,
+    /// Signed input offset current `I(+) − I(−)`, amps.
+    pub ios: f64,
+    /// Differential resistance between the inputs, ohms; zero disables it.
+    pub rin: f64,
+    /// Common-mode resistance from each input to `v−`, ohms; zero disables it.
+    pub rin_cm: f64,
+    /// Common-mode input capacitance from each input to `v−`, farads.
+    pub cin_cm: f64,
+    /// Differential capacitance between the two inputs, farads.
+    pub cin_diff: f64,
+    /// Quiescent current drawn from `v+` to `v−`, amps.
+    pub iq: f64,
+    /// Common-mode rejection ratio in dB. `None` means ideal rejection.
+    pub cmrr: Option<f64>,
+    /// Symmetric output current limit, amps. `None` leaves the output stage
+    /// unlimited, preserving the ordinary Thevenin `ROUT` behavior.
+    pub ilim: Option<f64>,
+    /// Large-signal output slew rate `SR`, volts per second. `None` leaves the
+    /// gain-node capacitor current unlimited, preserving the one-pole response.
+    pub sr: Option<f64>,
     /// `DROP_HI`: how far below `v+` the output saturates, volts.
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
@@ -523,6 +728,16 @@ impl Default for OpAmpModel {
             gbw: 1e6,
             rout: 100.0,
             vos: 0.0,
+            ibias: 0.0,
+            ios: 0.0,
+            rin: 0.0,
+            rin_cm: 0.0,
+            cin_cm: 0.0,
+            cin_diff: 0.0,
+            iq: 0.0,
+            cmrr: None,
+            ilim: None,
+            sr: None,
             drop_hi: 0.0,
             drop_lo: 0.0,
         }
@@ -548,6 +763,19 @@ impl Default for OpAmpModel {
 /// `−VOS ± VHYS/2`, a window `VHYS` volts wide, independent of the supply.
 /// `GBW` here sets the response time: the decision node slews at
 /// `2π·GBW·overdrive` volts per second across its 1 V span.
+///
+/// `IBIAS` is the average signed DC current into `v−`, and `IOS` is the signed
+/// difference `I(+) − I(−)`. The input currents are `IBIAS ± IOS/2`; negative
+/// values source current from `v−` into the inputs. This constant-current
+/// approximation has no temperature dependence. `CINCM` is the common-mode
+/// capacitance from each input to `v−`; `CIND` is the differential capacitance
+/// between the inputs. Both are fixed linear capacitances. `RIN` is a fixed
+/// differential resistance between the inputs; zero disables it. `RINCM` is
+/// one fixed resistance from each input to `v−`; zero disables those paths.
+/// `IQ` is a fixed quiescent current from `v+` to `v−`, independent of signal
+/// and output load. `CMRR`, when present, converts common-mode input voltage
+/// relative to the supply midpoint into input-referred differential voltage
+/// using `10^(−CMRR/20)`. Omission gives ideal common-mode rejection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ComparatorModel {
     /// DC gain `AOL`, V/V.
@@ -559,6 +787,23 @@ pub struct ComparatorModel {
     pub rout: f64,
     /// Input offset voltage `VOS`, volts.
     pub vos: f64,
+    /// Average signed DC bias current, amps; positive current flows from the
+    /// input pins into `v−`.
+    pub ibias: f64,
+    /// Signed input offset current `I(+) − I(−)`, amps.
+    pub ios: f64,
+    /// Differential resistance between the inputs, ohms; zero disables it.
+    pub rin: f64,
+    /// Common-mode resistance from each input to `v−`, ohms; zero disables it.
+    pub rin_cm: f64,
+    /// Common-mode input capacitance from each input to `v−`, farads.
+    pub cin_cm: f64,
+    /// Differential capacitance between the two inputs, farads.
+    pub cin_diff: f64,
+    /// Quiescent current drawn from `v+` to `v−`, amps.
+    pub iq: f64,
+    /// Common-mode rejection ratio in dB. `None` means ideal rejection.
+    pub cmrr: Option<f64>,
     /// Hysteresis window `VHYS`, volts. Zero is none.
     pub vhys: f64,
     /// `OUTPUT=OC` (default) or `OUTPUT=PP`.
@@ -572,6 +817,14 @@ impl Default for ComparatorModel {
             gbw: 10e6,
             rout: 60.0,
             vos: 0.0,
+            ibias: 0.0,
+            ios: 0.0,
+            rin: 0.0,
+            rin_cm: 0.0,
+            cin_cm: 0.0,
+            cin_diff: 0.0,
+            iq: 0.0,
+            cmrr: None,
             vhys: 0.0,
             output: ComparatorOutput::OpenCollector,
         }
@@ -730,10 +983,20 @@ pub const REGULATOR_LIMIT_GAIN: f64 = 100.0;
 pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 1.0,
+    ik: 0.0,
+    ikr: 0.0,
+    isr: 0.0,
+    nr: 2.0,
     rs: 0.0,
+    tt: 0.0,
+    vp: 0.0,
     bv: None,
     ibv: 1e-3,
     nbv: None,
+    cjo: 0.0,
+    vj: 1.0,
+    m: 0.5,
+    fc: 0.5,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -784,6 +1047,76 @@ pub struct BjtModel {
     pub nf: f64,
     /// Reverse emission coefficient `NR`.
     pub nr: f64,
+    /// Forward Early voltage `VAF`, volts. Infinity disables forward Early
+    /// effect, matching ngspice's default.
+    pub vaf: f64,
+    /// Reverse Early voltage `VAR`, volts. Infinity disables reverse Early
+    /// effect, matching ngspice's default.
+    pub var: f64,
+    /// Forward beta rolloff knee current `IKF`, amps. Infinity disables
+    /// forward high-injection rolloff, matching ngspice's default.
+    pub ikf: f64,
+    /// Reverse beta rolloff knee current `IKR`, amps. Infinity disables
+    /// reverse high-injection rolloff, matching ngspice's default.
+    pub ikr: f64,
+    /// Optional high-current beta rolloff exponent `NKF` (`NK`). `None`
+    /// retains ngspice's default square-root form (exponent 0.5).
+    pub nkf: Option<f64>,
+    /// Base-emitter recombination saturation current `ISE`, amps. Zero
+    /// disables this current, matching ngspice's default.
+    pub ise: f64,
+    /// Base-emitter recombination emission coefficient `NE`.
+    pub ne: f64,
+    /// Base-collector recombination saturation current `ISC`, amps. Zero
+    /// disables this current, matching ngspice's default.
+    pub isc: f64,
+    /// Base-collector recombination emission coefficient `NC`.
+    pub nc: f64,
+    /// Zero-bias base-emitter depletion capacitance `CJE`, farads.
+    pub cje: f64,
+    /// Base-emitter junction potential `VJE`, volts.
+    pub vje: f64,
+    /// Base-emitter junction grading coefficient `MJE`.
+    pub mje: f64,
+    /// Zero-bias base-collector depletion capacitance `CJC`, farads.
+    pub cjc: f64,
+    /// Base-collector junction potential `VJC`, volts.
+    pub vjc: f64,
+    /// Base-collector junction grading coefficient `MJC`.
+    pub mjc: f64,
+    /// Forward-bias depletion-capacitance coefficient `FC`.
+    pub fc: f64,
+    /// Ideal forward transit time `TF`, seconds. Zero disables forward
+    /// diffusion charge, matching ngspice's default.
+    pub tf: f64,
+    /// Forward transit-time bias coefficient `XTF`. Zero disables the
+    /// `VBC`/current-dependent adjustment, matching ngspice's default.
+    pub xtf: f64,
+    /// Voltage scale `VTF` for the forward transit-time `VBC` dependence,
+    /// volts. Infinity disables that voltage dependence, matching ngspice's default.
+    pub vtf: f64,
+    /// High-current scale `ITF` for the forward transit-time adjustment,
+    /// amps. Zero disables current suppression, matching ngspice's default.
+    pub itf: f64,
+    /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
+    /// diffusion charge, matching ngspice's default.
+    pub tr: f64,
+    /// Zero-bias base terminal resistance `RB`, ohms. Zero disables the
+    /// internal base node, matching ngspice's default.
+    pub rb: f64,
+    /// Minimum high-current base resistance `RBM`, ohms. `None` means RBM=RB,
+    /// ngspice's default, so the base resistance stays fixed.
+    pub rbm: Option<f64>,
+    /// Base current where resistance falls halfway from RB to RBM (`IRB`),
+    /// amps. Infinity disables the current-dependent transition, ngspice's
+    /// default.
+    pub irb: f64,
+    /// Ohmic collector terminal resistance `RC`, ohms. Zero disables the
+    /// internal collector node, matching ngspice's default.
+    pub rc: f64,
+    /// Ohmic emitter terminal resistance `RE`, ohms. Zero disables the
+    /// internal emitter node, matching ngspice's default.
+    pub re: f64,
 }
 
 impl BjtModel {
@@ -795,8 +1128,43 @@ impl BjtModel {
             br: 1.0,
             nf: 1.0,
             nr: 1.0,
+            vaf: f64::INFINITY,
+            var: f64::INFINITY,
+            ikf: f64::INFINITY,
+            ikr: f64::INFINITY,
+            nkf: None,
+            ise: 0.0,
+            ne: 1.5,
+            isc: 0.0,
+            nc: 2.0,
+            cje: 0.0,
+            vje: 0.75,
+            mje: 0.33,
+            cjc: 0.0,
+            vjc: 0.75,
+            mjc: 0.33,
+            fc: 0.5,
+            tf: 0.0,
+            xtf: 0.0,
+            vtf: f64::INFINITY,
+            itf: 0.0,
+            tr: 0.0,
+            rb: 0.0,
+            rbm: None,
+            irb: f64::INFINITY,
+            rc: 0.0,
+            re: 0.0,
         }
     }
+}
+
+/// Intrinsic MOSFET channel charge formulation selected by the model card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MosChannelChargeModel {
+    /// ngspice-compatible piecewise Meyer capacitance model.
+    Meyer,
+    /// Engine-specific Ward–Dutton inversion-charge partition.
+    WardDutton,
 }
 
 /// Resolved parameters of a `.model <name> NMOS|PMOS(...)` card, SPICE
@@ -812,10 +1180,118 @@ pub struct MosModel {
     pub kp: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
+    /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
+    /// drain node, matching ngspice's default.
+    pub rd: f64,
+    /// Whether the model card explicitly supplied `RD`. When present, this
+    /// value takes precedence over `RSH`, including when it is zero.
+    pub rd_given: bool,
+    /// Ohmic source terminal resistance `RS`, ohms. Zero disables the internal
+    /// source node, matching ngspice's default.
+    pub rs: f64,
+    /// Whether the model card explicitly supplied `RS`. When present, this
+    /// value takes precedence over `RSH`, including when it is zero.
+    pub rs_given: bool,
+    /// Drain/source diffusion sheet resistance `RSH`, ohms per square. When
+    /// the corresponding direct `RD` or `RS` is zero, the instance's `NRD` or
+    /// `NRS` multiplies this value.
+    pub rsh: f64,
+    /// Bulk threshold parameter `GAMMA`, sqrt(V).
+    pub gamma: f64,
+    /// Surface potential `PHI`, volts.
+    pub phi: f64,
+    /// Bulk junction saturation current `IS`, amps.
+    pub is: f64,
+    /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
+    pub cbd: f64,
+    /// Whether `CBD` was explicitly supplied; an explicit zero also overrides
+    /// the geometry-derived bottom capacitance `CJ·AD`.
+    pub cbd_given: bool,
+    /// Zero-bias bulk-source junction capacitance `CBS`, farads.
+    pub cbs: f64,
+    /// Whether `CBS` was explicitly supplied; an explicit zero also overrides
+    /// the geometry-derived bottom capacitance `CJ·AS`.
+    pub cbs_given: bool,
+    /// Zero-bias bottom junction capacitance density `CJ`, F/m².
+    pub cj: f64,
+    /// Zero-bias sidewall junction capacitance density `CJSW`, F/m.
+    pub cjsw: f64,
+    /// Bulk junction potential `PB`, volts.
+    pub pb: f64,
+    /// Bulk junction grading coefficient `MJ`.
+    pub mj: f64,
+    /// Bulk junction sidewall grading coefficient `MJSW`.
+    pub mjsw: f64,
+    /// Forward-bias depletion-capacitance coefficient `FC`.
+    pub fc: f64,
     /// Default channel width `W`, metres (the element line may override it).
     pub w: f64,
     /// Default channel length `L`, metres (the element line may override it).
     pub l: f64,
+    /// Gate-source overlap capacitance per unit width `CGSO`, F/m.
+    pub cgso: f64,
+    /// Gate-drain overlap capacitance per unit width `CGDO`, F/m.
+    pub cgdo: f64,
+    /// Gate-bulk overlap capacitance per unit length `CGBO`, F/m.
+    pub cgbo: f64,
+    /// Gate oxide thickness `TOX`, metres. When present, enables intrinsic
+    /// channel charge; absent means no intrinsic channel capacitance, matching
+    /// ngspice's level-1 behavior.
+    pub tox: Option<f64>,
+    /// Intrinsic channel charge formulation. `WardDutton` is an engine
+    /// extension selected by `CHARGEMOD=WARD_DUTTON`; `Meyer` is the default.
+    pub channel_charge_model: MosChannelChargeModel,
+}
+
+/// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
+/// level 1 with the Parker–Skellern `B` fitting parameter.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JfetModel {
+    /// N-channel or P-channel.
+    pub polarity: Polarity,
+    /// Pinch-off voltage `VTO`, volts (negative for NJF, positive for PJF).
+    pub vto: f64,
+    /// Transconductance parameter `BETA`, A/V².
+    pub beta: f64,
+    /// Channel-length modulation `LAMBDA`, 1/V.
+    pub lambda: f64,
+    /// Parker–Skellern fitting parameter B for the level-1 channel equation.
+    pub b: f64,
+    /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
+    /// drain node, matching ngspice's default.
+    pub rd: f64,
+    /// Ohmic source terminal resistance `RS`, ohms. Zero disables the internal
+    /// source node, matching ngspice's default.
+    pub rs: f64,
+    /// Gate-junction saturation current `IS`, amps.
+    pub is: f64,
+    /// Zero-bias gate-source depletion capacitance `CGS`, farads.
+    pub cgs: f64,
+    /// Zero-bias gate-drain depletion capacitance `CGD`, farads.
+    pub cgd: f64,
+    /// Gate-junction potential `PB`, volts.
+    pub pb: f64,
+    /// Forward-bias depletion-capacitance coefficient `FC`.
+    pub fc: f64,
+}
+
+impl JfetModel {
+    fn defaults(polarity: Polarity) -> Self {
+        Self {
+            polarity,
+            vto: if polarity == Polarity::N { -2.0 } else { 2.0 },
+            beta: 1e-4,
+            lambda: 0.0,
+            b: 1.0,
+            rd: 0.0,
+            rs: 0.0,
+            is: 1e-14,
+            cgs: 0.0,
+            cgd: 0.0,
+            pb: 1.0,
+            fc: 0.5,
+        }
+    }
 }
 
 impl MosModel {
@@ -825,8 +1301,31 @@ impl MosModel {
             vto: 0.0,
             kp: 2e-5,
             lambda: 0.0,
+            rd: 0.0,
+            rd_given: false,
+            rs: 0.0,
+            rs_given: false,
+            rsh: 0.0,
+            gamma: 0.0,
+            phi: 0.6,
+            is: 1e-14,
+            cbd: 0.0,
+            cbd_given: false,
+            cbs: 0.0,
+            cbs_given: false,
+            cj: 0.0,
+            cjsw: 0.0,
+            pb: 0.8,
+            mj: 0.5,
+            mjsw: 0.5,
+            fc: 0.5,
             w: 1e-4,
             l: 1e-4,
+            cgso: 0.0,
+            cgdo: 0.0,
+            cgbo: 0.0,
+            tox: None,
+            channel_charge_model: MosChannelChargeModel::Meyer,
         }
     }
 }
@@ -840,6 +1339,8 @@ pub enum ModelCard {
     Bjt(BjtModel),
     /// An `NMOS` or `PMOS` card.
     Mos(MosModel),
+    /// An `NJF` or `PJF` card.
+    Jfet(JfetModel),
     /// An `OPAMP` card (this engine's type, not ngspice's).
     OpAmp(OpAmpModel),
     /// A `COMP` card (this engine's type, not ngspice's).
@@ -867,6 +1368,10 @@ impl ModelCard {
             Self::Mos(model) => match model.polarity {
                 Polarity::N => "NMOS",
                 Polarity::P => "PMOS",
+            },
+            Self::Jfet(model) => match model.polarity {
+                Polarity::N => "NJF",
+                Polarity::P => "PJF",
             },
         }
     }
@@ -897,10 +1402,20 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
         "1N4733A" => Some(ModelCard::Diode(DiodeModel {
             is: 1e-11,
             n: 1.2,
+            ik: 0.0,
+            ikr: 0.0,
+            isr: 0.0,
+            nr: 2.0,
             rs: 6.0,
+            tt: 0.0,
+            vp: 0.0,
             bv: Some(4.8),
             ibv: 49e-3,
             nbv: None,
+            cjo: 0.0,
+            vj: 1.0,
+            m: 0.5,
+            fc: 0.5,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -909,11 +1424,23 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
         "SMAJ5.0A" => Some(ModelCard::Diode(DiodeModel {
             is: 1e-12,
             n: 1.0,
+            ik: 0.0,
+            ikr: 0.0,
+            isr: 0.0,
+            nr: 2.0,
             rs: 0.0525,
+            tt: 0.0,
+            vp: 0.0,
             bv: Some(6.7),
             ibv: 10e-3,
             nbv: None,
+            cjo: 0.0,
+            vj: 1.0,
+            m: 0.5,
+            fc: 0.5,
         })),
+        "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
+        "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
         // An op-amp that is ideal for any circuit a board puts around it:
         // 120 dB, 10 MHz, 1 Ω, rail to rail.
         "IDEAL_OPAMP" => Some(ModelCard::OpAmp(OpAmpModel {
@@ -932,6 +1459,16 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             gbw: 0.7e6,
             rout: 50.0,
             vos: 0.0,
+            ibias: 0.0,
+            ios: 0.0,
+            rin: 0.0,
+            rin_cm: 0.0,
+            cin_cm: 0.0,
+            cin_diff: 0.0,
+            iq: 0.0,
+            cmrr: None,
+            ilim: None,
+            sr: None,
             drop_hi: 1.5,
             drop_lo: 0.0,
         })),
@@ -1132,6 +1669,58 @@ pub struct Vccs {
     pub gm: f64,
 }
 
+/// A symmetric current limit in an op-amp's Norton output stage.
+///
+/// The output current is `clamp((v(drive) − v(output))/ROUT, −IOLIM, IOLIM)`.
+/// The drive node is only a control: the limited output current does not load
+/// the op-amp's internal gain node.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputCurrentLimit {
+    /// Element name (`<X name>#go`).
+    pub name: String,
+    /// Internal op-amp drive node, used as the Thevenin voltage.
+    pub drive: NodeRef,
+    /// External output pin.
+    pub output: NodeRef,
+    /// Small-signal output resistance, ohms.
+    pub rout: f64,
+    /// Symmetric output-current limit, amps.
+    pub ilim: f64,
+}
+
+/// A slew-limited op-amp compensation-stage transconductance.
+///
+/// At an operating point it contributes the full `gm · error` current. During
+/// transient steps it compensates the gain-node `Rg` path and clamps only the
+/// capacitor current to `±ilim`, preserving settled gain while limiting
+/// `Cg · dV/dt`. `error` includes differential input, common-mode error
+/// relative to the supply midpoint, and input offset voltage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SlewLimitedVccs {
+    /// Element name (`<X name>#g`).
+    pub name: String,
+    /// Terminal the current leaves the circuit at.
+    pub p: NodeRef,
+    /// Terminal the current returns to the circuit at.
+    pub n: NodeRef,
+    /// Non-inverting input pin.
+    pub input_plus: NodeRef,
+    /// Inverting input pin.
+    pub input_minus: NodeRef,
+    /// Positive supply pin, used for the common-mode reference.
+    pub vcc: NodeRef,
+    /// Negative supply pin, used for the common-mode reference.
+    pub vee: NodeRef,
+    /// Transconductance, siemens.
+    pub gm: f64,
+    /// Common-mode error gain (linear, not dB).
+    pub cm_gain: f64,
+    /// Input offset voltage, volts.
+    pub vos: f64,
+    /// Symmetric gain-node capacitor current limit, amps.
+    pub ilim: f64,
+}
+
 /// `F<name> n+ n- <vsource> <gain>` — current-controlled current source: a
 /// current `gain · i(vsource)` flows from `n+` through the source to `n−`.
 #[derive(Debug, Clone, PartialEq)]
@@ -1179,13 +1768,22 @@ pub struct Bjt {
     pub b: NodeRef,
     /// Emitter.
     pub e: NodeRef,
+    /// Collector junction node. Equals `c` when `RC = 0`, else the internal
+    /// node `<name>#collector`.
+    pub junction_c: NodeRef,
+    /// Base junction node. Equals `b` when `RB = 0`, else the internal node
+    /// `<name>#base`.
+    pub junction_b: NodeRef,
+    /// Emitter junction node. Equals `e` when `RE = 0`, else the internal
+    /// node `<name>#emitter`.
+    pub junction_e: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
     /// Resolved model parameters.
     pub model: BjtModel,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
@@ -1196,8 +1794,14 @@ pub struct Mosfet {
     pub g: NodeRef,
     /// Source.
     pub s: NodeRef,
-    /// Bulk. Required by the syntax and tied to the channel through `GMIN`,
-    /// but it does not shift the threshold: there is no body effect.
+    /// Intrinsic drain after the effective drain resistance, or `d` when it
+    /// is zero.
+    pub junction_d: NodeRef,
+    /// Intrinsic source before the effective source resistance, or `s` when
+    /// it is zero.
+    pub junction_s: NodeRef,
+    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
+    /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
@@ -1205,6 +1809,97 @@ pub struct Mosfet {
     pub model: MosModel,
     /// `KP·W/L`, A/V² — the transconductance the solver actually stamps.
     pub beta: f64,
+    /// Instance channel width `W`, metres.
+    pub w: f64,
+    /// Instance channel length `L`, metres.
+    pub l: f64,
+    /// Drain diffusion area `AD`, m², used with model `CJ` when `CBD` is absent.
+    pub ad: f64,
+    /// Source diffusion area `AS`, m², used with model `CJ` when `CBS` is absent.
+    pub as_: f64,
+    /// Drain diffusion perimeter `PD`, metres, used with model `CJSW`.
+    pub pd: f64,
+    /// Source diffusion perimeter `PS`, metres, used with model `CJSW`.
+    pub ps: f64,
+    /// Effective drain terminal resistance, from `RD` or `RSH·NRD`, ohms.
+    pub drain_resistance_ohms: f64,
+    /// Effective source terminal resistance, from `RS` or `RSH·NRS`, ohms.
+    pub source_resistance_ohms: f64,
+}
+
+impl Mosfet {
+    /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
+    pub fn overlap_capacitances(&self) -> [f64; 3] {
+        [
+            self.model.cgso * self.w,
+            self.model.cgdo * self.w,
+            self.model.cgbo * self.l,
+        ]
+    }
+
+    /// Zero-bias bottom and sidewall capacitances for the selected bulk
+    /// junction, in that order.
+    pub fn bulk_junction_capacitances(&self, drain: bool) -> [f64; 2] {
+        let model = self.model;
+        if drain {
+            [
+                if model.cbd_given {
+                    model.cbd
+                } else {
+                    model.cj * self.ad
+                },
+                model.cjsw * self.pd,
+            ]
+        } else {
+            [
+                if model.cbs_given {
+                    model.cbs
+                } else {
+                    model.cj * self.as_
+                },
+                model.cjsw * self.ps,
+            ]
+        }
+    }
+
+    /// Nonlinear bulk-junction charge and differential capacitance in
+    /// normalized MOSFET coordinates. `drain` selects the bulk-drain junction;
+    /// otherwise the bulk-source junction is used. Explicit `CBD`/`CBS`
+    /// overrides only the bottom-area term; sidewall charge remains additive.
+    pub fn bulk_junction_charge(&self, voltage: f64, drain: bool) -> (f64, f64) {
+        let model = self.model;
+        let [bottom, sidewall] = self.bulk_junction_capacitances(drain);
+        let (bottom_charge, bottom_capacitance) =
+            super::device::junction_depletion_charge(voltage, bottom, model.pb, model.mj, model.fc);
+        let (sidewall_charge, sidewall_capacitance) = super::device::junction_depletion_charge(
+            voltage, sidewall, model.pb, model.mjsw, model.fc,
+        );
+        (
+            bottom_charge + sidewall_charge,
+            bottom_capacitance + sidewall_capacitance,
+        )
+    }
+}
+
+/// `J<name> nd ng ns <model>` — a SPICE level-1 JFET.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Jfet {
+    /// Element name as written, e.g. `J1`.
+    pub name: String,
+    /// Drain.
+    pub d: NodeRef,
+    /// Gate.
+    pub g: NodeRef,
+    /// Source.
+    pub s: NodeRef,
+    /// Intrinsic drain after `RD`, or `d` when `RD` is zero.
+    pub junction_d: NodeRef,
+    /// Intrinsic source before `RS`, or `s` when `RS` is zero.
+    pub junction_s: NodeRef,
+    /// Model name as written, for diagnostics.
+    pub model_name: String,
+    /// Resolved model parameters.
+    pub model: JfetModel,
 }
 
 /// Voltage threshold control for a switch: closes from the voltage between
@@ -1270,6 +1965,8 @@ pub struct Circuit {
     pub capacitors: Vec<Capacitor>,
     /// Inductors, in netlist order.
     pub inductors: Vec<Inductor>,
+    /// Pairwise mutual inductances, in netlist order.
+    pub mutual_inductors: Vec<MutualInductor>,
     /// Voltage sources, in netlist order.
     pub voltage_sources: Vec<VoltageSource>,
     /// Current sources, in netlist order.
@@ -1282,6 +1979,8 @@ pub struct Circuit {
     pub bjts: Vec<Bjt>,
     /// MOSFETs, in netlist order.
     pub mosfets: Vec<Mosfet>,
+    /// JFETs, in netlist order.
+    pub jfets: Vec<Jfet>,
     /// Voltage-controlled voltage sources (`E`), in netlist order.
     pub vcvs: Vec<Vcvs>,
     /// Voltage-controlled current sources (`G`), in netlist order.
@@ -1292,6 +1991,10 @@ pub struct Circuit {
     pub ccvs: Vec<Ccvs>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
+    /// Op-amp output stages with an explicit `IOLIM`.
+    pub output_current_limits: Vec<OutputCurrentLimit>,
+    /// Op-amp compensation stages with an explicit `SR`.
+    pub slew_limited_vccs: Vec<SlewLimitedVccs>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
 }
@@ -1375,7 +2078,7 @@ impl Circuit {
         Some(index)
     }
 
-    fn has_element(&self, name: &str) -> bool {
+    fn has_element(&self, name: &str, pending_mutuals: &[PendingMutualInductor]) -> bool {
         let key = name.to_ascii_lowercase();
         let matches = |candidate: &str| candidate.to_ascii_lowercase() == key;
         self.resistors.iter().any(|e| matches(&e.name))
@@ -1387,11 +2090,15 @@ impl Circuit {
             || self.diodes.iter().any(|e| matches(&e.name))
             || self.bjts.iter().any(|e| matches(&e.name))
             || self.mosfets.iter().any(|e| matches(&e.name))
+            || self.jfets.iter().any(|e| matches(&e.name))
             || self.vcvs.iter().any(|e| matches(&e.name))
             || self.vccs.iter().any(|e| matches(&e.name))
             || self.cccs.iter().any(|e| matches(&e.name))
             || self.ccvs.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
+            || self.output_current_limits.iter().any(|e| matches(&e.name))
+            || self.slew_limited_vccs.iter().any(|e| matches(&e.name))
+            || pending_mutuals.iter().any(|e| matches(&e.name))
     }
 
     /// True when the circuit holds at least one device whose stamp depends on
@@ -1404,7 +2111,10 @@ impl Circuit {
         !self.diodes.is_empty()
             || !self.bjts.is_empty()
             || !self.mosfets.is_empty()
+            || !self.jfets.is_empty()
             || !self.power_sinks.is_empty()
+            || !self.output_current_limits.is_empty()
+            || !self.slew_limited_vccs.is_empty()
     }
 
     /// True when any independent source carries a transient function, so the
@@ -1539,6 +2249,22 @@ struct PendingDevice {
     model_name: String,
     width: Option<f64>,
     length: Option<f64>,
+    nrd: Option<f64>,
+    nrs: Option<f64>,
+    ad: Option<f64>,
+    as_: Option<f64>,
+    pd: Option<f64>,
+    ps: Option<f64>,
+}
+
+/// A K line held until all its L elements have been parsed.
+struct PendingMutualInductor {
+    line: usize,
+    text: String,
+    name: String,
+    first: String,
+    second: String,
+    coupling: f64,
 }
 
 /// Parse a netlist into a [`Circuit`].
@@ -1547,6 +2273,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     let mut ended = false;
     let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
     let mut pending: Vec<PendingDevice> = Vec::new();
+    let mut pending_mutuals: Vec<PendingMutualInductor> = Vec::new();
     let mut in_control = false;
     // Line of every `F`/`H`, in the order they were pushed, for the error when
     // the element they name carries no branch current.
@@ -1605,27 +2332,89 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             .unwrap_or(' ');
         if !matches!(
             letter,
-            'R' | 'C' | 'L' | 'V' | 'I' | 'S' | 'D' | 'Q' | 'M' | 'E' | 'G' | 'F' | 'H' | 'X'
+            'R' | 'C'
+                | 'L'
+                | 'K'
+                | 'V'
+                | 'I'
+                | 'S'
+                | 'D'
+                | 'Q'
+                | 'M'
+                | 'J'
+                | 'E'
+                | 'G'
+                | 'F'
+                | 'H'
+                | 'X'
         ) {
             return Err(ctx.unsupported());
         }
         if head.len() < 2 {
             return Err(ctx.parse_err(format!("element `{head}` has no name after `{letter}`")));
         }
-        if circuit.has_element(head) {
+        if circuit.has_element(head, &pending_mutuals) {
             return Err(ctx.parse_err(format!("element `{head}` is declared twice")));
         }
 
         match letter {
             'R' => {
                 let rest = &tokens[1..];
-                if rest.len() != 3 {
+                if rest.len() < 3 {
                     return Err(ctx.parse_err("expected `R<name> n1 n2 <value>`"));
                 }
                 let ohms = ctx.value(rest[2], "resistance")?;
                 if ohms == 0.0 {
                     return Err(ctx.parse_err("resistance must be non-zero"));
                 }
+                let mut beta = None;
+                let mut nominal_temperature_celsius = 25.0;
+                let mut temperature_celsius = 25.0;
+                let mut has_temperature_parameter = false;
+                for token in &rest[3..] {
+                    let (key, value) = token.split_once('=').ok_or_else(|| {
+                        ctx.parse_err("NTC resistor options must be `beta=`, `tnom=` or `temp=`")
+                    })?;
+                    let parsed = ctx.value(value, key)?;
+                    match key.to_ascii_lowercase().as_str() {
+                        "beta" => beta = Some(parsed),
+                        "tnom" => {
+                            nominal_temperature_celsius = parsed;
+                            has_temperature_parameter = true;
+                        }
+                        "temp" => {
+                            temperature_celsius = parsed;
+                            has_temperature_parameter = true;
+                        }
+                        other => {
+                            return Err(ctx.parse_err(format!(
+                                "unknown resistor parameter `{other}`; expected `beta`, `tnom` or `temp`"
+                            )))
+                        }
+                    }
+                }
+                if beta.is_none() && has_temperature_parameter {
+                    return Err(ctx.parse_err("`tnom` and `temp` require an NTC `beta`"));
+                }
+                let ntc = if let Some(beta) = beta {
+                    if beta <= 0.0 || ohms <= 0.0 {
+                        return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
+                    }
+                    if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
+                        return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
+                    }
+                    let model = NtcModel {
+                        beta,
+                        nominal_temperature_celsius,
+                        temperature_celsius,
+                    };
+                    if !model.resistance_ohms(ohms).is_finite() {
+                        return Err(ctx.parse_err("NTC parameters produce a non-finite resistance"));
+                    }
+                    Some(model)
+                } else {
+                    None
+                };
                 let a = circuit.intern(rest[0]);
                 let b = circuit.intern(rest[1]);
                 circuit.resistors.push(Resistor {
@@ -1633,6 +2422,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     a,
                     b,
                     ohms,
+                    ntc,
                 });
             }
             'C' => {
@@ -1671,6 +2461,31 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     ic,
                 });
             }
+            'K' => {
+                let rest = &tokens[1..];
+                if rest.len() != 3 {
+                    return Err(ctx.parse_err("expected `K<name> L<name1> L<name2> <k>`"));
+                }
+                if ![rest[0], rest[1]].iter().all(|name| {
+                    name.chars()
+                        .next()
+                        .is_some_and(|letter| letter.eq_ignore_ascii_case(&'L'))
+                }) {
+                    return Err(ctx.parse_err("a K element must name two inductors"));
+                }
+                let coupling = ctx.value(rest[2], "coupling coefficient")?;
+                if !coupling.is_finite() || coupling.abs() > 1.0 {
+                    return Err(ctx.parse_err("coupling coefficient must be finite and in [-1, 1]"));
+                }
+                pending_mutuals.push(PendingMutualInductor {
+                    line: number,
+                    text: line.to_string(),
+                    name: head.to_string(),
+                    first: rest[0].to_string(),
+                    second: rest[1].to_string(),
+                    coupling,
+                });
+            }
             'V' | 'I' => {
                 let shape = if letter == 'V' {
                     "V<name> n+ n- <source>"
@@ -1704,11 +2519,15 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     });
                 }
             }
-            'D' | 'Q' | 'M' => {
+            'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
                     'D' => (2, "D<name> n+ n- <model>"),
                     'Q' => (3, "Q<name> nc nb ne <model>"),
-                    _ => (4, "M<name> nd ng ns nb <model> [w=<m>] [l=<m>]"),
+                    'M' => (
+                        4,
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]",
+                    ),
+                    _ => (3, "J<name> nd ng ns <model>"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -1716,6 +2535,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 }
                 let mut width = None;
                 let mut length = None;
+                let mut nrd = None;
+                let mut nrs = None;
+                let mut ad = None;
+                let mut as_ = None;
+                let mut pd = None;
+                let mut ps = None;
                 for token in &rest[terminals + 1..] {
                     let (key, value) = token
                         .split_once('=')
@@ -1723,6 +2548,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     match key.to_ascii_lowercase().as_str() {
                         "w" if letter == 'M' => width = Some(ctx.value(value, "w")?),
                         "l" if letter == 'M' => length = Some(ctx.value(value, "l")?),
+                        "nrd" if letter == 'M' => nrd = Some(ctx.value(value, "nrd")?),
+                        "nrs" if letter == 'M' => nrs = Some(ctx.value(value, "nrs")?),
+                        "ad" if letter == 'M' => ad = Some(ctx.value(value, "ad")?),
+                        "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
+                        "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
+                        "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -1732,6 +2563,18 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 }
                 if matches!(width, Some(w) if w <= 0.0) || matches!(length, Some(l) if l <= 0.0) {
                     return Err(ctx.parse_err("w and l must be positive"));
+                }
+                if matches!(nrd, Some(squares) if !squares.is_finite() || squares < 0.0)
+                    || matches!(nrs, Some(squares) if !squares.is_finite() || squares < 0.0)
+                {
+                    return Err(ctx.parse_err("nrd and nrs must be >= 0 and finite"));
+                }
+                if [ad, as_, pd, ps]
+                    .into_iter()
+                    .flatten()
+                    .any(|geometry| !geometry.is_finite() || geometry < 0.0)
+                {
+                    return Err(ctx.parse_err("ad, as, pd and ps must be >= 0 and finite"));
                 }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
@@ -1749,6 +2592,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     model_name: rest[terminals].to_string(),
                     width,
                     length,
+                    nrd,
+                    nrs,
+                    ad,
+                    as_,
+                    pd,
+                    ps,
                 });
             }
             'E' | 'G' => {
@@ -1848,6 +2697,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     model_name: model_name.to_string(),
                     width: None,
                     length: None,
+                    nrd: None,
+                    nrs: None,
+                    ad: None,
+                    as_: None,
+                    pd: None,
+                    ps: None,
                 });
             }
             'S' => {
@@ -1966,6 +2821,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
         }
     }
 
+    bind_mutual_inductors(&mut circuit, pending_mutuals)?;
     bind_models(&mut circuit, &models, pending)?;
     bind_controls(&mut circuit, &controls)?;
     Ok(circuit)
@@ -2034,6 +2890,59 @@ fn bind_controls(
     Ok(())
 }
 
+/// Resolve K elements after every inductor is known, allowing forward references.
+fn bind_mutual_inductors(
+    circuit: &mut Circuit,
+    pending: Vec<PendingMutualInductor>,
+) -> Result<(), AnalogError> {
+    for coupling in pending {
+        let ctx = LineCtx {
+            number: coupling.line,
+            text: &coupling.text,
+        };
+        let find_inductor = |name: &str| {
+            circuit
+                .inductors
+                .iter()
+                .position(|inductor| inductor.name.eq_ignore_ascii_case(name))
+        };
+        let first = find_inductor(&coupling.first).ok_or_else(|| {
+            ctx.parse_err(format!(
+                "`{}` is not an inductor in this netlist",
+                coupling.first
+            ))
+        })?;
+        let second = find_inductor(&coupling.second).ok_or_else(|| {
+            ctx.parse_err(format!(
+                "`{}` is not an inductor in this netlist",
+                coupling.second
+            ))
+        })?;
+        if first == second {
+            return Err(ctx.parse_err("a K element must couple two different inductors"));
+        }
+        if circuit.mutual_inductors.iter().any(|existing| {
+            (existing.first == first && existing.second == second)
+                || (existing.first == second && existing.second == first)
+        }) {
+            return Err(ctx.parse_err("the same inductor pair cannot be coupled twice"));
+        }
+        let first_l = circuit.inductors[first].henries;
+        let second_l = circuit.inductors[second].henries;
+        let mutual_henries = coupling.coupling * (first_l.sqrt() * second_l.sqrt());
+        if !mutual_henries.is_finite() {
+            return Err(ctx.parse_err("inductor values produce non-finite mutual inductance"));
+        }
+        circuit.mutual_inductors.push(MutualInductor {
+            name: coupling.name,
+            first,
+            second,
+            mutual_henries,
+        });
+    }
+    Ok(())
+}
+
 /// Attach each device's model card, once every `.model` line has been read.
 fn bind_models(
     circuit: &mut Circuit,
@@ -2070,7 +2979,7 @@ fn bind_models(
         let card = resolved.ok_or_else(|| {
             ctx.parse_err(format!(
                 "no `.model {}` line, and `{}` is not one of the built-in models \
-                     `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `1N4733A`, `SMAJ5.0A`",
+                     `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, `1N4733A`, `SMAJ5.0A`",
                 device.model_name, device.model_name
             ))
         })?;
@@ -2088,10 +2997,35 @@ fn bind_models(
                 let ModelCard::Diode(model) = card else {
                     return Err(wrong_kind("D"));
                 };
-                if model.is <= 0.0 || model.n <= 0.0 || model.rs < 0.0 {
-                    return Err(
-                        ctx.parse_err("a diode model needs IS > 0, N > 0 and RS >= 0".to_string())
-                    );
+                if model.is <= 0.0
+                    || model.n <= 0.0
+                    || !model.ik.is_finite()
+                    || model.ik < 0.0
+                    || !model.ikr.is_finite()
+                    || model.ikr < 0.0
+                    || !model.isr.is_finite()
+                    || model.isr < 0.0
+                    || !model.nr.is_finite()
+                    || model.nr <= 0.0
+                    || model.rs < 0.0
+                    || !model.tt.is_finite()
+                    || model.tt < 0.0
+                    || !model.vp.is_finite()
+                    || model.vp < 0.0
+                    || !model.cjo.is_finite()
+                    || model.cjo < 0.0
+                    || !model.vj.is_finite()
+                    || model.vj <= 0.0
+                    || !model.m.is_finite()
+                    || model.m < 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(ctx.parse_err(
+                        "a diode model needs IS > 0, N > 0, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                            .to_string(),
+                    ));
                 }
                 let breakdown = match model.bv {
                     None => None,
@@ -2138,11 +3072,107 @@ fn bind_models(
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
                 }
+                if !(model.vaf >= 0.0) || !(model.var >= 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs VAF >= 0 and VAR >= 0 (zero disables Early effect)"
+                            .to_string(),
+                    ));
+                }
+                if !(model.ikf > 0.0) || !(model.ikr > 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs IKF > 0 and IKR > 0 (infinity disables high-injection rolloff)"
+                            .to_string(),
+                    ));
+                }
+                if model.nkf.is_some_and(|nkf| !nkf.is_finite() || nkf < 0.0) {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs NKF >= 0 when the high-current beta exponent is supplied"
+                            .to_string(),
+                    ));
+                }
+                if !(model.ise >= 0.0)
+                    || !(model.isc >= 0.0)
+                    || !(model.ne > 0.0)
+                    || !(model.nc > 0.0)
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs ISE >= 0, ISC >= 0, NE > 0 and NC > 0".to_string(),
+                    ));
+                }
+                if !model.cje.is_finite()
+                    || model.cje < 0.0
+                    || !model.vje.is_finite()
+                    || model.vje <= 0.0
+                    || !model.mje.is_finite()
+                    || model.mje < 0.0
+                    || !model.cjc.is_finite()
+                    || model.cjc < 0.0
+                    || !model.vjc.is_finite()
+                    || model.vjc <= 0.0
+                    || !model.mjc.is_finite()
+                    || model.mjc < 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                    || !model.tf.is_finite()
+                    || model.tf < 0.0
+                    || !model.xtf.is_finite()
+                    || model.xtf < 0.0
+                    || !(model.vtf >= 0.0)
+                    || model.vtf.is_nan()
+                    || !model.itf.is_finite()
+                    || model.itf < 0.0
+                    || !model.tr.is_finite()
+                    || model.tr < 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
+                            .to_string(),
+                    ));
+                }
+                if !model.rb.is_finite()
+                    || model.rb < 0.0
+                    || model
+                        .rbm
+                        .is_some_and(|rbm| !rbm.is_finite() || rbm < 0.0 || rbm > model.rb)
+                    || !(model.irb > 0.0)
+                    || model.irb.is_nan()
+                    || !model.rc.is_finite()
+                    || model.rc < 0.0
+                    || !model.re.is_finite()
+                    || model.re < 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs RB/RC/RE >= 0, 0 <= RBM <= RB and IRB > 0".to_string(),
+                    ));
+                }
+                let junction_node = |circuit: &mut Circuit,
+                                     terminal: NodeRef,
+                                     resistance: f64,
+                                     suffix: &str|
+                 -> Result<NodeRef, AnalogError> {
+                    if resistance == 0.0 {
+                        return Ok(terminal);
+                    }
+                    let internal_name = format!("{}#{suffix}", device.name);
+                    if circuit.node(&internal_name).is_some() {
+                        return Err(ctx.parse_err(format!(
+                            "internal BJT node `{internal_name}` is already used by the netlist"
+                        )));
+                    }
+                    Ok(circuit.intern(&internal_name))
+                };
+                let junction_c = junction_node(circuit, device.nodes[0], model.rc, "collector")?;
+                let junction_b = junction_node(circuit, device.nodes[1], model.rb, "base")?;
+                let junction_e = junction_node(circuit, device.nodes[2], model.re, "emitter")?;
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
+                    junction_c,
+                    junction_b,
+                    junction_e,
                     model_name: device.model_name,
                     model,
                 });
@@ -2151,23 +3181,247 @@ fn bind_models(
                 let ModelCard::Mos(model) = card else {
                     return Err(wrong_kind("M"));
                 };
-                if model.kp <= 0.0 {
-                    return Err(ctx.parse_err("a MOSFET model needs KP > 0".to_string()));
+                if model.kp <= 0.0 || model.is <= 0.0 || model.gamma < 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs KP > 0, IS > 0 and GAMMA >= 0".to_string(),
+                    ));
+                }
+                if model.gamma > 0.0 && model.phi <= 0.0 {
+                    return Err(
+                        ctx.parse_err("a MOSFET model with GAMMA > 0 needs PHI > 0".to_string())
+                    );
                 }
                 let w = device.width.unwrap_or(model.w);
                 let l = device.length.unwrap_or(model.l);
                 if w <= 0.0 || l <= 0.0 {
                     return Err(ctx.parse_err("a MOSFET model needs W > 0 and L > 0".to_string()));
                 }
+                if ![model.cgso, model.cgdo, model.cgbo]
+                    .into_iter()
+                    .all(|capacitance| capacitance.is_finite() && capacitance >= 0.0)
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs CGSO/CGDO/CGBO >= 0 and finite".to_string(),
+                    ));
+                }
+                if !model.cbd.is_finite()
+                    || model.cbd < 0.0
+                    || !model.cbs.is_finite()
+                    || model.cbs < 0.0
+                    || !model.cj.is_finite()
+                    || model.cj < 0.0
+                    || !model.cjsw.is_finite()
+                    || model.cjsw < 0.0
+                    || !model.pb.is_finite()
+                    || model.pb <= 0.0
+                    || !model.mj.is_finite()
+                    || model.mj < 0.0
+                    || !model.mjsw.is_finite()
+                    || model.mjsw < 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs CBD/CBS/CJ/CJSW >= 0, PB > 0, MJ/MJSW >= 0 and 0 <= FC < 1",
+                    ));
+                }
+                let ad = device.ad.unwrap_or(0.0);
+                let as_ = device.as_.unwrap_or(0.0);
+                let pd = device.pd.unwrap_or(0.0);
+                let ps = device.ps.unwrap_or(0.0);
+                let junction_capacitances = [
+                    if model.cbd_given {
+                        model.cbd
+                    } else {
+                        model.cj * ad
+                    },
+                    model.cjsw * pd,
+                    if model.cbs_given {
+                        model.cbs
+                    } else {
+                        model.cj * as_
+                    },
+                    model.cjsw * ps,
+                    (if model.cbd_given {
+                        model.cbd
+                    } else {
+                        model.cj * ad
+                    }) + model.cjsw * pd,
+                    (if model.cbs_given {
+                        model.cbs
+                    } else {
+                        model.cj * as_
+                    }) + model.cjsw * ps,
+                ];
+                if junction_capacitances
+                    .into_iter()
+                    .any(|capacitance| !capacitance.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective junction capacitances from CJ/CJSW and AD/AS/PD/PS must be finite",
+                    ));
+                }
+                if !model.rd.is_finite()
+                    || model.rd < 0.0
+                    || !model.rs.is_finite()
+                    || model.rs < 0.0
+                    || !model.rsh.is_finite()
+                    || model.rsh < 0.0
+                {
+                    return Err(ctx.parse_err("a MOSFET model needs RD/RS/RSH >= 0 and finite"));
+                }
+                if !(model.cgso * w).is_finite()
+                    || !(model.cgdo * w).is_finite()
+                    || !(model.cgbo * l).is_finite()
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model's effective overlap capacitances must be finite"
+                            .to_string(),
+                    ));
+                }
+                if let Some(tox) = model.tox {
+                    if !tox.is_finite() || tox <= 0.0 {
+                        return Err(ctx.parse_err("a MOSFET model needs TOX > 0 and finite"));
+                    }
+                    let cox = 3.453_133e-11 * w * l / tox;
+                    if !cox.is_finite() {
+                        return Err(ctx.parse_err(
+                            "a MOSFET model's effective oxide capacitance must be finite",
+                        ));
+                    }
+                }
+                if model.channel_charge_model == MosChannelChargeModel::WardDutton
+                    && model.tox.is_none()
+                {
+                    return Err(ctx.parse_err(
+                        "MOSFET `CHARGEMOD=WARD_DUTTON` needs `TOX` to define oxide charge",
+                    ));
+                }
+                let junction_node = |circuit: &mut Circuit,
+                                     terminal: NodeRef,
+                                     resistance: f64,
+                                     suffix: &str|
+                 -> Result<NodeRef, AnalogError> {
+                    if resistance == 0.0 {
+                        return Ok(terminal);
+                    }
+                    let internal_name = format!("{}#{suffix}", device.name);
+                    if circuit.node(&internal_name).is_some() {
+                        return Err(ctx.parse_err(format!(
+                            "internal MOSFET node `{internal_name}` is already used by the netlist"
+                        )));
+                    }
+                    Ok(circuit.intern(&internal_name))
+                };
+                // SPICE accepts the model's direct resistance or its sheet
+                // resistance times the instance square count. An explicitly
+                // supplied direct value takes precedence for that terminal,
+                // including zero, which disables its series resistor.
+                let nrd = device.nrd.unwrap_or(1.0);
+                let nrs = device.nrs.unwrap_or(1.0);
+                let drain_resistance_ohms = if model.rd_given {
+                    model.rd
+                } else {
+                    model.rsh * nrd
+                };
+                let source_resistance_ohms = if model.rs_given {
+                    model.rs
+                } else {
+                    model.rsh * nrs
+                };
+                if !drain_resistance_ohms.is_finite()
+                    || !source_resistance_ohms.is_finite()
+                    || (drain_resistance_ohms > 0.0 && !(1.0 / drain_resistance_ohms).is_finite())
+                    || (source_resistance_ohms > 0.0 && !(1.0 / source_resistance_ohms).is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective RD/RS from RSH and NRD/NRS must be finite",
+                    ));
+                }
+                let junction_d =
+                    junction_node(circuit, device.nodes[0], drain_resistance_ohms, "drain")?;
+                let junction_s =
+                    junction_node(circuit, device.nodes[2], source_resistance_ohms, "source")?;
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
+                    junction_d,
+                    junction_s,
                     bulk: device.nodes[3],
                     model_name: device.model_name,
                     model,
                     beta: model.kp * w / l,
+                    w,
+                    l,
+                    ad,
+                    as_,
+                    pd,
+                    ps,
+                    drain_resistance_ohms,
+                    source_resistance_ohms,
+                });
+            }
+            'J' => {
+                let ModelCard::Jfet(model) = card else {
+                    return Err(wrong_kind("J"));
+                };
+                if model.beta <= 0.0 || model.is <= 0.0 {
+                    return Err(ctx.parse_err("a JFET model needs BETA > 0 and IS > 0"));
+                }
+                if !model.rd.is_finite()
+                    || model.rd < 0.0
+                    || !model.rs.is_finite()
+                    || model.rs < 0.0
+                {
+                    return Err(ctx.parse_err("a JFET model needs RD/RS >= 0 and finite"));
+                }
+                if !model.b.is_finite() || model.b <= 0.0 {
+                    return Err(ctx.parse_err("a JFET model needs B > 0 and finite"));
+                }
+                if !model.cgs.is_finite()
+                    || model.cgs < 0.0
+                    || !model.cgd.is_finite()
+                    || model.cgd < 0.0
+                    || !model.pb.is_finite()
+                    || model.pb <= 0.0
+                    || !model.fc.is_finite()
+                    || model.fc < 0.0
+                    || model.fc >= 1.0
+                {
+                    return Err(
+                        ctx.parse_err("a JFET model needs CGS/CGD >= 0, PB > 0 and 0 <= FC < 1")
+                    );
+                }
+                let junction_node = |circuit: &mut Circuit,
+                                     terminal: NodeRef,
+                                     resistance: f64,
+                                     suffix: &str|
+                 -> Result<NodeRef, AnalogError> {
+                    if resistance == 0.0 {
+                        return Ok(terminal);
+                    }
+                    let internal_name = format!("{}#{suffix}", device.name);
+                    if circuit.node(&internal_name).is_some() {
+                        return Err(ctx.parse_err(format!(
+                            "internal JFET node `{internal_name}` is already used by the netlist"
+                        )));
+                    }
+                    Ok(circuit.intern(&internal_name))
+                };
+                let junction_d = junction_node(circuit, device.nodes[0], model.rd, "drain")?;
+                let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
+                circuit.jfets.push(Jfet {
+                    name: device.name,
+                    d: device.nodes[0],
+                    g: device.nodes[1],
+                    s: device.nodes[2],
+                    junction_d,
+                    junction_s,
+                    model_name: device.model_name,
+                    model,
                 });
             }
             _ => unreachable!("device letter filtered above"),
@@ -2306,6 +3560,8 @@ fn parse_model(
         "PNP" => ModelCard::Bjt(BjtModel::defaults(Polarity::P)),
         "NMOS" => ModelCard::Mos(MosModel::defaults(Polarity::N)),
         "PMOS" => ModelCard::Mos(MosModel::defaults(Polarity::P)),
+        "NJF" => ModelCard::Jfet(JfetModel::defaults(Polarity::N)),
+        "PJF" => ModelCard::Jfet(JfetModel::defaults(Polarity::P)),
         "OPAMP" => ModelCard::OpAmp(OpAmpModel::default()),
         "COMP" => ModelCard::Comparator(ComparatorModel::default()),
         "LDO" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Linear)),
@@ -2313,7 +3569,7 @@ fn parse_model(
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
         other => {
             return Err(ctx.parse_err(format!(
-                "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, \
+                "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
                  `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
@@ -2339,25 +3595,67 @@ fn parse_model(
                 continue;
             }
         }
+        if let ModelCard::Mos(model) = &mut card {
+            if param.eq_ignore_ascii_case("CHARGEMOD") {
+                model.channel_charge_model = match raw.to_ascii_uppercase().as_str() {
+                    "MEYER" => MosChannelChargeModel::Meyer,
+                    "WARD_DUTTON" | "WARD-DUTTON" => MosChannelChargeModel::WardDutton,
+                    other => {
+                        return Err(ctx.parse_err(format!(
+                            "MOSFET `CHARGEMOD={other}` is not `MEYER` or `WARD_DUTTON`"
+                        )))
+                    }
+                };
+                continue;
+            }
+        }
         let value = ctx.value(raw, param)?;
         let param = param.to_ascii_uppercase();
         match (&mut card, param.as_str()) {
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
+            (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
+            (ModelCard::Diode(model), "IKR") => model.ikr = value,
+            (ModelCard::Diode(model), "ISR") => model.isr = value,
+            (ModelCard::Diode(model), "NR") => model.nr = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
+            (ModelCard::Diode(model), "TT") => model.tt = value,
+            (ModelCard::Diode(model), "VP") => model.vp = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
             (ModelCard::Diode(model), "NBV") => model.nbv = Some(value),
+            (ModelCard::Diode(model), "CJO") => model.cjo = value,
+            (ModelCard::Diode(model), "VJ") => model.vj = value,
+            (ModelCard::Diode(model), "M") => model.m = value,
+            (ModelCard::Diode(model), "FC") => model.fc = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
             (ModelCard::OpAmp(model), "VOS") => model.vos = value,
+            (ModelCard::OpAmp(model), "IBIAS") => model.ibias = value,
+            (ModelCard::OpAmp(model), "IOS") => model.ios = value,
+            (ModelCard::OpAmp(model), "CINCM") => model.cin_cm = value,
+            (ModelCard::OpAmp(model), "CIND") => model.cin_diff = value,
+            (ModelCard::OpAmp(model), "RIN") => model.rin = value,
+            (ModelCard::OpAmp(model), "RINCM") => model.rin_cm = value,
+            (ModelCard::OpAmp(model), "IQ") => model.iq = value,
+            (ModelCard::OpAmp(model), "CMRR") => model.cmrr = Some(value),
+            (ModelCard::OpAmp(model), "IOLIM") => model.ilim = Some(value),
+            (ModelCard::OpAmp(model), "SR") => model.sr = Some(value),
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
             (ModelCard::Comparator(model), "GBW") => model.gbw = value,
             (ModelCard::Comparator(model), "ROUT") => model.rout = value,
             (ModelCard::Comparator(model), "VOS") => model.vos = value,
+            (ModelCard::Comparator(model), "IBIAS") => model.ibias = value,
+            (ModelCard::Comparator(model), "IOS") => model.ios = value,
+            (ModelCard::Comparator(model), "CINCM") => model.cin_cm = value,
+            (ModelCard::Comparator(model), "CIND") => model.cin_diff = value,
+            (ModelCard::Comparator(model), "RIN") => model.rin = value,
+            (ModelCard::Comparator(model), "RINCM") => model.rin_cm = value,
+            (ModelCard::Comparator(model), "IQ") => model.iq = value,
+            (ModelCard::Comparator(model), "CMRR") => model.cmrr = Some(value),
             (ModelCard::Comparator(model), "VHYS") => model.vhys = value,
             // This engine's own card types have no vendor parameters to
             // tolerate, so a misspelt one is an error rather than a silently
@@ -2365,7 +3663,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, SR, DROP_HI, DROP_LO"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -2402,7 +3700,7 @@ fn parse_model(
             }
             (ModelCard::Comparator(_), other) => {
                 return Err(ctx.parse_err(format!(
-                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, VHYS, \
+                    "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, VHYS, \
                      OUTPUT"
                 )))
             }
@@ -2411,11 +3709,67 @@ fn parse_model(
             (ModelCard::Bjt(model), "BR") => model.br = value,
             (ModelCard::Bjt(model), "NF") => model.nf = value,
             (ModelCard::Bjt(model), "NR") => model.nr = value,
+            (ModelCard::Bjt(model), "VAF" | "VA") => model.vaf = value,
+            (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
+            (ModelCard::Bjt(model), "IKF") => model.ikf = value,
+            (ModelCard::Bjt(model), "IKR") => model.ikr = value,
+            (ModelCard::Bjt(model), "NKF" | "NK") => model.nkf = Some(value),
+            (ModelCard::Bjt(model), "ISE") => model.ise = value,
+            (ModelCard::Bjt(model), "NE") => model.ne = value,
+            (ModelCard::Bjt(model), "ISC") => model.isc = value,
+            (ModelCard::Bjt(model), "NC") => model.nc = value,
+            (ModelCard::Bjt(model), "CJE") => model.cje = value,
+            (ModelCard::Bjt(model), "VJE" | "PE") => model.vje = value,
+            (ModelCard::Bjt(model), "MJE" | "ME") => model.mje = value,
+            (ModelCard::Bjt(model), "CJC") => model.cjc = value,
+            (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
+            (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
+            (ModelCard::Bjt(model), "FC") => model.fc = value,
+            (ModelCard::Bjt(model), "TF") => model.tf = value,
+            (ModelCard::Bjt(model), "XTF") => model.xtf = value,
+            (ModelCard::Bjt(model), "VTF") => model.vtf = value,
+            (ModelCard::Bjt(model), "ITF") => model.itf = value,
+            (ModelCard::Bjt(model), "TR") => model.tr = value,
+            (ModelCard::Bjt(model), "RB") => model.rb = value,
+            (ModelCard::Bjt(model), "RBM") => model.rbm = Some(value),
+            (ModelCard::Bjt(model), "IRB") => model.irb = value,
+            (ModelCard::Bjt(model), "RC") => model.rc = value,
+            (ModelCard::Bjt(model), "RE") => model.re = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Mos(model), "RD") => {
+                model.rd = value;
+                model.rd_given = true;
+            }
+            (ModelCard::Mos(model), "RS") => {
+                model.rs = value;
+                model.rs_given = true;
+            }
+            (ModelCard::Mos(model), "RSH") => model.rsh = value,
+            (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
+            (ModelCard::Mos(model), "PHI") => model.phi = value,
+            (ModelCard::Mos(model), "IS") => model.is = value,
+            (ModelCard::Mos(model), "CBD") => {
+                model.cbd = value;
+                model.cbd_given = true;
+            }
+            (ModelCard::Mos(model), "CBS") => {
+                model.cbs = value;
+                model.cbs_given = true;
+            }
+            (ModelCard::Mos(model), "CJ") => model.cj = value,
+            (ModelCard::Mos(model), "CJSW") => model.cjsw = value,
+            (ModelCard::Mos(model), "PB") => model.pb = value,
+            (ModelCard::Mos(model), "MJ") => model.mj = value,
+            (ModelCard::Mos(model), "MJSW") => model.mjsw = value,
+            (ModelCard::Mos(model), "FC") => model.fc = value,
             (ModelCard::Mos(model), "W") => model.w = value,
             (ModelCard::Mos(model), "L") => model.l = value,
+            (ModelCard::Mos(model), "CGSO") => model.cgso = value,
+            (ModelCard::Mos(model), "CGDO") => model.cgdo = value,
+            (ModelCard::Mos(model), "CGBO") => model.cgbo = value,
+            (ModelCard::Mos(model), "TOX") => model.tox = Some(value),
             // A level this engine cannot honour is the one parameter worth
             // refusing: silently solving a BSIM card with Shichman-Hodges
             // would be wrong by orders of magnitude, not by a capacitance.
@@ -2424,6 +3778,23 @@ fn parse_model(
                     "MOSFET `LEVEL={value}` is not modelled in-core; only level 1 \
                      (Shichman-Hodges) is. Use `adapter: external_process` with \
                      `tools/cosim/labwired_ngspice.py`"
+                )))
+            }
+            (ModelCard::Jfet(model), "VTO" | "VT0") => model.vto = value,
+            (ModelCard::Jfet(model), "BETA") => model.beta = value,
+            (ModelCard::Jfet(model), "LAMBDA") => model.lambda = value,
+            (ModelCard::Jfet(model), "B") => model.b = value,
+            (ModelCard::Jfet(model), "RD") => model.rd = value,
+            (ModelCard::Jfet(model), "RS") => model.rs = value,
+            (ModelCard::Jfet(model), "IS") => model.is = value,
+            (ModelCard::Jfet(model), "CGS") => model.cgs = value,
+            (ModelCard::Jfet(model), "CGD") => model.cgd = value,
+            (ModelCard::Jfet(model), "PB") => model.pb = value,
+            (ModelCard::Jfet(model), "FC") => model.fc = value,
+            (ModelCard::Jfet(_), "LEVEL") if value != 1.0 => {
+                return Err(ctx.parse_err(format!(
+                    "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \
+                     `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
                 )))
             }
             _ => {}
@@ -2456,10 +3827,20 @@ pub const MACRO_GAIN_RESISTANCE: f64 = 1e6;
 pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     is: 1e-12,
     n: 0.02,
+    ik: 0.0,
+    ikr: 0.0,
+    isr: 0.0,
+    nr: 2.0,
     rs: 0.0,
+    tt: 0.0,
+    vp: 0.0,
     bv: None,
     ibv: 1e-3,
     nbv: None,
+    cjo: 0.0,
+    vj: 1.0,
+    m: 0.5,
+    fc: 0.5,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -2485,7 +3866,13 @@ impl Lowering<'_> {
 
     fn resistor(&mut self, part: &str, a: NodeRef, b: NodeRef, ohms: f64) {
         let name = self.name(part);
-        self.circuit.resistors.push(Resistor { name, a, b, ohms });
+        self.circuit.resistors.push(Resistor {
+            name,
+            a,
+            b,
+            ohms,
+            ntc: None,
+        });
     }
 
     fn capacitor(&mut self, part: &str, a: NodeRef, b: NodeRef, farads: f64) {
@@ -2496,6 +3883,24 @@ impl Lowering<'_> {
             b,
             farads,
             ic: None,
+        });
+    }
+
+    fn output_current_limit(
+        &mut self,
+        part: &str,
+        drive: NodeRef,
+        output: NodeRef,
+        rout: f64,
+        ilim: f64,
+    ) {
+        let name = self.name(part);
+        self.circuit.output_current_limits.push(OutputCurrentLimit {
+            name,
+            drive,
+            output,
+            rout,
+            ilim,
         });
     }
 
@@ -2600,7 +4005,117 @@ fn check_macro(ctx: &LineCtx<'_>, aol: f64, gbw: f64, rout: f64) -> Result<(), A
     Ok(())
 }
 
-/// Lower an op-amp `X` line; see [`OpAmpModel`] for the circuit.
+/// Split a macro's average input bias current and signed input offset current
+/// into the currents drawn by its non-inverting and inverting pins.
+fn input_bias_currents(ctx: &LineCtx<'_>, ibias: f64, ios: f64) -> Result<(f64, f64), AnalogError> {
+    if !ibias.is_finite() {
+        return Err(ctx.parse_err("IBIAS must be finite"));
+    }
+    if !ios.is_finite() {
+        return Err(ctx.parse_err("IOS must be finite"));
+    }
+    let half_offset = 0.5 * ios;
+    let input_plus = ibias + half_offset;
+    let input_minus = ibias - half_offset;
+    if !input_plus.is_finite() || !input_minus.is_finite() {
+        return Err(ctx.parse_err("IBIAS and IOS produce a non-finite input current"));
+    }
+    Ok((input_plus, input_minus))
+}
+
+/// Check the fixed common-mode and differential capacitances on a macro input.
+fn check_input_capacitances(
+    ctx: &LineCtx<'_>,
+    cin_cm: f64,
+    cin_diff: f64,
+) -> Result<(), AnalogError> {
+    if !cin_cm.is_finite() || cin_cm < 0.0 {
+        return Err(ctx.parse_err("CINCM must be finite and non-negative"));
+    }
+    if !cin_diff.is_finite() || cin_diff < 0.0 {
+        return Err(ctx.parse_err("CIND must be finite and non-negative"));
+    }
+    Ok(())
+}
+
+/// Check the fixed differential resistance between macro inputs.
+fn check_input_resistance(ctx: &LineCtx<'_>, rin: f64) -> Result<(), AnalogError> {
+    if !rin.is_finite() || rin < 0.0 {
+        return Err(ctx.parse_err("RIN must be finite and non-negative"));
+    }
+    Ok(())
+}
+
+/// Check the fixed common-mode input resistance on a macro.
+fn check_common_mode_input_resistance(ctx: &LineCtx<'_>, rin_cm: f64) -> Result<(), AnalogError> {
+    if !rin_cm.is_finite() || rin_cm < 0.0 {
+        return Err(ctx.parse_err("RINCM must be finite and non-negative"));
+    }
+    Ok(())
+}
+
+/// Convert an optional macro CMRR in dB into common-mode-to-differential gain.
+fn check_common_mode_rejection(
+    ctx: &LineCtx<'_>,
+    cmrr_db: Option<f64>,
+) -> Result<f64, AnalogError> {
+    let Some(cmrr_db) = cmrr_db else {
+        return Ok(0.0);
+    };
+    if !cmrr_db.is_finite() || cmrr_db < 0.0 {
+        return Err(ctx.parse_err("CMRR must be finite and non-negative"));
+    }
+    Ok(libm::pow(10.0, -cmrr_db / 20.0))
+}
+
+/// Quiescent supply current flows only from `v+` to `v−` in these macro cards.
+fn check_quiescent_current(ctx: &LineCtx<'_>, iq: f64) -> Result<(), AnalogError> {
+    if !iq.is_finite() || iq < 0.0 {
+        return Err(ctx.parse_err("IQ must be finite and non-negative"));
+    }
+    Ok(())
+}
+
+/// Lower the macro's fixed input capacitances as ordinary MNA capacitors.
+fn lower_input_capacitances(
+    lower: &mut Lowering<'_>,
+    inp: NodeRef,
+    inn: NodeRef,
+    vee: NodeRef,
+    cin_cm: f64,
+    cin_diff: f64,
+) {
+    if cin_cm > 0.0 {
+        lower.capacitor("cinp", inp, vee, cin_cm);
+        lower.capacitor("cinm", inn, vee, cin_cm);
+    }
+    if cin_diff > 0.0 {
+        lower.capacitor("cind", inp, inn, cin_diff);
+    }
+}
+
+/// Lower the macro's differential input resistance as an ordinary MNA resistor.
+fn lower_input_resistance(lower: &mut Lowering<'_>, inp: NodeRef, inn: NodeRef, rin: f64) {
+    if rin > 0.0 {
+        lower.resistor("rin", inp, inn, rin);
+    }
+}
+
+/// Lower two equal common-mode input resistors, one from each input to `v−`.
+fn lower_common_mode_input_resistance(
+    lower: &mut Lowering<'_>,
+    inp: NodeRef,
+    inn: NodeRef,
+    vee: NodeRef,
+    rin_cm: f64,
+) {
+    if rin_cm > 0.0 {
+        lower.resistor("rincmp", inp, vee, rin_cm);
+        lower.resistor("rincmm", inn, vee, rin_cm);
+    }
+}
+
+/// Lower an op-amp into the MNA circuit.
 fn lower_opamp(
     circuit: &mut Circuit,
     ctx: &LineCtx<'_>,
@@ -2612,29 +4127,92 @@ fn lower_opamp(
     if model.drop_hi < 0.0 || model.drop_lo < 0.0 {
         return Err(ctx.parse_err("DROP_HI and DROP_LO must not be negative"));
     }
+    check_input_capacitances(ctx, model.cin_cm, model.cin_diff)?;
+    check_input_resistance(ctx, model.rin)?;
+    check_common_mode_input_resistance(ctx, model.rin_cm)?;
+    check_quiescent_current(ctx, model.iq)?;
+    if let Some(ilim) = model.ilim {
+        if !ilim.is_finite() || ilim <= 0.0 {
+            return Err(ctx.parse_err("IOLIM must be finite and positive"));
+        }
+    }
+    let cm_gain = check_common_mode_rejection(ctx, model.cmrr)?;
+    let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rg = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rg;
     let cg = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rg);
+    let slew_current_limit = if let Some(sr) = model.sr {
+        if !sr.is_finite() || sr <= 0.0 {
+            return Err(ctx.parse_err("SR must be finite and positive"));
+        }
+        let ilim = cg * sr;
+        if !ilim.is_finite() || ilim <= 0.0 {
+            return Err(ctx.parse_err("SR and macro parameters produce an invalid slew current"));
+        }
+        Some(ilim)
+    } else {
+        None
+    };
 
     let mut lower = Lowering {
         circuit,
         prefix: device.name.clone(),
     };
+    lower_input_capacitances(&mut lower, inp, inn, vee, model.cin_cm, model.cin_diff);
+    lower_input_resistance(&mut lower, inp, inn, model.rin);
+    lower_common_mode_input_resistance(&mut lower, inp, inn, vee, model.rin_cm);
+    if model.iq > 0.0 {
+        lower.current("iq", vcc, vee, model.iq);
+    }
     let p = lower.node("p");
-    // gm·(v(in+) − v(in−)) flows from ground through the source into p.
-    lower.vccs("g", None, p, inp, inn, gm);
+    if let Some(ilim) = slew_current_limit {
+        let source = SlewLimitedVccs {
+            name: lower.name("g"),
+            p: None,
+            n: p,
+            input_plus: inp,
+            input_minus: inn,
+            vcc,
+            vee,
+            gm,
+            cm_gain,
+            vos: model.vos,
+            ilim,
+        };
+        lower.circuit.slew_limited_vccs.push(source);
+    } else {
+        // gm·(v(in+) − v(in−)) flows from ground through the source into p.
+        lower.vccs("g", None, p, inp, inn, gm);
+        if cm_gain > 0.0 {
+            // The input-referred error is the common-mode voltage relative to
+            // the midpoint of the supply rails, attenuated by 10^(−CMRR/20).
+            let gcm = 0.5 * gm * cm_gain;
+            lower.vccs("gcmp", None, p, inp, vee, gcm);
+            lower.vccs("gcmm", None, p, inn, vcc, gcm);
+        }
+        if model.vos != 0.0 {
+            lower.current("ios", None, p, gm * model.vos);
+        }
+    }
     lower.resistor("rg", p, None, rg);
     lower.capacitor("cg", p, None, cg);
-    if model.vos != 0.0 {
-        lower.current("ios", None, p, gm * model.vos);
+    if ibias_plus != 0.0 {
+        lower.current("ibp", inp, vee, ibias_plus);
+    }
+    if ibias_minus != 0.0 {
+        lower.current("ibn", inn, vee, ibias_minus);
     }
     let hi = lower.offset_rail("hi", vcc, model.drop_hi, true);
     let lo = lower.offset_rail("lo", vee, model.drop_lo, false);
     lower.clamp("dhi", p, hi);
     lower.clamp("dlo", lo, p);
-    // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
-    lower.vccs("go", None, out, p, None, 1.0 / model.rout);
-    lower.resistor("ro", out, None, model.rout);
+    if let Some(ilim) = model.ilim {
+        lower.output_current_limit("go", p, out, model.rout, ilim);
+    } else {
+        // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
+        lower.vccs("go", None, out, p, None, 1.0 / model.rout);
+        lower.resistor("ro", out, None, model.rout);
+    }
     Ok(())
 }
 
@@ -2650,6 +4228,12 @@ fn lower_comparator(
     if model.vhys < 0.0 {
         return Err(ctx.parse_err("VHYS must not be negative"));
     }
+    check_input_capacitances(ctx, model.cin_cm, model.cin_diff)?;
+    check_input_resistance(ctx, model.rin)?;
+    check_common_mode_input_resistance(ctx, model.rin_cm)?;
+    check_quiescent_current(ctx, model.iq)?;
+    let cm_gain = check_common_mode_rejection(ctx, model.cmrr)?;
+    let (ibias_plus, ibias_minus) = input_bias_currents(ctx, model.ibias, model.ios)?;
     let rq = MACRO_GAIN_RESISTANCE;
     let gm = model.aol / rq;
     let cq = model.aol / (2.0 * core::f64::consts::PI * model.gbw * rq);
@@ -2658,15 +4242,35 @@ fn lower_comparator(
         circuit,
         prefix: device.name.clone(),
     };
+    lower_input_capacitances(&mut lower, inp, inn, vee, model.cin_cm, model.cin_diff);
+    lower_input_resistance(&mut lower, inp, inn, model.rin);
+    lower_common_mode_input_resistance(&mut lower, inp, inn, vee, model.rin_cm);
+    if model.iq > 0.0 {
+        lower.current("iq", vcc, vee, model.iq);
+    }
     // The decision node q, referenced to v−: high means "in− is above in+",
     // i.e. the output should be LOW.
     let q = lower.node("q");
     lower.vccs("g", vee, q, inn, inp, gm);
+    if cm_gain > 0.0 {
+        // The comparator's input polarity is opposite the op-amp's: common-
+        // mode error is subtracted from (v(in−) − v(in+)). Reference it to
+        // the midpoint of the two supply pins and apply the CMRR attenuation.
+        let gcm = 0.5 * gm * cm_gain;
+        lower.vccs("gcmp", q, vee, inp, vee, gcm);
+        lower.vccs("gcmm", q, vee, inn, vcc, gcm);
+    }
     lower.resistor("rq", q, vee, rq);
     lower.capacitor("cq", q, vee, cq);
     if model.vos != 0.0 {
         // −gm·VOS into q, i.e. +VOS on v(in+) − v(in−).
         lower.current("ios", q, vee, gm * model.vos);
+    }
+    if ibias_plus != 0.0 {
+        lower.current("ibp", inp, vee, ibias_plus);
+    }
+    if ibias_minus != 0.0 {
+        lower.current("ibn", inn, vee, ibias_minus);
     }
     if model.vhys != 0.0 {
         // gm·VHYS·(v(q) − v(v−) − ½) into q: positive feedback that holds
@@ -2691,18 +4295,51 @@ fn lower_comparator(
                 vto: 0.5,
                 kp,
                 lambda: 0.0,
+                rd: 0.0,
+                rd_given: false,
+                rs: 0.0,
+                rs_given: false,
+                rsh: 0.0,
+                gamma: 0.0,
+                phi: 0.6,
+                is: 1e-14,
+                cbd: 0.0,
+                cbd_given: false,
+                cbs: 0.0,
+                cbs_given: false,
+                cj: 0.0,
+                cjsw: 0.0,
+                pb: 0.8,
+                mj: 0.5,
+                mjsw: 0.5,
+                fc: 0.5,
                 w: 1.0,
                 l: 1.0,
+                cgso: 0.0,
+                cgdo: 0.0,
+                cgbo: 0.0,
+                tox: None,
+                channel_charge_model: MosChannelChargeModel::Meyer,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
                 d: out,
                 g: q,
                 s: vee,
+                junction_d: out,
+                junction_s: vee,
                 bulk: vee,
                 model_name: "comparator-output".to_string(),
                 model: mos,
                 beta: kp,
+                w: 1.0,
+                l: 1.0,
+                ad: 0.0,
+                as_: 0.0,
+                pd: 0.0,
+                ps: 0.0,
+                drain_resistance_ohms: 0.0,
+                source_resistance_ohms: 0.0,
             });
         }
         ComparatorOutput::PushPull => {

@@ -1123,6 +1123,63 @@ fn macros_match_ngspice() {
     eprint!("{report}");
 }
 
+/// The engine's Beta NTC card lowers to a temperature-dependent resistor.
+/// Compare that DC divider against ngspice with the equivalent resistance
+/// written out as an ordinary resistor; ngspice has no matching Beta card in
+/// this subset.
+#[test]
+fn ntc_beta_resistance_matches_ngspice_at_a_fixed_temperature() {
+    if !ngspice_available() {
+        eprintln!("SKIP: `ngspice` is not on PATH, so the NTC differential cannot run");
+        return;
+    }
+
+    let in_core =
+        "Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950 tnom=25 temp=80\nRpull sense 0 10k\n";
+    let circuit = parse_netlist(in_core).expect("in-core NTC parses");
+    let solver = Solver::new(circuit, Integration::BackwardEuler).expect("in-core solves");
+    let sense = solver.circuit().node("sense").expect("sense node");
+    let ours = solver.node_voltage(sense);
+
+    let resistance = 10_000.0 * libm::exp(3950.0 * (1.0 / (80.0 + 273.15) - 1.0 / 298.15));
+    let dir = std::env::temp_dir().join(format!("labwired-ntc-ngspice-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temporary directory");
+    let deck = dir.join("ntc.cir");
+    std::fs::write(
+        &deck,
+        format!("Vcc vcc 0 dc 3.3\nRntc vcc sense {resistance:.17e}\nRpull sense 0 10k\n.control\nop\nprint v(sense)\nquit\n.endc\n.end\n"),
+    )
+    .expect("write ngspice deck");
+    let output = Command::new("ngspice")
+        .arg("-b")
+        .arg(&deck)
+        .current_dir(&dir)
+        .output()
+        .expect("ngspice runs");
+    assert!(
+        output.status.success(),
+        "ngspice failed: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let reference = stdout
+        .lines()
+        .find_map(|line| {
+            let (_, value) = line.split_once("v(sense)")?;
+            let (_, value) = value.split_once('=')?;
+            value.trim().parse::<f64>().ok()
+        })
+        .unwrap_or_else(|| panic!("ngspice did not print v(sense): {stdout}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    let error = (ours - reference).abs() / 3.3;
+    assert!(
+        error < 5e-4,
+        "80 °C divider: in-core {ours} V vs ngspice {reference} V ({:.4}% FS)",
+        error * 100.0
+    );
+}
+
 #[test]
 fn negative_controls_fail_the_differential() {
     // Zener BV 1 % high: 4.8 V → 4.848 V, every other parameter as the card.
