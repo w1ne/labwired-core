@@ -41,8 +41,9 @@
 //!   visible text (`"P3C" at cycle 3200000000`); `frames` has one line per
 //!   change of the visible segment masks (`0x0629 0x0000 0x0000 at cycle ...`).
 //!   `labwired test` asserts on them with `peripheral_log`.
-//! * [`BusResidentDevice::evidence`]: a `text_display` artifact with `text`
-//!   and the per-digit `segments` masks.
+//! * [`BusResidentDevice::evidence`]: a `text_display` artifact with `text`,
+//!   `texts_seen` (distinct panels across the run), `printable_chars`, and the
+//!   per-digit `segments` masks.
 //!
 //! # Where it sits
 //!
@@ -73,6 +74,9 @@ use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
 /// Most log lines kept per log. The oldest lines go first.
 pub const LOG_CAPACITY: usize = 4096;
+
+/// Most distinct visible texts kept in artifact `texts_seen` (ring, oldest first).
+const TEXTS_SEEN_CAP: usize = 32;
 
 /// Most segment lines, and most digits, one display can have.
 pub const MAX_LINES: usize = 32;
@@ -412,6 +416,8 @@ pub struct DeclarativeSegmentDisplay {
     /// Visible masks per digit, from the last closed window.
     shown: Vec<u32>,
     text: String,
+    /// Distinct non-blank panels seen this run (capped); for oracle history.
+    texts_seen: VecDeque<String>,
     text_log: VecDeque<String>,
     frame_log: VecDeque<String>,
 }
@@ -439,6 +445,7 @@ impl DeclarativeSegmentDisplay {
             on_time: vec![vec![0; segments.len()]; digits.len()],
             shown: vec![0; digits.len()],
             text: blank,
+            texts_seen: VecDeque::new(),
             spec,
             segments,
             digits,
@@ -551,7 +558,17 @@ impl DeclarativeSegmentDisplay {
             let text = self.decode();
             if text != self.text {
                 push_capped(&mut self.text_log, format!("\"{text}\" at cycle {now}"));
-                self.text = text;
+                self.text = text.clone();
+                // Blank panels are not history (same rule as LCD1602): a clear
+                // does not wipe prior glyphs a prove may still need.
+                if !text.chars().all(|c| c.is_whitespace())
+                    && self.texts_seen.back().map(|s| s.as_str()) != Some(text.as_str())
+                {
+                    if self.texts_seen.len() >= TEXTS_SEEN_CAP {
+                        self.texts_seen.pop_front();
+                    }
+                    self.texts_seen.push_back(text);
+                }
             }
         }
     }
@@ -702,6 +719,8 @@ impl DeviceEvidence for DeclarativeSegmentDisplay {
             "format": "segment_mux",
             "generation": artifact_generation(&bytes),
             "text": self.text,
+            "texts_seen": self.texts_seen.iter().cloned().collect::<Vec<_>>(),
+            "printable_chars": self.text.chars().filter(|c| !c.is_whitespace()).count(),
             "digits": self.digits.len(),
             "segments": self.shown,
             "segment_names": self.spec.segment_names,
@@ -880,6 +899,40 @@ mod tests {
         scan(&mut d, &mut pads, &[0x06 | 0x80, 0x5B, 0x4F], 0, 100_000);
         assert_eq!(d.text(), "1.23");
         assert!(logs(&d, "text").iter().any(|l| l.starts_with("\"1.23\"")));
+    }
+
+    #[test]
+    fn texts_seen_records_distinct_panels_in_artifact() {
+        let mut d = display("");
+        let mut pads = Pads::default();
+        // Hold '3' on the middle digit, then switch to '5'.
+        store(&mut d, &mut pads, 0, 0x4F, 0b010);
+        d.service(&mut pads, 50_000);
+        assert_eq!(d.text(), " 3 ");
+        store(&mut d, &mut pads, 50_000, 0x6D, 0b010);
+        d.service(&mut pads, 100_000);
+        assert_eq!(d.text(), " 5 ");
+        let art = DeviceEvidence::artifacts(&d, "disp", &InspectOpts::default());
+        assert_eq!(art.len(), 1);
+        let meta = &art[0].meta;
+        let seen = meta
+            .get("texts_seen")
+            .and_then(|v| v.as_array())
+            .expect("texts_seen in artifact meta");
+        let texts: Vec<&str> = seen.iter().filter_map(|v| v.as_str()).collect();
+        assert!(
+            texts.contains(&" 3 "),
+            "first panel must land in texts_seen: {texts:?}"
+        );
+        assert!(
+            texts.contains(&" 5 "),
+            "second panel must land in texts_seen: {texts:?}"
+        );
+        assert_eq!(
+            meta.get("printable_chars").and_then(|v| v.as_u64()),
+            Some(1),
+            "printable_chars counts non-whitespace glyphs on the current panel"
+        );
     }
 
     #[test]
