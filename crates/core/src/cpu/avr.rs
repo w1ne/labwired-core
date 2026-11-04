@@ -171,14 +171,12 @@ impl AvrModel {
             // Classic tinyAVR. Datasheet flash size, per part.
             AvrModel::Attiny13 => 1 * 1024,
             AvrModel::Attiny25 | AvrModel::Attiny2313 | AvrModel::Attiny261 => 2 * 1024,
-            AvrModel::Attiny45
-            | AvrModel::Attiny44
-            | AvrModel::Attiny461
-            | AvrModel::Attiny48 => 4 * 1024,
-            AvrModel::Attiny85
-            | AvrModel::Attiny84
-            | AvrModel::Attiny861
-            | AvrModel::Attiny88 => 8 * 1024,
+            AvrModel::Attiny45 | AvrModel::Attiny44 | AvrModel::Attiny461 | AvrModel::Attiny48 => {
+                4 * 1024
+            }
+            AvrModel::Attiny85 | AvrModel::Attiny84 | AvrModel::Attiny861 | AvrModel::Attiny88 => {
+                8 * 1024
+            }
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -221,14 +219,12 @@ impl AvrModel {
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => 0x3FFF,
             // Classic tinyAVR RAMEND = SRAM start + size - 1 (datasheets).
-            AvrModel::Attiny13 => 0x009F,// 0x0060 + 64B
-            AvrModel::Attiny25 | AvrModel::Attiny2313 | AvrModel::Attiny261 => 0x00DF,// + 128B
-            AvrModel::Attiny45 | AvrModel::Attiny44 | AvrModel::Attiny461 => 0x015F,// + 256B
-            AvrModel::Attiny48 => 0x01FF,// 0x0100 + 256B
-            AvrModel::Attiny85
-            | AvrModel::Attiny84
-            | AvrModel::Attiny861 => 0x025F,// 0x0060 + 512B
-            AvrModel::Attiny88 => 0x02FF,// 0x0100 + 512B
+            AvrModel::Attiny13 => 0x009F, // 0x0060 + 64B
+            AvrModel::Attiny25 | AvrModel::Attiny2313 | AvrModel::Attiny261 => 0x00DF, // + 128B
+            AvrModel::Attiny45 | AvrModel::Attiny44 | AvrModel::Attiny461 => 0x015F, // + 256B
+            AvrModel::Attiny48 => 0x01FF, // 0x0100 + 256B
+            AvrModel::Attiny85 | AvrModel::Attiny84 | AvrModel::Attiny861 => 0x025F, // 0x0060 + 512B
+            AvrModel::Attiny88 => 0x02FF, // 0x0100 + 512B
         }
     }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
@@ -251,7 +247,7 @@ impl AvrModel {
             | AvrModel::Attiny1607 => AVR_ADC_INPUT_BASE,
             // Classic tinyAVR use the same ADC input window as the 328P side of
             // the model; only the mega parts move it.
-            | AvrModel::Attiny13
+            AvrModel::Attiny13
             | AvrModel::Attiny2313
             | AvrModel::Attiny25
             | AvrModel::Attiny45
@@ -750,7 +746,7 @@ impl Avr {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
-            | AvrModel::Attiny13
+            AvrModel::Attiny13
             | AvrModel::Attiny2313
             | AvrModel::Attiny25
             | AvrModel::Attiny45
@@ -783,7 +779,7 @@ impl Avr {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
-            | AvrModel::Attiny13
+            AvrModel::Attiny13
             | AvrModel::Attiny2313
             | AvrModel::Attiny25
             | AvrModel::Attiny45
@@ -3429,19 +3425,96 @@ mod tests {
         // (name, model, flash, sram_start, ramend, sram_len)
         let cases = [
             ("attiny13", AvrModel::Attiny13, 1 * 1024, 0x0060, 0x009F, 64),
-            ("attiny25", AvrModel::Attiny25, 2 * 1024, 0x0060, 0x00DF, 128),
-            ("attiny45", AvrModel::Attiny45, 4 * 1024, 0x0060, 0x015F, 256),
-            ("attiny85", AvrModel::Attiny85, 8 * 1024, 0x0060, 0x025F, 512),
-            ("attiny2313", AvrModel::Attiny2313, 2 * 1024, 0x0060, 0x00DF, 128),
-            ("attiny261", AvrModel::Attiny261, 2 * 1024, 0x0060, 0x00DF, 128),
-            ("attiny461", AvrModel::Attiny461, 4 * 1024, 0x0060, 0x015F, 256),
-            ("attiny861", AvrModel::Attiny861, 8 * 1024, 0x0060, 0x025F, 512),
-            ("attiny44", AvrModel::Attiny44, 4 * 1024, 0x0060, 0x015F, 256),
-            ("attiny84", AvrModel::Attiny84, 8 * 1024, 0x0060, 0x025F, 512),
+            (
+                "attiny25",
+                AvrModel::Attiny25,
+                2 * 1024,
+                0x0060,
+                0x00DF,
+                128,
+            ),
+            (
+                "attiny45",
+                AvrModel::Attiny45,
+                4 * 1024,
+                0x0060,
+                0x015F,
+                256,
+            ),
+            (
+                "attiny85",
+                AvrModel::Attiny85,
+                8 * 1024,
+                0x0060,
+                0x025F,
+                512,
+            ),
+            (
+                "attiny2313",
+                AvrModel::Attiny2313,
+                2 * 1024,
+                0x0060,
+                0x00DF,
+                128,
+            ),
+            (
+                "attiny261",
+                AvrModel::Attiny261,
+                2 * 1024,
+                0x0060,
+                0x00DF,
+                128,
+            ),
+            (
+                "attiny461",
+                AvrModel::Attiny461,
+                4 * 1024,
+                0x0060,
+                0x015F,
+                256,
+            ),
+            (
+                "attiny861",
+                AvrModel::Attiny861,
+                8 * 1024,
+                0x0060,
+                0x025F,
+                512,
+            ),
+            (
+                "attiny44",
+                AvrModel::Attiny44,
+                4 * 1024,
+                0x0060,
+                0x015F,
+                256,
+            ),
+            (
+                "attiny84",
+                AvrModel::Attiny84,
+                8 * 1024,
+                0x0060,
+                0x025F,
+                512,
+            ),
             // The 48/88 have a 160-byte extended I/O file, so SRAM starts at
             // 0x0100 rather than 0x0060 (ATtiny48/88 datasheet Table 5-2).
-            ("attiny48", AvrModel::Attiny48, 4 * 1024, 0x0100, 0x01FF, 256),
-            ("attiny88", AvrModel::Attiny88, 8 * 1024, 0x0100, 0x02FF, 512),
+            (
+                "attiny48",
+                AvrModel::Attiny48,
+                4 * 1024,
+                0x0100,
+                0x01FF,
+                256,
+            ),
+            (
+                "attiny88",
+                AvrModel::Attiny88,
+                8 * 1024,
+                0x0100,
+                0x02FF,
+                512,
+            ),
         ];
         for (name, model, flash, sram_start, ramend, sram_len) in cases {
             assert_eq!(
