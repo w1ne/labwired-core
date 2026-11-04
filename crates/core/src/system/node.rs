@@ -914,6 +914,11 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         let addr = if arch == crate::Arch::Mips {
             // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
             crate::system::mips::kseg_to_physical(ph.p_paddr)
+        } else if arch == crate::Arch::XtensaLx7 && ph.p_vaddr != 0 {
+            // ESP-IDF app ELFs distinguish the flash/load address in p_paddr
+            // from the address visible to the running core in p_vaddr. Fast
+            // boot skips the bootloader, so populate the runtime VMA directly.
+            ph.p_vaddr
         } else {
             ph.p_paddr
         };
