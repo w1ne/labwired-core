@@ -1,0 +1,23 @@
+# NUCLEO-L476RG plus an Adafruit BME280 breakout on I2C1.
+# The breakout ships at address 0x77; its SDO address jumper is left open.
+name: "nucleo-l476rg-bme280"
+chip: "../chips/stm32l476.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

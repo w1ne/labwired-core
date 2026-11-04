@@ -1,0 +1,11 @@
+schema_version: "1.0"
+inputs:
+  firmware: "./.pio/build/nucleo_l476rg/firmware.elf"
+  system: "../../configs/systems/nucleo-l476rg-bme280.yaml"
+limits:
+  # STM32duino searches the STM32L4 TIMINGR space before starting Wire.
+  max_steps: 40000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "BME280_OK"
+  - uart_contains: "T=25.00C P=1013.25hPa H=50.00%RH"
