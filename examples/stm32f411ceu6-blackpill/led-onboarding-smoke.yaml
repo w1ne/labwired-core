@@ -1,0 +1,12 @@
+# WeAct STM32F411CEU6 Black Pill: boot and exercise its active-low PC13 LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f411-blackpill-smoke"
+  system: "../../configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 16
+  - expected_stop_reason: max_steps

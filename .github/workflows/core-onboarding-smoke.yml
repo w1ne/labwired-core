@@ -57,6 +57,10 @@ on:
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f207zg-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
+      - "crates/firmware-stm32f411-blackpill-smoke/**"
+      - "configs/chips/stm32f411ceu6-blackpill-led-smoke.yaml"
+      - "configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml"
+      - "examples/stm32f411ceu6-blackpill/**"
       - "crates/firmware-nucleo-f413zh-smoke/**"
       - "crates/firmware-nucleo-f410rb-smoke/**"
       - "crates/firmware-nucleo-f439zi-smoke/**"
@@ -303,6 +307,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f411re/io-smoke.yaml
             system: configs/systems/nucleo-f411re.yaml
+          - id: stm32f411ceu6-blackpill-led-smoke
+            crate: firmware-stm32f411-blackpill-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f411ceu6-blackpill/led-onboarding-smoke.yaml
+            system: configs/systems/stm32f411ceu6-blackpill-led-smoke.yaml
           - id: nucleo-f411re-bme280
             crate: examples/nucleo-f411re-bme280
             target: ""

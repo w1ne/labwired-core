@@ -1,0 +1,13 @@
+# WeAct STM32F411CEU6 Black Pill, scoped to the documented active-low PC13 LED.
+# USB-C, button input, external SPI flash and other board/chip interfaces are
+# outside this GPIO smoke.
+name: "stm32f411ceu6-blackpill-led-smoke"
+chip: "../chips/stm32f411ceu6-blackpill-led-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

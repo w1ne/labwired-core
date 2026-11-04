@@ -99,6 +99,7 @@ members = [
     "crates/firmware-nucleo-c031c6-smoke",
     "crates/firmware-nucleo-c092rc-smoke",
     "crates/firmware-nucleo-f411re-smoke",
+    "crates/firmware-stm32f411-blackpill-smoke",
     "crates/firmware-nucleo-f413zh-smoke",
     "crates/firmware-nucleo-f412zg-smoke",
     "crates/firmware-nucleo-f410rb-smoke",
@@ -343,6 +344,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nucleo-f411re-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f411-blackpill-smoke]
 codegen-units = 1
 opt-level = "s"
 
