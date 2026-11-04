@@ -5,7 +5,7 @@
 - booted: `True`
 - smoke_passed: `True`
 - elapsed_seconds: `2`
-- elapsed_ms: `1419`
+- elapsed_ms: `1526`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
