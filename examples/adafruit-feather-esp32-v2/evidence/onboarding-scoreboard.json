@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 4704,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 4.704
+  },
+  "targets": [
+    {
+      "target_id": "adafruit-feather-esp32-v2",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/adafruit-feather-esp32-v2/io-smoke.yaml",
+      "system": "configs/systems/adafruit-feather-esp32-v2.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T03:53:02Z",
+      "finished_at_utc": "2026-11-04T03:53:07Z",
+      "elapsed_seconds": 5,
+      "elapsed_ms": 4704,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.339,
+        "build_firmware": 1.039,
+        "run_smoke": 3.315
+      },
+      "stages_ms": {
+        "build_cli": 339,
+        "build_firmware": 1039,
+        "run_smoke": 3315
+      },
+      "firmware_build_script": "scripts/build-adafruit-feather-esp32-v2-smoke.sh",
+      "_artifact_path": "examples/adafruit-feather-esp32-v2/evidence"
+    }
+  ]
+}

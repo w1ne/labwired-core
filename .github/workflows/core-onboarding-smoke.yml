@@ -79,6 +79,8 @@ on:
       - "crates/firmware-pico2-w-smoke/**"
       - "crates/firmware-xiao-rp2350-smoke/**"
       - "crates/firmware-adafruit-feather-rp2350-smoke/**"
+      - "examples/adafruit-feather-esp32-v2/**"
+      - "scripts/build-adafruit-feather-esp32-v2-smoke.sh"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-nucleo-u545re-smoke/**"
@@ -408,6 +410,10 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-l552ze-q/io-smoke.yaml
             system: examples/nucleo-l552ze-q/system.yaml
+          - id: adafruit-feather-esp32-v2
+            firmware_build_script: scripts/build-adafruit-feather-esp32-v2-smoke.sh
+            script: examples/adafruit-feather-esp32-v2/io-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -416,6 +422,16 @@ jobs:
         uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32imc-unknown-none-elf
+
+      - name: Set up Python for Feather ESP32 V2
+        if: matrix.firmware_build_script != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO for Feather ESP32 V2
+        if: matrix.firmware_build_script != ''
+        run: python -m pip install platformio
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -434,6 +450,7 @@ jobs:
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
             --firmware-build-dir "${{ matrix.firmware_build_dir }}" \
+            --firmware-build-script "${{ matrix.firmware_build_script }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600
 

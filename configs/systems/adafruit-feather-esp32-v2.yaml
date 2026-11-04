@@ -1,9 +1,8 @@
 # LabWired - Adafruit ESP32 Feather V2 System Configuration
 #
 # Adafruit PID 5400: ESP32-D0WD-V3 (dual-core LX6) with 8 MiB flash and 2 MiB
-# PSRAM, plus a STEMMA QT / Qwiic connector. Runs through the arduino-esp32
-# snapshot profile like the WROOM-32 board — same chip descriptor, different
-# board wiring.
+# PSRAM, plus a STEMMA QT / Qwiic connector. This board profile uses the narrow
+# `esp32-feather-v2-smoke` chip slice and claims only the discrete GPIO13 LED.
 #
 # The board_io below is NOT a copy of the DevKit's. Three Feather-specific pins
 # matter enough that getting them wrong makes a correct sketch look broken, and
@@ -18,8 +17,13 @@
 #     address as absent — which reads as bad wiring rather than an unpowered
 #     bus.
 #   * I2C is SDA=GPIO22 / SCL=GPIO20, not the DevKit's 21/22.
+# Source: https://learn.adafruit.com/adafruit-esp32-feather-v2/pinouts and the
+# Arduino variant header.
+# The onboarding smoke claims only the discrete active-high GPIO13 LED. PSRAM,
+# radio, USB-to-UART, STEMMA QT/NeoPixel power, I2C devices, and NeoPixel data
+# are outside this board profile's smoke.
 name: "adafruit-feather-esp32-v2"
-chip: "../chips/esp32.yaml"
+chip: "../chips/esp32-feather-v2-smoke.yaml"
 external_devices: []
 board_io:
   - id: "status_led"

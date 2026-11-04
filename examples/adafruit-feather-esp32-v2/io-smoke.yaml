@@ -1,0 +1,14 @@
+# Adafruit ESP32 Feather V2: boot the sketch and prove real GPIO13 transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/feather_nopsramfix/firmware.elf"
+  system: "../../configs/systems/adafruit-feather-esp32-v2.yaml"
+limits:
+  max_steps: 20000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_min_steps: 2000000
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - gpio_edges:
+      pin: "gpio:13"
+      min_edges: 16

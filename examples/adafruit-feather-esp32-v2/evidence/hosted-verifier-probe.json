@@ -1,0 +1,110 @@
+{
+  "checked_at_utc": "2026-11-04",
+  "service": "LabWired hosted labwired_verify",
+  "request": {
+    "board": "adafruit-feather-esp32-v2",
+    "language": "arduino",
+    "entryPath": "src/main.ino",
+    "diagram": {
+      "board": "adafruit-feather-esp32-v2",
+      "parts": [
+        {
+          "id": "mcu",
+          "type": "esp32"
+        }
+      ],
+      "wires": []
+    },
+    "source": "#include <Arduino.h>\n#include <driver/gpio.h>\n\nvoid setup() {\n  gpio_reset_pin(GPIO_NUM_13);\n  gpio_set_direction(GPIO_NUM_13, GPIO_MODE_OUTPUT);\n  gpio_set_level(GPIO_NUM_13, 1);\n}\n\nvoid loop() { delay(1000); }",
+    "oracle": {
+      "gpio": [
+        {
+          "pin": "GPIO13",
+          "state": "high"
+        }
+      ]
+    },
+    "max_steps": 40000000
+  },
+  "result": {
+    "ok": true,
+    "status": "unsupported",
+    "proven": false,
+    "gaps": [
+      {
+        "code": "unmapped_mmio",
+        "scope": "model",
+        "detail": "read",
+        "address": "0x3fc9b2b4",
+        "pc": "0x0"
+      },
+      {
+        "code": "unmapped_mmio",
+        "scope": "model",
+        "detail": "read",
+        "address": "0x3fc9b2b8",
+        "pc": "0x0"
+      },
+      {
+        "code": "unmapped_mmio",
+        "scope": "model",
+        "detail": "read",
+        "address": "0xffffffff",
+        "pc": "0x0"
+      },
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+        "address": "0x0",
+        "pc": "0x0"
+      }
+    ],
+    "unmodeled_faults": [
+      {
+        "access": "unmapped_mmio",
+        "pc": "0x0",
+        "count": 7,
+        "note": "read",
+        "address": "0x3fc9b2b4"
+      },
+      {
+        "access": "unmapped_mmio",
+        "pc": "0x0",
+        "count": 3,
+        "note": "read",
+        "address": "0x3fc9b2b8"
+      },
+      {
+        "access": "unmapped_mmio",
+        "pc": "0x0",
+        "count": 1,
+        "note": "read",
+        "address": "0xffffffff"
+      },
+      {
+        "access": "unpowered_rail_assumed",
+        "pc": "0x0",
+        "count": 1,
+        "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+        "address": "0x0"
+      }
+    ],
+    "verification": "",
+    "run_status": "error",
+    "stop_reason": "memory_violation",
+    "oracle_results": [
+      {
+        "kind": "gpio",
+        "passed": true,
+        "detail": "GPIO13 is high (gpio_pins pad)"
+      }
+    ],
+    "diagnosis": {
+      "summary": "Simulation stopped with reason: \"memory_violation\".",
+      "faulting_pc": "0x4008a002"
+    },
+    "oracle_error": "RUN_ERRORED",
+    "error_code": "INVALID_ARGUMENT"
+  }
+}

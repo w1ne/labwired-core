@@ -1,0 +1,9 @@
+2026-11-04T03:53:04.514708Z  INFO labwired_loader: ELF Entry Point: 0x40081b90
+2026-11-04T03:53:04.515469Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-feather-v2-smoke.yaml
+labwired-cli test: seeded examples/adafruit-feather-esp32-v2/firmware/.pio/build/feather_nopsramfix/partitions.bin (3072 bytes) @ flash 0x8000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: seeded g_rom_flashchip @0x3ffae270 (post-BROM flash attach state)
+labwired-cli test: pxCurrentTCBs @0x3ffc2ab0 (hybrid preserve key)
+labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x40090ae8
+E (0) quad_psram: PSRAM ID read error: 0x001640ef, PSRAM chip not found or not supported
+PASS  1/1 checks · io-smoke · 2010000 steps · 1.27s
