@@ -138,6 +138,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/efm32jg1-smoke.yaml
             system: configs/systems/onboarding/efm32jg1.yaml
+          # JG12 retains its imported memory map and only the modeled USART0
+          # window exercised by this Cortex-M3-targeted smoke.
+          - id: efm32jg12
+            crate: firmware-efm32jg12-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32jg12-smoke.yaml
+            system: configs/systems/onboarding/efm32jg12.yaml
           # HG350 is bounded to its Cortex-M0+ memory map and model-backed USART0.
           - id: efm32hg350
             crate: firmware-efm32hg350-smoke

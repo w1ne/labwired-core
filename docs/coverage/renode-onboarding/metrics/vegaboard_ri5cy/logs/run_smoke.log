@@ -1,4 +1,4 @@
-2026-11-04T10:11:30.030949Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/vegaboard_ri5cy.yaml
-2026-11-04T10:11:30.032158Z  INFO labwired_loader: ELF Entry Point: 0x0
+2026-11-04T10:31:51.056472Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/vegaboard_ri5cy.yaml
+2026-11-04T10:31:51.057678Z  INFO labwired_loader: ELF Entry Point: 0x0
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  3/3 checks · vegaboard_ri5cy-smoke · 4000000 steps · 0.77s
+PASS  3/3 checks · vegaboard_ri5cy-smoke · 4000000 steps · 0.65s
