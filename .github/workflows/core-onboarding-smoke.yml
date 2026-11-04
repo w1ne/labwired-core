@@ -129,6 +129,12 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g210-smoke.yaml
             system: configs/systems/onboarding/efm32g210.yaml
+          # HG350 is bounded to its Cortex-M0+ memory map and model-backed USART0.
+          - id: efm32hg350
+            crate: firmware-efm32hg350-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/efm32hg350-smoke.yaml
+            system: configs/systems/onboarding/efm32hg350.yaml
           # The G232 smoke links its firmware at the imported 0x08000000 flash base.
           - id: efm32g232
             crate: firmware-efm32g232-smoke

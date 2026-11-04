@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
   "system": "configs/systems/onboarding/nrf52840dk_nrf52840.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T08:50:12Z",
-  "finished_at_utc": "2026-11-04T08:50:15Z",
+  "started_at_utc": "2026-11-04T09:05:33Z",
+  "finished_at_utc": "2026-11-04T09:05:35Z",
   "elapsed_seconds": 3,
-  "elapsed_ms": 2270,
+  "elapsed_ms": 2200,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.302,
-    "build_firmware": 0.196,
-    "run_smoke": 1.761
+    "build_cli": 0.306,
+    "build_firmware": 0.203,
+    "run_smoke": 1.68
   },
   "stages_ms": {
-    "build_cli": 302,
-    "build_firmware": 196,
-    "run_smoke": 1761
+    "build_cli": 306,
+    "build_firmware": 203,
+    "run_smoke": 1680
   }
 }
