@@ -240,6 +240,16 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
     },
+    "max32652": {
+        "crate": "firmware-max32652-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/max32652-smoke.yaml",
+    },
+    "max32652-evkit": {
+        "crate": "firmware-max32652-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/max32652-evkit-smoke.yaml",
+    },
     "stm32f072b_discovery": {
         "crate": "firmware-stm32f072b-disco-smoke",
         "target": "thumbv6m-none-eabi",

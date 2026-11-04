@@ -562,6 +562,19 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml
             system: configs/systems/onboarding/nrf52840dk_nrf52840.yaml
+          # Both imported MAX32652 profiles expose only their model-backed
+          # UART0 and memory windows; generated stub and unsupported GPIO
+          # declarations are omitted until those models exist.
+          - id: max32652
+            crate: firmware-max32652-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/max32652-smoke.yaml
+            system: configs/systems/onboarding/max32652.yaml
+          - id: max32652-evkit
+            crate: firmware-max32652-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/max32652-evkit-smoke.yaml
+            system: configs/systems/onboarding/max32652-evkit.yaml
           - id: nucleo_f767zi
             crate: firmware-stm32f746-demo
             target: thumbv7em-none-eabi

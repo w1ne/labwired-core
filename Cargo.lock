@@ -1598,6 +1598,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-max32652-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-mg26-adc"
 version = "0.25.0"
 dependencies = [

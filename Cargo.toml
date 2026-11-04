@@ -122,6 +122,7 @@ members = [
     "crates/firmware-renesas-ck-ra6m5-smoke",
     "crates/firmware-s32k388-onboarding-smoke",
     "crates/firmware-s32k118-smoke",
+    "crates/firmware-max32652-smoke",
     "crates/firmware-mimxrt700-evk-smoke",
     "crates/firmware-mimxrt798s-smoke",
     "crates/firmware-apollo4p-evb-smoke",
