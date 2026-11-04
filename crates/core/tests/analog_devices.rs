@@ -948,6 +948,90 @@ mod analog {
         }
     }
 
+    /// `TTT1`/`TTT2` scale diode transit time using the instance temperature.
+    /// A solved transient circuit must match an otherwise identical model
+    /// whose `TT` is set to the independently calculated value. Cover both
+    /// quasi-static diffusion charge and the `VP` soft-recovery state.
+    #[test]
+    fn diode_transit_time_temperature_coefficients_match_explicit_charge_models() {
+        let (is, n, tnom, tt) = (1e-14, 1.0, 27.0, 100e-9);
+        let (ttt1, ttt2) = (8e-4, 4e-6);
+        let (resistance, h) = (1e3, 20e-9);
+        let adjusted_tt = |temperature: f64| {
+            let delta = temperature - tnom;
+            tt * (1.0 + ttt1 * delta + ttt2 * delta * delta)
+        };
+        let mut hot_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for vp in [0.0, 0.25] {
+                for temperature in [tnom, 127.0] {
+                    let expected_tt = adjusted_tt(temperature);
+                    let make_solver = |model: String| {
+                        let netlist = format!(
+                            "Vdrive drive 0 dc 0\nRdrive drive out {resistance}\n\
+                             D1 out 0 DMOD TEMP={temperature}\n.model DMOD D({model})\n"
+                        );
+                        Solver::new(
+                            parse_netlist(&netlist)
+                                .expect("diode transient temperature deck parses"),
+                            integration,
+                        )
+                        .expect("diode transient temperature solver builds")
+                    };
+                    let common = format!("IS={is} N={n} TNOM={tnom} VP={vp}");
+                    let adjusted_model = format!("{common} TT={tt} TTT1={ttt1} TTT2={ttt2}");
+                    let explicit_model = format!("{common} TT={expected_tt}");
+                    let fixed_model = format!("{common} TT={tt}");
+                    let mut actual = make_solver(adjusted_model);
+                    let mut explicit = make_solver(explicit_model);
+                    let mut fixed = make_solver(fixed_model);
+
+                    for solver in [&mut actual, &mut explicit, &mut fixed] {
+                        let drive = solver
+                            .voltage_source_index("Vdrive")
+                            .expect("drive source exists");
+                        solver.set_voltage_source(drive, 1.0);
+                        solver.advance(h).expect("diode transient step solves");
+                    }
+
+                    let out = actual.circuit().node("out").expect("output node exists");
+                    let explicit_out = explicit
+                        .circuit()
+                        .node("out")
+                        .expect("explicit output node exists");
+                    let fixed_out = fixed
+                        .circuit()
+                        .node("out")
+                        .expect("fixed output node exists");
+                    let actual_voltage = actual.node_voltage(out);
+                    let explicit_voltage = explicit.node_voltage(explicit_out);
+                    assert!(
+                        (actual_voltage - explicit_voltage).abs() < 1e-8,
+                        "{integration:?} VP={vp} TEMP={temperature}: expected explicit TT={expected_tt} s voltage {explicit_voltage} V, got {actual_voltage} V"
+                    );
+                    assert!(
+                        relative(
+                            source_current(&actual, "Vdrive"),
+                            source_current(&explicit, "Vdrive")
+                        ) < 1e-6,
+                        "{integration:?} VP={vp} TEMP={temperature}: explicit-TT drive currents differ"
+                    );
+
+                    if temperature > tnom {
+                        let effect = (actual_voltage - fixed.node_voltage(fixed_out)).abs();
+                        assert!(
+                            effect > 1e-7,
+                            "{integration:?} VP={vp}: hot TTT1/TTT2 must change the solved transient, difference={effect} V"
+                        );
+                        hot_effects.push(effect);
+                    }
+                }
+            }
+        }
+        assert!(hot_effects.iter().all(|effect| *effect > 1e-7));
+    }
+
     /// Depletion charge and transit charge share the diode's transient branch
     /// in MNA. Check their combined current against an independently integrated
     /// charge law while the junction is behind the model's series resistance.

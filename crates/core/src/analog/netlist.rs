@@ -72,8 +72,9 @@
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
 //! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
 //! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
-//! `TRC*`/`TRE*` temperature coefficients, forward/reverse BJT transit-time
-//! temperature coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
+//! `TRC*`/`TRE*` temperature coefficients, diode transit-time temperature
+//! coefficients `TTT1`/`TTT2`, forward/reverse BJT transit-time temperature
+//! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
 //! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
 //! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
@@ -87,8 +88,9 @@
 //! and most terminal resistances, …) are **accepted and ignored rather than
 //! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
 //! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
-//! breakdown voltage; `TRS1`/`TRS2` adjust the series resistance. Diode
-//! capacitance remains fixed. A BJT instance's `TEMP` uses model `TNOM`/`EG`/
+//! breakdown voltage; `TRS1`/`TRS2` adjust series resistance and `TTT1`/`TTT2`
+//! adjust transit time. Diode depletion capacitance remains fixed. A BJT
+//! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT charge remains at its
 //! nominal value. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
@@ -154,7 +156,8 @@
 //! linear coefficient to `BV` when `TEMP` is present:
 //! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. `RS` uses the polynomial
 //! `RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `TRS` aliases `TRS1` and
-//! `ΔT = TEMP − TNOM`. Depletion charge and `TT` are not temperature-adjusted.
+//! `ΔT = TEMP − TNOM`. Depletion charge remains nominal, while `TTT1`/`TTT2`
+//! apply the SPICE polynomial to diode transit time.
 //!
 //! A BJT model uses `TNOM` (or `TREF`, default 27 °C), `EG` (default 1.11 eV),
 //! `XTI` (default 3), and `XTB` (default 0). On a BJT instance,
@@ -643,6 +646,10 @@ pub struct DiodeModel {
     /// Forward transit time `TT`, seconds. Zero disables diffusion charge,
     /// matching ngspice's default.
     pub tt: f64,
+    /// First and second order temperature coefficients for `TT`, per °C and
+    /// per °C². They apply when an instance `TEMP` is present.
+    pub ttt1: f64,
+    pub ttt2: f64,
     /// Soft reverse-recovery coefficient `VP`. Positive `VP` with positive
     /// `TT` replaces quasi-static diffusion charge with a first-order charge
     /// state; zero keeps `Qd = TT·Id`.
@@ -695,6 +702,19 @@ impl DiodeModel {
         let delta = temperature_celsius - self.tnom_celsius;
         self.rs * (1.0 + self.trs1 * delta + self.trs2 * delta * delta)
     }
+
+    /// Transit time at the instance temperature, in seconds.
+    ///
+    /// With no instance temperature, retain the engine's historical fixed
+    /// behavior. With `TEMP`, apply ngspice's quadratic `TTT1`/`TTT2` law
+    /// measured from `TNOM`.
+    pub fn transit_time_seconds(self, temperature_celsius: Option<f64>) -> f64 {
+        let Some(temperature_celsius) = temperature_celsius else {
+            return self.tt;
+        };
+        let delta = temperature_celsius - self.tnom_celsius;
+        self.tt * (1.0 + self.ttt1 * delta + self.ttt2 * delta * delta)
+    }
 }
 
 impl Default for DiodeModel {
@@ -708,6 +728,8 @@ impl Default for DiodeModel {
             nr: 2.0,
             rs: 0.0,
             tt: 0.0,
+            ttt1: 0.0,
+            ttt2: 0.0,
             vp: 0.0,
             bv: None,
             ibv: 1e-3,
@@ -1099,6 +1121,8 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     nr: 2.0,
     rs: 0.0,
     tt: 0.0,
+    ttt1: 0.0,
+    ttt2: 0.0,
     vp: 0.0,
     bv: None,
     ibv: 1e-3,
@@ -1579,6 +1603,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             nr: 2.0,
             rs: 6.0,
             tt: 0.0,
+            ttt1: 0.0,
+            ttt2: 0.0,
             vp: 0.0,
             bv: Some(4.8),
             ibv: 49e-3,
@@ -1607,6 +1633,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             nr: 2.0,
             rs: 0.0525,
             tt: 0.0,
+            ttt1: 0.0,
+            ttt2: 0.0,
             vp: 0.0,
             bv: Some(6.7),
             ibv: 10e-3,
@@ -1808,6 +1836,8 @@ pub struct Diode {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: DiodeModel,
+    /// Model parameters adjusted for this instance's temperature.
+    pub operating_model: DiodeModel,
     /// Model series resistance after applying the instance `TEMP`, in ohms.
     pub series_resistance_ohms: f64,
     /// Instance junction temperature in Celsius. `None` preserves the
@@ -3259,6 +3289,8 @@ fn bind_models(
                     || !model.tcv.is_finite()
                     || !model.trs1.is_finite()
                     || !model.trs2.is_finite()
+                    || !model.ttt1.is_finite()
+                    || !model.ttt2.is_finite()
                     || !model.ik.is_finite()
                     || model.ik < 0.0
                     || !model.ikr.is_finite()
@@ -3284,7 +3316,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3343,6 +3375,13 @@ fn bind_models(
                         "temperature-adjusted diode RS must be finite and >= 0".to_string(),
                     ));
                 }
+                let mut operating_model = model;
+                operating_model.tt = model.transit_time_seconds(device.temperature_celsius);
+                if !operating_model.tt.is_finite() || operating_model.tt < 0.0 {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode TT must be finite and >= 0".to_string(),
+                    ));
+                }
                 // A series resistance needs somewhere to drop its voltage, so
                 // it gets the internal node SPICE also creates. It is a real
                 // node: it costs an unknown and `v(d1#internal)` probes it.
@@ -3358,6 +3397,7 @@ fn bind_models(
                     junction_anode,
                     model_name: device.model_name,
                     model,
+                    operating_model,
                     series_resistance_ohms,
                     temperature_celsius: device.temperature_celsius,
                     breakdown,
@@ -4008,6 +4048,8 @@ fn parse_model(
             (ModelCard::Diode(model), "NR") => model.nr = value,
             (ModelCard::Diode(model), "RS") => model.rs = value,
             (ModelCard::Diode(model), "TT") => model.tt = value,
+            (ModelCard::Diode(model), "TTT1") => model.ttt1 = value,
+            (ModelCard::Diode(model), "TTT2") => model.ttt2 = value,
             (ModelCard::Diode(model), "VP") => model.vp = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
@@ -4239,6 +4281,8 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     nr: 2.0,
     rs: 0.0,
     tt: 0.0,
+    ttt1: 0.0,
+    ttt2: 0.0,
     vp: 0.0,
     bv: None,
     ibv: 1e-3,
@@ -4373,6 +4417,7 @@ impl Lowering<'_> {
             junction_anode: anode,
             model_name: "clamp".to_string(),
             model: MACRO_CLAMP_DIODE,
+            operating_model: MACRO_CLAMP_DIODE,
             series_resistance_ohms: 0.0,
             temperature_celsius: None,
             breakdown: None,
@@ -4909,6 +4954,7 @@ fn lower_regulator(
         junction_anode: a,
         model_name: "limit-clamp".to_string(),
         model: REGULATOR_LIMIT_DIODE,
+        operating_model: REGULATOR_LIMIT_DIODE,
         series_resistance_ohms: 0.0,
         temperature_celsius: None,
         breakdown: None,

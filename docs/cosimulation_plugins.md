@@ -444,7 +444,7 @@ input at a different element.
 ### Semiconductor models
 
 ```text
-.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²>)
+.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²> TT=<s> TTT1=<1/°C> TTT2=<1/°C²>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> RB=<ohms> RBM=<ohms> IRB=<a>)
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
@@ -505,7 +505,9 @@ setting the knee current and optional `NBV` selecting its reverse exponential
 coefficient (default `N`). With instance `TEMP`, diode series resistance uses
 `TRS1` (also `TRS`) and `TRS2` as
 `RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `ΔT = TEMP − TNOM` and both
-coefficients default to zero. Gummel–Poon BJT
+coefficients default to zero. Diode `TTT1`/`TTT2` similarly apply
+`TT(T) = TT · (1 + TTT1·ΔT + TTT2·ΔT²)` to diffusion and soft-recovery
+charge; both coefficients default to zero. Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity) with optional
 `NKF` (also `NK`) exponent (0.5 when omitted), and B-E/B-C base
@@ -547,8 +549,9 @@ thermal voltage and saturation current, plus `TCV`/`TBV1` for breakdown and
 the matching temperature adjustment for `ISE`/`ISC` using their `NE`/`NC`
 emission coefficients; it also sets the junction thermal voltage used by both
 conduction and transit charge.
-Diode depletion/transit charge and BJT junction depletion charge and terminal
-resistances remain at nominal values. JFET and MOSFET models do not yet have a
+Diode depletion charge and BJT junction depletion charge and terminal
+resistances remain at nominal values. Diode `TT` follows `TTT1`/`TTT2` when
+provided. JFET and MOSFET models do not yet have a
 temperature model. These are external instance temperatures; self-heating is
 not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the

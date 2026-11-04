@@ -902,7 +902,8 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if diode_charge_active(diode.model) {
+            let charge_model = diode.operating_model;
+            if diode_charge_active(charge_model) {
                 self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
                 let op = diode_model_op(
                     self.diode_vj[index],
@@ -910,10 +911,10 @@ impl Solver {
                     diode.breakdown,
                     diode.temperature_celsius,
                 );
-                self.diode_q[index] = diode_charge_op(self.diode_vj[index], diode.model, op).0;
+                self.diode_q[index] = diode_charge_op(self.diode_vj[index], charge_model, op).0;
                 self.diode_i[index] = 0.0;
-                if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
-                    self.diode_recovery_state[index] = -diode.model.tt * op.id;
+                if charge_model.vp > 0.0 && charge_model.tt > 0.0 {
+                    self.diode_recovery_state[index] = -charge_model.tt * op.id;
                     self.diode_recovery_rate[index] = 0.0;
                 }
             }
@@ -1143,7 +1144,8 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if !diode_charge_active(diode.model) {
+            let charge_model = diode.operating_model;
+            if !diode_charge_active(charge_model) {
                 continue;
             }
             let v_new = node_diff(
@@ -1157,7 +1159,7 @@ impl Solver {
                 diode.breakdown,
                 diode.temperature_celsius,
             );
-            let (q_new, _) = diode_charge_op(v_new, diode.model, op);
+            let (q_new, _) = diode_charge_op(v_new, charge_model, op);
             let i_new = match rule {
                 Integration::BackwardEuler => (q_new - self.diode_q[index]) / h,
                 Integration::Trapezoidal => {
@@ -1171,7 +1173,8 @@ impl Solver {
         }
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if diode.model.vp <= 0.0 || diode.model.tt <= 0.0 {
+            let charge_model = diode.operating_model;
+            if charge_model.vp <= 0.0 || charge_model.tt <= 0.0 {
                 continue;
             }
             let v_new = node_diff(
@@ -1186,7 +1189,7 @@ impl Solver {
                 diode.temperature_celsius,
             );
             let recovery = diode_recovery_step(
-                diode.model,
+                charge_model,
                 op,
                 self.diode_recovery_state[index],
                 self.diode_recovery_rate[index],
@@ -2117,6 +2120,7 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            let charge_model = diode.operating_model;
             if diode.series_resistance_ohms > 0.0 {
                 conductance(
                     matrix,
@@ -2132,9 +2136,9 @@ impl Solver {
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
 
-            if diode_charge_active(diode.model) {
+            if diode_charge_active(charge_model) {
                 if let Stamp::Transient(h, rule) = stamp {
-                    let (charge, capacitance) = diode_charge_op(vj, diode.model, op);
+                    let (charge, capacitance) = diode_charge_op(vj, charge_model, op);
                     let (geq, current) = match rule {
                         Integration::BackwardEuler => {
                             (capacitance / h, (charge - self.diode_q[index]) / h)
@@ -2164,10 +2168,10 @@ impl Solver {
                 }
             }
 
-            if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
+            if charge_model.vp > 0.0 && charge_model.tt > 0.0 {
                 if let Stamp::Transient(h, rule) = stamp {
                     let recovery = diode_recovery_step(
-                        diode.model,
+                        charge_model,
                         op,
                         self.diode_recovery_state[index],
                         self.diode_recovery_rate[index],
