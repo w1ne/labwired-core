@@ -31,6 +31,7 @@ on:
       - "crates/firmware-nucleo-f303k8-smoke/**"
       - "crates/firmware-nucleo-f030r8-smoke/**"
       - "crates/firmware-nucleo-l011k4-smoke/**"
+      - "crates/firmware-nucleo-l031k6-smoke/**"
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
       - "crates/firmware-nucleo-f413zh-smoke/**"
@@ -153,6 +154,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/nucleo-l011k4/onboarding-smoke.yaml
             system: configs/systems/nucleo-l011k4.yaml
+          - id: nucleo-l031k6
+            crate: firmware-nucleo-l031k6-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-l031k6/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l031k6.yaml
           - id: nucleo-wb55rg
             crate: firmware-nucleo-wb55rg-demo
             target: thumbv7em-none-eabi

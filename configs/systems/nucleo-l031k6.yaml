@@ -1,0 +1,13 @@
+# NUCLEO-L031K6 board path exercised by this smoke:
+#   - green user LED LD3 on PB3, routed to Arduino Nano D13 / CN4.15
+# The profile omits the ST-LINK VCP, USB, and all other MCU peripherals.
+name: "nucleo-l031k6"
+chip: "../chips/stm32l031k6-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led_d13"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 3
+    signal: "output"
+    active_high: true

@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-l031k6",
+  "status": "pass",
+  "crate": "firmware-nucleo-l031k6-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/nucleo-l031k6/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-l031k6.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T11:17:09Z",
+  "finished_at_utc": "2026-11-04T11:17:26Z",
+  "elapsed_seconds": 17,
+  "elapsed_ms": 16886,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 16.046,
+    "build_firmware": 0.522,
+    "run_smoke": 0.307
+  },
+  "stages_ms": {
+    "build_cli": 16046,
+    "build_firmware": 522,
+    "run_smoke": 307
+  }
+}
