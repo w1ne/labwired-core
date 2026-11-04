@@ -1918,6 +1918,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-renesas-r7fa2e1a9-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-renesas-r7fa2l1a-smoke"
 version = "0.1.0"
 dependencies = [
