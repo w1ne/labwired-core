@@ -3,9 +3,13 @@
 # Maps to Zephyr board target `nrf5340dk/nrf5340/cpuapp` (application core).
 #
 # PCA10095: LED1..LED4 are P0.28..P0.31 and buttons 1..4 are P0.23, P0.24,
-# P0.08, P0.09; all active low. The VCOM0 console is UARTE0 with TXD on P0.20.
+# P0.08, P0.09; all active low. This profile exposes only the LEDs and VCOM0
+# console; button input is outside this smoke.
+# The VCOM0 console is UARTE0 with TXD on P0.20.
+# This customer-facing slice exposes only the LED GPIO and UARTE0 models used
+# by the board smoke; the separate Zephyr boot fixture uses the full chip map.
 name: "nrf5340dk"
-chip: "../chips/nrf5340.yaml"
+chip: "../chips/nrf5340-dk-smoke.yaml"
 peripherals: []
 board_io:
   - id: "led1"
@@ -31,28 +35,4 @@ board_io:
     peripheral: "gpio0"
     pin: 31
     signal: "output"
-    active_high: false
-  - id: "button1"
-    kind: "button"
-    peripheral: "gpio0"
-    pin: 23
-    signal: "input"
-    active_high: false
-  - id: "button2"
-    kind: "button"
-    peripheral: "gpio0"
-    pin: 24
-    signal: "input"
-    active_high: false
-  - id: "button3"
-    kind: "button"
-    peripheral: "gpio0"
-    pin: 8
-    signal: "input"
-    active_high: false
-  - id: "button4"
-    kind: "button"
-    peripheral: "gpio0"
-    pin: 9
-    signal: "input"
     active_high: false

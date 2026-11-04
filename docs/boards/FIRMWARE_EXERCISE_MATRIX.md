@@ -276,15 +276,16 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 ### `nrf5340`
 
-_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
+_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). A board-level bare-metal smoke also cycles all four nRF5340-DK user LEDs through GPIO0 and reports their GPIO OUT readback on UARTE0._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
+- nRF5340-DK LED1–LED4 on P0.28–P0.31 toggle and are read back over UARTE0 — `firmware-nrf5340-dk-demo` · [`examples/nrf5340-dk/io-smoke.yaml`](../../examples/nrf5340-dk/io-smoke.yaml), evidence in [`examples/nrf5340-dk/evidence/`](../../examples/nrf5340-dk/evidence/)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO1`, `TIMER0-2`, `RTC0`, board buttons
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
+- The full Zephyr boot profile (`configs/chips/nrf5340.yaml`) keeps DCNF, FPU, CACHE, SPU, OSC_REG, CTRLAP, GPIOTE0, FICR, UICR, and analog-trim windows as zero-answering stubs. The customer-facing board smoke uses `configs/chips/nrf5340-dk-smoke.yaml`, which excludes them.
 
 ### `nrf54l15`
 

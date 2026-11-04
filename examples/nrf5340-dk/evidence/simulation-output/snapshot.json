@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      138944,
+      4026531840,
+      537395132,
+      9,
+      1350837508,
+      102,
+      10,
+      537395184,
+      13,
+      537395126,
+      537395174,
+      1342210336,
+      10,
+      537395032,
+      537395126,
+      3412
+    ],
+    "pc": 3412,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "44f92f479d54ce6cf6a6987cbcae339f85504603dc101285912f9ee5f91c72bd",
+  "config": {
+    "firmware": "examples/nrf5340-dk/../../target/thumbv8m.main-none-eabi/release/firmware-nrf5340-dk-demo",
+    "system": "examples/nrf5340-dk/../../configs/systems/nrf5340dk.yaml",
+    "script": "examples/nrf5340-dk/io-smoke.yaml"
+  }
+}

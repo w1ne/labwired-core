@@ -214,10 +214,11 @@ The models column is a content digest over everything that board's `models` list
 ## `nrf5340` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/nrf5340.md`](nrf5340.md)  ·  Chip: `configs/chips/nrf5340.yaml`
-- Note: Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board.
+- Note: Application core (Cortex-M33). Boots unmodified upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) and prints its banner over UARTE0 EasyDMA — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. The board-level smoke at [`examples/nrf5340-dk/`](../../examples/nrf5340-dk/README.md) uses a narrow chip descriptor with only the modeled GPIO0 and UARTE0 paths, drives all four active-low user LEDs on P0.28–P0.31, and checks the console. Network core, radio, TrustZone/SPU enforcement, QSPI, button input, and analog trims are not covered. The separate full Zephyr boot profile retains setup/trim stubs. No nRF5340 silicon diff — no bench board.
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)
   - offline (CI): nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)
+- Local onboarding smoke: [`examples/nrf5340-dk/evidence/logs/run_smoke.log`](../../examples/nrf5340-dk/evidence/logs/run_smoke.log) (3/3 assertions; four LED readback states and UARTE0 banner)
 - Drift status: **no silicon capture**
 
 ## `stm32h735` — 🔵 sim-validated (deep model, no HW diff)

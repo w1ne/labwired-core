@@ -1,0 +1,39 @@
+# Customer-facing nRF5340-DK smoke slice: only the modeled paths exercised by
+# examples/nrf5340-dk/io-smoke.yaml are present. The full application-core
+# descriptor remains configs/chips/nrf5340.yaml for the separate Zephyr boot
+# fixture; setup/trim stubs from that profile are not exposed by this system.
+name: "nrf5340-dk-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 128_000_000
+
+flash:
+  base: 0x00000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  size: "512KB"
+
+pins:
+  P0.20: { gpio: "gpio0", bit: 20 } # UARTE0 VCOM0 TX
+  P0.28: { gpio: "gpio0", bit: 28 } # DK LED1, active low
+  P0.29: { gpio: "gpio0", bit: 29 } # DK LED2, active low
+  P0.30: { gpio: "gpio0", bit: 30 } # DK LED3, active low
+  P0.31: { gpio: "gpio0", bit: 31 } # DK LED4, active low
+
+peripherals:
+  - id: "uart0"
+    type: "nrf52840_uart"
+    base_address: 0x50008000
+    size: "4KB"
+    irq: 8
+    config:
+      debug_schema: "../peripherals/nrf5340/uarte0_s.yaml"
+
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x50842500
+    size: "768B"
+    config:
+      profile: "nrf52"
+      reg_offset: 0x500
