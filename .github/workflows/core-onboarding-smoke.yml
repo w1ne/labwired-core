@@ -29,6 +29,7 @@ on:
       - "crates/firmware-nucleo-f302r8-smoke/**"
       - "crates/firmware-nucleo-f303re-smoke/**"
       - "crates/firmware-stm32f3-discovery-smoke/**"
+      - "crates/firmware-stm32f3348-disco-smoke/**"
       - "crates/firmware-nucleo-f334r8-smoke/**"
       - "crates/firmware-nucleo-f303k8-smoke/**"
       - "crates/firmware-nucleo-f030r8-smoke/**"
@@ -121,6 +122,8 @@ on:
       - "configs/systems/nucleo-h533re.yaml"
       - "configs/chips/stm32h755zi-nucleo-m7-smoke.yaml"
       - "configs/systems/nucleo-h755zi-q.yaml"
+      - "configs/chips/stm32f334c8-f3348-disco-smoke.yaml"
+      - "configs/systems/stm32f3348-disco.yaml"
       - "configs/systems/stm32h573i-dk-smoke.yaml"
       - "configs/chips/stm32h573ii-dk-gpio-smoke.yaml"
       - "configs/systems/nucleo-c5a3zg.yaml"
@@ -231,6 +234,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/stm32f3-discovery/io-smoke.yaml
             system: configs/systems/stm32f3-discovery.yaml
+          - id: stm32f3348-disco
+            crate: firmware-stm32f3348-disco-smoke
+            target: thumbv7em-none-eabi
+            script: examples/stm32f3348-disco/onboarding-smoke.yaml
+            system: configs/systems/stm32f3348-disco.yaml
           - id: nucleo-f334r8
             crate: firmware-nucleo-f334r8-smoke
             target: thumbv7em-none-eabi

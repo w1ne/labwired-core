@@ -1,0 +1,12 @@
+# STM32F3348-DISCO: boot and toggle active-high red user LED LD3 on PB6.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f3348-disco-smoke"
+  system: "../../configs/systems/stm32f3348-disco.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:6"
+      min_edges: 16
+  - expected_stop_reason: max_steps

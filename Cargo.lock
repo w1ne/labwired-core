@@ -2290,6 +2290,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32f3348-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-stm32f411-blackpill-smoke"
 version = "0.1.0"
 dependencies = [
