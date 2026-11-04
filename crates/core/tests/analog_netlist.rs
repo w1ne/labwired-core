@@ -656,12 +656,35 @@ C1 out 0 100n $ dollar comment
         assert_eq!(defaults.mjc, 0.33);
         assert_eq!(defaults.fc, 0.5);
 
+        let temperature = parse_netlist(
+            "Q1 c b e QMOD TEMP=85\n\
+             .model QMOD NPN(TMJE1=1m TMJE2=2u TMJC1=3m TMJC2=4u TLEVC=1 CTE=5m CTC=6m TVJE=7u TVJC=8u)\n",
+        )
+        .expect("BJT junction temperature parameters parse");
+        let model = temperature.bjts[0].model;
+        assert_eq!(model.tmje1, 1e-3);
+        assert_eq!(model.tmje2, 2e-6);
+        assert_eq!(model.tmjc1, 3e-3);
+        assert_eq!(model.tmjc2, 4e-6);
+        assert_eq!(model.tlevc, 1);
+        assert_eq!(model.cte, 5e-3);
+        assert_eq!(model.ctc, 6e-3);
+        assert_eq!(model.tvje, 7e-6);
+        assert_eq!(model.tvjc, 8e-6);
+
         for parameters in [
             "CJE=-1p", "VJE=0", "MJE=-0.1", "CJC=-1p", "VJC=0", "MJC=-0.1", "FC=-0.1", "FC=1",
         ] {
             let text = format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n");
             let error =
                 parse_netlist(&text).expect_err("invalid BJT junction parameters are refused");
+            assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
+        }
+        for parameter in ["TLEVC=-1", "TLEVC=2", "TMJE1=NaN", "CTC=NaN"] {
+            let error = parse_netlist(&format!(
+                "Q1 c b e QMOD TEMP=85\n.model QMOD NPN({parameter})\n"
+            ))
+            .expect_err("unsupported selectors and non-finite BJT temperature values are refused");
             assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
         }
     }

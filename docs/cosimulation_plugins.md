@@ -445,7 +445,7 @@ input at a different element.
 
 ```text
 .model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²> TT=<s> TTT1=<1/°C> TTT2=<1/°C²> TM1=<1/°C> TM2=<1/°C²>)
-.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> RB=<ohms> RBM=<ohms> IRB=<a>)
+.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> CJE=<f> VJE=<v> MJE=<ratio> CJC=<f> VJC=<v> MJC=<ratio> TMJE1=<1/°C> TMJE2=<1/°C²> TMJC1=<1/°C> TMJC2=<1/°C²> TLEVC=0|1 [CTE/CTC/TVJE/TVJC])
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
@@ -555,10 +555,14 @@ the matching temperature adjustment for `ISE`/`ISC` using their `NE`/`NC`
 emission coefficients; it also sets the junction thermal voltage used by both
 conduction and transit charge.
 Diode `CJO`, `VJ`, `M`, and `TT` follow their SPICE temperature laws when an
-instance `TEMP` is supplied. BJT junction depletion charge and terminal
-resistances remain at nominal values. JFET and MOSFET models do not yet have a
-temperature model. These are external instance temperatures; self-heating is
-not modeled.
+instance `TEMP` is supplied. BJT junction depletion parameters `CJE`/`VJE`/
+`MJE` and `CJC`/`VJC`/`MJC` use ngspice's silicon temperature law by default;
+`TMJE1`/`TMJE2` and `TMJC1`/`TMJC2` add grading-coefficient temperature
+dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
+`TVJE`/`TVJC` potential coefficients. BJT terminal resistances continue to
+use their documented `TR*` coefficients. JFET and MOSFET models do not yet
+have a temperature model. These are external instance temperatures;
+self-heating is not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the
 deck is specifically checking an in-core temperature law.
 

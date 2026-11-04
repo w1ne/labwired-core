@@ -2051,6 +2051,155 @@ mod analog {
         }
     }
 
+    /// BJT instance temperature adjusts both base-junction depletion charges.
+    /// The solved driven-base transient must match an independent ngspice
+    /// temperature calculation encoded as explicit nominal parameters, for
+    /// the default silicon law and `TLEVC=1`'s linear coefficients.
+    #[test]
+    fn bjt_junction_depletion_temperature_matches_explicit_charge_models() {
+        let (tnom, hot) = (40.0, 120.0);
+        let (cje, vje, mje) = (80e-12, 0.72, 0.42);
+        let (cjc, vjc, mjc) = (50e-12, 0.82, 0.35);
+        let (tmje1, tmje2, tmjc1, tmjc2) = (1e-3, 2e-6, 7e-4, 1e-6);
+        let (cte, ctc, tvje, tvjc) = (1.5e-3, 1e-3, 4e-4, 5e-4);
+        let h = 1e-6;
+
+        let adjusted_junction = |capacitance: f64,
+                                 potential: f64,
+                                 grading: f64,
+                                 grading_tc1: f64,
+                                 grading_tc2: f64,
+                                 capacitance_tc: f64,
+                                 potential_tc: f64,
+                                 temperature: f64,
+                                 tlevc: u8| {
+            let delta = temperature - tnom;
+            let grading_at = grading * (1.0 + grading_tc1 * delta + grading_tc2 * delta * delta);
+            if delta == 0.0 {
+                return (capacitance, potential, grading_at);
+            }
+            if tlevc == 1 {
+                return (
+                    capacitance * (1.0 + capacitance_tc * delta),
+                    potential - potential_tc * delta,
+                    grading_at,
+                );
+            }
+
+            const TREF: f64 = 300.15;
+            const EG_REF: f64 = 1.115_087_7;
+            const KB_EV: f64 = 8.617_333_262_145e-5;
+            let nominal_k = tnom + 273.15;
+            let temperature_k = temperature + 273.15;
+            let ratio_nominal = nominal_k / TREF;
+            let ratio_temperature = temperature_k / TREF;
+            let eg_temperature =
+                1.16 - 7.02e-4 * temperature_k * temperature_k / (temperature_k + 1108.0);
+            let vt = KB_EV * temperature_k;
+            let pbfact = vt
+                * (eg_temperature / (KB_EV * temperature_k)
+                    - EG_REF / (KB_EV * TREF)
+                    - 3.0 * ratio_temperature.ln());
+            let pbo = (potential - pbfact) / ratio_nominal;
+            let gma_old = (potential - pbo) / pbo;
+            let cap_temperature =
+                capacitance / (1.0 + grading_at * (4e-4 * (nominal_k - TREF) - gma_old));
+            let potential_temperature = ratio_temperature * pbo + pbfact;
+            let gma_new = (potential_temperature - pbo) / pbo;
+            let cap_temperature =
+                cap_temperature * (1.0 + grading_at * (4e-4 * (temperature_k - TREF) - gma_new));
+            (cap_temperature, potential_temperature, grading_at)
+        };
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for tlevc in [0u8, 1u8] {
+                for temperature in [tnom, hot] {
+                    let (cje_at, vje_at, mje_at) = adjusted_junction(
+                        cje,
+                        vje,
+                        mje,
+                        tmje1,
+                        tmje2,
+                        cte,
+                        tvje,
+                        temperature,
+                        tlevc,
+                    );
+                    let (cjc_at, vjc_at, mjc_at) = adjusted_junction(
+                        cjc,
+                        vjc,
+                        mjc,
+                        tmjc1,
+                        tmjc2,
+                        ctc,
+                        tvjc,
+                        temperature,
+                        tlevc,
+                    );
+                    let make_solver = |kind: &str, temp: Option<f64>, model: String| {
+                        let instance_temperature =
+                            temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                        let netlist = format!(
+                            "Vdrive drive 0 dc 0\nRdrive drive b 1k\nVc c 0 dc -0.5\n\
+                             Q1 c b 0 QMOD{instance_temperature}\n.model QMOD {kind}({model})\n"
+                        );
+                        Solver::new(
+                            parse_netlist(&netlist).expect("BJT junction-temperature deck parses"),
+                            integration,
+                        )
+                        .expect("BJT junction-temperature solver builds")
+                    };
+                    let base_model = format!(
+                        "IS=1e-40 TNOM={tnom} CJE={cje} VJE={vje} MJE={mje} \
+                         CJC={cjc} VJC={vjc} MJC={mjc} FC=0.5"
+                    );
+                    let temperature_model = format!(
+                        "{base_model} TLEVC={tlevc} TMJE1={tmje1} TMJE2={tmje2} \
+                         TMJC1={tmjc1} TMJC2={tmjc2} CTE={cte} CTC={ctc} TVJE={tvje} TVJC={tvjc}"
+                    );
+                    let explicit_model = format!(
+                        "IS=1e-40 CJE={cje_at} VJE={vje_at} MJE={mje_at} \
+                         CJC={cjc_at} VJC={vjc_at} MJC={mjc_at} FC=0.5"
+                    );
+                    let fixed_model = format!(
+                        "{base_model} TLEVC={tlevc} CTE={cte} CTC={ctc} TVJE={tvje} TVJC={tvjc}"
+                    );
+                    for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                        let mut actual =
+                            make_solver(kind, Some(temperature), temperature_model.clone());
+                        let mut explicit = make_solver(kind, None, explicit_model.clone());
+                        let mut fixed = make_solver(kind, Some(temperature), fixed_model.clone());
+                        for solver in [&mut actual, &mut explicit, &mut fixed] {
+                            let drive = solver
+                                .voltage_source_index("Vdrive")
+                                .expect("base drive source exists");
+                            solver.set_voltage_source(drive, sign * 0.8);
+                            solver.advance(h).expect("BJT depletion transient solves");
+                        }
+
+                        let node_voltage = |solver: &Solver| {
+                            let base = solver.circuit().node("b").expect("base node exists");
+                            sign * solver.node_voltage(base)
+                        };
+                        let actual_voltage = node_voltage(&actual);
+                        let explicit_voltage = node_voltage(&explicit);
+                        assert!(
+                            (actual_voltage - explicit_voltage).abs() < 1e-8,
+                            "{kind} {integration:?} TLEVC={tlevc} TEMP={temperature}: explicit adjusted CJE/VJE/MJE and CJC/VJC/MJC predict {explicit_voltage} V, got {actual_voltage} V"
+                        );
+                        if temperature > tnom {
+                            let effect = (actual_voltage - node_voltage(&fixed)).abs();
+                            assert!(
+                                effect > 1e-7,
+                                "{kind} {integration:?} TLEVC={tlevc}: TMJE/TMJC and junction temperature coefficients must change the solved transient, difference={effect} V"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn bjt_bias_dependent_transit_charge_matches_spice_and_partials() {
         let circuit = parse_netlist(

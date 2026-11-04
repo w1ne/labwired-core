@@ -95,8 +95,10 @@
 //! temperature law. A BJT
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
-//! saturation currents, and forward/reverse beta. BJT charge remains at its
-//! nominal value. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
+//! saturation currents, and forward/reverse beta. BJT `CJE`/`VJE`/`MJE` and
+//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `TMJE1`/`2`
+//! and `TMJC1`/`2` adjust the grading factors. `TLEVC=1` selects the linear
+//! `CTE`/`CTC` and `TVJE`/`TVJC` law. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
 //! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
 //! minimum-base, base-current knee, collector, and emitter resistances using
 //! `ΔT = TEMP − TNOM`; `TRM1`/`TRM2` are accepted aliases for `TRBM1`/`TRBM2`.
@@ -169,7 +171,8 @@
 //! `BF`/`BR`. Without instance `TEMP`, the historical fixed-300 K behavior is
 //! retained. `TRB*`/`TRM*` (also `TRBM*`)/`TIRB*`/`TRC*`/`TRE*` adjust
 //! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
-//! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge remains nominal.
+//! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge follows ngspice's
+//! default silicon temperature law, or its `TLEVC=1` linear coefficient form.
 //! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
@@ -1247,12 +1250,28 @@ pub struct BjtModel {
     pub vje: f64,
     /// Base-emitter junction grading coefficient `MJE`.
     pub mje: f64,
+    /// First and second order temperature coefficients for `MJE`, per °C and
+    /// per °C².
+    pub tmje1: f64,
+    pub tmje2: f64,
     /// Zero-bias base-collector depletion capacitance `CJC`, farads.
     pub cjc: f64,
     /// Base-collector junction potential `VJC`, volts.
     pub vjc: f64,
     /// Base-collector junction grading coefficient `MJC`.
     pub mjc: f64,
+    /// First and second order temperature coefficients for `MJC`, per °C and
+    /// per °C².
+    pub tmjc1: f64,
+    pub tmjc2: f64,
+    /// BJT junction-capacitance temperature equation selector (`TLEVC`): 0
+    /// uses the silicon bandgap law, 1 uses the linear coefficient form.
+    pub tlevc: u8,
+    /// Linear temperature coefficients used by `TLEVC=1`, per °C.
+    pub cte: f64,
+    pub ctc: f64,
+    pub tvje: f64,
+    pub tvjc: f64,
     /// Forward-bias depletion-capacitance coefficient `FC`.
     pub fc: f64,
     /// Ideal forward transit time `TF`, seconds. Zero disables forward
@@ -1341,9 +1360,18 @@ impl BjtModel {
             cje: 0.0,
             vje: 0.75,
             mje: 0.33,
+            tmje1: 0.0,
+            tmje2: 0.0,
             cjc: 0.0,
             vjc: 0.75,
             mjc: 0.33,
+            tmjc1: 0.0,
+            tmjc2: 0.0,
+            tlevc: 0,
+            cte: 0.0,
+            ctc: 0.0,
+            tvje: 0.0,
+            tvjc: 0.0,
             fc: 0.5,
             tf: 0.0,
             ttf1: 0.0,
@@ -3494,9 +3522,18 @@ fn bind_models(
                     || !model.ttf2.is_finite()
                     || !model.ttr1.is_finite()
                     || !model.ttr2.is_finite()
+                    || !model.tmje1.is_finite()
+                    || !model.tmje2.is_finite()
+                    || !model.tmjc1.is_finite()
+                    || !model.tmjc2.is_finite()
+                    || !model.cte.is_finite()
+                    || !model.ctc.is_finite()
+                    || !model.tvje.is_finite()
+                    || !model.tvjc.is_finite()
+                    || model.tlevc > 1
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs finite IS/BF/BR/ISE/ISC/EG/XTI/XTB and terminal-resistance temperature coefficients, and TNOM above absolute zero"
+                        "a BJT model needs finite temperature parameters, TLEVC=0 or 1, and TNOM above absolute zero"
                             .to_string(),
                     ));
                 }
@@ -3611,11 +3648,23 @@ fn bind_models(
                     || !operating_model.re.is_finite()
                     || operating_model.re < 0.0
                     || (model.re > 0.0 && operating_model.re <= 0.0)
+                    || !operating_model.cje.is_finite()
+                    || operating_model.cje < 0.0
+                    || !operating_model.vje.is_finite()
+                    || operating_model.vje <= 0.0
+                    || !operating_model.mje.is_finite()
+                    || operating_model.mje < 0.0
+                    || !operating_model.cjc.is_finite()
+                    || operating_model.cjc < 0.0
+                    || !operating_model.vjc.is_finite()
+                    || operating_model.vjc <= 0.0
+                    || !operating_model.mjc.is_finite()
+                    || operating_model.mjc < 0.0
                     || !thermal_voltage.is_finite()
                     || thermal_voltage <= 0.0
                 {
                     return Err(ctx.parse_err(
-                        "temperature-adjusted BJT currents, beta and resistances must remain finite and valid"
+                        "temperature-adjusted BJT currents, beta, resistances and junction charges must remain finite and valid"
                             .to_string(),
                     ));
                 }
@@ -4214,9 +4263,23 @@ fn parse_model(
             (ModelCard::Bjt(model), "CJE") => model.cje = value,
             (ModelCard::Bjt(model), "VJE" | "PE") => model.vje = value,
             (ModelCard::Bjt(model), "MJE" | "ME") => model.mje = value,
+            (ModelCard::Bjt(model), "TMJE1") => model.tmje1 = value,
+            (ModelCard::Bjt(model), "TMJE2") => model.tmje2 = value,
             (ModelCard::Bjt(model), "CJC") => model.cjc = value,
             (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
+            (ModelCard::Bjt(model), "TMJC1") => model.tmjc1 = value,
+            (ModelCard::Bjt(model), "TMJC2") => model.tmjc2 = value,
+            (ModelCard::Bjt(model), "TLEVC") => {
+                if value != 0.0 && value != 1.0 {
+                    return Err(ctx.parse_err("BJT TLEVC must be 0 or 1".to_string()));
+                }
+                model.tlevc = value as u8;
+            }
+            (ModelCard::Bjt(model), "CTE") => model.cte = value,
+            (ModelCard::Bjt(model), "CTC") => model.ctc = value,
+            (ModelCard::Bjt(model), "TVJE") => model.tvje = value,
+            (ModelCard::Bjt(model), "TVJC") => model.tvjc = value,
             (ModelCard::Bjt(model), "FC") => model.fc = value,
             (ModelCard::Bjt(model), "TF") => model.tf = value,
             (ModelCard::Bjt(model), "TTF1") => model.ttf1 = value,

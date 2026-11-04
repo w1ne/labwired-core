@@ -30,8 +30,10 @@
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
 //! using ideal transit times with ngspice's forward `XTF`/`VTF`/`ITF` bias
-//! adjustment. MOSFET intrinsic channel charge from `TOX` uses the level-1
-//! Meyer model by default; opt-in Ward–Dutton mode integrates strong-inversion
+//! adjustment. BJT junction depletion parameters follow ngspice's default
+//! silicon temperature law or its `TLEVC=1` linear form. MOSFET intrinsic
+//! channel charge from `TOX` uses the level-1 Meyer model by default; opt-in
+//! Ward–Dutton mode integrates strong-inversion
 //! terminal charge with an analytic Jacobian. MOSFET bulk depletion charge integrates
 //! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
@@ -180,7 +182,10 @@ pub fn ln(value: f64) -> f64 {
 /// law, `XTB` beta scaling, and the corresponding `ISE`/`ISC` recombination
 /// currents, the first and second order coefficients for forward/reverse
 /// transit time, and the coefficients for `RB`/`RBM`/`IRB`/`RC`/`RE`.
-/// `None` preserves the engine's historical fixed-300 K path.
+/// `None` preserves the engine's historical fixed-300 K path. With an
+/// instance temperature, B-E and B-C depletion parameters use ngspice's
+/// default silicon-bandgap law (`TLEVC=0`) or its linear `CTE`/`CTC` and
+/// `TVJE`/`TVJC` form (`TLEVC=1`).
 pub fn bjt_parameters_at_temperature(
     model: BjtModel,
     temperature_celsius: Option<f64>,
@@ -220,7 +225,107 @@ pub fn bjt_parameters_at_temperature(
     adjusted.irb *= temperature_factor(model.tirb1, model.tirb2);
     adjusted.rc *= temperature_factor(model.trc1, model.trc2);
     adjusted.re *= temperature_factor(model.tre1, model.tre2);
+    let (cje, vje, mje) = bjt_junction_parameters_at_temperature(
+        model.cje,
+        model.vje,
+        model.mje,
+        model.tmje1,
+        model.tmje2,
+        model.cte,
+        model.tvje,
+        model.tnom_celsius,
+        temperature_celsius,
+        model.tlevc,
+    );
+    adjusted.cje = cje;
+    adjusted.vje = vje;
+    adjusted.mje = mje;
+    let (cjc, vjc, mjc) = bjt_junction_parameters_at_temperature(
+        model.cjc,
+        model.vjc,
+        model.mjc,
+        model.tmjc1,
+        model.tmjc2,
+        model.ctc,
+        model.tvjc,
+        model.tnom_celsius,
+        temperature_celsius,
+        model.tlevc,
+    );
+    adjusted.cjc = cjc;
+    adjusted.vjc = vjc;
+    adjusted.mjc = mjc;
     (adjusted, thermal_voltage)
+}
+
+/// Temperature-adjust one BJT depletion junction, matching ngspice's default
+/// `TLEVC=0` silicon law and the alternate `TLEVC=1` linear coefficient law.
+#[allow(clippy::too_many_arguments)]
+fn bjt_junction_parameters_at_temperature(
+    capacitance: f64,
+    potential: f64,
+    grading: f64,
+    grading_tc1: f64,
+    grading_tc2: f64,
+    capacitance_tc: f64,
+    potential_tc: f64,
+    nominal_celsius: f64,
+    temperature_celsius: f64,
+    tlevc: u8,
+) -> (f64, f64, f64) {
+    let delta = temperature_celsius - nominal_celsius;
+    let grading_at_temperature =
+        grading * (1.0 + grading_tc1 * delta + grading_tc2 * delta * delta);
+    if delta == 0.0 {
+        return (capacitance, potential, grading_at_temperature);
+    }
+
+    if tlevc == 1 {
+        return (
+            capacitance * (1.0 + capacitance_tc * delta),
+            potential - potential_tc * delta,
+            grading_at_temperature,
+        );
+    }
+
+    const REFERENCE_TEMPERATURE_K: f64 = 300.15;
+    const REFERENCE_SILICON_BANDGAP_EV: f64 = 1.115_087_7;
+    const SILICON_VARSHNI_A_EV_PER_K: f64 = 7.02e-4;
+    const SILICON_VARSHNI_B_K: f64 = 1108.0;
+
+    let nominal_kelvin = nominal_celsius + 273.15;
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_reference_ratio = nominal_kelvin / REFERENCE_TEMPERATURE_K;
+    let temperature_reference_ratio = temperature_kelvin / REFERENCE_TEMPERATURE_K;
+    let bandgap_at_temperature = 1.16
+        - SILICON_VARSHNI_A_EV_PER_K * temperature_kelvin * temperature_kelvin
+            / (temperature_kelvin + SILICON_VARSHNI_B_K);
+    let boltzmann_ev_per_kelvin = BOLTZMANN / ELEMENTARY_CHARGE;
+    let potential_temperature_factor = thermal_voltage_at_temperature(temperature_kelvin)
+        * (bandgap_at_temperature / (boltzmann_ev_per_kelvin * temperature_kelvin)
+            - REFERENCE_SILICON_BANDGAP_EV / (boltzmann_ev_per_kelvin * REFERENCE_TEMPERATURE_K)
+            - 3.0 * ln(temperature_reference_ratio));
+
+    let nominal_reference_potential =
+        (potential - potential_temperature_factor) / nominal_reference_ratio;
+    let nominal_gma = (potential - nominal_reference_potential) / nominal_reference_potential;
+    let mut adjusted_capacitance = capacitance
+        / (1.0
+            + grading_at_temperature
+                * (4.0e-4 * (nominal_kelvin - REFERENCE_TEMPERATURE_K) - nominal_gma));
+    let adjusted_potential =
+        temperature_reference_ratio * nominal_reference_potential + potential_temperature_factor;
+    let temperature_gma =
+        (adjusted_potential - nominal_reference_potential) / nominal_reference_potential;
+    adjusted_capacitance *= 1.0
+        + grading_at_temperature
+            * (4.0e-4 * (temperature_kelvin - REFERENCE_TEMPERATURE_K) - temperature_gma);
+
+    (
+        adjusted_capacitance,
+        adjusted_potential,
+        grading_at_temperature,
+    )
 }
 
 // ---------------------------------------------------------------------------
