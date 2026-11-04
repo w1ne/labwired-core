@@ -414,9 +414,8 @@ const fn edev(
 /// uses `PIC16_CLASSIC_F84A_MAP` because 0x0C is GPR and has no PIR/PIE registers; enhanced
 /// parts without an EUSART (except PIC16F1503, PIC16F1507, and PIC16LF1507,
 /// which use `PIC16E_F151X_NO_EUSART_MAP`; PIC16F1613 uses
-/// `PIC16E_F182X_NO_EUSART_MAP`; PIC16F1703 remains left out, while PIC16F1707
-/// and PIC16LF1707 use `PIC16E_F182X_NO_EUSART_MAP`; PIC16LF1703 uses the same
-/// map), parts with
+/// `PIC16E_F182X_NO_EUSART_MAP`; PIC16F1703, PIC16F1707 and PIC16LF1707 use
+/// `PIC16E_F182X_NO_EUSART_MAP`; PIC16LF1703 uses the same map), parts with
 /// comparator SFRs at LATD/LATE (PIC16F176x), the 64-bank PIC16F18xxx/19xxx,
 /// and for now the PIC16F157x (their headers match, but gputils 1.4.0 has no
 /// processor entry for them, so no lkr cross-check or SDCC firmware build).
@@ -1051,6 +1050,12 @@ const PIC16_DEVICES: &[Pic16Device] = &[
         8192,
         [0x3F, 0xF0, 0xFF, 0x00, 0x00],
         PIC16E_F161X_MAP,
+    ),
+    edev(
+        "pic16f1703",
+        2048,
+        [0x3F, 0x00, 0x3F, 0x00, 0x00],
+        PIC16E_F182X_NO_EUSART_MAP,
     ),
     edev(
         "pic16f1704",
@@ -3890,6 +3895,45 @@ mod tests {
         cpu.write_data(0x08E, 0x00);
         cpu.write_data(0x00E, 0xFF);
         assert_eq!(cpu.read_data(0x00E), 0xFF, "PORTC");
+    }
+
+    #[test]
+    fn pic16f1703_uses_exact_enhanced_no_eusart_geometry() {
+        let device = pic16_device("pic16f1703").expect("F1703 row");
+        assert_eq!(device.flash_words, 2048);
+        assert_eq!(device.port_masks, [0x3F, 0x00, 0x3F, 0x00, 0x00]);
+        assert!(device.enhanced);
+        assert!(!device.map.has_usart);
+        assert_eq!(device.map.pir, &[0x011, 0x012, 0x013, 0x014]);
+        assert_eq!(device.map.osc_ready, Some((0x09A, 0x1F)));
+
+        let mut cpu = Pic16::for_chip_name("PIC16F1703");
+        assert!(cpu.is_enhanced());
+        assert_eq!(cpu.flash_words(), 2048);
+        for (address, value) in [
+            (0x199, 0xA0),
+            (0x19A, 0xA1),
+            (0x19B, 0xA2),
+            (0x19D, 0xA3),
+            (0x19E, 0xA4),
+        ] {
+            cpu.write_data(address, value);
+            assert_eq!(
+                cpu.read_data(address),
+                value,
+                "file register {address:#05x}"
+            );
+        }
+
+        cpu.write_data(0x08C, 0x00);
+        cpu.write_data(0x00C, 0xFF);
+        assert_eq!(cpu.read_data(0x00C), 0x3F, "PORTA");
+        cpu.write_data(0x08D, 0x00);
+        cpu.write_data(0x00D, 0xFF);
+        assert_eq!(cpu.read_data(0x00D), 0x00, "unimplemented PORTB");
+        cpu.write_data(0x08E, 0x00);
+        cpu.write_data(0x00E, 0xFF);
+        assert_eq!(cpu.read_data(0x00E), 0x3F, "PORTC");
     }
 
     #[test]

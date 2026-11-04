@@ -114,7 +114,8 @@ E_SFRS = {
 # the register, but then no other SFR may sit at the address.
 E_OPTIONAL_SFRS = {"OSCSTAT": 0x09A}
 E_NO_EUSART_PARTS = {
-    "pic16f1503", "pic16f1507", "pic16lf1507", "pic16f1613", "pic16f1707",
+    "pic16f1503", "pic16f1507", "pic16lf1507", "pic16f1613", "pic16f1703",
+    "pic16f1707",
     "pic16lf1707", "pic16lf1703",
 }
 # The two enhanced layouts, keyed by where PIR1 sits: how many PORT/TRIS/LAT
