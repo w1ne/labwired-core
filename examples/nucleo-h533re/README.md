@@ -8,8 +8,12 @@ peripherals are outside the profile.
 
 ## Reproduce
 
+This host's user-level Cargo config points to a missing `sccache` wrapper, so
+the captured command clears that wrapper for this invocation. Omit the prefix
+on machines with a working Cargo wrapper.
+
 ```bash
-scripts/onboarding_smoke.sh \
+CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
   --target-id nucleo-h533re \
   --crate firmware-nucleo-h533re-smoke \
   --target thumbv8m.main-none-eabi \
