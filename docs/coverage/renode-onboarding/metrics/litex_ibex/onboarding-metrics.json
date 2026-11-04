@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/litex_ibex-smoke.yaml",
   "system": "configs/systems/onboarding/litex_ibex.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T16:21:33Z",
-  "finished_at_utc": "2026-11-04T16:21:34Z",
+  "started_at_utc": "2026-11-04T16:38:56Z",
+  "finished_at_utc": "2026-11-04T16:38:57Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 885,
+  "elapsed_ms": 844,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.312,
-    "build_firmware": 0.243,
-    "run_smoke": 0.318
+    "build_cli": 0.313,
+    "build_firmware": 0.21,
+    "run_smoke": 0.311
   },
   "stages_ms": {
-    "build_cli": 312,
-    "build_firmware": 243,
-    "run_smoke": 318
+    "build_cli": 313,
+    "build_firmware": 210,
+    "run_smoke": 311
   }
 }

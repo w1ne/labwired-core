@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
   "system": "configs/systems/onboarding/imxrt1064.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T16:21:33Z",
-  "finished_at_utc": "2026-11-04T16:21:33Z",
+  "started_at_utc": "2026-11-04T16:38:55Z",
+  "finished_at_utc": "2026-11-04T16:38:56Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 834,
+  "elapsed_ms": 840,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.314,
-    "build_firmware": 0.209,
-    "run_smoke": 0.299
+    "build_cli": 0.317,
+    "build_firmware": 0.219,
+    "run_smoke": 0.294
   },
   "stages_ms": {
-    "build_cli": 314,
-    "build_firmware": 209,
-    "run_smoke": 299
+    "build_cli": 317,
+    "build_firmware": 219,
+    "run_smoke": 294
   }
 }

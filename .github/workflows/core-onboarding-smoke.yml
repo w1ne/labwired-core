@@ -45,6 +45,7 @@ on:
       - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
       - "crates/firmware-renesas-ek-ra2e1-smoke/**"
+      - "crates/firmware-renesas-da14592-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
       - "crates/firmware-s32k118-smoke/**"
       - "crates/firmware-mimxrt700-evk-smoke/**"
@@ -96,6 +97,14 @@ jobs:
             target: thumbv8m.base-none-eabi
             script: examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml
             system: configs/systems/onboarding/renesas-ek_ra2e1.yaml
+          # DA14592 is scoped to the primary M33 core, exact flash/SRAM map,
+          # and model-backed DA UART0. The M0+ CMAC core and other peripherals
+          # are not claimed by this smoke.
+          - id: renesas-da14592
+            crate: firmware-renesas-da14592-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-da14592-smoke.yaml
+            system: configs/systems/onboarding/renesas-da14592.yaml
           # S32K388's generated profile included unsupported peripheral claims;
           # this fixture exercises only the sourced Cortex-M7 and memory map.
           - id: nxp-s32k388

@@ -1,4 +1,4 @@
-2026-11-04T16:22:02.566679Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/riscv_virt.yaml
-2026-11-04T16:22:02.567326Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+2026-11-04T16:39:33.471945Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/riscv_virt.yaml
+2026-11-04T16:39:33.472623Z  INFO labwired_loader: ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  3/3 checks · riscv_virt-smoke · 100000 steps · 0.02s
+PASS  3/3 checks · riscv_virt-smoke · 100000 steps · 0.04s
