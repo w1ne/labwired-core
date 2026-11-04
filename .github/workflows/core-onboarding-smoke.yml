@@ -40,6 +40,7 @@ on:
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/firmware-ek-ra8m1-smoke/**"
       - "crates/firmware-stm32w108-boot-smoke/**"
+      - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/cli/**"
@@ -68,6 +69,14 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stm32w108-boot-smoke.yaml
             system: configs/systems/onboarding/stm32w108.yaml
+          # The imported RA6M5 descriptor had a stale code-flash base and
+          # generated peripheral claims. This smoke checks M33 instruction
+          # execution only on the corrected memory profile.
+          - id: renesas-r7fa6m5b
+            crate: firmware-renesas-r7fa6m5b-boot-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa6m5b.yaml
           # The imported EK-RA8M1 profile uses the accurate RA8M1 memory map
           # and limits its claim to the modeled Cortex-M85, SYSTEM, GPIO/PFS,
           # and SCI_B paths. Module-stop gating remains outside this smoke.

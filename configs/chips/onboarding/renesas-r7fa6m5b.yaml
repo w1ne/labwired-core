@@ -4,107 +4,16 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 is the
-# RA6M5 8 KiB data flash, not the 2 MiB code flash at 0x0 per R7FA6M5BH.h /
-# Zephyr r7fa6m5bh3cfc.dtsi). The promoted RA6M5 part is
-# configs/chips/r7fa6m5bh.yaml (board: configs/systems/ek-ra6m5.yaml).
+# Imported Renode execution profile. The generated import used the data-flash
+# base for code flash and listed unrelated peripherals. This profile retains
+# only the model-backed CPU and memory required by the instruction smoke.
 name: renesas-r7fa6m5b
 arch: arm
+core: cortex-m33
 flash:
-  base: 134217728
-  size: 2097152B
+  base: 0x00000000
+  size: "2048KB"
 ram:
-  base: 536870912
-  size: 524288B
-peripherals:
-- id: sysc_oscsf
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864764
-- id: gpt
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1075220480
-- id: agt0
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692096
-- id: agt1
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692352
-- id: agt2
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692608
-- id: agt3
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692864
-- id: agt4
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074693120
-- id: agt5
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074693376
-- id: sci0
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074888704
-- id: sci1
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074888960
-- id: sci2
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889216
-- id: sci3
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889472
-- id: sci4
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889728
-- id: sci5
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889984
-- id: sci6
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074890240
-- id: sci7
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074890496
-- id: sci8
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074890752
-- id: sci9
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074891008
-- id: portMisc
-  type: renesasra_gpiomisc
-  bus: sysbus
-  base_address: 1074269440
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074393088
-- id: iic1
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074393344
-- id: iic2
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074393600
+  base: 0x20000000
+  size: "512KB"
+peripherals: []

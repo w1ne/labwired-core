@@ -1862,6 +1862,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-renesas-r7fa6m5b-boot-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-rp2040-demo"
 version = "0.1.0"
 dependencies = [

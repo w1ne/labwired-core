@@ -30,6 +30,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/stm32w108-boot-smoke.yaml",
     },
+    "renesas-r7fa6m5b": {
+        "crate": "firmware-renesas-r7fa6m5b-boot-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml",
+    },
     "atsamd51g19a": {
         "crate": "firmware-atsamd51-demo",
         "target": "thumbv7em-none-eabi",

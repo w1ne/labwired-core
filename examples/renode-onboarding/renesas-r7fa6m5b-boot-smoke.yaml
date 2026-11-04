@@ -1,0 +1,9 @@
+# CPU-only instruction stepping smoke for the corrected imported RA6M5 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-renesas-r7fa6m5b-boot-smoke"
+  system: "../../configs/systems/onboarding/renesas-r7fa6m5b.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

@@ -102,6 +102,7 @@ members = [
     "crates/firmware-ek-ra6m5-smoke",
     "crates/firmware-ek-ra8m1-smoke",
     "crates/firmware-stm32w108-boot-smoke",
+    "crates/firmware-renesas-r7fa6m5b-boot-smoke",
     "crates/firmware-apollo4p-evb-smoke",
     "crates/firmware-s32k388-evb-smoke",
     "crates/firmware-mimxrt595-evk-smoke",
