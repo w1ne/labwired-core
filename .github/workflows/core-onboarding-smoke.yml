@@ -44,6 +44,7 @@ on:
       - "crates/firmware-s32k388-onboarding-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
+      - "crates/firmware-cv32e40p-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -529,6 +530,14 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/picosoc-smoke.yaml
             system: configs/systems/onboarding/picosoc.yaml
+          # CV32E40P is imported with a corrected RV32IMC identity and a
+          # CPU-and-memory profile. The smoke executes from the imported code
+          # window and makes no PULP peripheral claim.
+          - id: A2_CV32E40P
+            crate: firmware-cv32e40p-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/A2_CV32E40P-smoke.yaml
+            system: configs/systems/onboarding/A2_CV32E40P.yaml
 
     steps:
       - uses: actions/checkout@v4

@@ -1,4 +1,4 @@
-2026-11-04T12:17:15.418209Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_ibex.yaml
-2026-11-04T12:17:15.419476Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+2026-11-04T12:38:21.727911Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_ibex.yaml
+2026-11-04T12:38:21.729155Z  INFO labwired_loader: ELF Entry Point: 0x20000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · litex_ibex-smoke · 100000 steps · 0.02s

@@ -82,6 +82,7 @@ members = [
     "crates/firmware-miv-rv32-smoke",
     "crates/firmware-murax-vexriscv-smoke",
     "crates/firmware-picosoc-smoke",
+    "crates/firmware-cv32e40p-smoke",
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-sam-e70-xplained-smoke",
     "crates/firmware-sam-e70-renode-smoke",

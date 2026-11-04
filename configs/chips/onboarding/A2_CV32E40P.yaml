@@ -1,45 +1,15 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Bounded imported CV32E40P profile. The generated import mislabeled this
+# RISC-V system as ARM and listed PULP peripheral windows outside this
+# CPU-and-memory smoke. The profile claims RV32IMC execution and the imported
+# memory windows; no peripheral behavior is claimed here.
 name: A2_CV32E40P
-arch: arm
+arch: riscv
+core: rv32imc
 flash:
-  base: 436207616
-  size: 8192B
+  base: 0x1A000000
+  size: 8KiB
 ram:
-  base: 469762048
-  size: 524288B
-peripherals:
-- id: uart
-  type: pulp_udma_uart
-  bus: sysbus
-  base_address: 437264640
-- id: timer
-  type: pulp_timer
-  bus: sysbus
-  base_address: 437301248
-- id: gpio
-  type: pulp_apb_gpio
-  bus: sysbus
-  base_address: 437260288
-- id: i2s
-  type: pulp_i2s
-  bus: sysbus
-  base_address: 437264896
-- id: i2c0
-  type: stub
-  renode_type: pulp_udma_i2c
-  bus: sysbus
-  base_address: 437264768
-- id: spi
-  type: stub
-  renode_type: pulp_udma_spi
-  bus: sysbus
-  base_address: 437264512
-- id: camera_controller
-  type: pulp_udma_camera
-  bus: sysbus
-  base_address: 437265024
+  base: 0x1C000000
+  size: 512KiB
+flash_boot_alias: false
+peripherals: []
