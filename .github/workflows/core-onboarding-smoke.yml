@@ -37,6 +37,7 @@ on:
       - "crates/firmware-efm32pg1-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
+      - "crates/firmware-ek-ra8m1-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/cli/**"
@@ -58,6 +59,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The imported EK-RA8M1 profile uses the accurate RA8M1 memory map
+          # and limits its claim to the modeled Cortex-M85, SYSTEM, GPIO/PFS,
+          # and SCI_B paths. Module-stop gating remains outside this smoke.
+          - id: renesas-ek_ra8m1
+            crate: firmware-ek-ra8m1-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml
+            system: configs/systems/onboarding/renesas-ek_ra8m1.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi

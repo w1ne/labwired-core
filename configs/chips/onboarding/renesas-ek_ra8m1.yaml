@@ -1,98 +1,75 @@
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
-# SUPERSEDED: staged onboarding descriptor (flash 64 KiB at 0x08000000 and RAM
-# 64 KiB at 0x30000000 are placeholders; the RA8M1 has 2 MiB code flash at
-# 0x02000000 and 896 KiB SRAM at 0x22000000 per R7FA8M1AH.h / Zephyr
-# ra8x1.dtsi). The promoted RA8M1 part is configs/chips/r7fa8m1ah.yaml (board:
-# configs/systems/ek-ra8m1.yaml).
+# Narrow imported Renesas EK-RA8M1 profile for the Cortex-M85 SCI9/GPIO smoke.
+# Memory and register addresses follow the R7FA8M1AH CMSIS header and the
+# Renesas RA8M1 model profile in configs/chips/r7fa8m1ah.yaml. The engine's
+# Cortex-M85 scalar Armv8-M subset and listed peripheral paths are exercised;
+# this profile does not claim Helium/MVE, TrustZone, or the unmapped RA8 blocks.
 name: renesas-ek_ra8m1
 arch: arm
+core: cortex-m85
+cpu_hz: 8000000
 flash:
-  base: 134217728
-  size: 65536B
+  base: 0x02000000
+  size: 2048KB
 ram:
-  base: 805306368
-  size: 65536B
+  base: 0x22000000
+  size: 896KB
+memory_regions:
+  - name: itcm
+    base: 0x00000000
+    size: 64KB
+  - name: dtcm
+    base: 0x20000000
+    size: 64KB
+  - name: data_flash
+    base: 0x27000000
+    size: 12KB
+    erased: true
 peripherals:
-- id: led_blue
-  type: led
-  bus: port6
-  base_address: 0
-- id: led_green
-  type: led
-  bus: port4
-  base_address: 14
-- id: led_red
-  type: led
-  bus: port9
-  base_address: 13
-- id: button_s2
-  type: button
-  bus: port0
-  base_address: 8
-- id: button_s1
-  type: button
-  bus: port0
-  base_address: 9
-- id: gpt
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1077026816
-- id: gpt_ns
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1345462272
-- id: agt0
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1075974144
-- id: agt1
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1075974400
-- id: sci0
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248000
-- id: sci1
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248256
-- id: sci2
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248512
-- id: sci3
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077248768
-- id: sci4
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077249024
-- id: sci9
-  type: renesasra8m1_sci
-  bus: sysbus
-  base_address: 1077250304
-- id: portMisc
-  type: renesasra_gpiomisc
-  bus: sysbus
-  base_address: 1077939456
-- id: SYSC_SCICKCR
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864789
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1076224000
-- id: iic1
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1076224256
+  # R_SYSTEM supplies the SCICKCR switch handshake used by the firmware.
+  - id: ra_sysc
+    type: ra8_sysc
+    base_address: 0x4001E000
+    size: 4KB
+  # MSTP storage is still a known model gap; the smoke does not assert module
+  # gating. SCI_B currently operates independently of MSTPCRB in the model.
+  - id: mstp
+    type: stub
+    base_address: 0x40203000
+    size: 64B
+  # GPIO port latches and PFS pull-up setup used by the three LED and two
+  # switch readbacks in the existing fixture.
+  - id: port0
+    type: gpio
+    base_address: 0x40400000
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 0 }
+  - id: port1
+    type: gpio
+    base_address: 0x40400020
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 1 }
+  - id: port4
+    type: gpio
+    base_address: 0x40400080
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 4 }
+  - id: port6
+    type: gpio
+    base_address: 0x404000C0
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 6 }
+  - id: pfs
+    type: ra8_pfs
+    base_address: 0x40400800
+    size: 1536B
+  - id: sci9
+    type: uart
+    base_address: 0x40358900
+    size: 256B
+    config:
+      profile: sci_b
+      clock_hz: 8000000
+      baud: 9600
