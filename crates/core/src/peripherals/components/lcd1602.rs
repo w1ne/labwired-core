@@ -177,15 +177,19 @@ impl Lcd1602 {
         }
     }
 
-    /// The visible 2×16 panel as 32 characters: row 0 first, then row 1, with no
-    /// separator — callers slice `[..16]` and `[16..]`.
+    /// The visible 2×16 panel as 32 Unicode scalars: row 0 first, then row 1,
+    /// with no separator. Prefer `chars()` (or JS/TS `.slice` on BMP text) for
+    /// row splits — Rust byte ranges like `[..16]` can panic mid-glyph when `°`
+    /// is present.
     ///
-    /// Bytes outside printable ASCII (`0x20`…`0x7E`) render as a space; the
-    /// HD44780 ROM maps them to katakana or user glyphs that have no faithful
-    /// single-`char` form. A display that is off reads as all spaces, mirroring
-    /// the way [`super::max7219::Max7219`] and the TM1637 descriptor
-    /// blank their readback — reporting DDRAM here would render a picture the
-    /// real panel is not showing.
+    /// Printable ASCII (`0x20`…`0x7E`) passes through. HD44780 ROM code `0xDF`
+    /// (A00 table degree glyph, what LiquidCrystal_I2C sketches write as
+    /// `\\xDF`) renders as `°`. Every other non-ASCII byte is a space — the
+    /// rest of the ROM is katakana / user glyphs with no faithful single-`char`
+    /// form. A display that is off reads as all spaces, mirroring the way
+    /// [`super::max7219::Max7219`] and the TM1637 descriptor blank their
+    /// readback — reporting DDRAM here would render a picture the real panel
+    /// is not showing.
     pub fn text(&self) -> String {
         let mut out = String::with_capacity(ROWS * COLS);
         for row in 0..ROWS {
@@ -195,10 +199,10 @@ impl Lcd1602 {
                     continue;
                 }
                 let byte = self.ddram[row * LINE_LEN + col];
-                out.push(if (0x20..=0x7E).contains(&byte) {
-                    byte as char
-                } else {
-                    ' '
+                out.push(match byte {
+                    0x20..=0x7E => byte as char,
+                    0xDF => '°',
+                    _ => ' ',
                 });
             }
         }
@@ -756,15 +760,21 @@ mod tests {
     }
 
     #[test]
-    fn non_printable_bytes_render_as_spaces() {
+    fn non_printable_bytes_render_as_spaces_except_degree() {
         let mut dev = Lcd1602::new(0x27);
         display_on(&mut dev);
         data(&mut dev, 0x00); // custom glyph 0
         data(&mut dev, b'X');
-        data(&mut dev, 0xDF); // katakana / degree sign in the HD44780 ROM
+        data(&mut dev, 0xDF); // HD44780 A00 degree glyph
 
         let text = dev.text();
-        assert_eq!(&text[..3], " X ", "non-ASCII code points blank out");
+        // `°` is two UTF-8 bytes — compare by chars, not a byte index that
+        // would panic mid-glyph on the degree sign.
+        assert_eq!(
+            text.chars().take(3).collect::<String>(),
+            " X°",
+            "0xDF is the degree sign; other non-ASCII blanks"
+        );
         assert_eq!(dev.ddram()[0], 0x00, "DDRAM keeps the raw byte");
         assert_eq!(dev.ddram()[2], 0xDF);
     }
