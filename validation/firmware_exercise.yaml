@@ -299,6 +299,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: stm32f303vc-f3discovery-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; the firmware toggles the on-board LD3 LED through GPIOE pin 9."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32f411re-nucleo-smoke
     arch: cortex-m4
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
