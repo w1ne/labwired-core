@@ -1,0 +1,12 @@
+# GPIO-only system profile for ST NUCLEO-C5A3ZG (MB2310).
+# Only the onboard green user LED LD1 on active-high PA5 is claimed.
+name: "nucleo-c5a3zg"
+chip: "../chips/stm32c5a3zg-nucleo-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

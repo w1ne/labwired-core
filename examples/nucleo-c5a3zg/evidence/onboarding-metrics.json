@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-c5a3zg",
+  "status": "pass",
+  "crate": "firmware-nucleo-c5a3zg-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/nucleo-c5a3zg/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-c5a3zg.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T16:30:00Z",
+  "finished_at_utc": "2026-11-04T16:30:49Z",
+  "elapsed_seconds": 50,
+  "elapsed_ms": 49586,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 48.668,
+    "build_firmware": 0.527,
+    "run_smoke": 0.38
+  },
+  "stages_ms": {
+    "build_cli": 48668,
+    "build_firmware": 527,
+    "run_smoke": 380
+  }
+}

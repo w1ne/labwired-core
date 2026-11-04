@@ -1,0 +1,47 @@
+# Focused NUCLEO-C5A3ZG profile for the onboard LD1 GPIO smoke.
+# It models the STM32C5A3ZGT6 main flash and SRAM1 plus only the RCC GPIOA
+# clock gate, GPIOA, and SysTick used here. SRAM2, the C5 clock tree, VCP,
+# Ethernet, USB, I3C, FDCAN, timers, ADC, security, and other peripherals are
+# outside this profile.
+#
+# Sources: ST DS15137 / STM32C5A3ZG product page (Cortex-M33, 1 MiB flash,
+# 256 KiB SRAM); RM0522 Rev 1 (GPIOA at 0x42020000, RCC_AHB2ENR at RCC+0x8C,
+# GPIOAEN bit 0, SRAM1 at 0x20000000); UM3616 Rev 2 (LD1 active-high PA5).
+name: "stm32c5a3zgt6-nucleo-gpio-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+# This LED smoke does not reconfigure the system clock.
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x08000000
+  size: "1MiB"
+ram:
+  # SRAM1 is 128 KiB; SRAM2 at 0x20020000 is not mapped by this profile.
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      profile: "stm32c5"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      profile: "stm32c5"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
