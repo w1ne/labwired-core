@@ -142,6 +142,7 @@ members = [
     "crates/firmware-feather-rp2040-smoke",
     "crates/firmware-itsybitsy-rp2040-smoke",
     "crates/firmware-feather-m4-express-smoke",
+    "crates/firmware-feather-m0-express-smoke",
     "crates/firmware-pico-w-smoke",
     "crates/firmware-xiao-rp2040-smoke",
     "crates/firmware-xiao-rp2350-smoke",

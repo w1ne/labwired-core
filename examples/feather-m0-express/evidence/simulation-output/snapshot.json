@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073742876,
+      8,
+      460,
+      0,
+      131072,
+      1090536456,
+      0,
+      536903656,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536903656,
+      297,
+      338
+    ],
+    "pc": 338,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 12000,
+  "cycles": 12000,
+  "instructions": 12000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 12000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 12000
+    }
+  },
+  "limits": {
+    "max_steps": 12000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "a4a52484b4edda31ac3b6d9efb46907a97c7f104eea855e0792466a1a88b1ebd",
+  "config": {
+    "firmware": "examples/feather-m0-express/../../target/thumbv6m-none-eabi/release/firmware-feather-m0-express-smoke",
+    "system": "examples/feather-m0-express/../../configs/systems/feather-m0-express.yaml",
+    "script": "examples/feather-m0-express/io-smoke.yaml"
+  }
+}

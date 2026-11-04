@@ -95,6 +95,10 @@ on:
       - "crates/firmware-feather-rp2040-smoke/**"
       - "crates/firmware-itsybitsy-rp2040-smoke/**"
       - "crates/firmware-feather-m4-express-smoke/**"
+      - "crates/firmware-feather-m0-express-smoke/**"
+      - "configs/chips/atsamd21g18a-feather-m0-express-smoke.yaml"
+      - "configs/systems/feather-m0-express.yaml"
+      - "examples/feather-m0-express/**"
       - "configs/chips/rp2040-itsybitsy-smoke.yaml"
       - "configs/systems/adafruit-itsybitsy-rp2040.yaml"
       - "examples/adafruit-itsybitsy-rp2040/**"
@@ -461,6 +465,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/feather-m4-express/io-smoke.yaml
             system: configs/systems/feather-m4-express.yaml
+          - id: feather-m0-express
+            crate: firmware-feather-m0-express-smoke
+            target: thumbv6m-none-eabi
+            script: examples/feather-m0-express/io-smoke.yaml
+            system: configs/systems/feather-m0-express.yaml
           - id: raspberry-pi-pico-w
             crate: firmware-pico-w-smoke
             target: thumbv6m-none-eabi

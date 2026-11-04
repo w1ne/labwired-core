@@ -1,0 +1,11 @@
+# Adafruit Feather M0 Express narrowed to its onboard D13 red LED smoke.
+name: "feather-m0-express"
+chip: "../chips/atsamd21g18a-feather-m0-express-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "gpio_a"
+    pin: 17 # PA17 / D13 / LED_BUILTIN
+    signal: "output"
+    active_high: true
