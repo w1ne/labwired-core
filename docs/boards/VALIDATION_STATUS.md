@@ -50,7 +50,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `ce18a3409645e33d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b03c28d7252087fd` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `9f8af370ee4a1463` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `584a6255b1549fc2` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `ef3a0d367e10e6f5` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `85c2a74fa11ccb26` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `b81b8754dacf5220` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `a33bde2eaade7db0` | no silicon capture |
