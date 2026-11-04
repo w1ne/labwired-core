@@ -2157,6 +2157,102 @@ mod analog {
         }
     }
 
+    /// `TTF1/2` and `TTR1/2` scale the SPICE forward and reverse transit times
+    /// with temperature. Compare each transient step to a separate transistor
+    /// whose `TF`/`TR` are explicitly set to the independently calculated
+    /// values, and confirm the hot result differs from an unscaled model.
+    #[test]
+    fn bjt_transit_time_temperature_coefficients_match_explicit_charge_models() {
+        let (is, bf, br, tnom, tf, tr) = (1e-14, 100.0, 2.0, 27.0, 1e-6, 2e-6);
+        let (ttf1, ttf2, ttr1, ttr2) = (1e-3, 1e-5, 2e-3, 1e-5);
+        let h = 1e-6;
+        let adjusted_times = |temperature: f64| {
+            let delta = temperature - tnom;
+            (
+                tf * (1.0 + ttf1 * delta + ttf2 * delta * delta),
+                tr * (1.0 + ttr1 * delta + ttr2 * delta * delta),
+            )
+        };
+        let mut hot_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for temperature in [tnom, 127.0] {
+                let (tf_at, tr_at) = adjusted_times(temperature);
+                for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                    for forward in [true, false] {
+                        let (collector_v, emitter_v) = if forward {
+                            (sign * 2.0, 0.0)
+                        } else {
+                            (0.0, sign * 2.0)
+                        };
+                        let make_solver = |transit_model: String| {
+                            let netlist = format!(
+                                "Vdrive drive 0 dc 0\nRdrive drive b 1k\n\
+                                 Vc c 0 dc {collector_v}\nVe e 0 dc {emitter_v}\n\
+                                 Q1 c b e QMOD TEMP={temperature}\n.model QMOD {kind}({transit_model})\n"
+                            );
+                            Solver::new(
+                                parse_netlist(&netlist)
+                                    .expect("BJT transit-temperature deck parses"),
+                                integration,
+                            )
+                            .expect("BJT transit-temperature solver builds")
+                        };
+                        let nominal_model =
+                            format!("IS={is} BF={bf} BR={br} TNOM={tnom} TF={tf} TR={tr}");
+                        let adjusted_model = format!(
+                            "IS={is} BF={bf} BR={br} TNOM={tnom} TF={tf} TR={tr} \
+                             TTF1={ttf1} TTF2={ttf2} TTR1={ttr1} TTR2={ttr2}"
+                        );
+                        let explicit_model =
+                            format!("IS={is} BF={bf} BR={br} TNOM={tnom} TF={tf_at} TR={tr_at}");
+                        let mut actual = make_solver(adjusted_model);
+                        let mut explicit = make_solver(explicit_model);
+                        let mut fixed = make_solver(nominal_model);
+                        for solver in [&mut actual, &mut explicit, &mut fixed] {
+                            let drive = solver
+                                .voltage_source_index("Vdrive")
+                                .expect("base drive source exists");
+                            solver.set_voltage_source(drive, sign);
+                            solver.advance(h).expect("transit-charge step solves");
+                        }
+
+                        let actual_base =
+                            actual.circuit().node("b").expect("actual base node exists");
+                        let explicit_base = explicit
+                            .circuit()
+                            .node("b")
+                            .expect("explicit base node exists");
+                        let fixed_base = fixed.circuit().node("b").expect("fixed base node exists");
+                        let actual_voltage = actual.node_voltage(actual_base);
+                        let explicit_voltage = explicit.node_voltage(explicit_base);
+                        let fixed_voltage = fixed.node_voltage(fixed_base);
+                        assert!(
+                            (actual_voltage - explicit_voltage).abs() < 1e-8,
+                            "{kind} {forward:?} {integration:?} TEMP={temperature}: expected explicit-time base voltage {explicit_voltage} V, got {actual_voltage} V"
+                        );
+                        assert!(
+                            relative(
+                                source_current(&actual, "Vdrive"),
+                                source_current(&explicit, "Vdrive")
+                            ) < 1e-6,
+                            "{kind} {forward:?} {integration:?} TEMP={temperature}: transit-time drive currents differ"
+                        );
+                        if temperature > tnom {
+                            let difference = (actual_voltage - fixed_voltage).abs();
+                            assert!(
+                                difference > 1e-7,
+                                "{kind} {forward:?} {integration:?}: TTF/TTR must change the hot transient, difference={difference} V"
+                            );
+                            hot_effects.push(difference);
+                        }
+                    }
+                }
+            }
+        }
+        assert!(hot_effects.iter().all(|effect| *effect > 1e-7));
+    }
+
     /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
     /// saturation current plus `GMIN*V` and has no stored charge.
     #[test]

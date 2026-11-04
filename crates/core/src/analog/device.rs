@@ -37,9 +37,10 @@
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
 //! The diode and BJT support their documented explicit instance `TEMP` laws;
-//! BJT terminal resistances additionally use their `TRB*`/`TRBM*`/`TIRB*`/
-//! `TRC*`/`TRE*` coefficients, while charge parameters remain nominal. Other
-//! parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
+//! BJT transit times additionally use `TTF*`/`TTR*`, and terminal resistances
+//! use `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. Junction depletion parameters
+//! remain nominal. Other parameters are taken at [`TEMPERATURE_K`] as
+//! written. A `.model`
 //! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
 //! [`super::netlist`]. Diode soft recovery covers the
@@ -144,9 +145,9 @@ pub fn ln(value: f64) -> f64 {
 ///
 /// This covers the standard `TNOM`/`EG`/`XTI` transport saturation-current
 /// law, `XTB` beta scaling, and the corresponding `ISE`/`ISC` recombination
-/// currents, plus the first and second order temperature coefficients for
-/// `RB`/`RBM`/`IRB`/`RC`/`RE`. `None` preserves the engine's historical fixed-
-/// 300 K path.
+/// currents, the first and second order coefficients for forward/reverse
+/// transit time, and the coefficients for `RB`/`RBM`/`IRB`/`RC`/`RE`.
+/// `None` preserves the engine's historical fixed-300 K path.
 pub fn bjt_parameters_at_temperature(
     model: BjtModel,
     temperature_celsius: Option<f64>,
@@ -178,6 +179,8 @@ pub fn bjt_parameters_at_temperature(
     if adjusted.isc > 0.0 {
         adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
     }
+    adjusted.tf *= temperature_factor(model.ttf1, model.ttf2);
+    adjusted.tr *= temperature_factor(model.ttr1, model.ttr2);
     adjusted.rb *= temperature_factor(model.trb1, model.trb2);
     adjusted.rbm =
         Some(model.rbm.unwrap_or(model.rb) * temperature_factor(model.trbm1, model.trbm2));

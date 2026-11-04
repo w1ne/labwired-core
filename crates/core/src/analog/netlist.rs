@@ -72,7 +72,8 @@
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
 //! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
 //! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
-//! `TRC*`/`TRE*` temperature coefficients, JFET terminal
+//! `TRC*`/`TRE*` temperature coefficients, forward/reverse BJT transit-time
+//! temperature coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
 //! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
 //! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
@@ -94,7 +95,9 @@
 //! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
 //! minimum-base, base-current knee, collector, and emitter resistances using
 //! `ΔT = TEMP − TNOM`; `TRM1`/`TRM2` are accepted aliases for `TRBM1`/`TRBM2`.
-//! Without instance `TEMP`, terminal resistances retain their nominal values.
+//! `TTF1`/`TTF2` and `TTR1`/`TTR2` apply the same polynomial to forward and
+//! reverse transit times. Without instance `TEMP`, these parameters retain
+//! their nominal values.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -159,8 +162,9 @@
 //! transport `IS`, base-recombination `ISE`/`ISC`, and forward/reverse beta
 //! `BF`/`BR`. Without instance `TEMP`, the historical fixed-300 K behavior is
 //! retained. `TRB*`/`TRM*` (also `TRBM*`)/`TIRB*`/`TRC*`/`TRE*` adjust
-//! terminal resistances with `ΔT = TEMP − TNOM`; junction charge remains
-//! nominal. Self-heating is not modeled.
+//! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
+//! all with `ΔT = TEMP − TNOM`. Junction depletion charge remains nominal.
+//! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -1209,6 +1213,10 @@ pub struct BjtModel {
     /// Ideal forward transit time `TF`, seconds. Zero disables forward
     /// diffusion charge, matching ngspice's default.
     pub tf: f64,
+    /// First and second order temperature coefficients for `TF`, per °C and
+    /// per °C².
+    pub ttf1: f64,
+    pub ttf2: f64,
     /// Forward transit-time bias coefficient `XTF`. Zero disables the
     /// `VBC`/current-dependent adjustment, matching ngspice's default.
     pub xtf: f64,
@@ -1221,6 +1229,10 @@ pub struct BjtModel {
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
+    /// First and second order temperature coefficients for `TR`, per °C and
+    /// per °C².
+    pub ttr1: f64,
+    pub ttr2: f64,
     /// Zero-bias base terminal resistance `RB`, ohms. Zero disables the
     /// internal base node, matching ngspice's default.
     pub rb: f64,
@@ -1289,10 +1301,14 @@ impl BjtModel {
             mjc: 0.33,
             fc: 0.5,
             tf: 0.0,
+            ttf1: 0.0,
+            ttf2: 0.0,
             xtf: 0.0,
             vtf: f64::INFINITY,
             itf: 0.0,
             tr: 0.0,
+            ttr1: 0.0,
+            ttr2: 0.0,
             rb: 0.0,
             trb1: 0.0,
             trb2: 0.0,
@@ -1485,6 +1501,7 @@ impl MosModel {
 }
 
 /// One `.model` card, before it is attached to an element.
+#[allow(clippy::large_enum_variant)] // Keep cards Copy; model cards are small, short-lived parser values.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelCard {
     /// A `D` card.
@@ -3376,6 +3393,10 @@ fn bind_models(
                     || !model.trc2.is_finite()
                     || !model.tre1.is_finite()
                     || !model.tre2.is_finite()
+                    || !model.ttf1.is_finite()
+                    || !model.ttf2.is_finite()
+                    || !model.ttr1.is_finite()
+                    || !model.ttr2.is_finite()
                 {
                     return Err(ctx.parse_err(
                         "a BJT model needs finite IS/BF/BR/ISE/ISC/EG/XTI/XTB and terminal-resistance temperature coefficients, and TNOM above absolute zero"
@@ -3474,6 +3495,10 @@ fn bind_models(
                     || operating_model.ise < 0.0
                     || !operating_model.isc.is_finite()
                     || operating_model.isc < 0.0
+                    || !operating_model.tf.is_finite()
+                    || operating_model.tf < 0.0
+                    || !operating_model.tr.is_finite()
+                    || operating_model.tr < 0.0
                     || !operating_model.rb.is_finite()
                     || operating_model.rb < 0.0
                     || (model.rb > 0.0 && operating_model.rb <= 0.0)
@@ -4093,10 +4118,14 @@ fn parse_model(
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
             (ModelCard::Bjt(model), "FC") => model.fc = value,
             (ModelCard::Bjt(model), "TF") => model.tf = value,
+            (ModelCard::Bjt(model), "TTF1") => model.ttf1 = value,
+            (ModelCard::Bjt(model), "TTF2") => model.ttf2 = value,
             (ModelCard::Bjt(model), "XTF") => model.xtf = value,
             (ModelCard::Bjt(model), "VTF") => model.vtf = value,
             (ModelCard::Bjt(model), "ITF") => model.itf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
+            (ModelCard::Bjt(model), "TTR1") => model.ttr1 = value,
+            (ModelCard::Bjt(model), "TTR2") => model.ttr2 = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
             (ModelCard::Bjt(model), "TRB1") => model.trb1 = value,
             (ModelCard::Bjt(model), "TRB2") => model.trb2 = value,
