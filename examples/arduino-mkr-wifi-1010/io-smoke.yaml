@@ -1,0 +1,12 @@
+# Arduino MKR WiFi 1010: boot and blink the onboard D6 / LED_BUILTIN on PA20.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-mkr-wifi-1010-smoke"
+  system: "../../configs/systems/arduino-mkr-wifi-1010.yaml"
+limits:
+  max_steps: 12000
+assertions:
+  - gpio_edges:
+      pin: "gpio_a:20"
+      min_edges: 16
+  - expected_stop_reason: max_steps

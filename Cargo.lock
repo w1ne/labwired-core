@@ -1524,6 +1524,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-mkr-wifi-1010-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nano-rp2040-connect-smoke"
 version = "0.1.0"
 dependencies = [

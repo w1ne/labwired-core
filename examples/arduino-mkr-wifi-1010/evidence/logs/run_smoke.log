@@ -1,0 +1,5 @@
+2026-11-04T09:32:26.275883Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/atsamd21g18a-mkr-wifi-1010-smoke.yaml
+2026-11-04T09:32:26.276910Z  INFO labwired_loader: ELF Entry Point: 0xc1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  2/2 checks · io-smoke · 12000 steps · 0.00s

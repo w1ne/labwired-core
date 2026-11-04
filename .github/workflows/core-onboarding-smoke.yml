@@ -104,6 +104,10 @@ on:
       - "crates/firmware-nucleo-u545re-smoke/**"
       - "crates/firmware-atsamd51-demo/**"
       - "crates/firmware-atsamd51-pybadge-demo/**"
+      - "crates/firmware-mkr-wifi-1010-smoke/**"
+      - "configs/chips/atsamd21g18a-mkr-wifi-1010-smoke.yaml"
+      - "configs/systems/arduino-mkr-wifi-1010.yaml"
+      - "examples/arduino-mkr-wifi-1010/**"
       - "crates/firmware-l552ze-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -458,6 +462,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/pybadge/onboarding-smoke.yaml
             system: examples/pybadge/system.yaml
+          - id: arduino-mkr-wifi-1010
+            crate: firmware-mkr-wifi-1010-smoke
+            target: thumbv6m-none-eabi
+            script: examples/arduino-mkr-wifi-1010/io-smoke.yaml
+            system: configs/systems/arduino-mkr-wifi-1010.yaml
           - id: nucleo-l476rg
             crate: firmware-l476-demo
             target: thumbv7em-none-eabihf

@@ -146,6 +146,7 @@ members = [
     "crates/firmware-pico2-w-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-arduino-zero-demo",
+    "crates/firmware-mkr-wifi-1010-smoke",
     "crates/firmware-rp2350-demo",
     "crates/firmware-pico2-demo",
     "crates/firmware-kw41z-demo",

@@ -1,0 +1,12 @@
+# Arduino MKR WiFi 1010 (ABX00023), narrowed to the MCU-driven D6 user LED.
+# The RGB LED is connected to the NINA-W102 and is not part of this model.
+name: "arduino-mkr-wifi-1010"
+chip: "../chips/atsamd21g18a-mkr-wifi-1010-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_builtin_d6"
+    kind: "led"
+    peripheral: "gpio_a"
+    pin: 20
+    signal: "output"
+    active_high: true
