@@ -71,6 +71,7 @@ on:
       - "crates/firmware-nucleo-h533re-smoke/**"
       - "crates/firmware-nucleo-h723zg-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
+      - "crates/firmware-nucleo-h7a3zi-q-smoke/**"
       - "crates/firmware-stm32h735g-dk-smoke/**"
       - "crates/firmware-nucleo-c071rb-smoke/**"
       - "crates/firmware-nucleo-c051c8-smoke/**"
@@ -342,6 +343,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-h753zi/onboarding-smoke.yaml
             system: configs/systems/nucleo-h753zi.yaml
+          - id: nucleo-h7a3zi-q
+            crate: firmware-nucleo-h7a3zi-q-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h7a3zi-q/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h7a3zi-q.yaml
           - id: stm32h735g-dk
             crate: firmware-stm32h735g-dk-smoke
             target: thumbv7em-none-eabi

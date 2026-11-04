@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-h7a3zi-q",
+  "status": "pass",
+  "crate": "firmware-nucleo-h7a3zi-q-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-h7a3zi-q/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-h7a3zi-q.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T15:11:05Z",
+  "finished_at_utc": "2026-11-04T15:11:06Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1134,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.338,
+    "build_firmware": 0.481,
+    "run_smoke": 0.305
+  },
+  "stages_ms": {
+    "build_cli": 338,
+    "build_firmware": 481,
+    "run_smoke": 305
+  }
+}
