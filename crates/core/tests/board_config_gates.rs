@@ -188,6 +188,36 @@ fn itsybitsy_rp2040_from_config_builds() {
 }
 
 #[test]
+fn adafruit_feather_rp2350_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/adafruit-feather-rp2350.yaml",
+        "rp2350 / adafruit-feather-rp2350 GPIO profile must build",
+    );
+
+    assert_eq!(chip.name, "rp2350-feather-smoke");
+    assert_eq!(chip.core.as_deref(), Some("cortex-m33"));
+    assert_eq!(chip.flash.base, 0x1000_0000);
+    assert_eq!(chip.flash.size, 8 * 1024 * 1024);
+    assert_eq!(chip.ram.size, 520 * 1024);
+    assert_eq!(chip.pins.get("GP7").map(|pin| pin.bit), Some(7));
+
+    assert!(
+        bus.find_peripheral_index_by_name("io_bank0").is_some(),
+        "bus must expose io_bank0 for the GP7 SIO route"
+    );
+    assert!(
+        bus.find_peripheral_index_by_name("sio").is_some(),
+        "bus must expose sio for the onboard red LED on GP7"
+    );
+    for omitted in ["uart0", "i2c0", "spi0", "pwm", "pio0", "usb"] {
+        assert!(
+            bus.find_peripheral_index_by_name(omitted).is_none(),
+            "the focused Feather RP2350 profile must omit {omitted}"
+        );
+    }
+}
+
+#[test]
 fn stm32f746_from_config_builds() {
     let (chip, bus) = from_config(
         "configs/systems/stm32f7-discovery.yaml",

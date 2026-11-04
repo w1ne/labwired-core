@@ -74,6 +74,7 @@ on:
       - "crates/firmware-pico2-demo/**"
       - "crates/firmware-pico2-w-smoke/**"
       - "crates/firmware-xiao-rp2350-smoke/**"
+      - "crates/firmware-adafruit-feather-rp2350-smoke/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-nucleo-u545re-smoke/**"
@@ -320,6 +321,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/seeed-xiao-rp2350/io-smoke.yaml
             system: configs/systems/seeed-xiao-rp2350.yaml
+          - id: adafruit-feather-rp2350
+            crate: firmware-adafruit-feather-rp2350-smoke
+            firmware_build_dir: crates/firmware-adafruit-feather-rp2350-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/adafruit-feather-rp2350/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2350.yaml
           - id: pico
             crate: firmware-rp2040-demo
             target: thumbv6m-none-eabi

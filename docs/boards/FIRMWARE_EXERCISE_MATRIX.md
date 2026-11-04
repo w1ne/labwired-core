@@ -181,6 +181,13 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
 
+### `rp2350-feather-smoke`
+
+_Adafruit Feather RP2350 HSTX board-bound smoke toggles the onboard active-high red indicator LED on GPIO7 through IO_BANK0/SIO. The profile omits NeoPixel/PIO, STEMMA QT I2C, USB, HSTX, optional PSRAM and other unexercised board functions._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Adafruit Feather RP2350 red indicator LED — GPIO7 transitions through IO_BANK0/SIO — `firmware-adafruit-feather-rp2350-smoke` · examples/adafruit-feather-rp2350/io-smoke.yaml + examples/adafruit-feather-rp2350/evidence/simulation-output/result.json (nightly CI)
+
 ### `stm32c071rb-nucleo-smoke`
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._

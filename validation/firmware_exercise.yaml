@@ -247,6 +247,18 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: rp2350-feather-smoke
+    arch: cortex-m33
+    headline: "Adafruit Feather RP2350 HSTX board-bound smoke toggles the onboard active-high red indicator LED on GPIO7 through IO_BANK0/SIO. The profile omits NeoPixel/PIO, STEMMA QT I2C, USB, HSTX, optional PSRAM and other unexercised board functions."
+    functional:
+      - what: "Adafruit Feather RP2350 red indicator LED — GPIO7 transitions through IO_BANK0/SIO"
+        fw: firmware-adafruit-feather-rp2350-smoke
+        ev: "examples/adafruit-feather-rp2350/io-smoke.yaml + examples/adafruit-feather-rp2350/evidence/simulation-output/result.json"
+        gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32c071rb-nucleo-smoke
     arch: cortex-m0plus
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."

@@ -49,6 +49,7 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-40` | 🟡 smoke-manual | — | `f91e048dcfa137c4` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `1ced4739806c4f51` | no silicon capture |
 | `adafruit-itsybitsy-rp2040` | 🟡 smoke-manual | — | `ef88eebb83752f04` | no silicon capture |
+| `adafruit-feather-rp2350` | 🟡 smoke-manual | — | `fb0499536730fa10` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `c9ad61e2f603be0c` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `d710bd56d73733bc` | no silicon capture |
 | `nucleo-g0b1re` | 🟡 smoke-manual | — | `8fb0908c8a24858b` | no silicon capture |
@@ -418,6 +419,14 @@ The models column is a content digest over everything that board's `models` list
 - Note: Focused ItsyBitsy RP2040 profile records 8 MiB external flash and 264 KiB SRAM, maps GP11 / D13 to the onboard red LED, and exercises IO_BANK0 plus SIO. The model omits QSPI boot, USB, NeoPixel, buttons, and other peripherals; ideal VDD is assumed, so power-on/brown-out reset is outside the smoke. Local smoke only; no physical-board capture.
 - Silicon: none — not validated against real hardware.
   - offline (CI): board_config_gates::itsybitsy_rp2040_from_config_builds
+- Drift status: **no silicon capture**
+
+## `adafruit-feather-rp2350` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/adafruit-feather-rp2350.md`](adafruit-feather-rp2350.md)  ·  Chip: `configs/chips/rp2350-feather-smoke.yaml`
+- Note: Focused Adafruit Feather RP2350 profile exercises the active-high red status LED on GPIO7 through IO_BANK0 and SIO. The GPIO21 NeoPixel/PIO, STEMMA QT I2C, USB, HSTX, optional PSRAM and other header pins are outside this profile. Local model smoke only; no physical-board capture.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): board_config_gates::adafruit_feather_rp2350_from_config_builds
 - Drift status: **no silicon capture**
 
 ## `stm32f7-discovery` — 🟡 smoke-manual

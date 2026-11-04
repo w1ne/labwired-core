@@ -9719,6 +9719,23 @@ boards:
       - configs/chips/rp2040-itsybitsy-smoke.yaml
       - configs/systems/adafruit-itsybitsy-rp2040.yaml
 
+  - id: adafruit-feather-rp2350
+    doc: docs/boards/adafruit-feather-rp2350.md
+    chip: configs/chips/rp2350-feather-smoke.yaml
+    tier: smoke-manual
+    note: "Focused Adafruit Feather RP2350 profile exercises the active-high red status LED on GPIO7 through IO_BANK0 and SIO. The GPIO21 NeoPixel/PIO, STEMMA QT I2C, USB, HSTX, optional PSRAM and other header pins are outside this profile. Local model smoke only; no physical-board capture."
+    offline_tests:
+      - "board_config_gates::adafruit_feather_rp2350_from_config_builds"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/rp2040/io_bank0.rs
+      - crates/core/src/peripherals/rp2040/sio.rs
+      - configs/peripherals/rp2350/io_bank0.yaml
+      - configs/peripherals/rp2350/sio.yaml
+      - configs/chips/rp2350-feather-smoke.yaml
+      - configs/systems/adafruit-feather-rp2350.yaml
+
   - id: stm32f7-discovery
     doc: docs/boards/stm32f7-discovery.md
     chip: configs/chips/stm32f746.yaml
