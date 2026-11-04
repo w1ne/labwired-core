@@ -1,0 +1,4 @@
+nRF54L15 boot OK
+core=cortex-m33 rram=1524K ram=256K
+uarte20@0x500C6000 gpio2@0x50050400
+regs from MDK/SVD, not nRF52

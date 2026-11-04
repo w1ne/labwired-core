@@ -11,6 +11,8 @@
 # UARTE20 is the DK console, routed to the on-board interface MCU's virtual COM
 # port. That is why the smoke firmware and the boot test both expect the banner
 # on uart20 rather than uart30.
+# Scope: application SoC, LEDs/buttons, and UARTE20 only. The radio behavior,
+# J-Link interface MCU, and on-board 8 MB flash are not modeled by this profile.
 name: "nrf54l15dk"
 chip: "../chips/nrf54l15.yaml"
 external_devices: []

@@ -80,6 +80,10 @@ on:
       - "crates/firmware-teensy4-smoke/**"
       - "crates/firmware-uno-r4-wifi-smoke/**"
       - "crates/firmware-xiao-nrf54l15-smoke/**"
+      - "examples/nrf54l15-dk/**"
+      - "configs/chips/nrf54l15.yaml"
+      - "configs/systems/nrf54l15dk.yaml"
+      - "tests/fixtures/nrf54l15-smoke.elf"
       - "configs/chips/stm32wba55cg-nucleo-smoke.yaml"
       - "configs/chips/stm32h503rb-nucleo-smoke.yaml"
       - "configs/chips/stm32h533re-nucleo-gpio-smoke.yaml"
@@ -210,6 +214,10 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nrf54l10/onboarding-smoke.yaml
             system: configs/systems/nrf54l10-on-nrf54l15-dk.yaml
+          - id: nrf54l15-dk
+            firmware_build_script: examples/nrf54l15-dk/ci/build-firmware.sh
+            script: examples/nrf54l15-dk/io-smoke.yaml
+            system: configs/systems/nrf54l15dk.yaml
           - id: nucleo-wb55rg
             crate: firmware-nucleo-wb55rg-demo
             target: thumbv7em-none-eabi
@@ -582,6 +590,12 @@ jobs:
       - name: Install PlatformIO
         if: matrix.firmware_build_script != ''
         run: python -m pip install platformio
+
+      - name: Install ARM embedded GCC for nRF54L15 DK
+        if: matrix.id == 'nrf54l15-dk'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-arm-none-eabi
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

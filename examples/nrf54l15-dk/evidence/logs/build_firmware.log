@@ -1,0 +1,9 @@
+rm -rf /tmp/labwired-nrf54l15-dk-build
+arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c11 -Os -g3 -Wall -Wextra -Wpedantic -Werror -ffreestanding -fno-common -ffunction-sections -fdata-sections -MMD -MP -c src/startup.c -o /tmp/labwired-nrf54l15-dk-build/startup.o
+arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c11 -Os -g3 -Wall -Wextra -Wpedantic -Werror -ffreestanding -fno-common -ffunction-sections -fdata-sections -MMD -MP -c src/main.c -o /tmp/labwired-nrf54l15-dk-build/main.o
+arm-none-eabi-gcc /tmp/labwired-nrf54l15-dk-build/startup.o /tmp/labwired-nrf54l15-dk-build/main.o -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -T nrf54l15.ld -nostdlib -nostartfiles -Wl,--gc-sections -Wl,-Map=/tmp/labwired-nrf54l15-dk-build/nrf54l15-smoke.map -o /tmp/labwired-nrf54l15-dk-build/nrf54l15-smoke.elf
+arm-none-eabi-size /tmp/labwired-nrf54l15-dk-build/nrf54l15-smoke.elf
+   text	   data	    bss	    dec	    hex	filename
+    428	      0	    128	    556	    22c	/tmp/labwired-nrf54l15-dk-build/nrf54l15-smoke.elf
+cp /tmp/labwired-nrf54l15-dk-build/nrf54l15-smoke.elf ../../tests/fixtures/nrf54l15-smoke.elf
+Published ../../tests/fixtures/nrf54l15-smoke.elf
