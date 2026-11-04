@@ -133,6 +133,7 @@ nav:
     - STM32F0DISCOVERY: boards/stm32f0-discovery.md
     - STM32F767: boards/stm32f767.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
+    - NUCLEO-L496ZG-P: boards/nucleo-l496zg-p.md
     - NUCLEO-L073RZ: boards/nucleo-l073rz.md
     - NUCLEO-F411RE: boards/nucleo-f411re.md
     - NUCLEO-G070RB: boards/nucleo-g070rb.md

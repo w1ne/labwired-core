@@ -78,6 +78,7 @@ on:
       - "configs/systems/nucleo-l432kc.yaml"
       - "examples/nucleo-l432kc/**"
       - "crates/firmware-nucleo-l4a6zg-smoke/**"
+      - "crates/firmware-nucleo-l496zg-p-smoke/**"
       - "configs/chips/stm32l4a6zg-nucleo-smoke.yaml"
       - "configs/systems/nucleo-l4a6zg.yaml"
       - "examples/nucleo-l4a6zg/**"
@@ -406,6 +407,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-l4a6zg/onboarding-smoke.yaml
             system: configs/systems/nucleo-l4a6zg.yaml
+          - id: nucleo-l496zg-p
+            crate: firmware-nucleo-l496zg-p-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l496zg-p/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l496zg-p.yaml
           - id: nucleo-wba55cg
             crate: firmware-nucleo-wba55cg-smoke
             target: thumbv8m.main-none-eabi
