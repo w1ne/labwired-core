@@ -80,6 +80,7 @@ on:
       - "crates/firmware-nucleo-u545re-smoke/**"
       - "crates/firmware-atsamd51-demo/**"
       - "crates/firmware-atsamd51-pybadge-demo/**"
+      - "crates/firmware-l552ze-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -378,6 +379,11 @@ jobs:
             target: thumbv7em-none-eabihf
             script: examples/nucleo-l476rg/io-smoke.yaml
             system: configs/systems/nucleo-l476rg.yaml
+          - id: nucleo-l552ze-q
+            crate: firmware-l552ze-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-l552ze-q/io-smoke.yaml
+            system: examples/nucleo-l552ze-q/system.yaml
 
     steps:
       - uses: actions/checkout@v4

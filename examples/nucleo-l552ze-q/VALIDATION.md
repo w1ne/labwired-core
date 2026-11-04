@@ -2,6 +2,21 @@
 
 Claims, evidence, and what is explicitly **not** claimed yet.
 
+## Current onboarding evidence
+
+The lane smoke was rebuilt and run on 2026-11-04 with
+`scripts/onboarding_smoke.sh`. Its committed build and run logs, UART output,
+GPIO/register snapshot, and scoreboard are under [`evidence/`](evidence/).
+The smoke checks the three LED GPIO/ODR paths, reads the released B1 input,
+and requires the LPUART1 marker and ordered heartbeat output. The live ST
+board availability and STM32L552ZET6Q lifecycle check is recorded in
+[`evidence/vendor-status.md`](evidence/vendor-status.md).
+
+This is local simulator evidence. No new peripheral behavior is introduced by
+this onboarding update. The existing profile remains deliberately narrow;
+TrustZone/SAU/GTZC are not modelled, and the L5 FLASH controller, EXTI, ADC,
+FDCAN, and USB windows remain declared stubs.
+
 ## Tier status
 
 | Capability | Tier | Evidence |
