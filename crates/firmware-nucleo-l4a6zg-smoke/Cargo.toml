@@ -1,0 +1,14 @@
+[package]
+name = "firmware-nucleo-l4a6zg-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[dependencies]
+
+[[bin]]
+name = "firmware-nucleo-l4a6zg-smoke"
+path = "src/main.rs"
+test = false
+bench = false

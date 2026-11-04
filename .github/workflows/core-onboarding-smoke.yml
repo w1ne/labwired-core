@@ -42,6 +42,10 @@ on:
       - "configs/chips/stm32l432kc-nucleo-smoke.yaml"
       - "configs/systems/nucleo-l432kc.yaml"
       - "examples/nucleo-l432kc/**"
+      - "crates/firmware-nucleo-l4a6zg-smoke/**"
+      - "configs/chips/stm32l4a6zg-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-l4a6zg.yaml"
+      - "examples/nucleo-l4a6zg/**"
       - "crates/firmware-nucleo-l452re-p-smoke/**"
       - "crates/firmware-nucleo-wb55rg-demo/**"
       - "crates/firmware-nucleo-wba55cg-smoke/**"
@@ -216,6 +220,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-l432kc/onboarding-smoke.yaml
             system: configs/systems/nucleo-l432kc.yaml
+          - id: nucleo-l4a6zg
+            crate: firmware-nucleo-l4a6zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l4a6zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-l4a6zg.yaml
           - id: nucleo-wba55cg
             crate: firmware-nucleo-wba55cg-smoke
             target: thumbv8m.main-none-eabi

@@ -1867,6 +1867,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-l4a6zg-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-nucleo-u545re-smoke"
 version = "0.1.0"
 
