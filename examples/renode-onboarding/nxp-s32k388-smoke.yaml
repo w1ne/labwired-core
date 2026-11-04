@@ -1,0 +1,9 @@
+# CPU-only instruction stepping smoke for the narrowed imported S32K388 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-s32k388-onboarding-smoke"
+  system: "../../configs/systems/onboarding/nxp-s32k388.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

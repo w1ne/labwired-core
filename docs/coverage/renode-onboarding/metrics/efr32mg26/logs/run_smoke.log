@@ -1,5 +1,5 @@
-2026-11-04T11:55:38.734343Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efr32mg26.yaml
-2026-11-04T11:55:38.736898Z  INFO labwired_loader: ELF Entry Point: 0x8000801
+2026-11-04T12:17:13.695451Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efr32mg26.yaml
+2026-11-04T12:17:13.697971Z  INFO labwired_loader: ELF Entry Point: 0x8000801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · efr32mg26-smoke · 100000 steps · 0.00s
