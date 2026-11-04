@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sam_e70-smoke.yaml",
   "system": "configs/systems/onboarding/sam_e70.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T15:04:31Z",
-  "finished_at_utc": "2026-11-04T15:04:32Z",
+  "started_at_utc": "2026-11-04T15:17:02Z",
+  "finished_at_utc": "2026-11-04T15:17:03Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 837,
+  "elapsed_ms": 821,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.316,
-    "build_firmware": 0.202,
-    "run_smoke": 0.309
+    "build_cli": 0.304,
+    "build_firmware": 0.2,
+    "run_smoke": 0.307
   },
   "stages_ms": {
-    "build_cli": 316,
-    "build_firmware": 202,
-    "run_smoke": 309
+    "build_cli": 304,
+    "build_firmware": 200,
+    "run_smoke": 307
   }
 }

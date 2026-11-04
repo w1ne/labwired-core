@@ -30,6 +30,7 @@ on:
       - "crates/firmware-stm32l151-smoke/**"
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
+      - "crates/firmware-efm32tg840-smoke/**"
       - "crates/firmware-efm32lg942-smoke/**"
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
@@ -234,6 +235,12 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g842-smoke.yaml
             system: configs/systems/onboarding/efm32g842.yaml
+          # TG840's imported profile is limited to its memory and modeled USART0.
+          - id: efm32tg840
+            crate: firmware-efm32tg840-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32tg840-smoke.yaml
+            system: configs/systems/onboarding/efm32tg840.yaml
           # LG995 is a Cortex-M3 Leopard Gecko import. This smoke measures its
           # imported memory and model-backed USART0 path only.
           - id: efm32lg995

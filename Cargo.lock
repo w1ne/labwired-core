@@ -1331,6 +1331,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-efm32tg840-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-efm32wg995-smoke"
 version = "0.1.0"
 dependencies = [
