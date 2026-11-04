@@ -76,6 +76,32 @@ const ELEMENTARY_CHARGE: f64 = 1.602_176_634e-19;
 /// `kT/q` at [`TEMPERATURE_K`]: about 25.852 mV.
 pub const THERMAL_VOLTAGE: f64 = BOLTZMANN * TEMPERATURE_K / ELEMENTARY_CHARGE;
 
+/// `kT/q` at an explicitly selected absolute temperature, in kelvin.
+pub fn thermal_voltage_at_temperature(temperature_kelvin: f64) -> f64 {
+    BOLTZMANN * temperature_kelvin / ELEMENTARY_CHARGE
+}
+
+/// SPICE diode saturation current at an instance temperature.
+///
+/// `EG` is in eV; numerically it can be divided by the thermal voltage in
+/// volts because one electron-volt is the energy gained by one electron over
+/// one volt. The emission coefficient `n` scales both the power law and the
+/// activation-energy term, as in the SPICE diode temperature equation.
+pub fn diode_saturation_current_at_temperature(
+    is_nominal: f64,
+    n: f64,
+    eg_ev: f64,
+    xti: f64,
+    nominal_kelvin: f64,
+    temperature_kelvin: f64,
+) -> f64 {
+    let vt_nominal = thermal_voltage_at_temperature(nominal_kelvin);
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let log_factor =
+        eg_ev / vt_nominal - eg_ev / vt + xti * ln(temperature_kelvin / nominal_kelvin);
+    is_nominal * exp_clamped(log_factor / n)
+}
+
 /// Conductance added across every pn junction, siemens.
 ///
 /// SPICE's `GMIN`. It exists so a device that is fully off still ties its
@@ -129,7 +155,17 @@ pub struct DiodeOp {
 /// model that is *not* the anode-to-cathode voltage, because the series
 /// resistance drops the difference.
 pub fn diode_op(v_junction: f64, is: f64, n: f64) -> DiodeOp {
-    let vte = n * THERMAL_VOLTAGE;
+    diode_op_at_thermal_voltage(v_junction, is, n, THERMAL_VOLTAGE)
+}
+
+/// Shockley diode operating point using the selected thermal voltage.
+pub fn diode_op_at_thermal_voltage(
+    v_junction: f64,
+    is: f64,
+    n: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
+    let vte = n * thermal_voltage;
     let exponential = exp_clamped(v_junction / vte);
     DiodeOp {
         id: is * (exponential - 1.0) + GMIN * v_junction,
@@ -151,13 +187,26 @@ pub fn diode_recombination_op(
     vj: f64,
     m: f64,
 ) -> DiodeOp {
+    diode_recombination_op_at_thermal_voltage(v_junction, isr, nr, n, vj, m, THERMAL_VOLTAGE)
+}
+
+/// Recombination branch using an explicit operating thermal voltage.
+pub fn diode_recombination_op_at_thermal_voltage(
+    v_junction: f64,
+    isr: f64,
+    nr: f64,
+    n: f64,
+    vj: f64,
+    m: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
     if isr == 0.0 {
         return DiodeOp { id: 0.0, gd: 0.0 };
     }
 
-    let forward_boundary = -3.0 * n * THERMAL_VOLTAGE;
+    let forward_boundary = -3.0 * n * thermal_voltage;
     let voltage = v_junction.max(forward_boundary);
-    let vte = nr * THERMAL_VOLTAGE;
+    let vte = nr * thermal_voltage;
     let exponential = exp_clamped(voltage / vte);
     let base_current = isr * (exponential - 1.0);
     let x = 1.0 - voltage / vj;
@@ -256,7 +305,11 @@ pub const BREAKDOWN_FIT_RELTOL: f64 = 1e-9;
 /// Note that ngspice divides by the bare thermal voltage here, not by `N·Vt` —
 /// kept as written, since agreeing with ngspice is the point.
 pub fn breakdown_voltage(bv: f64, ibv: f64, is: f64, nbv: f64) -> f64 {
-    let vt = THERMAL_VOLTAGE;
+    breakdown_voltage_at_thermal_voltage(bv, ibv, is, nbv, THERMAL_VOLTAGE)
+}
+
+/// Fit the breakdown knee with an explicit operating thermal voltage.
+pub fn breakdown_voltage_at_thermal_voltage(bv: f64, ibv: f64, is: f64, nbv: f64, vt: f64) -> f64 {
     let cbv = ibv;
     if cbv < is * bv / vt {
         return bv;
@@ -287,9 +340,21 @@ pub fn breakdown_voltage(bv: f64, ibv: f64, is: f64, nbv: f64) -> f64 {
 /// not use it — it keeps the plain exponential it always had, so that nothing
 /// already simulated moves by a bit.
 pub fn diode_op_breakdown(v_junction: f64, is: f64, n: f64, xbv: f64, nbv: f64) -> DiodeOp {
-    let vte = n * THERMAL_VOLTAGE;
+    diode_op_breakdown_at_thermal_voltage(v_junction, is, n, xbv, nbv, THERMAL_VOLTAGE)
+}
+
+/// Three-region SPICE diode current using an explicit operating thermal voltage.
+pub fn diode_op_breakdown_at_thermal_voltage(
+    v_junction: f64,
+    is: f64,
+    n: f64,
+    xbv: f64,
+    nbv: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
+    let vte = n * thermal_voltage;
     if v_junction >= -3.0 * vte {
-        return diode_op(v_junction, is, n);
+        return diode_op_at_thermal_voltage(v_junction, is, n, thermal_voltage);
     }
     if v_junction >= -xbv {
         let arg = 3.0 * vte / (v_junction * core::f64::consts::E);
@@ -299,7 +364,7 @@ pub fn diode_op_breakdown(v_junction: f64, is: f64, n: f64, xbv: f64, nbv: f64) 
             gd: is * 3.0 * arg / v_junction + GMIN,
         };
     }
-    let vtebrk = nbv * THERMAL_VOLTAGE;
+    let vtebrk = nbv * thermal_voltage;
     let evrev = exp_clamped(-(xbv + v_junction) / vtebrk);
     DiodeOp {
         id: -is * evrev + GMIN * v_junction,
@@ -321,7 +386,20 @@ pub fn breakdown_limit(
     xbv: f64,
     nbv: f64,
 ) -> f64 {
-    let vtebrk = nbv * THERMAL_VOLTAGE;
+    breakdown_limit_at_thermal_voltage(v_new, v_old, vte, v_critical, xbv, nbv, THERMAL_VOLTAGE)
+}
+
+/// Breakdown-aware junction limiter using an explicit operating thermal voltage.
+pub fn breakdown_limit_at_thermal_voltage(
+    v_new: f64,
+    v_old: f64,
+    vte: f64,
+    v_critical: f64,
+    xbv: f64,
+    nbv: f64,
+    thermal_voltage: f64,
+) -> f64 {
+    let vtebrk = nbv * thermal_voltage;
     let threshold = (-xbv + 10.0 * vtebrk).min(0.0);
     if v_new < threshold {
         let mirrored = -(v_new + xbv);
@@ -339,7 +417,12 @@ pub fn breakdown_limit(
 /// The junction voltage above which [`pn_limit`] starts damping, per SPICE:
 /// the point where `dI/dV` of the exponential passes `1/Vt`.
 pub fn pn_critical_voltage(is: f64, n: f64) -> f64 {
-    let vte = n * THERMAL_VOLTAGE;
+    pn_critical_voltage_at_thermal_voltage(is, n, THERMAL_VOLTAGE)
+}
+
+/// Junction limiter's critical voltage using an explicit thermal voltage.
+pub fn pn_critical_voltage_at_thermal_voltage(is: f64, n: f64, thermal_voltage: f64) -> f64 {
+    let vte = n * thermal_voltage;
     vte * ln(vte / (core::f64::consts::SQRT_2 * is))
 }
 

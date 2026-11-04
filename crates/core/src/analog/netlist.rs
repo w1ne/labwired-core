@@ -81,8 +81,12 @@
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients, and most terminal
-//! resistances, …) are **accepted
-//! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
+//! resistances, and semiconductor temperature coefficients beyond the diode
+//! saturation-current law below, …) are **accepted and ignored rather than
+//! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
+//! its thermal voltage and saturation currents; diode capacitance, series
+//! resistance, and breakdown-voltage temperature coefficients remain fixed.
+//! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
 //! equal fixed resistance from each input to `V−`; `CMRR` converts common-mode
@@ -128,6 +132,14 @@
 //! `LM393`; [`builtin_model`] gives their values and where each came from.
 //! They are *-like* cards — the datasheet's headline numbers, not the vendor's
 //! macro model.
+//!
+//! A diode card may carry `TNOM` (measurement temperature, default 27 °C),
+//! `EG` (activation energy, default 1.11 eV), and `XTI` (saturation-current
+//! temperature exponent, default 3). On a diode instance, `TEMP=<°C>` applies
+//! ngspice's temperature law to the junction thermal voltage and to `IS` and
+//! `ISR` (using `N` and `NR`, respectively). Without `TEMP`, the historical
+//! fixed 300 K diode behavior is retained. This slice does not temperature-
+//! adjust depletion charge, `TT`, `RS`, or breakdown voltage.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -628,6 +640,12 @@ pub struct DiodeModel {
     /// Forward-bias depletion-capacitance transition coefficient `FC`, default
     /// 0.5.
     pub fc: f64,
+    /// Activation energy `EG` for the saturation-current temperature law, eV.
+    pub eg: f64,
+    /// Saturation-current temperature exponent `XTI`.
+    pub xti: f64,
+    /// Parameter measurement temperature `TNOM`, in Celsius.
+    pub tnom_celsius: f64,
 }
 
 impl Default for DiodeModel {
@@ -649,6 +667,9 @@ impl Default for DiodeModel {
             vj: 1.0,
             m: 0.5,
             fc: 0.5,
+            eg: 1.11,
+            xti: 3.0,
+            tnom_celsius: 27.0,
         }
     }
 }
@@ -1034,6 +1055,9 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     vj: 1.0,
     m: 0.5,
     fc: 0.5,
+    eg: 1.11,
+    xti: 3.0,
+    tnom_celsius: 27.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1453,6 +1477,9 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             vj: 1.0,
             m: 0.5,
             fc: 0.5,
+            eg: 1.11,
+            xti: 3.0,
+            tnom_celsius: 27.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1475,6 +1502,9 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             vj: 1.0,
             m: 0.5,
             fc: 0.5,
+            eg: 1.11,
+            xti: 3.0,
+            tnom_celsius: 27.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -1662,6 +1692,9 @@ pub struct Diode {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: DiodeModel,
+    /// Instance junction temperature in Celsius. `None` preserves the
+    /// engine's historical fixed 300 K behavior.
+    pub temperature_celsius: Option<f64>,
     /// The breakdown voltage the reverse exponential is actually written
     /// about — ngspice's `tBrkdwnV`, i.e. `BV` moved so that the current at
     /// `−BV` is `IBV` — or `None` when the model has no `BV`. See
@@ -2292,6 +2325,7 @@ struct PendingDevice {
     as_: Option<f64>,
     pd: Option<f64>,
     ps: Option<f64>,
+    temperature_celsius: Option<f64>,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2622,6 +2656,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut as_ = None;
                 let mut pd = None;
                 let mut ps = None;
+                let mut temperature_celsius = None;
                 for token in &rest[terminals + 1..] {
                     let (key, value) = token
                         .split_once('=')
@@ -2635,6 +2670,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
+                        "temp" if letter == 'D' => {
+                            temperature_celsius = Some(ctx.value(value, "temp")?)
+                        }
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -2656,6 +2694,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     .any(|geometry| !geometry.is_finite() || geometry < 0.0)
                 {
                     return Err(ctx.parse_err("ad, as, pd and ps must be >= 0 and finite"));
+                }
+                if matches!(temperature_celsius, Some(temp) if !temp.is_finite() || temp <= -273.15)
+                {
+                    return Err(ctx.parse_err(
+                        "diode TEMP must be finite and above absolute zero (-273.15 °C)",
+                    ));
                 }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
@@ -2679,6 +2723,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_,
                     pd,
                     ps,
+                    temperature_celsius,
                 });
             }
             'E' | 'G' => {
@@ -2784,6 +2829,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_: None,
                     pd: None,
                     ps: None,
+                    temperature_celsius: None,
                 });
             }
             'S' => {
@@ -3080,6 +3126,11 @@ fn bind_models(
                 };
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.eg.is_finite()
+                    || model.eg < 0.0
+                    || !model.xti.is_finite()
+                    || !model.tnom_celsius.is_finite()
+                    || model.tnom_celsius <= -273.15
                     || !model.ik.is_finite()
                     || model.ik < 0.0
                     || !model.ikr.is_finite()
@@ -3104,10 +3155,28 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
+                let (is_at_temperature, thermal_voltage) =
+                    if let Some(temp_celsius) = device.temperature_celsius {
+                        let temperature_kelvin = temp_celsius + 273.15;
+                        let nominal_kelvin = model.tnom_celsius + 273.15;
+                        (
+                            super::device::diode_saturation_current_at_temperature(
+                                model.is,
+                                model.n,
+                                model.eg,
+                                model.xti,
+                                nominal_kelvin,
+                                temperature_kelvin,
+                            ),
+                            super::device::thermal_voltage_at_temperature(temperature_kelvin),
+                        )
+                    } else {
+                        (model.is, super::device::THERMAL_VOLTAGE)
+                    };
                 let breakdown = match model.bv {
                     None => None,
                     Some(bv) => {
@@ -3118,8 +3187,12 @@ fn bind_models(
                                     .to_string(),
                             ));
                         }
-                        Some(super::device::breakdown_voltage(
-                            bv, model.ibv, model.is, nbv,
+                        Some(super::device::breakdown_voltage_at_thermal_voltage(
+                            bv,
+                            model.ibv,
+                            is_at_temperature,
+                            nbv,
+                            thermal_voltage,
                         ))
                     }
                 };
@@ -3138,6 +3211,7 @@ fn bind_models(
                     junction_anode,
                     model_name: device.model_name,
                     model,
+                    temperature_celsius: device.temperature_celsius,
                     breakdown,
                 });
             }
@@ -3695,6 +3769,9 @@ fn parse_model(
         match (&mut card, param.as_str()) {
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
+            (ModelCard::Diode(model), "EG") => model.eg = value,
+            (ModelCard::Diode(model), "XTI") => model.xti = value,
+            (ModelCard::Diode(model), "TNOM") => model.tnom_celsius = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
             (ModelCard::Diode(model), "IKR") => model.ikr = value,
             (ModelCard::Diode(model), "ISR") => model.isr = value,
@@ -3922,6 +3999,9 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     vj: 1.0,
     m: 0.5,
     fc: 0.5,
+    eg: 1.11,
+    xti: 3.0,
+    tnom_celsius: 27.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -4042,6 +4122,7 @@ impl Lowering<'_> {
             junction_anode: anode,
             model_name: "clamp".to_string(),
             model: MACRO_CLAMP_DIODE,
+            temperature_celsius: None,
             breakdown: None,
         });
     }
@@ -4576,6 +4657,7 @@ fn lower_regulator(
         junction_anode: a,
         model_name: "limit-clamp".to_string(),
         model: REGULATOR_LIMIT_DIODE,
+        temperature_celsius: None,
         breakdown: None,
     });
 

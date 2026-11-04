@@ -392,6 +392,34 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
+    fn diode_temperature_parameters_and_instance_override_parse_and_validate() {
+        let circuit =
+            parse_netlist("D1 a 0 DMOD TEMP=100\n.model DMOD D(EG=1.05 XTI=2.4 TNOM=25)\n")
+                .expect("diode TEMP and model temperature parameters parse");
+        let diode = &circuit.diodes[0];
+        assert_eq!(diode.temperature_celsius, Some(100.0));
+        assert_eq!(diode.model.eg, 1.05);
+        assert_eq!(diode.model.xti, 2.4);
+        assert_eq!(diode.model.tnom_celsius, 25.0);
+
+        let defaults = parse_netlist("D1 a 0 D\n").expect("default diode parses");
+        assert_eq!(defaults.diodes[0].temperature_celsius, None);
+        assert_eq!(defaults.diodes[0].model.eg, 1.11);
+        assert_eq!(defaults.diodes[0].model.xti, 3.0);
+        assert_eq!(defaults.diodes[0].model.tnom_celsius, 27.0);
+
+        for parameter in ["EG=-0.1", "XTI=1e999", "TNOM=-273.15"] {
+            let error = parse_netlist(&format!("D1 a 0 DMOD\n.model DMOD D({parameter})\n"))
+                .expect_err("invalid diode temperature model parameter is refused");
+            assert!(error.to_string().contains("diode model"), "{error}");
+        }
+        for temp in ["-273.15", "1e999"] {
+            parse_netlist(&format!("D1 a 0 D TEMP={temp}\n"))
+                .expect_err("invalid diode instance temperature is refused");
+        }
+    }
+
+    #[test]
     fn invalid_diode_model_parameters_are_rejected() {
         for parameters in [
             "IK=-1m", "IKR=-1m", "TT=-1n", "VP=-0.1", "CJO=-1p", "VJ=0", "M=-0.1", "FC=-0.1",

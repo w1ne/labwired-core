@@ -153,25 +153,86 @@ fn mos_channel_capacitance_halves(
     caps
 }
 
-fn diode_model_op(voltage: f64, model: DiodeModel, breakdown: Option<f64>) -> device::DiodeOp {
-    let mut op = match breakdown {
-        None => device::diode_op(voltage, model.is, model.n),
-        Some(xbv) => device::diode_op_breakdown(
+fn diode_temperature_parameters(
+    model: DiodeModel,
+    temperature_celsius: Option<f64>,
+) -> (f64, f64, f64) {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return (model.is, model.isr, device::THERMAL_VOLTAGE);
+    };
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    let is = device::diode_saturation_current_at_temperature(
+        model.is,
+        model.n,
+        model.eg,
+        model.xti,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    let isr = device::diode_saturation_current_at_temperature(
+        model.isr,
+        model.nr,
+        model.eg,
+        model.xti,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    (
+        is,
+        isr,
+        device::thermal_voltage_at_temperature(temperature_kelvin),
+    )
+}
+
+fn diode_model_op(
+    voltage: f64,
+    model: DiodeModel,
+    breakdown: Option<f64>,
+    temperature_celsius: Option<f64>,
+) -> device::DiodeOp {
+    let (is, isr, thermal_voltage) = diode_temperature_parameters(model, temperature_celsius);
+    let mut op = match (breakdown, temperature_celsius) {
+        (None, None) => device::diode_op(voltage, model.is, model.n),
+        (Some(xbv), None) => device::diode_op_breakdown(
             voltage,
             model.is,
             model.n,
             xbv,
             model.nbv.unwrap_or(model.n),
         ),
+        (None, Some(_)) => {
+            device::diode_op_at_thermal_voltage(voltage, is, model.n, thermal_voltage)
+        }
+        (Some(xbv), Some(_)) => device::diode_op_breakdown_at_thermal_voltage(
+            voltage,
+            is,
+            model.n,
+            xbv,
+            model.nbv.unwrap_or(model.n),
+            thermal_voltage,
+        ),
     };
-    let recombination =
-        device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m);
+    let recombination = match temperature_celsius {
+        None => {
+            device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m)
+        }
+        Some(_) => device::diode_recombination_op_at_thermal_voltage(
+            voltage,
+            isr,
+            model.nr,
+            model.n,
+            model.vj,
+            model.m,
+            thermal_voltage,
+        ),
+    };
 
     // ngspice's IK/IKR high-injection correction applies to the junction
     // current (including recombination) but leaves GMIN outside the clamp.
     // Preserve the old arithmetic exactly when the selected knee is omitted,
     // or when the current is too small for the correction to apply.
-    let forward = voltage >= -3.0 * model.n * device::THERMAL_VOLTAGE;
+    let forward = voltage >= -3.0 * model.n * thermal_voltage;
     let knee = if forward { model.ik } else { model.ikr };
     let junction_current = op.id + recombination.id - device::GMIN * voltage;
     let active_current = if forward {
@@ -843,7 +904,12 @@ impl Solver {
             let diode = &self.circuit.diodes[index];
             if diode_charge_active(diode.model) {
                 self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
-                let op = diode_model_op(self.diode_vj[index], diode.model, diode.breakdown);
+                let op = diode_model_op(
+                    self.diode_vj[index],
+                    diode.model,
+                    diode.breakdown,
+                    diode.temperature_celsius,
+                );
                 self.diode_q[index] = diode_charge_op(self.diode_vj[index], diode.model, op).0;
                 self.diode_i[index] = 0.0;
                 if diode.model.vp > 0.0 && diode.model.tt > 0.0 {
@@ -1086,7 +1152,12 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let op = diode_model_op(v_new, diode.model, diode.breakdown);
+            let op = diode_model_op(
+                v_new,
+                diode.model,
+                diode.breakdown,
+                diode.temperature_celsius,
+            );
             let (q_new, _) = diode_charge_op(v_new, diode.model, op);
             let i_new = match rule {
                 Integration::BackwardEuler => (q_new - self.diode_q[index]) / h,
@@ -1109,7 +1180,12 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let op = diode_model_op(v_new, diode.model, diode.breakdown);
+            let op = diode_model_op(
+                v_new,
+                diode.model,
+                diode.breakdown,
+                diode.temperature_celsius,
+            );
             let recovery = diode_recovery_step(
                 diode.model,
                 op,
@@ -1847,17 +1923,35 @@ impl Solver {
                 diode.junction_anode,
                 diode.cathode,
             );
-            let vte = diode.model.n * device::THERMAL_VOLTAGE;
-            let critical = device::pn_critical_voltage(diode.model.is, diode.model.n);
-            let limited = match diode.breakdown {
-                None => device::pn_limit(raw, self.diode_vj[index], vte, critical),
-                Some(xbv) => device::breakdown_limit(
+            let (is, _, thermal_voltage) =
+                diode_temperature_parameters(diode.model, diode.temperature_celsius);
+            let vte = diode.model.n * thermal_voltage;
+            let critical = match diode.temperature_celsius {
+                None => device::pn_critical_voltage(diode.model.is, diode.model.n),
+                Some(_) => device::pn_critical_voltage_at_thermal_voltage(
+                    is,
+                    diode.model.n,
+                    thermal_voltage,
+                ),
+            };
+            let limited = match (diode.breakdown, diode.temperature_celsius) {
+                (None, _) => device::pn_limit(raw, self.diode_vj[index], vte, critical),
+                (Some(xbv), None) => device::breakdown_limit(
                     raw,
                     self.diode_vj[index],
                     vte,
                     critical,
                     xbv,
                     diode.model.nbv.unwrap_or(diode.model.n),
+                ),
+                (Some(xbv), Some(_)) => device::breakdown_limit_at_thermal_voltage(
+                    raw,
+                    self.diode_vj[index],
+                    vte,
+                    critical,
+                    xbv,
+                    diode.model.nbv.unwrap_or(diode.model.n),
+                    thermal_voltage,
                 ),
             };
             self.limiter_clamped |= limited != raw;
@@ -2036,7 +2130,7 @@ impl Solver {
                 );
             }
             let vj = self.diode_vj[index];
-            let op = diode_model_op(vj, diode.model, diode.breakdown);
+            let op = diode_model_op(vj, diode.model, diode.breakdown, diode.temperature_celsius);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));

@@ -111,6 +111,93 @@ mod analog {
         }
     }
 
+    /// A diode's instance `TEMP` changes both `kT/q` and the SPICE saturation
+    /// current law. The expected load line is solved independently from those
+    /// equations, including the model's series resistance.
+    #[test]
+    fn diode_instance_temperature_matches_the_spice_saturation_current_law() {
+        let (is, n, eg, xti, tnom_c, rs, r, isr, nr, vj, m, target_current) = (
+            2.52e-14, 1.15, 1.11, 3.0, 27.0, 50.0, 2200.0, 4e-11, 1.8, 0.9, 0.4, 200e-6,
+        );
+        let source_voltage = {
+            let vt = 8.617_333_262_145e-5 * (tnom_c + 273.15);
+            let junction = n * vt * f64::ln(target_current / is + 1.0);
+            junction + target_current * (r + rs)
+        };
+        let adjusted_saturation = |nominal_is: f64, emission: f64, temperature_c: f64| {
+            let nominal = tnom_c + 273.15;
+            let temperature = temperature_c + 273.15;
+            let vt_nominal = 8.617_333_262_145e-5 * nominal;
+            let vt = 8.617_333_262_145e-5 * temperature;
+            let log_factor = eg / vt_nominal - eg / vt + xti * f64::ln(temperature / nominal);
+            nominal_is * f64::exp(log_factor / emission)
+        };
+        let expected_junction = |temperature_c: f64| {
+            let temperature = temperature_c + 273.15;
+            let vt = 8.617_333_262_145e-5 * temperature;
+            let is_temperature = adjusted_saturation(is, n, temperature_c);
+            let isr_temperature = adjusted_saturation(isr, nr, temperature_c);
+            let residual = |junction: f64| {
+                let diode = is_temperature * (f64::exp(junction / (n * vt)) - 1.0);
+                let recombination = isr_temperature
+                    * (f64::exp(junction / (nr * vt)) - 1.0)
+                    * ((1.0 - junction / vj).powi(2) + 0.005).powf(m / 2.0);
+                (source_voltage - junction) / (r + rs) - diode - recombination
+            };
+            let (mut low, mut high) = (0.0, source_voltage);
+            for _ in 0..100 {
+                let mid = 0.5 * (low + high);
+                if residual(mid) > 0.0 {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            let junction = 0.5 * (low + high);
+            let current = (source_voltage - junction) / (r + rs);
+            (junction, current)
+        };
+
+        let mut currents = Vec::new();
+        for temperature_c in [27.0, 125.0] {
+            let netlist = format!(
+                "V1 supply 0 dc {source_voltage}\n\
+                 R1 supply a {r}\n\
+                 D1 a 0 DMOD TEMP={temperature_c}\n\
+                 .model DMOD D(IS={is} N={n} RS={rs} EG={eg} XTI={xti} TNOM={tnom_c} \
+                               ISR={isr} NR={nr} VJ={vj} M={m})\n"
+            );
+            let solver = build(&netlist);
+            let (expected_vj, expected_current) = expected_junction(temperature_c);
+            let actual_current = source_current(&solver, "V1");
+            let external = solver.circuit().node("a").expect("external diode node");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("series resistance creates the junction node");
+            let actual_external_voltage = solver.node_voltage(external);
+            let actual_junction_voltage = solver.node_voltage(junction);
+
+            assert!(
+                relative(actual_current, expected_current) < 2e-7,
+                "TEMP={temperature_c} °C: SPICE load line predicts {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_junction_voltage - expected_vj).abs() < 2e-8,
+                "TEMP={temperature_c} °C: junction should be at {expected_vj} V, got {actual_junction_voltage} V"
+            );
+            assert!(
+                (actual_external_voltage - (source_voltage - r * expected_current)).abs() < 2e-8,
+                "TEMP={temperature_c} °C: external node must include the load resistor drop"
+            );
+            currents.push(actual_current);
+        }
+        assert!(
+            currents[1] > currents[0] * 1.3,
+            "heating the silicon junction must raise the current at this fixed bias: {currents:?}"
+        );
+    }
+
     /// `IK`/`IKF` and `IKR` reduce forward and reverse junction current at
     /// high injection. The source voltage is derived from the selected
     /// junction voltage and the ngspice current transform, so each case checks
