@@ -1,0 +1,809 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 16000,
+  "cycles": 16000,
+  "instructions": 16000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 16000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 16000
+    }
+  },
+  "limits": {
+    "max_steps": 16000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32H735G_DK_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:3",
+          "min_edges": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:2",
+          "min_edges": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      786432,
+      0,
+      44,
+      10,
+      0,
+      0,
+      0,
+      537001968,
+      0,
+      0,
+      0,
+      0,
+      134219008,
+      537001968,
+      1476528128,
+      134218984
+    ],
+    "pc": 134218984,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "6010ef7a95ce3b018db3dfe76b51540860475d4a70347baddbcb2b41593631fe",
+  "config": {
+    "firmware": "examples/stm32h735g-dk/../../target/thumbv7em-none-eabi/release/firmware-stm32h735g-dk-smoke",
+    "system": "examples/stm32h735g-dk/../../configs/systems/stm32h735g-dk.yaml",
+    "script": "examples/stm32h735g-dk/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1476543488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1476528128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1476529152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 16000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioc",
+        "pin": 3,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 414,
+            "value": 1
+          },
+          {
+            "cycle": 423,
+            "value": 0
+          },
+          {
+            "cycle": 432,
+            "value": 1
+          },
+          {
+            "cycle": 441,
+            "value": 0
+          },
+          {
+            "cycle": 450,
+            "value": 1
+          },
+          {
+            "cycle": 459,
+            "value": 0
+          },
+          {
+            "cycle": 468,
+            "value": 1
+          },
+          {
+            "cycle": 477,
+            "value": 0
+          },
+          {
+            "cycle": 486,
+            "value": 1
+          },
+          {
+            "cycle": 495,
+            "value": 0
+          },
+          {
+            "cycle": 504,
+            "value": 1
+          },
+          {
+            "cycle": 513,
+            "value": 0
+          },
+          {
+            "cycle": 522,
+            "value": 1
+          },
+          {
+            "cycle": 531,
+            "value": 0
+          },
+          {
+            "cycle": 540,
+            "value": 1
+          },
+          {
+            "cycle": 549,
+            "value": 0
+          },
+          {
+            "cycle": 558,
+            "value": 1
+          },
+          {
+            "cycle": 567,
+            "value": 0
+          },
+          {
+            "cycle": 576,
+            "value": 1
+          },
+          {
+            "cycle": 585,
+            "value": 0
+          },
+          {
+            "cycle": 594,
+            "value": 1
+          },
+          {
+            "cycle": 603,
+            "value": 0
+          },
+          {
+            "cycle": 612,
+            "value": 1
+          },
+          {
+            "cycle": 621,
+            "value": 0
+          },
+          {
+            "cycle": 630,
+            "value": 1
+          },
+          {
+            "cycle": 639,
+            "value": 0
+          },
+          {
+            "cycle": 648,
+            "value": 1
+          },
+          {
+            "cycle": 657,
+            "value": 0
+          },
+          {
+            "cycle": 666,
+            "value": 1
+          },
+          {
+            "cycle": 675,
+            "value": 0
+          },
+          {
+            "cycle": 684,
+            "value": 1
+          },
+          {
+            "cycle": 693,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 36,
+            "state": "0"
+          },
+          {
+            "cycle": 414,
+            "state": "1"
+          },
+          {
+            "cycle": 423,
+            "state": "0"
+          },
+          {
+            "cycle": 432,
+            "state": "1"
+          },
+          {
+            "cycle": 441,
+            "state": "0"
+          },
+          {
+            "cycle": 450,
+            "state": "1"
+          },
+          {
+            "cycle": 459,
+            "state": "0"
+          },
+          {
+            "cycle": 468,
+            "state": "1"
+          },
+          {
+            "cycle": 477,
+            "state": "0"
+          },
+          {
+            "cycle": 486,
+            "state": "1"
+          },
+          {
+            "cycle": 495,
+            "state": "0"
+          },
+          {
+            "cycle": 504,
+            "state": "1"
+          },
+          {
+            "cycle": 513,
+            "state": "0"
+          },
+          {
+            "cycle": 522,
+            "state": "1"
+          },
+          {
+            "cycle": 531,
+            "state": "0"
+          },
+          {
+            "cycle": 540,
+            "state": "1"
+          },
+          {
+            "cycle": 549,
+            "state": "0"
+          },
+          {
+            "cycle": 558,
+            "state": "1"
+          },
+          {
+            "cycle": 567,
+            "state": "0"
+          },
+          {
+            "cycle": 576,
+            "state": "1"
+          },
+          {
+            "cycle": 585,
+            "state": "0"
+          },
+          {
+            "cycle": 594,
+            "state": "1"
+          },
+          {
+            "cycle": 603,
+            "state": "0"
+          },
+          {
+            "cycle": 612,
+            "state": "1"
+          },
+          {
+            "cycle": 621,
+            "state": "0"
+          },
+          {
+            "cycle": 630,
+            "state": "1"
+          },
+          {
+            "cycle": 639,
+            "state": "0"
+          },
+          {
+            "cycle": 648,
+            "state": "1"
+          },
+          {
+            "cycle": 657,
+            "state": "0"
+          },
+          {
+            "cycle": 666,
+            "state": "1"
+          },
+          {
+            "cycle": 675,
+            "state": "0"
+          },
+          {
+            "cycle": 684,
+            "state": "1"
+          },
+          {
+            "cycle": 693,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 32
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpioc",
+        "pin": 2,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 414,
+            "value": 1
+          },
+          {
+            "cycle": 423,
+            "value": 0
+          },
+          {
+            "cycle": 432,
+            "value": 1
+          },
+          {
+            "cycle": 441,
+            "value": 0
+          },
+          {
+            "cycle": 450,
+            "value": 1
+          },
+          {
+            "cycle": 459,
+            "value": 0
+          },
+          {
+            "cycle": 468,
+            "value": 1
+          },
+          {
+            "cycle": 477,
+            "value": 0
+          },
+          {
+            "cycle": 486,
+            "value": 1
+          },
+          {
+            "cycle": 495,
+            "value": 0
+          },
+          {
+            "cycle": 504,
+            "value": 1
+          },
+          {
+            "cycle": 513,
+            "value": 0
+          },
+          {
+            "cycle": 522,
+            "value": 1
+          },
+          {
+            "cycle": 531,
+            "value": 0
+          },
+          {
+            "cycle": 540,
+            "value": 1
+          },
+          {
+            "cycle": 549,
+            "value": 0
+          },
+          {
+            "cycle": 558,
+            "value": 1
+          },
+          {
+            "cycle": 567,
+            "value": 0
+          },
+          {
+            "cycle": 576,
+            "value": 1
+          },
+          {
+            "cycle": 585,
+            "value": 0
+          },
+          {
+            "cycle": 594,
+            "value": 1
+          },
+          {
+            "cycle": 603,
+            "value": 0
+          },
+          {
+            "cycle": 612,
+            "value": 1
+          },
+          {
+            "cycle": 621,
+            "value": 0
+          },
+          {
+            "cycle": 630,
+            "value": 1
+          },
+          {
+            "cycle": 639,
+            "value": 0
+          },
+          {
+            "cycle": 648,
+            "value": 1
+          },
+          {
+            "cycle": 657,
+            "value": 0
+          },
+          {
+            "cycle": 666,
+            "value": 1
+          },
+          {
+            "cycle": 675,
+            "value": 0
+          },
+          {
+            "cycle": 684,
+            "value": 1
+          },
+          {
+            "cycle": 693,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 36,
+            "state": "0"
+          },
+          {
+            "cycle": 414,
+            "state": "1"
+          },
+          {
+            "cycle": 423,
+            "state": "0"
+          },
+          {
+            "cycle": 432,
+            "state": "1"
+          },
+          {
+            "cycle": 441,
+            "state": "0"
+          },
+          {
+            "cycle": 450,
+            "state": "1"
+          },
+          {
+            "cycle": 459,
+            "state": "0"
+          },
+          {
+            "cycle": 468,
+            "state": "1"
+          },
+          {
+            "cycle": 477,
+            "state": "0"
+          },
+          {
+            "cycle": 486,
+            "state": "1"
+          },
+          {
+            "cycle": 495,
+            "state": "0"
+          },
+          {
+            "cycle": 504,
+            "state": "1"
+          },
+          {
+            "cycle": 513,
+            "state": "0"
+          },
+          {
+            "cycle": 522,
+            "state": "1"
+          },
+          {
+            "cycle": 531,
+            "state": "0"
+          },
+          {
+            "cycle": 540,
+            "state": "1"
+          },
+          {
+            "cycle": 549,
+            "state": "0"
+          },
+          {
+            "cycle": 558,
+            "state": "1"
+          },
+          {
+            "cycle": 567,
+            "state": "0"
+          },
+          {
+            "cycle": 576,
+            "state": "1"
+          },
+          {
+            "cycle": 585,
+            "state": "0"
+          },
+          {
+            "cycle": 594,
+            "state": "1"
+          },
+          {
+            "cycle": 603,
+            "state": "0"
+          },
+          {
+            "cycle": 612,
+            "state": "1"
+          },
+          {
+            "cycle": 621,
+            "state": "0"
+          },
+          {
+            "cycle": 630,
+            "state": "1"
+          },
+          {
+            "cycle": 639,
+            "state": "0"
+          },
+          {
+            "cycle": 648,
+            "state": "1"
+          },
+          {
+            "cycle": 657,
+            "state": "0"
+          },
+          {
+            "cycle": 666,
+            "state": "1"
+          },
+          {
+            "cycle": 675,
+            "state": "0"
+          },
+          {
+            "cycle": 684,
+            "state": "1"
+          },
+          {
+            "cycle": 693,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 32
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioc",
+      "number": 3,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpioc",
+      "number": 2,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32H735G_DK_OK USART3=PD8 LD1=PC3 LD2=PC2",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1324,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1324,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.13,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 131056,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131056,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 16000,
+    "instructions": 16000,
+    "steps_executed": 16000,
+    "memory_reads": 153,
+    "memory_writes": 6,
+    "peripheral_accesses": 164,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218984,
+        "count": 62,
+        "symbol": "firmware_stm32h735g_dk_smoke::__cortex_m_rt_main"
+      }
+    ]
+  }
+}

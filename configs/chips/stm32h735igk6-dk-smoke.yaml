@@ -1,0 +1,62 @@
+# Focused STM32H735IGK6 model slice for the STM32H735G-DK.
+# It models reset-clock RCC gates, GPIOC/GPIOD, USART3, and the 128 KiB DTCM
+# used by the smoke. The installed MCU has 1 MiB Flash and 564 KiB SRAM; the
+# other SRAM banks and all board devices are omitted from this narrow profile.
+# Sources: ST DS13312, RM0468, CMSIS stm32h735xx.h, and UM2679 Rev 5 / MB1520.
+# Peripheral behavior is shared with LabWired's RM0468-derived H735 models;
+# this board-specific profile has not been checked against physical silicon.
+
+name: "stm32h735igk6-dk-smoke"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+# The firmware keeps the reset HSI selected (64 MHz).
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "1MiB"
+ram:
+  # Only DTCM is mapped by this smoke profile. The other H735IG SRAM banks are
+  # intentionally outside this board claim.
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PC2: { gpio: "gpioc", bit: 2, functions: [{ type: gpio, peripheral: gpioc }] }
+  PC3: { gpio: "gpioc", bit: 3, functions: [{ type: gpio, peripheral: gpioc }] }
+  PD8: { gpio: "gpiod", bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx, af: 7 }] }
+  PD9: { gpio: "gpiod", bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx, af: 7 }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x58020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 2 }
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 3 }
+
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1lenr", bit: 18 }
