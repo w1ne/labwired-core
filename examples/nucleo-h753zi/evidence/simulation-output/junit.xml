@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.008222">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="233b14269184a1a82ecc1f8b50511cb1eb967b97e4c2f2e808933dec50e50305"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.008222">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO_H753ZI_OK LD1=PB0 LD2=PE1 LD3=PB14 USART3=PD8" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpiob:0 &gt;= 16 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpioe:1 &gt;= 16 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpiob:14 &gt;= 16 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

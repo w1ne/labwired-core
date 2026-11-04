@@ -1,0 +1,19 @@
+# NUCLEO-H753ZI: capture USART3 VCP output and all three user LED GPIO paths.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h753zi-smoke"
+  system: "../../configs/systems/nucleo-h753zi.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NUCLEO_H753ZI_OK LD1=PB0 LD2=PE1 LD3=PB14 USART3=PD8"
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 16
+  - gpio_edges:
+      pin: "gpioe:1"
+      min_edges: 16
+  - gpio_edges:
+      pin: "gpiob:14"
+      min_edges: 16
+  - expected_stop_reason: max_steps

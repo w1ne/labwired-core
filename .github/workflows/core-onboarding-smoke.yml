@@ -44,6 +44,7 @@ on:
       - "crates/firmware-nucleo-wba55cg-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h723zg-smoke/**"
+      - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-nucleo-c071rb-smoke/**"
       - "crates/firmware-teensy4-smoke/**"
       - "crates/firmware-uno-r4-wifi-smoke/**"
@@ -210,6 +211,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-h723zg/onboarding-smoke.yaml
             system: configs/systems/nucleo-h723zg.yaml
+          - id: nucleo-h753zi
+            crate: firmware-nucleo-h753zi-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h753zi/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h753zi.yaml
           - id: nucleo-c071rb
             crate: firmware-nucleo-c071rb-smoke
             target: thumbv6m-none-eabi

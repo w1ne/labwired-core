@@ -97,6 +97,7 @@ members = [
     "crates/firmware-nucleo-wba55cg-smoke",
     "crates/firmware-nucleo-h503rb-smoke",
     "crates/firmware-nucleo-h723zg-smoke",
+    "crates/firmware-nucleo-h753zi-smoke",
     "crates/firmware-xiao-nrf54l15-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-arty-litex-smoke",

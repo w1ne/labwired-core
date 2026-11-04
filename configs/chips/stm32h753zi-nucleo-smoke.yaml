@@ -1,0 +1,74 @@
+# Narrow STM32H753ZIT6 profile for the NUCLEO-H753ZI board smoke.
+# This profile exposes only the reset-clock path, three user LED GPIOs,
+# USART3 VCP, and the 128 KiB DTCM used by the smoke image. Other SRAM banks
+# and MCU/board peripherals are outside this profile and remain unsupported.
+#
+# Sources: ST DS12117 (H753 memory/core), RM0433 (H7 register map), the
+# STM32H753 CMSIS device header (peripheral bases/IRQ), and UM2407 Rev 6
+# (MB1364 board wiring: active-high LD1 PB0, LD2 PE1, LD3 PB14; default
+# ST-LINK VCP on USART3 PD8/PD9).
+# The H7 peripheral profiles are reused from the LabWired STM32H735 model;
+# this board profile has not been checked against physical H753 silicon.
+
+name: "stm32h753zit6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+# The smoke leaves the reset HSI clock selected; HSI is 64 MHz.
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x08000000
+  size: "2MiB"
+ram:
+  # The smoke image uses H753 DTCM. The other RAM banks are not exposed here.
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PB0: { gpio: "gpiob", bit: 0, functions: [{ type: gpio, peripheral: gpiob }] }
+  PB14: { gpio: "gpiob", bit: 14, functions: [{ type: gpio, peripheral: gpiob }] }
+  PE1: { gpio: "gpioe", bit: 1, functions: [{ type: gpio, peripheral: gpioe }] }
+  PD8: { gpio: "gpiod", bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx, af: 7 }] }
+  PD9: { gpio: "gpiod", bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx, af: 7 }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 1 }
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 3 }
+
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x58021000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb4enr", bit: 4 }
+
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1lenr", bit: 18 }

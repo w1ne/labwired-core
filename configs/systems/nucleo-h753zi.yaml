@@ -1,0 +1,26 @@
+# NUCLEO-H753ZI (MB1364) narrow smoke profile.
+# Only the three active-high user LEDs and USART3 peripheral path used for the
+# default VCP output are modeled. The ST-LINK USB bridge is not simulated.
+name: "nucleo-h753zi"
+chip: "../chips/stm32h753zi-nucleo-smoke.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 14
+    signal: "output"
+    active_high: true
