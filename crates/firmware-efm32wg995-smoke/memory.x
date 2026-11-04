@@ -1,0 +1,6 @@
+/* Imported EFM32WG995 profile: 256 KiB flash and 32 KiB SRAM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 256K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 32K
+}

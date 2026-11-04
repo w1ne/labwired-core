@@ -30,6 +30,7 @@ on:
       - "crates/firmware-stm32l151-smoke/**"
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
+      - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
@@ -162,6 +163,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32gg995-smoke.yaml
             system: configs/systems/onboarding/efm32gg995.yaml
+          # The WG995 profile exercises the modeled UART0 subset on its M4
+          # instruction profile; this smoke does not exercise the FPU.
+          - id: efm32wg995
+            crate: firmware-efm32wg995-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32wg995-smoke.yaml
+            system: configs/systems/onboarding/efm32wg995.yaml
           # The PG12 profile is limited to its Cortex-M4F memory and USART0 path.
           - id: efm32pg12
             crate: firmware-efm32pg12-smoke

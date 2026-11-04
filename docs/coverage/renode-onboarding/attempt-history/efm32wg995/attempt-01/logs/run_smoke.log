@@ -1,0 +1,8 @@
+2026-11-04T07:50:34.494622Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32wg995.yaml
+2026-11-04T07:50:34.495437Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-04T07:50:34.496599Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "EFM32WG995 UART0 smoke" }) (captured len=0)
+FAIL  1/2 checks · efm32wg995-smoke · 100000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4000_C00C (BFAR valid), at PC 0x0800_045A in `core::ptr::write_volatile` (mod.rs:2178), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x4000C00C
