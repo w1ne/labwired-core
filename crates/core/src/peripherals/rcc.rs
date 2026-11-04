@@ -6,7 +6,7 @@
 //
 // ── Architectural separation ────────────────────────────────────────────────
 // RCC is modelled as one struct PER CHIP FAMILY (F1 / F4 / V2 / L4 / L0, and
-// the later H5/H7/G4/C0/C5/U0 additions), unified by the `Rcc` enum. Each
+// the later H5/H7/G4/C0/C5/U0/U3 additions), unified by the `Rcc` enum. Each
 // family struct owns ONLY the registers that family actually has — so e.g. the
 // L0-only CRRCR/IOPENR registers physically cannot exist on an F4 or L4
 // instance, and a change to one family's model cannot leak into another.
@@ -126,6 +126,10 @@ pub enum RccRegisterLayout {
     /// RCC_IOPENR@0x4C bit 0 (GPIOAEN) is modeled for the NUCLEO-U083RC GPIO
     /// smoke; the U0 clock tree and other RCC registers are out of scope.
     Stm32U0,
+    /// STM32U3 onboarding subset (RM0487 Rev 1). Currently only
+    /// RCC_AHB2ENR1@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-U3C5ZI-Q
+    /// GPIO smoke; the U3 clock tree and other RCC registers are out of scope.
+    Stm32U3,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -150,8 +154,9 @@ impl FromStr for RccRegisterLayout {
             "stm32c0" | "c0" => Ok(Self::Stm32C0),
             "stm32c5" | "c5" => Ok(Self::Stm32C5),
             "stm32u0" | "u0" => Ok(Self::Stm32U0),
+            "stm32u3" | "u3" => Ok(Self::Stm32U3),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3",
                 value
             )),
         }
@@ -2707,6 +2712,49 @@ impl RccModel for U0Rcc {
     }
 }
 
+// ── STM32U3 ────────────────────────────────────────────────────────────────
+// NUCLEO-U3C5ZI-Q GPIO smoke subset. RM0487 Rev 1 §10.5.21 defines
+// RCC_AHB2ENR1@0x8C, reset 0x40000000, with GPIOAEN at bit 0. Only GPIOA's
+// clock gate is modeled here; the U3 clock tree and other enable bits are
+// outside this onboarding profile.
+#[derive(Debug, serde::Serialize)]
+pub struct U3Rcc {
+    ahb2enr1: u32,
+}
+
+impl Default for U3Rcc {
+    fn default() -> Self {
+        Self {
+            ahb2enr1: 1 << 30, // SRAM2EN reset value from RM0487 §10.5.21.
+        }
+    }
+}
+
+impl RccModel for U3Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x8C => self.ahb2enr1,
+            _ => {
+                crate::census_reg!("rcc:U3Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // Preserve the documented SRAM2EN reset state and expose GPIOAEN;
+            // all other gates are outside the NUCLEO-U3C5ZI-Q smoke profile.
+            0x8C => self.ahb2enr1 = (1 << 30) | (value & 1),
+            _ => crate::census_reg!("rcc:U3Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 
 /// RCC peripheral — one variant per chip family. Each variant's registers are
@@ -2727,6 +2775,7 @@ pub enum Rcc {
     Stm32C0(C0Rcc),
     Stm32C5(C5Rcc),
     Stm32U0(U0Rcc),
+    Stm32U3(U3Rcc),
 }
 
 impl Default for Rcc {
@@ -2756,6 +2805,7 @@ impl Rcc {
             RccRegisterLayout::Stm32C0 => Self::Stm32C0(C0Rcc::default()),
             RccRegisterLayout::Stm32C5 => Self::Stm32C5(C5Rcc::default()),
             RccRegisterLayout::Stm32U0 => Self::Stm32U0(U0Rcc::default()),
+            RccRegisterLayout::Stm32U3 => Self::Stm32U3(U3Rcc::default()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
@@ -2945,6 +2995,11 @@ impl Rcc {
                 "iopenr" => Some(0x4C),
                 _ => None,
             },
+            // U3 GPIO smoke subset: AHB2ENR1@0x8C (RM0487 Rev 1 §10.5.21).
+            Self::Stm32U3(_) => match r.as_str() {
+                "ahb2enr" | "ahb2enr1" => Some(0x8C),
+                _ => None,
+            },
             // WB (RM0434, 0x4C/0x58/0x60) and WBA (RM0493, H5-style
             // 0x8C/0x9C/0xA4): the six shared slots, read off the instance's
             // own map. `cfgr1` is WBA RCC_CFGR1@0x1C (WB has RCC_CIFR there
@@ -3013,6 +3068,7 @@ impl Rcc {
             Self::Stm32C0(r) => r,
             Self::Stm32C5(r) => r,
             Self::Stm32U0(r) => r,
+            Self::Stm32U3(r) => r,
         }
     }
 
@@ -3032,6 +3088,7 @@ impl Rcc {
             Self::Stm32C0(r) => r,
             Self::Stm32C5(r) => r,
             Self::Stm32U0(r) => r,
+            Self::Stm32U3(r) => r,
         }
     }
 }
@@ -4201,6 +4258,30 @@ mod tests {
             "must not alias the G0/C0 slot"
         );
         assert_eq!(rcc.read_u32(0x2C).unwrap(), 0, "must not alias the L0 slot");
+    }
+
+    /// U3's GPIOA gate is AHB2ENR1@0x8C (RM0487 Rev 1 §10.5.21), with
+    /// SRAM2EN set at reset. The narrow board profile exposes only GPIOAEN.
+    #[test]
+    fn test_rcc_u3_gpio_clock_gate_offset_and_scope() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32U3);
+        assert_eq!(
+            "stm32u3".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Stm32U3
+        );
+        assert_eq!(rcc.rcc_reg_offset("ahb2enr"), Some(0x8C));
+        assert_eq!(rcc.rcc_reg_offset("ahb2enr1"), Some(0x8C));
+        assert_eq!(rcc.rcc_reg_offset("apb1enr"), None);
+        assert_eq!(
+            rcc.read_u32(0x8C).unwrap(),
+            1 << 30,
+            "U3 AHB2ENR1 reset SRAM2EN"
+        );
+
+        // Other AHB2 gates are outside this profile; GPIOAEN is live.
+        rcc.write_u32(0x8C, u32::MAX).unwrap();
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), (1 << 30) | 1);
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "must not alias U5 AHB2ENR");
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360
