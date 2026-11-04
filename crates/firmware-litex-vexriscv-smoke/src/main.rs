@@ -43,8 +43,10 @@ const TIMER_EV_STATUS: *const u32 = 0x6000_2814 as *const u32;
 const TIMER_EV_PENDING: *mut u32 = 0x6000_2818 as *mut u32;
 
 /// An unmodelled LiteX CSR window (the SPI-flash controller at 0x60005000).
-/// Reading it documents the declared-stub behaviour: an unmodelled window
-/// answers zeros, and the smoke says so on the wire.
+/// The original profile declares this stub to make the omission explicit.
+/// The imported Zephyr profile builds with `no-unmodelled-spi-probe` and does
+/// not map or access the window.
+#[cfg(not(feature = "no-unmodelled-spi-probe"))]
 const SPI_CSR: *const u32 = 0x6000_5000 as *const u32;
 
 /// TX one byte through the LiteX UART: poll `txfull` until clear (idle 0 =
@@ -130,10 +132,13 @@ fn main() -> ! {
     puts("LITEX VEXRISCV SMOKE\n");
     puts("cpu=rv32im uart=litex\n");
 
-    // The SPI controller is declared, not modelled: it answers zeros.
-    puts("spi=");
-    put_hex32(unsafe { core::ptr::read_volatile(SPI_CSR) });
-    putc(b'\n');
+    // Keep the explicit stub probe only in the original generic LiteX profile.
+    #[cfg(not(feature = "no-unmodelled-spi-probe"))]
+    {
+        puts("spi=");
+        put_hex32(unsafe { core::ptr::read_volatile(SPI_CSR) });
+        putc(b'\n');
+    }
 
     timer_one_shot(100_000);
 

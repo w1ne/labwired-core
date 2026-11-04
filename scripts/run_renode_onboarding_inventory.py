@@ -200,6 +200,12 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
     },
+    "litex_vexriscv_zephyr": {
+        "crate": "firmware-litex-vexriscv-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "features": "no-unmodelled-spi-probe",
+        "script": "examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml",
+    },
     "litex_ibex": {
         "crate": "firmware-litex-ibex-smoke",
         "target": "riscv32imc-unknown-none-elf",
@@ -339,6 +345,8 @@ def main() -> int:
                     "3600",
                 ]
             )
+            if mapping.get("features"):
+                command.extend(["--features", mapping["features"]])
             attempted += 1
 
         result = subprocess.run(

@@ -324,6 +324,14 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv.yaml
+          # This Zephyr imported target shares the LiteX VexRiscv SoC. Its
+          # smoke omits the unmodelled SPI window and covers UART plus timer.
+          - id: litex_vexriscv_zephyr
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_zephyr.yaml
           - id: litex_ibex
             crate: firmware-litex-ibex-smoke
             target: riscv32imc-unknown-none-elf
@@ -379,6 +387,7 @@ jobs:
           scripts/onboarding_smoke.sh \
             --target-id "${{ matrix.id }}" \
             --crate "${{ matrix.crate }}" \
+            --features "${{ matrix.features }}" \
             --target "${{ matrix.target }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \

@@ -3,6 +3,7 @@ set -euo pipefail
 
 TARGET_ID=""
 CRATE=""
+CRATE_FEATURES=""
 TARGET=""
 SCRIPT=""
 SYSTEM=""
@@ -18,6 +19,7 @@ Usage: scripts/onboarding_smoke.sh --target-id ID --system PATH --out-dir DIR [o
 
 Smoke mode options:
   --crate NAME --target TRIPLE --script PATH
+  --features NAME[,NAME...]
   --profile release|debug
   --threshold-seconds N
 
@@ -50,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --crate)
       CRATE="$2"
+      shift 2
+      ;;
+    --features)
+      CRATE_FEATURES="$2"
       shift 2
       ;;
     --target)
@@ -215,6 +221,11 @@ infer_failure_hint() {
 run_smoke_output_dir="${OUT_DIR}/simulation-output"
 mkdir -p "${run_smoke_output_dir}"
 
+firmware_build_args=(cargo build -p "${CRATE}")
+if [[ -n "${CRATE_FEATURES}" ]]; then
+  firmware_build_args+=(--features "${CRATE_FEATURES}")
+fi
+
 # No RUSTFLAGS here. A firmware crate passes its own linker script from its
 # build.rs, so `cargo build -p <crate> --target <t>` links on its own.
 #
@@ -233,7 +244,7 @@ if [[ "${INVENTORY_ONLY}" == "true" ]]; then
 elif ! run_stage build_cli cargo build -p labwired-cli; then
   :
 elif [[ "${PROFILE}" == "release" ]]; then
-  if ! run_stage build_firmware cargo build -p "${CRATE}" --release --target "${TARGET}"; then
+  if ! run_stage build_firmware "${firmware_build_args[@]}" --release --target "${TARGET}"; then
     :
   else
     run_attempted="true"
@@ -242,7 +253,7 @@ elif [[ "${PROFILE}" == "release" ]]; then
     fi
   fi
 else
-  if ! run_stage build_firmware cargo build -p "${CRATE}" --target "${TARGET}"; then
+  if ! run_stage build_firmware "${firmware_build_args[@]}" --target "${TARGET}"; then
     :
   else
     run_attempted="true"

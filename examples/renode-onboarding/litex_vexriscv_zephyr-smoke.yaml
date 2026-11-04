@@ -1,0 +1,16 @@
+# Exact-import smoke for the narrowed LiteX VexRiscv Zephyr system profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke"
+  system: "../../configs/systems/onboarding/litex_vexriscv_zephyr.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "LITEX VEXRISCV SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im uart=litex"
+      - "timer=running"
+      - "timer=zero"
+      - "hb=0 txfull=00000000"
+      - "hb=1 txfull=00000000"
+  - expected_stop_reason: max_steps
