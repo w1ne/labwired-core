@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml",
   "system": "configs/systems/onboarding/litex_vexriscv_zephyr.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T10:48:24Z",
-  "finished_at_utc": "2026-11-04T10:48:26Z",
-  "elapsed_seconds": 3,
-  "elapsed_ms": 2036,
+  "started_at_utc": "2026-11-04T11:05:33Z",
+  "finished_at_utc": "2026-11-04T11:05:35Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1968,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.315,
-    "build_firmware": 0.204,
-    "run_smoke": 1.507
+    "build_cli": 0.305,
+    "build_firmware": 0.203,
+    "run_smoke": 1.45
   },
   "stages_ms": {
-    "build_cli": 315,
-    "build_firmware": 204,
-    "run_smoke": 1507
+    "build_cli": 305,
+    "build_firmware": 203,
+    "run_smoke": 1450
   }
 }

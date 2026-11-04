@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32wg995-smoke.yaml",
   "system": "configs/systems/onboarding/efm32wg995.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T10:48:15Z",
-  "finished_at_utc": "2026-11-04T10:48:16Z",
+  "started_at_utc": "2026-11-04T11:05:23Z",
+  "finished_at_utc": "2026-11-04T11:05:24Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 799,
+  "elapsed_ms": 806,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.298,
-    "build_firmware": 0.204,
-    "run_smoke": 0.287
+    "build_cli": 0.303,
+    "build_firmware": 0.199,
+    "run_smoke": 0.293
   },
   "stages_ms": {
-    "build_cli": 298,
-    "build_firmware": 204,
-    "run_smoke": 287
+    "build_cli": 303,
+    "build_firmware": 199,
+    "run_smoke": 293
   }
 }
