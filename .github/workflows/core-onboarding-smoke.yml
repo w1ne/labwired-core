@@ -451,6 +451,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32h743-smoke.yaml
             system: configs/systems/onboarding/stm32h743.yaml
+          # The generic H7 import now uses the sourced Cortex-M7 memory map and
+          # exposes only the RCC, GPIOB/GPIOD, and USART3 paths in the shared smoke.
+          - id: stm32h7
+            crate: firmware-stm32h743-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/stm32h7-smoke.yaml
+            system: configs/systems/onboarding/stm32h7.yaml
           # The H753 descriptor keeps only the same modeled H7 surfaces as the
           # shared smoke; its imported system is exercised directly.
           - id: stm32h753
