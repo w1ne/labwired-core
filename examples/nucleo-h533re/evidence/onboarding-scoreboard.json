@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 15939,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 15.939
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-h533re",
+      "status": "pass",
+      "crate": "firmware-nucleo-h533re-smoke",
+      "target_triple": "thumbv8m.main-none-eabi",
+      "script": "examples/nucleo-h533re/onboarding-smoke.yaml",
+      "system": "configs/systems/nucleo-h533re.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-04T07:24:28Z",
+      "finished_at_utc": "2026-11-04T07:24:44Z",
+      "elapsed_seconds": 16,
+      "elapsed_ms": 15939,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 15.173,
+        "build_firmware": 0.457,
+        "run_smoke": 0.299
+      },
+      "stages_ms": {
+        "build_cli": 15173,
+        "build_firmware": 457,
+        "run_smoke": 299
+      },
+      "_artifact_path": "examples/nucleo-h533re/evidence"
+    }
+  ]
+}

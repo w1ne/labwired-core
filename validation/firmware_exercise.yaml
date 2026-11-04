@@ -379,6 +379,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: stm32h533re-nucleo-gpio-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32h723zg-nucleo-smoke
     arch: cortex-m7
     headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."

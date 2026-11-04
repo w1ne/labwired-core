@@ -248,6 +248,10 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
 
+### `stm32h533re-nucleo-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
 ### `stm32h723zg-nucleo-smoke`
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
