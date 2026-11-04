@@ -1,0 +1,12 @@
+# NUCLEO-U031R8 (MB1932), scoped to its default user LED connection.
+# USART2/VCP, USB, ST-LINK, buttons, and other board paths are omitted.
+name: "nucleo-u031r8"
+chip: "../chips/stm32u031r8-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_green_ld4"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

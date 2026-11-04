@@ -2051,6 +2051,15 @@ name = "firmware-nucleo-l4a6zg-smoke"
 version = "0.1.0"
 
 [[package]]
+name = "firmware-nucleo-u031r8-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-u083rc-smoke"
 version = "0.1.0"
 dependencies = [

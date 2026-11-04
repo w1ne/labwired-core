@@ -122,6 +122,7 @@ members = [
     "crates/firmware-nucleo-u385rg-q-smoke",
     "crates/firmware-stm32h573i-dk-smoke",
     "crates/firmware-nucleo-u083rc-smoke",
+    "crates/firmware-nucleo-u031r8-smoke",
     "crates/firmware-nucleo-h723zg-smoke",
     "crates/firmware-nucleo-h753zi-smoke",
     "crates/firmware-nucleo-h7a3zi-q-smoke",
@@ -365,6 +366,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nucleo-g0b1re-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-u031r8-smoke]
 codegen-units = 1
 opt-level = "s"
 
