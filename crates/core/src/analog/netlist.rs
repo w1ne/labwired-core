@@ -81,11 +81,12 @@
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode
-//! saturation-current and breakdown-voltage laws below, and most terminal
-//! resistances, …) are **accepted and ignored rather than
+//! saturation-current, breakdown-voltage and series-resistance laws below,
+//! and most terminal resistances, …) are **accepted and ignored rather than
 //! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
 //! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
-//! breakdown voltage. Diode capacitance and series resistance remain fixed.
+//! breakdown voltage; `TRS1`/`TRS2` adjust the series resistance. Diode
+//! capacitance remains fixed.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -140,8 +141,9 @@
 //! `ISR` (using `N` and `NR`, respectively). Without `TEMP`, the historical
 //! fixed 300 K diode behavior is retained. `TCV` (also `TBV1`) applies a
 //! linear coefficient to `BV` when `TEMP` is present:
-//! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. Depletion charge, `TT`, and `RS`
-//! are not temperature-adjusted.
+//! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. `RS` uses the polynomial
+//! `RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `TRS` aliases `TRS1` and
+//! `ΔT = TEMP − TNOM`. Depletion charge and `TT` are not temperature-adjusted.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -651,6 +653,27 @@ pub struct DiodeModel {
     /// Breakdown-voltage temperature coefficient `TCV`/`TBV1`, per Celsius
     /// degree. Applies when an instance `TEMP` is present.
     pub tcv: f64,
+    /// First-order series-resistance temperature coefficient `TRS1`/`TRS`,
+    /// per Celsius degree. Applies when an instance `TEMP` is present.
+    pub trs1: f64,
+    /// Second-order series-resistance temperature coefficient `TRS2`, per
+    /// Celsius degree squared. Applies when an instance `TEMP` is present.
+    pub trs2: f64,
+}
+
+impl DiodeModel {
+    /// Series resistance at the instance temperature, in ohms.
+    ///
+    /// With no instance temperature, retain the engine's historical fixed
+    /// 300 K behavior and nominal resistance. With `TEMP`, apply ngspice's
+    /// quadratic `TRS1`/`TRS2` law measured from `TNOM`.
+    pub fn series_resistance_ohms(self, temperature_celsius: Option<f64>) -> f64 {
+        let Some(temperature_celsius) = temperature_celsius else {
+            return self.rs;
+        };
+        let delta = temperature_celsius - self.tnom_celsius;
+        self.rs * (1.0 + self.trs1 * delta + self.trs2 * delta * delta)
+    }
 }
 
 impl Default for DiodeModel {
@@ -676,6 +699,8 @@ impl Default for DiodeModel {
             xti: 3.0,
             tnom_celsius: 27.0,
             tcv: 0.0,
+            trs1: 0.0,
+            trs2: 0.0,
         }
     }
 }
@@ -1065,6 +1090,8 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     xti: 3.0,
     tnom_celsius: 27.0,
     tcv: 0.0,
+    trs1: 0.0,
+    trs2: 0.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1488,6 +1515,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             xti: 3.0,
             tnom_celsius: 27.0,
             tcv: 0.0,
+            trs1: 0.0,
+            trs2: 0.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1514,6 +1543,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             xti: 3.0,
             tnom_celsius: 27.0,
             tcv: 0.0,
+            trs1: 0.0,
+            trs2: 0.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -1694,13 +1725,15 @@ pub struct Diode {
     pub anode: NodeRef,
     /// Cathode.
     pub cathode: NodeRef,
-    /// The junction's anode side: the same node as [`Self::anode`] when
-    /// `RS = 0`, and the internal node `<name>#internal` when it is not.
+    /// The junction's anode side: the same node as [`Self::anode`] when the
+    /// temperature-adjusted `RS` is zero, and `<name>#internal` when it is not.
     pub junction_anode: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
     /// Resolved model parameters.
     pub model: DiodeModel,
+    /// Model series resistance after applying the instance `TEMP`, in ohms.
+    pub series_resistance_ohms: f64,
     /// Instance junction temperature in Celsius. `None` preserves the
     /// engine's historical fixed 300 K behavior.
     pub temperature_celsius: Option<f64>,
@@ -3141,6 +3174,8 @@ fn bind_models(
                     || !model.tnom_celsius.is_finite()
                     || model.tnom_celsius <= -273.15
                     || !model.tcv.is_finite()
+                    || !model.trs1.is_finite()
+                    || !model.trs2.is_finite()
                     || !model.ik.is_finite()
                     || model.ik < 0.0
                     || !model.ikr.is_finite()
@@ -3149,6 +3184,7 @@ fn bind_models(
                     || model.isr < 0.0
                     || !model.nr.is_finite()
                     || model.nr <= 0.0
+                    || !model.rs.is_finite()
                     || model.rs < 0.0
                     || !model.tt.is_finite()
                     || model.tt < 0.0
@@ -3165,7 +3201,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3217,10 +3253,17 @@ fn bind_models(
                         ))
                     }
                 };
+                let series_resistance_ohms =
+                    model.series_resistance_ohms(device.temperature_celsius);
+                if !series_resistance_ohms.is_finite() || series_resistance_ohms < 0.0 {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode RS must be finite and >= 0".to_string(),
+                    ));
+                }
                 // A series resistance needs somewhere to drop its voltage, so
                 // it gets the internal node SPICE also creates. It is a real
                 // node: it costs an unknown and `v(d1#internal)` probes it.
-                let junction_anode = if model.rs > 0.0 {
+                let junction_anode = if series_resistance_ohms > 0.0 {
                     circuit.intern(&format!("{}#internal", device.name))
                 } else {
                     device.nodes[0]
@@ -3232,6 +3275,7 @@ fn bind_models(
                     junction_anode,
                     model_name: device.model_name,
                     model,
+                    series_resistance_ohms,
                     temperature_celsius: device.temperature_celsius,
                     breakdown,
                 });
@@ -3794,6 +3838,8 @@ fn parse_model(
             (ModelCard::Diode(model), "XTI") => model.xti = value,
             (ModelCard::Diode(model), "TNOM") => model.tnom_celsius = value,
             (ModelCard::Diode(model), "TCV" | "TBV1") => model.tcv = value,
+            (ModelCard::Diode(model), "TRS" | "TRS1") => model.trs1 = value,
+            (ModelCard::Diode(model), "TRS2") => model.trs2 = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
             (ModelCard::Diode(model), "IKR") => model.ikr = value,
             (ModelCard::Diode(model), "ISR") => model.isr = value,
@@ -4025,6 +4071,8 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     xti: 3.0,
     tnom_celsius: 27.0,
     tcv: 0.0,
+    trs1: 0.0,
+    trs2: 0.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -4145,6 +4193,7 @@ impl Lowering<'_> {
             junction_anode: anode,
             model_name: "clamp".to_string(),
             model: MACRO_CLAMP_DIODE,
+            series_resistance_ohms: 0.0,
             temperature_celsius: None,
             breakdown: None,
         });
@@ -4680,6 +4729,7 @@ fn lower_regulator(
         junction_anode: a,
         model_name: "limit-clamp".to_string(),
         model: REGULATOR_LIMIT_DIODE,
+        series_resistance_ohms: 0.0,
         temperature_celsius: None,
         breakdown: None,
     });

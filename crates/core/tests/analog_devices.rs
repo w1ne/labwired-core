@@ -198,6 +198,95 @@ mod analog {
         );
     }
 
+    /// `TRS`/`TRS1` and `TRS2` apply a quadratic temperature law to the diode's
+    /// internal series resistance. Check the resulting load-line current and
+    /// both sides of the internal resistor against a separately solved diode
+    /// equation, with `IS` held temperature-independent to isolate this law.
+    #[test]
+    fn diode_series_resistance_temperature_coefficients_change_the_load_line() {
+        let (is, n, rs, trs1, trs2, tnom, load, supply) =
+            (1e-14, 1.2, 300.0, 1e-3, 2e-6, 27.0, 1_000.0, 2.0);
+        let expected = |temperature_celsius: f64| {
+            let delta = temperature_celsius - tnom;
+            let rs_at_temperature = rs * (1.0 + trs1 * delta + trs2 * delta * delta);
+            let vt = 8.617_333_262_145e-5 * (temperature_celsius + 273.15);
+            let residual = |junction: f64| {
+                (supply - junction) / (load + rs_at_temperature)
+                    - is * (f64::exp(junction / (n * vt)) - 1.0)
+            };
+            let (mut low, mut high) = (0.0, supply);
+            for _ in 0..100 {
+                let mid = 0.5 * (low + high);
+                if residual(mid) > 0.0 {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            let junction = 0.5 * (low + high);
+            let current = (supply - junction) / (load + rs_at_temperature);
+            (rs_at_temperature, junction, current)
+        };
+
+        let mut currents = Vec::new();
+        for temperature_celsius in [27.0, 127.0] {
+            let netlist = format!(
+                "V1 supply 0 dc {supply}\n\
+                 R1 supply a {load}\n\
+                 D1 a 0 DMOD TEMP={temperature_celsius}\n\
+                 .model DMOD D(IS={is} N={n} RS={rs} EG=0 XTI=0 TNOM={tnom} TRS={trs1} TRS2={trs2})\n"
+            );
+            let solver = build(&netlist);
+            let diode = &solver.circuit().diodes[0];
+            let (expected_rs, expected_junction, expected_current) = expected(temperature_celsius);
+            let external = solver.circuit().node("a").expect("external diode node");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("series resistance creates the junction node");
+            let actual_current = source_current(&solver, "V1");
+            let actual_external = solver.node_voltage(external);
+            let actual_junction = solver.node_voltage(junction);
+
+            assert_eq!(diode.model.rs, rs, "RS remains the nominal model value");
+            assert_eq!(diode.model.trs1, trs1, "TRS is the TRS1 alias");
+            assert_eq!(diode.model.trs2, trs2);
+            assert!(
+                (diode.series_resistance_ohms - expected_rs).abs() < 1e-12,
+                "TEMP={temperature_celsius} °C: expected RS(T)={expected_rs} Ω, got {} Ω",
+                diode.series_resistance_ohms
+            );
+            assert!(
+                relative(actual_current, expected_current) < 2e-7,
+                "TEMP={temperature_celsius} °C: expected load current {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_junction - expected_junction).abs() < 2e-8,
+                "TEMP={temperature_celsius} °C: expected junction {expected_junction} V, got {actual_junction} V"
+            );
+            assert!(
+                (actual_external - actual_junction - actual_current * expected_rs).abs() < 2e-8,
+                "the internal diode resistor must carry the load current at RS(T)"
+            );
+            currents.push(actual_current);
+        }
+        assert_ne!(
+            currents[0].to_bits(),
+            currents[1].to_bits(),
+            "the temperature-adjusted series resistance must change the solved load line"
+        );
+
+        let fixed_temperature = build(&format!(
+            "V1 supply 0 dc {supply}\nR1 supply a {load}\nD1 a 0 DMOD\n\
+             .model DMOD D(IS={is} N={n} RS={rs} EG=0 XTI=0 TNOM={tnom} TRS={trs1} TRS2={trs2})\n"
+        ));
+        assert_eq!(
+            fixed_temperature.circuit().diodes[0].series_resistance_ohms,
+            rs,
+            "without instance TEMP, preserve the nominal fixed-temperature resistance"
+        );
+    }
+
     /// `TCV`/`TBV1` moves a zener's specified breakdown voltage relative to
     /// `TNOM`. Check the shifted reverse knee through model `RS` and an external
     /// load, so ignoring the coefficient or applying it at the external node

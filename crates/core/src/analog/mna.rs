@@ -2120,13 +2120,13 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
-            if diode.model.rs > 0.0 {
+            if diode.series_resistance_ohms > 0.0 {
                 conductance(
                     matrix,
                     dim,
                     diode.anode,
                     diode.junction_anode,
-                    1.0 / diode.model.rs,
+                    1.0 / diode.series_resistance_ohms,
                 );
             }
             let vj = self.diode_vj[index];

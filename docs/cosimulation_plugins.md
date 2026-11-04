@@ -444,7 +444,7 @@ input at a different element.
 ### Semiconductor models
 
 ```text
-.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms>)
+.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> RB=<ohms> RBM=<ohms> IRB=<a>)
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
@@ -502,7 +502,10 @@ recombination current from `ISR`/`NR`, clamped in reverse bias at the
 from `TT` (defaults to zero), including first-order soft reverse recovery
 when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set, with `IBV`
 setting the knee current and optional `NBV` selecting its reverse exponential
-coefficient (default `N`). Gummel–Poon BJT
+coefficient (default `N`). With instance `TEMP`, diode series resistance uses
+`TRS1` (also `TRS`) and `TRS2` as
+`RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `ΔT = TEMP − TNOM` and both
+coefficients default to zero. Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity) with optional
 `NKF` (also `NK`) exponent (0.5 when omitted), and B-E/B-C base
@@ -537,8 +540,12 @@ emission coefficient, and first-order soft-recovery response are exercised in
 [`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). BJT `NKF`
 is checked against solved forward/reverse terminal currents and its effect on
 transit charge. Every
-parameter is taken at 300.00 K; there is no temperature
-model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
+The diode's explicitly supported temperature laws are instance `TEMP` for
+thermal voltage and saturation current, plus `TCV`/`TBV1` for breakdown and
+`TRS1`/`TRS2` for series resistance. Other semiconductor parameters remain at
+their nominal values; the other device families have no temperature model.
+Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the
+deck is specifically checking an in-core temperature law.
 
 **What is not modeled:** Ward–Dutton mode includes strong-inversion channel
 charge only; it omits intrinsic accumulation/depletion charge. Select Meyer
