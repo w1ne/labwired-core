@@ -36,6 +36,7 @@ on:
       - "crates/firmware-efr32mg26-smoke/**"
       - "crates/firmware-efr32mg24-smoke/**"
       - "examples/renode-onboarding/brd4186c-smoke.yaml"
+      - "examples/renode-onboarding/brd4162a-smoke.yaml"
       - "examples/renode-onboarding/brd4402a-smoke.yaml"
       - "crates/firmware-efr32xg22-smoke/**"
       - "crates/firmware-efr32mg12-smoke/**"
@@ -351,6 +352,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/brd4186c-smoke.yaml
             system: configs/systems/onboarding/brd4186c.yaml
+          # BRD4162A uses the EFR32MG12. Its imported profile is narrowed to
+          # the M4F, code/sequence memory, and USART0 used by this smoke.
+          - id: brd4162a
+            crate: firmware-efr32mg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/brd4162a-smoke.yaml
+            system: configs/systems/onboarding/brd4162a.yaml
           # BRD4402A uses the xG22 MCU. Its imported profile exposes only the
           # model-backed CMU and USART0 used by the exact-system smoke.
           - id: brd4402a
