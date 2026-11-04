@@ -6,18 +6,12 @@
 
 name: stm32w108
 arch: arm
+# Boot-only profile. The imported timers are outside this smoke, so this
+# profile does not claim any peripheral windows.
 flash:
   base: 134217728
   size: 262144B
 ram:
   base: 536870912
   size: 1048576B
-peripherals:
-- id: timer1
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073799168
-- id: timer2
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073803264
+peripherals: []

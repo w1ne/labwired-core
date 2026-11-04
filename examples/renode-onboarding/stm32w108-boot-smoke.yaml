@@ -1,0 +1,9 @@
+# CPU-only instruction stepping smoke for the narrowed imported STM32W108 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke"
+  system: "../../configs/systems/onboarding/stm32w108.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

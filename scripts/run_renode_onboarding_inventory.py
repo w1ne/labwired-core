@@ -25,6 +25,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/cc2538-smoke.yaml",
     },
+    "stm32w108": {
+        "crate": "firmware-stm32w108-boot-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/stm32w108-boot-smoke.yaml",
+    },
     "atsamd51g19a": {
         "crate": "firmware-atsamd51-demo",
         "target": "thumbv7em-none-eabi",

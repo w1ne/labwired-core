@@ -2061,6 +2061,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32w108-boot-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-uart-echo-fixture"
 version = "0.25.0"
 dependencies = [

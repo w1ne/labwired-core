@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      536870912,
+      536870912,
+      134218840,
+      0,
+      0,
+      0,
+      0,
+      537919480,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537919480,
+      134218791,
+      134218830
+    ],
+    "pc": 134218830,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "a1db978b3964ef07fb17756561ad66c7fab9de292dc57d0683473a3bfd2c314f",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32w108.yaml",
+    "script": "examples/renode-onboarding/stm32w108-boot-smoke.yaml"
+  }
+}

@@ -39,6 +39,7 @@ on:
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/firmware-ek-ra8m1-smoke/**"
+      - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/cli/**"
@@ -60,6 +61,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # This imported STM32W108 profile is intentionally CPU-only: its
+          # imported timer windows are not covered by this instruction smoke.
+          - id: stm32w108
+            crate: firmware-stm32w108-boot-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stm32w108-boot-smoke.yaml
+            system: configs/systems/onboarding/stm32w108.yaml
           # The imported EK-RA8M1 profile uses the accurate RA8M1 memory map
           # and limits its claim to the modeled Cortex-M85, SYSTEM, GPIO/PFS,
           # and SCI_B paths. Module-stop gating remains outside this smoke.
