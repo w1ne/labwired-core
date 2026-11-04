@@ -58,10 +58,10 @@ MIRRORS = (0x101, 0x106, 0x181, 0x186)
 
 SFRS = {
     "INDF": 0x00, "TMR0": 0x01, "PCL": 0x02, "STATUS": 0x03, "FSR": 0x04,
-    "PORTA": 0x05, "PORTB": 0x06,
+    "PORTA": 0x05,
     "PCLATH": 0x0A, "INTCON": 0x0B, "PIR1": 0x0C,
     "RCSTA": 0x18, "TXREG": 0x19,
-    "OPTION_REG": 0x81, "TRISA": 0x85, "TRISB": 0x86,
+    "OPTION_REG": 0x81, "TRISA": 0x85,
     "PIE1": 0x8C, "TXSTA": 0x98, "SPBRG": 0x99,
 }
 # Optional SFRs: if the part has them they must be at these addresses.
@@ -69,11 +69,12 @@ OPTIONAL_SFRS = {
     "PORTD": 0x08, "PORTE": 0x09, "TRISD": 0x88, "TRISE": 0x89,
     "PIR2": 0x0D, "PIE2": 0x8D,
 }
-# Optional ports the model always decodes (PORTC reads latch & !TRISC &
-# mask). A part without one (PIC16F627A/628A/648A, PIC16F87/88) gets a zero
-# port mask, so the port reads 0 and ignores writes, as on silicon; the
-# address must then be free in the header.
-OPTIONAL_FREE_SFRS = {"PORTC": 0x07, "TRISC": 0x87}
+# Optional ports the model always decodes (PORTx reads latch & !TRISx & mask).
+# A part without one gets a zero port mask, so the address reads 0 and ignores
+# writes, as on silicon; the address must then be free in the header.
+OPTIONAL_FREE_SFRS = {
+    "PORTB": 0x06, "PORTC": 0x07, "TRISB": 0x86, "TRISC": 0x87,
+}
 # Bit masks the model decodes.
 BITS = {
     "C": 0x01, "DC": 0x02, "Z": 0x04, "NOT_PD": 0x08, "NOT_TO": 0x10,
@@ -81,9 +82,14 @@ BITS = {
     "GIE": 0x80, "PEIE": 0x40,
     "TXIF": 0x10, "TXEN": 0x20, "TRMT": 0x02, "SPEN": 0x80,
 }
-NO_USART_PARTS = {"pic16f819"}
+NO_USART_PARTS = {
+    "pic16f84a", "pic16f610", "pic16f616", "pic16f630", "pic16f676", "pic16f677", "pic16f684", "pic16f685",
+    "pic16f631", "pic16f716", "pic16f785",
+    "pic16f818", "pic16f819",
+}
 NO_USART_SFRS = {"RCSTA", "TXREG", "TXSTA", "SPBRG"}
 NO_USART_BITS = {"TXIF", "TXEN", "TRMT", "SPEN"}
+NO_PIR_PARTS = {"pic16f84a"}
 
 
 # Enhanced mid-range (PIC16F1xxx, 32 banks): the PIC16F182x/F193x layout
@@ -107,6 +113,11 @@ E_SFRS = {
 # the PIRx/PIEx interrupt scan, ports, OSCSTAT ready bits). A part may lack
 # the register, but then no other SFR may sit at the address.
 E_OPTIONAL_SFRS = {"OSCSTAT": 0x09A}
+E_NO_EUSART_PARTS = {
+    "pic16f1503", "pic16f1507", "pic16lf1507", "pic16f1613", "pic16f1703",
+    "pic16f1707",
+    "pic16lf1707", "pic16lf1703",
+}
 # The two enhanced layouts, keyed by where PIR1 sits: how many PORT/TRIS/LAT
 # addresses the model decodes from PORTA up (`Pic16SfrMap::ports`), and its
 # PIR/PIE list. PIC16F161x has PORTA-C only, so its PIR1-5/PIE1-5 start one
@@ -192,9 +203,13 @@ def check(part: str) -> list[str]:
     bits = {name: want for name, want in BITS.items()
             if part not in NO_USART_PARTS or name not in NO_USART_BITS}
     for name, want in sfrs.items():
+        if part in NO_PIR_PARTS and name in {"PIR1", "PIE1"}:
+            continue
         if addrs.get(name) != want:
             bad.append(f"{name} at {addrs.get(name)!r}, model {want:#x}")
     for name, want in OPTIONAL_SFRS.items():
+        if part in NO_PIR_PARTS and name in {"PIR2", "PIE2"}:
+            continue
         if name in addrs and addrs[name] != want:
             bad.append(f"{name} at {addrs[name]:#x}, model {want:#x}")
     for name, want in OPTIONAL_FREE_SFRS.items():
@@ -206,6 +221,8 @@ def check(part: str) -> list[str]:
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
     for name, want in bits.items():
+        if part in NO_PIR_PARTS and name == "PEIE":
+            continue
         found = re.search(rf"#define\s+_{name}\s+0x([0-9A-Fa-f]+)", h)
         if not found or int(found[1], 16) != want:
             bad.append(f"bit {name} {found[1] if found else None}, model {want:#x}")
@@ -250,6 +267,8 @@ def check_enhanced(part: str) -> list[str]:
     pir1 = addrs.get("PIR1") if addrs.get("PIR1") in E_LAYOUTS else 0x011
     required, optional = e_layout_sfrs(pir1)
     for names, want in {**E_SFRS, **required}.items():
+        if part in E_NO_EUSART_PARTS and names[0] in {"TXREG", "SPBRGL", "RCSTA", "TXSTA"}:
+            continue
         if not any(addrs.get(n) == want for n in names):
             bad.append(f"{names[0]} at {addrs.get(names[0])!r}, model {want:#x}")
     for name, want in {**E_OPTIONAL_SFRS, **optional}.items():
@@ -261,6 +280,10 @@ def check_enhanced(part: str) -> list[str]:
             if others:
                 bad.append(f"{want:#x} is {others[0]}, model {name}")
     for reg_names, bit_names, want in E_BITS:
+        if part in E_NO_EUSART_PARTS and (
+                reg_names[0] in {"TXSTA", "RCSTA"}
+                or (reg_names[0] == "PIR1" and bit_names[0] == "TXIF")):
+            continue
         reg = next((r for r in reg_names if r in regs), None)
         got = None if reg is None else next(
             (regs[reg][b] for b in bit_names if b in regs[reg]), None)
@@ -288,20 +311,37 @@ def check_enhanced(part: str) -> list[str]:
 
 
 def geometry(part: str):
-    """(flash words, port masks, aliases) from the lkr and the header."""
+    """(flash words, port masks, aliases) from the SDCC db, lkr and header."""
     lkr = (lkr_dir() / f"{part[3:]}_g.lkr").read_text()
     pages = re.findall(
         r"CODEPAGE\s+NAME=page\d*\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
-    flash_words = max(int(end, 16) for _, end in pages) + 1
+    program = device_db(part)["program"]
+    flash_words = int(program[:-1]) * 1024 if program.endswith("K") else int(program)
+    code_words = max(int(end, 16) for _, end in pages) + 1
+    if code_words != flash_words:
+        oscval = re.search(
+            r"CODEPAGE\s+NAME=oscval\s+START=(0x\w+)\s+END=(0x\w+)", lkr)
+        osc_start = int(oscval[1], 16) if oscval else None
+        osc_end = int(oscval[2], 16) if oscval else None
+        calibration_words = 0 if not oscval else osc_end - osc_start + 1
+        if (code_words + calibration_words != flash_words or not oscval
+                or osc_start != code_words or osc_end + 1 != flash_words):
+            sys.exit(f"error: {part}: {program} words, but linker code pages expose "
+                     f"{code_words} plus {calibration_words} calibration words")
     groups: dict[str, list[tuple[int, int]]] = {}
     for name, start, end in re.findall(
             r"SHAREBANK\s+NAME=(\w+)\s+START=(0x\w+)\s+END=(0x\w+)", lkr):
-        groups.setdefault(name, []).append((int(start, 16), int(end, 16)))
+        ranges = groups.setdefault(name, [])
+        bank_range = (int(start, 16), int(end, 16))
+        if bank_range not in ranges:
+            ranges.append(bank_range)
     aliases = []
     for ranges in groups.values():
         target = ranges[0][0]
         for start, end in ranges[1:]:
-            aliases.append((start, end, target))
+            alias = (start, end, target)
+            if alias not in aliases:
+                aliases.append(alias)
     h = header(part)
     masks = []
     for port in "ABCDE":
@@ -320,6 +360,8 @@ def row(part: str) -> str:
     flash_words, masks, aliases, own = geometry(part)
     m = ", ".join(f"0x{x:02X}" for x in masks)
     a = ", ".join(f"(0x{s:03X}, 0x{e:03X}, 0x{t:03X})" for s, e, t in aliases)
+    if part == "pic16f84a":
+        return f'    dev_f84a("{part}", {flash_words}, [{m}], &[{a}]),'
     if own:
         o = ", ".join(f"0x{x:03X}" for x in own)
         return f'    dev_own("{part}", {flash_words}, [{m}], &[{a}], &[{o}]),'
@@ -370,7 +412,10 @@ def enhanced_geometry(part: str):
         sys.exit(f"error: {part}: pic14devices.txt {flash_words} words, lkr {lkr_words}")
     h = header(part)
     pir1 = int(re.search(r"#define\s+PIR1_ADDR\s+0x([0-9A-Fa-f]+)", h)[1], 16)
-    return flash_words, port_masks(part), E_MAPS[(pir1, osc_ready(h))]
+    map_name = E_MAPS[(pir1, osc_ready(h))]
+    if part in E_NO_EUSART_PARTS:
+        map_name = map_name.replace("_MAP", "_NO_EUSART_MAP")
+    return flash_words, port_masks(part), map_name
 
 
 def enhanced_row(part: str) -> str:
@@ -398,7 +443,7 @@ def committed_rows() -> dict[str, tuple]:
         sys.exit("error: PIC16_DEVICES not found in pic16.rs")
     rows = {}
     for m in re.finditer(
-            r'\b(dev|dev_own|dev_no_usart)\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
+            r'\b(dev|dev_own|dev_no_usart|dev_f84a)\(\s*"(\w+)",\s*(\d+),\s*\[([^\]]*)\],\s*&\[(.*?)\]'
             r'(?:,\s*&\[([^\]]*)\])?,?\s*\)',
             table[1], re.S):
         masks = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]+)", m[4])]
@@ -419,7 +464,8 @@ def main() -> int:
             mism = check(part)
             want = geometry(part)
             kind = committed[0]
-            expected_kind = ("dev_own" if want[3] else
+            expected_kind = ("dev_f84a" if part == "pic16f84a" else
+                             "dev_own" if want[3] else
                              "dev_no_usart" if part in NO_USART_PARTS else "dev")
             if mism or tuple(want) != committed[1:] or kind != expected_kind:
                 bad += 1
