@@ -1,0 +1,41 @@
+# Focused STM32L010RBT6 profile for NUCLEO-L010RB.
+# The profile exposes only reset-clock RCC and GPIOA for the onboard LD2 smoke.
+# Other MCU peripherals and board paths remain outside this descriptor.
+#
+# Sources:
+# - ST STM32L010RB product page and datasheet: Cortex-M0+, 128 KiB flash,
+#   20 KiB SRAM.
+# - ST RM0451, STM32L0x0 reference manual: RCC/GPIO register locations.
+# - ST UM1724 Rev 17, MB1136: NUCLEO-L010RB D13/PA5 user LED wiring.
+
+name: "stm32l010rbt6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m0+"
+# Reset selects the MSI clock at 2.097 MHz (ST RM0451 / product page).
+cpu_hz: 2_097_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l0"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "iopenr", bit: 0 }

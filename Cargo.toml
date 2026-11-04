@@ -91,6 +91,7 @@ members = [
     "crates/firmware-nucleo-f334r8-smoke",
     "crates/firmware-nucleo-f030r8-smoke",
     "crates/firmware-nucleo-l011k4-smoke",
+    "crates/firmware-nucleo-l010rb-smoke",
     "crates/firmware-nucleo-l031k6-smoke",
     "crates/firmware-nucleo-c071rb-smoke",
     "crates/firmware-nucleo-c031c6-smoke",
@@ -341,6 +342,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nucleo-f410rb-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nucleo-l010rb-smoke]
 codegen-units = 1
 opt-level = "s"
 

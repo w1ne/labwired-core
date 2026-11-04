@@ -1,0 +1,12 @@
+# NUCLEO-L010RB: boot STM32L010RBT6 and toggle the active-high LD2 on PA5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-l010rb-smoke"
+  system: "../../configs/systems/nucleo-l010rb.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 16
+  - expected_stop_reason: max_steps
