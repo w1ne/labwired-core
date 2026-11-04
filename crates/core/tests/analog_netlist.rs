@@ -428,10 +428,10 @@ C1 out 0 100n $ dollar comment
     }
 
     #[test]
-    fn diode_transit_time_temperature_parameters_parse_and_validate() {
+    fn diode_transit_and_grading_temperature_parameters_parse_and_validate() {
         let circuit = parse_netlist(
             "D1 a 0 DMOD TEMP=127\n\
-             .model DMOD D(TNOM=27 TT=100n TTT1=800u TTT2=4u)\n",
+             .model DMOD D(TNOM=27 TT=100n TTT1=800u TTT2=4u TM1=800u TM2=4u)\n",
         )
         .expect("diode transit-time temperature coefficients parse");
         let diode = &circuit.diodes[0];
@@ -439,29 +439,45 @@ C1 out 0 100n $ dollar comment
         assert_eq!(diode.model.ttt1, 800e-6);
         assert_eq!(diode.model.ttt2, 4e-6);
         assert!((diode.operating_model.tt - 112e-9).abs() < 1e-22);
+        assert_eq!(diode.model.tm1, 800e-6);
+        assert_eq!(diode.model.tm2, 4e-6);
+        assert!((diode.operating_model.m - 0.56).abs() < 1e-15);
 
         let defaults = parse_netlist("D1 a 0 D\n").expect("default diode parses");
         assert_eq!(defaults.diodes[0].model.ttt1, 0.0);
         assert_eq!(defaults.diodes[0].model.ttt2, 0.0);
+        assert_eq!(defaults.diodes[0].model.tm1, 0.0);
+        assert_eq!(defaults.diodes[0].model.tm2, 0.0);
         assert_eq!(
             defaults.diodes[0].operating_model.tt,
             defaults.diodes[0].model.tt
         );
-        let fixed_temperature =
-            parse_netlist("D1 a 0 DMOD\n.model DMOD D(TNOM=27 TT=100n TTT1=800u TTT2=4u)\n")
-                .expect("TTT coefficients without instance TEMP preserve nominal TT");
+        assert_eq!(
+            defaults.diodes[0].operating_model.m,
+            defaults.diodes[0].model.m
+        );
+        let fixed_temperature = parse_netlist(
+            "D1 a 0 DMOD\n.model DMOD D(TNOM=27 TT=100n TTT1=800u TTT2=4u TM1=800u TM2=4u)\n",
+        )
+        .expect("temperature coefficients without instance TEMP preserve nominal parameters");
         assert_eq!(
             fixed_temperature.diodes[0].operating_model.tt,
             fixed_temperature.diodes[0].model.tt
         );
+        assert_eq!(
+            fixed_temperature.diodes[0].operating_model.m,
+            fixed_temperature.diodes[0].model.m
+        );
 
-        for parameter in ["TTT1=1e999", "TTT2=-1e999"] {
+        for parameter in ["TTT1=1e999", "TTT2=-1e999", "TM1=1e999", "TM2=-1e999"] {
             let error = parse_netlist(&format!("D1 a 0 DMOD\n.model DMOD D({parameter})\n"))
-                .expect_err("non-finite diode transit-time temperature coefficients are refused");
+                .expect_err("non-finite diode temperature coefficients are refused");
             assert!(error.to_string().contains("diode model"), "{error}");
         }
         parse_netlist("D1 a 0 DMOD TEMP=127\n.model DMOD D(TNOM=27 TT=100n TTT1=-20m)\n")
             .expect_err("negative temperature-adjusted transit time is refused");
+        parse_netlist("D1 a 0 DMOD TEMP=127\n.model DMOD D(TNOM=27 M=0.5 TM1=-20m)\n")
+            .expect_err("negative temperature-adjusted grading coefficient is refused");
     }
 
     #[test]

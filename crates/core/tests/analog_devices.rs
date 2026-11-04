@@ -1032,6 +1032,87 @@ mod analog {
         assert!(hot_effects.iter().all(|effect| *effect > 1e-7));
     }
 
+    /// `TM1`/`TM2` scale the depletion grading coefficient `M` at `TEMP`.
+    /// A reverse-biased junction transient must match the same circuit with
+    /// the independently calculated `M(T)` entered directly on the model.
+    #[test]
+    fn diode_grading_temperature_coefficients_change_solved_depletion_charge() {
+        let (is, n, tnom, cjo, vj, m) = (1e-30, 1.0, 27.0, 10e-9, 0.75, 0.5);
+        let (tm1, tm2) = (8e-4, 4e-6);
+        let (resistance, h) = (1e3, 2e-6);
+        let adjusted_m = |temperature: f64| {
+            let delta = temperature - tnom;
+            m * (1.0 + tm1 * delta + tm2 * delta * delta)
+        };
+        let mut hot_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for temperature in [tnom, 127.0] {
+                let expected_m = adjusted_m(temperature);
+                let make_solver = |model: String| {
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive out {resistance}\n\
+                         D1 out 0 DMOD TEMP={temperature}\n.model DMOD D({model})\n"
+                    );
+                    Solver::new(
+                        parse_netlist(&netlist).expect("diode depletion-temperature deck parses"),
+                        integration,
+                    )
+                    .expect("diode depletion-temperature solver builds")
+                };
+                let common = format!("IS={is} N={n} TNOM={tnom} CJO={cjo} VJ={vj} FC=0.5");
+                let adjusted_model = format!("{common} M={m} TM1={tm1} TM2={tm2}");
+                let explicit_model = format!("{common} M={expected_m}");
+                let fixed_model = format!("{common} M={m}");
+                let mut actual = make_solver(adjusted_model);
+                let mut explicit = make_solver(explicit_model);
+                let mut fixed = make_solver(fixed_model);
+
+                for solver in [&mut actual, &mut explicit, &mut fixed] {
+                    let drive = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("drive source exists");
+                    solver.set_voltage_source(drive, -1.0);
+                    solver
+                        .advance(h)
+                        .expect("depletion-charge transient solves");
+                }
+
+                let out = actual.circuit().node("out").expect("output node exists");
+                let explicit_out = explicit
+                    .circuit()
+                    .node("out")
+                    .expect("explicit output node exists");
+                let fixed_out = fixed
+                    .circuit()
+                    .node("out")
+                    .expect("fixed output node exists");
+                let actual_voltage = actual.node_voltage(out);
+                let explicit_voltage = explicit.node_voltage(explicit_out);
+                assert!(
+                    (actual_voltage - explicit_voltage).abs() < 1e-8,
+                    "{integration:?} TEMP={temperature}: expected explicit M={expected_m} voltage {explicit_voltage} V, got {actual_voltage} V"
+                );
+                assert!(
+                    relative(
+                        source_current(&actual, "Vdrive"),
+                        source_current(&explicit, "Vdrive")
+                    ) < 1e-6,
+                    "{integration:?} TEMP={temperature}: explicit-M drive currents differ"
+                );
+                if temperature > tnom {
+                    let effect = (actual_voltage - fixed.node_voltage(fixed_out)).abs();
+                    assert!(
+                        effect > 1e-6,
+                        "{integration:?}: hot TM1/TM2 must change transient depletion charge, difference={effect} V"
+                    );
+                    hot_effects.push(effect);
+                }
+            }
+        }
+        assert!(hot_effects.iter().all(|effect| *effect > 1e-6));
+    }
+
     /// Depletion charge and transit charge share the diode's transient branch
     /// in MNA. Check their combined current against an independently integrated
     /// charge law while the junction is behind the model's series resistance.

@@ -73,7 +73,8 @@
 //! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
 //! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
 //! `TRC*`/`TRE*` temperature coefficients, diode transit-time temperature
-//! coefficients `TTT1`/`TTT2`, forward/reverse BJT transit-time temperature
+//! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
+//! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
 //! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
 //! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
 //! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
@@ -88,8 +89,9 @@
 //! and most terminal resistances, …) are **accepted and ignored rather than
 //! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
 //! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
-//! breakdown voltage; `TRS1`/`TRS2` adjust series resistance and `TTT1`/`TTT2`
-//! adjust transit time. Diode depletion capacitance remains fixed. A BJT
+//! breakdown voltage; `TRS1`/`TRS2` adjust series resistance, `TTT1`/`TTT2`
+//! adjust transit time, and `TM1`/`TM2` adjust the depletion grading
+//! coefficient. Diode `CJO` and `VJ` remain fixed. A BJT
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT charge remains at its
@@ -156,8 +158,8 @@
 //! linear coefficient to `BV` when `TEMP` is present:
 //! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. `RS` uses the polynomial
 //! `RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `TRS` aliases `TRS1` and
-//! `ΔT = TEMP − TNOM`. Depletion charge remains nominal, while `TTT1`/`TTT2`
-//! apply the SPICE polynomial to diode transit time.
+//! `ΔT = TEMP − TNOM`. `TTT1`/`TTT2` apply the SPICE polynomial to diode
+//! transit time and `TM1`/`TM2` apply it to the depletion grading coefficient.
 //!
 //! A BJT model uses `TNOM` (or `TREF`, default 27 °C), `EG` (default 1.11 eV),
 //! `XTI` (default 3), and `XTB` (default 0). On a BJT instance,
@@ -650,6 +652,11 @@ pub struct DiodeModel {
     /// per °C². They apply when an instance `TEMP` is present.
     pub ttt1: f64,
     pub ttt2: f64,
+    /// First and second order temperature coefficients for the depletion
+    /// grading coefficient `M`, per °C and per °C². They apply with instance
+    /// `TEMP`.
+    pub tm1: f64,
+    pub tm2: f64,
     /// Soft reverse-recovery coefficient `VP`. Positive `VP` with positive
     /// `TT` replaces quasi-static diffusion charge with a first-order charge
     /// state; zero keeps `Qd = TT·Id`.
@@ -715,6 +722,15 @@ impl DiodeModel {
         let delta = temperature_celsius - self.tnom_celsius;
         self.tt * (1.0 + self.ttt1 * delta + self.ttt2 * delta * delta)
     }
+
+    /// Depletion grading coefficient `M(T)` using the SPICE `TM1`/`TM2` law.
+    pub fn grading_coefficient_at_temperature(self, temperature_celsius: Option<f64>) -> f64 {
+        let Some(temperature_celsius) = temperature_celsius else {
+            return self.m;
+        };
+        let delta = temperature_celsius - self.tnom_celsius;
+        self.m * (1.0 + self.tm1 * delta + self.tm2 * delta * delta)
+    }
 }
 
 impl Default for DiodeModel {
@@ -730,6 +746,8 @@ impl Default for DiodeModel {
             tt: 0.0,
             ttt1: 0.0,
             ttt2: 0.0,
+            tm1: 0.0,
+            tm2: 0.0,
             vp: 0.0,
             bv: None,
             ibv: 1e-3,
@@ -1123,6 +1141,8 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     tt: 0.0,
     ttt1: 0.0,
     ttt2: 0.0,
+    tm1: 0.0,
+    tm2: 0.0,
     vp: 0.0,
     bv: None,
     ibv: 1e-3,
@@ -1605,6 +1625,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tt: 0.0,
             ttt1: 0.0,
             ttt2: 0.0,
+            tm1: 0.0,
+            tm2: 0.0,
             vp: 0.0,
             bv: Some(4.8),
             ibv: 49e-3,
@@ -1635,6 +1657,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tt: 0.0,
             ttt1: 0.0,
             ttt2: 0.0,
+            tm1: 0.0,
+            tm2: 0.0,
             vp: 0.0,
             bv: Some(6.7),
             ibv: 10e-3,
@@ -1836,7 +1860,8 @@ pub struct Diode {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: DiodeModel,
-    /// Model parameters adjusted for this instance's temperature.
+    /// Model parameters with `TT` and `M` adjusted for this instance's
+    /// temperature.
     pub operating_model: DiodeModel,
     /// Model series resistance after applying the instance `TEMP`, in ohms.
     pub series_resistance_ohms: f64,
@@ -3291,6 +3316,8 @@ fn bind_models(
                     || !model.trs2.is_finite()
                     || !model.ttt1.is_finite()
                     || !model.ttt2.is_finite()
+                    || !model.tm1.is_finite()
+                    || !model.tm2.is_finite()
                     || !model.ik.is_finite()
                     || model.ik < 0.0
                     || !model.ikr.is_finite()
@@ -3316,7 +3343,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3377,9 +3404,16 @@ fn bind_models(
                 }
                 let mut operating_model = model;
                 operating_model.tt = model.transit_time_seconds(device.temperature_celsius);
+                operating_model.m =
+                    model.grading_coefficient_at_temperature(device.temperature_celsius);
                 if !operating_model.tt.is_finite() || operating_model.tt < 0.0 {
                     return Err(ctx.parse_err(
                         "temperature-adjusted diode TT must be finite and >= 0".to_string(),
+                    ));
+                }
+                if !operating_model.m.is_finite() || operating_model.m < 0.0 {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode M must be finite and >= 0".to_string(),
                     ));
                 }
                 // A series resistance needs somewhere to drop its voltage, so
@@ -4050,6 +4084,8 @@ fn parse_model(
             (ModelCard::Diode(model), "TT") => model.tt = value,
             (ModelCard::Diode(model), "TTT1") => model.ttt1 = value,
             (ModelCard::Diode(model), "TTT2") => model.ttt2 = value,
+            (ModelCard::Diode(model), "TM1") => model.tm1 = value,
+            (ModelCard::Diode(model), "TM2") => model.tm2 = value,
             (ModelCard::Diode(model), "VP") => model.vp = value,
             (ModelCard::Diode(model), "BV") => model.bv = Some(value),
             (ModelCard::Diode(model), "IBV") => model.ibv = value,
@@ -4283,6 +4319,8 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     tt: 0.0,
     ttt1: 0.0,
     ttt2: 0.0,
+    tm1: 0.0,
+    tm2: 0.0,
     vp: 0.0,
     bv: None,
     ibv: 1e-3,

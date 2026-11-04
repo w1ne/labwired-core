@@ -39,8 +39,9 @@
 //! The diode and BJT support their documented explicit instance `TEMP` laws;
 //! diode transit time additionally uses `TTT1`/`TTT2`. BJT transit times use
 //! `TTF*`/`TTR*`, and terminal resistances use
-//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. Junction depletion parameters remain
-//! nominal. Other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
+//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. Diode `CJO` and `VJ` remain nominal;
+//! `TM1`/`TM2` adjust its grading coefficient. Other parameters are taken at
+//! [`TEMPERATURE_K`] as written. A `.model`
 //! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
 //! [`super::netlist`]. Diode soft recovery covers the
