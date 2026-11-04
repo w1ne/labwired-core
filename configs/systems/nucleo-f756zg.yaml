@@ -1,0 +1,12 @@
+# NUCLEO-F756ZG (MB1137), narrowed to USART3 VCP and LD2 on PB7.
+name: "nucleo-f756zg"
+chip: "../chips/stm32f756zg-nucleo-smoke.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "ld2_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true

@@ -1,0 +1,67 @@
+# Focused STM32F756ZGT6 model for the NUCLEO-F756ZG board smoke.
+# SIM-DERIVED. It exposes only RCC, GPIOB/PB7, GPIOD/PD8-PD9, USART3 and SysTick.
+# Other F756 peripherals, including crypto, Ethernet and USB, are outside this
+# board profile and are not represented as working.
+#
+# Board source: ST UM1974, NUCLEO-F756ZG target and MB1137 signal assignments.
+# Shared F7 memory map: ST DS10685 and RM0385.
+
+name: "stm32f756zgt6-nucleo-smoke"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 216_000_000
+flash:
+  base: 0x08000000
+  size: "1MiB"
+ram:
+  # DTCM is the initial stack/data RAM used by this smoke image.
+  base: 0x20000000
+  size: "64KiB"
+memory_regions:
+  - name: "sram1"
+    base: 0x20010000
+    size: "240KiB"
+  - name: "sram2"
+    base: 0x2004C000
+    size: "16KiB"
+  - name: "itcm"
+    base: 0x00000000
+    size: "16KiB"
+pins:
+  # USART3 is routed through the on-board ST-LINK VCP on PD8/PD9 by default.
+  PD8: { gpio: gpiod, bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx }] }
+  PD9: { gpio: gpiod, bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx }] }
+  # LD2 blue user LED.
+  PB7: { gpio: gpiob, bit: 7, functions: [{ type: gpio, peripheral: gpiob }] }
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 1 }
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 3 }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1enr", bit: 18 }

@@ -25,6 +25,7 @@ members = [
     "crates/firmware-teensy4-smoke",
     "crates/firmware-itm-smoke",
     "crates/firmware-stm32f746-demo",
+    "crates/firmware-nucleo-f756zg-smoke",
     "crates/firmware-ci-fixture",
     "crates/firmware-uart-echo-fixture",
     "crates/firmware-comparative-benchmark",
