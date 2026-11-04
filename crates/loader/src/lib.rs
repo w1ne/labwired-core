@@ -180,7 +180,13 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 );
                 program_image.add_segment(start_addr, segment_data);
             } else {
-                let start_addr = ph.p_paddr;
+                let start_addr = if arch == labwired_core::Arch::XtensaLx7 && ph.p_vaddr != 0 {
+                    // ESP-IDF app ELFs distinguish flash/load address from
+                    // runtime VMA. Fast boot must populate the latter.
+                    ph.p_vaddr
+                } else {
+                    ph.p_paddr
+                };
                 debug!(
                     "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
                     start_addr, size, offset
