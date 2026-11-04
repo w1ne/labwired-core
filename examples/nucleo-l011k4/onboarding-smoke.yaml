@@ -1,0 +1,13 @@
+# NUCLEO-L011K4: capture USART2's VCP banner and exercise D13/PB3.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-l011k4-smoke"
+  system: "../../configs/systems/nucleo-l011k4.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "NUCLEO_L011K4_OK D13=PB3 USART2=PA2"
+  - gpio_edges:
+      pin: "gpiob:3"
+      min_edges: 16
+  - expected_stop_reason: max_steps
