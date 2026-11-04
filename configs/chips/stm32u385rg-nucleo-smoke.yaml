@@ -1,0 +1,43 @@
+# Focused STM32U385RGT6Q profile for the NUCLEO-U385RG-Q user LED GPIO smoke.
+# Only main flash, SRAM, RCC AHB2ENR1.GPIOAEN, GPIOA, and SysTick are mapped.
+# VCP, USB, I3C, timers, and the remaining peripherals are outside this profile.
+# Sources: ST STM32U385 product page (clock/memory), RM0487 Rev 1 (U3 register
+# map), CMSIS stm32u385xx.h, and UM3062 (board LED and package/order code).
+name: "stm32u385rgt6q-nucleo-gpio-smoke"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+cpu_hz: 96_000_000
+
+flash:
+  base: 0x08000000
+  size: "1MiB"
+ram:
+  base: 0x20000000
+  size: "256KiB"
+
+# UM3062: default LD2 is active-high and connected to PA5 through SB10.
+pins:
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40030C00
+    size: "1KB"
+    config:
+      profile: "stm32u3"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    # RM0487 RCC_AHB2ENR1.GPIOnEN, bit 0 for GPIOA.
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"

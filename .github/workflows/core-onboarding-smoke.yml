@@ -75,6 +75,7 @@ on:
       - "crates/firmware-nucleo-c5a3zg-smoke/**"
       - "crates/firmware-nucleo-c542rc-smoke/**"
       - "crates/firmware-nucleo-u3c5zi-q-smoke/**"
+      - "crates/firmware-nucleo-u385rg-q-smoke/**"
       - "crates/firmware-nucleo-h723zg-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-nucleo-h7a3zi-q-smoke/**"
@@ -105,6 +106,8 @@ on:
       - "configs/chips/stm32c542rc-nucleo-smoke.yaml"
       - "configs/systems/nucleo-u3c5zi-q-smoke.yaml"
       - "configs/chips/stm32u3c5zi-q-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-u385rg-q-smoke.yaml"
+      - "configs/chips/stm32u385rg-nucleo-smoke.yaml"
       - "configs/systems/nucleo-c071rb.yaml"
       - "configs/systems/nucleo-c092rc.yaml"
       - "configs/chips/r7fa4m1ab-uno-r4-wifi-smoke.yaml"
@@ -117,6 +120,7 @@ on:
       - "examples/nucleo-c5a3zg/**"
       - "examples/nucleo-c542rc/**"
       - "examples/nucleo-u3c5zi-q/**"
+      - "examples/nucleo-u385rg-q/**"
       - "examples/nucleo-c071rb/**"
       - "examples/nucleo-c092rc/**"
       - "crates/firmware-l073-demo/**"
@@ -388,6 +392,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u3c5zi-q/onboarding-smoke.yaml
             system: configs/systems/nucleo-u3c5zi-q-smoke.yaml
+          - id: nucleo-u385rg-q
+            crate: firmware-nucleo-u385rg-q-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u385rg-q/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u385rg-q-smoke.yaml
           - id: nucleo-h723zg
             crate: firmware-nucleo-h723zg-smoke
             target: thumbv7em-none-eabi

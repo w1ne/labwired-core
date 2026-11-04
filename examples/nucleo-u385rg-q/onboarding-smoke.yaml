@@ -1,0 +1,12 @@
+# Boot Cortex-M33 firmware and toggle the NUCLEO-U385RG-Q user LED LD2 on PA5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-u385rg-q-smoke"
+  system: "../../configs/systems/nucleo-u385rg-q-smoke.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 16
+  - expected_stop_reason: max_steps
