@@ -36,6 +36,7 @@ on:
       - "crates/firmware-efr32mg26-smoke/**"
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
+      - "crates/firmware-kendryte-k210-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -610,6 +611,14 @@ jobs:
             target: riscv64imac-unknown-none-elf
             script: examples/renode-onboarding/sifive-fu740-smoke.yaml
             system: configs/systems/onboarding/sifive-fu740.yaml
+          # K210 is narrowed to one RV64IMAC hart, its mapped memory window,
+          # and the model-backed SiFive UART; the second hart and K210-specific
+          # peripherals are outside this smoke.
+          - id: kendryte_k210
+            crate: firmware-kendryte-k210-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/kendryte_k210-smoke.yaml
+            system: configs/systems/onboarding/kendryte_k210.yaml
           # Mi-V profile follows Renode's CPU/memory map and keeps only the
           # CoreUART path exercised by the smoke.
           - id: miv_rv32

@@ -407,6 +407,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv64imac-unknown-none-elf",
         "script": "examples/renode-onboarding/sifive-fu740-smoke.yaml",
     },
+    "kendryte_k210": {
+        "crate": "firmware-kendryte-k210-smoke",
+        "target": "riscv64imac-unknown-none-elf",
+        "script": "examples/renode-onboarding/kendryte_k210-smoke.yaml",
+    },
     "miv_rv32": {
         "crate": "firmware-miv-rv32-smoke",
         "target": "riscv32im-unknown-none-elf",

@@ -1494,6 +1494,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-kendryte-k210-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-kw41z-demo"
 version = "0.1.0"
 dependencies = [
