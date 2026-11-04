@@ -40,6 +40,10 @@ on:
       - "configs/chips/nrf54l10.yaml"
       - "configs/systems/nrf54l10-on-nrf54l15-dk.yaml"
       - "examples/nrf54l10/**"
+      - "examples/nucleo-f411re-bme280/**"
+      - "configs/chips/stm32f411re-nucleo-bme280-smoke.yaml"
+      - "configs/systems/nucleo-f411re-bme280.yaml"
+      - "scripts/build_nucleo_f411re_bme280_smoke.sh"
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
       - "crates/firmware-nucleo-f413zh-smoke/**"
@@ -221,6 +225,12 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f411re/io-smoke.yaml
             system: configs/systems/nucleo-f411re.yaml
+          - id: nucleo-f411re-bme280
+            crate: examples/nucleo-f411re-bme280
+            target: ""
+            firmware_build_script: scripts/build_nucleo_f411re_bme280_smoke.sh
+            script: examples/nucleo-f411re-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f411re-bme280.yaml
           - id: nucleo-f413zh
             crate: firmware-nucleo-f413zh-smoke
             target: thumbv7em-none-eabi
@@ -523,13 +533,13 @@ jobs:
         with:
           targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32imc-unknown-none-elf
 
-      - name: Set up Python for Feather ESP32 V2
+      - name: Set up Python for PlatformIO targets
         if: matrix.firmware_build_script != ''
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install PlatformIO for Feather ESP32 V2
+      - name: Install PlatformIO
         if: matrix.firmware_build_script != ''
         run: python -m pip install platformio
 

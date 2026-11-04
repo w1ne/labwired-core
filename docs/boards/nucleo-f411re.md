@@ -17,3 +17,11 @@ The profile declares only RCC, GPIOA, and USART2. No zero-answering
 stubs are used; unlisted peripherals are unsupported. The USART2 transcript is
 captured by the simulator, which does not emulate ST-LINK or the USB VCP bridge.
 This is simulator evidence, not hardware confirmation.
+
+## BME280 integration
+
+The companion [NUCLEO-F411RE + BME280 system](../../examples/nucleo-f411re-bme280/README.md)
+adds a focused I2C1 profile on D14/D15 (PB9/PB8) and checks the Adafruit
+breakout's ID, calibration data, and deterministic measurements. It has its
+own board-system descriptor and committed build/smoke evidence; the original
+LED/VCP profile is unchanged.

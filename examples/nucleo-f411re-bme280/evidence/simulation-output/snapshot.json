@@ -1,0 +1,62 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      5,
+      1,
+      3758153984,
+      0,
+      536872516,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2144930048,
+      537001976,
+      134241421,
+      134241424
+    ],
+    "pc": 134241424,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 134217728,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "steps_executed": 11285984,
+  "cycles": 11285984,
+  "instructions": 11285984,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 40000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "02f025ab7982fc800442c1a52cac00d887c63680ddd0223ff1af0e8d27c0c434",
+  "config": {
+    "firmware": "examples/nucleo-f411re-bme280/./.pio/build/nucleo_f411re/firmware.elf",
+    "system": "examples/nucleo-f411re-bme280/../../configs/systems/nucleo-f411re-bme280.yaml",
+    "script": "examples/nucleo-f411re-bme280/onboarding-smoke.yaml"
+  }
+}
