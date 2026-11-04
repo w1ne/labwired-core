@@ -9702,6 +9702,23 @@ boards:
       - configs/chips/mimxrt1062-teensy4-gpio-smoke.yaml
       - configs/systems/teensy-41.yaml
 
+  - id: adafruit-itsybitsy-rp2040
+    doc: docs/boards/adafruit-itsybitsy-rp2040.md
+    chip: configs/chips/rp2040-itsybitsy-smoke.yaml
+    tier: smoke-manual
+    note: "Focused ItsyBitsy RP2040 profile records 8 MiB external flash and 264 KiB SRAM, maps GP11 / D13 to the onboard red LED, and exercises IO_BANK0 plus SIO. The model omits QSPI boot, USB, NeoPixel, buttons, and other peripherals; ideal VDD is assumed, so power-on/brown-out reset is outside the smoke. Local smoke only; no physical-board capture."
+    offline_tests:
+      - "board_config_gates::itsybitsy_rp2040_from_config_builds"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/rp2040/io_bank0.rs
+      - crates/core/src/peripherals/rp2040/sio.rs
+      - configs/peripherals/rp2040/io_bank0.yaml
+      - configs/peripherals/rp2040/sio.yaml
+      - configs/chips/rp2040-itsybitsy-smoke.yaml
+      - configs/systems/adafruit-itsybitsy-rp2040.yaml
+
   - id: stm32f7-discovery
     doc: docs/boards/stm32f7-discovery.md
     chip: configs/chips/stm32f746.yaml

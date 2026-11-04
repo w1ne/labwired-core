@@ -1395,6 +1395,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-itsybitsy-rp2040-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-kw41z-demo"
 version = "0.1.0"
 dependencies = [

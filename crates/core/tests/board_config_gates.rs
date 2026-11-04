@@ -158,6 +158,36 @@ fn teensy4_gpio_from_config_builds() {
 }
 
 #[test]
+fn itsybitsy_rp2040_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/adafruit-itsybitsy-rp2040.yaml",
+        "rp2040 / adafruit-itsybitsy-rp2040 GPIO profile must build",
+    );
+
+    assert_eq!(chip.name, "rp2040-itsybitsy-smoke");
+    assert_eq!(chip.core.as_deref(), Some("cortex-m0+"));
+    assert_eq!(chip.flash.base, 0x1000_0000);
+    assert_eq!(chip.flash.size, 8 * 1024 * 1024);
+    assert_eq!(chip.ram.size, 264 * 1024);
+    assert_eq!(chip.pins.get("GP11").map(|pin| pin.bit), Some(11));
+
+    assert!(
+        bus.find_peripheral_index_by_name("io_bank0").is_some(),
+        "bus must expose io_bank0 for the GP11 SIO route"
+    );
+    assert!(
+        bus.find_peripheral_index_by_name("sio").is_some(),
+        "bus must expose sio for the onboard D13 LED"
+    );
+    for omitted in ["uart0", "i2c0", "spi0", "adc", "pwm"] {
+        assert!(
+            bus.find_peripheral_index_by_name(omitted).is_none(),
+            "the focused ItsyBitsy profile must omit {omitted}"
+        );
+    }
+}
+
+#[test]
 fn stm32f746_from_config_builds() {
     let (chip, bus) = from_config(
         "configs/systems/stm32f7-discovery.yaml",

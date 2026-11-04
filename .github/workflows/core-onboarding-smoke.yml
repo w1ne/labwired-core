@@ -63,7 +63,11 @@ on:
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
       - "crates/firmware-feather-rp2040-smoke/**"
+      - "crates/firmware-itsybitsy-rp2040-smoke/**"
       - "crates/firmware-feather-m4-express-smoke/**"
+      - "configs/chips/rp2040-itsybitsy-smoke.yaml"
+      - "configs/systems/adafruit-itsybitsy-rp2040.yaml"
+      - "examples/adafruit-itsybitsy-rp2040/**"
       - "crates/firmware-pico-w-smoke/**"
       - "crates/firmware-xiao-rp2040-smoke/**"
       - "crates/firmware-nano-rp2040-connect-smoke/**"
@@ -326,6 +330,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/adafruit-feather-rp2040/io-smoke.yaml
             system: configs/systems/adafruit-feather-rp2040.yaml
+          - id: adafruit-itsybitsy-rp2040
+            crate: firmware-itsybitsy-rp2040-smoke
+            target: thumbv6m-none-eabi
+            script: examples/adafruit-itsybitsy-rp2040/io-smoke.yaml
+            system: configs/systems/adafruit-itsybitsy-rp2040.yaml
           - id: feather-m4-express
             crate: firmware-feather-m4-express-smoke
             target: thumbv7em-none-eabi

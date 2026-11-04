@@ -123,6 +123,7 @@ members = [
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
     "crates/firmware-feather-rp2040-smoke",
+    "crates/firmware-itsybitsy-rp2040-smoke",
     "crates/firmware-feather-m4-express-smoke",
     "crates/firmware-pico-w-smoke",
     "crates/firmware-xiao-rp2040-smoke",
@@ -434,6 +435,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-feather-rp2040-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-itsybitsy-rp2040-smoke]
 codegen-units = 1
 opt-level = "s"
 

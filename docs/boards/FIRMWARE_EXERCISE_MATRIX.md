@@ -126,6 +126,141 @@ _Shares the nRF52 model with nrf52840/nrf52832; tier-1 drives 12 rubric classes 
 
 _The Raspberry Pi Pico 1 system now has an onboarding smoke in core-onboarding-smoke.yml that drives UART0 and toggles the onboard GP25 LED through IO_BANK0/SIO; the assertions require the RP2040_SMOKE_OK transcript and at least eight GP25 edges. The tier1 fixture separately drives clock/timer/gpio/spi/i2c and boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards). The Pico smoke does not exercise USB CDC or the TBMAN zero stub._
 
+**Functional device/protocol reads** (real driver, decoded value):
+- Raspberry Pi Pico D13 LED and UART0 console — onboard GP25 GPIO edges plus RP2040_SMOKE_OK transcript — `firmware-rp2040-demo` · examples/pico/io-smoke.yaml + examples/pico/evidence/simulation-output/result.json (nightly CI)
+
+### `rp2040-itsybitsy-smoke`
+
+_Board-bound ItsyBitsy profile exercises the standard GPIO rubric only; its smoke toggles the onboard D13/GP11 LED._
+
+### `atsamd51-metro-m4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `atsamd51j19a-feather-m4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-arduino-nano-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-devkitc-1-n16r8-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf54l15-xiao-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `r7fa4m1ab-uno-r4-wifi-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-feather-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-nano-rp2040-connect-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-pico-w-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-xiao-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-pico2-w-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-xiao-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c071rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f030r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f091rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f303re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f411re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f439zi-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f446ze-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g071rb-disco-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g071rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g0b1re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g431kb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g431rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g491re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h503rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h723zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l432kc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l452re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u545re-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32wba55cg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
 ### `stm32h563`
 
 _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broadest rubric coverage. UDS bootloader/ECU examples exist but are not yet gated as automated tests._
@@ -547,11 +682,11 @@ _Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware e
 
 ### `atsamd51`
 
-_No tier-1 target. The PR-gated `firmware_survival::test_atsamd51_metro_m4_smoke_survival` runs the committed Metro M4 ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf): firmware gates SERCOM3, selects PA22/PA23 function C, configures the internal-clock USART at 115200 baud, prints `METRO_M4_OK`, then toggles D13 on PA16. The dedicated board profile is configs/chips/atsamd51-metro-m4-smoke.yaml; it uses the pad-aware `samd51_sercom_usart` model and omits the carrier's USB/QSPI windows. The legacy broad configs/chips/atsamd51.yaml remains available and has two explicit zero windows, USB and QSPI; Metro's board system no longer uses that descriptor._
+_No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::test_atsamd51_metro_m4_smoke_survival` (step core-ci.yml:779; case firmware_survival.rs:1336): the committed Metro M4 smoke ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf, built from crates/firmware-atsamd51-demo) writes MCLK.APBBMASK + GCLK PCHCTRL[24] and prints `OK` on Serial1 (crates/firmware-atsamd51-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/metro-m4/io-smoke.yaml) and the nightly coverage-matrix cell `metro-m4` (core-coverage-matrix-smoke.yml:82-88, examples/metro-m4/uart-smoke.yaml). Beyond the rubric the descriptor declares two zero windows, USB and QSPI, that no firmware opens._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `USB` (configs/chips/atsamd51.yaml:69 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window in the legacy broad descriptor; the SAMD51 native-USB device is not modelled. The Metro smoke profile omits this window.
-- `QSPI` (configs/chips/atsamd51.yaml:73 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window in the legacy broad descriptor; the SAMD51 QSPI controller is not modelled. The Metro smoke profile omits this window and firmware executes from internal flash.
+- `USB` (configs/chips/atsamd51.yaml:69 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — reads return 0 and writes are dropped, so the SAMD51 native-USB device is not modelled; the PR-gated smoke drives SERCOM3 (Serial1) only and no gated firmware opens the window (docs/boards/metro-m4.md:27-28 lists QSPI/USB/NeoPixel as deliberate stub windows).
+- `QSPI` (configs/chips/atsamd51.yaml:73 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — the SAMD51 QSPI controller (the board's onboard QSPI flash) is not modelled; firmware executes from internal flash and nothing opens the window (docs/boards/metro-m4.md:27-28).
 
 ### `atsamd51-pybadge`
 
@@ -576,7 +711,7 @@ _L2 on the conformance board (silicon reset oracle, 243/243 registers — docs/c
 
 ### `imxrt1064`
 
-_No tier-1 target. The committed ELF is an internal RT1064-class LPUART/GPIO peripheral regression fixture, not a Teensy 4.1 board smoke: `firmware_survival::test_imxrt1064_lpuart_regression_fixture_survival` captures LPUART6 directly, bypassing IOMUXC pad routing. The image runs from DTCM because FlexSPI/XIP is not modelled. The focused Teensy board smoke instead uses the exact MIMXRT1062 GPIO profile below. The older class descriptor retains two unused shims, listed here; the board profile omits them._
+_No tier-1 target. The committed ELF is an internal RT1064-class LPUART/GPIO peripheral regression fixture, not a Teensy 4.1 board smoke: firmware_survival::test_imxrt1064_lpuart_regression_fixture_survival captures LPUART6 directly, bypassing IOMUXC pad routing. The image runs from DTCM because FlexSPI/XIP is not modeled. The focused Teensy board smoke instead uses the exact MIMXRT1062 GPIO profile below. The older class descriptor retains two unused shims, listed here; the board profile omits them._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
@@ -584,11 +719,11 @@ _No tier-1 target. The committed ELF is an internal RT1064-class LPUART/GPIO per
 
 ### `mimxrt1062-teensy4-gpio-smoke`
 
-_No tier-1 target. The focused Teensy 4.0 and 4.1 descriptors share the MIMXRT1062 profile with only CCM/GPIO2. The board pin maps put D13 on GPIO_B0_03 / GPIO2_IO03; the simulator maps D13 directly and does not validate IOMUXC or the silicon pad route. Images execute from DTCM; external flash/XIP and unrelated peripherals are omitted._
+_No tier-1 target. Focused Teensy 4.0/4.1 descriptors use the MIMXRT1062 identity and only CCM/GPIO2. The board pin maps put D13 on GPIO_B0_03 / GPIO2_IO03; the simulator maps it directly and does not validate IOMUXC or the silicon pad route. Images run from DTCM; external flash/XIP and unrelated peripherals are omitted._
 
-**Functional device/protocol reads**:
-- Teensy 4.0 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · `examples/teensy-40/onboarding-smoke.yaml` + `examples/teensy-40/evidence/simulation-output/result.json` (nightly CI)
-- Teensy 4.1 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · `examples/teensy-41/onboarding-smoke.yaml` + `examples/teensy-41/evidence/simulation-output/result.json` (nightly CI)
+**Functional device/protocol reads** (real driver, decoded value):
+- Teensy 4.0 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · examples/teensy-40/onboarding-smoke.yaml + examples/teensy-40/evidence/simulation-output/result.json (nightly CI)
+- Teensy 4.1 D13 LED path — CCM clock ungating and repeated GPIO2_IO03 transitions, asserted at >=8 edges — `firmware-teensy4-smoke` · examples/teensy-41/onboarding-smoke.yaml + examples/teensy-41/evidence/simulation-output/result.json (nightly CI)
 
 ### `mkw41z4`
 

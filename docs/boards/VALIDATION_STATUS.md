@@ -48,6 +48,7 @@ The models column is a content digest over everything that board's `models` list
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `4fcc55aad06ad323` | no silicon capture |
 | `teensy-40` | 🟡 smoke-manual | — | `f91e048dcfa137c4` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `1ced4739806c4f51` | no silicon capture |
+| `adafruit-itsybitsy-rp2040` | 🟡 smoke-manual | — | `ef88eebb83752f04` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `c9ad61e2f603be0c` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `d710bd56d73733bc` | no silicon capture |
 | `nucleo-g0b1re` | 🟡 smoke-manual | — | `8fb0908c8a24858b` | no silicon capture |
@@ -409,6 +410,14 @@ The models column is a content digest over everything that board's `models` list
 - Note: Focused MIMXRT1062 profile exercises CCM clock ungating and GPIO2_IO03 toggles for the onboard D13 LED. DTCM-linked image; IOMUXC and external FlexSPI/XIP boot are outside the profile. Local model smoke only; no physical-board capture.
 - Silicon: none — not validated against real hardware.
   - offline (CI): board_config_gates::teensy4_gpio_from_config_builds
+- Drift status: **no silicon capture**
+
+## `adafruit-itsybitsy-rp2040` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/adafruit-itsybitsy-rp2040.md`](adafruit-itsybitsy-rp2040.md)  ·  Chip: `configs/chips/rp2040-itsybitsy-smoke.yaml`
+- Note: Focused ItsyBitsy RP2040 profile records 8 MiB external flash and 264 KiB SRAM, maps GP11 / D13 to the onboard red LED, and exercises IO_BANK0 plus SIO. The model omits QSPI boot, USB, NeoPixel, buttons, and other peripherals; ideal VDD is assumed, so power-on/brown-out reset is outside the smoke. Local smoke only; no physical-board capture.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): board_config_gates::itsybitsy_rp2040_from_config_builds
 - Drift status: **no silicon capture**
 
 ## `stm32f7-discovery` — 🟡 smoke-manual
