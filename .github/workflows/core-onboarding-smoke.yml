@@ -46,6 +46,7 @@ on:
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
       - "crates/firmware-renesas-ek-ra2e1-smoke/**"
       - "crates/firmware-renesas-da14592-smoke/**"
+      - "crates/firmware-renesas-ck-ra6m5-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
       - "crates/firmware-s32k118-smoke/**"
       - "crates/firmware-mimxrt700-evk-smoke/**"
@@ -105,6 +106,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/renesas-da14592-smoke.yaml
             system: configs/systems/onboarding/renesas-da14592.yaml
+          # CK-RA6M5 is limited to its sourced M33 core, code flash, and SRAM.
+          - id: renesas-ck_ra6m5
+            crate: firmware-renesas-ck-ra6m5-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml
+            system: configs/systems/onboarding/renesas-ck_ra6m5.yaml
           # S32K388's generated profile included unsupported peripheral claims;
           # this fixture exercises only the sourced Cortex-M7 and memory map.
           - id: nxp-s32k388
