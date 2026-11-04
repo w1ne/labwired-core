@@ -390,6 +390,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
     },
+    "mimxrt1064_evk": {
+        "crate": "firmware-imxrt1064-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/mimxrt1064_evk-smoke.yaml",
+    },
     "sam4s_xplained": {
         "crate": "firmware-sam4s-xplained-smoke",
         "target": "thumbv7em-none-eabi",

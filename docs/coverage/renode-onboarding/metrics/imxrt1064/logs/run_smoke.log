@@ -1,5 +1,5 @@
-2026-11-04T21:28:07.747753Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/imxrt1064.yaml
-2026-11-04T21:28:07.748742Z  INFO labwired_loader: ELF Entry Point: 0x20000401
+2026-11-04T21:43:18.235990Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/imxrt1064.yaml
+2026-11-04T21:43:18.236916Z  INFO labwired_loader: ELF Entry Point: 0x20000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 799867 of 800000 device cycles (133 interpreted)

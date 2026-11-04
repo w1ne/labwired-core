@@ -595,6 +595,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/imxrt1064-smoke.yaml
             system: configs/systems/onboarding/imxrt1064.yaml
+          # The imported EVK profile exposes the same modeled DTCM, CCM,
+          # GPIO2, and LPUART6 execution surface as the RT1064 smoke.
+          - id: mimxrt1064_evk
+            crate: firmware-imxrt1064-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/mimxrt1064_evk-smoke.yaml
+            system: configs/systems/onboarding/mimxrt1064_evk.yaml
           - id: sam4s_xplained
             crate: firmware-sam4s-xplained-smoke
             target: thumbv7em-none-eabi
