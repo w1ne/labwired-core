@@ -45,6 +45,7 @@ on:
       - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
       - "crates/firmware-renesas-ek-ra2e1-smoke/**"
+      - "crates/firmware-renesas-r7fa2l1a-smoke/**"
       - "crates/firmware-renesas-da14592-smoke/**"
       - "crates/firmware-renesas-ck-ra6m5-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
@@ -98,6 +99,13 @@ jobs:
             target: thumbv8m.base-none-eabi
             script: examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml
             system: configs/systems/onboarding/renesas-ek_ra2e1.yaml
+          # RA2L1 is limited to Renode's Cortex-M23, code flash and SRAM map;
+          # generated peripheral claims are omitted from this instruction smoke.
+          - id: renesas-r7fa2l1a
+            crate: firmware-renesas-r7fa2l1a-smoke
+            target: thumbv8m.base-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa2l1a-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa2l1a.yaml
           # DA14592 is scoped to the primary M33 core, exact flash/SRAM map,
           # and model-backed DA UART0. The M0+ CMAC core and other peripherals
           # are not claimed by this smoke.

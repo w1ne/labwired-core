@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32pg12-smoke.yaml",
   "system": "configs/systems/onboarding/efm32pg12.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T16:38:51Z",
-  "finished_at_utc": "2026-11-04T16:38:52Z",
+  "started_at_utc": "2026-11-04T17:12:38Z",
+  "finished_at_utc": "2026-11-04T17:12:38Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 842,
+  "elapsed_ms": 705,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.316,
-    "build_firmware": 0.207,
-    "run_smoke": 0.309
+    "build_cli": 0.272,
+    "build_firmware": 0.166,
+    "run_smoke": 0.258
   },
   "stages_ms": {
-    "build_cli": 316,
-    "build_firmware": 207,
-    "run_smoke": 309
+    "build_cli": 272,
+    "build_firmware": 166,
+    "run_smoke": 258
   }
 }
