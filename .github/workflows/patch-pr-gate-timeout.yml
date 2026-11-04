@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   patch:
-    runs-on: [self-hosted, Linux, X64, europa]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
