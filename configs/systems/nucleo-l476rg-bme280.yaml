@@ -1,5 +1,5 @@
 # NUCLEO-L476RG plus an Adafruit BME280 breakout on I2C1.
-# The breakout ships at address 0x77; its SDO address jumper is left open.
+# The digital twin instantiates the BME280 at model address 0x77.
 name: "nucleo-l476rg-bme280"
 chip: "../chips/stm32l476.yaml"
 external_devices:

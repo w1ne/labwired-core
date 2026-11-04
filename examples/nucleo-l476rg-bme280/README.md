@@ -5,11 +5,12 @@ NUCLEO-L476RG model. It builds the Adafruit Arduino library firmware and checks
 that the sensor answers its ID and calibration reads and returns a temperature
 through the modeled I²C1 path.
 
-The example leaves the breakout's default I²C address at `0x77`. The LabWired
-pin model exposes I²C1 SCL on PB6 and SDA on PB7; that is a model claim for the
-digital twin. The BME280 component model exposes VCC, GND, SDA, SCL, CSB, and
-SDO. The system binds the sensor to I²C1 at `0x77`. Power sequencing and the
-breakout's physical header routing are outside this simulation evidence.
+The system binds the modeled sensor to I²C1 at `0x77`, which is the address
+used by the firmware smoke. The LabWired pin model exposes I²C1 SCL on PB6 and
+SDA on PB7; that is a model claim for the digital twin. The BME280 component
+model exposes VCC, GND, SDA, SCL, CSB, and SDO. Power sequencing, the physical
+breakout address strap, and its header routing are outside this simulation
+evidence.
 
 ## Reproduce
 
