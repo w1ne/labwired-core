@@ -1,0 +1,11 @@
+# STM32F429I-DISC1 smoke slice: only green user LED LD3 on PG13 is attached.
+name: stm32f429i-disc1
+chip: ../chips/stm32f429zi-f429i-disc1-smoke.yaml
+external_devices: []
+board_io:
+  - id: led_ld3_green
+    kind: led
+    peripheral: gpiog
+    pin: 13
+    signal: output
+    active_high: true

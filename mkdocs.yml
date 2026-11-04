@@ -131,6 +131,7 @@ nav:
     - STM32F411: boards/stm32f411.md
     - STM32F3DISCOVERY: boards/stm32f3-discovery.md
     - STM32F3348-DISCO: boards/stm32f3348-disco.md
+    - STM32F429I-DISC1: boards/stm32f429i-disc1.md
     - STM32F0DISCOVERY: boards/stm32f0-discovery.md
     - STM32F767: boards/stm32f767.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
