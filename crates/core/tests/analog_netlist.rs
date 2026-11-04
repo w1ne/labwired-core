@@ -408,7 +408,8 @@ C1 out 0 100n $ dollar comment
             assert_eq!(circuit.bjts[0].model.nkf, Some(expected));
         }
 
-        for parameter in ["NKF=-0.1"] {
+        {
+            let parameter = "NKF=-0.1";
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
                 .expect_err("a negative NKF exponent is rejected");
             assert!(error.to_string().contains("NKF >= 0"), "{error}");
@@ -922,7 +923,9 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.b, 1.2);
         assert_eq!(model.is, 4e-12);
 
-        for (card, rejected) in [("NJF(LEVEL=2)", "LEVEL=2")] {
+        {
+            let card = "NJF(LEVEL=2)";
+            let rejected = "LEVEL=2";
             let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD {card}\n"))
                 .expect_err("unsupported JFET equations must be refused");
             assert!(err.to_string().contains(rejected), "{err}");
