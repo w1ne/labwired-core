@@ -517,11 +517,9 @@ C1 out 0 100n $ dollar comment
             assert_eq!(circuit.bjts[0].model.nkf, Some(expected));
         }
 
-        for parameter in ["NKF=-0.1"] {
-            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
-                .expect_err("a negative NKF exponent is rejected");
-            assert!(error.to_string().contains("NKF >= 0"), "{error}");
-        }
+        let error = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN(NKF=-0.1)\n")
+            .expect_err("a negative NKF exponent is rejected");
+        assert!(error.to_string().contains("NKF >= 0"), "{error}");
         for parameter in ["NKF=inf", "NKF=nan", "NKF=1e999"] {
             parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameter})\n"))
                 .expect_err("a nonfinite NKF exponent is rejected");
@@ -1031,12 +1029,10 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.b, 1.2);
         assert_eq!(model.is, 4e-12);
 
-        for (card, rejected) in [("NJF(LEVEL=2)", "LEVEL=2")] {
-            let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD {card}\n"))
-                .expect_err("unsupported JFET equations must be refused");
-            assert!(err.to_string().contains(rejected), "{err}");
-            assert!(err.to_string().contains("labwired_ngspice.py"), "{err}");
-        }
+        let err = parse_netlist("J1 d g s MOD\n.model MOD NJF(LEVEL=2)\n")
+            .expect_err("unsupported JFET equations must be refused");
+        assert!(err.to_string().contains("LEVEL=2"), "{err}");
+        assert!(err.to_string().contains("labwired_ngspice.py"), "{err}");
 
         for b in ["0", "-0.1", "1e999"] {
             let err = parse_netlist(&format!("J1 d g s MOD\n.model MOD NJF(B={b})\n"))

@@ -3339,13 +3339,14 @@ fn bind_models(
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
                 }
-                if !(model.vaf >= 0.0) || !(model.var >= 0.0) {
+                if model.vaf.is_nan() || model.vaf < 0.0 || model.var.is_nan() || model.var < 0.0 {
                     return Err(ctx.parse_err(
                         "a BJT model needs VAF >= 0 and VAR >= 0 (zero disables Early effect)"
                             .to_string(),
                     ));
                 }
-                if !(model.ikf > 0.0) || !(model.ikr > 0.0) {
+                if model.ikf.is_nan() || model.ikf <= 0.0 || model.ikr.is_nan() || model.ikr <= 0.0
+                {
                     return Err(ctx.parse_err(
                         "a BJT model needs IKF > 0 and IKR > 0 (infinity disables high-injection rolloff)"
                             .to_string(),
@@ -3357,10 +3358,10 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
-                if !(model.ise >= 0.0)
-                    || !(model.isc >= 0.0)
-                    || !(model.ne > 0.0)
-                    || !(model.nc > 0.0)
+                if model.ise < 0.0
+                    || model.isc < 0.0
+                    || model.ne <= 0.0
+                    || model.nc <= 0.0
                     || !model.ne.is_finite()
                     || !model.nc.is_finite()
                 {
@@ -3387,8 +3388,8 @@ fn bind_models(
                     || model.tf < 0.0
                     || !model.xtf.is_finite()
                     || model.xtf < 0.0
-                    || !(model.vtf >= 0.0)
                     || model.vtf.is_nan()
+                    || model.vtf < 0.0
                     || !model.itf.is_finite()
                     || model.itf < 0.0
                     || !model.tr.is_finite()
@@ -3404,8 +3405,8 @@ fn bind_models(
                     || model
                         .rbm
                         .is_some_and(|rbm| !rbm.is_finite() || rbm < 0.0 || rbm > model.rb)
-                    || !(model.irb > 0.0)
                     || model.irb.is_nan()
+                    || model.irb <= 0.0
                     || !model.rc.is_finite()
                     || model.rc < 0.0
                     || !model.re.is_finite()
