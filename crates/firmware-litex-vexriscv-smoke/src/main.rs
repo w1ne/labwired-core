@@ -44,8 +44,8 @@ const TIMER_EV_PENDING: *mut u32 = 0x6000_2818 as *mut u32;
 
 /// An unmodelled LiteX CSR window (the SPI-flash controller at 0x60005000).
 /// The original profile declares this stub to make the omission explicit.
-/// The imported Zephyr profile builds with `no-unmodelled-spi-probe` and does
-/// not map or access the window.
+/// The imported Zephyr and MicroPython profiles build with
+/// `no-unmodelled-spi-probe` and do not map or access the window.
 #[cfg(not(feature = "no-unmodelled-spi-probe"))]
 const SPI_CSR: *const u32 = 0x6000_5000 as *const u32;
 

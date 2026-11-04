@@ -395,6 +395,15 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv_zephyr.yaml
+          # The MicroPython alias inherits the same modeled LiteX/VexRiscv
+          # CPU, memory, UART, and timer. This smoke runs a bare-metal fixture,
+          # not the MicroPython interpreter image.
+          - id: litex_vexriscv_micropython
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_micropython-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_micropython.yaml
           - id: litex_ibex
             crate: firmware-litex-ibex-smoke
             target: riscv32imc-unknown-none-elf

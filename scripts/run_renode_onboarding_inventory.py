@@ -251,6 +251,12 @@ SMOKE_MAPPINGS = {
         "features": "no-unmodelled-spi-probe",
         "script": "examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml",
     },
+    "litex_vexriscv_micropython": {
+        "crate": "firmware-litex-vexriscv-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "features": "no-unmodelled-spi-probe",
+        "script": "examples/renode-onboarding/litex_vexriscv_micropython-smoke.yaml",
+    },
     "litex_ibex": {
         "crate": "firmware-litex-ibex-smoke",
         "target": "riscv32imc-unknown-none-elf",
