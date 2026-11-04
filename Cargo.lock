@@ -1645,6 +1645,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nrf52840-dk-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nrf52840-isr-blinky"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,14 @@
+# nRF52840-DK smoke profile: the only modeled board path is physical LED1 on
+# P0.13 (the Zephyr board alias is led0).
+# This narrow profile exposes GPIO0 for physical LED1 (Zephyr alias led0) only
+# and makes no claim about the board's other GPIO or peripheral paths.
+name: "nrf52840-dk-led-smoke"
+chip: "../chips/nrf52840-dk-led-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "user_led1"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: false

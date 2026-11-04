@@ -1,0 +1,28 @@
+# Focused nRF52840-DK profile for the board's LED0 GPIO smoke.
+# Only GPIO P0 is exposed; radio, QSPI, NFC, USB, and other blocks are out of
+# scope for this system. Zephyr's led0 alias is physical LED1, active-low on
+# P0.13.
+
+name: "nrf52840-dk-led-smoke"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 64_000_000
+
+flash:
+  base: 0x00000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+
+pins:
+  P0_13: { gpio: "gpio0", bit: 13 }
+
+peripherals:
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf52840/p0.yaml"
+      profile: "nrf52"

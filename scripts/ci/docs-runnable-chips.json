@@ -50,6 +50,10 @@
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "nrf52840-dk-led-smoke": {
+      "how": "needs-build",
+      "why": "Focused nRF52840-DK GPIO0/physical LED1 (Zephyr led0) board profile and firmware smoke are built from this Core source tree; the smoke ELF is not a released CLI fixture yet."
+    },
     "nrf54l15": {
       "how": "example",
       "script": "examples/nrf54l15-dk/io-smoke.yaml",
