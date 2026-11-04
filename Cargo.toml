@@ -94,6 +94,7 @@ members = [
     "crates/firmware-nucleo-l010rb-smoke",
     "crates/firmware-nucleo-l031k6-smoke",
     "crates/firmware-nucleo-c071rb-smoke",
+    "crates/firmware-nucleo-c051c8-smoke",
     "crates/firmware-nucleo-c031c6-smoke",
     "crates/firmware-nucleo-c092rc-smoke",
     "crates/firmware-nucleo-f411re-smoke",

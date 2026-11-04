@@ -73,6 +73,7 @@ on:
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-stm32h735g-dk-smoke/**"
       - "crates/firmware-nucleo-c071rb-smoke/**"
+      - "crates/firmware-nucleo-c051c8-smoke/**"
       - "crates/firmware-nucleo-c092rc-smoke/**"
       - "crates/firmware-teensy4-smoke/**"
       - "crates/firmware-uno-r4-wifi-smoke/**"
@@ -146,6 +147,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: nucleo-c051c8
+            crate: firmware-nucleo-c051c8-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-c051c8/onboarding-smoke.yaml
+            system: configs/systems/nucleo-c051c8.yaml
           - id: nucleo-f302r8
             crate: firmware-nucleo-f302r8-smoke
             target: thumbv7em-none-eabi
