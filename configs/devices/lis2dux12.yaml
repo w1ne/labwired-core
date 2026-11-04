@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+# ST LIS2DUX12 3-axis accelerometer, I2C address 0x18 (SA0 low).
+# Register map and sensitivity: ST datasheet DS14071 Rev 8.
+#
+# This model covers the main-page I2C identity, CTRL5 ODR/full-scale
+# configuration, a time-gated STATUS data-ready bit, and live XYZ output.
+# Data-ready uses a fixed 800 Hz period while CTRL5 ODR is non-zero; the
+# selected ODR is not decoded. FIFO, interrupts, embedded functions (MLC/FSM,
+# tap/free-fall/6D), I3C, temperature, and analog/electrical behavior are not
+# modelled. The auto-increment pointer behavior is always enabled here.
+type: lis2dux12
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x18
+    auto_increment: true
+    pointer_mask: 0x7F
+    unmapped_byte: 0x00
+    registers:
+      - { name: PIN_CTRL,       addr: 0x0C, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: WHO_AM_I,       addr: 0x0F, width: 1, endian: le, access: r,  reset: 0x47 }
+      - { name: CTRL1,           addr: 0x10, width: 1, endian: le, access: rw, reset: 0x10 }
+      - { name: CTRL2,           addr: 0x11, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CTRL3,           addr: 0x12, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CTRL4,           addr: 0x13, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CTRL5,           addr: 0x14, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: FIFO_CTRL,       addr: 0x15, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: FIFO_WTM,        addr: 0x16, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INTERRUPT_CFG,   addr: 0x17, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: SIXD,            addr: 0x18, width: 1, endian: le, access: rw, reset: 0x00 }
+      # STATUS.DRDY is overlaid by the fixed-rate data_ready rule below.
+      - { name: STATUS,          addr: 0x25, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: OUT_X, addr: 0x28, width: 2, endian: le, access: r, signed: true, source: x, scale_from: { register: CTRL5, mask: 0x03, shift: 0, map: { 0: 16393.4426, 1: 8196.7213, 2: 4098.3607, 3: 2049.1803 } } }
+      - { name: OUT_Y, addr: 0x2A, width: 2, endian: le, access: r, signed: true, source: y, scale_from: { register: CTRL5, mask: 0x03, shift: 0, map: { 0: 16393.4426, 1: 8196.7213, 2: 4098.3607, 3: 2049.1803 } } }
+      - { name: OUT_Z, addr: 0x2C, width: 2, endian: le, access: r, signed: true, source: z, scale_from: { register: CTRL5, mask: 0x03, shift: 0, map: { 0: 16393.4426, 1: 8196.7213, 2: 4098.3607, 3: 2049.1803 } } }
+
+    # Approximate the 800 Hz ODR used by the onboarding firmware (1.25 ms).
+    data_ready:
+      - name: xyz
+        start_register: CTRL5
+        start_mask: 0xF0        # ODR[7:4]; 0 is power-down
+        ready_register: STATUS
+        ready_mask: 0x01        # DRDY
+        conversion_us: 1250
+        clear_on_read: [OUT_X, OUT_Y, OUT_Z]
+
+metadata:
+  label: "LIS2DUX12 accelerometer"
+  summary: "ST LIS2DUX12 3-axis accelerometer over I2C (SA0 low, address 0x18)."
+  detail: "Models WHO_AM_I, the CTRL5 ODR/full-scale byte, fixed 800 Hz data-ready timing, and live signed XYZ samples. Full scale follows CTRL5.FS. Other embedded features, FIFO, interrupts, temperature, I3C and electrical behavior are not modeled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Defaults to 0x18 with SA0 low; 0x19 with SA0 high."
+  inputs:
+    - { key: x, label: "X", unit: "g", min: -16.0, max: 16.0, default: 0.061 }
+    - { key: y, label: "Y", unit: "g", min: -16.0, max: 16.0, default: -0.122 }
+    - { key: z, label: "Z", unit: "g", min: -16.0, max: 16.0, default: 0.244 }

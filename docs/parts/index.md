@@ -70,6 +70,7 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [MCP3008](mcp3008.md) | `mcp3008` | SPI |
 | [ADS1256](ads1256.md) | `ads1256` | SPI |
 | [BMI160](bmi160.md) | `bmi160` | I²C |
+| [LIS2DUX12](lis2dux12.md) | `lis2dux12` | I²C |
 | [BMM150](bmm150.md) | `bmm150` | I²C |
 | [VEML6075](veml6075.md) | `veml6075` | I²C |
 | [HT16K33](ht16k33.md) | `ht16k33` | I²C |

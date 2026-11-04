@@ -128,6 +128,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/lsm303agr_mag.yaml"),
     ),
     (
+        &["lis2dux12"],
+        include_str!("../../../configs/devices/lis2dux12.yaml"),
+    ),
+    (
         &["pybadge_buttons"],
         include_str!("../../../configs/devices/pybadge_buttons.yaml"),
     ),

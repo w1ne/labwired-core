@@ -15,6 +15,7 @@ on:
       - main
     paths:
       - "configs/chips/**"
+      - "configs/devices/lis2dux12.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/firmware-f401-demo/**"
@@ -195,6 +196,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f439zi/io-smoke.yaml
             system: configs/systems/nucleo-f439zi.yaml
+          - id: lis2dux12-nucleo-f407
+            crate: nucleo-f407-i2c
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f407-lis2dux12/onboarding-smoke.yaml
+            system: examples/nucleo-f407-lis2dux12/system.yaml
           - id: nucleo-g071rb
             crate: firmware-nucleo-g071rb-smoke
             target: thumbv6m-none-eabi
