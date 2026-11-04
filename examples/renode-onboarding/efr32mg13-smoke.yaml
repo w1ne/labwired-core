@@ -1,0 +1,10 @@
+# Cortex-M4F USART0 smoke against the narrowed imported EFR32MG13 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-efr32mg13-smoke"
+  system: "../../configs/systems/onboarding/efr32mg13.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFR32MG13 USART0 smoke"
+  - expected_stop_reason: max_steps

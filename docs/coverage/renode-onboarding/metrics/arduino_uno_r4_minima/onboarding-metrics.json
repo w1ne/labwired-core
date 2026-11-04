@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml",
   "system": "configs/systems/onboarding/arduino_uno_r4_minima.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T18:06:32Z",
-  "finished_at_utc": "2026-11-04T18:06:33Z",
+  "started_at_utc": "2026-11-04T18:22:39Z",
+  "finished_at_utc": "2026-11-04T18:22:40Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 729,
+  "elapsed_ms": 718,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.273,
-    "build_firmware": 0.172,
-    "run_smoke": 0.274
+    "build_cli": 0.269,
+    "build_firmware": 0.178,
+    "run_smoke": 0.259
   },
   "stages_ms": {
-    "build_cli": 273,
-    "build_firmware": 172,
-    "run_smoke": 274
+    "build_cli": 269,
+    "build_firmware": 178,
+    "run_smoke": 259
   }
 }
