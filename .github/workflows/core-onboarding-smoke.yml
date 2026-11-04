@@ -35,6 +35,7 @@ on:
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
       - "crates/firmware-sifive-fu540-smoke/**"
+      - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -569,6 +570,13 @@ jobs:
             target: riscv64imac-unknown-none-elf
             script: examples/renode-onboarding/sifive-fu540-smoke.yaml
             system: configs/systems/onboarding/sifive-fu540.yaml
+          # FU740's S7 hart and UART0 are measured; four U74 harts and other
+          # peripherals are outside this bounded imported profile.
+          - id: sifive-fu740
+            crate: firmware-sifive-fu740-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/sifive-fu740-smoke.yaml
+            system: configs/systems/onboarding/sifive-fu740.yaml
           # Mi-V profile follows Renode's CPU/memory map and keeps only the
           # CoreUART path exercised by the smoke.
           - id: miv_rv32

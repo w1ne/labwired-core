@@ -382,6 +382,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv64imac-unknown-none-elf",
         "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
     },
+    "sifive-fu740": {
+        "crate": "firmware-sifive-fu740-smoke",
+        "target": "riscv64imac-unknown-none-elf",
+        "script": "examples/renode-onboarding/sifive-fu740-smoke.yaml",
+    },
     "miv_rv32": {
         "crate": "firmware-miv-rv32-smoke",
         "target": "riscv32im-unknown-none-elf",

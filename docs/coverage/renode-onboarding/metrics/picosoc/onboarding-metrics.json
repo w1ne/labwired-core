@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/picosoc-smoke.yaml",
   "system": "configs/systems/onboarding/picosoc.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T16:04:34Z",
-  "finished_at_utc": "2026-11-04T16:04:35Z",
+  "started_at_utc": "2026-11-04T16:21:57Z",
+  "finished_at_utc": "2026-11-04T16:21:58Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 850,
+  "elapsed_ms": 874,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.312,
-    "build_firmware": 0.208,
-    "run_smoke": 0.321
+    "build_cli": 0.313,
+    "build_firmware": 0.212,
+    "run_smoke": 0.337
   },
   "stages_ms": {
-    "build_cli": 312,
-    "build_firmware": 208,
-    "run_smoke": 321
+    "build_cli": 313,
+    "build_firmware": 212,
+    "run_smoke": 337
   }
 }

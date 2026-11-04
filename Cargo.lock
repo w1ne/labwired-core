@@ -2035,6 +2035,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-sifive-fu740-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-stm32f042-smoke"
 version = "0.1.0"
 dependencies = [
