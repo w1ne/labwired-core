@@ -1,4 +1,4 @@
-2026-11-04T22:19:37.764535Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/andes_ae350_n25.yaml
-2026-11-04T22:19:37.765058Z  INFO labwired_loader: ELF Entry Point: 0x0
+2026-11-04T22:41:36.071391Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/andes_ae350_n25.yaml
+2026-11-04T22:41:36.071973Z  INFO labwired_loader: ELF Entry Point: 0x0
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  2/2 checks · andes_ae350_n25-smoke · 100000 steps · 0.01s
+PASS  2/2 checks · andes_ae350_n25-smoke · 100000 steps · 0.02s

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.002840">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.002797">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="9ae802a43315e06faa12d6e6736ebd9b6eda987716272140c055a1757fc28788"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.002840">
+  <testcase classname="labwired" name="run" time="0.002797">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: RV64 FU740 UART0 smoke; mul=0000001100000011" time="0.000000">
   </testcase>

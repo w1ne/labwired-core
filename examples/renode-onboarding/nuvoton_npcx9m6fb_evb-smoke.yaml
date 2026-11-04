@@ -1,0 +1,11 @@
+# Cortex-M4F instruction and modeled NPCX UART1 smoke on the imported EVB system.
+# The NPCX9 boot-ROM handoff and board LED wiring are outside this profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke"
+  system: "../../configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "NPCX9 UART1 smoke"
+  - expected_stop_reason: max_steps

@@ -260,6 +260,16 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/max32652-evkit-smoke.yaml",
     },
+    "nuvoton_npcx9": {
+        "crate": "firmware-nuvoton-npcx9-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/nuvoton_npcx9-smoke.yaml",
+    },
+    "nuvoton_npcx9m6fb_evb": {
+        "crate": "firmware-nuvoton-npcx9-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml",
+    },
     "stm32f072b_discovery": {
         "crate": "firmware-stm32f072b-disco-smoke",
         "target": "thumbv6m-none-eabi",

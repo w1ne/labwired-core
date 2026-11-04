@@ -57,6 +57,7 @@ on:
       - "crates/firmware-renesas-ck-ra6m5-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
       - "crates/firmware-s32k118-smoke/**"
+      - "crates/firmware-nuvoton-npcx9-smoke/**"
       - "crates/firmware-mimxrt700-evk-smoke/**"
       - "crates/firmware-mimxrt798s-smoke/**"
       - "crates/firmware-mimxrt595-evk-smoke/**"
@@ -592,6 +593,19 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/max32652-evkit-smoke.yaml
             system: configs/systems/onboarding/max32652-evkit.yaml
+          # The NPCX9 imports retain only their mapped ROM execution window,
+          # data RAM and model-backed UART1. Boot-ROM handoff, clocks, GPIO,
+          # timers, SMBus and other generated peripherals are not claimed.
+          - id: nuvoton_npcx9
+            crate: firmware-nuvoton-npcx9-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nuvoton_npcx9-smoke.yaml
+            system: configs/systems/onboarding/nuvoton_npcx9.yaml
+          - id: nuvoton_npcx9m6fb_evb
+            crate: firmware-nuvoton-npcx9-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml
+            system: configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml
           - id: nucleo_f767zi
             crate: firmware-stm32f746-demo
             target: thumbv7em-none-eabi
