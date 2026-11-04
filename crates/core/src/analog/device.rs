@@ -415,6 +415,7 @@ pub struct BjtOp {
 /// `RE` = 0 and no capacitances, this is the portion of ngspice's model
 /// represented in-core. A zero or infinite Early voltage disables its
 /// corresponding base-width term.
+#[allow(clippy::too_many_arguments)]
 pub fn bjt_op(
     vbe: f64,
     vbc: f64,
@@ -440,6 +441,7 @@ pub fn bjt_op(
 /// Gummel–Poon operating point with an optional high-current beta exponent.
 /// `None` keeps the historical square-root path bit-for-bit; `Some(nkf)` uses
 /// the explicit ngspice `NKF` rolloff exponent.
+#[allow(clippy::too_many_arguments)]
 pub fn bjt_op_with_nkf(
     vbe: f64,
     vbc: f64,
@@ -810,6 +812,7 @@ pub struct MosOp {
 /// `gmb` is the matching `∂Id/∂Vbs`; the MNA solver stamps it with the gate and
 /// drain derivatives. The bulk terminal's drain and source pn junctions are
 /// stamped separately using the model's `IS`.
+#[allow(clippy::too_many_arguments)]
 pub fn mos_op(
     vgs: f64,
     vds: f64,

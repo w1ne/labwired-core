@@ -1151,12 +1151,12 @@ impl Solver {
             let nodes = &self.solution[..self.nodes];
 
             let voltages = [self.mos_vbd[index], self.mos_vbs[index]];
-            for junction in 0..2 {
+            for (junction, &voltage) in voltages.iter().enumerate() {
                 let drain = junction == 0;
                 if mosfet.bulk_junction_capacitances(drain) == [0.0, 0.0] {
                     continue;
                 }
-                let q_new = mosfet.bulk_junction_charge(voltages[junction], drain).0;
+                let q_new = mosfet.bulk_junction_charge(voltage, drain).0;
                 let i_new = match rule {
                     Integration::BackwardEuler => (q_new - self.mos_bulk_q[index][junction]) / h,
                     Integration::Trapezoidal => {
