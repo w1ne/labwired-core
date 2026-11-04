@@ -3678,19 +3678,114 @@ impl SystemBus {
             })
             .map(|(i, _)| i)
             .collect();
-        let mut miso = 0u8;
-        for idx in indices {
-            self.maybe_latch_dc(idx);
-            if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
-                for device in devs {
-                    let resp = device.transfer(mosi);
-                    if resp != 0 {
-                        miso = resp;
+        // Collect (periph_idx, device_idx, chain_index, cs_pin) for selected
+        // devices so a daisy chain on a shared CS clocks closest-first and
+        // feeds DOUT→DIN. Unselected devices stay quiet (CS high).
+        let mut selected: Vec<(usize, usize, u32, String)> = Vec::new();
+        for idx in &indices {
+            self.maybe_latch_dc(*idx);
+            if let Some(devs) = self.peripherals[*idx].dev.spi_attached_devices() {
+                for (di, device) in devs.iter().enumerate() {
+                    if device.is_selected() {
+                        selected.push((
+                            *idx,
+                            di,
+                            device.chain_index(),
+                            device.cs_pin().to_string(),
+                        ));
                     }
                 }
             }
         }
+        if selected.is_empty() {
+            // Legacy single-device parking path (e.g. ST7789 tests that call
+            // cs_select once then leave is_selected false on stubs): clock
+            // every attached device with the same MOSI, as before.
+            let mut miso = 0u8;
+            for idx in indices {
+                if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
+                    for device in devs {
+                        let resp = device.transfer(mosi);
+                        if resp != 0 {
+                            miso = resp;
+                        }
+                    }
+                }
+            }
+            return miso;
+        }
+        // Group by CS pin; within each group, sort by chain_index ascending
+        // (closest to MOSI first) and fold DOUT into the next DIN.
+        selected.sort_by(|a, b| a.3.cmp(&b.3).then(a.2.cmp(&b.2)));
+        let mut miso = 0u8;
+        let mut i = 0;
+        while i < selected.len() {
+            let cs = selected[i].3.clone();
+            let mut j = i + 1;
+            while j < selected.len() && selected[j].3 == cs {
+                j += 1;
+            }
+            let mut byte = mosi;
+            for &(pidx, di, _, _) in &selected[i..j] {
+                if let Some(devs) = self.peripherals[pidx].dev.spi_attached_devices_mut() {
+                    byte = devs[di].transfer(byte);
+                }
+            }
+            if byte != 0 {
+                miso = byte;
+            }
+            i = j;
+        }
         miso
+    }
+
+    /// Sync parking-SPI chip-selects from live GPIO levels (active-low).
+    ///
+    /// Soft-SPI and bit-banged CS on AVR never touch a controller's NSS, so the
+    /// parking kits only see CS through this walk — called after every PORT
+    /// mirror write when hardware SPE is clear.
+    pub fn sync_parking_spi_cs(&mut self) {
+        let indices: Vec<usize> = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry
+                    .dev
+                    .spi_attached_devices()
+                    .is_some_and(|devs| !devs.is_empty())
+            })
+            .map(|(i, _)| i)
+            .collect();
+        for idx in indices {
+            // Levels first (immutable borrow of bus), then mutate devices.
+            let levels: Vec<Option<bool>> = {
+                let Some(devs) = self.peripherals[idx].dev.spi_attached_devices() else {
+                    continue;
+                };
+                devs.iter()
+                    .map(|d| {
+                        let pin = d.cs_pin();
+                        if pin.is_empty() {
+                            None
+                        } else {
+                            self.read_gpio_output_by_label(pin)
+                        }
+                    })
+                    .collect()
+            };
+            if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
+                for (device, level) in devs.iter_mut().zip(levels.into_iter()) {
+                    let Some(high) = level else { continue };
+                    let selected = !high; // active-low CS
+                    match (device.is_selected(), selected) {
+                        (false, true) => device.cs_select(),
+                        (true, false) => device.cs_release(),
+                        _ => {}
+                    }
+                }
+            }
+        }
     }
 
     /// Take every slave off a SPI controller (by peripheral id).

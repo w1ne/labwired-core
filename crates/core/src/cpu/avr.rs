@@ -230,6 +230,14 @@ pub struct Avr {
     /// parking SPI controller and are clocked from SPDR via
     /// [`crate::bus::SystemBus::clock_parking_spi`] so inspect can see them.
     pub spi_devices: Vec<Box<dyn SpiDevice>>,
+    /// Soft-SPI bit-bang state (SPE=0): last sampled SCK level, the byte
+    /// accumulating on rising edges, and how many bits are in it. Arduino
+    /// `shiftOut` / LedControl drive PB3 (MOSI) + PB5 (SCK) as GPIO; each
+    /// rising SCK samples MOSI MSB-first into this shifter, and every eighth
+    /// bit clocks the parking SPI chain.
+    soft_spi_sck: bool,
+    soft_spi_shift: u8,
+    soft_spi_bits: u8,
     /// TWI (I²C) — TWBR/TWSR/TWAR/TWDR/TWCR (data-space 0xB8..0xBC).
     pub twbr: u8,
     pub twsr: u8,
@@ -479,6 +487,9 @@ impl Avr {
             spsr: 0,
             spdr: 0,
             spi_devices: Vec::new(),
+            soft_spi_sck: false,
+            soft_spi_shift: 0,
+            soft_spi_bits: 0,
             twbr: 0,
             twsr: 0xF8, // no-info status with prescaler 0
             twar: 0,
@@ -546,6 +557,53 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+        }
+    }
+
+    /// Soft-SPI + GPIO-CS bridge for parking kits when hardware SPE is clear.
+    ///
+    /// LedControl (and Arduino `shiftOut`) drive CS / MOSI / SCK as GPIO.
+    /// After every PORT mirror write we (1) sync parking-SPI chip-selects from
+    /// the live GPIO level and (2) on a rising PB5 (SCK) sample PB3 (MOSI)
+    /// MSB-first into an 8-bit shifter; every eighth bit clocks the daisy
+    /// chain via [`Bus::clock_parking_spi`]. Hardware SPI (SPE=1) owns the
+    /// pins — this path stays quiet then.
+    fn soft_spi_after_port(&mut self, bus: &mut dyn Bus, addr: u16, port_value: u8) {
+        const SPE: u8 = 1 << 6;
+        if self.spcr & SPE != 0 {
+            return;
+        }
+        // CS may live on any port (D10=PB2 on Uno, but not assumed exclusively).
+        bus.sync_parking_spi_cs();
+        // Bit-bang clock/data only observe PORTB (Uno hardware-SPI pins).
+        // PINB=0x23, DDRB=0x24, PORTB=0x25 on ATmega328P.
+        let portb_addr = match self.model {
+            AvrModel::Atmega328p | AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x25u16,
+        };
+        if addr != portb_addr {
+            return;
+        }
+        let sck = (port_value & (1 << 5)) != 0;
+        let mosi = (port_value & (1 << 3)) != 0;
+        if sck && !self.soft_spi_sck {
+            self.soft_spi_shift = (self.soft_spi_shift << 1) | u8::from(mosi);
+            self.soft_spi_bits = self.soft_spi_bits.saturating_add(1);
+            if self.soft_spi_bits >= 8 {
+                let _ = bus.clock_parking_spi(self.soft_spi_shift);
+                self.soft_spi_shift = 0;
+                self.soft_spi_bits = 0;
+            }
+        }
+        // A CS↑ (handled in sync above) should drop a partial byte so the next
+        // transaction cannot inherit orphan bits from a short pulse.
+        if !sck && self.soft_spi_sck {
+            // falling edge only — no action; CS release resets below via poll
+        }
+        self.soft_spi_sck = sck;
+        // If every parking device released CS, clear the bit accumulator.
+        if !bus.parking_spi_any_selected() {
+            self.soft_spi_shift = 0;
+            self.soft_spi_bits = 0;
         }
     }
 
@@ -926,6 +984,9 @@ impl Avr {
                     }
                 }
                 for dev in &mut self.spi_devices {
+                    if !dev.is_selected() {
+                        continue;
+                    }
                     let resp = dev.transfer(mosi);
                     if resp != 0 {
                         miso = resp;
@@ -934,6 +995,8 @@ impl Avr {
                 // Kits left on the parking SPI controller (not taken): latch
                 // D/C and clock them so inspect / display_artifact still see
                 // the panel. Bus::clock_parking_spi — no SystemBus downcast.
+                // Sync GPIO CS first so a digitalWrite(CS) before SPDR is seen.
+                bus.sync_parking_spi_cs();
                 let bus_miso = bus.clock_parking_spi(mosi);
                 if bus_miso != 0 {
                     miso = bus_miso;
@@ -1032,6 +1095,10 @@ impl Avr {
                     // A pad an output-compare unit owns keeps its waveform level.
                     let pad = self.port_pad_value(addr, value);
                     let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, pad);
+                    // Soft-SPI / GPIO-CS bridge: LedControl and friends bit-bang
+                    // CS/MOSI/SCK with SPE clear. Sync parking CS from the live
+                    // GPIO level, then on a rising PB5 (SCK) sample PB3 (MOSI).
+                    self.soft_spi_after_port(bus, addr, pad);
                 } else {
                     let _mirror = bus.write_u8(addr as u64, value);
                 }
@@ -1041,6 +1108,7 @@ impl Avr {
                 self.io[(addr - 0x20) as usize] = value;
                 if self.is_port_reg(addr) {
                     let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, value);
+                    self.soft_spi_after_port(bus, addr, value);
                 }
                 Ok(())
             }
@@ -3347,6 +3415,107 @@ mod tests {
             painted > 0,
             "SPDR-driven parking ST7789 must paint; meta={:?}",
             art.meta
+        );
+    }
+
+    /// LedControl never touches SPDR — it bit-bangs CS/MOSI/SCK with SPE=0.
+    /// Soft-SPI after PORTB must latch a MAX7219 digit into the parking kit.
+    #[test]
+    fn soft_spi_portb_bitbang_paints_parking_max7219() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, ExternalDevice, SystemManifest};
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328p.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
+        let mut cfg = std::collections::HashMap::new();
+        cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "soft-spi-max7219".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: vec![ExternalDevice {
+                id: "DS1".to_string(),
+                r#type: "led-matrix".to_string(),
+                connection: "spi".to_string(),
+                channel: None,
+                route: Default::default(),
+                config: cfg,
+            }],
+            board_io: vec![],
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: vec![],
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        // SPE must stay clear (default) so soft-SPI owns the pins.
+        assert_eq!(cpu.spcr & (1 << 6), 0, "SPE must be clear for soft-SPI");
+
+        // DDRB: PB2 (CS), PB3 (MOSI), PB5 (SCK) as outputs.
+        const PORTB: u16 = 0x25;
+        const DDRB: u16 = 0x24;
+        const CS: u8 = 1 << 2;
+        const MOSI: u8 = 1 << 3;
+        const SCK: u8 = 1 << 5;
+        cpu.data_write(DDRB, CS | MOSI | SCK, &mut bus).unwrap();
+
+        // Idle CS high.
+        let mut port = CS;
+        cpu.data_write(PORTB, port, &mut bus).unwrap();
+
+        let bitbang_byte = |cpu: &mut Avr, bus: &mut SystemBus, port: &mut u8, byte: u8| {
+            for i in (0..8).rev() {
+                if (byte >> i) & 1 != 0 {
+                    *port |= MOSI;
+                } else {
+                    *port &= !MOSI;
+                }
+                cpu.data_write(PORTB, *port, bus).unwrap();
+                *port |= SCK;
+                cpu.data_write(PORTB, *port, bus).unwrap();
+                *port &= !SCK;
+                cpu.data_write(PORTB, *port, bus).unwrap();
+            }
+        };
+
+        // CS↓ then shutdown-off (0x0C, 0x01), then CS↑.
+        port &= !CS;
+        cpu.data_write(PORTB, port, &mut bus).unwrap();
+        bitbang_byte(&mut cpu, &mut bus, &mut port, 0x0C);
+        bitbang_byte(&mut cpu, &mut bus, &mut port, 0x01);
+        port |= CS;
+        cpu.data_write(PORTB, port, &mut bus).unwrap();
+
+        // Digit 0 = 0xA5.
+        port &= !CS;
+        cpu.data_write(PORTB, port, &mut bus).unwrap();
+        bitbang_byte(&mut cpu, &mut bus, &mut port, 0x01);
+        bitbang_byte(&mut cpu, &mut bus, &mut port, 0xA5);
+        port |= CS;
+        cpu.data_write(PORTB, port, &mut bus).unwrap();
+
+        let art = bus
+            .display_artifact(
+                "DS1",
+                &crate::inspect::InspectOpts {
+                    include_bytes: true,
+                    ..Default::default()
+                },
+            )
+            .expect("DS1 artifact");
+        assert_eq!(art.meta["shutdown"], false, "soft-SPI must leave shutdown");
+        assert_eq!(
+            art.bytes.as_deref(),
+            Some(&[0xA5u8, 0, 0, 0, 0, 0, 0, 0][..]),
+            "soft-SPI digit write must land; meta={:?} bytes={:?}",
+            art.meta,
+            art.bytes
         );
     }
 }

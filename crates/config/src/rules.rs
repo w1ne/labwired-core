@@ -264,6 +264,17 @@ pub struct FrameSpec {
     /// the next transaction's first. Meaningless without `length`.
     #[serde(default)]
     pub discard_partial: bool,
+    /// **Hardware shift-register cascade (DOUT).**
+    ///
+    /// When set with [`length`](Self::length), each `transfer` pushes one byte
+    /// into a fixed-width FIFO and returns the oldest byte that shifted out —
+    /// the chip's DOUT for the next device in a daisy chain. Frames are NOT
+    /// closed at `length` during the transfer: the register only latches on
+    /// CS↑ (see `cs_release`), matching MAX7219 silicon. Meaningless without
+    /// `length`. Default false keeps the prior length-closes-during-transfer
+    /// contract for every existing descriptor.
+    #[serde(default)]
+    pub shift_register: bool,
 }
 
 // ─── named bit-fields ──────────────────────────────────────────────────────

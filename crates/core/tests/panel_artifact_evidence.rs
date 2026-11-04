@@ -482,15 +482,20 @@ fn pcd8544_that_painted_reports_its_ink() {
 #[test]
 fn max7219_that_was_written_reports_its_lit_leds() {
     // Registers 0x01..0x08 are the eight digit/row registers.
+    // MAX7219 latches only on CS↑ (`frames.shift_register`), so each 16-bit
+    // register write is its own CS-framed transaction — same as real silicon
+    // and the parity suite's `spi_txn` / `max_write`.
     const ROWS: [u8; 3] = [0xFF, 0x81, 0x18];
     let lit: usize = ROWS.iter().map(|b| b.count_ones() as usize).sum();
-    let mut frames: Vec<(bool, u8)> = vec![(false, 0x0C), (false, 0x01)]; // shutdown reg = normal
-    for (i, &row) in ROWS.iter().enumerate() {
-        frames.push((false, (i + 1) as u8));
-        frames.push((false, row));
-    }
     let mut bus = rig("led-matrix", "spi1", &[("cs_pin", "PA4".into())]);
-    spi_write(&mut bus, "spi1", &frames);
+    spi_write(&mut bus, "spi1", &[(false, 0x0C), (false, 0x01)]); // shutdown = normal
+    for (i, &row) in ROWS.iter().enumerate() {
+        spi_write(
+            &mut bus,
+            "spi1",
+            &[(false, (i + 1) as u8), (false, row)],
+        );
+    }
 
     let device = inspect_panel(bus);
     let art = evidence(&device);
