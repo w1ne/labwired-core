@@ -561,13 +561,13 @@ impl DeclarativeSegmentDisplay {
                 self.text = text.clone();
                 // Blank panels are not history (same rule as LCD1602): a clear
                 // does not wipe prior glyphs a prove may still need.
-                if !text.chars().all(|c| c.is_whitespace()) {
-                    if self.texts_seen.back().map(|s| s.as_str()) != Some(text.as_str()) {
-                        if self.texts_seen.len() >= TEXTS_SEEN_CAP {
-                            self.texts_seen.pop_front();
-                        }
-                        self.texts_seen.push_back(text);
+                if !text.chars().all(|c| c.is_whitespace())
+                    && self.texts_seen.back().map(|s| s.as_str()) != Some(text.as_str())
+                {
+                    if self.texts_seen.len() >= TEXTS_SEEN_CAP {
+                        self.texts_seen.pop_front();
                     }
+                    self.texts_seen.push_back(text);
                 }
             }
         }
