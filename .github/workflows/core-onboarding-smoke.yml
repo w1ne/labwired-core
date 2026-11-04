@@ -287,6 +287,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/efm32hg350-smoke.yaml
             system: configs/systems/onboarding/efm32hg350.yaml
+          # The EFM32ZG222 import keeps only its declared memory and modeled
+          # USART1 surface; other generated peripherals are not claimed.
+          - id: efm32zg222
+            crate: firmware-efm32zg222-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/efm32zg222-smoke.yaml
+            system: configs/systems/onboarding/efm32zg222.yaml
           # The G232 smoke links its firmware at the imported 0x08000000 flash base.
           - id: efm32g232
             crate: firmware-efm32g232-smoke

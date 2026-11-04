@@ -1,5 +1,5 @@
-2026-11-04T23:34:52.733373Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas-da14592.yaml
-2026-11-04T23:34:52.734275Z  INFO labwired_loader: ELF Entry Point: 0x801
+2026-11-04T23:54:24.581285Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas-da14592.yaml
+2026-11-04T23:54:24.582174Z  INFO labwired_loader: ELF Entry Point: 0x801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  3/3 checks · renesas-da14592-smoke · 100000 steps · 0.00s

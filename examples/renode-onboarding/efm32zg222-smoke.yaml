@@ -1,0 +1,10 @@
+# USART1 smoke against the narrowed imported EFM32ZG222 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-efm32zg222-smoke"
+  system: "../../configs/systems/onboarding/efm32zg222.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32ZG222 USART1 smoke"
+  - expected_stop_reason: max_steps
