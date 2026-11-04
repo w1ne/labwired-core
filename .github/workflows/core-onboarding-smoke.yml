@@ -28,6 +28,7 @@ on:
       - "crates/firmware-stm32l071-smoke/**"
       - "crates/firmware-stm32l072-smoke/**"
       - "crates/firmware-stm32l151-smoke/**"
+      - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/cli/**"
@@ -121,6 +122,12 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g232-smoke.yaml
             system: configs/systems/onboarding/efm32g232.yaml
+          # G222 is bounded to its Cortex-M3 memory map and model-backed USART0.
+          - id: efm32g222
+            crate: firmware-efm32g222-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32g222-smoke.yaml
+            system: configs/systems/onboarding/efm32g222.yaml
           # The Nano 33 BLE imported profile exposes only its actual nRF52840
           # memory, UARTE0, and GPIO0 smoke surface.
           - id: arduino_nano_33_ble
