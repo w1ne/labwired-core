@@ -921,11 +921,11 @@ mod tests {
             .expect("texts_seen in artifact meta");
         let texts: Vec<&str> = seen.iter().filter_map(|v| v.as_str()).collect();
         assert!(
-            texts.iter().any(|t| *t == " 3 "),
+            texts.contains(&" 3 "),
             "first panel must land in texts_seen: {texts:?}"
         );
         assert!(
-            texts.iter().any(|t| *t == " 5 "),
+            texts.contains(&" 5 "),
             "second panel must land in texts_seen: {texts:?}"
         );
         assert_eq!(
