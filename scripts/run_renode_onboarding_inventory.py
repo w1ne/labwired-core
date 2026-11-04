@@ -65,6 +65,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv8m.base-none-eabi",
         "script": "examples/renode-onboarding/renesas-r7fa2e1a9-smoke.yaml",
     },
+    "renesas-r7fa8m1a": {
+        "crate": "firmware-renesas-r7fa8m1a-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml",
+    },
     "renesas-da14592": {
         "crate": "firmware-renesas-da14592-smoke",
         "target": "thumbv8m.main-none-eabi",

@@ -49,6 +49,7 @@ on:
       - "crates/firmware-renesas-ek-ra2e1-smoke/**"
       - "crates/firmware-renesas-r7fa2l1a-smoke/**"
       - "crates/firmware-renesas-r7fa2e1a9-smoke/**"
+      - "crates/firmware-renesas-r7fa8m1a-smoke/**"
       - "crates/firmware-renesas-da14592-smoke/**"
       - "crates/firmware-renesas-ck-ra6m5-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
@@ -117,6 +118,13 @@ jobs:
             target: thumbv8m.base-none-eabi
             script: examples/renode-onboarding/renesas-r7fa2e1a9-smoke.yaml
             system: configs/systems/onboarding/renesas-r7fa2e1a9.yaml
+          # R7FA8M1A is restricted to the model-backed M85 CPU and memory map;
+          # the imported peripheral claims remain omitted for this smoke.
+          - id: renesas-r7fa8m1a
+            crate: firmware-renesas-r7fa8m1a-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa8m1a.yaml
           # DA14592 is scoped to the primary M33 core, exact flash/SRAM map,
           # and model-backed DA UART0. The M0+ CMAC core and other peripherals
           # are not claimed by this smoke.
