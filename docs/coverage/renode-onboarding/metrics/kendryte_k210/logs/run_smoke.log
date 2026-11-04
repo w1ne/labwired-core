@@ -1,5 +1,5 @@
-2026-11-04T21:09:12.800882Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/kendryte_k210.yaml
-2026-11-04T21:09:12.801658Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+2026-11-04T21:28:08.519257Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/kendryte_k210.yaml
+2026-11-04T21:28:08.519874Z  INFO labwired_loader: ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · kendryte_k210-smoke · 100000 steps · 0.00s

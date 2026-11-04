@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001349">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001328">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="827dcbbb236b5ed26f6a1d742fc8fb59a3f73fed256f28a47db36013a4d2adc0"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001349">
+  <testcase classname="labwired" name="run" time="0.001328">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EFR32MG24 Cortex-M33 USART0 smoke" time="0.000000">
   </testcase>
