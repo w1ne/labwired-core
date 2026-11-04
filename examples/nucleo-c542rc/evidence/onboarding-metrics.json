@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-c542rc",
+  "status": "pass",
+  "crate": "firmware-nucleo-c542rc-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/nucleo-c542rc/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-c542rc-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T18:43:19Z",
+  "finished_at_utc": "2026-11-04T18:43:37Z",
+  "elapsed_seconds": 18,
+  "elapsed_ms": 17702,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 16.796,
+    "build_firmware": 0.515,
+    "run_smoke": 0.379
+  },
+  "stages_ms": {
+    "build_cli": 16796,
+    "build_firmware": 515,
+    "run_smoke": 379
+  }
+}

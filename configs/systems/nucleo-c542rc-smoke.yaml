@@ -1,0 +1,13 @@
+# GPIO-only system profile for ST NUCLEO-C542RC (MB2213).
+# Only the onboard green user LED LD1 on active-high PA5 is claimed.
+schema_version: "1.0"
+name: "nucleo-c542rc-smoke"
+chip: "../chips/stm32c542rc-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
