@@ -169,7 +169,7 @@ impl AvrModel {
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
             AvrModel::Attiny1604 | AvrModel::Attiny1606 | AvrModel::Attiny1607 => 16 * 1024,
             // Classic tinyAVR. Datasheet flash size, per part.
-            AvrModel::Attiny13 => 1 * 1024,
+            AvrModel::Attiny13 => 1024,
             AvrModel::Attiny25 | AvrModel::Attiny2313 | AvrModel::Attiny261 => 2 * 1024,
             AvrModel::Attiny45 | AvrModel::Attiny44 | AvrModel::Attiny461 | AvrModel::Attiny48 => {
                 4 * 1024
