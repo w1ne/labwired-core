@@ -72,6 +72,7 @@ on:
       - "crates/firmware-nucleo-wba25ce1-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h533re-smoke/**"
+      - "crates/firmware-stm32h573i-dk-smoke/**"
       - "crates/firmware-nucleo-c5a3zg-smoke/**"
       - "crates/firmware-nucleo-c542rc-smoke/**"
       - "crates/firmware-nucleo-u3c5zi-q-smoke/**"
@@ -101,6 +102,8 @@ on:
       - "configs/systems/nucleo-wba25ce1-smoke.yaml"
       - "configs/systems/nucleo-h503rb.yaml"
       - "configs/systems/nucleo-h533re.yaml"
+      - "configs/systems/stm32h573i-dk-smoke.yaml"
+      - "configs/chips/stm32h573ii-dk-gpio-smoke.yaml"
       - "configs/systems/nucleo-c5a3zg.yaml"
       - "configs/systems/nucleo-c542rc-smoke.yaml"
       - "configs/chips/stm32c542rc-nucleo-smoke.yaml"
@@ -117,6 +120,7 @@ on:
       - "examples/nucleo-wba25ce1/**"
       - "examples/nucleo-h503rb/**"
       - "examples/nucleo-h533re/**"
+      - "examples/stm32h573i-dk/**"
       - "examples/nucleo-c5a3zg/**"
       - "examples/nucleo-c542rc/**"
       - "examples/nucleo-u3c5zi-q/**"
@@ -377,6 +381,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h533re/onboarding-smoke.yaml
             system: configs/systems/nucleo-h533re.yaml
+          - id: stm32h573i-dk
+            crate: firmware-stm32h573i-dk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/stm32h573i-dk/onboarding-smoke.yaml
+            system: configs/systems/stm32h573i-dk-smoke.yaml
           - id: nucleo-c5a3zg
             crate: firmware-nucleo-c5a3zg-smoke
             target: thumbv8m.main-none-eabi

@@ -1,0 +1,13 @@
+# GPIO-only smoke profile for ST STM32H573I-DK (MB1677).
+# Only the active-low green user LED LD1 on PI9 is claimed.
+schema_version: "1.0"
+name: "stm32h573i-dk-smoke"
+chip: "../chips/stm32h573ii-dk-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioi"
+    pin: 9
+    signal: "output"
+    active_high: false

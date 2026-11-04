@@ -120,6 +120,7 @@ members = [
     "crates/firmware-nucleo-c542rc-smoke",
     "crates/firmware-nucleo-u3c5zi-q-smoke",
     "crates/firmware-nucleo-u385rg-q-smoke",
+    "crates/firmware-stm32h573i-dk-smoke",
     "crates/firmware-nucleo-u083rc-smoke",
     "crates/firmware-nucleo-h723zg-smoke",
     "crates/firmware-nucleo-h753zi-smoke",

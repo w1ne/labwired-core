@@ -1,0 +1,12 @@
+# Boot Cortex-M33 firmware and toggle the STM32H573I-DK user LED LD1 on PI9.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-stm32h573i-dk-smoke"
+  system: "../../configs/systems/stm32h573i-dk-smoke.yaml"
+limits:
+  max_steps: 5000
+assertions:
+  - gpio_edges:
+      pin: "gpioi:9"
+      min_edges: 16
+  - expected_stop_reason: max_steps
