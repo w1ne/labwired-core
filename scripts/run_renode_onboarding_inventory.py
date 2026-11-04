@@ -432,6 +432,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/miv_rv32-smoke.yaml",
     },
+    "miv-board": {
+        "crate": "firmware-miv-rv32-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/miv-board-smoke.yaml",
+    },
     "murax_vexriscv": {
         "crate": "firmware-murax-vexriscv-smoke",
         "target": "riscv32im-unknown-none-elf",

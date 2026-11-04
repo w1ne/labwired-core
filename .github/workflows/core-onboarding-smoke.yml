@@ -642,6 +642,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/miv_rv32-smoke.yaml
             system: configs/systems/onboarding/miv_rv32.yaml
+          # The imported miv-board profile uses Renode's documented RV32 Mi-V
+          # memory map and only retains the CoreUART path exercised here.
+          - id: miv-board
+            crate: firmware-miv-rv32-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv-board-smoke.yaml
+            system: configs/systems/onboarding/miv-board.yaml
           # Murax uses the modeled VexRiscv RV32IM core and UART; this smoke
           # checks UART output and an explicit M-extension multiply result.
           - id: murax_vexriscv
