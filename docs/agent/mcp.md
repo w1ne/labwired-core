@@ -25,8 +25,22 @@ Tool names share the `labwired_*` family. Stdio does **not** expose `labwired_co
 
 ### Claude Code
 
+Install the hosted connector and electronics workflow skill from LabWired’s public marketplace:
+
 ```bash
-claude mcp add labwired --transport http https://api.labwired.com/mcp
+claude plugin install labwired --marketplace w1ne/labwired-core
+```
+
+For just the remote MCP server, use:
+
+```bash
+claude mcp add --transport http labwired https://api.labwired.com/mcp
+```
+
+### Grok Build
+
+```bash
+grok mcp add --transport http labwired https://api.labwired.com/mcp
 ```
 
 ### Codex
