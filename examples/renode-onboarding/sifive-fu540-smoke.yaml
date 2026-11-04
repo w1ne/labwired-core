@@ -1,0 +1,10 @@
+# One RV64IMAC hart and UART0 on the narrowed imported SiFive FU540 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke"
+  system: "../../configs/systems/onboarding/sifive-fu540.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "RV64 FU540 UART0 smoke; mul=0000001100000011"
+  - expected_stop_reason: max_steps

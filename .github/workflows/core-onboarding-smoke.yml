@@ -34,6 +34,7 @@ on:
       - "crates/firmware-efm32lg942-smoke/**"
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
+      - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -552,6 +553,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/sifive-fe310-smoke.yaml
             system: configs/systems/onboarding/sifive-fe310.yaml
+          # One RV64IMAC hart from the imported FU540 platform; other harts
+          # and unmodeled peripherals stay outside this UART0 smoke profile.
+          - id: sifive-fu540
+            crate: firmware-sifive-fu540-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/sifive-fu540-smoke.yaml
+            system: configs/systems/onboarding/sifive-fu540.yaml
           # Mi-V profile follows Renode's CPU/memory map and keeps only the
           # CoreUART path exercised by the smoke.
           - id: miv_rv32
@@ -604,7 +612,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv64imac-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

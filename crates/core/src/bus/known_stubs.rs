@@ -143,7 +143,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "cadencegem",
         "Cadence GEM Ethernet MAC. Renode-imported onboarding descriptor; no model in this \
          engine, so the window answers reads with zeros. Used by: onboarding/mars_zx3, \
-         onboarding/sam_e70, onboarding/sifive-fu540, onboarding/zedboard, \
+         onboarding/sam_e70, onboarding/zedboard, \
          onboarding/zynq-7000.",
     ),
     (
