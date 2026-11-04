@@ -1,8 +1,8 @@
 # Onboarding Smoke: adafruit-feather-esp32-v2
 
 - status: `pass`
-- elapsed_seconds: `5`
-- elapsed_ms: `4704`
+- elapsed_seconds: `18`
+- elapsed_ms: `17128`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

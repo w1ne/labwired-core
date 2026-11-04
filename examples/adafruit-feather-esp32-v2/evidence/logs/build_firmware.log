@@ -24,4 +24,4 @@ Checking size .pio/build/feather_nopsramfix/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [=         ]   7.0% (used 22884 bytes from 327680 bytes)
 Flash: [==        ]  23.3% (used 304793 bytes from 1310720 bytes)
-========================= [SUCCESS] Took 0.83 seconds =========================
+========================= [SUCCESS] Took 0.86 seconds =========================
