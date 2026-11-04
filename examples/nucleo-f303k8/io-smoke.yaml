@@ -1,0 +1,13 @@
+# NUCLEO-F303K8: USART2 output and repeated LD3 GPIOB/PB3 transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f303k8-smoke"
+  system: "../../configs/systems/nucleo-f303k8.yaml"
+limits:
+  max_steps: 2200
+assertions:
+  - uart_contains: "NUCLEO_F303K8_OK"
+  - gpio_edges:
+      pin: "gpiob:3"
+      min_edges: 8
+  - expected_stop_reason: max_steps
