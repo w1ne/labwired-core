@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-f302r8",
+  "status": "pass",
+  "crate": "firmware-nucleo-f302r8-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-f302r8/onboarding-smoke.yaml",
+  "system": "configs/systems/nucleo-f302r8.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T04:40:35Z",
+  "finished_at_utc": "2026-11-04T04:40:52Z",
+  "elapsed_seconds": 17,
+  "elapsed_ms": 16849,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 16.043,
+    "build_firmware": 0.501,
+    "run_smoke": 0.295
+  },
+  "stages_ms": {
+    "build_cli": 16043,
+    "build_firmware": 501,
+    "run_smoke": 295
+  }
+}

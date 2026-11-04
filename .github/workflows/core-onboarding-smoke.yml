@@ -24,6 +24,7 @@ on:
       - "crates/firmware-esp32c6-demo/**"
       - "crates/firmware-nucleo-f072rb-smoke/**"
       - "crates/firmware-nucleo-f091rc-smoke/**"
+      - "crates/firmware-nucleo-f302r8-smoke/**"
       - "crates/firmware-nucleo-f303re-smoke/**"
       - "crates/firmware-nucleo-f303k8-smoke/**"
       - "crates/firmware-nucleo-f030r8-smoke/**"
@@ -110,6 +111,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - id: nucleo-f302r8
+            crate: firmware-nucleo-f302r8-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f302r8/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f302r8.yaml
           - id: nucleo-f303k8
             crate: firmware-nucleo-f303k8-smoke
             target: thumbv7em-none-eabi
