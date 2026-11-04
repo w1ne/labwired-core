@@ -681,6 +681,16 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // LEDC, etc). Most are touched briefly during esp-idf init; round-
     // trip stubs satisfy the access pattern even without modeling
     // any specific peripheral semantics.
+    // RMT (TRM §12) at 0x3FF5_6000 — real TX→GPIO model (NeoPixel / WS2812).
+    // Must win over the catch-all stubs below; ETS_RMT_INTR_SOURCE = 47.
+    bus.add_peripheral(
+        "rmt",
+        0x3FF5_6000,
+        0x1000,
+        Some(47),
+        Box::new(crate::peripherals::esp32::rmt::Esp32Rmt::new(47)),
+    );
+
     for (name, base) in [
         ("sdio_host", 0x3FF4_A000u64),
         ("sar_adc", 0x3FF4_C000),
@@ -699,7 +709,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("rmt", 0x3FF5_6000),
         ("pcnt", 0x3FF5_7000),
     ] {
         bus.add_peripheral(
@@ -954,6 +963,8 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     // as round-trip storage. `sens_sar_adc` (0x3FF4_8800) and `io_mux`
     // (0x3FF4_9000) still win their ranges by the greatest-start rule.
     ("rtcio",    "esp32_rtc_io",   0x3FF4_8400, 0x1000, None),
+    // RMT TX (NeoPixel). ETS_RMT_INTR_SOURCE = 47.
+    ("rmt",      "esp32_rmt",      0x3FF5_6000, 0x1000, Some(47)),
 ];
 
 /// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x530), stride 4.

@@ -58,6 +58,8 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x3FF4_8400), shared with
         // the GPIO model through the bus (`rebuild_rtc_io_link`).
         "esp32_rtc_io" => Box::new(crate::peripherals::esp_rtc_io::EspRtcIo::new_esp32()),
+        // ETS_RMT_INTR_SOURCE = 47 on classic ESP32.
+        "esp32_rmt" => Box::new(rmt::Esp32Rmt::new(p_cfg.irq.unwrap_or(47))),
         _ => return None,
     };
     Some(dev)
@@ -81,4 +83,5 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_mcpwm",
     "esp32_sdio",
     "esp32_rtc_io",
+    "esp32_rmt",
 ];
