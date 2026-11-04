@@ -1,5 +1,5 @@
-2026-11-04T14:47:10.301896Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/cc2538sf53.yaml
-2026-11-04T14:47:10.305381Z  INFO labwired_loader: ELF Entry Point: 0x200401
+2026-11-04T15:03:47.507914Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/cc2538sf53.yaml
+2026-11-04T15:03:47.511316Z  INFO labwired_loader: ELF Entry Point: 0x200401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  3/3 checks · cc2538-smoke · 4000000 steps · 0.16s
