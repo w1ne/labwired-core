@@ -36,10 +36,10 @@
 //! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
-//! There is no temperature model: every parameter is taken at
-//! [`TEMPERATURE_K`] as written. A `.model` line may
-//! carry unmodelled parameters (real vendor models do) and they are accepted
-//! and ignored; see [`super::netlist`]. Diode soft recovery covers the
+//! Except for the diode's explicit `TEMP` law, parameters are taken at
+//! [`TEMPERATURE_K`] as written. A `.model` line may carry unmodelled
+//! parameters (real vendor models do) and they are accepted and ignored; see
+//! [`super::netlist`]. Diode soft recovery covers the
 //! first-order `VP` charge state. Other recovery models and stored charge in
 //! unsupported junctions still require `adapter: external_process` with ngspice.
 //!
@@ -60,8 +60,9 @@ use super::netlist::{MosChannelChargeModel, Mosfet};
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
-/// The engine has no temperature model, so this is a constant rather than a
-/// setting. ngspice's default is 300.15 K (27 °C); the 0.05 % difference in
+/// This is the fallback for paths without an explicit diode instance
+/// temperature, so it is a constant rather than a setting. ngspice's default
+/// is 300.15 K (27 °C); the 0.05 % difference in
 /// [`THERMAL_VOLTAGE`] moves a silicon junction by about 13 µV per decade of
 /// current, which is why the ngspice differential decks pin `temp`/`tnom` to
 /// 26.85 °C — exactly 300.00 K — instead of arguing about it.

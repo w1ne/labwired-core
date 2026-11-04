@@ -373,7 +373,7 @@ C1 out 0 100n $ dollar comment
         let circuit = parse_netlist(
             "D1 a 0 D1N4148\n\
              .model D1N4148 D(IS=2.52n RS=0.568 N=1.752 IKF=100m IKR=20m CJO=4p M=0.333 FC=0.4 TT=11.54n VP=0.2 \
-             VJ=0.75 BV=100 IBV=100u ISR=8p NR=1.8 EG=1.11 XTI=3)\n",
+             VJ=0.75 BV=100 IBV=100u ISR=8p NR=1.8 EG=1.11 XTI=3 TCV=1m)\n",
         )
         .expect("a vendor card parses");
         assert_eq!(circuit.diodes[0].model.is, 2.52e-9);
@@ -389,6 +389,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.diodes[0].model.m, 0.333);
         assert_eq!(circuit.diodes[0].model.vj, 0.75);
         assert_eq!(circuit.diodes[0].model.fc, 0.4);
+        assert_eq!(circuit.diodes[0].model.tcv, 1e-3);
     }
 
     #[test]
@@ -402,13 +403,17 @@ C1 out 0 100n $ dollar comment
         assert_eq!(diode.model.xti, 2.4);
         assert_eq!(diode.model.tnom_celsius, 25.0);
 
+        let alias =
+            parse_netlist("D1 a 0 D\n.model D D(TBV1=2m)\n").expect("ngspice TBV1 alias parses");
+        assert_eq!(alias.diodes[0].model.tcv, 2e-3);
+
         let defaults = parse_netlist("D1 a 0 D\n").expect("default diode parses");
         assert_eq!(defaults.diodes[0].temperature_celsius, None);
         assert_eq!(defaults.diodes[0].model.eg, 1.11);
         assert_eq!(defaults.diodes[0].model.xti, 3.0);
         assert_eq!(defaults.diodes[0].model.tnom_celsius, 27.0);
 
-        for parameter in ["EG=-0.1", "XTI=1e999", "TNOM=-273.15"] {
+        for parameter in ["EG=-0.1", "XTI=1e999", "TNOM=-273.15", "TCV=1e999"] {
             let error = parse_netlist(&format!("D1 a 0 DMOD\n.model DMOD D({parameter})\n"))
                 .expect_err("invalid diode temperature model parameter is refused");
             assert!(error.to_string().contains("diode model"), "{error}");
@@ -417,6 +422,8 @@ C1 out 0 100n $ dollar comment
             parse_netlist(&format!("D1 a 0 D TEMP={temp}\n"))
                 .expect_err("invalid diode instance temperature is refused");
         }
+        parse_netlist("D1 a 0 DMOD TEMP=50\n.model DMOD D(BV=5 TCV=-0.1 TNOM=27)\n")
+            .expect_err("a nonpositive temperature-adjusted BV is refused");
     }
 
     #[test]

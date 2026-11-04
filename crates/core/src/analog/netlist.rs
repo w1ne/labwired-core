@@ -80,12 +80,12 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients, and most terminal
-//! resistances, and semiconductor temperature coefficients beyond the diode
-//! saturation-current law below, …) are **accepted and ignored rather than
+//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode
+//! saturation-current and breakdown-voltage laws below, and most terminal
+//! resistances, …) are **accepted and ignored rather than
 //! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
-//! its thermal voltage and saturation currents; diode capacitance, series
-//! resistance, and breakdown-voltage temperature coefficients remain fixed.
+//! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
+//! breakdown voltage. Diode capacitance and series resistance remain fixed.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -138,8 +138,10 @@
 //! temperature exponent, default 3). On a diode instance, `TEMP=<°C>` applies
 //! ngspice's temperature law to the junction thermal voltage and to `IS` and
 //! `ISR` (using `N` and `NR`, respectively). Without `TEMP`, the historical
-//! fixed 300 K diode behavior is retained. This slice does not temperature-
-//! adjust depletion charge, `TT`, `RS`, or breakdown voltage.
+//! fixed 300 K diode behavior is retained. `TCV` (also `TBV1`) applies a
+//! linear coefficient to `BV` when `TEMP` is present:
+//! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. Depletion charge, `TT`, and `RS`
+//! are not temperature-adjusted.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -646,6 +648,9 @@ pub struct DiodeModel {
     pub xti: f64,
     /// Parameter measurement temperature `TNOM`, in Celsius.
     pub tnom_celsius: f64,
+    /// Breakdown-voltage temperature coefficient `TCV`/`TBV1`, per Celsius
+    /// degree. Applies when an instance `TEMP` is present.
+    pub tcv: f64,
 }
 
 impl Default for DiodeModel {
@@ -670,6 +675,7 @@ impl Default for DiodeModel {
             eg: 1.11,
             xti: 3.0,
             tnom_celsius: 27.0,
+            tcv: 0.0,
         }
     }
 }
@@ -1058,6 +1064,7 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     eg: 1.11,
     xti: 3.0,
     tnom_celsius: 27.0,
+    tcv: 0.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1480,6 +1487,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             eg: 1.11,
             xti: 3.0,
             tnom_celsius: 27.0,
+            tcv: 0.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1505,6 +1513,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             eg: 1.11,
             xti: 3.0,
             tnom_celsius: 27.0,
+            tcv: 0.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -3131,6 +3140,7 @@ fn bind_models(
                     || !model.xti.is_finite()
                     || !model.tnom_celsius.is_finite()
                     || model.tnom_celsius <= -273.15
+                    || !model.tcv.is_finite()
                     || !model.ik.is_finite()
                     || model.ik < 0.0
                     || !model.ikr.is_finite()
@@ -3155,7 +3165,7 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3179,12 +3189,23 @@ fn bind_models(
                     };
                 let breakdown = match model.bv {
                     None => None,
-                    Some(bv) => {
+                    Some(nominal_bv) => {
                         let nbv = model.nbv.unwrap_or(model.n);
-                        if bv <= 0.0 || model.ibv <= 0.0 || nbv <= 0.0 {
+                        if nominal_bv <= 0.0 || model.ibv <= 0.0 || nbv <= 0.0 {
                             return Err(ctx.parse_err(
                                 "a diode model with BV needs BV > 0, IBV > 0 and NBV > 0"
                                     .to_string(),
+                            ));
+                        }
+                        let bv = device
+                            .temperature_celsius
+                            .map(|temperature| {
+                                nominal_bv * (1.0 + model.tcv * (temperature - model.tnom_celsius))
+                            })
+                            .unwrap_or(nominal_bv);
+                        if !bv.is_finite() || bv <= 0.0 {
+                            return Err(ctx.parse_err(
+                                "temperature-adjusted diode BV must be finite and > 0".to_string(),
                             ));
                         }
                         Some(super::device::breakdown_voltage_at_thermal_voltage(
@@ -3772,6 +3793,7 @@ fn parse_model(
             (ModelCard::Diode(model), "EG") => model.eg = value,
             (ModelCard::Diode(model), "XTI") => model.xti = value,
             (ModelCard::Diode(model), "TNOM") => model.tnom_celsius = value,
+            (ModelCard::Diode(model), "TCV" | "TBV1") => model.tcv = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
             (ModelCard::Diode(model), "IKR") => model.ikr = value,
             (ModelCard::Diode(model), "ISR") => model.isr = value,
@@ -4002,6 +4024,7 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     eg: 1.11,
     xti: 3.0,
     tnom_celsius: 27.0,
+    tcv: 0.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V

@@ -198,6 +198,95 @@ mod analog {
         );
     }
 
+    /// `TCV`/`TBV1` moves a zener's specified breakdown voltage relative to
+    /// `TNOM`. Check the shifted reverse knee through model `RS` and an external
+    /// load, so ignoring the coefficient or applying it at the external node
+    /// produces the wrong operating point.
+    #[test]
+    fn diode_breakdown_temperature_coefficient_moves_loaded_zener_knee() {
+        let (is, n, bv, ibv, nbv, tcv, tnom, rs, load, supply) =
+            (1e-14, 1.2, 5.0, 1e-3, 1.4, 2e-3, 27.0, 40.0, 1_000.0, -7.0);
+        let mut currents = Vec::new();
+
+        for temperature in [27.0, 127.0] {
+            let effective_bv = bv * (1.0 + tcv * (temperature - tnom));
+            let temperature_kelvin = temperature + 273.15;
+            let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+            let xbv = device::breakdown_voltage_at_thermal_voltage(effective_bv, ibv, is, nbv, vt);
+            let current_at_junction =
+                |voltage: f64| -is * (-(xbv + voltage) / (nbv * vt)).exp() + device::GMIN * voltage;
+            let load_line = |junction_voltage: f64| {
+                let current = current_at_junction(junction_voltage);
+                (junction_voltage + current * rs - supply) / load + current
+            };
+            let (mut low, mut high) = (-12.0, 0.0);
+            assert!(load_line(low) < 0.0 && load_line(high) > 0.0);
+            for _ in 0..100 {
+                let mid = (low + high) / 2.0;
+                if load_line(mid) < 0.0 {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            let expected_junction = (low + high) / 2.0;
+            let expected_current = current_at_junction(expected_junction);
+            assert!(
+                expected_junction < -xbv,
+                "TEMP={temperature} °C test point must be in breakdown"
+            );
+
+            let netlist = format!(
+                "Vdrive drive 0 dc {supply}\nRload drive a {load}\nD1 a 0 DBV TEMP={temperature}\n\
+                 .model DBV D(IS={is} N={n} EG=0 XTI=0 TNOM={tnom} BV={bv} IBV={ibv} NBV={nbv} TCV={tcv} RS={rs})\n"
+            );
+            let solver = build(&netlist);
+            let diode = &solver.circuit().diodes[0];
+            assert_eq!(diode.model.tcv, tcv);
+            assert!(
+                (diode.breakdown.expect("BV is enabled") - xbv).abs() < 1e-12,
+                "TEMP={temperature} °C: effective breakdown fit should use BV(T)={effective_bv} V"
+            );
+            let external = solver.circuit().node("a").expect("external anode");
+            let junction = solver
+                .circuit()
+                .node("D1#internal")
+                .expect("RS creates an internal junction node");
+            let actual_external = solver.node_voltage(external);
+            let actual_junction = solver.node_voltage(junction);
+            let actual_current = source_current(&solver, "Vdrive");
+
+            assert!(
+                (actual_junction - expected_junction).abs() < 1e-8,
+                "TEMP={temperature} °C: expected internal junction {expected_junction} V, got {actual_junction} V"
+            );
+            assert!(
+                (actual_current - expected_current).abs() < 1e-9,
+                "TEMP={temperature} °C: expected reverse current {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                (actual_external - actual_junction - actual_current * rs).abs() < 1e-8,
+                "the diode's series resistance must carry the breakdown current"
+            );
+            currents.push(actual_current);
+        }
+
+        assert!(
+            currents[0] < currents[1],
+            "the positive zener coefficient raises BV with temperature and reduces current at fixed reverse bias: {currents:?}"
+        );
+
+        let legacy = build(&format!(
+            "Vdrive a 0 dc -5.5\nD1 a 0 DBV\n\
+             .model DBV D(IS={is} N={n} BV={bv} IBV={ibv} NBV={nbv} TCV={tcv})\n"
+        ));
+        assert_eq!(
+            legacy.circuit().diodes[0].breakdown,
+            Some(device::breakdown_voltage(bv, ibv, is, nbv)),
+            "without instance TEMP, the existing fixed-300 K path is retained"
+        );
+    }
+
     /// `IK`/`IKF` and `IKR` reduce forward and reverse junction current at
     /// high injection. The source voltage is derived from the selected
     /// junction voltage and the ngspice current transform, so each case checks
