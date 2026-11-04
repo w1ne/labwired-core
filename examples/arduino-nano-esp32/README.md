@@ -1,16 +1,24 @@
 # Arduino Nano ESP32 GPIO smoke
 
-This smoke runs on the Arduino Nano ESP32 (ABX00083) profile and drives the
-onboard RGB LED's red channel through ESP32-S3 GPIO46. GPIO46 is active-low.
+This smoke targets the Arduino Nano ESP32 and drives the onboard RGB LED's red
+channel through ESP32-S3 GPIO46. GPIO46 is active-low. Arduino's current store
+listing is the headered SKU ABX00092; the profile follows the same documented
+Nano ESP32 GPIO mapping.
 The system profile is
 [`configs/systems/arduino-nano-esp32.yaml`](../../configs/systems/arduino-nano-esp32.yaml)
 and names only the real ESP32-S3 GPIO model needed for this check.
 
 ## Scope
 
-- The committed firmware uses ESP-IDF's GPIO API to drive physical GPIO46 low.
-- The required oracle checks that GPIO46 ends low. The hosted result is
-  **model-verified** for that GPIO state; it is not a physical-board test.
+- The repository smoke runs `firmware/board_gpio_smoke.c`, a minimal bare-metal
+  S3 image that writes the GPIO bank 1 enable/output registers for GPIO46. The
+  test requires at least two transitions, which turns the active-low red LED
+  channel on and off.
+- PlatformIO also builds `src/main.ino`, an Arduino sketch that sets GPIO46
+  high and then low. The hosted verifier checks the final low state and returns
+  **model-verified**; neither result is a physical-board test.
+- The local repository smoke uses the S3 fast-boot ELF path. Full Arduino
+  framework startup through the mask ROM is outside this profile.
 - The hosted twin assumes an ideal 3.3 V rail, so power-on and brown-out reset
   behavior are outside this result.
 - The Nano's Wi-Fi/Bluetooth, PSRAM, native USB, ADC, timer, I²C and SPI paths
@@ -58,4 +66,24 @@ the hosted Arduino board-alias mapping remains an open model gap.
   board, source, diagram, and GPIO oracle.
 - [`evidence/model-verification.json`](evidence/model-verification.json) is the
   hosted LabWired verification result.
-- [`src/main.ino`](src/main.ino) is the tested firmware source.
+- [`firmware/board_gpio_smoke.c`](firmware/board_gpio_smoke.c) is the local
+  fast-boot smoke firmware; [`src/main.ino`](src/main.ino) is the hosted
+  Arduino firmware proof source.
+
+## Reproduce the repository smoke
+
+From the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id arduino-nano-esp32 \
+  --script examples/arduino-nano-esp32/onboarding-smoke.yaml \
+  --system configs/systems/arduino-nano-esp32.yaml \
+  --firmware-build-script examples/arduino-nano-esp32/ci/build-firmware.sh \
+  --out-dir examples/arduino-nano-esp32/evidence
+```
+
+The PlatformIO environment is pinned to Espressif32 8.0.0 and the
+`arduino_nano_esp32` board definition. It builds the Arduino sketch and uses
+the same pinned Xtensa toolchain for the small local smoke image. The committed
+build and simulator logs are under [`evidence/logs/`](evidence/logs/).

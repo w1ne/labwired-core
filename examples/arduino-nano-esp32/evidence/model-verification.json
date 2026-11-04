@@ -6,7 +6,7 @@
     {
       "code": "approximation",
       "scope": "model",
-      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
       "address": "0x0",
       "pc": "0x0"
     }
@@ -16,7 +16,7 @@
       "access": "unpowered_rail_assumed",
       "pc": "0x0",
       "count": 1,
-      "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+      "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
       "address": "0x0"
     }
   ],

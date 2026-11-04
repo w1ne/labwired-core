@@ -3,6 +3,7 @@
 
 void setup() {
   gpio_set_direction(GPIO_NUM_46, GPIO_MODE_OUTPUT); // RGB red, active low
+  gpio_set_level(GPIO_NUM_46, 1); // LED off
   gpio_set_level(GPIO_NUM_46, 0);
 }
 

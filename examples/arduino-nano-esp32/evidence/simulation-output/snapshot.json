@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070464960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464960,
+      1610629144,
+      16384,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1077379128,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 1000,
+  "cycles": 1000,
+  "instructions": 1000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000
+    }
+  },
+  "limits": {
+    "max_steps": 1000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "a807276c47194eae203f6aa166e3b76c2eace3f7f810aae61ece8cac43b35d81",
+  "config": {
+    "firmware": "examples/arduino-nano-esp32/../../target/xtensa-esp32s3-none-elf/release/firmware-arduino-nano-esp32-smoke",
+    "system": "examples/arduino-nano-esp32/../../configs/systems/arduino-nano-esp32.yaml",
+    "script": "examples/arduino-nano-esp32/onboarding-smoke.yaml"
+  }
+}
