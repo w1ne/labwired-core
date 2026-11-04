@@ -822,8 +822,11 @@ impl Avr {
         bus.sync_parking_spi_cs();
         // Bit-bang clock/data only observe PORTB (Uno hardware-SPI pins).
         // PINB=0x23, DDRB=0x24, PORTB=0x25 on ATmega328P.
+        // Soft-SPI bit-bang observes classic mega PORTB only (Uno pinout).
+        // tinyAVR / other models use different port maps — skip.
         let portb_addr = match self.model {
             AvrModel::Atmega328p | AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x25u16,
+            _ => return,
         };
         if addr != portb_addr {
             return;
@@ -1234,8 +1237,13 @@ impl Avr {
                         self.spi_devices[i].set_dc_level(level);
                     }
                 }
+                // Mirror parking SPI: prefer CS-selected devices; if none
+                // report selected (legacy stubs / DcProbe), clock every
+                // attached device so D/C sampling tests and single-device
+                // kits keep working.
+                let any_selected = self.spi_devices.iter().any(|d| d.is_selected());
                 for dev in &mut self.spi_devices {
-                    if !dev.is_selected() {
+                    if any_selected && !dev.is_selected() {
                         continue;
                     }
                     let resp = dev.transfer(mosi);
