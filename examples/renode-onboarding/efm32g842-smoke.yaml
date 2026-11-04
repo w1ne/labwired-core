@@ -1,0 +1,10 @@
+# Cortex-M3 USART0 smoke against the narrowed imported EFM32G842 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32g842-smoke"
+  system: "../../configs/systems/onboarding/efm32g842.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32G842 USART0 smoke"
+  - expected_stop_reason: max_steps

@@ -116,8 +116,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "Cortex-M bit-band alias region. Bit-banding is modelled by the bus itself \
          (SystemBus::bit_band_enabled), so the imported peripheral entry is inert. \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/cc2538, onboarding/efm32g842 \
-         (+34 more).",
+         answers reads with zeros. Used by: onboarding/cc2538, onboarding/efm32g890 \
+         (+33 more).",
     ),
     (
         "bmp180",
