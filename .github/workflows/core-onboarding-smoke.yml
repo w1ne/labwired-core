@@ -30,6 +30,7 @@ on:
       - "crates/firmware-stm32l151-smoke/**"
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
+      - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -153,6 +154,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g842-smoke.yaml
             system: configs/systems/onboarding/efm32g842.yaml
+          # LG995 is a Cortex-M3 Leopard Gecko import. This smoke measures its
+          # imported memory and model-backed USART0 path only.
+          - id: efm32lg995
+            crate: firmware-efm32lg995-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32lg995-smoke.yaml
+            system: configs/systems/onboarding/efm32lg995.yaml
           # G890 is bounded to its Cortex-M3 memory map and model-backed USART0.
           - id: efm32g890
             crate: firmware-efm32g842-smoke
