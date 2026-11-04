@@ -1,4 +1,4 @@
-2026-11-04T13:51:11.912305Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/murax_vexriscv.yaml
-2026-11-04T13:51:11.913083Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+2026-11-04T14:08:37.115155Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/murax_vexriscv.yaml
+2026-11-04T14:08:37.115930Z  INFO labwired_loader: ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · murax_vexriscv-smoke · 100000 steps · 0.02s

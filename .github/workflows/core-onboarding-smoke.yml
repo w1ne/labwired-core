@@ -42,6 +42,7 @@ on:
       - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
+      - "crates/firmware-s32k118-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/firmware-cv32e40p-smoke/**"
@@ -88,6 +89,14 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nxp-s32k388-smoke.yaml
             system: configs/systems/onboarding/nxp-s32k388.yaml
+          # S32K118 is bounded to Renode's Cortex-M0+ CPU, 256 KiB program
+          # flash, and the 0x5800-byte upper SRAM window; no peripherals are
+          # claimed by this instruction and memory smoke.
+          - id: s32k118
+            crate: firmware-s32k118-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/s32k118-smoke.yaml
+            system: configs/systems/onboarding/s32k118.yaml
           # The imported EK-RA8M1 profile uses the accurate RA8M1 memory map
           # and limits its claim to the modeled Cortex-M85, SYSTEM, GPIO/PFS,
           # and SCI_B paths. Module-stop gating remains outside this smoke.

@@ -55,6 +55,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nxp-s32k388-smoke.yaml",
     },
+    "s32k118": {
+        "crate": "firmware-s32k118-smoke",
+        "target": "thumbv6m-none-eabi",
+        "script": "examples/renode-onboarding/s32k118-smoke.yaml",
+    },
     "atsamd51g19a": {
         "crate": "firmware-atsamd51-demo",
         "target": "thumbv7em-none-eabi",

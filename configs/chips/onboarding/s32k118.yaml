@@ -6,51 +6,15 @@
 
 name: s32k118
 arch: arm
+core: cortex-m0+
 flash:
-  base: 134217728
-  size: 262144B
+  base: 0x00000000
+  size: 256KB
 ram:
-  base: 536870912
-  size: 262144B
-peripherals:
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
-- id: lpspi0
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1073922048
-- id: lpspi1
-  type: stub
-  renode_type: imxrt_lpspi
-  bus: sysbus
-  base_address: 1073926144
-- id: lpuart0
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1074176000
-- id: lpuart1
-  type: nxp_lpuart
-  bus: sysbus
-  base_address: 1074180096
-- id: can0_mcr
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073889280
-- id: lpit
-  type: stub
-  renode_type: s32k_lpit
-  bus: sysbus
-  base_address: 1073967104
-- id: lptmr
-  type: stub
-  renode_type: s32k_lptmr
-  bus: sysbus
-  base_address: 1074003968
-- id: scg
-  type: stub
-  renode_type: s32k_scg
-  bus: sysbus
-  base_address: 1074151424
+  base: 0x20000000
+  size: 0x5800
+# The generated import mapped the flash to 0x08000000 and exposed zero-answer
+# stubs. Keep this execution profile to the Renode S32K118 CPU and upper SRAM
+# region used by the smoke (https://github.com/renode/renode/blob/master/platforms/cpus/s32k118.repl);
+# peripheral behavior is not claimed here.
+peripherals: []
