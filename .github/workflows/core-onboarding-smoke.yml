@@ -34,6 +34,7 @@ on:
       - "crates/firmware-efm32lg942-smoke/**"
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
+      - "crates/firmware-efr32mg12-smoke/**"
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-kendryte-k210-smoke/**"
@@ -337,6 +338,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efm32pg12-smoke.yaml
             system: configs/systems/onboarding/efm32pg12.yaml
+          # The MG12 smoke is restricted to Renode's flash, sequence SRAM, and
+          # the modeled Series-1 USART0 register surface.
+          - id: efr32mg12
+            crate: firmware-efr32mg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efr32mg12-smoke.yaml
+            system: configs/systems/onboarding/efr32mg12.yaml
           # The PG1 profile is limited to its 256 KiB flash, 32 KiB RAM, and
           # model-backed USART0 bring-up path.
           - id: efm32pg1
