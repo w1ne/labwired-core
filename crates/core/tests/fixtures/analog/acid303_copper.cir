@@ -1,0 +1,121 @@
+* Acid303 R-2R DAC / dual-LM358 regression.
+* All 67 extracted track/via resistances retained; 101 expanded MNA unknowns.
+Vdd v_net_cu_r10_2 0 dc 3.3
+Cc1 v_net_c1_1 v_net_c1_2 100n
+Cc2 v_net_c2_1 v_net_c2_2 100n
+Cc3 v_net_c3_1 v_net_c3_2 100n
+Cc4 v_net_c4_1 v_net_c4_2 4.7u
+Cc5 v_net_c5_1 v_net_c5_2 1u
+Cc6 v_net_c6_1 v_net_c6_2 10n
+Cc_analog v_net_c_analog_1 v_net_c_analog_2 100n
+Cc_line v_net_c_line_1 v_net_c_line_2 10u
+Ccf1 v_net_cf1_1 v_net_cf1_2 22n
+Ccf2 v_net_cf2_1 v_net_cf2_2 22n
+Rcu_r1 v_net_c1_1 v_net_c2_1 36.2136m
+Rcu_r10 v_net_c4_1 v_net_cu_r10_2 780.645m
+Rcu_r11 v_net_c5_1 v_net_c6_1 12.5663m
+Rcu_r12 v_net_c5_1 v_net_cu_r10_2 69.0687m
+Rcu_r13 v_net_c1_2 v_net_c4_2 10.0936m
+Rcu_r14 v_net_c1_2 0 9.48748m
+Rcu_r15 v_net_cf1_2 v_net_cf2_2 30.7143m
+Rcu_r16 v_net_cf2_2 0 22.5726m
+Rcu_r17 v_net_c2_2 v_net_c3_2 36.3095m
+Rcu_r18 v_net_c2_2 v_net_c5_2 180.201m
+Rcu_r19 v_net_c2_2 0 16.0456m
+Rcu_r2 v_net_c1_1 v_net_c4_1 15.122m
+Rcu_r20 v_net_c2_2 v_net_cu_r20_2 58.8684m
+Rcu_r21 v_net_c3_2 v_net_c5_2 24.8219m
+Rcu_r22 v_net_c5_2 v_net_c6_2 10.3725m
+Rcu_r23 0 v_net_c_analog_2 31.0431m
+Rcu_r24 0 v_net_cu_r20_2 49.5511m
+Rcu_r25 0 v_net_cu_r25_2 22.4877m
+Rcu_r26 v_net_cf1_1 v_net_cu_r26_2 25.4401m
+Rcu_r27 v_net_cf1_1 v_net_cu_r27_2 80.3484m
+Rcu_r28 v_net_cu_r26_2 v_net_cu_r27_2 27.2712m
+Rcu_r29 v_net_cf2_1 v_net_cu_r29_2 27.0574m
+Rcu_r3 v_net_c1_1 v_net_cu_r10_2 1.92607m
+Rcu_r30 v_net_cf2_1 v_net_cu_r30_2 566.959m
+Rcu_r31 v_net_cu_r29_2 v_net_cu_r30_2 25.4263m
+Rcu_r32 v_net_c_line_1 v_net_cu_r32_2 26.232m
+Rcu_r33 v_net_c_line_2 v_net_cu_r33_2 12.2243m
+Rcu_r34 v_net_c_analog_1 v_net_cu_r34_2 11.8656m
+Rcu_r35 v_net_cu_r35_1 v_net_cu_r35_2 57.8176m
+Rcu_r36 v_net_cu_r35_1 v_net_cu_r36_2 610.66m
+Rcu_r37 v_net_cu_r35_2 v_net_cu_r36_2 21.7419m
+Rcu_r38 v_net_cu_r38_1 v_net_cu_r38_2 86.58m
+Rcu_r39 v_net_cu_r38_1 v_net_cu_r39_2 1.45472
+Rcu_r4 v_net_c2_1 v_net_c3_1 759.968m
+Rcu_r40 v_net_cu_r38_2 v_net_cu_r39_2 20.0284m
+Rcu_r41 v_net_cu_r41_1 v_net_cu_r41_2 120.703m
+Rcu_r42 v_net_cu_r42_1 v_net_cu_r42_2 69.5514m
+Rcu_r43 v_net_cu_r42_1 v_net_cu_r43_2 26.214m
+Rcu_r44 v_net_cu_r42_2 v_net_cu_r43_2 9.00549m
+Rcu_r45 v_net_cu_r45_1 v_net_cu_r45_2 67.6382m
+Rcu_r46 v_net_cu_r45_1 v_net_cu_r46_2 9.02016m
+Rcu_r47 v_net_cu_r45_2 v_net_cu_r46_2 26.4989m
+Rcu_r48 v_net_cu_r48_1 v_net_cu_r48_2 130.691m
+Rcu_r49 v_net_cu_r49_1 v_net_cu_r49_2 8.23143m
+Rcu_r5 v_net_c2_1 v_net_c4_1 695.955m
+Rcu_r50 v_net_cu_r50_1 v_net_cu_r49_2 26.7197m
+Rcu_r51 v_net_cu_r51_1 v_net_cu_r51_2 145.658m
+Rcu_r52 v_net_cu_r52_1 v_net_cu_r52_2 195.345m
+Rcu_r53 v_net_cu_r53_1 v_net_cu_r53_2 152.801m
+Rcu_r54 v_net_cu_r53_1 v_net_cu_r54_2 18.6273m
+Rcu_r55 v_net_cu_r53_2 v_net_cu_r54_2 29.1894m
+Rcu_r56 v_net_cu_r56_1 v_net_cu_r56_2 40.8019m
+Rcu_r57 v_net_cu_r57_1 v_net_cu_r57_2 81.1605m
+Rcu_r58 v_net_cu_r58_1 v_net_cu_r58_2 8.23143m
+Rcu_r59 v_net_cu_r59_1 v_net_cu_r58_2 26.744m
+Rcu_r6 v_net_c2_1 v_net_c5_1 187.023m
+Rcu_r60 v_net_cu_r60_1 v_net_cu_r60_2 94.0089m
+Rcu_r61 v_net_cu_r61_1 v_net_cu_r61_2 82.546m
+Rcu_r62 v_net_cu_r61_1 v_net_cu_r62_2 8.86473m
+Rcu_r63 v_net_cu_r61_2 v_net_cu_r62_2 32.6745m
+Rcu_r64 v_net_cu_r64_1 v_net_cu_r64_2 82.2874m
+Rcu_r65 v_net_cu_r65_1 v_net_cu_r65_2 8.23143m
+Rcu_r66 v_net_cu_r66_1 v_net_cu_r65_2 20.4308m
+Rcu_r67 v_net_cu_r67_1 v_net_cu_r67_2 101.906m
+Rcu_r7 v_net_c2_1 v_net_cu_r10_2 8.14576m
+Rcu_r8 v_net_c3_1 v_net_c5_1 9.80584m
+Rcu_r9 v_net_c3_1 v_net_cu_r10_2 8.53597m
+Vsup_j_analog v_net_cu_r34_2 0 dc 5
+Rr_bleed v_net_cu_r36_2 v_net_cu_r25_2 100k
+Rr_line v_net_cu_r33_2 v_net_cu_r35_2 1k
+Rrd0 v_net_cu_r57_1 v_net_cu_r53_2 20k
+Rrd1 v_net_cu_r60_1 v_net_cu_r59_1 20k
+Rrd2 v_net_cu_r64_1 v_net_cu_r61_2 20k
+Rrd3 v_net_cu_r67_1 v_net_cu_r66_1 20k
+Rrd4 v_net_cu_r41_1 v_net_cu_r42_1 20k
+Rrd5 v_net_cu_r48_1 v_net_cu_r45_2 20k
+Rrd6 v_net_cu_r51_1 v_net_cu_r50_1 20k
+Rrd7 v_net_cu_r52_1 v_net_cu_r39_2 20k
+Rrf1 v_net_cu_r56_1 v_net_cu_r26_2 10k
+Rrf2 v_net_cu_r27_2 v_net_cu_r29_2 10k
+Rrl0 v_net_cu_r54_2 v_net_cu_r58_1 10k
+Rrl1 v_net_cu_r58_2 v_net_cu_r61_1 10k
+Rrl2 v_net_cu_r62_2 v_net_cu_r65_1 10k
+Rrl3 v_net_cu_r65_2 v_net_cu_r43_2 10k
+Rrl4 v_net_cu_r42_2 v_net_cu_r45_1 10k
+Rrl5 v_net_cu_r46_2 v_net_cu_r49_1 10k
+Rrl6 v_net_cu_r49_2 v_net_cu_r38_2 10k
+Rrt v_net_cu_r53_1 v_net_cu_r20_2 20k
+Xu_analog_A v_net_cu_r38_1 v_net_cu_r56_2 v_net_cu_r34_2 0 v_net_cu_r56_2 LM358
+Xu_analog_B v_net_cu_r30_2 v_net_cu_r32_2 v_net_cu_r34_2 0 v_net_cu_r32_2 LM358
+Vdrv_pa6 d_pa6 0 dc 0
+Sdrv_pa6 d_pa6 v_net_cu_r32_2 ctl_pa6 ron=25 roff=1e12
+Vdrv_pb0 d_pb0 0 dc 0
+Sdrv_pb0 d_pb0 v_net_cu_r57_2 ctl_pb0 ron=25 roff=1e12
+Vdrv_pb1 d_pb1 0 dc 0
+Sdrv_pb1 d_pb1 v_net_cu_r60_2 ctl_pb1 ron=25 roff=1e12
+Vdrv_pb10 d_pb10 0 dc 0
+Sdrv_pb10 d_pb10 v_net_cu_r52_2 ctl_pb10 ron=25 roff=1e12
+Vdrv_pb3 d_pb3 0 dc 0
+Sdrv_pb3 d_pb3 v_net_cu_r64_2 ctl_pb3 ron=25 roff=1e12
+Vdrv_pb4 d_pb4 0 dc 0
+Sdrv_pb4 d_pb4 v_net_cu_r67_2 ctl_pb4 ron=25 roff=1e12
+Vdrv_pb5 d_pb5 0 dc 0
+Sdrv_pb5 d_pb5 v_net_cu_r41_2 ctl_pb5 ron=25 roff=1e12
+Vdrv_pb6 d_pb6 0 dc 0
+Sdrv_pb6 d_pb6 v_net_cu_r48_2 ctl_pb6 ron=25 roff=1e12
+Vdrv_pb7 d_pb7 0 dc 0
+Sdrv_pb7 d_pb7 v_net_cu_r51_2 ctl_pb7 ron=25 roff=1e12
