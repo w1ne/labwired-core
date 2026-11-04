@@ -21,6 +21,8 @@ The committed build and simulator output is under [`evidence/`](evidence/).
 This is local engine evidence, not a physical-board capture.
 The hosted LabWired board catalog currently has no L010RB target, so this lane
 does not claim a hosted `labwired_verify` `model_verified` verdict.
+The run records `unpowered_rail_assumed`: VDD is idealized, so power-on and
+brown-out reset behavior are not simulated.
 
 ## Modeled board path
 
