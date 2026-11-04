@@ -50,7 +50,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `ce18a3409645e33d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `b03c28d7252087fd` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `9f8af370ee4a1463` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `3e16d2c983814a38` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `584a6255b1549fc2` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `85c2a74fa11ccb26` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `b81b8754dacf5220` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `a33bde2eaade7db0` | no silicon capture |
@@ -64,7 +64,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f072` | 🟡 smoke-manual | — | `6a06b631057e034a` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `d7f9b46ab51e73a6` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `c064eb3dfd680fbb` | no silicon capture |
-| `mpfs095t` | 🟡 smoke-manual | — | `6b05d518fc4e2571` | no silicon capture |
+| `mpfs095t` | 🟡 smoke-manual | — | `9a10b4fdd9731585` | no silicon capture |
 | `am6234` | 🟡 smoke-manual | — | `e6d1c84c83164ed8` | no silicon capture |
 | `r5f52618bgfp` | 🟡 smoke-manual | — | `93cb48ac29fedf82` | no silicon capture |
 | `pic32mz2048efm144` | 🟡 smoke-manual | — | `256ee309e6ee7598` | no silicon capture |

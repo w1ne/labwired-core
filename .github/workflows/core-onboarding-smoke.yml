@@ -141,6 +141,12 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32g890-smoke.yaml
             system: configs/systems/onboarding/efm32g890.yaml
+          # GG942 keeps its accurate Cortex-M3 memory map and modeled USART0.
+          - id: efm32gg942
+            crate: firmware-efm32g842-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/efm32gg942-smoke.yaml
+            system: configs/systems/onboarding/efm32gg942.yaml
           # The Nano 33 BLE imported profile exposes only its actual nRF52840
           # memory, UARTE0, and GPIO0 smoke surface.
           - id: arduino_nano_33_ble
