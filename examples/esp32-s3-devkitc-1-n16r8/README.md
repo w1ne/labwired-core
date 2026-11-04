@@ -1,37 +1,58 @@
 # ESP32-S3-DevKitC-1-N16R8 UART0 smoke
 
-This smoke boots an Arduino sketch on LabWired's ESP32-S3-DevKitC-1-N16R8
-target and checks a UART0 transmit marker. The system profile is
+This smoke boots firmware on the ESP32-S3-DevKitC-1-N16R8 and checks a UART0
+transmit marker. The system profile is
 [`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml).
 
-## Scope
+## Pin map
 
-- `UART0`: real S3 UART peripheral model, exercised by `Serial0.println` and
-  checked against the serial oracle.
-- Twin pin map: GPIO43 is UART0 TX and GPIO44 is UART0 RX. This mapping comes
-  from LabWired's **MODEL_ONLY** board record; it is not a vendor pinout
-  verification.
-- No external devices are attached. The smoke observes the UART0 console in
-  the twin; it does not model the board's USB-to-UART bridge or claim USB
-  serial operation.
-- The board profile references a minimal chip descriptor that lists UART0 only
-  and omits the broader S3 YAML's placeholder windows. The dedicated Xtensa S3
-  builder still wires additional internal models in code; this smoke makes no
-  claim about those peripherals. PSRAM, Wi-Fi/BLE, buttons, LEDs, and native USB
-  are outside the verified path.
-- The hosted verifier assumes an ideal VDD rail. It does not simulate power-on
-  or brown-out reset behavior.
+| Board connection | MCU signal | Pin | Scope |
+| --- | --- | --- | --- |
+| J3-2 TX | UART0 TX / U0TXD | GPIO43 | UART FIFO is exercised; USB bridge is omitted |
+| J3-3 RX | UART0 RX / U0RXD | GPIO44 | Pin is mapped; receive path is not exercised |
+
+Espressif's [current user guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+documents these header signals and the USB-to-UART bridge. The twin captures
+the UART peripheral output; it does not model that bridge or claim physical
+USB serial behavior.
+
+## Scope and limits
+
+- The narrow profile exposes the real S3 UART0 and GPIO models needed for this
+  pin map. GPIO is declared for the pad mapping but not exercised. Firmware
+  writes UART0 FIFO and checks the marker in the local simulator. A separate
+  hosted Arduino sketch is checked with the serial oracle.
+- PSRAM, Wi-Fi/BLE, buttons, LEDs, native USB and ESP-IDF boot-ROM startup are
+  outside this smoke. The board's RGB LED pin changes between board revisions,
+  so it is not claimed here.
+- The hosted verifier assumes an ideal VDD rail. Power-on and brown-out reset
+  behavior are outside this evidence.
+- This is simulation evidence; no physical-board capture is recorded.
+
+## Reproduce the local repository smoke
+
+From the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-s3-devkitc-1-n16r8 \
+  --script examples/esp32-s3-devkitc-1-n16r8/onboarding-smoke.yaml \
+  --system configs/systems/esp32-s3-devkitc-1-n16r8.yaml \
+  --firmware-build-script examples/esp32-s3-devkitc-1-n16r8/ci/build-firmware.sh \
+  --out-dir examples/esp32-s3-devkitc-1-n16r8/evidence
+```
+
+The committed local build and simulator logs are in `evidence/logs/` and
+`evidence/simulation-output/`.
 
 ## Evidence
 
-- [`evidence/part-model.json`](evidence/part-model.json) records the twin's
-  model-only pin map.
 - [`evidence/model-verification.json`](evidence/model-verification.json) is the
-  raw hosted LabWired verification response from 2026-11-03 UTC.
+  raw hosted LabWired verification response from 2026-11-04 UTC.
 - [`evidence/verify-request.json`](evidence/verify-request.json) records the
-  board, diagram, source, and required marker oracle used for the run.
-- [`evidence/vendor-status.md`](evidence/vendor-status.md) records the live
-  manufacturer catalog and retailer availability check.
-
-The verification is model evidence for the hosted twin, not a physical-board
-test. The committed Arduino source is [`src/main.ino`](src/main.ino).
+  hosted board, diagram, source and required marker oracle.
+- [`evidence/vendor-status.md`](evidence/vendor-status.md) records live
+  lifecycle and retailer availability evidence.
+- [`firmware/uart_smoke.c`](firmware/uart_smoke.c) and `firmware/link.ld` are
+  the local fast-boot firmware; [`src/main.ino`](src/main.ino) is the hosted
+  Arduino verification source.

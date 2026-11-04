@@ -1,14 +1,18 @@
-# Vendor and availability check
+# Live lifecycle and availability check
 
-Checked 2026-11-03 UTC for the exact ESP32-S3-DevKitC-1-N16R8 variant.
+Checked 2026-11-04 UTC for the exact ESP32-S3-DevKitC-1-N16R8 variant.
 
-- Espressif's current [ESP32-S3 DevKit catalog](https://www.espressif.com/en/products/devkits/esp32-s3-series/esp32-s3-devkitc-1)
-  lists the ESP32-S3-DevKitC-1 and the exact N16R8 variant, linked to Mouser.
-  The live page does not show an explicit lifecycle field such as Active,
-  NRND, or EOL.
-- Wavtron's [N16R8 product listing](https://www.wavtron.in/products/esp32-s3-devkitc-n16r8-dev-board)
-  reported **In Stock** and exposed **Add to Cart** when checked. Its page says
-  the listing was updated September 29, 2026.
+- Espressif's live [ESP32-S3 DevKit catalog](https://www.espressif.com/en/products/devkits/esp32-s3-series/esp32-s3-devkitc-1)
+  lists the exact N16R8 variant and links it to Mouser. The current
+  [Espressif board guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+  identifies it as a 16 MB flash / 8 MB PSRAM variant; the guide marks the
+  older N8 and N8R2 variants EOL, but does not mark N16R8 EOL.
+- Schukat's live [exact-part listing](https://shop.schukat.com/de/en/EUR/Espressif-Systems/ESP32-S3-DEVKITC-1-N16R8/p/114985)
+  states **Life Cycle Status: Active**. It showed no units currently on hand
+  and a planned receipt of 2,000 units in week 46/2026.
+- Wavtron's live [N16R8 board listing](https://www.wavtron.in/products/esp32-s3-devkitc-n16r8-dev-board)
+  reported **In Stock**, **Add to Cart**, and ₹760 when checked. This is current
+  retailer evidence that the board can be purchased now.
 
-This is evidence of a current manufacturer catalog entry and current
-retail availability, not a manufacturer-issued lifecycle classification.
+The exact variant is currently listed as Active and was available for retail
+purchase. No NRND or obsolete status was shown for N16R8.
