@@ -1045,15 +1045,8 @@ impl SpiDevice for GenericSpiDevice {
             // false here and the buffer holds the last `length` bytes that
             // remained in the shifter after DOUT pushed earlier bytes downstream.
             if shift_register {
-                let length = self
-                    .frames
-                    .as_ref()
-                    .and_then(|f| f.length)
-                    .unwrap_or(0) as usize;
-                if self
-                    .frames
-                    .as_ref()
-                    .is_some_and(|f| f.discard_partial)
+                let length = self.frames.as_ref().and_then(|f| f.length).unwrap_or(0) as usize;
+                if self.frames.as_ref().is_some_and(|f| f.discard_partial)
                     && length > 0
                     && self.frame_buf.len() < length
                 {
@@ -1099,11 +1092,7 @@ impl SpiDevice for GenericSpiDevice {
                 self.frame_buf.clear();
                 self.frame_closed = false;
             }
-            let length = self
-                .frames
-                .as_ref()
-                .and_then(|f| f.length)
-                .unwrap_or(0) as usize;
+            let length = self.frames.as_ref().and_then(|f| f.length).unwrap_or(0) as usize;
             let dout = if length > 0 && self.frame_buf.len() >= length {
                 self.frame_buf.remove(0)
             } else {
@@ -2396,7 +2385,7 @@ behavior:
         d.cs_select();
         d.transfer(0x0C);
         d.transfer(0x01); // leave shutdown — must not latch until CS↑
-        // Still in shutdown until release:
+                          // Still in shutdown until release:
         {
             let art = SpiDevice::artifacts(
                 &d,
@@ -2422,6 +2411,9 @@ behavior:
             },
         );
         assert_eq!(art[0].meta["shutdown"], false);
-        assert_eq!(art[0].bytes.as_deref(), Some(&[0x3C, 0, 0, 0, 0, 0, 0, 0][..]));
+        assert_eq!(
+            art[0].bytes.as_deref(),
+            Some(&[0x3C, 0, 0, 0, 0, 0, 0, 0][..])
+        );
     }
 }

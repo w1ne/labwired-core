@@ -490,11 +490,7 @@ fn max7219_that_was_written_reports_its_lit_leds() {
     let mut bus = rig("led-matrix", "spi1", &[("cs_pin", "PA4".into())]);
     spi_write(&mut bus, "spi1", &[(false, 0x0C), (false, 0x01)]); // shutdown = normal
     for (i, &row) in ROWS.iter().enumerate() {
-        spi_write(
-            &mut bus,
-            "spi1",
-            &[(false, (i + 1) as u8), (false, row)],
-        );
+        spi_write(&mut bus, "spi1", &[(false, (i + 1) as u8), (false, row)]);
     }
 
     let device = inspect_panel(bus);
