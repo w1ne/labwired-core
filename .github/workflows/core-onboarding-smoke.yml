@@ -90,6 +90,13 @@ jobs:
           # M0/M3/M4/M7 firmware against the exact imported system descriptors.
           # The SAMD51 profile uses the silicon memory map and only its modeled
           # MCLK, GCLK, PORTA, and SERCOM3 path.
+          # CC2538 uses its accurate promoted Cortex-M3 profile and checks the
+          # existing model-backed UART0, SYS_CTRL clock, and GPIO readback path.
+          - id: cc2538
+            crate: firmware-cc2538dk-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/cc2538-smoke.yaml
+            system: configs/systems/onboarding/cc2538.yaml
           - id: atsamd51g19a
             crate: firmware-atsamd51-demo
             target: thumbv7em-none-eabi
