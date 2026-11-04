@@ -1,7 +1,8 @@
 # LabWired - micro:bit v2 (Nordic nRF52833) System Configuration
 #
-# Board: BBC micro:bit v2 — target MCU nRF52833, interface MCU (KL27 / DAPLink)
-# bridged UART, 5x5 LED matrix, buttons A/B.
+# Board: BBC micro:bit v2 — target MCU nRF52833, 5x5 LED matrix, buttons A/B.
+# The target UART is captured at host_console; the interface MCU and physical
+# USB CDC bridge are abstracted and are not modeled by this system descriptor.
 #
 # Sources:
 #   * micro:bit v2 hardware documentation (tech.microbit.org/hardware/2-0-revision)

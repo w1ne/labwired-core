@@ -36,6 +36,7 @@ on:
       - "crates/firmware-nucleo-u083rc-smoke/**"
       - "crates/firmware-nucleo-u031r8-smoke/**"
       - "crates/firmware-nrf52840-dk-smoke/**"
+      - "crates/firmware-nrf52833-demo/**"
       - "configs/chips/nrf52840-dk-led-smoke.yaml"
       - "configs/chips/stm32u031r8-nucleo-smoke.yaml"
       - "configs/systems/nucleo-u031r8.yaml"
@@ -253,6 +254,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nrf52840-dk/onboarding-smoke.yaml
             system: configs/systems/nrf52840-dk-led-smoke.yaml
+          - id: microbit-v2
+            crate: firmware-nrf52833-demo
+            target: thumbv7em-none-eabi
+            script: examples/microbit-v2/onboarding-smoke.yaml
+            system: configs/systems/microbit-v2-uart-smoke.yaml
           - id: nrf54l10-on-nrf54l15-dk
             crate: firmware-nrf54l10-smoke
             target: thumbv8m.main-none-eabi
