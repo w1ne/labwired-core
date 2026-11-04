@@ -24,7 +24,7 @@
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
-//! | BJT | `Q<name> nc nb ne <model>` |
+//! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
 //! | JFET | `J<name> nd ng ns <model>` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
@@ -81,12 +81,15 @@
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode
-//! saturation-current, breakdown-voltage and series-resistance laws below,
+//! and BJT laws below,
 //! and most terminal resistances, …) are **accepted and ignored rather than
 //! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
 //! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
 //! breakdown voltage; `TRS1`/`TRS2` adjust the series resistance. Diode
-//! capacitance remains fixed.
+//! capacitance remains fixed. A BJT instance's `TEMP` uses model `TNOM`/`EG`/
+//! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
+//! saturation currents, and forward/reverse beta. BJT charge and terminal
+//! resistance parameters remain at their nominal values.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -144,6 +147,14 @@
 //! `BV(T) = BV · (1 + TCV · (TEMP − TNOM))`. `RS` uses the polynomial
 //! `RS(T) = RS · (1 + TRS1·ΔT + TRS2·ΔT²)`, where `TRS` aliases `TRS1` and
 //! `ΔT = TEMP − TNOM`. Depletion charge and `TT` are not temperature-adjusted.
+//!
+//! A BJT model uses `TNOM` (or `TREF`, default 27 °C), `EG` (default 1.11 eV),
+//! `XTI` (default 3), and `XTB` (default 0). On a BJT instance,
+//! `TEMP=<°C>` applies ngspice's level-1 temperature laws to thermal voltage,
+//! transport `IS`, base-recombination `ISE`/`ISC`, and forward/reverse beta
+//! `BF`/`BR`. Without instance `TEMP`, the historical fixed-300 K behavior is
+//! retained. BJT junction charge and terminal resistances remain at nominal
+//! values; self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -1167,6 +1178,14 @@ pub struct BjtModel {
     pub isc: f64,
     /// Base-collector recombination emission coefficient `NC`.
     pub nc: f64,
+    /// Parameter measurement temperature `TNOM`, in Celsius.
+    pub tnom_celsius: f64,
+    /// Energy gap `EG` used by the saturation-current temperature law, in eV.
+    pub eg: f64,
+    /// Saturation-current temperature exponent `XTI`.
+    pub xti: f64,
+    /// Forward/reverse beta temperature exponent `XTB`.
+    pub xtb: f64,
     /// Zero-bias base-emitter depletion capacitance `CJE`, farads.
     pub cje: f64,
     /// Base-emitter junction potential `VJE`, volts.
@@ -1232,6 +1251,10 @@ impl BjtModel {
             ne: 1.5,
             isc: 0.0,
             nc: 2.0,
+            tnom_celsius: 27.0,
+            eg: 1.11,
+            xti: 3.0,
+            xtb: 0.0,
             cje: 0.0,
             vje: 0.75,
             mje: 0.33,
@@ -1869,7 +1892,7 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model>` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne <model> [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
@@ -1893,6 +1916,13 @@ pub struct Bjt {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: BjtModel,
+    /// Model parameters adjusted for this instance's explicit `TEMP`.
+    pub operating_model: BjtModel,
+    /// Junction thermal voltage for this instance.
+    pub thermal_voltage: f64,
+    /// Explicit instance junction temperature in Celsius. `None` preserves
+    /// the engine's historical fixed 300 K behavior.
+    pub temperature_celsius: Option<f64>,
 }
 
 /// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` — a level-1 MOSFET.
@@ -2712,7 +2742,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
-                        "temp" if letter == 'D' => {
+                        "temp" if matches!(letter, 'D' | 'Q') => {
                             temperature_celsius = Some(ctx.value(value, "temp")?)
                         }
                         other => {
@@ -2740,7 +2770,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 if matches!(temperature_celsius, Some(temp) if !temp.is_finite() || temp <= -273.15)
                 {
                     return Err(ctx.parse_err(
-                        "diode TEMP must be finite and above absolute zero (-273.15 °C)",
+                        "device TEMP must be finite and above absolute zero (-273.15 °C)",
                     ));
                 }
                 // The terminals are interned now so that node numbering still
@@ -3289,6 +3319,23 @@ fn bind_models(
                         ctx.parse_err("a BJT model needs IS > 0, BF > 0 and BR > 0".to_string())
                     );
                 }
+                if !model.is.is_finite()
+                    || !model.bf.is_finite()
+                    || !model.br.is_finite()
+                    || !model.ise.is_finite()
+                    || !model.isc.is_finite()
+                    || !model.tnom_celsius.is_finite()
+                    || model.tnom_celsius <= -273.15
+                    || !model.eg.is_finite()
+                    || model.eg < 0.0
+                    || !model.xti.is_finite()
+                    || !model.xtb.is_finite()
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT model needs finite IS/BF/BR/ISE/ISC/EG/XTI/XTB and TNOM above absolute zero"
+                            .to_string(),
+                    ));
+                }
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
                 }
@@ -3314,6 +3361,8 @@ fn bind_models(
                     || !(model.isc >= 0.0)
                     || !(model.ne > 0.0)
                     || !(model.nc > 0.0)
+                    || !model.ne.is_finite()
+                    || !model.nc.is_finite()
                 {
                     return Err(ctx.parse_err(
                         "a BJT model needs ISE >= 0, ISC >= 0, NE > 0 and NC > 0".to_string(),
@@ -3366,6 +3415,26 @@ fn bind_models(
                         "a BJT model needs RB/RC/RE >= 0, 0 <= RBM <= RB and IRB > 0".to_string(),
                     ));
                 }
+                let (operating_model, thermal_voltage) =
+                    super::device::bjt_parameters_at_temperature(model, device.temperature_celsius);
+                if !operating_model.is.is_finite()
+                    || operating_model.is <= 0.0
+                    || !operating_model.bf.is_finite()
+                    || operating_model.bf <= 0.0
+                    || !operating_model.br.is_finite()
+                    || operating_model.br <= 0.0
+                    || !operating_model.ise.is_finite()
+                    || operating_model.ise < 0.0
+                    || !operating_model.isc.is_finite()
+                    || operating_model.isc < 0.0
+                    || !thermal_voltage.is_finite()
+                    || thermal_voltage <= 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted BJT transport currents and beta must be finite and positive; recombination currents must be finite and nonnegative"
+                            .to_string(),
+                    ));
+                }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
                                      resistance: f64,
@@ -3395,6 +3464,9 @@ fn bind_models(
                     junction_e,
                     model_name: device.model_name,
                     model,
+                    operating_model,
+                    thermal_voltage,
+                    temperature_celsius: device.temperature_celsius,
                 });
             }
             'M' => {
@@ -3944,6 +4016,10 @@ fn parse_model(
             (ModelCard::Bjt(model), "NE") => model.ne = value,
             (ModelCard::Bjt(model), "ISC") => model.isc = value,
             (ModelCard::Bjt(model), "NC") => model.nc = value,
+            (ModelCard::Bjt(model), "TNOM" | "TREF") => model.tnom_celsius = value,
+            (ModelCard::Bjt(model), "EG") => model.eg = value,
+            (ModelCard::Bjt(model), "XTI") => model.xti = value,
+            (ModelCard::Bjt(model), "XTB") => model.xtb = value,
             (ModelCard::Bjt(model), "CJE") => model.cje = value,
             (ModelCard::Bjt(model), "VJE" | "PE") => model.vje = value,
             (ModelCard::Bjt(model), "MJE" | "ME") => model.mje = value,

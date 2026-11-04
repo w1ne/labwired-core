@@ -36,8 +36,9 @@
 //! bottom-area capacitance from `CBD`/`CBS` or `CJ` times instance `AD`/`AS`,
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
-//! Except for the diode's explicit `TEMP` law, parameters are taken at
-//! [`TEMPERATURE_K`] as written. A `.model` line may carry unmodelled
+//! The diode and BJT support their documented explicit instance `TEMP` laws;
+//! other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
+//! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
 //! [`super::netlist`]. Diode soft recovery covers the
 //! first-order `VP` charge state. Other recovery models and stored charge in
@@ -135,6 +136,43 @@ fn exp_clamped(arg: f64) -> f64 {
 /// Natural logarithm, from `libm` so it is the same function everywhere.
 pub fn ln(value: f64) -> f64 {
     libm::log(value)
+}
+
+/// SPICE Gummel–Poon parameters adjusted for one BJT instance's temperature.
+///
+/// This covers the standard `TNOM`/`EG`/`XTI` transport saturation-current
+/// law, `XTB` beta scaling, and the corresponding `ISE`/`ISC` recombination
+/// currents. `None` preserves the engine's historical fixed-300 K path.
+pub fn bjt_parameters_at_temperature(
+    model: BjtModel,
+    temperature_celsius: Option<f64>,
+) -> (BjtModel, f64) {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return (model, THERMAL_VOLTAGE);
+    };
+
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    let ratio = temperature_kelvin / nominal_kelvin;
+    let log_ratio = ln(ratio);
+    let thermal_voltage = thermal_voltage_at_temperature(temperature_kelvin);
+    // ngspice's BJT implementation uses (T/TNOM - 1)·EG/Vt(T) for this
+    // exponent. `EG` is in eV, so the numerical value is volts after dividing
+    // by Vt.
+    let log_current_factor = (ratio - 1.0) * model.eg / thermal_voltage + model.xti * log_ratio;
+    let beta_factor = libm::exp(model.xtb * log_ratio);
+
+    let mut adjusted = model;
+    adjusted.is *= libm::exp(log_current_factor);
+    adjusted.bf *= beta_factor;
+    adjusted.br *= beta_factor;
+    if adjusted.ise > 0.0 {
+        adjusted.ise *= libm::exp(log_current_factor / model.ne) / beta_factor;
+    }
+    if adjusted.isc > 0.0 {
+        adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
+    }
+    (adjusted, thermal_voltage)
 }
 
 // ---------------------------------------------------------------------------
@@ -542,10 +580,51 @@ pub fn bjt_op_with_nkf(
     nc: f64,
     nkf: Option<f64>,
 ) -> BjtOp {
-    let vtf = nf * THERMAL_VOLTAGE;
-    let vtr = nr * THERMAL_VOLTAGE;
-    let vte = ne * THERMAL_VOLTAGE;
-    let vtc = nc * THERMAL_VOLTAGE;
+    bjt_op_with_nkf_at_thermal_voltage(
+        vbe,
+        vbc,
+        is,
+        bf,
+        br,
+        nf,
+        nr,
+        vaf,
+        var,
+        ikf,
+        ikr,
+        ise,
+        ne,
+        isc,
+        nc,
+        nkf,
+        THERMAL_VOLTAGE,
+    )
+}
+
+/// Gummel–Poon operating point with an explicit junction thermal voltage.
+pub fn bjt_op_with_nkf_at_thermal_voltage(
+    vbe: f64,
+    vbc: f64,
+    is: f64,
+    bf: f64,
+    br: f64,
+    nf: f64,
+    nr: f64,
+    vaf: f64,
+    var: f64,
+    ikf: f64,
+    ikr: f64,
+    ise: f64,
+    ne: f64,
+    isc: f64,
+    nc: f64,
+    nkf: Option<f64>,
+    thermal_voltage: f64,
+) -> BjtOp {
+    let vtf = nf * thermal_voltage;
+    let vtr = nr * thermal_voltage;
+    let vte = ne * thermal_voltage;
+    let vtc = nc * thermal_voltage;
     let forward = exp_clamped(vbe / vtf);
     let reverse = exp_clamped(vbc / vtr);
     let inv_vaf = if vaf > 0.0 && vaf.is_finite() {
@@ -727,12 +806,22 @@ pub struct BjtTransitCharge {
 /// only the exponential voltage dependence; the default infinity makes its
 /// exponential equal one. `ITF = 0` disables current suppression.
 pub fn bjt_transit_charge(vbe: f64, vbc: f64, model: BjtModel) -> BjtTransitCharge {
+    bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, THERMAL_VOLTAGE)
+}
+
+/// Gummel–Poon transit charge evaluated with an explicit thermal voltage.
+pub fn bjt_transit_charge_at_thermal_voltage(
+    vbe: f64,
+    vbc: f64,
+    model: BjtModel,
+    thermal_voltage: f64,
+) -> BjtTransitCharge {
     if model.tf == 0.0 && model.tr == 0.0 {
         return BjtTransitCharge::default();
     }
 
-    let vtf = model.nf * THERMAL_VOLTAGE;
-    let vtr = model.nr * THERMAL_VOLTAGE;
+    let vtf = model.nf * thermal_voltage;
+    let vtr = model.nr * thermal_voltage;
     let forward = exp_clamped(vbe / vtf);
     let reverse = exp_clamped(vbc / vtr);
     let cbe = model.is * (forward - 1.0);

@@ -91,8 +91,8 @@ struct BjtChargeOp {
     dq: [[f64; 2]; 2],
 }
 
-fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel) -> BjtChargeOp {
-    let transit = device::bjt_transit_charge(vbe, vbc, model);
+fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel, thermal_voltage: f64) -> BjtChargeOp {
+    let transit = device::bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, thermal_voltage);
     let (qbe, cbe) =
         device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
     let (qbc, cbc) =
@@ -923,8 +923,7 @@ impl Solver {
             let sign = bjt.model.polarity.sign();
             let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
             let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
-            let model = bjt.model;
-            self.bjt_q[index] = bjt_charge_op(vbe, vbc, model).q;
+            self.bjt_q[index] = bjt_charge_op(vbe, vbc, bjt.operating_model, bjt.thermal_voltage).q;
             self.bjt_i[index] = [0.0; 2];
         }
         for index in 0..self.circuit.mosfets.len() {
@@ -1202,13 +1201,18 @@ impl Solver {
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
-            let model = bjt.model;
+            let model = bjt.operating_model;
             let nodes = &self.solution[..self.nodes];
             let voltages = [
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
             ];
-            let charge = bjt_charge_op(voltages[0], voltages[1], model);
+            let charge = bjt_charge_op(
+                voltages[0],
+                voltages[1],
+                bjt.operating_model,
+                bjt.thermal_voltage,
+            );
             for junction in 0..2 {
                 if !bjt_charge_active(model, junction) {
                     continue;
@@ -1964,10 +1968,19 @@ impl Solver {
             let nodes = &self.solution[..self.nodes];
             let raw_be = sign * node_diff(nodes, bjt.junction_b, bjt.junction_e);
             let raw_bc = sign * node_diff(nodes, bjt.junction_b, bjt.junction_c);
-            let vtf = bjt.model.nf * device::THERMAL_VOLTAGE;
-            let vtr = bjt.model.nr * device::THERMAL_VOLTAGE;
-            let crit_f = device::pn_critical_voltage(bjt.model.is, bjt.model.nf);
-            let crit_r = device::pn_critical_voltage(bjt.model.is, bjt.model.nr);
+            let model = bjt.operating_model;
+            let vtf = model.nf * bjt.thermal_voltage;
+            let vtr = model.nr * bjt.thermal_voltage;
+            let crit_f = device::pn_critical_voltage_at_thermal_voltage(
+                model.is,
+                model.nf,
+                bjt.thermal_voltage,
+            );
+            let crit_r = device::pn_critical_voltage_at_thermal_voltage(
+                model.is,
+                model.nr,
+                bjt.thermal_voltage,
+            );
             let be = device::pn_limit(raw_be, self.bjt_vbe[index], vtf, crit_f);
             let bc = device::pn_limit(raw_bc, self.bjt_vbc[index], vtr, crit_r);
             self.limiter_clamped |= be != raw_be || bc != raw_bc;
@@ -2206,10 +2219,26 @@ impl Solver {
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
             let sign = bjt.model.polarity.sign();
             let model = bjt.model;
+            let operating_model = bjt.operating_model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op_with_nkf(
-                vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr, model.vaf, model.var,
-                model.ikf, model.ikr, model.ise, model.ne, model.isc, model.nc, model.nkf,
+            let op = device::bjt_op_with_nkf_at_thermal_voltage(
+                vbe,
+                vbc,
+                operating_model.is,
+                operating_model.bf,
+                operating_model.br,
+                operating_model.nf,
+                operating_model.nr,
+                operating_model.vaf,
+                operating_model.var,
+                operating_model.ikf,
+                operating_model.ikr,
+                operating_model.ise,
+                operating_model.ne,
+                operating_model.isc,
+                operating_model.nc,
+                operating_model.nkf,
+                bjt.thermal_voltage,
             );
 
             // The Gummel–Poon base resistance is updated from the transistor's
@@ -2255,7 +2284,7 @@ impl Solver {
             );
 
             if let Stamp::Transient(h, rule) = stamp {
-                let charge = bjt_charge_op(vbe, vbc, model);
+                let charge = bjt_charge_op(vbe, vbc, operating_model, bjt.thermal_voltage);
                 for junction in 0..2 {
                     if !bjt_charge_active(model, junction) {
                         continue;

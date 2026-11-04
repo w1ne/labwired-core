@@ -2044,97 +2044,115 @@ mod analog {
         let (is, bf, br, vaf, var, ikf, ikr) = (1e-16, 80.0, 4.0, 35.0, 50.0, 0.2e-3, 0.5e-3);
         let (ise, ne, isc, nc) = (1e-13, 1.5, 2e-13, 2.0);
         let (tf, tr, cje, cjc) = (20e-9, 30e-9, 60e-12, 40e-12);
+        let (eg, xti, xtb, tnom_celsius) = (1.11, 3.0, 1.2, 27.0);
         let (drive, resistance, collector, h) = (0.95, 1e3, 3.0, 1e-6);
 
-        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
-            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
-                let netlist = format!(
+        for temperature_celsius in [27.0, 110.0] {
+            let temperature_kelvin = temperature_celsius + 273.15;
+            let nominal_kelvin = tnom_celsius + 273.15;
+            let ratio = temperature_kelvin / nominal_kelvin;
+            let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+            let factlog = (ratio - 1.0) * eg / vt + xti * f64::ln(ratio);
+            let beta_factor = ratio.powf(xtb);
+            let adjusted_is = is * f64::exp(factlog);
+            let adjusted_bf = bf * beta_factor;
+            let adjusted_br = br * beta_factor;
+            let adjusted_ise = ise * f64::exp(factlog / ne) / beta_factor;
+            let adjusted_isc = isc * f64::exp(factlog / nc) / beta_factor;
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                    let netlist = format!(
                     "Vdrive drive 0 dc 0\nRdrive drive b {resistance}\n\
-                     Vc c 0 dc {}\nVe e 0 dc 0\nQ1 c b e QMOD\n\
-                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} ISE={ise} NE={ne} ISC={isc} NC={nc} TF={tf} TR={tr} CJE={cje} CJC={cjc} VJE=1 MJE=0 VJC=1 MJC=0)\n",
+                     Vc c 0 dc {}\nVe e 0 dc 0\n\
+                     Q1 c b e QMOD TEMP={temperature_celsius}\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} VAF={vaf} VAR={var} IKF={ikf} IKR={ikr} ISE={ise} NE={ne} ISC={isc} NC={nc} TF={tf} TR={tr} CJE={cje} CJC={cjc} VJE=1 MJE=0 VJC=1 MJC=0 TNOM={tnom_celsius} EG={eg} XTI={xti} XTB={xtb})\n",
                     sign * collector,
                 );
-                let circuit = parse_netlist(&netlist).expect("combined BJT model parses");
-                let mut solver =
-                    Solver::new(circuit, integration).expect("combined BJT solver builds");
-                let base = solver.circuit().node("b").expect("base node");
-                let drive_source = solver
-                    .voltage_source_index("Vdrive")
-                    .expect("base drive source");
-                let previous_v = sign * solver.node_voltage(base);
-                solver.set_voltage_source(drive_source, sign * drive);
+                    let circuit = parse_netlist(&netlist).expect("combined BJT model parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("combined BJT solver builds");
+                    let base = solver.circuit().node("b").expect("base node");
+                    let drive_source = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("base drive source");
+                    let previous_v = sign * solver.node_voltage(base);
+                    solver.set_voltage_source(drive_source, sign * drive);
 
-                let base_width_and_charge = |vbe: f64, vbc: f64| {
-                    let forward = (vbe / VT).exp();
-                    let reverse = (vbc / VT).exp();
-                    let cbe = is * (forward - 1.0);
-                    let cbc = is * (reverse - 1.0);
-                    let base_width = 1.0 - vbc / vaf - vbe / var;
-                    let q1 = 1.0 / base_width;
-                    let q2 = cbe / ikf + cbc / ikr;
-                    let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
-                    (qb, cbe, cbc, forward, reverse)
-                };
-                let base_current_and_charge = |vbe: f64, vbc: f64| {
-                    let (qb, cbe, cbc, forward, reverse) = base_width_and_charge(vbe, vbc);
-                    let ibe = (is / bf) * (forward - 1.0) + ise * ((vbe / (ne * VT)).exp() - 1.0);
-                    let ibc = (is / br) * (reverse - 1.0) + isc * ((vbc / (nc * VT)).exp() - 1.0);
-                    let qbe = if vbe > 0.0 { tf * cbe / qb } else { tf * cbe };
-                    let qbc = tr * cbc;
-                    let junction_charge = cje * vbe + cjc * vbc;
-                    (
-                        ibe + ibc,
-                        junction_charge + qbe + qbc,
-                        qb,
-                        qbe,
-                        junction_charge,
-                    )
-                };
-                let previous_vbc = previous_v - collector;
-                let (_, previous_charge, _, _, _) =
-                    base_current_and_charge(previous_v, previous_vbc);
-                let residual = |vbe: f64| {
-                    let vbc = vbe - collector;
-                    let (base_current, charge, _, _, _) = base_current_and_charge(vbe, vbc);
-                    (drive - vbe) / resistance
-                        - base_current
-                        - device::GMIN * (vbe + vbc)
-                        - (charge - previous_charge) / h
-                };
-                let mut lo = 0.0;
-                let mut hi = drive;
-                for _ in 0..100 {
-                    let mid = 0.5 * (lo + hi);
-                    if residual(mid) > 0.0 {
-                        lo = mid;
-                    } else {
-                        hi = mid;
+                    let base_width_and_charge = |vbe: f64, vbc: f64| {
+                        let forward = (vbe / vt).exp();
+                        let reverse = (vbc / vt).exp();
+                        let cbe = adjusted_is * (forward - 1.0);
+                        let cbc = adjusted_is * (reverse - 1.0);
+                        let base_width = 1.0 - vbc / vaf - vbe / var;
+                        let q1 = 1.0 / base_width;
+                        let q2 = cbe / ikf + cbc / ikr;
+                        let qb = q1 * (1.0 + (1.0 + 4.0 * q2).sqrt()) / 2.0;
+                        (qb, cbe, cbc, forward, reverse)
+                    };
+                    let base_current_and_charge = |vbe: f64, vbc: f64| {
+                        let (qb, cbe, cbc, forward, reverse) = base_width_and_charge(vbe, vbc);
+                        let ibe = (adjusted_is / adjusted_bf) * (forward - 1.0)
+                            + adjusted_ise * ((vbe / (ne * vt)).exp() - 1.0);
+                        let ibc = (adjusted_is / adjusted_br) * (reverse - 1.0)
+                            + adjusted_isc * ((vbc / (nc * vt)).exp() - 1.0);
+                        let qbe = if vbe > 0.0 { tf * cbe / qb } else { tf * cbe };
+                        let qbc = tr * cbc;
+                        let junction_charge = cje * vbe + cjc * vbc;
+                        (
+                            ibe + ibc,
+                            junction_charge + qbe + qbc,
+                            qb,
+                            qbe,
+                            junction_charge,
+                        )
+                    };
+                    let previous_vbc = previous_v - collector;
+                    let (_, previous_charge, _, _, _) =
+                        base_current_and_charge(previous_v, previous_vbc);
+                    let residual = |vbe: f64| {
+                        let vbc = vbe - collector;
+                        let (base_current, charge, _, _, _) = base_current_and_charge(vbe, vbc);
+                        (drive - vbe) / resistance
+                            - base_current
+                            - device::GMIN * (vbe + vbc)
+                            - (charge - previous_charge) / h
+                    };
+                    let mut lo = 0.0;
+                    let mut hi = drive;
+                    for _ in 0..100 {
+                        let mid = 0.5 * (lo + hi);
+                        if residual(mid) > 0.0 {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
                     }
-                }
-                let expected = 0.5 * (lo + hi);
-                let (_, _, qb, transit_charge, junction_charge) =
-                    base_current_and_charge(expected, expected - collector);
-                assert!(
-                    qb > 1.1,
-                    "{kind}: selected bias must activate high injection (qb={qb})"
-                );
-                assert!(
+                    let expected = 0.5 * (lo + hi);
+                    let (_, _, qb, transit_charge, junction_charge) =
+                        base_current_and_charge(expected, expected - collector);
+                    assert!(
+                        qb > 1.1,
+                        "{kind}: selected bias must activate high injection (qb={qb})"
+                    );
+                    assert!(
                     transit_charge.abs() > 1e-13,
                     "{kind}: transit charge must affect the solved base (QTF={transit_charge} C)"
                 );
-                assert!(
-                    (junction_charge - previous_charge).abs() > 1e-13,
-                    "{kind}: junction depletion charge must affect the transient"
-                );
+                    assert!(
+                        (junction_charge - previous_charge).abs() > 1e-13,
+                        "{kind}: junction depletion charge must affect the transient"
+                    );
 
-                solver
-                    .advance(h)
-                    .expect("combined BJT transient step solves");
-                let actual = sign * solver.node_voltage(base);
-                assert!(
+                    solver
+                        .advance(h)
+                        .expect("combined BJT transient step solves");
+                    let actual = sign * solver.node_voltage(base);
+                    assert!(
                     (actual - expected).abs() < 1e-8,
-                    "{kind} {integration:?}: Early/high-injection transit charge and junction charge predict {expected} V, got {actual} V"
+                    "{kind} TEMP={temperature_celsius} °C {integration:?}: Early/high-injection transit charge and junction charge predict {expected} V, got {actual} V"
                 );
+                }
             }
         }
     }
@@ -2686,6 +2704,71 @@ mod analog {
                 measured[1] < measured[0],
                 "{kind}: base resistance should roll off with increasing base current, got {measured:?}"
             );
+        }
+    }
+
+    /// Instance TEMP adjusts BJT saturation current, thermal voltage and beta.
+    /// Pin both junction voltages in an MNA circuit, then compare all three
+    /// terminal currents with an independent SPICE temperature calculation.
+    #[test]
+    fn bjt_instance_temperature_matches_gummel_poon_current_laws() {
+        let (is, bf, br, nf, nr) = (1e-16, 80.0, 4.0, 1.1, 1.2);
+        let (ise, ne, isc, nc) = (1e-12, 1.5, 2e-12, 1.8);
+        let (eg, xti, xtb, tnom_celsius) = (1.11, 3.0, 1.4, 27.0);
+        let (vbe, vbc) = (0.62, -1.38);
+        let expected = |temperature_celsius: f64| {
+            let temperature_kelvin = temperature_celsius + 273.15;
+            let nominal_kelvin = tnom_celsius + 273.15;
+            let ratio = temperature_kelvin / nominal_kelvin;
+            let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+            let factlog = (ratio - 1.0) * eg / vt + xti * f64::ln(ratio);
+            let beta_factor = ratio.powf(xtb);
+            let adjusted_is = is * f64::exp(factlog);
+            let adjusted_bf = bf * beta_factor;
+            let adjusted_br = br * beta_factor;
+            let adjusted_ise = ise * f64::exp(factlog / ne) / beta_factor;
+            let adjusted_isc = isc * f64::exp(factlog / nc) / beta_factor;
+            let forward = f64::exp(vbe / (nf * vt));
+            let reverse = f64::exp(vbc / (nr * vt));
+            let transport = adjusted_is * (forward - reverse);
+            let ibe = (adjusted_is / adjusted_bf) * (forward - 1.0)
+                + adjusted_ise * (f64::exp(vbe / (ne * vt)) - 1.0);
+            let ibc = (adjusted_is / adjusted_br) * (reverse - 1.0)
+                + adjusted_isc * (f64::exp(vbc / (nc * vt)) - 1.0);
+            let ic = transport - ibc - device::GMIN * vbc;
+            let ib = ibe + ibc + device::GMIN * (vbe + vbc);
+            [ic, ib, -(ic + ib)]
+        };
+
+        for temperature_celsius in [27.0, 125.0] {
+            let expected_currents = expected(temperature_celsius);
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let netlist = format!(
+                    "Vb b 0 dc {}\nVc c 0 dc {}\nVe e 0 dc 0\n\
+                     Q1 c b e QMOD TEMP={temperature_celsius}\n\
+                     .model QMOD {kind}(IS={is} BF={bf} BR={br} NF={nf} NR={nr} \
+                     ISE={ise} NE={ne} ISC={isc} NC={nc} TNOM={tnom_celsius} \
+                     EG={eg} XTI={xti} XTB={xtb})\n",
+                    sign * vbe,
+                    sign * (vbe - vbc),
+                );
+                let solver = build(&netlist);
+                let actual = [
+                    sign * source_current(&solver, "Vc"),
+                    sign * source_current(&solver, "Vb"),
+                    sign * source_current(&solver, "Ve"),
+                ];
+                for (terminal, actual, expected) in [
+                    ("collector", actual[0], expected_currents[0]),
+                    ("base", actual[1], expected_currents[1]),
+                    ("emitter", actual[2], expected_currents[2]),
+                ] {
+                    assert!(
+                        relative(actual, expected) < 2e-5,
+                        "{kind} TEMP={temperature_celsius} °C {terminal}: expected {expected} A, got {actual} A"
+                    );
+                }
+            }
         }
     }
 

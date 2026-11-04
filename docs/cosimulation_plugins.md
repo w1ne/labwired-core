@@ -542,8 +542,15 @@ is checked against solved forward/reverse terminal currents and its effect on
 transit charge. Every
 The diode's explicitly supported temperature laws are instance `TEMP` for
 thermal voltage and saturation current, plus `TCV`/`TBV1` for breakdown and
-`TRS1`/`TRS2` for series resistance. Other semiconductor parameters remain at
-their nominal values; the other device families have no temperature model.
+`TRS1`/`TRS2` for series resistance. BJT instance `TEMP` applies the SPICE
+`TNOM`/`EG`/`XTI` saturation-current law, the `XTB` scaling for `BF`/`BR`, and
+the matching temperature adjustment for `ISE`/`ISC` using their `NE`/`NC`
+emission coefficients; it also sets the junction thermal voltage used by both
+conduction and transit charge.
+Diode depletion/transit charge and BJT junction depletion charge and terminal
+resistances remain at nominal values. JFET and MOSFET models do not yet have a
+temperature model. These are external instance temperatures; self-heating is
+not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the
 deck is specifically checking an in-core temperature law.
 

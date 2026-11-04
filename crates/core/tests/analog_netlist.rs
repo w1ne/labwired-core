@@ -9,7 +9,8 @@
 // verification command `cargo test -p labwired-core analog` runs all of them.
 mod analog {
     use labwired_core::analog::{
-        parse_netlist, parse_spice_value, AnalogError, Integration, Polarity, Solver, Waveform,
+        device, parse_netlist, parse_spice_value, AnalogError, Integration, Polarity, Solver,
+        Waveform,
     };
 
     const RC: &str = "\
@@ -462,6 +463,50 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.bjts[1].model.ne, 1.6);
         assert_eq!(circuit.bjts[1].model.isc, 4e-12);
         assert_eq!(circuit.bjts[1].model.nc, 1.8);
+    }
+
+    #[test]
+    fn bjt_temperature_parameters_resolve_and_validate() {
+        let circuit = parse_netlist(
+            "Q1 c b e QMOD TEMP=85\n.model QMOD PNP(TNOM=25 EG=1.08 XTI=2.5 XTB=-1)\n",
+        )
+        .expect("BJT instance and model temperature parameters parse");
+        let bjt = &circuit.bjts[0];
+        assert_eq!(bjt.temperature_celsius, Some(85.0));
+        assert_eq!(bjt.model.tnom_celsius, 25.0);
+        assert_eq!(bjt.model.eg, 1.08);
+        assert_eq!(bjt.model.xti, 2.5);
+        assert_eq!(bjt.model.xtb, -1.0);
+        assert!(bjt.operating_model.is > bjt.model.is);
+        assert!(bjt.operating_model.bf < bjt.model.bf);
+        assert!(bjt.thermal_voltage > device::THERMAL_VOLTAGE);
+
+        let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN\n")
+            .expect("default BJT temperature path parses");
+        let bjt = &defaults.bjts[0];
+        assert_eq!(bjt.model.tnom_celsius, 27.0);
+        assert_eq!(bjt.model.eg, 1.11);
+        assert_eq!(bjt.model.xti, 3.0);
+        assert_eq!(bjt.model.xtb, 0.0);
+        assert_eq!(bjt.temperature_celsius, None);
+        assert_eq!(bjt.operating_model, bjt.model);
+        assert_eq!(bjt.thermal_voltage, device::THERMAL_VOLTAGE);
+
+        for parameters in [
+            "TNOM=-273.15",
+            "EG=-0.1",
+            "EG=nan",
+            "XTI=inf",
+            "XTB=1e999",
+            "IS=inf",
+        ] {
+            let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n"))
+                .expect_err("invalid BJT temperature parameters are refused");
+            assert!(matches!(error, AnalogError::Parse { .. }), "{error}");
+        }
+        let error = parse_netlist("Q1 c b e QMOD TEMP=-273.15\n.model QMOD NPN\n")
+            .expect_err("BJT instance temperature must stay above absolute zero");
+        assert!(error.to_string().contains("device TEMP"), "{error}");
     }
 
     #[test]
