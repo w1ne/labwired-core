@@ -1147,7 +1147,7 @@ fn ntc_beta_resistance_matches_ngspice_at_a_fixed_temperature() {
     let deck = dir.join("ntc.cir");
     std::fs::write(
         &deck,
-        format!("Vcc vcc 0 dc 3.3\nRntc vcc sense {resistance:.17e}\nRpull sense 0 10k\n.control\nop\nprint v(sense)\nquit\n.endc\n.end\n"),
+        format!("* NTC beta divider differential\nVcc vcc 0 dc 3.3\nRntc vcc sense {resistance:.17e}\nRpull sense 0 10k\n.control\nop\nprint v(sense)\nquit\n.endc\n.end\n"),
     )
     .expect("write ngspice deck");
     let output = Command::new("ngspice")
