@@ -35,6 +35,7 @@ on:
       - "crates/firmware-efm32pg1-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
+      - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -427,6 +428,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/miv_rv32-smoke.yaml
             system: configs/systems/onboarding/miv_rv32.yaml
+          # Murax uses the modeled VexRiscv RV32IM core and UART; this smoke
+          # checks UART output and an explicit M-extension multiply result.
+          - id: murax_vexriscv
+            crate: firmware-murax-vexriscv-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/murax_vexriscv-smoke.yaml
+            system: configs/systems/onboarding/murax_vexriscv.yaml
 
     steps:
       - uses: actions/checkout@v4
