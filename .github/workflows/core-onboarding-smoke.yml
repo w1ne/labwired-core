@@ -47,6 +47,7 @@ on:
       - "configs/systems/nucleo-f411re-bme280.yaml"
       - "scripts/build_nucleo_f411re_bme280_smoke.sh"
       - "crates/firmware-nucleo-f103rb-smoke/**"
+      - "crates/firmware-nucleo-f207zg-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
       - "crates/firmware-nucleo-f413zh-smoke/**"
       - "crates/firmware-nucleo-f410rb-smoke/**"
@@ -587,6 +588,11 @@ jobs:
             firmware_build_script: scripts/build-adafruit-feather-esp32-v2-smoke.sh
             script: examples/adafruit-feather-esp32-v2/io-smoke.yaml
             system: configs/systems/adafruit-feather-esp32-v2.yaml
+          - id: nucleo-f207zg
+            crate: firmware-nucleo-f207zg-smoke
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-f207zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f207zg-smoke.yaml
 
     steps:
       - uses: actions/checkout@v4

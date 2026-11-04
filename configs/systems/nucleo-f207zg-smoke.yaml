@@ -1,0 +1,13 @@
+# LabWired - NUCLEO-F207ZG smoke system.
+# This profile claims only the default green user LED LD1 on PB0.
+schema_version: "1.0"
+name: "nucleo-f207zg-smoke"
+chip: "../chips/stm32f207zg-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
