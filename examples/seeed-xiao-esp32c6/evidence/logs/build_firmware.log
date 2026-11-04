@@ -1,0 +1,3 @@
+Compiler: /home/andrii/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc
+riscv32-esp-elf-gcc (crosstool-NG esp-14.2.0_20260121) 14.2.0
+Built /home/andrii/worktrees/labwired-core/hw-onboarding/target/riscv32imc-unknown-none-elf/release/firmware-xiao-esp32c6-gpio-smoke
