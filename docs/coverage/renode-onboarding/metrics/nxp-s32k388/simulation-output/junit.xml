@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.002355">
+<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.002307">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="8869b3a9934ca271fc1c80f1fce3657bdff6487da766dd5c6bdde771a8383fe6"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.002355">
+  <testcase classname="labwired" name="run" time="0.002307">
   </testcase>
   <testcase classname="labwired" name="assertion 1: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>

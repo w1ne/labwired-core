@@ -1,4 +1,4 @@
-2026-11-04T14:08:04.013862Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/arduino_nano_33_ble.yaml
-2026-11-04T14:08:04.015170Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-04T14:28:36.182897Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/arduino_nano_33_ble.yaml
+2026-11-04T14:28:36.184243Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · arduino_nano_33_ble-smoke · 4000000 steps · 1.34s
