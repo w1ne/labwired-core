@@ -1,0 +1,12 @@
+# NUCLEO-U083RC (MB1932), scoped to the default user LED connection only.
+# USART2/VCP, USB, ST-LINK, buttons, and other board connections are omitted.
+name: "nucleo-u083rc"
+chip: "../chips/stm32u083rc-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_green_ld4"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

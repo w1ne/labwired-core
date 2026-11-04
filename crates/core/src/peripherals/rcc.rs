@@ -6,13 +6,14 @@
 //
 // ── Architectural separation ────────────────────────────────────────────────
 // RCC is modelled as one struct PER CHIP FAMILY (F1 / F4 / V2 / L4 / L0, and
-// the later H5/H7/G4 additions), unified by the `Rcc` enum. Each family struct
-// owns ONLY the registers that family actually has — so e.g. the L0-only
-// CRRCR/IOPENR registers physically cannot exist on an F4 or L4 instance, and a
-// change to one family's model cannot leak into another. `V2Rcc` is the one
-// deliberate exception: WB, WBA and U5 share enough of the V2 register file to
-// be one struct, with the family deltas — WB's enable-block placement, U5's
-// remapped clock tree, WBA's PLL1CFGR ready status — selected by
+// the later H5/H7/G4/C0/C5/U0 additions), unified by the `Rcc` enum. Each
+// family struct owns ONLY the registers that family actually has — so e.g. the
+// L0-only CRRCR/IOPENR registers physically cannot exist on an F4 or L4
+// instance, and a change to one family's model cannot leak into another.
+// `V2Rcc` is the one deliberate exception: WB, WBA and U5 share enough of the
+// V2 register file to be one struct, with family-specific deltas: WB's
+// enable-block placement, U5's remapped clock tree, and WBA's PLL1CFGR ready
+// status are selected by
 // fixed-configuration flags each set only by its own constructor and pinned by
 // its own tests. The chip yaml's `profile` selects the variant via
 // `RccRegisterLayout`; the `Peripheral` impl dispatches to the active family.
@@ -121,6 +122,10 @@ pub enum RccRegisterLayout {
     /// RCC_AHB2ENR@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-C5A3ZG
     /// GPIO smoke; the C5 clock tree and other RCC registers are out of scope.
     Stm32C5,
+    /// STM32U0 onboarding subset (RM0503 Rev 4). Currently only
+    /// RCC_IOPENR@0x4C bit 0 (GPIOAEN) is modeled for the NUCLEO-U083RC GPIO
+    /// smoke; the U0 clock tree and other RCC registers are out of scope.
+    Stm32U0,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -144,8 +149,9 @@ impl FromStr for RccRegisterLayout {
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
             "stm32c0" | "c0" => Ok(Self::Stm32C0),
             "stm32c5" | "c5" => Ok(Self::Stm32C5),
+            "stm32u0" | "u0" => Ok(Self::Stm32U0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0, stm32c5",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0",
                 value
             )),
         }
@@ -2666,6 +2672,41 @@ impl RccModel for C5Rcc {
     }
 }
 
+// ── STM32U0 ────────────────────────────────────────────────────────────────
+// NUCLEO-U083RC GPIO smoke subset. RM0503 Rev 4 §5.4.13 gives
+// RCC_IOPENR@0x4C, reset 0, with GPIOAEN at bit 0. The GPIO clock register is
+// at a different offset from the similar G0/C0 block; keep this family-specific
+// so a G0 profile cannot silently put the gate on the wrong register.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct U0Rcc {
+    iopenr: u32,
+}
+
+impl RccModel for U0Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x4C => self.iopenr,
+            _ => {
+                crate::census_reg!("rcc:U0Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // This board smoke exposes GPIOA only; other U0 I/O clock gates are
+            // outside the profile and stay disabled.
+            0x4C => self.iopenr = value & 1,
+            _ => crate::census_reg!("rcc:U0Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 
 /// RCC peripheral — one variant per chip family. Each variant's registers are
@@ -2685,6 +2726,7 @@ pub enum Rcc {
     Stm32F0(F0Rcc),
     Stm32C0(C0Rcc),
     Stm32C5(C5Rcc),
+    Stm32U0(U0Rcc),
 }
 
 impl Default for Rcc {
@@ -2713,6 +2755,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
             RccRegisterLayout::Stm32C0 => Self::Stm32C0(C0Rcc::default()),
             RccRegisterLayout::Stm32C5 => Self::Stm32C5(C5Rcc::default()),
+            RccRegisterLayout::Stm32U0 => Self::Stm32U0(U0Rcc::default()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
@@ -2897,6 +2940,11 @@ impl Rcc {
                 "ahb2enr" => Some(0x8C),
                 _ => None,
             },
+            // U0 GPIO smoke subset (RM0503 Rev 4 §5.4.13).
+            Self::Stm32U0(_) => match r.as_str() {
+                "iopenr" => Some(0x4C),
+                _ => None,
+            },
             // WB (RM0434, 0x4C/0x58/0x60) and WBA (RM0493, H5-style
             // 0x8C/0x9C/0xA4): the six shared slots, read off the instance's
             // own map. `cfgr1` is WBA RCC_CFGR1@0x1C (WB has RCC_CIFR there
@@ -2964,6 +3012,7 @@ impl Rcc {
             Self::Stm32F0(r) => r,
             Self::Stm32C0(r) => r,
             Self::Stm32C5(r) => r,
+            Self::Stm32U0(r) => r,
         }
     }
 
@@ -2982,6 +3031,7 @@ impl Rcc {
             Self::Stm32F0(r) => r,
             Self::Stm32C0(r) => r,
             Self::Stm32C5(r) => r,
+            Self::Stm32U0(r) => r,
         }
     }
 }
@@ -4127,6 +4177,30 @@ mod tests {
         rcc.write_u32(0x60, 1).unwrap();
         assert_eq!(rcc.read_u32(0x60).unwrap() & 0x3, 0x3, "G0 LSIRDY");
         assert_eq!(rcc.read_u32(0x5C).unwrap() & 0x3, 0x3, "G0 LSERDY");
+    }
+
+    /// U0's GPIO clock gate is at IOPENR@0x4C (RM0503 Rev 4 §5.4.13),
+    /// distinct from G0/C0 IOPENR@0x34 and L0 IOPENR@0x2C.
+    #[test]
+    fn test_rcc_u0_gpio_clock_gate_offset_and_scope() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32U0);
+        assert_eq!(
+            "stm32u0".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Stm32U0
+        );
+        assert_eq!(rcc.rcc_reg_offset("iopenr"), Some(0x4C));
+        assert_eq!(rcc.rcc_reg_offset("ahbenr"), None);
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "GPIO clocks start disabled");
+
+        // The board smoke exposes only GPIOA, so other port enables are masked.
+        rcc.write_u32(0x4C, 0x3F).unwrap();
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 1, "only GPIOAEN is in profile");
+        assert_eq!(
+            rcc.read_u32(0x34).unwrap(),
+            0,
+            "must not alias the G0/C0 slot"
+        );
+        assert_eq!(rcc.read_u32(0x2C).unwrap(), 0, "must not alias the L0 slot");
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360

@@ -33,6 +33,7 @@ on:
       - "crates/firmware-nucleo-f030r8-smoke/**"
       - "crates/firmware-nucleo-l011k4-smoke/**"
       - "crates/firmware-nucleo-l031k6-smoke/**"
+      - "crates/firmware-nucleo-u083rc-smoke/**"
       - "crates/firmware-nrf52840-dk-smoke/**"
       - "configs/chips/nrf52840-dk-led-smoke.yaml"
       - "configs/systems/nrf52840-dk-led-smoke.yaml"
@@ -204,6 +205,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/nucleo-l031k6/onboarding-smoke.yaml
             system: configs/systems/nucleo-l031k6.yaml
+          - id: nucleo-u083rc
+            crate: firmware-nucleo-u083rc-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-u083rc/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u083rc.yaml
           - id: nrf52840-dk
             crate: firmware-nrf52840-dk-smoke
             target: thumbv7em-none-eabi

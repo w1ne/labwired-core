@@ -1,0 +1,12 @@
+# NUCLEO-U083RC: boot STM32U083RCT6 and toggle LD4 on PA5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-u083rc-smoke"
+  system: "../../configs/systems/nucleo-u083rc.yaml"
+limits:
+  max_steps: 10000
+assertions:
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 16
+  - expected_stop_reason: max_steps
