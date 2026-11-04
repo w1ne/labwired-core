@@ -60,6 +60,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml",
     },
+    "renesas-r7fa4m1a": {
+        "crate": "firmware-ra4m1-demo",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/renesas-r7fa4m1a-smoke.yaml",
+    },
     "arduino_nano_33_ble": {
         "crate": "firmware-arduino-nano-33-ble-smoke",
         "target": "thumbv7em-none-eabihf",

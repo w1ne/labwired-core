@@ -277,6 +277,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml
             system: configs/systems/onboarding/arduino_uno_r4_minima.yaml
+          # Reuse the bounded RA4M1 UART/GPIO fixture against the imported
+          # generic Renode target after narrowing it to the same modeled core.
+          - id: renesas-r7fa4m1a
+            crate: firmware-ra4m1-demo
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa4m1a-smoke.yaml
+            system: configs/systems/onboarding/renesas-r7fa4m1a.yaml
           - id: stm32f4_discovery
             crate: firmware-f4-discovery-smoke
             target: thumbv7em-none-eabi
