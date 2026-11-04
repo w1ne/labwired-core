@@ -3775,7 +3775,7 @@ impl SystemBus {
                     .collect()
             };
             if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
-                for (device, level) in devs.iter_mut().zip(levels.into_iter()) {
+                for (device, level) in devs.iter_mut().zip(levels) {
                     let Some(high) = level else { continue };
                     let selected = !high; // active-low CS
                     match (device.is_selected(), selected) {
