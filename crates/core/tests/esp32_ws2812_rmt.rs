@@ -41,13 +41,7 @@ fn push_pixel(symbols: &mut Vec<u32>, grb: u32) {
 #[test]
 fn classic_rmt_drives_ws2812_frame_decoded_end_to_end() {
     let mut bus = SystemBus::new();
-    bus.add_peripheral(
-        "gpio",
-        GPIO_BASE,
-        0x1000,
-        None,
-        Box::new(Esp32Gpio::new()),
-    );
+    bus.add_peripheral("gpio", GPIO_BASE, 0x1000, None, Box::new(Esp32Gpio::new()));
     bus.add_peripheral(
         "rmt",
         RMT_BASE,

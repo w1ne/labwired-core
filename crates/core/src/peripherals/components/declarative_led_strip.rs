@@ -456,7 +456,6 @@ impl GenericLedStrip {
         }
     }
 
-
     fn flat_of(pixels: &[LedPixel]) -> Vec<u8> {
         let mut out = Vec::with_capacity(pixels.len() * 3);
         for p in pixels {
@@ -535,7 +534,7 @@ impl GenericLedStrip {
                 if sim_cycle.saturating_sub(fall) >= self.reset_threshold_cycles {
                     if !s.current.is_empty() {
                         let flat = Self::flat_of(&s.current);
-                            Self::record_frame(&mut s, flat);
+                        Self::record_frame(&mut s, flat);
                         s.latched = std::mem::take(&mut s.current);
                     }
                     s.current.clear();
@@ -636,7 +635,10 @@ impl GenericLedStrip {
                 .frames_seen
                 .iter()
                 .map(|flat| {
-                    let lit = flat.chunks_exact(3).filter(|c| c.iter().any(|&b| b != 0)).count();
+                    let lit = flat
+                        .chunks_exact(3)
+                        .filter(|c| c.iter().any(|&b| b != 0))
+                        .count();
                     serde_json::json!({
                         "lit_pixels": lit,
                         "bytes": flat,

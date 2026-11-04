@@ -14,8 +14,8 @@
 
 use crate::bus::SystemBus;
 use crate::peripherals::esp32::gpio::{
-    Esp32Gpio, RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3, RMT_SIG_OUT4,
-    RMT_SIG_OUT5, RMT_SIG_OUT6, RMT_SIG_OUT7,
+    Esp32Gpio, RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3, RMT_SIG_OUT4, RMT_SIG_OUT5,
+    RMT_SIG_OUT6, RMT_SIG_OUT7,
 };
 use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
@@ -189,7 +189,6 @@ impl Esp32Rmt {
         self.apb_conf & APB_CONF_MEM_TX_WRAP != 0
     }
 
-
     fn conf_index(offset: u64) -> Option<(usize, bool)> {
         if (0x20..0x60).contains(&offset) {
             let rel = offset - 0x20;
@@ -270,7 +269,10 @@ impl Esp32Rmt {
     fn pulse_parts(word: u32) -> [(u64, bool); 2] {
         [
             ((word & ENTRY_DUR_MASK) as u64, (word >> 15) & 1 != 0),
-            (((word >> 16) & ENTRY_DUR_MASK) as u64, (word >> 31) & 1 != 0),
+            (
+                ((word >> 16) & ENTRY_DUR_MASK) as u64,
+                (word >> 31) & 1 != 0,
+            ),
         ]
     }
 
@@ -447,9 +449,8 @@ impl Peripheral for Esp32Rmt {
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
         // TX_THR must be visible immediately (ping-pong refill); TX_END respects
         // holdoff so the waveform can finish before the done ISR runs.
-        let thr_pending = (0..CHANNELS).any(|ch| {
-            self.int_raw & tx_thr_bit(ch) != 0 && self.int_ena & tx_thr_bit(ch) != 0
-        });
+        let thr_pending = (0..CHANNELS)
+            .any(|ch| self.int_raw & tx_thr_bit(ch) != 0 && self.int_ena & tx_thr_bit(ch) != 0);
         let end_pending = self.irq_holdoff_cycles == 0 && self.int_st() != 0;
         if thr_pending || end_pending {
             out.push(self.source_id);
