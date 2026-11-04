@@ -43,7 +43,7 @@
 //! The observer hook is `&self`, so the decode state of a `nrz_gpio` strip
 //! lives behind a `Mutex` and the part is held as `Arc<GenericLedStrip>`.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Mutex;
 
 use anyhow::{bail, Context, Result};
@@ -76,8 +76,11 @@ fn ns_to_cycles(ns: u64, cpu_hz: u64) -> u64 {
     ((ns as u128 * cpu_hz as u128) / 1_000_000_000).max(1) as u64
 }
 
-/// Distinct latched wire frames kept for mid-run proves (blink / dim history).
-const FRAMES_SEEN_CAP: usize = 64;
+/// Distinct latched wire frames kept for mid-run proves (blink / dim / phase
+/// history). Cap is keyed by (lit, colour family, brightness bucket) so a long
+/// virtual-time drain (Pomodoro 5+5 min) still retains boot / phase / blink
+/// samples instead of flushing them with per-frame fade updates.
+const FRAMES_SEEN_CAP: usize = 128;
 
 /// `nrz_gpio` decode state. Behind a `Mutex` because the observer hook is
 /// `&self`.
@@ -92,6 +95,8 @@ struct NrzState {
     latched: Vec<LedPixel>,
     /// Distinct completed frames (flat wire bytes), oldest first.
     frames_seen: VecDeque<Vec<u8>>,
+    /// Keys already stored in `frames_seen` (see `frame_key`).
+    frames_seen_keys: HashSet<(u16, u8, u16)>,
 }
 
 /// The engine device. One per placed strip.
@@ -463,14 +468,49 @@ impl GenericLedStrip {
         out
     }
 
-    fn record_frame(frames: &mut VecDeque<Vec<u8>>, flat: Vec<u8>) {
-        if frames.back() == Some(&flat) {
+    /// Coarse signature so fade micro-steps of the same phase collapse: lit
+    /// count, dominant colour family (0=dark, 1=R, 2=G, 3=B on GRB wire), and
+    /// a brightness bucket. First frame per key is kept.
+    fn frame_key(flat: &[u8]) -> (u16, u8, u16) {
+        let lit = flat
+            .chunks_exact(3)
+            .filter(|c| c.iter().any(|&b| b != 0))
+            .count() as u16;
+        let mut r = 0u32;
+        let mut g = 0u32;
+        let mut b = 0u32;
+        for c in flat.chunks_exact(3) {
+            g = g.saturating_add(c[0] as u32);
+            r = r.saturating_add(c[1] as u32);
+            b = b.saturating_add(c[2] as u32);
+        }
+        let colour = if r + g + b == 0 {
+            0
+        } else if r >= g && r >= b {
+            1
+        } else if g >= r && g >= b {
+            2
+        } else {
+            3
+        };
+        let bright = ((r + g + b) / 32) as u16;
+        (lit, colour, bright)
+    }
+
+    fn record_frame(state: &mut NrzState, flat: Vec<u8>) {
+        if state.frames_seen.back() == Some(&flat) {
             return;
         }
-        if frames.len() >= FRAMES_SEEN_CAP {
-            frames.pop_front();
+        let key = Self::frame_key(&flat);
+        if !state.frames_seen_keys.insert(key) {
+            return;
         }
-        frames.push_back(flat);
+        if state.frames_seen.len() >= FRAMES_SEEN_CAP {
+            if let Some(old) = state.frames_seen.pop_front() {
+                state.frames_seen_keys.remove(&Self::frame_key(&old));
+            }
+        }
+        state.frames_seen.push_back(flat);
     }
 
     // ── the single wire ─────────────────────────────────────────────────
@@ -495,7 +535,7 @@ impl GenericLedStrip {
                 if sim_cycle.saturating_sub(fall) >= self.reset_threshold_cycles {
                     if !s.current.is_empty() {
                         let flat = Self::flat_of(&s.current);
-                            Self::record_frame(&mut s.frames_seen, flat);
+                            Self::record_frame(&mut s, flat);
                         s.latched = std::mem::take(&mut s.current);
                     }
                     s.current.clear();
@@ -532,7 +572,7 @@ impl GenericLedStrip {
                         });
                         if s.current.len() == self.num_pixels {
                             let flat = Self::flat_of(&s.current);
-                            Self::record_frame(&mut s.frames_seen, flat);
+                            Self::record_frame(&mut s, flat);
                         }
                     }
                     s.shift = 0;
