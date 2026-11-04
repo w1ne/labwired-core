@@ -92,6 +92,7 @@ members = [
     "crates/firmware-stm32f3-discovery-smoke",
     "crates/firmware-nucleo-f334r8-smoke",
     "crates/firmware-nucleo-f030r8-smoke",
+    "crates/firmware-stm32f0-discovery-smoke",
     "crates/firmware-nucleo-l011k4-smoke",
     "crates/firmware-nucleo-l010rb-smoke",
     "crates/firmware-nucleo-l031k6-smoke",
@@ -357,6 +358,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nucleo-f303k8-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32f0-discovery-smoke]
 codegen-units = 1
 opt-level = "s"
 

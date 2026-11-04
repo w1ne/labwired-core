@@ -32,6 +32,7 @@ on:
       - "crates/firmware-nucleo-f334r8-smoke/**"
       - "crates/firmware-nucleo-f303k8-smoke/**"
       - "crates/firmware-nucleo-f030r8-smoke/**"
+      - "crates/firmware-stm32f0-discovery-smoke/**"
       - "crates/firmware-nucleo-l011k4-smoke/**"
       - "crates/firmware-nucleo-l031k6-smoke/**"
       - "crates/firmware-nucleo-u083rc-smoke/**"
@@ -235,6 +236,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/nucleo-f030r8/io-smoke.yaml
             system: configs/systems/nucleo-f030r8.yaml
+          - id: stm32f0-discovery
+            crate: firmware-stm32f0-discovery-smoke
+            target: thumbv6m-none-eabi
+            script: examples/stm32f0-discovery/onboarding-smoke.yaml
+            system: configs/systems/stm32f0-discovery.yaml
           - id: nucleo-l011k4
             crate: firmware-nucleo-l011k4-smoke
             target: thumbv6m-none-eabi
