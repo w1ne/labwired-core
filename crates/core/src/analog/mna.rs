@@ -1445,32 +1445,15 @@ impl Solver {
             );
         }
         for bjt in &self.circuit.bjts {
-            if bjt.model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(bjt.model) {
-                conductance(
-                    &mut self.matrix,
-                    dim,
-                    bjt.b,
-                    bjt.junction_b,
-                    1.0 / bjt.model.rb,
-                );
+            let model = bjt.operating_model;
+            if model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(model) {
+                conductance(&mut self.matrix, dim, bjt.b, bjt.junction_b, 1.0 / model.rb);
             }
-            if bjt.model.rc > 0.0 {
-                conductance(
-                    &mut self.matrix,
-                    dim,
-                    bjt.c,
-                    bjt.junction_c,
-                    1.0 / bjt.model.rc,
-                );
+            if model.rc > 0.0 {
+                conductance(&mut self.matrix, dim, bjt.c, bjt.junction_c, 1.0 / model.rc);
             }
-            if bjt.model.re > 0.0 {
-                conductance(
-                    &mut self.matrix,
-                    dim,
-                    bjt.e,
-                    bjt.junction_e,
-                    1.0 / bjt.model.re,
-                );
+            if model.re > 0.0 {
+                conductance(&mut self.matrix, dim, bjt.e, bjt.junction_e, 1.0 / model.re);
             }
         }
         for mosfet in &self.circuit.mosfets {
@@ -2219,7 +2202,7 @@ impl Solver {
 
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
             let sign = bjt.model.polarity.sign();
-            let model = bjt.model;
+            let model = bjt.operating_model;
             let operating_model = bjt.operating_model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
             let op = device::bjt_op_with_nkf_at_thermal_voltage(

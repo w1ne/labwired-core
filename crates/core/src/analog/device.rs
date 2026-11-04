@@ -37,7 +37,9 @@
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
 //! The diode and BJT support their documented explicit instance `TEMP` laws;
-//! other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
+//! BJT terminal resistances additionally use their `TRB*`/`TRBM*`/`TIRB*`/
+//! `TRC*`/`TRE*` coefficients, while charge parameters remain nominal. Other
+//! parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
 //! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
 //! [`super::netlist`]. Diode soft recovery covers the
@@ -142,7 +144,9 @@ pub fn ln(value: f64) -> f64 {
 ///
 /// This covers the standard `TNOM`/`EG`/`XTI` transport saturation-current
 /// law, `XTB` beta scaling, and the corresponding `ISE`/`ISC` recombination
-/// currents. `None` preserves the engine's historical fixed-300 K path.
+/// currents, plus the first and second order temperature coefficients for
+/// `RB`/`RBM`/`IRB`/`RC`/`RE`. `None` preserves the engine's historical fixed-
+/// 300 K path.
 pub fn bjt_parameters_at_temperature(
     model: BjtModel,
     temperature_celsius: Option<f64>,
@@ -155,6 +159,8 @@ pub fn bjt_parameters_at_temperature(
     let nominal_kelvin = model.tnom_celsius + 273.15;
     let ratio = temperature_kelvin / nominal_kelvin;
     let log_ratio = ln(ratio);
+    let delta = temperature_celsius - model.tnom_celsius;
+    let temperature_factor = |first: f64, second: f64| 1.0 + first * delta + second * delta * delta;
     let thermal_voltage = thermal_voltage_at_temperature(temperature_kelvin);
     // ngspice's BJT implementation uses (T/TNOM - 1)·EG/Vt(T) for this
     // exponent. `EG` is in eV, so the numerical value is volts after dividing
@@ -172,6 +178,12 @@ pub fn bjt_parameters_at_temperature(
     if adjusted.isc > 0.0 {
         adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
     }
+    adjusted.rb *= temperature_factor(model.trb1, model.trb2);
+    adjusted.rbm =
+        Some(model.rbm.unwrap_or(model.rb) * temperature_factor(model.trbm1, model.trbm2));
+    adjusted.irb *= temperature_factor(model.tirb1, model.tirb2);
+    adjusted.rc *= temperature_factor(model.trc1, model.trc2);
+    adjusted.re *= temperature_factor(model.tre1, model.tre2);
     (adjusted, thermal_voltage)
 }
 

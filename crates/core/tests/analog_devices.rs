@@ -2400,6 +2400,85 @@ mod analog {
         }
     }
 
+    /// BJT `TRB*`, `TRC*`, and `TRE*` coefficients scale the three terminal
+    /// resistors by `1 + TC1·ΔT + TC2·ΔT²`. Compare a real loaded transistor at
+    /// nominal and hot temperatures against explicit resistors with the
+    /// independently calculated values, for NPN and PNP models.
+    #[test]
+    fn bjt_terminal_resistance_temperature_coefficients_match_explicit_resistors() {
+        let (tnom, rb, rc, re) = (27.0, 31.0, 18.0, 7.0);
+        let (trb1, trb2, trc1, trc2, tre1, tre2) = (1e-3, 1e-5, 2e-3, 1e-5, 5e-4, 1e-5);
+        let resistances = |temperature_celsius: f64| {
+            let delta = temperature_celsius - tnom;
+            (
+                rb * (1.0 + trb1 * delta + trb2 * delta * delta),
+                rc * (1.0 + trc1 * delta + trc2 * delta * delta),
+                re * (1.0 + tre1 * delta + tre2 * delta * delta),
+            )
+        };
+
+        for temperature in [tnom, 127.0] {
+            let (rb_at, rc_at, re_at) = resistances(temperature);
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let modelled = format!(
+                    "Vc c 0 dc {}\nVdrive drive 0 dc {}\nRdrive drive b 10k\n\
+                     Rload e 0 10k\nQ1 c b e QMOD TEMP={temperature}\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 TNOM={tnom} \
+                     RB={rb} TRB1={trb1} TRB2={trb2} RC={rc} TRC1={trc1} TRC2={trc2} \
+                     RE={re} TRE1={tre1} TRE2={tre2})\n",
+                    sign * 5.0,
+                    sign * 1.0,
+                );
+                let explicit = format!(
+                    "Vc c 0 dc {}\nVdrive drive 0 dc {}\nRdrive drive b 10k\n\
+                     Rload e 0 10k\nRbase b qb {rb_at}\nRcollector c qc {rc_at}\n\
+                     Remitter e qe {re_at}\nQ1 qc qb qe QMOD TEMP={temperature}\n\
+                     .model QMOD {kind}(IS=1e-15 BF=100 BR=4 TNOM={tnom})\n",
+                    sign * 5.0,
+                    sign * 1.0,
+                );
+                let actual = build(&modelled);
+                let expected = build(&explicit);
+                let operating = actual.circuit().bjts[0].operating_model;
+                assert!((operating.rb - rb_at).abs() < 1e-12);
+                assert!((operating.rc - rc_at).abs() < 1e-12);
+                assert!((operating.re - re_at).abs() < 1e-12);
+
+                for (actual_name, expected_name) in [
+                    ("c", "c"),
+                    ("b", "b"),
+                    ("e", "e"),
+                    ("Q1#collector", "qc"),
+                    ("Q1#base", "qb"),
+                    ("Q1#emitter", "qe"),
+                ] {
+                    let actual_node = actual
+                        .circuit()
+                        .node(actual_name)
+                        .expect("modelled node exists");
+                    let expected_node = expected
+                        .circuit()
+                        .node(expected_name)
+                        .expect("explicit resistor node exists");
+                    let actual_voltage = actual.node_voltage(actual_node);
+                    let expected_voltage = expected.node_voltage(expected_node);
+                    assert!(
+                        (actual_voltage - expected_voltage).abs() < 1e-8,
+                        "{kind} TEMP={temperature} °C {actual_name}: expected {expected_voltage} V, got {actual_voltage} V"
+                    );
+                }
+                for source in ["Vc", "Vdrive"] {
+                    let actual_current = source_current(&actual, source);
+                    let expected_current = source_current(&expected, source);
+                    assert!(
+                        (actual_current - expected_current).abs() < 1e-10,
+                        "{kind} TEMP={temperature} °C {source}: expected {expected_current} A, got {actual_current} A"
+                    );
+                }
+            }
+        }
+    }
+
     /// During a base step, Early effect, high-injection rolloff, base
     /// recombination, and junction/transit charge interact while displacement
     /// current flows through all three BJT terminals. Model-card RB/RC/RE must
@@ -2661,49 +2740,59 @@ mod analog {
     #[test]
     fn bjt_base_resistance_rolls_off_with_bias_for_both_polarities() {
         let (rb, rbm, irb) = (50.0, 5.0, 100e-6);
-        let expected_resistance = |base_current: f64| {
-            let x = (base_current / irb).max(1e-9);
+        let (trb1, trb2, trbm1, trbm2, tirb1, tirb2) = (1e-3, 2e-6, 2e-3, 3e-6, 1e-3, 1e-6);
+        let expected_resistance = |base_current: f64, temperature: f64| {
+            let delta = temperature - 27.0;
+            let rb_at = rb * (1.0 + trb1 * delta + trb2 * delta * delta);
+            let rbm_at = rbm * (1.0 + trbm1 * delta + trbm2 * delta * delta);
+            let irb_at = irb * (1.0 + tirb1 * delta + tirb2 * delta * delta);
+            let x = (base_current / irb_at).max(1e-9);
             let z = ((1.0 + 14.59025 * x).sqrt() - 1.0) / (2.4317 * x.sqrt());
             let tan_z = z.tan();
-            rbm + 3.0 * (rb - rbm) * (tan_z - z) / (z * tan_z * tan_z)
+            rbm_at + 3.0 * (rb_at - rbm_at) * (tan_z - z) / (z * tan_z * tan_z)
         };
 
-        for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
-            let mut measured = Vec::new();
-            for drive in [0.75, 0.82] {
-                let netlist = format!(
-                    "Vb b 0 dc {}\nVc c 0 dc {}\nQ1 c b 0 QMOD\n\
-                     .model QMOD {kind}(IS=1e-15 BF=100 BR=1 VAF=0 VAR=0 RB={rb} RBM={rbm} IRB={irb})\n",
-                    sign * drive,
-                    sign * 5.0,
-                );
-                let solver = build(&netlist);
-                let base = solver
-                    .circuit()
-                    .node("b")
-                    .expect("external base node")
-                    .expect("base is not ground");
-                let internal_base = solver
-                    .circuit()
-                    .node("Q1#base")
-                    .expect("internal base node")
-                    .expect("internal base is not ground");
-                let base_current = sign * source_current(&solver, "Vb");
-                let base_drop = sign
-                    * (solver.node_voltage(Some(base)) - solver.node_voltage(Some(internal_base)));
-                let actual_resistance = base_drop / base_current;
-                let expected = expected_resistance(base_current);
-                assert!(base_current > 0.0, "{kind}: expected forward base current");
+        for temperature in [27.0, 127.0] {
+            for (kind, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+                let mut measured = Vec::new();
+                for drive in [0.75, 0.82] {
+                    let netlist = format!(
+                        "Vb b 0 dc {}\nVc c 0 dc {}\nQ1 c b 0 QMOD TEMP={temperature}\n\
+                         .model QMOD {kind}(IS=1e-15 BF=100 BR=1 VAF=0 VAR=0 TNOM=27 \
+                         RB={rb} RBM={rbm} IRB={irb} TRB1={trb1} TRB2={trb2} \
+                         TRBM1={trbm1} TRBM2={trbm2} TIRB1={tirb1} TIRB2={tirb2})\n",
+                        sign * drive,
+                        sign * 5.0,
+                    );
+                    let solver = build(&netlist);
+                    let base = solver
+                        .circuit()
+                        .node("b")
+                        .expect("external base node")
+                        .expect("base is not ground");
+                    let internal_base = solver
+                        .circuit()
+                        .node("Q1#base")
+                        .expect("internal base node")
+                        .expect("base is not ground");
+                    let base_current = sign * source_current(&solver, "Vb");
+                    let base_drop = sign
+                        * (solver.node_voltage(Some(base))
+                            - solver.node_voltage(Some(internal_base)));
+                    let actual_resistance = base_drop / base_current;
+                    let expected = expected_resistance(base_current, temperature);
+                    assert!(base_current > 0.0, "{kind}: expected forward base current");
+                    assert!(
+                        relative(actual_resistance, expected) < 1e-5,
+                        "{kind} TEMP={temperature} °C at {drive} V: expected RB={expected} Ω from Ib={base_current} A, got {actual_resistance} Ω"
+                    );
+                    measured.push(actual_resistance);
+                }
                 assert!(
-                    relative(actual_resistance, expected) < 1e-5,
-                    "{kind} at {drive} V: expected RB={expected} Ω from Ib={base_current} A, got {actual_resistance} Ω"
+                    measured[1] < measured[0],
+                    "{kind} TEMP={temperature} °C: base resistance should roll off with increasing base current, got {measured:?}"
                 );
-                measured.push(actual_resistance);
             }
-            assert!(
-                measured[1] < measured[0],
-                "{kind}: base resistance should roll off with increasing base current, got {measured:?}"
-            );
         }
     }
 

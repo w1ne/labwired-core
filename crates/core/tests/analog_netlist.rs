@@ -468,7 +468,10 @@ C1 out 0 100n $ dollar comment
     #[test]
     fn bjt_temperature_parameters_resolve_and_validate() {
         let circuit = parse_netlist(
-            "Q1 c b e QMOD TEMP=85\n.model QMOD PNP(TNOM=25 EG=1.08 XTI=2.5 XTB=-1)\n",
+            "Q1 c b e QMOD TEMP=85\n\
+             .model QMOD PNP(TNOM=25 EG=1.08 XTI=2.5 XTB=-1 RB=30 RBM=10 IRB=1m RC=20 RE=5 \
+             TRB1=1m TRB2=10u TRM1=2m TRM2=20u TIRB1=1m TIRB2=30u \
+             TRC1=3m TRC2=10u TRE1=4m TRE2=20u)\n",
         )
         .expect("BJT instance and model temperature parameters parse");
         let bjt = &circuit.bjts[0];
@@ -480,6 +483,21 @@ C1 out 0 100n $ dollar comment
         assert!(bjt.operating_model.is > bjt.model.is);
         assert!(bjt.operating_model.bf < bjt.model.bf);
         assert!(bjt.thermal_voltage > device::THERMAL_VOLTAGE);
+        assert_eq!(bjt.model.trb1, 1e-3);
+        assert_eq!(bjt.model.trb2, 10e-6);
+        assert_eq!(bjt.model.trbm1, 2e-3);
+        assert_eq!(bjt.model.trbm2, 20e-6);
+        assert_eq!(bjt.model.tirb1, 1e-3);
+        assert_eq!(bjt.model.tirb2, 30e-6);
+        assert_eq!(bjt.model.trc1, 3e-3);
+        assert_eq!(bjt.model.trc2, 10e-6);
+        assert_eq!(bjt.model.tre1, 4e-3);
+        assert_eq!(bjt.model.tre2, 20e-6);
+        assert!((bjt.operating_model.rb - 32.88).abs() < 1e-12);
+        assert!((bjt.operating_model.rbm.unwrap() - 11.92).abs() < 1e-12);
+        assert!((bjt.operating_model.irb - 1.168e-3).abs() < 1e-15);
+        assert!((bjt.operating_model.rc - 24.32).abs() < 1e-12);
+        assert!((bjt.operating_model.re - 6.56).abs() < 1e-12);
 
         let defaults = parse_netlist("Q1 c b e QMOD\n.model QMOD NPN\n")
             .expect("default BJT temperature path parses");
@@ -488,6 +506,16 @@ C1 out 0 100n $ dollar comment
         assert_eq!(bjt.model.eg, 1.11);
         assert_eq!(bjt.model.xti, 3.0);
         assert_eq!(bjt.model.xtb, 0.0);
+        assert_eq!(bjt.model.trb1, 0.0);
+        assert_eq!(bjt.model.trb2, 0.0);
+        assert_eq!(bjt.model.trbm1, 0.0);
+        assert_eq!(bjt.model.trbm2, 0.0);
+        assert_eq!(bjt.model.tirb1, 0.0);
+        assert_eq!(bjt.model.tirb2, 0.0);
+        assert_eq!(bjt.model.trc1, 0.0);
+        assert_eq!(bjt.model.trc2, 0.0);
+        assert_eq!(bjt.model.tre1, 0.0);
+        assert_eq!(bjt.model.tre2, 0.0);
         assert_eq!(bjt.temperature_celsius, None);
         assert_eq!(bjt.operating_model, bjt.model);
         assert_eq!(bjt.thermal_voltage, device::THERMAL_VOLTAGE);
@@ -498,6 +526,11 @@ C1 out 0 100n $ dollar comment
             "EG=nan",
             "XTI=inf",
             "XTB=1e999",
+            "TRB1=nan",
+            "TRBM2=inf",
+            "TIRB1=1e999",
+            "TRC2=nan",
+            "TRE1=inf",
             "IS=inf",
         ] {
             let error = parse_netlist(&format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n"))
@@ -507,6 +540,10 @@ C1 out 0 100n $ dollar comment
         let error = parse_netlist("Q1 c b e QMOD TEMP=-273.15\n.model QMOD NPN\n")
             .expect_err("BJT instance temperature must stay above absolute zero");
         assert!(error.to_string().contains("device TEMP"), "{error}");
+
+        let error = parse_netlist("Q1 c b e QMOD TEMP=100\n.model QMOD NPN(RB=10 TRB1=-20m)\n")
+            .expect_err("temperature coefficients cannot make a terminal resistance nonpositive");
+        assert!(error.to_string().contains("resistances"), "{error}");
     }
 
     #[test]

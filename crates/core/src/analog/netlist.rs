@@ -70,8 +70,9 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB` and
-//! terminal resistances `RB`/`RC`/`RE`, JFET terminal
+//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
+//! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
+//! `TRC*`/`TRE*` temperature coefficients, JFET terminal
 //! resistances `RD`/`RS`, the Parker–Skellern channel fit `B`, and
 //! gate-junction depletion capacitance `CGS`/`CGD`/`PB`/`FC`,
 //! MOSFET terminal resistances `RD`/`RS` or `RSH` times instance `NRD`/`NRS`,
@@ -88,8 +89,12 @@
 //! breakdown voltage; `TRS1`/`TRS2` adjust the series resistance. Diode
 //! capacitance remains fixed. A BJT instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
-//! saturation currents, and forward/reverse beta. BJT charge and terminal
-//! resistance parameters remain at their nominal values.
+//! saturation currents, and forward/reverse beta. BJT charge remains at its
+//! nominal value. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
+//! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
+//! minimum-base, base-current knee, collector, and emitter resistances using
+//! `ΔT = TEMP − TNOM`; `TRM1`/`TRM2` are accepted aliases for `TRBM1`/`TRBM2`.
+//! Without instance `TEMP`, terminal resistances retain their nominal values.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -153,8 +158,9 @@
 //! `TEMP=<°C>` applies ngspice's level-1 temperature laws to thermal voltage,
 //! transport `IS`, base-recombination `ISE`/`ISC`, and forward/reverse beta
 //! `BF`/`BR`. Without instance `TEMP`, the historical fixed-300 K behavior is
-//! retained. BJT junction charge and terminal resistances remain at nominal
-//! values; self-heating is not modeled.
+//! retained. `TRB*`/`TRM*` (also `TRBM*`)/`TIRB*`/`TRC*`/`TRE*` adjust
+//! terminal resistances with `ΔT = TEMP − TNOM`; junction charge remains
+//! nominal. Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
 //! knee current) to reduce the Shockley current under high injection. It may
@@ -1218,19 +1224,39 @@ pub struct BjtModel {
     /// Zero-bias base terminal resistance `RB`, ohms. Zero disables the
     /// internal base node, matching ngspice's default.
     pub rb: f64,
+    /// First and second order temperature coefficients for `RB`, per °C and
+    /// per °C².
+    pub trb1: f64,
+    pub trb2: f64,
     /// Minimum high-current base resistance `RBM`, ohms. `None` means RBM=RB,
     /// ngspice's default, so the base resistance stays fixed.
     pub rbm: Option<f64>,
+    /// First and second order temperature coefficients for `RBM`, per °C and
+    /// per °C².
+    pub trbm1: f64,
+    pub trbm2: f64,
     /// Base current where resistance falls halfway from RB to RBM (`IRB`),
     /// amps. Infinity disables the current-dependent transition, ngspice's
     /// default.
     pub irb: f64,
+    /// First and second order temperature coefficients for `IRB`, per °C and
+    /// per °C².
+    pub tirb1: f64,
+    pub tirb2: f64,
     /// Ohmic collector terminal resistance `RC`, ohms. Zero disables the
     /// internal collector node, matching ngspice's default.
     pub rc: f64,
+    /// First and second order temperature coefficients for `RC`, per °C and
+    /// per °C².
+    pub trc1: f64,
+    pub trc2: f64,
     /// Ohmic emitter terminal resistance `RE`, ohms. Zero disables the
     /// internal emitter node, matching ngspice's default.
     pub re: f64,
+    /// First and second order temperature coefficients for `RE`, per °C and
+    /// per °C².
+    pub tre1: f64,
+    pub tre2: f64,
 }
 
 impl BjtModel {
@@ -1268,10 +1294,20 @@ impl BjtModel {
             itf: 0.0,
             tr: 0.0,
             rb: 0.0,
+            trb1: 0.0,
+            trb2: 0.0,
             rbm: None,
+            trbm1: 0.0,
+            trbm2: 0.0,
             irb: f64::INFINITY,
+            tirb1: 0.0,
+            tirb2: 0.0,
             rc: 0.0,
+            trc1: 0.0,
+            trc2: 0.0,
             re: 0.0,
+            tre1: 0.0,
+            tre2: 0.0,
         }
     }
 }
@@ -3330,9 +3366,19 @@ fn bind_models(
                     || model.eg < 0.0
                     || !model.xti.is_finite()
                     || !model.xtb.is_finite()
+                    || !model.trb1.is_finite()
+                    || !model.trb2.is_finite()
+                    || !model.trbm1.is_finite()
+                    || !model.trbm2.is_finite()
+                    || !model.tirb1.is_finite()
+                    || !model.tirb2.is_finite()
+                    || !model.trc1.is_finite()
+                    || !model.trc2.is_finite()
+                    || !model.tre1.is_finite()
+                    || !model.tre2.is_finite()
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs finite IS/BF/BR/ISE/ISC/EG/XTI/XTB and TNOM above absolute zero"
+                        "a BJT model needs finite IS/BF/BR/ISE/ISC/EG/XTI/XTB and terminal-resistance temperature coefficients, and TNOM above absolute zero"
                             .to_string(),
                     ));
                 }
@@ -3428,11 +3474,26 @@ fn bind_models(
                     || operating_model.ise < 0.0
                     || !operating_model.isc.is_finite()
                     || operating_model.isc < 0.0
+                    || !operating_model.rb.is_finite()
+                    || operating_model.rb < 0.0
+                    || (model.rb > 0.0 && operating_model.rb <= 0.0)
+                    || operating_model.rbm.is_some_and(|rbm| {
+                        !rbm.is_finite() || rbm < 0.0 || rbm > operating_model.rb
+                    })
+                    || operating_model.irb.is_nan()
+                    || operating_model.irb <= 0.0
+                    || (model.irb.is_finite() && !operating_model.irb.is_finite())
+                    || !operating_model.rc.is_finite()
+                    || operating_model.rc < 0.0
+                    || (model.rc > 0.0 && operating_model.rc <= 0.0)
+                    || !operating_model.re.is_finite()
+                    || operating_model.re < 0.0
+                    || (model.re > 0.0 && operating_model.re <= 0.0)
                     || !thermal_voltage.is_finite()
                     || thermal_voltage <= 0.0
                 {
                     return Err(ctx.parse_err(
-                        "temperature-adjusted BJT transport currents and beta must be finite and positive; recombination currents must be finite and nonnegative"
+                        "temperature-adjusted BJT currents, beta and resistances must remain finite and valid"
                             .to_string(),
                     ));
                 }
@@ -3452,9 +3513,12 @@ fn bind_models(
                     }
                     Ok(circuit.intern(&internal_name))
                 };
-                let junction_c = junction_node(circuit, device.nodes[0], model.rc, "collector")?;
-                let junction_b = junction_node(circuit, device.nodes[1], model.rb, "base")?;
-                let junction_e = junction_node(circuit, device.nodes[2], model.re, "emitter")?;
+                let junction_c =
+                    junction_node(circuit, device.nodes[0], operating_model.rc, "collector")?;
+                let junction_b =
+                    junction_node(circuit, device.nodes[1], operating_model.rb, "base")?;
+                let junction_e =
+                    junction_node(circuit, device.nodes[2], operating_model.re, "emitter")?;
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     c: device.nodes[0],
@@ -4034,10 +4098,20 @@ fn parse_model(
             (ModelCard::Bjt(model), "ITF") => model.itf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
+            (ModelCard::Bjt(model), "TRB1") => model.trb1 = value,
+            (ModelCard::Bjt(model), "TRB2") => model.trb2 = value,
             (ModelCard::Bjt(model), "RBM") => model.rbm = Some(value),
+            (ModelCard::Bjt(model), "TRBM1" | "TRM1") => model.trbm1 = value,
+            (ModelCard::Bjt(model), "TRBM2" | "TRM2") => model.trbm2 = value,
             (ModelCard::Bjt(model), "IRB") => model.irb = value,
+            (ModelCard::Bjt(model), "TIRB1") => model.tirb1 = value,
+            (ModelCard::Bjt(model), "TIRB2") => model.tirb2 = value,
             (ModelCard::Bjt(model), "RC") => model.rc = value,
+            (ModelCard::Bjt(model), "TRC1") => model.trc1 = value,
+            (ModelCard::Bjt(model), "TRC2") => model.trc2 = value,
             (ModelCard::Bjt(model), "RE") => model.re = value,
+            (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
+            (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
             (ModelCard::Mos(model), "KP") => model.kp = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
