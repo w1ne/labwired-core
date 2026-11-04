@@ -1900,6 +1900,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-g031k8-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-g071rb-smoke"
 version = "0.1.0"
 dependencies = [

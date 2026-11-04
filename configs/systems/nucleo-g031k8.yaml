@@ -1,0 +1,14 @@
+# NUCLEO-G031K8 (MB1455) board connections per ST UM2591 Rev 2.
+# The default solder bridges route LD3 to PC6 and the ST-LINK VCP to USART2
+# on PA2/PA3. This manifest attaches only the smoke-tested LED signal.
+name: nucleo-g031k8
+chip: ../chips/stm32g031k8-nucleo-smoke.yaml
+debug_uart: usart2
+external_devices: []
+board_io:
+  - id: led_ld3
+    kind: led
+    peripheral: gpioc
+    pin: 6
+    signal: output
+    active_high: true
