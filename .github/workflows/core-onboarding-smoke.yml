@@ -43,9 +43,13 @@ on:
       - "configs/systems/nrf52840-dk-led-smoke.yaml"
       - "examples/nrf52840-dk/**"
       - "crates/firmware-nrf54l10-smoke/**"
+      - "crates/firmware-nrf54lm20dk-smoke/**"
       - "configs/chips/nrf54l10.yaml"
       - "configs/systems/nrf54l10-on-nrf54l15-dk.yaml"
       - "examples/nrf54l10/**"
+      - "configs/chips/nrf54lm20a-dk-led-smoke.yaml"
+      - "configs/systems/nrf54lm20dk-led-smoke.yaml"
+      - "examples/nrf54lm20dk/**"
       - "examples/nucleo-f411re-bme280/**"
       - "configs/chips/stm32f411re-nucleo-bme280-smoke.yaml"
       - "configs/systems/nucleo-f411re-bme280.yaml"
@@ -250,6 +254,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nrf54l10/onboarding-smoke.yaml
             system: configs/systems/nrf54l10-on-nrf54l15-dk.yaml
+          - id: nrf54lm20dk-led-smoke
+            crate: firmware-nrf54lm20dk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nrf54lm20dk/onboarding-smoke.yaml
+            system: configs/systems/nrf54lm20dk-led-smoke.yaml
           - id: nrf54l15-dk
             firmware_build_script: examples/nrf54l15-dk/ci/build-firmware.sh
             script: examples/nrf54l15-dk/io-smoke.yaml

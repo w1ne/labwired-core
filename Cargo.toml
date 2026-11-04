@@ -81,6 +81,7 @@ members = [
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-nrf5340-dk-demo",
     "crates/firmware-nrf54l10-smoke",
+    "crates/firmware-nrf54lm20dk-smoke",
     "crates/firmware-nucleo-f407-demo",
     "crates/firmware-f4-discovery-smoke",
     "crates/firmware-nucleo-f072rb-smoke",
@@ -370,6 +371,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nucleo-u031r8-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nrf54lm20dk-smoke]
 codegen-units = 1
 opt-level = "s"
 

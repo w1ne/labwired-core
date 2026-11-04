@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1342988368,
+      0,
+      1,
+      25,
+      1343062532,
+      4194304,
+      0,
+      537394160,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537394160,
+      2159,
+      2256
+    ],
+    "pc": 2256,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "872652978415e22d4180ded8dbd7ee862013cd628f805eb9cd6e0c86a16532a9",
+  "config": {
+    "firmware": "examples/nrf54lm20dk/../../target/thumbv8m.main-none-eabi/release/firmware-nrf54lm20dk-smoke",
+    "system": "examples/nrf54lm20dk/../../configs/systems/nrf54lm20dk-led-smoke.yaml",
+    "script": "examples/nrf54lm20dk/onboarding-smoke.yaml"
+  }
+}

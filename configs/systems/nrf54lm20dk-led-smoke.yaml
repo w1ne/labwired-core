@@ -1,0 +1,13 @@
+# nRF54LM20 DK in its nRF54LM20A emulation target, narrowed to LED0 and VCOM.
+# Nordic's default LED rail is supplied by the on-board nPM1300; the PMIC and
+# its configuration are not simulated by this GPIO smoke.
+name: "nrf54lm20dk-led-smoke"
+chip: "../chips/nrf54lm20a-dk-led-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 22
+    signal: "output"
+    active_high: true
