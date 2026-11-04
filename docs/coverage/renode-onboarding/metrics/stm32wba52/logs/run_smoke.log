@@ -1,5 +1,5 @@
-2026-11-04T20:39:03.097904Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32wba52.yaml
-2026-11-04T20:39:03.099452Z  INFO labwired_loader: ELF Entry Point: 0x8000801
+2026-11-04T20:52:03.899834Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32wba52.yaml
+2026-11-04T20:52:03.901334Z  INFO labwired_loader: ELF Entry Point: 0x8000801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  5/5 checks · stm32wba52-smoke · 4000000 steps · 0.94s

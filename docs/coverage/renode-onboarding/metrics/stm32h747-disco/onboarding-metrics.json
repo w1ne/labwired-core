@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32h747-disco-smoke.yaml",
   "system": "configs/systems/onboarding/stm32h747-disco.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T20:38:50Z",
-  "finished_at_utc": "2026-11-04T20:38:52Z",
+  "started_at_utc": "2026-11-04T20:51:52Z",
+  "finished_at_utc": "2026-11-04T20:51:54Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1926,
+  "elapsed_ms": 1944,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.304,
-    "build_firmware": 0.158,
-    "run_smoke": 1.453
+    "build_cli": 0.292,
+    "build_firmware": 0.156,
+    "run_smoke": 1.486
   },
   "stages_ms": {
-    "build_cli": 304,
-    "build_firmware": 158,
-    "run_smoke": 1453
+    "build_cli": 292,
+    "build_firmware": 156,
+    "run_smoke": 1486
   }
 }

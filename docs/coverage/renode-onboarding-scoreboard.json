@@ -7,8 +7,8 @@
     "not_run": 156,
     "pass": 89,
     "fail": 0,
-    "median_elapsed_ms": 1028,
-    "median_elapsed_seconds": 1.028,
+    "median_elapsed_ms": 729,
+    "median_elapsed_seconds": 0.729,
     "threshold_seconds": 3600,
     "threshold_met": 89,
     "descriptors_present": 245,
@@ -32,24 +32,24 @@
       "script": "examples/renode-onboarding/A2_CV32E40P-smoke.yaml",
       "system": "configs/systems/onboarding/A2_CV32E40P.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T19:34:17Z",
-      "finished_at_utc": "2026-11-04T19:34:17Z",
+      "started_at_utc": "2026-11-04T20:50:31Z",
+      "finished_at_utc": "2026-11-04T20:50:32Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 730,
+      "elapsed_ms": 745,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.168,
-        "run_smoke": 0.271
+        "build_cli": 0.306,
+        "build_firmware": 0.154,
+        "run_smoke": 0.274
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 168,
-        "run_smoke": 271
+        "build_cli": 306,
+        "build_firmware": 154,
+        "run_smoke": 274
       },
       "_artifact_path": "A2_CV32E40P"
     },
@@ -206,24 +206,24 @@
       "script": "examples/renode-onboarding/andes_ae350_n25-smoke.yaml",
       "system": "configs/systems/onboarding/andes_ae350_n25.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:08Z",
-      "finished_at_utc": "2026-11-04T20:37:10Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1317,
+      "started_at_utc": "2026-11-04T20:50:32Z",
+      "finished_at_utc": "2026-11-04T20:50:33Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 711,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.358,
-        "build_firmware": 0.647,
-        "run_smoke": 0.298
+        "build_cli": 0.282,
+        "build_firmware": 0.153,
+        "run_smoke": 0.266
       },
       "stages_ms": {
-        "build_cli": 358,
-        "build_firmware": 647,
-        "run_smoke": 298
+        "build_cli": 282,
+        "build_firmware": 153,
+        "run_smoke": 266
       },
       "_artifact_path": "andes_ae350_n25"
     },
@@ -278,24 +278,24 @@
       "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
       "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:10Z",
-      "finished_at_utc": "2026-11-04T20:37:13Z",
+      "started_at_utc": "2026-11-04T20:50:33Z",
+      "finished_at_utc": "2026-11-04T20:50:35Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2847,
+      "elapsed_ms": 2119,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.32,
-        "build_firmware": 0.838,
-        "run_smoke": 1.677
+        "build_cli": 0.288,
+        "build_firmware": 0.164,
+        "run_smoke": 1.656
       },
       "stages_ms": {
-        "build_cli": 320,
-        "build_firmware": 838,
-        "run_smoke": 1677
+        "build_cli": 288,
+        "build_firmware": 164,
+        "run_smoke": 1656
       },
       "_artifact_path": "arduino_nano_33_ble"
     },
@@ -316,24 +316,24 @@
       "script": "examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml",
       "system": "configs/systems/onboarding/arduino_uno_r4_minima.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:13Z",
-      "finished_at_utc": "2026-11-04T20:37:14Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1403,
+      "started_at_utc": "2026-11-04T20:50:35Z",
+      "finished_at_utc": "2026-11-04T20:50:36Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 730,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.311,
-        "build_firmware": 0.807,
-        "run_smoke": 0.273
+        "build_cli": 0.274,
+        "build_firmware": 0.166,
+        "run_smoke": 0.28
       },
       "stages_ms": {
-        "build_cli": 311,
-        "build_firmware": 807,
-        "run_smoke": 273
+        "build_cli": 274,
+        "build_firmware": 166,
+        "run_smoke": 280
       },
       "_artifact_path": "arduino_uno_r4_minima"
     },
@@ -354,24 +354,24 @@
       "script": "examples/renode-onboarding/arty_litex_vexriscv-smoke.yaml",
       "system": "configs/systems/onboarding/arty_litex_vexriscv.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:14Z",
-      "finished_at_utc": "2026-11-04T20:37:18Z",
-      "elapsed_seconds": 4,
-      "elapsed_ms": 3659,
+      "started_at_utc": "2026-11-04T20:50:36Z",
+      "finished_at_utc": "2026-11-04T20:50:39Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2856,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.295,
-        "build_firmware": 0.933,
-        "run_smoke": 2.42
+        "build_cli": 0.275,
+        "build_firmware": 0.158,
+        "run_smoke": 2.413
       },
       "stages_ms": {
-        "build_cli": 295,
-        "build_firmware": 933,
-        "run_smoke": 2420
+        "build_cli": 275,
+        "build_firmware": 158,
+        "run_smoke": 2413
       },
       "_artifact_path": "arty_litex_vexriscv"
     },
@@ -460,24 +460,24 @@
       "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml",
       "system": "configs/systems/onboarding/atsamd21j17d-aft.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:18Z",
-      "finished_at_utc": "2026-11-04T20:37:19Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1267,
+      "started_at_utc": "2026-11-04T20:50:39Z",
+      "finished_at_utc": "2026-11-04T20:50:40Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 773,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.306,
-        "build_firmware": 0.618,
-        "run_smoke": 0.331
+        "build_cli": 0.289,
+        "build_firmware": 0.165,
+        "run_smoke": 0.309
       },
       "stages_ms": {
-        "build_cli": 306,
-        "build_firmware": 618,
-        "run_smoke": 331
+        "build_cli": 289,
+        "build_firmware": 165,
+        "run_smoke": 309
       },
       "_artifact_path": "atsamd21j17d-aft"
     },
@@ -498,24 +498,24 @@
       "script": "examples/renode-onboarding/atsamd51g19a-smoke.yaml",
       "system": "configs/systems/onboarding/atsamd51g19a.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:19Z",
-      "finished_at_utc": "2026-11-04T20:37:20Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1132,
+      "started_at_utc": "2026-11-04T20:50:40Z",
+      "finished_at_utc": "2026-11-04T20:50:40Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 719,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.304,
-        "build_firmware": 0.473,
-        "run_smoke": 0.344
+        "build_cli": 0.276,
+        "build_firmware": 0.178,
+        "run_smoke": 0.256
       },
       "stages_ms": {
-        "build_cli": 304,
-        "build_firmware": 473,
-        "run_smoke": 344
+        "build_cli": 276,
+        "build_firmware": 178,
+        "run_smoke": 256
       },
       "_artifact_path": "atsamd51g19a"
     },
@@ -876,24 +876,24 @@
       "script": "examples/renode-onboarding/cc2538-smoke.yaml",
       "system": "configs/systems/onboarding/cc2538.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:20Z",
-      "finished_at_utc": "2026-11-04T20:37:22Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1486,
+      "started_at_utc": "2026-11-04T20:50:40Z",
+      "finished_at_utc": "2026-11-04T20:50:41Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 869,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.337,
-        "build_firmware": 0.67,
-        "run_smoke": 0.466
+        "build_cli": 0.273,
+        "build_firmware": 0.156,
+        "run_smoke": 0.43
       },
       "stages_ms": {
-        "build_cli": 337,
-        "build_firmware": 670,
-        "run_smoke": 466
+        "build_cli": 273,
+        "build_firmware": 156,
+        "run_smoke": 430
       },
       "_artifact_path": "cc2538"
     },
@@ -1322,24 +1322,24 @@
       "script": "examples/renode-onboarding/efm32g210-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g210.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:22Z",
-      "finished_at_utc": "2026-11-04T20:37:23Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1027,
+      "started_at_utc": "2026-11-04T20:50:41Z",
+      "finished_at_utc": "2026-11-04T20:50:42Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 720,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.279,
-        "build_firmware": 0.456,
-        "run_smoke": 0.28
+        "build_cli": 0.301,
+        "build_firmware": 0.156,
+        "run_smoke": 0.254
       },
       "stages_ms": {
-        "build_cli": 279,
-        "build_firmware": 456,
-        "run_smoke": 280
+        "build_cli": 301,
+        "build_firmware": 156,
+        "run_smoke": 254
       },
       "_artifact_path": "efm32g210"
     },
@@ -1360,24 +1360,24 @@
       "script": "examples/renode-onboarding/efm32g222-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g222.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:23Z",
-      "finished_at_utc": "2026-11-04T20:37:24Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1008,
+      "started_at_utc": "2026-11-04T20:50:42Z",
+      "finished_at_utc": "2026-11-04T20:50:43Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 709,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.296,
-        "build_firmware": 0.443,
-        "run_smoke": 0.259
+        "build_cli": 0.273,
+        "build_firmware": 0.158,
+        "run_smoke": 0.267
       },
       "stages_ms": {
-        "build_cli": 296,
-        "build_firmware": 443,
-        "run_smoke": 259
+        "build_cli": 273,
+        "build_firmware": 158,
+        "run_smoke": 267
       },
       "_artifact_path": "efm32g222"
     },
@@ -1398,24 +1398,24 @@
       "script": "examples/renode-onboarding/efm32g232-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g232.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:24Z",
-      "finished_at_utc": "2026-11-04T20:37:25Z",
+      "started_at_utc": "2026-11-04T20:50:43Z",
+      "finished_at_utc": "2026-11-04T20:50:43Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 985,
+      "elapsed_ms": 733,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.29,
-        "build_firmware": 0.421,
-        "run_smoke": 0.263
+        "build_cli": 0.284,
+        "build_firmware": 0.173,
+        "run_smoke": 0.266
       },
       "stages_ms": {
-        "build_cli": 290,
-        "build_firmware": 421,
-        "run_smoke": 263
+        "build_cli": 284,
+        "build_firmware": 173,
+        "run_smoke": 266
       },
       "_artifact_path": "efm32g232"
     },
@@ -1436,24 +1436,24 @@
       "script": "examples/renode-onboarding/efm32g842-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g842.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:25Z",
-      "finished_at_utc": "2026-11-04T20:37:26Z",
+      "started_at_utc": "2026-11-04T20:50:44Z",
+      "finished_at_utc": "2026-11-04T20:50:44Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 989,
+      "elapsed_ms": 743,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.434,
-        "run_smoke": 0.265
+        "build_cli": 0.276,
+        "build_firmware": 0.163,
+        "run_smoke": 0.291
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 434,
-        "run_smoke": 265
+        "build_cli": 276,
+        "build_firmware": 163,
+        "run_smoke": 291
       },
       "_artifact_path": "efm32g842"
     },
@@ -1474,24 +1474,24 @@
       "script": "examples/renode-onboarding/efm32g890-smoke.yaml",
       "system": "configs/systems/onboarding/efm32g890.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:26Z",
-      "finished_at_utc": "2026-11-04T20:37:27Z",
+      "started_at_utc": "2026-11-04T20:50:44Z",
+      "finished_at_utc": "2026-11-04T20:50:45Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 736,
+      "elapsed_ms": 725,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.284,
-        "build_firmware": 0.161,
-        "run_smoke": 0.28
+        "build_cli": 0.282,
+        "build_firmware": 0.155,
+        "run_smoke": 0.279
       },
       "stages_ms": {
-        "build_cli": 284,
-        "build_firmware": 161,
-        "run_smoke": 280
+        "build_cli": 282,
+        "build_firmware": 155,
+        "run_smoke": 279
       },
       "_artifact_path": "efm32g890"
     },
@@ -1512,24 +1512,24 @@
       "script": "examples/renode-onboarding/efm32gg942-smoke.yaml",
       "system": "configs/systems/onboarding/efm32gg942.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:27Z",
-      "finished_at_utc": "2026-11-04T20:37:27Z",
+      "started_at_utc": "2026-11-04T20:50:45Z",
+      "finished_at_utc": "2026-11-04T20:50:46Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 718,
+      "elapsed_ms": 711,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.287,
-        "build_firmware": 0.158,
-        "run_smoke": 0.263
+        "build_cli": 0.276,
+        "build_firmware": 0.17,
+        "run_smoke": 0.256
       },
       "stages_ms": {
-        "build_cli": 287,
-        "build_firmware": 158,
-        "run_smoke": 263
+        "build_cli": 276,
+        "build_firmware": 170,
+        "run_smoke": 256
       },
       "_artifact_path": "efm32gg942"
     },
@@ -1550,24 +1550,24 @@
       "script": "examples/renode-onboarding/efm32gg995-smoke.yaml",
       "system": "configs/systems/onboarding/efm32gg995.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:27Z",
-      "finished_at_utc": "2026-11-04T20:37:28Z",
+      "started_at_utc": "2026-11-04T20:50:46Z",
+      "finished_at_utc": "2026-11-04T20:50:47Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 719,
+      "elapsed_ms": 710,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.284,
-        "build_firmware": 0.165,
-        "run_smoke": 0.262
+        "build_cli": 0.279,
+        "build_firmware": 0.155,
+        "run_smoke": 0.266
       },
       "stages_ms": {
-        "build_cli": 284,
-        "build_firmware": 165,
-        "run_smoke": 262
+        "build_cli": 279,
+        "build_firmware": 155,
+        "run_smoke": 266
       },
       "_artifact_path": "efm32gg995"
     },
@@ -1588,24 +1588,24 @@
       "script": "examples/renode-onboarding/efm32hg350-smoke.yaml",
       "system": "configs/systems/onboarding/efm32hg350.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:28Z",
-      "finished_at_utc": "2026-11-04T20:37:29Z",
+      "started_at_utc": "2026-11-04T20:50:47Z",
+      "finished_at_utc": "2026-11-04T20:50:47Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 963,
+      "elapsed_ms": 732,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.285,
-        "build_firmware": 0.41,
-        "run_smoke": 0.257
+        "build_cli": 0.304,
+        "build_firmware": 0.159,
+        "run_smoke": 0.259
       },
       "stages_ms": {
-        "build_cli": 285,
-        "build_firmware": 410,
-        "run_smoke": 257
+        "build_cli": 304,
+        "build_firmware": 159,
+        "run_smoke": 259
       },
       "_artifact_path": "efm32hg350"
     },
@@ -1626,24 +1626,24 @@
       "script": "examples/renode-onboarding/efm32jg1-smoke.yaml",
       "system": "configs/systems/onboarding/efm32jg1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:29Z",
-      "finished_at_utc": "2026-11-04T20:37:30Z",
+      "started_at_utc": "2026-11-04T20:50:47Z",
+      "finished_at_utc": "2026-11-04T20:50:48Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 973,
+      "elapsed_ms": 717,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.285,
-        "build_firmware": 0.416,
-        "run_smoke": 0.261
+        "build_cli": 0.283,
+        "build_firmware": 0.156,
+        "run_smoke": 0.267
       },
       "stages_ms": {
-        "build_cli": 285,
-        "build_firmware": 416,
-        "run_smoke": 261
+        "build_cli": 283,
+        "build_firmware": 156,
+        "run_smoke": 267
       },
       "_artifact_path": "efm32jg1"
     },
@@ -1664,24 +1664,24 @@
       "script": "examples/renode-onboarding/efm32jg12-smoke.yaml",
       "system": "configs/systems/onboarding/efm32jg12.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:30Z",
-      "finished_at_utc": "2026-11-04T20:37:31Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1025,
+      "started_at_utc": "2026-11-04T20:50:48Z",
+      "finished_at_utc": "2026-11-04T20:50:49Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 705,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.283,
-        "build_firmware": 0.432,
-        "run_smoke": 0.3
+        "build_cli": 0.279,
+        "build_firmware": 0.159,
+        "run_smoke": 0.257
       },
       "stages_ms": {
-        "build_cli": 283,
-        "build_firmware": 432,
-        "run_smoke": 300
+        "build_cli": 279,
+        "build_firmware": 159,
+        "run_smoke": 257
       },
       "_artifact_path": "efm32jg12"
     },
@@ -1702,24 +1702,24 @@
       "script": "examples/renode-onboarding/efm32lg942-smoke.yaml",
       "system": "configs/systems/onboarding/efm32lg942.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:31Z",
-      "finished_at_utc": "2026-11-04T20:37:32Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1040,
+      "started_at_utc": "2026-11-04T20:50:49Z",
+      "finished_at_utc": "2026-11-04T20:50:50Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 702,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.279,
-        "build_firmware": 0.438,
-        "run_smoke": 0.313
+        "build_cli": 0.28,
+        "build_firmware": 0.153,
+        "run_smoke": 0.259
       },
       "stages_ms": {
-        "build_cli": 279,
-        "build_firmware": 438,
-        "run_smoke": 313
+        "build_cli": 280,
+        "build_firmware": 153,
+        "run_smoke": 259
       },
       "_artifact_path": "efm32lg942"
     },
@@ -1740,24 +1740,24 @@
       "script": "examples/renode-onboarding/efm32lg995-smoke.yaml",
       "system": "configs/systems/onboarding/efm32lg995.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:32Z",
-      "finished_at_utc": "2026-11-04T20:37:33Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1010,
+      "started_at_utc": "2026-11-04T20:50:50Z",
+      "finished_at_utc": "2026-11-04T20:50:50Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 699,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.289,
-        "build_firmware": 0.441,
-        "run_smoke": 0.268
+        "build_cli": 0.27,
+        "build_firmware": 0.152,
+        "run_smoke": 0.265
       },
       "stages_ms": {
-        "build_cli": 289,
-        "build_firmware": 441,
-        "run_smoke": 268
+        "build_cli": 270,
+        "build_firmware": 152,
+        "run_smoke": 265
       },
       "_artifact_path": "efm32lg995"
     },
@@ -1778,24 +1778,24 @@
       "script": "examples/renode-onboarding/efm32pg1-smoke.yaml",
       "system": "configs/systems/onboarding/efm32pg1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:33Z",
-      "finished_at_utc": "2026-11-04T20:37:34Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1037,
+      "started_at_utc": "2026-11-04T20:50:50Z",
+      "finished_at_utc": "2026-11-04T20:50:51Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 725,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.311,
-        "build_firmware": 0.437,
-        "run_smoke": 0.277
+        "build_cli": 0.284,
+        "build_firmware": 0.165,
+        "run_smoke": 0.266
       },
       "stages_ms": {
-        "build_cli": 311,
-        "build_firmware": 437,
-        "run_smoke": 277
+        "build_cli": 284,
+        "build_firmware": 165,
+        "run_smoke": 266
       },
       "_artifact_path": "efm32pg1"
     },
@@ -1816,24 +1816,24 @@
       "script": "examples/renode-onboarding/efm32pg12-smoke.yaml",
       "system": "configs/systems/onboarding/efm32pg12.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:34Z",
-      "finished_at_utc": "2026-11-04T20:37:35Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1011,
+      "started_at_utc": "2026-11-04T20:50:51Z",
+      "finished_at_utc": "2026-11-04T20:50:52Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 708,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.299,
-        "build_firmware": 0.432,
-        "run_smoke": 0.268
+        "build_cli": 0.269,
+        "build_firmware": 0.152,
+        "run_smoke": 0.276
       },
       "stages_ms": {
-        "build_cli": 299,
-        "build_firmware": 432,
-        "run_smoke": 268
+        "build_cli": 269,
+        "build_firmware": 152,
+        "run_smoke": 276
       },
       "_artifact_path": "efm32pg12"
     },
@@ -1854,24 +1854,24 @@
       "script": "examples/renode-onboarding/efm32tg840-smoke.yaml",
       "system": "configs/systems/onboarding/efm32tg840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:36Z",
-      "finished_at_utc": "2026-11-04T20:37:37Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1016,
+      "started_at_utc": "2026-11-04T20:50:52Z",
+      "finished_at_utc": "2026-11-04T20:50:53Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 694,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.303,
-        "build_firmware": 0.441,
-        "run_smoke": 0.262
+        "build_cli": 0.272,
+        "build_firmware": 0.153,
+        "run_smoke": 0.255
       },
       "stages_ms": {
-        "build_cli": 303,
-        "build_firmware": 441,
-        "run_smoke": 262
+        "build_cli": 272,
+        "build_firmware": 153,
+        "run_smoke": 255
       },
       "_artifact_path": "efm32tg840"
     },
@@ -1892,23 +1892,23 @@
       "script": "examples/renode-onboarding/efm32wg995-smoke.yaml",
       "system": "configs/systems/onboarding/efm32wg995.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:37Z",
-      "finished_at_utc": "2026-11-04T20:37:38Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1012,
+      "started_at_utc": "2026-11-04T20:50:53Z",
+      "finished_at_utc": "2026-11-04T20:50:53Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 712,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.287,
-        "build_firmware": 0.449,
+        "build_cli": 0.284,
+        "build_firmware": 0.155,
         "run_smoke": 0.262
       },
       "stages_ms": {
-        "build_cli": 287,
-        "build_firmware": 449,
+        "build_cli": 284,
+        "build_firmware": 155,
         "run_smoke": 262
       },
       "_artifact_path": "efm32wg995"
@@ -1964,10 +1964,10 @@
       "script": "examples/renode-onboarding/efr32mg1-smoke.yaml",
       "system": "configs/systems/onboarding/efr32mg1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:38Z",
-      "finished_at_utc": "2026-11-04T20:37:38Z",
+      "started_at_utc": "2026-11-04T20:50:53Z",
+      "finished_at_utc": "2026-11-04T20:50:54Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 701,
+      "elapsed_ms": 705,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
@@ -1976,12 +1976,12 @@
       "stages_seconds": {
         "build_cli": 0.28,
         "build_firmware": 0.157,
-        "run_smoke": 0.255
+        "run_smoke": 0.258
       },
       "stages_ms": {
         "build_cli": 280,
         "build_firmware": 157,
-        "run_smoke": 255
+        "run_smoke": 258
       },
       "_artifact_path": "efr32mg1"
     },
@@ -2002,24 +2002,24 @@
       "script": "examples/renode-onboarding/efr32mg12-smoke.yaml",
       "system": "configs/systems/onboarding/efr32mg12.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:38Z",
-      "finished_at_utc": "2026-11-04T20:37:39Z",
+      "started_at_utc": "2026-11-04T20:50:54Z",
+      "finished_at_utc": "2026-11-04T20:50:55Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 972,
+      "elapsed_ms": 695,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.274,
-        "build_firmware": 0.429,
-        "run_smoke": 0.257
+        "build_cli": 0.275,
+        "build_firmware": 0.153,
+        "run_smoke": 0.256
       },
       "stages_ms": {
-        "build_cli": 274,
-        "build_firmware": 429,
-        "run_smoke": 257
+        "build_cli": 275,
+        "build_firmware": 153,
+        "run_smoke": 256
       },
       "_artifact_path": "efr32mg12"
     },
@@ -2040,24 +2040,24 @@
       "script": "examples/renode-onboarding/efr32mg13-smoke.yaml",
       "system": "configs/systems/onboarding/efr32mg13.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:39Z",
-      "finished_at_utc": "2026-11-04T20:37:40Z",
+      "started_at_utc": "2026-11-04T20:50:55Z",
+      "finished_at_utc": "2026-11-04T20:50:55Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 856,
+      "elapsed_ms": 693,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.279,
-        "build_firmware": 0.309,
-        "run_smoke": 0.258
+        "build_cli": 0.274,
+        "build_firmware": 0.153,
+        "run_smoke": 0.255
       },
       "stages_ms": {
-        "build_cli": 279,
-        "build_firmware": 309,
-        "run_smoke": 258
+        "build_cli": 274,
+        "build_firmware": 153,
+        "run_smoke": 255
       },
       "_artifact_path": "efr32mg13"
     },
@@ -2078,24 +2078,24 @@
       "script": "examples/renode-onboarding/efr32mg24-smoke.yaml",
       "system": "configs/systems/onboarding/efr32mg24.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:40Z",
-      "finished_at_utc": "2026-11-04T20:37:41Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1020,
+      "started_at_utc": "2026-11-04T20:50:55Z",
+      "finished_at_utc": "2026-11-04T20:50:56Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 720,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.281,
-        "build_firmware": 0.466,
-        "run_smoke": 0.262
+        "build_cli": 0.286,
+        "build_firmware": 0.154,
+        "run_smoke": 0.269
       },
       "stages_ms": {
-        "build_cli": 281,
-        "build_firmware": 466,
-        "run_smoke": 262
+        "build_cli": 286,
+        "build_firmware": 154,
+        "run_smoke": 269
       },
       "_artifact_path": "efr32mg24"
     },
@@ -2116,24 +2116,24 @@
       "script": "examples/renode-onboarding/efr32mg26-smoke.yaml",
       "system": "configs/systems/onboarding/efr32mg26.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:41Z",
-      "finished_at_utc": "2026-11-04T20:37:42Z",
+      "started_at_utc": "2026-11-04T20:50:56Z",
+      "finished_at_utc": "2026-11-04T20:50:57Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 978,
+      "elapsed_ms": 697,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.282,
-        "build_firmware": 0.42,
-        "run_smoke": 0.264
+        "build_cli": 0.273,
+        "build_firmware": 0.153,
+        "run_smoke": 0.262
       },
       "stages_ms": {
-        "build_cli": 282,
-        "build_firmware": 420,
-        "run_smoke": 264
+        "build_cli": 273,
+        "build_firmware": 153,
+        "run_smoke": 262
       },
       "_artifact_path": "efr32mg26"
     },
@@ -2664,24 +2664,24 @@
       "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
       "system": "configs/systems/onboarding/imxrt1064.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:42Z",
-      "finished_at_utc": "2026-11-04T20:37:43Z",
+      "started_at_utc": "2026-11-04T20:50:57Z",
+      "finished_at_utc": "2026-11-04T20:50:58Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 965,
+      "elapsed_ms": 744,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.276,
-        "build_firmware": 0.416,
-        "run_smoke": 0.262
+        "build_cli": 0.317,
+        "build_firmware": 0.16,
+        "run_smoke": 0.256
       },
       "stages_ms": {
-        "build_cli": 276,
-        "build_firmware": 416,
-        "run_smoke": 262
+        "build_cli": 317,
+        "build_firmware": 160,
+        "run_smoke": 256
       },
       "_artifact_path": "imxrt1064"
     },
@@ -2736,24 +2736,24 @@
       "script": "examples/renode-onboarding/kendryte_k210-smoke.yaml",
       "system": "configs/systems/onboarding/kendryte_k210.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:43Z",
-      "finished_at_utc": "2026-11-04T20:37:45Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1595,
+      "started_at_utc": "2026-11-04T20:50:58Z",
+      "finished_at_utc": "2026-11-04T20:50:58Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 715,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.278,
-        "build_firmware": 1.002,
-        "run_smoke": 0.305
+        "build_cli": 0.273,
+        "build_firmware": 0.172,
+        "run_smoke": 0.26
       },
       "stages_ms": {
-        "build_cli": 278,
-        "build_firmware": 1002,
-        "run_smoke": 305
+        "build_cli": 273,
+        "build_firmware": 172,
+        "run_smoke": 260
       },
       "_artifact_path": "kendryte_k210"
     },
@@ -2842,24 +2842,24 @@
       "script": "examples/renode-onboarding/litex_ibex-smoke.yaml",
       "system": "configs/systems/onboarding/litex_ibex.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:45Z",
-      "finished_at_utc": "2026-11-04T20:37:46Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1135,
+      "started_at_utc": "2026-11-04T20:50:59Z",
+      "finished_at_utc": "2026-11-04T20:50:59Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 709,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.307,
-        "build_firmware": 0.526,
-        "run_smoke": 0.291
+        "build_cli": 0.273,
+        "build_firmware": 0.154,
+        "run_smoke": 0.271
       },
       "stages_ms": {
-        "build_cli": 307,
-        "build_firmware": 526,
-        "run_smoke": 291
+        "build_cli": 273,
+        "build_firmware": 154,
+        "run_smoke": 271
       },
       "_artifact_path": "litex_ibex"
     },
@@ -3016,24 +3016,24 @@
       "script": "examples/renode-onboarding/litex_picorv32-smoke.yaml",
       "system": "configs/systems/onboarding/litex_picorv32.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:46Z",
-      "finished_at_utc": "2026-11-04T20:37:48Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2141,
+      "started_at_utc": "2026-11-04T20:50:59Z",
+      "finished_at_utc": "2026-11-04T20:51:01Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1919,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.275,
-        "build_firmware": 0.426,
-        "run_smoke": 1.431
+        "build_cli": 0.273,
+        "build_firmware": 0.168,
+        "run_smoke": 1.467
       },
       "stages_ms": {
-        "build_cli": 275,
-        "build_firmware": 426,
-        "run_smoke": 1431
+        "build_cli": 273,
+        "build_firmware": 168,
+        "run_smoke": 1467
       },
       "_artifact_path": "litex_picorv32"
     },
@@ -3088,24 +3088,24 @@
       "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
       "system": "configs/systems/onboarding/litex_vexriscv.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:48Z",
-      "finished_at_utc": "2026-11-04T20:37:51Z",
+      "started_at_utc": "2026-11-04T20:51:01Z",
+      "finished_at_utc": "2026-11-04T20:51:03Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2294,
+      "elapsed_ms": 2006,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.277,
-        "build_firmware": 0.479,
-        "run_smoke": 1.528
+        "build_cli": 0.278,
+        "build_firmware": 0.172,
+        "run_smoke": 1.542
       },
       "stages_ms": {
-        "build_cli": 277,
-        "build_firmware": 479,
-        "run_smoke": 1528
+        "build_cli": 278,
+        "build_firmware": 172,
+        "run_smoke": 1542
       },
       "_artifact_path": "litex_vexriscv"
     },
@@ -3160,24 +3160,24 @@
       "script": "examples/renode-onboarding/litex_vexriscv_micropython-smoke.yaml",
       "system": "configs/systems/onboarding/litex_vexriscv_micropython.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:51Z",
-      "finished_at_utc": "2026-11-04T20:37:53Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2388,
+      "started_at_utc": "2026-11-04T20:51:03Z",
+      "finished_at_utc": "2026-11-04T20:51:05Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1947,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.298,
-        "build_firmware": 0.514,
-        "run_smoke": 1.563
+        "build_cli": 0.274,
+        "build_firmware": 0.158,
+        "run_smoke": 1.506
       },
       "stages_ms": {
-        "build_cli": 298,
-        "build_firmware": 514,
-        "run_smoke": 1563
+        "build_cli": 274,
+        "build_firmware": 158,
+        "run_smoke": 1506
       },
       "_artifact_path": "litex_vexriscv_micropython"
     },
@@ -3334,24 +3334,24 @@
       "script": "examples/renode-onboarding/litex_vexriscv_zephyr-smoke.yaml",
       "system": "configs/systems/onboarding/litex_vexriscv_zephyr.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:53Z",
-      "finished_at_utc": "2026-11-04T20:37:55Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2003,
+      "started_at_utc": "2026-11-04T20:51:05Z",
+      "finished_at_utc": "2026-11-04T20:51:07Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1968,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.308,
-        "build_firmware": 0.162,
-        "run_smoke": 1.523
+        "build_cli": 0.281,
+        "build_firmware": 0.158,
+        "run_smoke": 1.518
       },
       "stages_ms": {
-        "build_cli": 308,
-        "build_firmware": 162,
-        "run_smoke": 1523
+        "build_cli": 281,
+        "build_firmware": 158,
+        "run_smoke": 1518
       },
       "_artifact_path": "litex_vexriscv_zephyr"
     },
@@ -3610,24 +3610,24 @@
       "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml",
       "system": "configs/systems/onboarding/mimxrt700_evk.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:55Z",
-      "finished_at_utc": "2026-11-04T20:37:56Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1129,
+      "started_at_utc": "2026-11-04T20:51:07Z",
+      "finished_at_utc": "2026-11-04T20:51:08Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 842,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.455,
-        "run_smoke": 0.384
+        "build_cli": 0.301,
+        "build_firmware": 0.156,
+        "run_smoke": 0.375
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 455,
-        "run_smoke": 384
+        "build_cli": 301,
+        "build_firmware": 156,
+        "run_smoke": 375
       },
       "_artifact_path": "mimxrt700_evk"
     },
@@ -3648,24 +3648,24 @@
       "script": "examples/renode-onboarding/mimxrt798s-smoke.yaml",
       "system": "configs/systems/onboarding/mimxrt798s.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:56Z",
-      "finished_at_utc": "2026-11-04T20:37:57Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1124,
+      "started_at_utc": "2026-11-04T20:51:08Z",
+      "finished_at_utc": "2026-11-04T20:51:09Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 828,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.283,
-        "build_firmware": 0.439,
-        "run_smoke": 0.391
+        "build_cli": 0.276,
+        "build_firmware": 0.166,
+        "run_smoke": 0.376
       },
       "stages_ms": {
-        "build_cli": 283,
-        "build_firmware": 439,
-        "run_smoke": 391
+        "build_cli": 276,
+        "build_firmware": 166,
+        "run_smoke": 376
       },
       "_artifact_path": "mimxrt798s"
     },
@@ -3720,24 +3720,24 @@
       "script": "examples/renode-onboarding/miv-board-smoke.yaml",
       "system": "configs/systems/onboarding/miv-board.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:57Z",
-      "finished_at_utc": "2026-11-04T20:37:59Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1011,
+      "started_at_utc": "2026-11-04T20:51:09Z",
+      "finished_at_utc": "2026-11-04T20:51:10Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 742,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.284,
-        "build_firmware": 0.439,
-        "run_smoke": 0.277
+        "build_cli": 0.308,
+        "build_firmware": 0.156,
+        "run_smoke": 0.267
       },
       "stages_ms": {
-        "build_cli": 284,
-        "build_firmware": 439,
-        "run_smoke": 277
+        "build_cli": 308,
+        "build_firmware": 156,
+        "run_smoke": 267
       },
       "_artifact_path": "miv-board"
     },
@@ -3792,24 +3792,24 @@
       "script": "examples/renode-onboarding/miv_rv32-smoke.yaml",
       "system": "configs/systems/onboarding/miv_rv32.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:59Z",
-      "finished_at_utc": "2026-11-04T20:37:59Z",
+      "started_at_utc": "2026-11-04T20:51:10Z",
+      "finished_at_utc": "2026-11-04T20:51:10Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 735,
+      "elapsed_ms": 712,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.285,
-        "build_firmware": 0.157,
-        "run_smoke": 0.28
+        "build_cli": 0.272,
+        "build_firmware": 0.156,
+        "run_smoke": 0.273
       },
       "stages_ms": {
-        "build_cli": 285,
-        "build_firmware": 157,
-        "run_smoke": 280
+        "build_cli": 272,
+        "build_firmware": 156,
+        "run_smoke": 273
       },
       "_artifact_path": "miv_rv32"
     },
@@ -4068,24 +4068,24 @@
       "script": "examples/renode-onboarding/murax_vexriscv-smoke.yaml",
       "system": "configs/systems/onboarding/murax_vexriscv.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:37:59Z",
-      "finished_at_utc": "2026-11-04T20:38:00Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1052,
+      "started_at_utc": "2026-11-04T20:51:11Z",
+      "finished_at_utc": "2026-11-04T20:51:11Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 718,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.296,
-        "build_firmware": 0.466,
-        "run_smoke": 0.279
+        "build_cli": 0.281,
+        "build_firmware": 0.154,
+        "run_smoke": 0.271
       },
       "stages_ms": {
-        "build_cli": 296,
-        "build_firmware": 466,
-        "run_smoke": 279
+        "build_cli": 281,
+        "build_firmware": 154,
+        "run_smoke": 271
       },
       "_artifact_path": "murax_vexriscv"
     },
@@ -4140,24 +4140,24 @@
       "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:00Z",
-      "finished_at_utc": "2026-11-04T20:38:03Z",
+      "started_at_utc": "2026-11-04T20:51:11Z",
+      "finished_at_utc": "2026-11-04T20:51:14Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2556,
+      "elapsed_ms": 2222,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.297,
-        "build_firmware": 0.528,
-        "run_smoke": 1.718
+        "build_cli": 0.275,
+        "build_firmware": 0.153,
+        "run_smoke": 1.784
       },
       "stages_ms": {
-        "build_cli": 297,
-        "build_firmware": 528,
-        "run_smoke": 1718
+        "build_cli": 275,
+        "build_firmware": 153,
+        "run_smoke": 1784
       },
       "_artifact_path": "nrf52840"
     },
@@ -4178,24 +4178,24 @@
       "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840dk_nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:03Z",
-      "finished_at_utc": "2026-11-04T20:38:05Z",
+      "started_at_utc": "2026-11-04T20:51:14Z",
+      "finished_at_utc": "2026-11-04T20:51:16Z",
       "elapsed_seconds": 3,
-      "elapsed_ms": 2043,
+      "elapsed_ms": 2183,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.291,
-        "build_firmware": 0.168,
-        "run_smoke": 1.568
+        "build_cli": 0.272,
+        "build_firmware": 0.154,
+        "run_smoke": 1.746
       },
       "stages_ms": {
-        "build_cli": 291,
-        "build_firmware": 168,
-        "run_smoke": 1568
+        "build_cli": 272,
+        "build_firmware": 154,
+        "run_smoke": 1746
       },
       "_artifact_path": "nrf52840dk_nrf52840"
     },
@@ -4216,24 +4216,24 @@
       "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
       "system": "configs/systems/onboarding/nucleo_f767zi.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:05Z",
-      "finished_at_utc": "2026-11-04T20:38:06Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1028,
+      "started_at_utc": "2026-11-04T20:51:16Z",
+      "finished_at_utc": "2026-11-04T20:51:16Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 719,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.273,
-        "build_firmware": 0.454,
-        "run_smoke": 0.29
+        "build_cli": 0.279,
+        "build_firmware": 0.16,
+        "run_smoke": 0.269
       },
       "stages_ms": {
-        "build_cli": 273,
-        "build_firmware": 454,
-        "run_smoke": 290
+        "build_cli": 279,
+        "build_firmware": 160,
+        "run_smoke": 269
       },
       "_artifact_path": "nucleo_f767zi"
     },
@@ -4254,24 +4254,24 @@
       "script": "examples/renode-onboarding/nucleo_h753zi-smoke.yaml",
       "system": "configs/systems/onboarding/nucleo_h753zi.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:06Z",
-      "finished_at_utc": "2026-11-04T20:38:08Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2226,
+      "started_at_utc": "2026-11-04T20:51:17Z",
+      "finished_at_utc": "2026-11-04T20:51:18Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1855,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.314,
-        "build_firmware": 0.476,
-        "run_smoke": 1.424
+        "build_cli": 0.28,
+        "build_firmware": 0.157,
+        "run_smoke": 1.408
       },
       "stages_ms": {
-        "build_cli": 314,
-        "build_firmware": 476,
-        "run_smoke": 1424
+        "build_cli": 280,
+        "build_firmware": 157,
+        "run_smoke": 1408
       },
       "_artifact_path": "nucleo_h753zi"
     },
@@ -4292,24 +4292,24 @@
       "script": "examples/renode-onboarding/nucleo_wba52cg-smoke.yaml",
       "system": "configs/systems/onboarding/nucleo_wba52cg.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:08Z",
-      "finished_at_utc": "2026-11-04T20:38:10Z",
+      "started_at_utc": "2026-11-04T20:51:18Z",
+      "finished_at_utc": "2026-11-04T20:51:20Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1970,
+      "elapsed_ms": 1673,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.477,
-        "run_smoke": 1.202
+        "build_cli": 0.292,
+        "build_firmware": 0.157,
+        "run_smoke": 1.214
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 477,
-        "run_smoke": 1202
+        "build_cli": 292,
+        "build_firmware": 157,
+        "run_smoke": 1214
       },
       "_artifact_path": "nucleo_wba52cg"
     },
@@ -4500,24 +4500,24 @@
       "script": "examples/renode-onboarding/nxp-s32k388-smoke.yaml",
       "system": "configs/systems/onboarding/nxp-s32k388.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:10Z",
-      "finished_at_utc": "2026-11-04T20:38:11Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1021,
+      "started_at_utc": "2026-11-04T20:51:20Z",
+      "finished_at_utc": "2026-11-04T20:51:21Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 738,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.294,
-        "build_firmware": 0.423,
-        "run_smoke": 0.294
+        "build_cli": 0.287,
+        "build_firmware": 0.173,
+        "run_smoke": 0.267
       },
       "stages_ms": {
-        "build_cli": 294,
-        "build_firmware": 423,
-        "run_smoke": 294
+        "build_cli": 287,
+        "build_firmware": 173,
+        "run_smoke": 267
       },
       "_artifact_path": "nxp-s32k388"
     },
@@ -4640,24 +4640,24 @@
       "script": "examples/renode-onboarding/picosoc-smoke.yaml",
       "system": "configs/systems/onboarding/picosoc.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:11Z",
-      "finished_at_utc": "2026-11-04T20:38:13Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1024,
+      "started_at_utc": "2026-11-04T20:51:21Z",
+      "finished_at_utc": "2026-11-04T20:51:22Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 717,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.278,
-        "build_firmware": 0.446,
-        "run_smoke": 0.291
+        "build_cli": 0.271,
+        "build_firmware": 0.155,
+        "run_smoke": 0.281
       },
       "stages_ms": {
-        "build_cli": 278,
-        "build_firmware": 446,
-        "run_smoke": 291
+        "build_cli": 271,
+        "build_firmware": 155,
+        "run_smoke": 281
       },
       "_artifact_path": "picosoc"
     },
@@ -4814,24 +4814,24 @@
       "script": "examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-ck_ra6m5.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:13Z",
-      "finished_at_utc": "2026-11-04T20:38:14Z",
+      "started_at_utc": "2026-11-04T20:51:22Z",
+      "finished_at_utc": "2026-11-04T20:51:22Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 981,
+      "elapsed_ms": 716,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.277,
-        "build_firmware": 0.423,
-        "run_smoke": 0.27
+        "build_cli": 0.281,
+        "build_firmware": 0.156,
+        "run_smoke": 0.269
       },
       "stages_ms": {
-        "build_cli": 277,
-        "build_firmware": 423,
-        "run_smoke": 270
+        "build_cli": 281,
+        "build_firmware": 156,
+        "run_smoke": 269
       },
       "_artifact_path": "renesas-ck_ra6m5"
     },
@@ -4852,24 +4852,24 @@
       "script": "examples/renode-onboarding/renesas-da14592-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-da14592.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:14Z",
-      "finished_at_utc": "2026-11-04T20:38:15Z",
+      "started_at_utc": "2026-11-04T20:51:22Z",
+      "finished_at_utc": "2026-11-04T20:51:23Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 980,
+      "elapsed_ms": 710,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.279,
-        "build_firmware": 0.428,
-        "run_smoke": 0.262
+        "build_cli": 0.276,
+        "build_firmware": 0.154,
+        "run_smoke": 0.269
       },
       "stages_ms": {
-        "build_cli": 279,
-        "build_firmware": 428,
-        "run_smoke": 262
+        "build_cli": 276,
+        "build_firmware": 154,
+        "run_smoke": 269
       },
       "_artifact_path": "renesas-da14592"
     },
@@ -4890,24 +4890,24 @@
       "script": "examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-ek_ra2e1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:15Z",
-      "finished_at_utc": "2026-11-04T20:38:16Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1042,
+      "started_at_utc": "2026-11-04T20:51:23Z",
+      "finished_at_utc": "2026-11-04T20:51:24Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 718,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.282,
-        "build_firmware": 0.468,
-        "run_smoke": 0.281
+        "build_cli": 0.289,
+        "build_firmware": 0.161,
+        "run_smoke": 0.257
       },
       "stages_ms": {
-        "build_cli": 282,
-        "build_firmware": 468,
-        "run_smoke": 281
+        "build_cli": 289,
+        "build_firmware": 161,
+        "run_smoke": 257
       },
       "_artifact_path": "renesas-ek_ra2e1"
     },
@@ -4928,24 +4928,24 @@
       "script": "examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-ek_ra8m1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:16Z",
-      "finished_at_utc": "2026-11-04T20:38:17Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1182,
+      "started_at_utc": "2026-11-04T20:51:24Z",
+      "finished_at_utc": "2026-11-04T20:51:25Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 729,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.285,
-        "build_firmware": 0.587,
-        "run_smoke": 0.299
+        "build_cli": 0.275,
+        "build_firmware": 0.157,
+        "run_smoke": 0.287
       },
       "stages_ms": {
-        "build_cli": 285,
-        "build_firmware": 587,
-        "run_smoke": 299
+        "build_cli": 275,
+        "build_firmware": 157,
+        "run_smoke": 287
       },
       "_artifact_path": "renesas-ek_ra8m1"
     },
@@ -4966,24 +4966,24 @@
       "script": "examples/renode-onboarding/renesas-r7fa2e1a9-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-r7fa2e1a9.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:17Z",
-      "finished_at_utc": "2026-11-04T20:38:18Z",
+      "started_at_utc": "2026-11-04T20:51:25Z",
+      "finished_at_utc": "2026-11-04T20:51:25Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 982,
+      "elapsed_ms": 710,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.281,
-        "build_firmware": 0.422,
-        "run_smoke": 0.269
+        "build_cli": 0.285,
+        "build_firmware": 0.157,
+        "run_smoke": 0.258
       },
       "stages_ms": {
-        "build_cli": 281,
-        "build_firmware": 422,
-        "run_smoke": 269
+        "build_cli": 285,
+        "build_firmware": 157,
+        "run_smoke": 258
       },
       "_artifact_path": "renesas-r7fa2e1a9"
     },
@@ -5004,24 +5004,24 @@
       "script": "examples/renode-onboarding/renesas-r7fa2l1a-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-r7fa2l1a.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:18Z",
-      "finished_at_utc": "2026-11-04T20:38:19Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1028,
+      "started_at_utc": "2026-11-04T20:51:25Z",
+      "finished_at_utc": "2026-11-04T20:51:26Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 702,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.289,
-        "build_firmware": 0.46,
-        "run_smoke": 0.27
+        "build_cli": 0.282,
+        "build_firmware": 0.154,
+        "run_smoke": 0.255
       },
       "stages_ms": {
-        "build_cli": 289,
-        "build_firmware": 460,
-        "run_smoke": 270
+        "build_cli": 282,
+        "build_firmware": 154,
+        "run_smoke": 255
       },
       "_artifact_path": "renesas-r7fa2l1a"
     },
@@ -5042,24 +5042,24 @@
       "script": "examples/renode-onboarding/renesas-r7fa4m1a-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-r7fa4m1a.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:19Z",
-      "finished_at_utc": "2026-11-04T20:38:20Z",
+      "started_at_utc": "2026-11-04T20:51:26Z",
+      "finished_at_utc": "2026-11-04T20:51:27Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 732,
+      "elapsed_ms": 713,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.298,
-        "build_firmware": 0.157,
-        "run_smoke": 0.267
+        "build_cli": 0.274,
+        "build_firmware": 0.159,
+        "run_smoke": 0.268
       },
       "stages_ms": {
-        "build_cli": 298,
-        "build_firmware": 157,
-        "run_smoke": 267
+        "build_cli": 274,
+        "build_firmware": 159,
+        "run_smoke": 268
       },
       "_artifact_path": "renesas-r7fa4m1a"
     },
@@ -5080,24 +5080,24 @@
       "script": "examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-r7fa6m5b.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:20Z",
-      "finished_at_utc": "2026-11-04T20:38:21Z",
+      "started_at_utc": "2026-11-04T20:51:27Z",
+      "finished_at_utc": "2026-11-04T20:51:28Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 966,
+      "elapsed_ms": 718,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.282,
-        "build_firmware": 0.41,
-        "run_smoke": 0.264
+        "build_cli": 0.278,
+        "build_firmware": 0.171,
+        "run_smoke": 0.258
       },
       "stages_ms": {
-        "build_cli": 282,
-        "build_firmware": 410,
-        "run_smoke": 264
+        "build_cli": 278,
+        "build_firmware": 171,
+        "run_smoke": 258
       },
       "_artifact_path": "renesas-r7fa6m5b"
     },
@@ -5118,24 +5118,24 @@
       "script": "examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-r7fa8m1a.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:21Z",
-      "finished_at_utc": "2026-11-04T20:38:22Z",
+      "started_at_utc": "2026-11-04T20:51:28Z",
+      "finished_at_utc": "2026-11-04T20:51:28Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 998,
+      "elapsed_ms": 713,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.281,
-        "build_firmware": 0.431,
-        "run_smoke": 0.276
+        "build_cli": 0.272,
+        "build_firmware": 0.157,
+        "run_smoke": 0.273
       },
       "stages_ms": {
-        "build_cli": 281,
-        "build_firmware": 431,
-        "run_smoke": 276
+        "build_cli": 272,
+        "build_firmware": 157,
+        "run_smoke": 273
       },
       "_artifact_path": "renesas-r7fa8m1a"
     },
@@ -5326,24 +5326,24 @@
       "script": "examples/renode-onboarding/riscv_virt-smoke.yaml",
       "system": "configs/systems/onboarding/riscv_virt.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:22Z",
-      "finished_at_utc": "2026-11-04T20:38:23Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1047,
+      "started_at_utc": "2026-11-04T20:51:28Z",
+      "finished_at_utc": "2026-11-04T20:51:29Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 733,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.288,
-        "build_firmware": 0.43,
-        "run_smoke": 0.315
+        "build_cli": 0.27,
+        "build_firmware": 0.159,
+        "run_smoke": 0.292
       },
       "stages_ms": {
-        "build_cli": 288,
-        "build_firmware": 430,
-        "run_smoke": 315
+        "build_cli": 270,
+        "build_firmware": 159,
+        "run_smoke": 292
       },
       "_artifact_path": "riscv_virt"
     },
@@ -5364,24 +5364,24 @@
       "script": "examples/renode-onboarding/s32k118-smoke.yaml",
       "system": "configs/systems/onboarding/s32k118.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:23Z",
-      "finished_at_utc": "2026-11-04T20:38:24Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1015,
+      "started_at_utc": "2026-11-04T20:51:29Z",
+      "finished_at_utc": "2026-11-04T20:51:30Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 732,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.286,
-        "build_firmware": 0.443,
-        "run_smoke": 0.273
+        "build_cli": 0.273,
+        "build_firmware": 0.176,
+        "run_smoke": 0.272
       },
       "stages_ms": {
-        "build_cli": 286,
-        "build_firmware": 443,
-        "run_smoke": 273
+        "build_cli": 273,
+        "build_firmware": 176,
+        "run_smoke": 272
       },
       "_artifact_path": "s32k118"
     },
@@ -5504,24 +5504,24 @@
       "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
       "system": "configs/systems/onboarding/sam4s_xplained.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:24Z",
-      "finished_at_utc": "2026-11-04T20:38:25Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1106,
+      "started_at_utc": "2026-11-04T20:51:30Z",
+      "finished_at_utc": "2026-11-04T20:51:31Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 733,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.292,
-        "build_firmware": 0.488,
-        "run_smoke": 0.316
+        "build_cli": 0.273,
+        "build_firmware": 0.156,
+        "run_smoke": 0.294
       },
       "stages_ms": {
-        "build_cli": 292,
-        "build_firmware": 488,
-        "run_smoke": 316
+        "build_cli": 273,
+        "build_firmware": 156,
+        "run_smoke": 294
       },
       "_artifact_path": "sam4s_xplained"
     },
@@ -5542,24 +5542,24 @@
       "script": "examples/renode-onboarding/sam_e70-smoke.yaml",
       "system": "configs/systems/onboarding/sam_e70.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:25Z",
-      "finished_at_utc": "2026-11-04T20:38:26Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1030,
+      "started_at_utc": "2026-11-04T20:51:31Z",
+      "finished_at_utc": "2026-11-04T20:51:31Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 715,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.282,
-        "build_firmware": 0.452,
-        "run_smoke": 0.285
+        "build_cli": 0.278,
+        "build_firmware": 0.153,
+        "run_smoke": 0.272
       },
       "stages_ms": {
-        "build_cli": 282,
-        "build_firmware": 452,
-        "run_smoke": 285
+        "build_cli": 278,
+        "build_firmware": 153,
+        "run_smoke": 272
       },
       "_artifact_path": "sam_e70"
     },
@@ -5580,24 +5580,24 @@
       "script": "examples/renode-onboarding/sifive-fe310-smoke.yaml",
       "system": "configs/systems/onboarding/sifive-fe310.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:26Z",
-      "finished_at_utc": "2026-11-04T20:38:27Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1066,
+      "started_at_utc": "2026-11-04T20:51:31Z",
+      "finished_at_utc": "2026-11-04T20:51:32Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 762,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.319,
-        "build_firmware": 0.456,
-        "run_smoke": 0.281
+        "build_cli": 0.289,
+        "build_firmware": 0.178,
+        "run_smoke": 0.286
       },
       "stages_ms": {
-        "build_cli": 319,
-        "build_firmware": 456,
-        "run_smoke": 281
+        "build_cli": 289,
+        "build_firmware": 178,
+        "run_smoke": 286
       },
       "_artifact_path": "sifive-fe310"
     },
@@ -5618,24 +5618,24 @@
       "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
       "system": "configs/systems/onboarding/sifive-fu540.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:27Z",
-      "finished_at_utc": "2026-11-04T20:38:28Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1021,
+      "started_at_utc": "2026-11-04T20:51:32Z",
+      "finished_at_utc": "2026-11-04T20:51:33Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 756,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.44,
-        "run_smoke": 0.293
+        "build_cli": 0.287,
+        "build_firmware": 0.16,
+        "run_smoke": 0.298
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 440,
-        "run_smoke": 293
+        "build_cli": 287,
+        "build_firmware": 160,
+        "run_smoke": 298
       },
       "_artifact_path": "sifive-fu540"
     },
@@ -5656,24 +5656,24 @@
       "script": "examples/renode-onboarding/sifive-fu740-smoke.yaml",
       "system": "configs/systems/onboarding/sifive-fu740.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:28Z",
-      "finished_at_utc": "2026-11-04T20:38:29Z",
+      "started_at_utc": "2026-11-04T20:51:33Z",
+      "finished_at_utc": "2026-11-04T20:51:34Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 999,
+      "elapsed_ms": 734,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.276,
-        "build_firmware": 0.449,
-        "run_smoke": 0.261
+        "build_cli": 0.281,
+        "build_firmware": 0.182,
+        "run_smoke": 0.26
       },
       "stages_ms": {
-        "build_cli": 276,
-        "build_firmware": 449,
-        "run_smoke": 261
+        "build_cli": 281,
+        "build_firmware": 182,
+        "run_smoke": 260
       },
       "_artifact_path": "sifive-fu740"
     },
@@ -7122,24 +7122,24 @@
       "script": "examples/renode-onboarding/stm32f042-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f042.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:29Z",
-      "finished_at_utc": "2026-11-04T20:38:30Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1065,
+      "started_at_utc": "2026-11-04T20:51:34Z",
+      "finished_at_utc": "2026-11-04T20:51:35Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 742,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.281,
-        "build_firmware": 0.46,
-        "run_smoke": 0.313
+        "build_cli": 0.279,
+        "build_firmware": 0.162,
+        "run_smoke": 0.29
       },
       "stages_ms": {
-        "build_cli": 281,
-        "build_firmware": 460,
-        "run_smoke": 313
+        "build_cli": 279,
+        "build_firmware": 162,
+        "run_smoke": 290
       },
       "_artifact_path": "stm32f042"
     },
@@ -7160,24 +7160,24 @@
       "script": "examples/renode-onboarding/stm32f072-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f072.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:30Z",
-      "finished_at_utc": "2026-11-04T20:38:31Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1026,
+      "started_at_utc": "2026-11-04T20:51:35Z",
+      "finished_at_utc": "2026-11-04T20:51:35Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 723,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.284,
-        "build_firmware": 0.443,
-        "run_smoke": 0.288
+        "build_cli": 0.274,
+        "build_firmware": 0.155,
+        "run_smoke": 0.284
       },
       "stages_ms": {
-        "build_cli": 284,
-        "build_firmware": 443,
-        "run_smoke": 288
+        "build_cli": 274,
+        "build_firmware": 155,
+        "run_smoke": 284
       },
       "_artifact_path": "stm32f072"
     },
@@ -7198,24 +7198,24 @@
       "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f072b_discovery.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:32Z",
-      "finished_at_utc": "2026-11-04T20:38:33Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1116,
+      "started_at_utc": "2026-11-04T20:51:35Z",
+      "finished_at_utc": "2026-11-04T20:51:36Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 810,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.283,
-        "build_firmware": 0.456,
-        "run_smoke": 0.367
+        "build_cli": 0.279,
+        "build_firmware": 0.155,
+        "run_smoke": 0.366
       },
       "stages_ms": {
-        "build_cli": 283,
-        "build_firmware": 456,
-        "run_smoke": 367
+        "build_cli": 279,
+        "build_firmware": 155,
+        "run_smoke": 366
       },
       "_artifact_path": "stm32f072b_discovery"
     },
@@ -7236,24 +7236,24 @@
       "script": "examples/renode-onboarding/stm32f103-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f103.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:33Z",
-      "finished_at_utc": "2026-11-04T20:38:34Z",
+      "started_at_utc": "2026-11-04T20:51:36Z",
+      "finished_at_utc": "2026-11-04T20:51:37Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1348,
+      "elapsed_ms": 1078,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.277,
-        "build_firmware": 0.426,
-        "run_smoke": 0.635
+        "build_cli": 0.27,
+        "build_firmware": 0.156,
+        "run_smoke": 0.64
       },
       "stages_ms": {
-        "build_cli": 277,
-        "build_firmware": 426,
-        "run_smoke": 635
+        "build_cli": 270,
+        "build_firmware": 156,
+        "run_smoke": 640
       },
       "_artifact_path": "stm32f103"
     },
@@ -7274,24 +7274,24 @@
       "script": "examples/renode-onboarding/stm32f4-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f4.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:34Z",
-      "finished_at_utc": "2026-11-04T20:38:36Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2262,
+      "started_at_utc": "2026-11-04T20:51:37Z",
+      "finished_at_utc": "2026-11-04T20:51:39Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1915,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.282,
-        "build_firmware": 0.468,
-        "run_smoke": 1.5
+        "build_cli": 0.288,
+        "build_firmware": 0.155,
+        "run_smoke": 1.461
       },
       "stages_ms": {
-        "build_cli": 282,
-        "build_firmware": 468,
-        "run_smoke": 1500
+        "build_cli": 288,
+        "build_firmware": 155,
+        "run_smoke": 1461
       },
       "_artifact_path": "stm32f4"
     },
@@ -7312,24 +7312,24 @@
       "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:36Z",
-      "finished_at_utc": "2026-11-04T20:38:37Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1016,
+      "started_at_utc": "2026-11-04T20:51:39Z",
+      "finished_at_utc": "2026-11-04T20:51:40Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 707,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.295,
-        "build_firmware": 0.437,
-        "run_smoke": 0.274
+        "build_cli": 0.279,
+        "build_firmware": 0.156,
+        "run_smoke": 0.262
       },
       "stages_ms": {
-        "build_cli": 295,
-        "build_firmware": 437,
-        "run_smoke": 274
+        "build_cli": 279,
+        "build_firmware": 156,
+        "run_smoke": 262
       },
       "_artifact_path": "stm32f401cdu6-blackpill"
     },
@@ -7350,23 +7350,23 @@
       "script": "examples/renode-onboarding/stm32f412-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f412.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:37Z",
-      "finished_at_utc": "2026-11-04T20:38:39Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1200,
+      "started_at_utc": "2026-11-04T20:51:40Z",
+      "finished_at_utc": "2026-11-04T20:51:41Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 922,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.283,
-        "build_firmware": 0.461,
+        "build_cli": 0.308,
+        "build_firmware": 0.155,
         "run_smoke": 0.447
       },
       "stages_ms": {
-        "build_cli": 283,
-        "build_firmware": 461,
+        "build_cli": 308,
+        "build_firmware": 155,
         "run_smoke": 447
       },
       "_artifact_path": "stm32f412"
@@ -7388,24 +7388,24 @@
       "script": "examples/renode-onboarding/stm32f429-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f429.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:39Z",
-      "finished_at_utc": "2026-11-04T20:38:40Z",
+      "started_at_utc": "2026-11-04T20:51:41Z",
+      "finished_at_utc": "2026-11-04T20:51:42Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 899,
+      "elapsed_ms": 961,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.158,
-        "run_smoke": 0.452
+        "build_cli": 0.324,
+        "build_firmware": 0.163,
+        "run_smoke": 0.464
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 158,
-        "run_smoke": 452
+        "build_cli": 324,
+        "build_firmware": 163,
+        "run_smoke": 464
       },
       "_artifact_path": "stm32f429"
     },
@@ -7426,24 +7426,24 @@
       "script": "examples/renode-onboarding/stm32f4_discovery-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f4_discovery.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:42Z",
-      "finished_at_utc": "2026-11-04T20:38:44Z",
+      "started_at_utc": "2026-11-04T20:51:44Z",
+      "finished_at_utc": "2026-11-04T20:51:46Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1946,
+      "elapsed_ms": 1920,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.29,
-        "build_firmware": 0.158,
-        "run_smoke": 1.488
+        "build_cli": 0.276,
+        "build_firmware": 0.157,
+        "run_smoke": 1.474
       },
       "stages_ms": {
-        "build_cli": 290,
-        "build_firmware": 158,
-        "run_smoke": 1488
+        "build_cli": 276,
+        "build_firmware": 157,
+        "run_smoke": 1474
       },
       "_artifact_path": "stm32f4_discovery"
     },
@@ -7464,24 +7464,24 @@
       "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f4_discovery-kit.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:40Z",
-      "finished_at_utc": "2026-11-04T20:38:42Z",
+      "started_at_utc": "2026-11-04T20:51:42Z",
+      "finished_at_utc": "2026-11-04T20:51:44Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1960,
+      "elapsed_ms": 1878,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.286,
-        "build_firmware": 0.159,
-        "run_smoke": 1.504
+        "build_cli": 0.274,
+        "build_firmware": 0.158,
+        "run_smoke": 1.435
       },
       "stages_ms": {
-        "build_cli": 286,
-        "build_firmware": 159,
-        "run_smoke": 1504
+        "build_cli": 274,
+        "build_firmware": 158,
+        "run_smoke": 1435
       },
       "_artifact_path": "stm32f4_discovery-kit"
     },
@@ -7502,24 +7502,24 @@
       "script": "examples/renode-onboarding/stm32f746-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f746.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:44Z",
-      "finished_at_utc": "2026-11-04T20:38:44Z",
+      "started_at_utc": "2026-11-04T20:51:46Z",
+      "finished_at_utc": "2026-11-04T20:51:47Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 750,
+      "elapsed_ms": 724,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.295,
-        "build_firmware": 0.18,
-        "run_smoke": 0.264
+        "build_cli": 0.291,
+        "build_firmware": 0.162,
+        "run_smoke": 0.26
       },
       "stages_ms": {
-        "build_cli": 295,
-        "build_firmware": 180,
-        "run_smoke": 264
+        "build_cli": 291,
+        "build_firmware": 162,
+        "run_smoke": 260
       },
       "_artifact_path": "stm32f746"
     },
@@ -7540,24 +7540,24 @@
       "script": "examples/renode-onboarding/stm32f777-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f777.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:44Z",
-      "finished_at_utc": "2026-11-04T20:38:45Z",
+      "started_at_utc": "2026-11-04T20:51:47Z",
+      "finished_at_utc": "2026-11-04T20:51:47Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 733,
+      "elapsed_ms": 702,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.28,
-        "build_firmware": 0.174,
-        "run_smoke": 0.271
+        "build_cli": 0.273,
+        "build_firmware": 0.158,
+        "run_smoke": 0.26
       },
       "stages_ms": {
-        "build_cli": 280,
-        "build_firmware": 174,
-        "run_smoke": 271
+        "build_cli": 273,
+        "build_firmware": 158,
+        "run_smoke": 260
       },
       "_artifact_path": "stm32f777"
     },
@@ -7578,24 +7578,24 @@
       "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f7_discovery-bb.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:45Z",
-      "finished_at_utc": "2026-11-04T20:38:46Z",
+      "started_at_utc": "2026-11-04T20:51:47Z",
+      "finished_at_utc": "2026-11-04T20:51:48Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 731,
+      "elapsed_ms": 716,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.291,
-        "build_firmware": 0.164,
-        "run_smoke": 0.267
+        "build_cli": 0.276,
+        "build_firmware": 0.175,
+        "run_smoke": 0.254
       },
       "stages_ms": {
-        "build_cli": 291,
-        "build_firmware": 164,
-        "run_smoke": 267
+        "build_cli": 276,
+        "build_firmware": 175,
+        "run_smoke": 254
       },
       "_artifact_path": "stm32f7_discovery-bb"
     },
@@ -7616,24 +7616,24 @@
       "script": "examples/renode-onboarding/stm32h7-smoke.yaml",
       "system": "configs/systems/onboarding/stm32h7.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:46Z",
-      "finished_at_utc": "2026-11-04T20:38:48Z",
+      "started_at_utc": "2026-11-04T20:51:48Z",
+      "finished_at_utc": "2026-11-04T20:51:50Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1884,
+      "elapsed_ms": 1916,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.274,
-        "build_firmware": 0.156,
-        "run_smoke": 1.443
+        "build_cli": 0.276,
+        "build_firmware": 0.165,
+        "run_smoke": 1.464
       },
       "stages_ms": {
-        "build_cli": 274,
-        "build_firmware": 156,
-        "run_smoke": 1443
+        "build_cli": 276,
+        "build_firmware": 165,
+        "run_smoke": 1464
       },
       "_artifact_path": "stm32h7"
     },
@@ -7654,24 +7654,24 @@
       "script": "examples/renode-onboarding/stm32h743-smoke.yaml",
       "system": "configs/systems/onboarding/stm32h743.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:48Z",
-      "finished_at_utc": "2026-11-04T20:38:50Z",
+      "started_at_utc": "2026-11-04T20:51:50Z",
+      "finished_at_utc": "2026-11-04T20:51:52Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1965,
+      "elapsed_ms": 1894,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.293,
-        "build_firmware": 0.161,
-        "run_smoke": 1.501
+        "build_cli": 0.297,
+        "build_firmware": 0.163,
+        "run_smoke": 1.423
       },
       "stages_ms": {
-        "build_cli": 293,
-        "build_firmware": 161,
-        "run_smoke": 1501
+        "build_cli": 297,
+        "build_firmware": 163,
+        "run_smoke": 1423
       },
       "_artifact_path": "stm32h743"
     },
@@ -7692,24 +7692,24 @@
       "script": "examples/renode-onboarding/stm32h747-smoke.yaml",
       "system": "configs/systems/onboarding/stm32h747.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:52Z",
-      "finished_at_utc": "2026-11-04T20:38:54Z",
+      "started_at_utc": "2026-11-04T20:51:54Z",
+      "finished_at_utc": "2026-11-04T20:51:56Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1886,
+      "elapsed_ms": 2000,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.292,
-        "build_firmware": 0.156,
-        "run_smoke": 1.429
+        "build_cli": 0.274,
+        "build_firmware": 0.158,
+        "run_smoke": 1.556
       },
       "stages_ms": {
-        "build_cli": 292,
-        "build_firmware": 156,
-        "run_smoke": 1429
+        "build_cli": 274,
+        "build_firmware": 158,
+        "run_smoke": 1556
       },
       "_artifact_path": "stm32h747"
     },
@@ -7730,24 +7730,24 @@
       "script": "examples/renode-onboarding/stm32h747-disco-smoke.yaml",
       "system": "configs/systems/onboarding/stm32h747-disco.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:50Z",
-      "finished_at_utc": "2026-11-04T20:38:52Z",
+      "started_at_utc": "2026-11-04T20:51:52Z",
+      "finished_at_utc": "2026-11-04T20:51:54Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1926,
+      "elapsed_ms": 1944,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.304,
-        "build_firmware": 0.158,
-        "run_smoke": 1.453
+        "build_cli": 0.292,
+        "build_firmware": 0.156,
+        "run_smoke": 1.486
       },
       "stages_ms": {
-        "build_cli": 304,
-        "build_firmware": 158,
-        "run_smoke": 1453
+        "build_cli": 292,
+        "build_firmware": 156,
+        "run_smoke": 1486
       },
       "_artifact_path": "stm32h747-disco"
     },
@@ -7768,24 +7768,24 @@
       "script": "examples/renode-onboarding/stm32h753-smoke.yaml",
       "system": "configs/systems/onboarding/stm32h753.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:54Z",
-      "finished_at_utc": "2026-11-04T20:38:56Z",
+      "started_at_utc": "2026-11-04T20:51:56Z",
+      "finished_at_utc": "2026-11-04T20:51:58Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1893,
+      "elapsed_ms": 1960,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.29,
-        "build_firmware": 0.161,
-        "run_smoke": 1.431
+        "build_cli": 0.283,
+        "build_firmware": 0.156,
+        "run_smoke": 1.51
       },
       "stages_ms": {
-        "build_cli": 290,
-        "build_firmware": 161,
-        "run_smoke": 1431
+        "build_cli": 283,
+        "build_firmware": 156,
+        "run_smoke": 1510
       },
       "_artifact_path": "stm32h753"
     },
@@ -7806,24 +7806,24 @@
       "script": "examples/renode-onboarding/stm32l071-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l071.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:56Z",
-      "finished_at_utc": "2026-11-04T20:38:57Z",
+      "started_at_utc": "2026-11-04T20:51:58Z",
+      "finished_at_utc": "2026-11-04T20:51:59Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 998,
+      "elapsed_ms": 720,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.282,
-        "build_firmware": 0.419,
-        "run_smoke": 0.287
+        "build_cli": 0.273,
+        "build_firmware": 0.158,
+        "run_smoke": 0.279
       },
       "stages_ms": {
-        "build_cli": 282,
-        "build_firmware": 419,
-        "run_smoke": 287
+        "build_cli": 273,
+        "build_firmware": 158,
+        "run_smoke": 279
       },
       "_artifact_path": "stm32l071"
     },
@@ -7844,24 +7844,24 @@
       "script": "examples/renode-onboarding/stm32l072-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l072.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:57Z",
-      "finished_at_utc": "2026-11-04T20:38:58Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1027,
+      "started_at_utc": "2026-11-04T20:51:59Z",
+      "finished_at_utc": "2026-11-04T20:52:00Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 714,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.276,
-        "build_firmware": 0.444,
-        "run_smoke": 0.298
+        "build_cli": 0.271,
+        "build_firmware": 0.153,
+        "run_smoke": 0.281
       },
       "stages_ms": {
-        "build_cli": 276,
-        "build_firmware": 444,
-        "run_smoke": 298
+        "build_cli": 271,
+        "build_firmware": 153,
+        "run_smoke": 281
       },
       "_artifact_path": "stm32l072"
     },
@@ -7882,24 +7882,24 @@
       "script": "examples/renode-onboarding/stm32l151-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l151.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:58Z",
-      "finished_at_utc": "2026-11-04T20:38:59Z",
+      "started_at_utc": "2026-11-04T20:52:00Z",
+      "finished_at_utc": "2026-11-04T20:52:00Z",
       "elapsed_seconds": 1,
-      "elapsed_ms": 990,
+      "elapsed_ms": 705,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.278,
-        "build_firmware": 0.431,
-        "run_smoke": 0.273
+        "build_cli": 0.273,
+        "build_firmware": 0.157,
+        "run_smoke": 0.264
       },
       "stages_ms": {
-        "build_cli": 278,
-        "build_firmware": 431,
-        "run_smoke": 273
+        "build_cli": 273,
+        "build_firmware": 157,
+        "run_smoke": 264
       },
       "_artifact_path": "stm32l151"
     },
@@ -7920,24 +7920,24 @@
       "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l552.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:38:59Z",
-      "finished_at_utc": "2026-11-04T20:39:01Z",
+      "started_at_utc": "2026-11-04T20:52:00Z",
+      "finished_at_utc": "2026-11-04T20:52:02Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1958,
+      "elapsed_ms": 1604,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.277,
-        "build_firmware": 0.468,
-        "run_smoke": 1.203
+        "build_cli": 0.271,
+        "build_firmware": 0.155,
+        "run_smoke": 1.167
       },
       "stages_ms": {
-        "build_cli": 277,
-        "build_firmware": 468,
-        "run_smoke": 1203
+        "build_cli": 271,
+        "build_firmware": 155,
+        "run_smoke": 1167
       },
       "_artifact_path": "stm32l552"
     },
@@ -7958,24 +7958,24 @@
       "script": "examples/renode-onboarding/stm32w108-boot-smoke.yaml",
       "system": "configs/systems/onboarding/stm32w108.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:39:01Z",
-      "finished_at_utc": "2026-11-04T20:39:02Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1061,
+      "started_at_utc": "2026-11-04T20:52:02Z",
+      "finished_at_utc": "2026-11-04T20:52:03Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 713,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.308,
-        "build_firmware": 0.446,
-        "run_smoke": 0.296
+        "build_cli": 0.278,
+        "build_firmware": 0.161,
+        "run_smoke": 0.264
       },
       "stages_ms": {
-        "build_cli": 308,
-        "build_firmware": 446,
-        "run_smoke": 296
+        "build_cli": 278,
+        "build_firmware": 161,
+        "run_smoke": 264
       },
       "_artifact_path": "stm32w108"
     },
@@ -7996,24 +7996,24 @@
       "script": "examples/renode-onboarding/stm32wba52-smoke.yaml",
       "system": "configs/systems/onboarding/stm32wba52.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:39:02Z",
-      "finished_at_utc": "2026-11-04T20:39:04Z",
+      "started_at_utc": "2026-11-04T20:52:03Z",
+      "finished_at_utc": "2026-11-04T20:52:04Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1658,
+      "elapsed_ms": 1643,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.283,
-        "build_firmware": 0.155,
-        "run_smoke": 1.21
+        "build_cli": 0.271,
+        "build_firmware": 0.157,
+        "run_smoke": 1.204
       },
       "stages_ms": {
-        "build_cli": 283,
-        "build_firmware": 155,
-        "run_smoke": 1210
+        "build_cli": 271,
+        "build_firmware": 157,
+        "run_smoke": 1204
       },
       "_artifact_path": "stm32wba52"
     },
@@ -8204,24 +8204,24 @@
       "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml",
       "system": "configs/systems/onboarding/vegaboard_ri5cy.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-04T20:39:04Z",
-      "finished_at_utc": "2026-11-04T20:39:05Z",
+      "started_at_utc": "2026-11-04T20:52:04Z",
+      "finished_at_utc": "2026-11-04T20:52:06Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1671,
+      "elapsed_ms": 1295,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.296,
-        "build_firmware": 0.494,
-        "run_smoke": 0.87
+        "build_cli": 0.281,
+        "build_firmware": 0.156,
+        "run_smoke": 0.848
       },
       "stages_ms": {
-        "build_cli": 296,
-        "build_firmware": 494,
-        "run_smoke": 870
+        "build_cli": 281,
+        "build_firmware": 156,
+        "run_smoke": 848
       },
       "_artifact_path": "vegaboard_ri5cy"
     },
