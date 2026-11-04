@@ -1765,6 +1765,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-f410rb-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-f411re-smoke"
 version = "0.1.0"
 dependencies = [
