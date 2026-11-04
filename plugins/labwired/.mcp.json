@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "labwired": {
+      "type": "http",
+      "url": "https://api.labwired.com/mcp"
+    }
+  }
+}
