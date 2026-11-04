@@ -1,0 +1,12 @@
+# Arduino Nano R4 (ABX00142): narrow smoke profile for LED_BUILTIN on P204.
+# No other on-board or header peripherals are claimed by this system.
+name: "arduino-nano-r4"
+chip: "../chips/ra4m1-nano-r4-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "port2"
+    pin: 4   # RA4M1 P204 / ArduinoCore-renesas NANOR4 variant pin 22.
+    signal: "output"
+    active_high: true

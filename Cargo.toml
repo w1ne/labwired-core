@@ -20,6 +20,7 @@ members = [
     "crates/firmware-atsamd51-demo",
     "crates/firmware-atsamd51-pybadge-demo",
     "crates/firmware-ra4m1-demo",
+    "crates/firmware-arduino-nano-r4-smoke",
     "crates/firmware-uno-r4-wifi-smoke",
     "crates/firmware-imxrt1064-demo",
     "crates/firmware-teensy4-smoke",
@@ -291,6 +292,10 @@ overflow-checks = true
 # (opt-level = "s") with single-codegen-unit for cleaner inlining. Cargo does
 # not support globs or inheritance in profile sections, so each crate gets
 # its own block. Keep alphabetical.
+[profile.release.package.firmware-arduino-nano-r4-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-ci-fixture]
 codegen-units = 1
 opt-level = "s"
