@@ -6,5 +6,5 @@ inputs:
 limits:
   max_steps: 100000
 assertions:
-  - uart_contains: "EFM32G842 USART0 smoke"
+  - uart_contains: "EFM32G USART0 smoke"
   - expected_stop_reason: max_steps

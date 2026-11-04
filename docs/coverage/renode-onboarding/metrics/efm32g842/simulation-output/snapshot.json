@@ -4,8 +4,8 @@
     "type": "arm",
     "registers": [
       1073790992,
-      24,
-      4294867296,
+      10,
+      2147483648,
       2147483648,
       0,
       0,
@@ -15,13 +15,13 @@
       0,
       0,
       0,
-      134218936,
+      0,
       536887280,
-      10,
-      134218914
+      134219623,
+      134219612
     ],
-    "pc": 134218914,
-    "xpsr": 1627389952,
+    "pc": 134219612,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "cdaac97e012346287e38973abc5266435ff0f975c5404d754f78ad4e82b0e7de",
+  "firmware_hash": "bce41cf1e3a3860c3047148a2539867de3c523877fa4c54ac8cd945eb93eae1a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32g842-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32g842.yaml",

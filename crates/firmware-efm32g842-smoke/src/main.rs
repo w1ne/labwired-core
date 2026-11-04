@@ -26,7 +26,7 @@ fn putc(byte: u8) {
 #[entry]
 fn main() -> ! {
     unsafe { write_volatile(USART0_CMD, CMD_TXEN) };
-    for byte in b"EFM32G842 USART0 smoke\r\n" {
+    for byte in b"EFM32G USART0 smoke\r\n" {
         putc(*byte);
     }
     loop {

@@ -30,7 +30,7 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "EFM32G842 USART0 smoke"
+        "uart_contains": "EFM32G USART0 smoke"
       },
       "passed": true
     },
@@ -45,8 +45,8 @@
     "type": "arm",
     "registers": [
       1073790992,
-      24,
-      4294867296,
+      10,
+      2147483648,
       2147483648,
       0,
       0,
@@ -56,13 +56,13 @@
       0,
       0,
       0,
-      134218936,
+      0,
       536887280,
-      10,
-      134218914
+      134219623,
+      134219612
     ],
-    "pc": 134218914,
-    "xpsr": 1627389952,
+    "pc": 134219612,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -74,7 +74,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "cdaac97e012346287e38973abc5266435ff0f975c5404d754f78ad4e82b0e7de",
+  "firmware_hash": "bce41cf1e3a3860c3047148a2539867de3c523877fa4c54ac8cd945eb93eae1a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32g842-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32g842.yaml",
@@ -132,7 +132,7 @@
   "uart_lines": {
     "lines": [
       {
-        "text": "EFM32G842 USART0 smoke",
+        "text": "EFM32G USART0 smoke",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -142,14 +142,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1232,
+    "text_bytes": 1900,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 1232,
+    "flash_used_bytes": 1900,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 0.94,
+    "flash_used_pct": 1.45,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -175,13 +175,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 86,
+    "memory_reads": 171,
     "memory_writes": 6,
-    "peripheral_accesses": 49,
+    "peripheral_accesses": 43,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134218914,
+        "pc": 134219612,
         "count": 390,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
