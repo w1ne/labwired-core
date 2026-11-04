@@ -1,0 +1,6 @@
+/* Renode RA2E1 code flash @ 0x0 and SRAM @ 0x20004000. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 128K
+  RAM   : ORIGIN = 0x20004000, LENGTH = 16K
+}

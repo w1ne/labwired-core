@@ -43,6 +43,7 @@ on:
       - "crates/firmware-ek-ra8m1-smoke/**"
       - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
+      - "crates/firmware-renesas-ek-ra2e1-smoke/**"
       - "crates/firmware-s32k388-onboarding-smoke/**"
       - "crates/firmware-s32k118-smoke/**"
       - "crates/firmware-mimxrt700-evk-smoke/**"
@@ -86,6 +87,14 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml
             system: configs/systems/onboarding/renesas-r7fa6m5b.yaml
+          # RA2E1's imported descriptor had stale flash/SRAM bounds and
+          # generated peripheral claims. This smoke covers its sourced M23
+          # core, code flash, and SRAM only.
+          - id: renesas-ek_ra2e1
+            crate: firmware-renesas-ek-ra2e1-smoke
+            target: thumbv8m.base-none-eabi
+            script: examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml
+            system: configs/systems/onboarding/renesas-ek_ra2e1.yaml
           # S32K388's generated profile included unsupported peripheral claims;
           # this fixture exercises only the sourced Cortex-M7 and memory map.
           - id: nxp-s32k388
@@ -612,7 +621,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv64imac-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,thumbv8m.base-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv64imac-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
