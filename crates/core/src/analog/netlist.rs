@@ -91,7 +91,8 @@
 //! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
 //! breakdown voltage; `TRS1`/`TRS2` adjust series resistance, `TTT1`/`TTT2`
 //! adjust transit time, and `TM1`/`TM2` adjust the depletion grading
-//! coefficient. Diode `CJO` and `VJ` remain fixed. A BJT
+//! coefficient; `CJO` and `VJ` follow the diode junction-capacitance
+//! temperature law. A BJT
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT charge remains at its
@@ -168,7 +169,7 @@
 //! `BF`/`BR`. Without instance `TEMP`, the historical fixed-300 K behavior is
 //! retained. `TRB*`/`TRM*` (also `TRBM*`)/`TIRB*`/`TRC*`/`TRE*` adjust
 //! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
-//! all with `ΔT = TEMP − TNOM`. Junction depletion charge remains nominal.
+//! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge remains nominal.
 //! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
@@ -1860,8 +1861,8 @@ pub struct Diode {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: DiodeModel,
-    /// Model parameters with `TT` and `M` adjusted for this instance's
-    /// temperature.
+    /// Model parameters with `CJO`, `VJ`, `M`, and `TT` adjusted for this
+    /// instance's temperature.
     pub operating_model: DiodeModel,
     /// Model series resistance after applying the instance `TEMP`, in ohms.
     pub series_resistance_ohms: f64,
@@ -3406,6 +3407,18 @@ fn bind_models(
                 operating_model.tt = model.transit_time_seconds(device.temperature_celsius);
                 operating_model.m =
                     model.grading_coefficient_at_temperature(device.temperature_celsius);
+                if let Some(temperature_celsius) = device.temperature_celsius {
+                    let nominal_kelvin = model.tnom_celsius + 273.15;
+                    let temperature_kelvin = temperature_celsius + 273.15;
+                    (operating_model.cjo, operating_model.vj) =
+                        super::device::diode_depletion_parameters_at_temperature(
+                            model.cjo,
+                            model.vj,
+                            operating_model.m,
+                            nominal_kelvin,
+                            temperature_kelvin,
+                        );
+                }
                 if !operating_model.tt.is_finite() || operating_model.tt < 0.0 {
                     return Err(ctx.parse_err(
                         "temperature-adjusted diode TT must be finite and >= 0".to_string(),
@@ -3414,6 +3427,16 @@ fn bind_models(
                 if !operating_model.m.is_finite() || operating_model.m < 0.0 {
                     return Err(ctx.parse_err(
                         "temperature-adjusted diode M must be finite and >= 0".to_string(),
+                    ));
+                }
+                if !operating_model.cjo.is_finite()
+                    || operating_model.cjo < 0.0
+                    || !operating_model.vj.is_finite()
+                    || operating_model.vj <= 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted diode CJO must be finite and >= 0 and VJ must be finite and > 0"
+                            .to_string(),
                     ));
                 }
                 // A series resistance needs somewhere to drop its voltage, so

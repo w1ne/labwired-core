@@ -508,8 +508,10 @@ coefficient (default `N`). With instance `TEMP`, diode series resistance uses
 coefficients default to zero. Diode `TTT1`/`TTT2` similarly apply
 `TT(T) = TT · (1 + TTT1·ΔT + TTT2·ΔT²)` to diffusion and soft-recovery
 charge; both coefficients default to zero. `TM1`/`TM2` adjust the diode
-depletion grading coefficient as `M(T) = M · (1 + TM1·ΔT + TM2·ΔT²)`;
-`CJO` and `VJ` remain nominal. All four coefficients default to zero.
+depletion grading coefficient as `M(T) = M · (1 + TM1·ΔT + TM2·ΔT²)`.
+`VJ(T)` and `CJO(T)` follow ngspice's silicon junction-potential and depletion
+capacitance temperature equations using `TNOM`; all four polynomial
+coefficients default to zero.
 Gummel–Poon BJT
 transport with `VAF`/`VAR` base-width modulation, optional
 `IKF`/`IKR` high-injection rolloff (both default to infinity) with optional
@@ -552,9 +554,9 @@ thermal voltage and saturation current, plus `TCV`/`TBV1` for breakdown and
 the matching temperature adjustment for `ISE`/`ISC` using their `NE`/`NC`
 emission coefficients; it also sets the junction thermal voltage used by both
 conduction and transit charge.
-Diode `CJO` and `VJ`, BJT junction depletion charge and terminal resistances
-remain at nominal values. Diode `TT` and grading coefficient `M` follow
-`TTT1`/`TTT2` and `TM1`/`TM2` when provided. JFET and MOSFET models do not yet have a
+Diode `CJO`, `VJ`, `M`, and `TT` follow their SPICE temperature laws when an
+instance `TEMP` is supplied. BJT junction depletion charge and terminal
+resistances remain at nominal values. JFET and MOSFET models do not yet have a
 temperature model. These are external instance temperatures; self-heating is
 not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the

@@ -65,6 +65,35 @@ mod analog {
         ((actual - expected) / expected).abs()
     }
 
+    /// ngspice's level-1 diode `VJ(T)`/`CJO(T)` equations, calculated here
+    /// independently of the solver's operating-model adjustment.
+    fn spice_diode_depletion_parameters(
+        cjo: f64,
+        vj: f64,
+        m: f64,
+        nominal_celsius: f64,
+        temperature_celsius: f64,
+    ) -> (f64, f64) {
+        let nominal_kelvin = nominal_celsius + 273.15;
+        let temperature_kelvin = temperature_celsius + 273.15;
+        if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+            return (cjo, vj);
+        }
+        let nominal_vt = 1.380_649e-23 * nominal_kelvin / 1.602_176_634e-19;
+        let vt = 1.380_649e-23 * temperature_kelvin / 1.602_176_634e-19;
+        let eg_nominal =
+            1.16 - 7.02e-4 * nominal_kelvin * nominal_kelvin / (nominal_kelvin + 1108.0);
+        let eg = 1.16
+            - 7.02e-4 * temperature_kelvin * temperature_kelvin / (temperature_kelvin + 1108.0);
+        let ratio = temperature_kelvin / nominal_kelvin;
+        let temperature_vj =
+            vj * ratio - vt * (3.0 * ratio.ln() + eg_nominal / nominal_vt - eg / vt);
+        let temperature_cjo = cjo
+            * (1.0
+                + m * (4.0e-4 * (temperature_kelvin - nominal_kelvin) - temperature_vj / vj + 1.0));
+        (temperature_cjo, temperature_vj)
+    }
+
     // -----------------------------------------------------------------------
     // Diode
     // -----------------------------------------------------------------------
@@ -1049,10 +1078,17 @@ mod analog {
         for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
             for temperature in [tnom, 127.0] {
                 let expected_m = adjusted_m(temperature);
-                let make_solver = |model: String| {
+                let (expected_cjo, expected_vj) =
+                    spice_diode_depletion_parameters(cjo, vj, expected_m, tnom, temperature);
+                let make_solver = |model: String, instance_temperature: bool| {
+                    let temperature = if instance_temperature {
+                        format!(" TEMP={temperature}")
+                    } else {
+                        String::new()
+                    };
                     let netlist = format!(
                         "Vdrive drive 0 dc 0\nRdrive drive out {resistance}\n\
-                         D1 out 0 DMOD TEMP={temperature}\n.model DMOD D({model})\n"
+                         D1 out 0 DMOD{temperature}\n.model DMOD D({model})\n"
                     );
                     Solver::new(
                         parse_netlist(&netlist).expect("diode depletion-temperature deck parses"),
@@ -1062,11 +1098,21 @@ mod analog {
                 };
                 let common = format!("IS={is} N={n} TNOM={tnom} CJO={cjo} VJ={vj} FC=0.5");
                 let adjusted_model = format!("{common} M={m} TM1={tm1} TM2={tm2}");
-                let explicit_model = format!("{common} M={expected_m}");
+                let explicit_model = format!(
+                    "IS={is} N={n} TNOM={tnom} CJO={expected_cjo} VJ={expected_vj} FC=0.5 M={expected_m}"
+                );
                 let fixed_model = format!("{common} M={m}");
-                let mut actual = make_solver(adjusted_model);
-                let mut explicit = make_solver(explicit_model);
-                let mut fixed = make_solver(fixed_model);
+                let mut actual = make_solver(adjusted_model, true);
+                let mut explicit = make_solver(explicit_model, false);
+                let mut fixed = make_solver(fixed_model, true);
+                let actual_model = actual.circuit().diodes[0].operating_model;
+                assert!(
+                    (actual_model.cjo - expected_cjo).abs() < 1e-20
+                        && (actual_model.vj - expected_vj).abs() < 1e-14,
+                    "TEMP={temperature}: expected operating CJO={expected_cjo}, VJ={expected_vj}; got CJO={}, VJ={}",
+                    actual_model.cjo,
+                    actual_model.vj
+                );
 
                 for solver in [&mut actual, &mut explicit, &mut fixed] {
                     let drive = solver
@@ -1111,6 +1157,86 @@ mod analog {
             }
         }
         assert!(hot_effects.iter().all(|effect| *effect > 1e-6));
+    }
+
+    /// `TEMP` adjusts the diode junction potential and zero-bias capacitance
+    /// used by depletion charge. Compare the transient solution with a
+    /// separate nominal-temperature circuit whose CJO/VJ are set from the
+    /// ngspice temperature equations, and require a measurable change from the
+    /// unadjusted junction at hot and cold temperatures.
+    #[test]
+    fn diode_depletion_capacitance_and_potential_follow_instance_temperature() {
+        let (is, n, tnom_c, cjo, vj, m, fc) = (1e-30, 1.0, 26.85, 10e-9, 0.75, 0.65, 0.5);
+        let mut temperature_effects = Vec::new();
+
+        for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for temperature in [-40.0, tnom_c, 125.0] {
+                let (expected_cjo, expected_vj) =
+                    spice_diode_depletion_parameters(cjo, vj, m, tnom_c, temperature);
+                let make_solver = |device_temp: Option<f64>, depletion_model: String| {
+                    let temperature = device_temp
+                        .map(|value| format!(" TEMP={value}"))
+                        .unwrap_or_default();
+                    let netlist = format!(
+                        "Vdrive drive 0 dc 0\nRdrive drive out 1k\n\
+                         D1 out 0 DMOD{temperature}\n.model DMOD D({depletion_model})\n"
+                    );
+                    Solver::new(
+                        parse_netlist(&netlist).expect("diode depletion-temperature deck parses"),
+                        integration,
+                    )
+                    .expect("diode depletion-temperature solver builds")
+                };
+                let common = format!("IS={is} N={n} TNOM={tnom_c} M={m} FC={fc}");
+                let adjusted_model = format!("{common} CJO={cjo} VJ={vj}");
+                let explicit_model = format!("{common} CJO={expected_cjo} VJ={expected_vj}");
+                let mut actual = make_solver(Some(temperature), adjusted_model);
+                let mut explicit = make_solver(None, explicit_model);
+                let mut nominal = make_solver(None, format!("{common} CJO={cjo} VJ={vj}"));
+
+                for solver in [&mut actual, &mut explicit, &mut nominal] {
+                    let drive = solver
+                        .voltage_source_index("Vdrive")
+                        .expect("drive source exists");
+                    solver.set_voltage_source(drive, -1.0);
+                    solver
+                        .advance(2e-6)
+                        .expect("depletion temperature transient solves");
+                }
+
+                let out = actual.circuit().node("out").expect("output node exists");
+                let explicit_out = explicit
+                    .circuit()
+                    .node("out")
+                    .expect("explicit output node exists");
+                let nominal_out = nominal
+                    .circuit()
+                    .node("out")
+                    .expect("nominal output node exists");
+                let actual_voltage = actual.node_voltage(out);
+                let explicit_voltage = explicit.node_voltage(explicit_out);
+                assert!(
+                    (actual_voltage - explicit_voltage).abs() < 1e-8,
+                    "{integration:?} TEMP={temperature}: expected explicit CJO={expected_cjo} F, VJ={expected_vj} V voltage {explicit_voltage} V, got {actual_voltage} V"
+                );
+                assert!(
+                    relative(
+                        source_current(&actual, "Vdrive"),
+                        source_current(&explicit, "Vdrive")
+                    ) < 1e-6,
+                    "{integration:?} TEMP={temperature}: explicit CJO/VJ drive currents differ"
+                );
+                if (temperature - tnom_c).abs() > 1.0 {
+                    let effect = (actual_voltage - nominal.node_voltage(nominal_out)).abs();
+                    assert!(
+                        effect > 1e-5,
+                        "{integration:?} TEMP={temperature}: CJO/VJ temperature law must change solved depletion charge, difference={effect} V"
+                    );
+                    temperature_effects.push(effect);
+                }
+            }
+        }
+        assert!(temperature_effects.iter().all(|effect| *effect > 1e-5));
     }
 
     /// Depletion charge and transit charge share the diode's transient branch

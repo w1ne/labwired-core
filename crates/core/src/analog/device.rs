@@ -37,10 +37,9 @@
 //! and sidewall capacitance from `CJSW` times `PD`/`PS`, with separate `MJ`
 //! and `MJSW` grading coefficients.
 //! The diode and BJT support their documented explicit instance `TEMP` laws;
-//! diode transit time additionally uses `TTT1`/`TTT2`. BJT transit times use
-//! `TTF*`/`TTR*`, and terminal resistances use
-//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. Diode `CJO` and `VJ` remain nominal;
-//! `TM1`/`TM2` adjust its grading coefficient. Other parameters are taken at
+//! diode `CJO`, `VJ`, `M`, and transit time use their documented temperature
+//! equations. BJT transit times use `TTF*`/`TTR*`, and terminal resistances use
+//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. Other parameters are taken at
 //! [`TEMPERATURE_K`] as written. A `.model`
 //! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
@@ -106,6 +105,39 @@ pub fn diode_saturation_current_at_temperature(
     let log_factor =
         eg_ev / vt_nominal - eg_ev / vt + xti * ln(temperature_kelvin / nominal_kelvin);
     is_nominal * exp_clamped(log_factor / n)
+}
+
+/// SPICE diode zero-bias depletion capacitance and junction potential at an
+/// instance temperature, following ngspice's silicon Varshni temperature law.
+///
+/// `M` is supplied after its `TM1`/`TM2` adjustment. `CJO` and `VJ` are
+/// measured at `nominal_kelvin`; at that temperature this returns their exact
+/// input values. The `EG` model parameter belongs to the saturation-current
+/// law; the standard junction-potential correction uses the silicon bandgap
+/// temperature fit documented by ngspice.
+pub fn diode_depletion_parameters_at_temperature(
+    cjo: f64,
+    vj: f64,
+    m: f64,
+    nominal_kelvin: f64,
+    temperature_kelvin: f64,
+) -> (f64, f64) {
+    if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+        return (cjo, vj);
+    }
+
+    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let eg_nominal = 1.16 - 7.02e-4 * nominal_kelvin * nominal_kelvin / (nominal_kelvin + 1108.0);
+    let eg =
+        1.16 - 7.02e-4 * temperature_kelvin * temperature_kelvin / (temperature_kelvin + 1108.0);
+    let ratio = temperature_kelvin / nominal_kelvin;
+    let vj_at_temperature = vj * ratio - vt * (3.0 * ln(ratio) + eg_nominal / nominal_vt - eg / vt);
+    let cjo_at_temperature = cjo
+        * (1.0
+            + m * (4.0e-4 * (temperature_kelvin - nominal_kelvin) - vj_at_temperature / vj + 1.0));
+
+    (cjo_at_temperature, vj_at_temperature)
 }
 
 /// Conductance added across every pn junction, siemens.
