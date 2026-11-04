@@ -59,6 +59,7 @@ on:
       - "crates/firmware-s32k118-smoke/**"
       - "crates/firmware-mimxrt700-evk-smoke/**"
       - "crates/firmware-mimxrt798s-smoke/**"
+      - "crates/firmware-mimxrt595-evk-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/firmware-cv32e40p-smoke/**"
@@ -157,6 +158,14 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/s32k118-smoke.yaml
             system: configs/systems/onboarding/s32k118.yaml
+          # The imported imxrt500 scaffold is narrowed to the MIMXRT595S
+          # Cortex-M33, XIP/SRAM, modeled clock/reset/pin control, GPIO, and
+          # FLEXCOMM0 path exercised by this exact-system smoke.
+          - id: imxrt500
+            crate: firmware-mimxrt595-evk-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/imxrt500-smoke.yaml
+            system: configs/systems/onboarding/imxrt500.yaml
           # MIMXRT700 uses the Cortex-M33 CPU0, Renode's XIP0 mapping, and its
           # bounded CPU0 SRAM window. CPU1, DSP, and peripheral paths are not
           # part of this instruction and memory smoke.

@@ -1,0 +1,37 @@
+{
+  "target_id": "imxrt500",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-mimxrt595-evk-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/imxrt500-smoke.yaml",
+  "system": "configs/systems/onboarding/imxrt500.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T22:03:42Z",
+  "finished_at_utc": "2026-11-04T22:03:58Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15406,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-04T22:03:58.338150Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"cpu=cortex-m33 uart=flexcomm0 pselid=000000f1 fifosize=16\", \"fcb tag=42464346 vtor=08001000\", \"clk frodivsel=1 mai",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.339,
+    "build_firmware": 0.72,
+    "run_smoke": 0.332
+  },
+  "stages_ms": {
+    "build_cli": 14339,
+    "build_firmware": 720,
+    "run_smoke": 332
+  }
+}

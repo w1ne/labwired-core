@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="1" errors="0" time="0.031766">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ad8d9317b960f54b81900d84e23f62e5cc47257fd70e601beb2bd004cc86835b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.031766">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT595 EVK SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m33 uart=flexcomm0 pselid=000000f1 fifosize=16&quot;, &quot;fcb tag=42464346 vtor=08001000&quot;, &quot;clk frod…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;cpu=cortex-m33 uart=flexcomm0 pselid=000000f1 fifosize=16&quot;, &quot;fcb tag=42464346 vtor=08001000&quot;, &quot;clk frod…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=ad8d9317b960f54b81900d84e23f62e5cc47257fd70e601beb2bd004cc86835b
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt595-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/imxrt500.yaml
+script=examples/renode-onboarding/imxrt500-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT595 EVK SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;cpu=cortex-m33 uart=flexcomm0 pselid=000000f1 fifosize=16&quot;, &quot;fcb tag=42464346 vtor=08001000&quot;, &quot;clk frodivsel=1 mainclksela=1 pscctl0=00000100 pscctl1=0000000b&quot;, &quot;uart fclk=48000000 osr=16 brg=26 baud=115384&quot;, &quot;leds=off r=0 g=0 b=0 pin0=02000400&quot;, &quot;set red r=1 g=0 b=0 pin0=02004400&quot;, &quot;byte green r=1 g=1 b=0 pin0=02004400&quot;, &quot;word blue r=1 g=1 b=1 pin0=02004400&quot;, &quot;not red r=0 g=1 b=1 pin0=02000400&quot;, &quot;mpin red r=1 g=1 b=1 pin0=02004400&quot;, &quot;clr all r=0 g=0 b=0 pin0=02000400&quot;, &quot;sw1=1 sw2=1&quot;, &quot;hb=0 green=1&quot;, &quot;hb=1 green=0&quot;] }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
