@@ -65,6 +65,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv8m.main-none-eabi",
         "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml",
     },
+    "mimxrt798s": {
+        "crate": "firmware-mimxrt798s-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/mimxrt798s-smoke.yaml",
+    },
     "atsamd51g19a": {
         "crate": "firmware-atsamd51-demo",
         "target": "thumbv7em-none-eabi",

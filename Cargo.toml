@@ -109,6 +109,7 @@ members = [
     "crates/firmware-s32k388-onboarding-smoke",
     "crates/firmware-s32k118-smoke",
     "crates/firmware-mimxrt700-evk-smoke",
+    "crates/firmware-mimxrt798s-smoke",
     "crates/firmware-apollo4p-evb-smoke",
     "crates/firmware-s32k388-evb-smoke",
     "crates/firmware-mimxrt595-evk-smoke",

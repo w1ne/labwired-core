@@ -1,0 +1,14 @@
+# Cortex-M33 CPU0 and bounded memory execution on the exact imported MIMXRT798S
+# system. This does not exercise CPU1, DSPs, or any peripheral.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt798s-smoke"
+  system: "../../configs/systems/onboarding/mimxrt798s.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x20000000
+      expected_value: 0x00000143
+      size: 4
+  - expected_stop_reason: max_steps

@@ -1,5 +1,5 @@
-2026-11-04T14:29:44.215535Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f7_discovery-bb.yaml
-2026-11-04T14:29:44.216980Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-04T14:48:12.327026Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f7_discovery-bb.yaml
+2026-11-04T14:48:12.328460Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 799864 of 800000 device cycles (136 interpreted)
