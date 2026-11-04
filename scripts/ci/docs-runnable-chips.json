@@ -60,6 +60,12 @@
       "expect": "nRF54L15 boot OK",
       "note": "The README quickstart. Firmware is committed, so a clone is enough."
     },
+    "nrf54l10": {
+      "how": "example",
+      "script": "examples/nrf54l10/io-smoke.yaml",
+      "expect": "nRF54L10 boot OK",
+      "note": "Focused L10 memory profile on Nordic's documented nRF54L15-DK emulation target; UART and DK LED0 are tested."
+    },
     "nrf54lm20a": {
       "how": "example",
       "script": "examples/nrf54lm20a-snake/io-smoke.yaml",

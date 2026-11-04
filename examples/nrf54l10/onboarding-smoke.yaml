@@ -1,0 +1,13 @@
+# Build-output smoke for CI: exercise the freshly compiled nRF54L10 image.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nrf54l10-smoke"
+  system: "../../configs/systems/nrf54l10-on-nrf54l15-dk.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "nRF54L10 boot OK"
+  - gpio_edges:
+      pin: "gpio2:9"
+      min_edges: 16
+  - expected_stop_reason: max_steps

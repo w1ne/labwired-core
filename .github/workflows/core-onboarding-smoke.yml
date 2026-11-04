@@ -36,6 +36,10 @@ on:
       - "configs/chips/nrf52840-dk-led-smoke.yaml"
       - "configs/systems/nrf52840-dk-led-smoke.yaml"
       - "examples/nrf52840-dk/**"
+      - "crates/firmware-nrf54l10-smoke/**"
+      - "configs/chips/nrf54l10.yaml"
+      - "configs/systems/nrf54l10-on-nrf54l15-dk.yaml"
+      - "examples/nrf54l10/**"
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
       - "crates/firmware-nucleo-f413zh-smoke/**"
@@ -168,6 +172,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nrf52840-dk/onboarding-smoke.yaml
             system: configs/systems/nrf52840-dk-led-smoke.yaml
+          - id: nrf54l10-on-nrf54l15-dk
+            crate: firmware-nrf54l10-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nrf54l10/onboarding-smoke.yaml
+            system: configs/systems/nrf54l10-on-nrf54l15-dk.yaml
           - id: nucleo-wb55rg
             crate: firmware-nucleo-wb55rg-demo
             target: thumbv7em-none-eabi

@@ -80,6 +80,7 @@ members = [
     "crates/firmware-nrf52840-secure-boot",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-nrf5340-dk-demo",
+    "crates/firmware-nrf54l10-smoke",
     "crates/firmware-nucleo-f407-demo",
     "crates/firmware-f4-discovery-smoke",
     "crates/firmware-nucleo-f072rb-smoke",
