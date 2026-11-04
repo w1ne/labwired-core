@@ -3410,7 +3410,6 @@ mod tests {
         assert_eq!(cpu.sram[0xFE], 9, "return PC low byte was pushed");
     }
 
-    #[test]
     /// Classic (pre-AVRxt) tinyAVR must select their OWN model.
     ///
     /// Regression guard. Before these arms existed every one of these parts hit
@@ -3424,7 +3423,7 @@ mod tests {
     fn classic_tinyavr_selects_its_own_geometry_and_not_the_atmega328p() {
         // (name, model, flash, sram_start, ramend, sram_len)
         let cases = [
-            ("attiny13", AvrModel::Attiny13, 1 * 1024, 0x0060, 0x009F, 64),
+            ("attiny13", AvrModel::Attiny13, 1024, 0x0060, 0x009F, 64),
             (
                 "attiny25",
                 AvrModel::Attiny25,
@@ -3537,6 +3536,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn tinyavr_0_series_selects_exact_avrxt_flash_and_sram_geometry() {
         for (name, model, flash_size, sram_start, sram_len) in [
             ("attiny202", AvrModel::Attiny202, 2 * 1024, 0x3F80, 128),
