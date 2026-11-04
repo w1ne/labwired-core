@@ -1,0 +1,1 @@
+2026-11-04T06:53:31.949744Z ERROR labwired_cli::commands::test: Failed to parse Test Script YAML (expected schema_version: "1.0"): unknown field `name`, expected one of `schema_version`, `inputs`, `limits`, `assertions`, `stack_paint`, `faults`, `verdict`, `stimuli`, `uart_injections` at line 11 column 1

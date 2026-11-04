@@ -30,6 +30,7 @@ on:
       - "crates/firmware-stm32l151-smoke/**"
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
+      - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/cli/**"
@@ -153,6 +154,12 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32gg995-smoke.yaml
             system: configs/systems/onboarding/efm32gg995.yaml
+          # The PG12 profile is limited to its Cortex-M4F memory and USART0 path.
+          - id: efm32pg12
+            crate: firmware-efm32pg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efm32pg12-smoke.yaml
+            system: configs/systems/onboarding/efm32pg12.yaml
           # The Nano 33 BLE imported profile exposes only its actual nRF52840
           # memory, UARTE0, and GPIO0 smoke surface.
           - id: arduino_nano_33_ble
