@@ -208,7 +208,7 @@ impl Avr {
         if (op & 0xFF00) == 0x9B00 {
             let a = ((op >> 3) & 0x1F) as u8;
             let b = (op & 0x07) as u8;
-            let v = self.data_read(0x20 + a as u16, bus)?;
+            let v = self.data_read(self.io_data_address(a), bus)?;
             let mut next = next;
             if v & (1 << b) != 0 {
                 let following = self.fetch_word(next)?;
@@ -223,7 +223,7 @@ impl Avr {
         if (op & 0xFF00) == 0x9900 {
             let a = ((op >> 3) & 0x1F) as u8;
             let b = (op & 0x07) as u8;
-            let v = self.data_read(0x20 + a as u16, bus)?;
+            let v = self.data_read(self.io_data_address(a), bus)?;
             let mut next = next;
             if v & (1 << b) == 0 {
                 let following = self.fetch_word(next)?;
