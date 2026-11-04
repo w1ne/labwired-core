@@ -2010,6 +2010,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-h755zi-q-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-h7a3zi-q-smoke"
 version = "0.1.0"
 dependencies = [
