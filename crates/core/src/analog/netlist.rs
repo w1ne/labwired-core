@@ -14,7 +14,7 @@
 //!
 //! | Element | Line |
 //! |---|---|
-//! | Resistor | `R<name> n1 n2 <value>` |
+//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]]` |
 //! | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
 //! | Voltage source | `V<name> n+ n- <source>` |
@@ -226,7 +226,31 @@ impl fmt::Display for AnalogError {
 
 impl std::error::Error for AnalogError {}
 
-/// `R<name> n1 n2 <ohms>`.
+/// Beta-model NTC parameters attached to an `R` element.
+///
+/// Temperature is an external environment input. Self-heating and thermal
+/// inertia are not modelled; at a fixed temperature the part is an ordinary
+/// resistor with `R = R25 · exp(B · (1/T − 1/T25))`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NtcModel {
+    /// Material beta value, in kelvin.
+    pub beta: f64,
+    /// The Celsius temperature at which the resistor's `ohms` value applies.
+    pub nominal_temperature_celsius: f64,
+    /// Current external temperature input, in Celsius.
+    pub temperature_celsius: f64,
+}
+
+impl NtcModel {
+    /// Resistance at `temperature_celsius`, in ohms.
+    pub fn resistance_ohms(self, r25_ohms: f64) -> f64 {
+        let t = self.temperature_celsius + 273.15;
+        let t25 = self.nominal_temperature_celsius + 273.15;
+        r25_ohms * libm::exp(self.beta * (1.0 / t - 1.0 / t25))
+    }
+}
+
+/// `R<name> n1 n2 <ohms> [beta=<K> [tnom=<°C>] [temp=<°C>]]`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resistor {
     /// Element name as written, e.g. `R1`.
@@ -235,8 +259,19 @@ pub struct Resistor {
     pub a: NodeRef,
     /// Second terminal.
     pub b: NodeRef,
-    /// Resistance in ohms.
+    /// Fixed resistance, or NTC resistance at `ntc.nominal_temperature_celsius`.
     pub ohms: f64,
+    /// Optional external-temperature Beta model.
+    pub ntc: Option<NtcModel>,
+}
+
+impl Resistor {
+    /// Resistance at the model's current external temperature, in ohms.
+    pub fn resistance_ohms(&self) -> f64 {
+        self.ntc
+            .map(|ntc| ntc.resistance_ohms(self.ohms))
+            .unwrap_or(self.ohms)
+    }
 }
 
 /// `C<name> n1 n2 <farads> [ic=<volts>]`.
@@ -1619,13 +1654,61 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
         match letter {
             'R' => {
                 let rest = &tokens[1..];
-                if rest.len() != 3 {
+                if rest.len() < 3 {
                     return Err(ctx.parse_err("expected `R<name> n1 n2 <value>`"));
                 }
                 let ohms = ctx.value(rest[2], "resistance")?;
                 if ohms == 0.0 {
                     return Err(ctx.parse_err("resistance must be non-zero"));
                 }
+                let mut beta = None;
+                let mut nominal_temperature_celsius = 25.0;
+                let mut temperature_celsius = 25.0;
+                let mut has_temperature_parameter = false;
+                for token in &rest[3..] {
+                    let (key, value) = token.split_once('=').ok_or_else(|| {
+                        ctx.parse_err("NTC resistor options must be `beta=`, `tnom=` or `temp=`")
+                    })?;
+                    let parsed = ctx.value(value, key)?;
+                    match key.to_ascii_lowercase().as_str() {
+                        "beta" => beta = Some(parsed),
+                        "tnom" => {
+                            nominal_temperature_celsius = parsed;
+                            has_temperature_parameter = true;
+                        }
+                        "temp" => {
+                            temperature_celsius = parsed;
+                            has_temperature_parameter = true;
+                        }
+                        other => {
+                            return Err(ctx.parse_err(format!(
+                                "unknown resistor parameter `{other}`; expected `beta`, `tnom` or `temp`"
+                            )))
+                        }
+                    }
+                }
+                if beta.is_none() && has_temperature_parameter {
+                    return Err(ctx.parse_err("`tnom` and `temp` require an NTC `beta`"));
+                }
+                let ntc = if let Some(beta) = beta {
+                    if beta <= 0.0 || ohms <= 0.0 {
+                        return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
+                    }
+                    if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
+                        return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
+                    }
+                    let model = NtcModel {
+                        beta,
+                        nominal_temperature_celsius,
+                        temperature_celsius,
+                    };
+                    if !model.resistance_ohms(ohms).is_finite() {
+                        return Err(ctx.parse_err("NTC parameters produce a non-finite resistance"));
+                    }
+                    Some(model)
+                } else {
+                    None
+                };
                 let a = circuit.intern(rest[0]);
                 let b = circuit.intern(rest[1]);
                 circuit.resistors.push(Resistor {
@@ -1633,6 +1716,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     a,
                     b,
                     ohms,
+                    ntc,
                 });
             }
             'C' => {
@@ -2485,7 +2569,13 @@ impl Lowering<'_> {
 
     fn resistor(&mut self, part: &str, a: NodeRef, b: NodeRef, ohms: f64) {
         let name = self.name(part);
-        self.circuit.resistors.push(Resistor { name, a, b, ohms });
+        self.circuit.resistors.push(Resistor {
+            name,
+            a,
+            b,
+            ohms,
+            ntc: None,
+        });
     }
 
     fn capacitor(&mut self, part: &str, a: NodeRef, b: NodeRef, farads: f64) {
