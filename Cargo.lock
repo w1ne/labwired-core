@@ -1151,6 +1151,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-andes-ae350-n25-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-apollo4p-evb-smoke"
 version = "0.1.0"
 dependencies = [

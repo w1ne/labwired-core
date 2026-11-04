@@ -25,6 +25,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imc-unknown-none-elf",
         "script": "examples/renode-onboarding/riscv_virt-smoke.yaml",
     },
+    "andes_ae350_n25": {
+        "crate": "firmware-andes-ae350-n25-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/andes_ae350_n25-smoke.yaml",
+    },
     "renesas-ek_ra8m1": {
         "crate": "firmware-ek-ra8m1-smoke",
         "target": "thumbv8m.main-none-eabi",

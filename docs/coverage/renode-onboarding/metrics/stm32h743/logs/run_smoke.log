@@ -1,5 +1,5 @@
-2026-11-04T13:24:28.757190Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32h743.yaml
-2026-11-04T13:24:28.758721Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-04T13:51:45.063658Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32h743.yaml
+2026-11-04T13:51:45.065144Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  3/3 checks · stm32h743-smoke · 4000000 steps · 1.17s
+PASS  3/3 checks · stm32h743-smoke · 4000000 steps · 1.14s

@@ -46,6 +46,7 @@ on:
       - "crates/firmware-picosoc-smoke/**"
       - "crates/firmware-cv32e40p-smoke/**"
       - "crates/firmware-riscv-virt-smoke/**"
+      - "crates/firmware-andes-ae350-n25-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -555,6 +556,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/riscv_virt-smoke.yaml
             system: configs/systems/onboarding/riscv_virt.yaml
+          # The AE350 profile is narrowed to the RV32IM and bounded DRAM path;
+          # its wide-register UART and Andes-specific ISA extensions are not claimed.
+          - id: andes_ae350_n25
+            crate: firmware-andes-ae350-n25-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/andes_ae350_n25-smoke.yaml
+            system: configs/systems/onboarding/andes_ae350_n25.yaml
 
     steps:
       - uses: actions/checkout@v4
