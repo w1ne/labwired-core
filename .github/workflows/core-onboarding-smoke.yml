@@ -45,6 +45,7 @@ on:
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/firmware-cv32e40p-smoke/**"
+      - "crates/firmware-riscv-virt-smoke/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -545,6 +546,15 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/A2_CV32E40P-smoke.yaml
             system: configs/systems/onboarding/A2_CV32E40P.yaml
+          # riscv_virt is RV32IMAC with DRAM and NS16550 in Renode. The
+          # imported profile exposes only the bounded DRAM aperture used by
+          # this smoke plus NS16550 polling TX; it does not claim the full
+          # 2 GiB, PLIC, CLINT, or UART interrupt path.
+          - id: riscv_virt
+            crate: firmware-riscv-virt-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/riscv_virt-smoke.yaml
+            system: configs/systems/onboarding/riscv_virt.yaml
 
     steps:
       - uses: actions/checkout@v4
