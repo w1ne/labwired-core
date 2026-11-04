@@ -379,6 +379,7 @@ the same circuit and the same routing as `system.yaml`.
 | Diode | `D<name> n+ n- <model>` |
 | BJT | `Q<name> nc nb ne <model>` |
 | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
+| JFET | `J<name> nd ng ns <model>` |
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE
@@ -424,6 +425,8 @@ input at a different element.
 .model <name> PNP  (...)
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> W=<m> L=<m>)
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
+.model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> IS=<a>)
+.model <name> PJF  (...)
 ```
 
 The parentheses are optional, parameters may be separated by spaces or commas,
@@ -434,29 +437,32 @@ same thing to both engines.
 Parameters this engine has no term for — every capacitance (`CJO`, `CJE`,
 `CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, `GAMMA`,
 `PHI`, `BV` — are **accepted and ignored**, so a vendor card pasted off a
-datasheet runs with the large-signal DC behaviour it describes. A MOSFET
-`LEVEL` other than 1 is the one exception and is refused by name: solving a
-BSIM card with Shichman–Hodges would be wrong by orders of magnitude rather
-than by a capacitance.
+datasheet runs with the large-signal DC behaviour it describes. MOSFET
+`LEVEL` other than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are
+refused by name because they use different channel equations.
 
-Five built-in cards need no `.model` line at all, which is what a catalog part
+Seven built-in cards need no `.model` line at all, which is what a catalog part
 emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
-`PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`). Those are this engine's
-convenience values, not ngspice's parameter defaults.
+`PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`), and `NJF`, `PJF` (level-1 model
+defaults). The MOSFET values are this engine's convenience values; the JFET
+values use ngspice's level-1 defaults.
 
 **What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`;
 Ebers–Moll (transport-form Gummel–Poon with `VAF`/`VAR`/`IKF`/`IKR` infinite
-and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1 with channel
--length modulation, both channel polarities and reverse mode. Every parameter is
-taken at 300.00 K; there is no temperature model, which is why decks handed to
-ngspice pin `temp`/`tnom` to 26.85 °C.
+and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1; and SPICE
+JFET level 1 with `B=1`, including its two gate junctions. MOSFET and JFET
+channel-length modulation, both polarities and reverse channel operation are
+covered by tests. Every parameter is taken at 300.00 K; there is no temperature
+model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
 **What is not, in this first version:** device capacitances, and therefore
 anything whose behaviour comes from stored device charge — reverse recovery, a
 Miller-limited edge, a charge pump. There is no Early effect (output conductance
 in the active region is `GMIN`, not `Ic/VAF`) and no body effect (`VTH` is
 `VTO`; the bulk terminal is required by the syntax and tied through `GMIN`, but
-does not shift the threshold). A circuit that needs any of those belongs on
+does not shift the threshold). JFET drain/source ohmic resistances `RD`/`RS`,
+gate capacitances and levels other than level 1 with `B=1` are also not modeled.
+A circuit that needs any of those belongs on
 `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
@@ -487,7 +493,7 @@ as SPICE does. It counts against the 64-unknown ceiling and can be probed.
   GPIO at 0 before the firmware has done anything.
 - `CosimStep::time_ns` is the END of the interval being simulated, matching
   `tools/cosim/labwired_ngspice.py`.
-- A circuit holding a diode, BJT or MOSFET is solved by Newton–Raphson inside
+- A circuit holding a diode, BJT, JFET or MOSFET is solved by Newton–Raphson inside
   each step: the device stamps are re-linearised, re-factorised and re-solved
   until every unknown stops moving, damped by SPICE's `DEVpnjlim`, `DEVfetlim`
   and `DEVlimvds`. The limiters change the path, never the point: the converged
@@ -551,11 +557,12 @@ circuit's channels. The CSV header and VCD variables use the same names.
 
 ### The boundary
 
-The in-core engine supports the linear elements, switches, and diode, BJT and
-level-1 MOSFET models listed above. Its semiconductor models have the limitations
+The in-core engine supports the linear elements, switches, and diode, BJT,
+level-1 JFET and level-1 MOSFET models listed above. Its semiconductor models
+have the limitations
 described in [Semiconductor models](#semiconductor-models), including omitted
 device capacitances and temperature effects. Subcircuits, `.include` / `.lib`
-device libraries, other MOSFET levels, and AC/DC sweeps are not supported by
+device libraries, other MOSFET or JFET levels, other JFET `B` values, and AC/DC sweeps are not supported by
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 

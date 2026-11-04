@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 //! The nonlinear half of the in-core analog engine: the diode, the BJT, the
-//! MOSFET, the Newton iteration that reaches them and the model cards that
-//! parameterise them.
+//! JFET, the MOSFET, the Newton iteration that reaches them and the model
+//! cards that parameterise them.
 //!
 //! Three kinds of assertion live here and they are deliberately different:
 //!
@@ -23,9 +23,10 @@
 //!
 //! What is NOT modelled, and is asserted to be missing rather than left to be
 //! discovered: device capacitances. No junction or diffusion charge on the
-//! diode, no `Cje`/`Cjc` on the BJT, no overlap or channel charge on the
-//! MOSFET. A circuit whose behaviour comes from stored device charge belongs
-//! to `adapter: external_process`, not to this engine.
+//! diode, no `Cje`/`Cjc` on the BJT, no `Cgs`/`Cgd` on the JFET, and no overlap
+//! or channel charge on the MOSFET. A circuit whose behaviour comes from
+//! stored device charge belongs to `adapter: external_process`, not to this
+//! engine.
 
 // The `analog` module puts every test under `analog::`, so the design's
 // verification command `cargo test -p labwired-core analog` runs all of them.
@@ -217,6 +218,116 @@ mod analog {
         }
     }
 
+    /// With the emitter and collector junction roles reversed, the old
+    /// emitter carries the reverse transport current and its ratio to base
+    /// current is `BR`. Check all three terminal currents against the
+    /// Ebers–Moll equations for both polarities; forward-only checks would
+    /// miss a swapped BC/BE stamp or a lost reverse gain.
+    #[test]
+    fn bjt_reverse_active_gain_matches_ebers_moll_by_hand() {
+        let is = 1e-16;
+        let bf = 80.0;
+        let br = 4.0;
+        let vbe = -4.35;
+        let vbc = 0.65;
+        let exp_be = (vbe / VT).exp();
+        let exp_bc = (vbc / VT).exp();
+        let junction_be = exp_be - 1.0;
+        let junction_bc = exp_bc - 1.0;
+        let ic = is * (exp_be - exp_bc) - (is / br) * junction_bc - device::GMIN * vbc;
+        let ib = (is / bf) * junction_be + (is / br) * junction_bc + device::GMIN * (vbe + vbc);
+        // The solver ties both base junctions with GMIN. In this reverse
+        // active point, Vb−Ve = Vbe and Vb−Vc = Vbc.
+        let ie = -(ic + ib);
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NPN"
+            } else {
+                "PNP"
+            };
+            let netlist = format!(
+                "Vb b 0 dc {}\nVc c 0 dc 0\nVe e 0 dc {}\nQ1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} NF=1 NR=1)\n",
+                sign * vbc,
+                sign * (vbc - vbe)
+            );
+            let solver = build(&netlist);
+            let actual_ic = sign * source_current(&solver, "Vc");
+            let actual_ib = sign * source_current(&solver, "Vb");
+            let actual_ie = sign * source_current(&solver, "Ve");
+
+            assert!(
+                relative(actual_ic, ic) < 1e-5,
+                "{kind}: reverse collector terminal current should be {ic} A, got {actual_ic} A"
+            );
+            assert!(
+                relative(actual_ib, ib) < 1e-5,
+                "{kind}: reverse base current should be {ib} A, got {actual_ib} A"
+            );
+            assert!(
+                relative(actual_ie, ie) < 1e-5,
+                "{kind}: reverse emitter transport current should be {ie} A, got {actual_ie} A"
+            );
+            let reverse_gain = actual_ie / actual_ib;
+            assert!(
+                (reverse_gain - br).abs() / br < 1e-5,
+                "{kind}: reverse common-emitter gain should be about {br}, got {reverse_gain}"
+            );
+        }
+    }
+
+    /// When both base junctions are forward biased, the Ebers–Moll transport
+    /// currents oppose each other. Check all terminals against the equations
+    /// for NPN and PNP; active-region tests do not exercise the BC injection
+    /// term that dominates a saturated transistor.
+    #[test]
+    fn bjt_saturation_matches_ebers_moll_by_hand() {
+        let is = 1e-16;
+        let bf = 80.0;
+        let br = 4.0;
+        let vbe: f64 = 0.65;
+        let vbc: f64 = 0.55;
+        let exp_be = (vbe / VT).exp();
+        let exp_bc = (vbc / VT).exp();
+        let junction_be = exp_be - 1.0;
+        let junction_bc = exp_bc - 1.0;
+        let ic = is * (exp_be - exp_bc) - (is / br) * junction_bc - device::GMIN * vbc;
+        let ib = (is / bf) * junction_be + (is / br) * junction_bc + device::GMIN * (vbe + vbc);
+        let ie = -(ic + ib);
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NPN"
+            } else {
+                "PNP"
+            };
+            let netlist = format!(
+                "Vb b 0 dc {}\nVc c 0 dc {}\nVe e 0 dc 0\nQ1 c b e QMOD\n\
+                 .model QMOD {kind}(IS={is} BF={bf} BR={br} NF=1 NR=1)\n",
+                sign * vbe,
+                sign * (vbe - vbc)
+            );
+            let solver = build(&netlist);
+            let actual_ic = sign * source_current(&solver, "Vc");
+            let actual_ib = sign * source_current(&solver, "Vb");
+            let actual_ie = sign * source_current(&solver, "Ve");
+
+            assert!(
+                relative(actual_ic, ic) < 1e-5,
+                "{kind}: saturated collector current should be {ic} A, got {actual_ic} A"
+            );
+            assert!(
+                relative(actual_ib, ib) < 1e-5,
+                "{kind}: saturated base current should be {ib} A, got {actual_ib} A"
+            );
+            assert!(
+                relative(actual_ie, ie) < 1e-5,
+                "{kind}: saturated emitter current should be {ie} A, got {actual_ie} A"
+            );
+        }
+    }
+
     /// The Early effect is the one missing Gummel–Poon term a user will notice:
     /// output conductance in the active region is `GMIN`, not `Ic/VAF`. Say so
     /// with a test rather than only in a doc comment.
@@ -317,6 +428,146 @@ mod analog {
         );
     }
 
+    /// The fourth terminal is not silently grounded: in cutoff, its two GMIN
+    /// ties to drain and source carry the hand-calculated leakage currents.
+    /// The normalized voltages keep both body junctions reverse biased, and
+    /// the same stamp is checked for NMOS and PMOS.
+    #[test]
+    fn mosfet_bulk_terminal_carries_its_two_gmin_ties() {
+        let (vds, vbulk) = (0.4, -0.1);
+        let expected_drain = device::GMIN * vds + device::GMIN * (vds - vbulk);
+        let expected_bulk = device::GMIN * (vbulk - vds) + device::GMIN * vbulk;
+        let expected_source = device::GMIN * (0.0 - vds) + device::GMIN * (0.0 - vbulk);
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NMOS"
+            } else {
+                "PMOS"
+            };
+            let netlist = format!(
+                "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc 0\nVbulk b 0 dc {}\n\
+                 M1 d g s b MMOD\n.model MMOD {kind}(VTO={} KP=20u LAMBDA=0)\n",
+                sign * vds,
+                sign * vbulk,
+                sign
+            );
+            let solver = build(&netlist);
+            let actual_drain = sign * source_current(&solver, "Vd");
+            let actual_bulk = sign * source_current(&solver, "Vbulk");
+            let actual_source = sign * source_current(&solver, "Vs");
+
+            assert!(
+                (actual_drain - expected_drain).abs() < device::GMIN * 1e-3,
+                "{kind}: drain current should include drain-source and drain-bulk GMIN ties; \
+                 expected {expected_drain} A, got {actual_drain} A"
+            );
+            assert!(
+                (actual_bulk - expected_bulk).abs() < device::GMIN * 1e-3,
+                "{kind}: bulk current should be {expected_bulk} A, got {actual_bulk} A"
+            );
+            assert!(
+                (actual_source - expected_source).abs() < device::GMIN * 1e-3,
+                "{kind}: source current should include its bulk tie; expected {expected_source} A, \
+                 got {actual_source} A"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JFET
+    // -----------------------------------------------------------------------
+
+    /// The three level-1 channel regions are checked against the model's
+    /// closed form, with both channel polarities and reverse gate-junction
+    /// leakage included in the measured drain supply current.
+    #[test]
+    fn jfet_operating_point_matches_level1_channel_equation_by_hand() {
+        let beta = 2e-4;
+        let lambda = 0.02;
+        let is = 1e-14;
+        let vto = -2.0;
+
+        for (polarity, sign) in [(Polarity::N, 1.0), (Polarity::P, -1.0)] {
+            let kind = if polarity == Polarity::N {
+                "NJF"
+            } else {
+                "PJF"
+            };
+            for (vgs, vds) in [(-2.5, 5.0), (0.0, 0.4), (0.0, 5.0)] {
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA={beta} \
+                     LAMBDA={lambda} IS={is})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vto
+                );
+                let solver = build(&netlist);
+                let vgst = vgs - vto;
+                let channel = if vgst <= 0.0 {
+                    0.0
+                } else if vds < vgst {
+                    beta * (1.0 + lambda * vds) * vds * (2.0 * vgst - vds)
+                } else {
+                    beta * (1.0 + lambda * vds) * vgst * vgst
+                };
+                let gate_drain_voltage = vgs - vds;
+                let expected =
+                    channel + device::GMIN * vds - device::diode_op(gate_drain_voltage, is, 1.0).id;
+                let measured = sign * source_current(&solver, "Vd");
+                let label = format!("{kind} Vgs={vgs} Vds={vds}");
+                assert!(
+                    relative(measured, expected) < 2e-5,
+                    "{label}: expected {expected} A including gate leakage, got {measured} A"
+                );
+            }
+        }
+    }
+
+    /// The JFET channel is symmetric, and each gate junction conducts when
+    /// forward biased. Both behaviors are exercised through the MNA solver.
+    #[test]
+    fn jfet_reverse_channel_and_forward_gate_junction_are_solved() {
+        let deck = |kind: &str, sign: f64, drain: f64, source: f64| {
+            format!(
+                "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc {}\n\
+                 J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA=200u IS=1e-12)\n",
+                sign * drain,
+                sign * source,
+                -2.0 * sign
+            )
+        };
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let forward = sign * source_current(&build(&deck(kind, sign, 0.4, 0.0)), "Vd");
+            let reverse = sign * source_current(&build(&deck(kind, sign, 0.0, 0.4)), "Vs");
+            assert!(
+                forward > 1e-6,
+                "{kind} forward channel current should be on, got {forward} A"
+            );
+            assert!(
+                relative(reverse, forward) < 1e-6,
+                "{kind} reverse channel should mirror: {forward} A vs {reverse} A"
+            );
+        }
+
+        let is = 1e-12;
+        let expected = 2.0 * device::diode_op(0.4, is, 1.0).id;
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let netlist = format!(
+                "Vg g 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                 J1 d g s JMOD\n.model JMOD {kind}(IS={is})\n",
+                sign * 0.4
+            );
+            let measured = sign * source_current(&build(&netlist), "Vg");
+            assert!(
+                relative(measured, expected) < 1e-5,
+                "{kind} gate current should be the two forward junctions: expected \
+                 {expected} A, got {measured} A"
+            );
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Newton iteration itself
     // -----------------------------------------------------------------------
@@ -331,6 +582,7 @@ mod analog {
         assert!(build("V1 in 0 dc 5\nR1 in a 1k\nD1 a 0 D\n").is_nonlinear());
         assert!(build("V1 in 0 dc 5\nR1 in b 100k\nQ1 in b 0 NPN\n").is_nonlinear());
         assert!(build("V1 in 0 dc 5\nR1 in d 1k\nM1 d in 0 0 NMOS\n").is_nonlinear());
+        assert!(build("V1 in 0 dc 0\nR1 in d 1k\nJ1 d in 0 NJF\n").is_nonlinear());
     }
 
     /// An ideal voltage source connected straight across a junction with no

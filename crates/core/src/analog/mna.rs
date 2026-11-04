@@ -111,6 +111,11 @@ pub struct Solver {
     /// Each MOSFET's drain-source voltage in device coordinates, as the
     /// netlist names the terminals. Negative means the device is reversed.
     mos_vds: Vec<f64>,
+    /// Each JFET's normalised gate-source and gate-drain junction voltages.
+    jfet_vgs: Vec<f64>,
+    jfet_vgd: Vec<f64>,
+    /// Each JFET's normalised drain-source voltage. Negative means reversed.
+    jfet_vds: Vec<f64>,
     /// Each power sink's linearisation point: `(v(p) − v(n), v(op) − v(on),
     /// i(control))`.
     sink_point: Vec<[f64; 3]>,
@@ -121,6 +126,9 @@ pub struct Solver {
     saved_bjt_vbc: Vec<f64>,
     saved_mos_vgs: Vec<f64>,
     saved_mos_vds: Vec<f64>,
+    saved_jfet_vgs: Vec<f64>,
+    saved_jfet_vgd: Vec<f64>,
+    saved_jfet_vds: Vec<f64>,
     saved_sink_point: Vec<[f64; 3]>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
@@ -192,6 +200,7 @@ impl Solver {
         let diodes = circuit.diodes.len();
         let bjts = circuit.bjts.len();
         let mosfets = circuit.mosfets.len();
+        let jfets = circuit.jfets.len();
         let sinks = circuit.power_sinks.len();
 
         let mut solver = Self {
@@ -216,12 +225,18 @@ impl Solver {
             bjt_vbc: vec![0.0; bjts],
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
+            jfet_vgs: vec![0.0; jfets],
+            jfet_vgd: vec![0.0; jfets],
+            jfet_vds: vec![0.0; jfets],
             sink_point: vec![[0.0; 3]; sinks],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
             saved_mos_vgs: vec![0.0; mosfets],
             saved_mos_vds: vec![0.0; mosfets],
+            saved_jfet_vgs: vec![0.0; jfets],
+            saved_jfet_vgd: vec![0.0; jfets],
+            saved_jfet_vds: vec![0.0; jfets],
             saved_sink_point: vec![[0.0; 3]; sinks],
             node_shunt: 0.0,
             limiter_clamped: false,
@@ -585,6 +600,9 @@ impl Solver {
         self.saved_bjt_vbc.copy_from_slice(&self.bjt_vbc);
         self.saved_mos_vgs.copy_from_slice(&self.mos_vgs);
         self.saved_mos_vds.copy_from_slice(&self.mos_vds);
+        self.saved_jfet_vgs.copy_from_slice(&self.jfet_vgs);
+        self.saved_jfet_vgd.copy_from_slice(&self.jfet_vgd);
+        self.saved_jfet_vds.copy_from_slice(&self.jfet_vds);
         self.saved_sink_point.copy_from_slice(&self.sink_point);
     }
 
@@ -594,6 +612,9 @@ impl Solver {
         self.bjt_vbc.copy_from_slice(&self.saved_bjt_vbc);
         self.mos_vgs.copy_from_slice(&self.saved_mos_vgs);
         self.mos_vds.copy_from_slice(&self.saved_mos_vds);
+        self.jfet_vgs.copy_from_slice(&self.saved_jfet_vgs);
+        self.jfet_vgd.copy_from_slice(&self.saved_jfet_vgd);
+        self.jfet_vds.copy_from_slice(&self.saved_jfet_vds);
         self.sink_point.copy_from_slice(&self.saved_sink_point);
     }
 
@@ -1186,6 +1207,50 @@ impl Solver {
             self.mos_vds[index] = ds;
         }
 
+        for index in 0..self.circuit.jfets.len() {
+            let jfet = &self.circuit.jfets[index];
+            let sign = jfet.model.polarity.sign();
+            let nodes = &self.solution[..self.nodes];
+            let raw_gs = sign * node_diff(nodes, jfet.g, jfet.s);
+            let raw_gd = sign * node_diff(nodes, jfet.g, jfet.d);
+            let raw_ds = sign * node_diff(nodes, jfet.d, jfet.s);
+            let critical = device::pn_critical_voltage(jfet.model.is, 1.0);
+            let gs = device::pn_limit(
+                raw_gs,
+                self.jfet_vgs[index],
+                device::THERMAL_VOLTAGE,
+                critical,
+            );
+            let gd = device::pn_limit(
+                raw_gd,
+                self.jfet_vgd[index],
+                device::THERMAL_VOLTAGE,
+                critical,
+            );
+
+            // The lower-potential channel terminal is the effective source.
+            // Gate junctions keep their physical terminal identities; only
+            // the channel control voltage changes when current reverses.
+            let reversed_now = raw_ds < 0.0;
+            let reversed_before = self.jfet_vds[index] < 0.0;
+            let old_effective_ds = if reversed_before == reversed_now {
+                self.jfet_vds[index].abs()
+            } else {
+                0.0
+            };
+            let effective_ds = device::vds_limit(raw_ds.abs(), old_effective_ds);
+            let ds = if reversed_now {
+                -effective_ds
+            } else {
+                effective_ds
+            };
+
+            self.limiter_clamped |= gs != raw_gs || gd != raw_gd || ds != raw_ds;
+            self.jfet_vgs[index] = gs;
+            self.jfet_vgd[index] = gd;
+            self.jfet_vds[index] = ds;
+        }
+
         // A power sink is smooth (a product over a floored quotient), so it
         // takes the plain Newton point with no limiting.
         for index in 0..self.circuit.power_sinks.len() {
@@ -1209,7 +1274,7 @@ impl Solver {
     /// the currents, never in the conductances, because negating both the
     /// controlling voltage and the current leaves `∂I/∂u` alone.
     ///
-    /// Nothing here runs for a circuit with no such device: all three vectors
+    /// Nothing here runs for a circuit with no such device: all four vectors
     /// are empty, so a linear netlist takes the same floating-point operations
     /// in the same order it took before this existed.
     fn stamp_devices(&mut self) {
@@ -1324,6 +1389,61 @@ impl Solver {
             );
             // The gate and the bulk carry no DC current in this model, so they
             // need no stamp of their own beyond the GMIN ties above.
+        }
+
+        for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            let sign = jfet.model.polarity.sign();
+            let reversed = self.jfet_vds[index] < 0.0;
+            let (drain, source, vgs) = if reversed {
+                (jfet.s, jfet.d, self.jfet_vgd[index])
+            } else {
+                (jfet.d, jfet.s, self.jfet_vgs[index])
+            };
+            let vds = self.jfet_vds[index].abs();
+            let op = device::jfet_op(
+                vgs,
+                vds,
+                sign * jfet.model.vto,
+                jfet.model.beta,
+                jfet.model.lambda,
+            );
+
+            // The channel's GMIN keeps a cut-off device connected. The gate
+            // junctions below each carry their own SPICE GMIN as part of the
+            // diode equation.
+            conductance(matrix, dim, jfet.d, jfet.s, device::GMIN);
+
+            let channel_terms = [
+                (op.gm, jfet.g, source, sign * vgs),
+                (op.gds, drain, source, sign * vds),
+            ];
+            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &channel_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                source,
+                -sign * op.id,
+                &negate(&channel_terms),
+            );
+
+            for (cathode, voltage) in [
+                (jfet.s, self.jfet_vgs[index]),
+                (jfet.d, self.jfet_vgd[index]),
+            ] {
+                let gate = device::diode_op(voltage, jfet.model.is, 1.0);
+                let gate_voltage = sign * voltage;
+                let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
+                stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);
+                stamp_linearised(
+                    matrix,
+                    rhs,
+                    dim,
+                    cathode,
+                    -sign * gate.id,
+                    &negate(&gate_terms),
+                );
+            }
         }
 
         // Power sinks: I = −vo·ib / (eff·d), d = max(vin, POWER_SINK_VMIN),

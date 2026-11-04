@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Device physics for the nonlinear elements: the exponential diode, the
-//! Ebers–Moll BJT and the level-1 MOSFET, plus the constants and the
+//! Ebers–Moll BJT, the level-1 JFET and MOSFET, plus the constants and the
 //! voltage-limiting heuristics Newton–Raphson needs to reach them.
 //!
 //! This module is equations only. It owns no state, touches no matrix, and
@@ -16,8 +16,8 @@
 //!
 //! DC/large-signal behaviour only. There are **no device capacitances** in this
 //! first version — no diode junction or diffusion charge, no BJT `Cje`/`Cjc`,
-//! no MOSFET overlap or channel charge — and no temperature model: every
-//! parameter is taken at [`TEMPERATURE_K`] as written. A `.model` line may
+//! no JFET `Cgs`/`Cgd`, no MOSFET overlap or channel charge — and no temperature
+//! model: every parameter is taken at [`TEMPERATURE_K`] as written. A `.model` line may
 //! carry those parameters (real vendor models do) and they are accepted and
 //! ignored; see [`super::netlist`]. The consequence is concrete: a circuit
 //! whose behaviour comes from stored device charge — reverse-recovery, a
@@ -32,9 +32,9 @@
 //! agree to within an ulp or two, which is exactly the size of drift that turns
 //! a bit-exact browser/native differential into a flaky one. `libm` is pure
 //! Rust with no dependencies of its own and produces identical bits on both.
-//! `analog_devices.rs` pins the operating points of one diode, one BJT and one
-//! MOSFET as raw `f64` bit patterns so any drift shows up as a failing test
-//! rather than as a 0.1 % disagreement somebody argues about.
+//! `analog_devices.rs` pins representative diode, BJT and MOSFET operating
+//! points as raw `f64` bit patterns and checks JFET regions against hand
+//! calculations, so drift or an incorrect equation fails a test.
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
@@ -360,6 +360,64 @@ pub fn mos_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> MosOp {
             id: 0.5 * betap * vgst * vgst,
             gm: betap * vgst,
             gds: 0.5 * lambda * beta * vgst * vgst,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JFET
+// ---------------------------------------------------------------------------
+
+/// One level-1 JFET's channel linearisation, in normalised N-channel
+/// coordinates with the effective drain and source already selected.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JfetOp {
+    /// Channel current, effective drain → source, amps.
+    pub id: f64,
+    /// `∂Id/∂Vgs`, siemens.
+    pub gm: f64,
+    /// `∂Id/∂Vds`, siemens.
+    pub gds: f64,
+}
+
+/// SPICE JFET level 1 with the Parker–Skellern fitting parameter `B = 1`:
+///
+/// ```text
+/// vgst = Vgs − VTO
+/// βp   = BETA·(1 + LAMBDA·Vds)
+///
+/// cutoff      vgst ≤ 0       Id = 0
+/// linear      Vds < vgst     Id = βp·Vds·(2·vgst − Vds)
+/// saturation  Vds ≥ vgst     Id = βp·vgst²
+/// ```
+///
+/// Gate-junction current and the channel's GMIN path are stamped separately by
+/// the MNA solver. `vto` is negative for an N-channel JFET; the caller mirrors
+/// voltages and currents for a P-channel device.
+pub fn jfet_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> JfetOp {
+    let vgst = vgs - vto;
+    if vgst <= 0.0 {
+        return JfetOp {
+            id: 0.0,
+            gm: 0.0,
+            gds: 0.0,
+        };
+    }
+
+    let beta_p = beta * (1.0 + lambda * vds);
+    if vds < vgst {
+        JfetOp {
+            id: beta_p * vds * (2.0 * vgst - vds),
+            gm: 2.0 * beta_p * vds,
+            gds: beta
+                * (lambda * vds * (2.0 * vgst - vds)
+                    + (1.0 + lambda * vds) * (2.0 * vgst - 2.0 * vds)),
+        }
+    } else {
+        JfetOp {
+            id: beta_p * vgst * vgst,
+            gm: 2.0 * beta_p * vgst,
+            gds: beta * lambda * vgst * vgst,
         }
     }
 }
