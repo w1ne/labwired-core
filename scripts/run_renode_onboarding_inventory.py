@@ -70,6 +70,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/efm32pg12-smoke.yaml",
     },
+    "efm32pg1": {
+        "crate": "firmware-efm32pg1-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/efm32pg1-smoke.yaml",
+    },
     "efm32g232": {
         "crate": "firmware-efm32g232-smoke",
         "target": "thumbv7m-none-eabi",

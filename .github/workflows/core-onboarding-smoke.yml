@@ -31,6 +31,7 @@ on:
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
+      - "crates/firmware-efm32pg1-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/cli/**"
@@ -160,6 +161,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efm32pg12-smoke.yaml
             system: configs/systems/onboarding/efm32pg12.yaml
+          # The PG1 profile is limited to its 256 KiB flash, 32 KiB RAM, and
+          # model-backed USART0 bring-up path.
+          - id: efm32pg1
+            crate: firmware-efm32pg1-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/efm32pg1-smoke.yaml
+            system: configs/systems/onboarding/efm32pg1.yaml
           # The Nano 33 BLE imported profile exposes only its actual nRF52840
           # memory, UARTE0, and GPIO0 smoke surface.
           - id: arduino_nano_33_ble
