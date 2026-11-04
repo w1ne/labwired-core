@@ -70,6 +70,24 @@ pub enum AvrModel {
     Attiny1604,
     Attiny1606,
     Attiny1607,
+    // Classic (pre-AVRxt) tinyAVR. These are NOT AVRxt and must not be given the
+    // AVRxt data map: no VPORT, no 0x3Fxx SRAM window. Their SRAM starts at
+    // 0x0060 (0x0100 for the 48/88, which have a 160-byte extended I/O file).
+    // Before these existed every one of them silently resolved to Atmega328p,
+    // so firmware ran with the wrong flash size, the wrong SRAM window and the
+    // wrong vector table.
+    Attiny13,
+    Attiny2313,
+    Attiny25,
+    Attiny45,
+    Attiny85,
+    Attiny261,
+    Attiny461,
+    Attiny861,
+    Attiny44,
+    Attiny84,
+    Attiny48,
+    Attiny88,
 }
 
 impl AvrModel {
@@ -100,6 +118,36 @@ impl AvrModel {
             AvrModel::Attiny1606
         } else if n.contains("attiny1607") || n.contains("attiny 1607") {
             AvrModel::Attiny1607
+        // Classic tinyAVR. ORDER MATTERS: these use contains(), and several
+        // names are prefixes of others (attiny861 contains attiny86; attiny44 is
+        // a prefix of attiny441/attiny44a; attiny25 of attiny25x). Longer,
+        // more specific names are matched first so a part never falls into a
+        // shorter part's model. Every geometry below is from the datasheet's
+        // data-memory map (SRAM start .. RAMEND), not interpolated.
+        } else if n.contains("attiny861") || n.contains("attiny 861") {
+            AvrModel::Attiny861
+        } else if n.contains("attiny461") || n.contains("attiny 461") {
+            AvrModel::Attiny461
+        } else if n.contains("attiny261") || n.contains("attiny 261") {
+            AvrModel::Attiny261
+        } else if n.contains("attiny2313") || n.contains("attiny 2313") {
+            AvrModel::Attiny2313
+        } else if n.contains("attiny88") || n.contains("attiny 88") {
+            AvrModel::Attiny88
+        } else if n.contains("attiny48") || n.contains("attiny 48") {
+            AvrModel::Attiny48
+        } else if n.contains("attiny85") || n.contains("attiny 85") {
+            AvrModel::Attiny85
+        } else if n.contains("attiny84") || n.contains("attiny 84") {
+            AvrModel::Attiny84
+        } else if n.contains("attiny45") || n.contains("attiny 45") {
+            AvrModel::Attiny45
+        } else if n.contains("attiny44") || n.contains("attiny 44") {
+            AvrModel::Attiny44
+        } else if n.contains("attiny25") || n.contains("attiny 25") {
+            AvrModel::Attiny25
+        } else if n.contains("attiny13") || n.contains("attiny 13") {
+            AvrModel::Attiny13
         } else if n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
@@ -117,6 +165,17 @@ impl AvrModel {
             AvrModel::Attiny402 | AvrModel::Attiny404 => 4 * 1024,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
             AvrModel::Attiny1604 | AvrModel::Attiny1606 | AvrModel::Attiny1607 => 16 * 1024,
+            // Classic tinyAVR. Datasheet flash size, per part.
+            AvrModel::Attiny13 => 1 * 1024,
+            AvrModel::Attiny25 | AvrModel::Attiny2313 | AvrModel::Attiny261 => 2 * 1024,
+            AvrModel::Attiny45
+            | AvrModel::Attiny44
+            | AvrModel::Attiny461
+            | AvrModel::Attiny48 => 4 * 1024,
+            AvrModel::Attiny85
+            | AvrModel::Attiny84
+            | AvrModel::Attiny861
+            | AvrModel::Attiny88 => 8 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -127,6 +186,20 @@ impl AvrModel {
             AvrModel::Attiny402 | AvrModel::Attiny404 => 0x3F00,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 0x3E00,
             AvrModel::Attiny1604 | AvrModel::Attiny1606 | AvrModel::Attiny1607 => 0x3C00,
+            // Classic tinyAVR: SRAM follows the 64-byte I/O file at 0x0060, except
+            // the 48/88 which add a 160-byte extended I/O file and start SRAM at
+            // 0x0100 (ATtiny48/88 datasheet, Table 5-2).
+            AvrModel::Attiny48 | AvrModel::Attiny88 => 0x0100,
+            AvrModel::Attiny13
+            | AvrModel::Attiny2313
+            | AvrModel::Attiny25
+            | AvrModel::Attiny45
+            | AvrModel::Attiny85
+            | AvrModel::Attiny261
+            | AvrModel::Attiny461
+            | AvrModel::Attiny861
+            | AvrModel::Attiny44
+            | AvrModel::Attiny84 => 0x0060,
         }
     }
     pub fn ramend(self) -> u16 {
@@ -143,6 +216,15 @@ impl AvrModel {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => 0x3FFF,
+            // Classic tinyAVR RAMEND = SRAM start + size - 1 (datasheets).
+            AvrModel::Attiny13 => 0x009F,// 0x0060 + 64B
+            AvrModel::Attiny25 | AvrModel::Attiny2313 | AvrModel::Attiny261 => 0x00DF,// + 128B
+            AvrModel::Attiny45 | AvrModel::Attiny44 | AvrModel::Attiny461 => 0x015F,// + 256B
+            AvrModel::Attiny48 => 0x01FF,// 0x0100 + 256B
+            AvrModel::Attiny85
+            | AvrModel::Attiny84
+            | AvrModel::Attiny861 => 0x025F,// 0x0060 + 512B
+            AvrModel::Attiny88 => 0x02FF,// 0x0100 + 512B
         }
     }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
@@ -162,6 +244,20 @@ impl AvrModel {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => AVR_ADC_INPUT_BASE,
+            // Classic tinyAVR use the same ADC input window as the 328P side of
+            // the model; only the mega parts move it.
+            | AvrModel::Attiny13
+            | AvrModel::Attiny2313
+            | AvrModel::Attiny25
+            | AvrModel::Attiny45
+            | AvrModel::Attiny85
+            | AvrModel::Attiny261
+            | AvrModel::Attiny461
+            | AvrModel::Attiny861
+            | AvrModel::Attiny44
+            | AvrModel::Attiny84
+            | AvrModel::Attiny48
+            | AvrModel::Attiny88 => AVR_ADC_INPUT_BASE,
         }
     }
     /// `true` when the PC is pushed as 3 bytes (flash above 128 KB).
@@ -647,6 +743,18 @@ impl Avr {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
+            | AvrModel::Attiny13
+            | AvrModel::Attiny2313
+            | AvrModel::Attiny25
+            | AvrModel::Attiny45
+            | AvrModel::Attiny85
+            | AvrModel::Attiny261
+            | AvrModel::Attiny461
+            | AvrModel::Attiny861
+            | AvrModel::Attiny44
+            | AvrModel::Attiny84
+            | AvrModel::Attiny48
+            | AvrModel::Attiny88 => false,
         }
     }
 
@@ -667,6 +775,18 @@ impl Avr {
             | AvrModel::Attiny1604
             | AvrModel::Attiny1606
             | AvrModel::Attiny1607 => false,
+            | AvrModel::Attiny13
+            | AvrModel::Attiny2313
+            | AvrModel::Attiny25
+            | AvrModel::Attiny45
+            | AvrModel::Attiny85
+            | AvrModel::Attiny261
+            | AvrModel::Attiny461
+            | AvrModel::Attiny861
+            | AvrModel::Attiny44
+            | AvrModel::Attiny84
+            | AvrModel::Attiny48
+            | AvrModel::Attiny88 => false,
         }
     }
 
@@ -3287,6 +3407,55 @@ mod tests {
     }
 
     #[test]
+    /// Classic (pre-AVRxt) tinyAVR must select their OWN model.
+    ///
+    /// Regression guard. Before these arms existed every one of these parts hit
+    /// the `else` branch and became an ATmega328p: 32 KB flash, SRAM at 0x0100
+    /// and the 328P vector table. Firmware then ran against geometry the part
+    /// does not have, and nothing failed loudly - which is exactly how
+    /// labwired-ip came to claim 13 parts as onboarded when they were not.
+    ///
+    /// Geometry is from each datasheet's data-memory map (SRAM start .. RAMEND).
+    #[test]
+    fn classic_tinyavr_selects_its_own_geometry_and_not_the_atmega328p() {
+        // (name, model, flash, sram_start, ramend, sram_len)
+        let cases = [
+            ("attiny13", AvrModel::Attiny13, 1 * 1024, 0x0060, 0x009F, 64),
+            ("attiny25", AvrModel::Attiny25, 2 * 1024, 0x0060, 0x00DF, 128),
+            ("attiny45", AvrModel::Attiny45, 4 * 1024, 0x0060, 0x015F, 256),
+            ("attiny85", AvrModel::Attiny85, 8 * 1024, 0x0060, 0x025F, 512),
+            ("attiny2313", AvrModel::Attiny2313, 2 * 1024, 0x0060, 0x00DF, 128),
+            ("attiny261", AvrModel::Attiny261, 2 * 1024, 0x0060, 0x00DF, 128),
+            ("attiny461", AvrModel::Attiny461, 4 * 1024, 0x0060, 0x015F, 256),
+            ("attiny861", AvrModel::Attiny861, 8 * 1024, 0x0060, 0x025F, 512),
+            ("attiny44", AvrModel::Attiny44, 4 * 1024, 0x0060, 0x015F, 256),
+            ("attiny84", AvrModel::Attiny84, 8 * 1024, 0x0060, 0x025F, 512),
+            // The 48/88 have a 160-byte extended I/O file, so SRAM starts at
+            // 0x0100 rather than 0x0060 (ATtiny48/88 datasheet Table 5-2).
+            ("attiny48", AvrModel::Attiny48, 4 * 1024, 0x0100, 0x01FF, 256),
+            ("attiny88", AvrModel::Attiny88, 8 * 1024, 0x0100, 0x02FF, 512),
+        ];
+        for (name, model, flash, sram_start, ramend, sram_len) in cases {
+            assert_eq!(
+                AvrModel::from_chip_name(name),
+                model,
+                "{name} must not fall through to the default model"
+            );
+            let cpu = Avr::for_chip_name(name);
+            assert_eq!(cpu.model, model, "{name} selects its exact model");
+            assert_eq!(cpu.flash.len(), flash, "{name} flash size");
+            assert_eq!(cpu.sram_start, sram_start, "{name} SRAM start");
+            assert_eq!(cpu.sram.len(), sram_len, "{name} SRAM size");
+            assert_eq!(cpu.ramend, ramend, "{name} RAMEND");
+            // These are classic AVR, so they must NOT get the AVRxt data map.
+            // Giving them 0x3Fxx SRAM would be as wrong as the 328P fallback.
+            assert!(
+                !cpu.model.uses_avrxt_data_map(),
+                "{name} is classic AVR, not AVRxt"
+            );
+        }
+    }
+
     fn tinyavr_0_series_selects_exact_avrxt_flash_and_sram_geometry() {
         for (name, model, flash_size, sram_start, sram_len) in [
             ("attiny202", AvrModel::Attiny202, 2 * 1024, 0x3F80, 128),
