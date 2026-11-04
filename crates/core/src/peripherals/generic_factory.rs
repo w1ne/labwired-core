@@ -813,7 +813,36 @@ pub fn try_build(
                 )
             }
         }
-        "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
+        "avr_gpio" => {
+            let pin_count = p_cfg
+                .config
+                .get("pin_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8);
+            if !(1..=8).contains(&pin_count) {
+                anyhow::bail!(
+                    "avr_gpio '{}': config.pin_count must be in 1..=8, got {pin_count}",
+                    p_cfg.id
+                );
+            }
+            let layout = p_cfg.config.get("layout").and_then(|v| v.as_str());
+            match layout {
+                None | Some("atmega") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_with_pin_count(
+                        pin_count as u8,
+                    ),
+                ),
+                Some("avrxt_vport") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_avrxt_vport(
+                        pin_count as u8,
+                    ),
+                ),
+                Some(other) => anyhow::bail!(
+                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport)",
+                    p_cfg.id
+                ),
+            }
+        }
         "pic24_gpio" => {
             // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
             // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
