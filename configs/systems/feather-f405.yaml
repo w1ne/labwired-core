@@ -11,9 +11,3 @@ board_io:
     pin: 1
     signal: "output"
     active_high: true
-  - id: "button_user_pc13"
-    kind: "button"
-    peripheral: "gpioc"
-    pin: 13
-    signal: "input"
-    active_high: true

@@ -1,0 +1,311 @@
+peripheral: USART3
+version: 0.1.0
+registers:
+- id: SR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 12582912
+  fields:
+  - name: CTS
+    bit_range:
+    - 9
+    - 9
+    description: CTS flag
+  - name: LBD
+    bit_range:
+    - 8
+    - 8
+    description: LIN break detection flag
+  - name: TXE
+    bit_range:
+    - 7
+    - 7
+    description: Transmit data register empty
+  - name: TC
+    bit_range:
+    - 6
+    - 6
+    description: Transmission complete
+  - name: RXNE
+    bit_range:
+    - 5
+    - 5
+    description: Read data register not empty
+  - name: IDLE
+    bit_range:
+    - 4
+    - 4
+    description: IDLE line detected
+  - name: ORE
+    bit_range:
+    - 3
+    - 3
+    description: Overrun error
+  - name: NF
+    bit_range:
+    - 2
+    - 2
+    description: Noise detected flag
+  - name: FE
+    bit_range:
+    - 1
+    - 1
+    description: Framing error
+  - name: PE
+    bit_range:
+    - 0
+    - 0
+    description: Parity error
+  side_effects: null
+- id: DR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DR
+    bit_range:
+    - 8
+    - 0
+    description: Data value
+  side_effects: null
+- id: BRR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_Mantissa
+    bit_range:
+    - 15
+    - 4
+    description: mantissa of USARTDIV
+  - name: DIV_Fraction
+    bit_range:
+    - 3
+    - 0
+    description: fraction of USARTDIV
+  side_effects: null
+- id: CR1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVER8
+    bit_range:
+    - 15
+    - 15
+    description: Oversampling mode
+  - name: UE
+    bit_range:
+    - 13
+    - 13
+    description: USART enable
+  - name: M
+    bit_range:
+    - 12
+    - 12
+    description: Word length
+  - name: WAKE
+    bit_range:
+    - 11
+    - 11
+    description: Wakeup method
+  - name: PCE
+    bit_range:
+    - 10
+    - 10
+    description: Parity control enable
+  - name: PS
+    bit_range:
+    - 9
+    - 9
+    description: Parity selection
+  - name: PEIE
+    bit_range:
+    - 8
+    - 8
+    description: PE interrupt enable
+  - name: TXEIE
+    bit_range:
+    - 7
+    - 7
+    description: TXE interrupt enable
+  - name: TCIE
+    bit_range:
+    - 6
+    - 6
+    description: Transmission complete interrupt enable
+  - name: RXNEIE
+    bit_range:
+    - 5
+    - 5
+    description: RXNE interrupt enable
+  - name: IDLEIE
+    bit_range:
+    - 4
+    - 4
+    description: IDLE interrupt enable
+  - name: TE
+    bit_range:
+    - 3
+    - 3
+    description: Transmitter enable
+  - name: RE
+    bit_range:
+    - 2
+    - 2
+    description: Receiver enable
+  - name: RWU
+    bit_range:
+    - 1
+    - 1
+    description: Receiver wakeup
+  - name: SBK
+    bit_range:
+    - 0
+    - 0
+    description: Send break
+  side_effects: null
+- id: CR2
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LINEN
+    bit_range:
+    - 14
+    - 14
+    description: LIN mode enable
+  - name: STOP
+    bit_range:
+    - 13
+    - 12
+    description: STOP bits
+  - name: CLKEN
+    bit_range:
+    - 11
+    - 11
+    description: Clock enable
+  - name: CPOL
+    bit_range:
+    - 10
+    - 10
+    description: Clock polarity
+  - name: CPHA
+    bit_range:
+    - 9
+    - 9
+    description: Clock phase
+  - name: LBCL
+    bit_range:
+    - 8
+    - 8
+    description: Last bit clock pulse
+  - name: LBDIE
+    bit_range:
+    - 6
+    - 6
+    description: LIN break detection interrupt enable
+  - name: LBDL
+    bit_range:
+    - 5
+    - 5
+    description: lin break detection length
+  - name: ADD
+    bit_range:
+    - 3
+    - 0
+    description: Address of the USART node
+  side_effects: null
+- id: CR3
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ONEBIT
+    bit_range:
+    - 11
+    - 11
+    description: One sample bit method enable
+  - name: CTSIE
+    bit_range:
+    - 10
+    - 10
+    description: CTS interrupt enable
+  - name: CTSE
+    bit_range:
+    - 9
+    - 9
+    description: CTS enable
+  - name: RTSE
+    bit_range:
+    - 8
+    - 8
+    description: RTS enable
+  - name: DMAT
+    bit_range:
+    - 7
+    - 7
+    description: DMA enable transmitter
+  - name: DMAR
+    bit_range:
+    - 6
+    - 6
+    description: DMA enable receiver
+  - name: SCEN
+    bit_range:
+    - 5
+    - 5
+    description: Smartcard mode enable
+  - name: NACK
+    bit_range:
+    - 4
+    - 4
+    description: Smartcard NACK enable
+  - name: HDSEL
+    bit_range:
+    - 3
+    - 3
+    description: Half-duplex selection
+  - name: IRLP
+    bit_range:
+    - 2
+    - 2
+    description: IrDA low-power
+  - name: IREN
+    bit_range:
+    - 1
+    - 1
+    description: IrDA mode enable
+  - name: EIE
+    bit_range:
+    - 0
+    - 0
+    description: Error interrupt enable
+  side_effects: null
+- id: GTPR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GT
+    bit_range:
+    - 15
+    - 8
+    description: Guard time value
+  - name: PSC
+    bit_range:
+    - 7
+    - 0
+    description: Prescaler value
+  side_effects: null
+interrupts:
+  USART3: 39
+  USART6: 71
+timing: null

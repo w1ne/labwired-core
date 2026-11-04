@@ -517,6 +517,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32f405/tim2.yaml", packed!("stm32f405/tim2.yaml")),
     ("stm32f405/usart1.yaml", packed!("stm32f405/usart1.yaml")),
     ("stm32f405/usart2.yaml", packed!("stm32f405/usart2.yaml")),
+    ("stm32f405/usart3.yaml", packed!("stm32f405/usart3.yaml")),
     ("stm32f407/adc1.yaml", packed!("stm32f407/adc1.yaml")),
     ("stm32f407/can1.yaml", packed!("stm32f407/can1.yaml")),
     ("stm32f407/dbg.yaml", packed!("stm32f407/dbg.yaml")),

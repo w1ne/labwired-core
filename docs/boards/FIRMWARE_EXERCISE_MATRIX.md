@@ -446,7 +446,7 @@ _Exact orderable geometry slice for stm32f401ve on the shared F401 peripheral en
 
 ### `stm32f405`
 
-_No tier-1 target (absent from tier1-matrix.json), so this entry carries the whole story: the committed part-specific fixture runs nightly via examples/feather-f405/tier1-smoke.yaml and PR-gated firmware_survival::test_stm32f405_tier1_survival, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and explicitly leaving dma/irq/pwm unclaimed; PWR and both DMA controllers are modeled but firmware-untouched, and DBGMCU is never exercised at all._
+_No tier-1 target (absent from tier1-matrix.json): the committed part-specific fixture runs nightly via examples/feather-f405/tier1-smoke.yaml and PR-gated firmware_survival::test_stm32f405_tier1_survival, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and explicitly leaving dma/irq/pwm unclaimed. The Adafruit Feather STM32F405 Express has a separate local CLI smoke at examples/feather-f405/io-smoke.yaml that checks the exposed USART3 TX on PB10 and D13/PC1 GPIO edges; it is not a CI or hosted-verifier result. PWR and both DMA controllers are modeled but firmware-untouched, and DBGMCU is never exercised at all._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `PWR`, `DMA1`, `DMA2`
 

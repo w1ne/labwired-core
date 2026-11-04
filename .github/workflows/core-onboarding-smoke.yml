@@ -19,6 +19,7 @@ on:
       - "configs/systems/**"
       - "examples/**"
       - "crates/firmware-f401-demo/**"
+      - "crates/firmware-feather-f405-demo/**"
       - "crates/firmware-f446-demo/**"
       - "crates/firmware-f4-discovery-smoke/**"
       - "crates/firmware-stm32g0-demo/**"
@@ -98,6 +99,7 @@ on:
       - "examples/adafruit-feather-esp32-v2/**"
       - "scripts/build-adafruit-feather-esp32-v2-smoke.sh"
       - "crates/core/**"
+      - "configs/peripherals/stm32f405/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-nucleo-u545re-smoke/**"
       - "crates/firmware-atsamd51-demo/**"
@@ -202,6 +204,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f439zi/io-smoke.yaml
             system: configs/systems/nucleo-f439zi.yaml
+          - id: feather-f405
+            crate: firmware-feather-f405-demo
+            target: thumbv7em-none-eabi
+            script: examples/feather-f405/io-smoke.yaml
+            system: configs/systems/feather-f405.yaml
           - id: lis2dux12-nucleo-f407
             crate: nucleo-f407-i2c
             target: thumbv7em-none-eabi
