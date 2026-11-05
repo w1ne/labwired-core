@@ -1,0 +1,12 @@
+# Toggle the external LED signal on XIAO ESP32-C3 D10 / GPIO10.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-xiao-esp32c3-smoke"
+  system: "../../configs/systems/seeed-xiao-esp32c3.yaml"
+limits:
+  max_steps: 1000
+assertions:
+  - gpio_edges:
+      pin: "gpio:10"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,38 @@
+# Narrow ESP32-C3 profile for the Seeed Studio XIAO ESP32-C3 D10 GPIO smoke.
+# Only the C3 memory map and real GPIO model are loaded; radio, USB, UART,
+# I2C, SPI, ADC, and boot-ROM startup are outside this profile.
+name: "esp32c3-xiao-gpio-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FC80000
+  size: "400KB"
+
+# Seeed's XIAO ESP32C3 pin map. This smoke profile exposes the header pins as
+# GPIO only; the alternate UART/I2C/SPI/ADC functions are not claimed here.
+pins:
+  D0: { gpio: "gpio", bit: 2, functions: [{ type: gpio, peripheral: gpio }] }
+  D1: { gpio: "gpio", bit: 3, functions: [{ type: gpio, peripheral: gpio }] }
+  D2: { gpio: "gpio", bit: 4, functions: [{ type: gpio, peripheral: gpio }] }
+  D3: { gpio: "gpio", bit: 5, functions: [{ type: gpio, peripheral: gpio }] }
+  D4: { gpio: "gpio", bit: 6, functions: [{ type: gpio, peripheral: gpio }] }
+  D5: { gpio: "gpio", bit: 7, functions: [{ type: gpio, peripheral: gpio }] }
+  D6: { gpio: "gpio", bit: 21, functions: [{ type: gpio, peripheral: gpio }] }
+  D7: { gpio: "gpio", bit: 20, functions: [{ type: gpio, peripheral: gpio }] }
+  D8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
+  D9: { gpio: "gpio", bit: 9, functions: [{ type: gpio, peripheral: gpio }] }
+  D10: { gpio: "gpio", bit: 10, functions: [{ type: gpio, peripheral: gpio }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32c3_gpio"
+    base_address: 0x60004000
+    size: "3840"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"

@@ -2438,6 +2438,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-xiao-esp32c3-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-xiao-nrf52840-sense-demo"
 version = "0.1.0"
 dependencies = [

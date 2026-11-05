@@ -19,6 +19,7 @@ on:
       - "examples/**"
       - "crates/core/**"
       - "crates/cli/**"
+      - "crates/firmware-xiao-esp32c3-smoke/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
@@ -158,6 +159,15 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/io-smoke.yaml
             system: configs/systems/esp32c6-devkitc.yaml
+          # XIAO ESP32-C3: the standalone GPIO profile tests its documented D10
+          # header pin without claiming the C3's other board/chip peripherals.
+          - id: seeed-xiao-esp32c3
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-xiao-esp32c3-smoke
+            profile: release
+            profile_dir: release
+            script: examples/seeed-xiao-esp32c3/onboarding-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c3.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
