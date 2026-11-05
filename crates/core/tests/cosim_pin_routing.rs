@@ -1646,42 +1646,44 @@ fn brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end() {
     );
 }
 
-/// The EK-RA6M5 system profile uses the generic MNA NTC and Shockley diode
-/// models on separate ADC1 channels. Advance a Cortex-M machine and both
-/// circuits in lockstep, then start the RA ADC12 scan through its MMIO
-/// registers and assert the converted voltages at cold, nominal and hot
-/// temperatures.
-#[test]
-fn ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end() {
+/// Exercise generic MNA NTC and Shockley diode netlists against a real RA ADC12
+/// peripheral. The same device models and ADC register path are used by both
+/// EK-RA6M5 and EK-RA8M1; only each board's ADC base and executable RAM address
+/// differ.
+fn assert_ra_adc12_ntc_and_diode_netlists(
+    system_manifest: &str,
+    expected_name: &str,
+    adc1: u64,
+    idle: u32,
+    stack_pointer: u32,
+) {
     use labwired_core::system::cortex_m::configure_cortex_m;
     use labwired_core::{AdvanceRequest, Cpu, Machine};
 
-    const ADC1: u64 = 0x4017_0200;
-    const ADANSA0: u64 = ADC1 + 0x04;
-    const ADDR0: u64 = ADC1 + 0x20;
-    const ADDR1: u64 = ADC1 + 0x22;
-    const ADDR2: u64 = ADC1 + 0x24;
+    let adansa0 = adc1 + 0x04;
+    let addr0 = adc1 + 0x20;
+    let addr1 = adc1 + 0x22;
+    let addr2 = adc1 + 0x24;
     const ADST: u16 = 1 << 15;
-    const IDLE: u32 = 0x2000_2000;
 
-    let profile_path = root("configs/systems/ek-ra6m5.yaml");
-    let mut profile = SystemManifest::from_file(&profile_path).expect("load EK-RA6M5 profile");
-    assert_eq!(profile.name, "ek-ra6m5");
+    let profile_path = root(system_manifest);
+    let mut profile = SystemManifest::from_file(&profile_path).expect("load board profile");
+    assert_eq!(profile.name, expected_name);
     let analog = SystemManifest::from_file(root("examples/ek-ra6m5/analog-ntc-system.yaml"))
-        .expect("load EK-RA6M5 NTC divider fixture");
+        .expect("load generic NTC and diode netlists");
     profile.cosim_models = analog.cosim_models;
 
     let chip_path = profile_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load RA6M5 descriptor");
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build EK-RA6M5 bus");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load board chip descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build board bus");
     let (cpu, _) = configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
     machine
         .bus
-        .write_u16(u64::from(IDLE), 0xE7FE)
+        .write_u16(u64::from(idle), 0xE7FE)
         .expect("write a branch-to-self instruction for lockstep time");
-    machine.cpu.set_pc(IDLE);
-    machine.cpu.set_sp(0x2000_7F00);
+    machine.cpu.set_pc(idle);
+    machine.cpu.set_sp(stack_pointer);
 
     let mut session = build_session(&machine.bus, &profile.cosim_models);
     let mut samples = Vec::new();
@@ -1756,15 +1758,15 @@ fn ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end() {
 
         machine
             .bus
-            .write_u16(ADANSA0, 0b0101)
+            .write_u16(adansa0, 0b0101)
             .expect("select RA ADC1 channels 0 and 2 only");
         machine
             .bus
-            .write_u16(ADC1, ADST)
+            .write_u16(adc1, ADST)
             .expect("start a firmware-visible ADC1 group-A scan");
         let mut conversion_complete = false;
         for _ in 0..2048 {
-            if machine.bus.read_u16(ADC1).expect("read ADC1 ADCSR") & ADST == 0 {
+            if machine.bus.read_u16(adc1).expect("read ADC1 ADCSR") & ADST == 0 {
                 conversion_complete = true;
                 break;
             }
@@ -1784,17 +1786,17 @@ fn ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end() {
         let diode_mv = (expected_diode_volts * 1000.0 + 0.5).floor() as u32;
         let expected_diode_count = (diode_mv * 4095 / 3300) as u16;
         assert_eq!(
-            machine.bus.read_u16(ADDR0).expect("read RA ADC1 ADDR0"),
+            machine.bus.read_u16(addr0).expect("read RA ADC1 ADDR0"),
             expected_count,
             "ADC1 channel 0 must convert the solved NTC voltage at {temperature_c} °C"
         );
         assert_eq!(
-            machine.bus.read_u16(ADDR2).expect("read RA ADC1 ADDR2"),
+            machine.bus.read_u16(addr2).expect("read RA ADC1 ADDR2"),
             expected_diode_count,
             "ADC1 channel 2 must convert the independent diode load line"
         );
         assert_eq!(
-            machine.bus.read_u16(ADDR1).expect("read RA ADC1 ADDR1"),
+            machine.bus.read_u16(addr1).expect("read RA ADC1 ADDR1"),
             0,
             "the unselected neighboring channel must not be converted"
         );
@@ -1819,6 +1821,28 @@ fn ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end() {
     assert!(
         samples.iter().all(|sample| sample.4 == samples[0].4),
         "the independent diode conversion remains constant as NTC temperature changes: {samples:?}"
+    );
+}
+
+#[test]
+fn ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end() {
+    assert_ra_adc12_ntc_and_diode_netlists(
+        "configs/systems/ek-ra6m5.yaml",
+        "ek-ra6m5",
+        0x4017_0200,
+        0x2000_2000,
+        0x2000_7F00,
+    );
+}
+
+#[test]
+fn ek_ra8m1_ntc_and_diode_netlists_reach_adc1_end_to_end() {
+    assert_ra_adc12_ntc_and_diode_netlists(
+        "configs/systems/ek-ra8m1.yaml",
+        "ek-ra8m1",
+        0x4033_2200,
+        0x2200_2000,
+        0x2200_7F00,
     );
 }
 
