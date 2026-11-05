@@ -1,0 +1,5 @@
+2026-11-05T11:32:45.474677Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_vexriscv_verilated_liteuart.yaml
+2026-11-05T11:32:45.475544Z  INFO labwired_loader: ELF Entry Point: 0x10000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-05T11:32:46.690270Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["cpu=rv32im uart=litex-csr-model", "mul=00000143", "timer=running", "timer=zero", "hb=0 txfull=00000000", "hb=1 txfull=00000000", "hb=2 txfull=00000000", "hb=3 txfull=00000000"] }) (captured len=162)
+FAIL  2/3 checks · litex_vexriscv_verilated_liteuart-smoke · 4000000 steps · 1.21s

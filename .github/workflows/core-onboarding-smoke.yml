@@ -861,6 +861,14 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv_micropython-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv_micropython.yaml
+          # The imported platform uses an external CoSimulatedUART. Run the
+          # local RV32IM + LiteX UART CSR/timer subset instead.
+          - id: litex_vexriscv_verilated_liteuart
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe,verilated-liteuart-profile
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_verilated_liteuart-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_verilated_liteuart.yaml
           - id: litex_ibex
             crate: firmware-litex-ibex-smoke
             target: riscv32imc-unknown-none-elf

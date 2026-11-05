@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/ezr32wg330-smoke.yaml",
   "system": "configs/systems/onboarding/ezr32wg330.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T11:14:42Z",
-  "finished_at_utc": "2026-11-05T11:14:43Z",
+  "started_at_utc": "2026-11-05T11:40:27Z",
+  "finished_at_utc": "2026-11-05T11:40:28Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 744,
+  "elapsed_ms": 714,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.285,
-    "build_firmware": 0.175,
-    "run_smoke": 0.274
+    "build_cli": 0.281,
+    "build_firmware": 0.164,
+    "run_smoke": 0.259
   },
   "stages_ms": {
-    "build_cli": 285,
-    "build_firmware": 175,
-    "run_smoke": 274
+    "build_cli": 281,
+    "build_firmware": 164,
+    "run_smoke": 259
   }
 }

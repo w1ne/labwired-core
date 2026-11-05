@@ -12,6 +12,7 @@ license = "MIT"
 [features]
 default = []
 no-unmodelled-spi-probe = []
+verilated-liteuart-profile = []
 
 [dependencies]
 riscv-rt = "0.12"

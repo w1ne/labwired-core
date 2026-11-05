@@ -6,7 +6,7 @@
 //!
 //! Boots from the SoC's integrated SRAM (fast boot: the ELF is loaded
 //! directly, the LiteX BIOS and the SPI-flash load are skipped) and prints
-//! over the LiteX UART at 0x60001800:
+//! over the LiteX UART CSR model:
 //!
 //! * a banner and the modelled-surface summary,
 //! * a readback of an *unmodelled* CSR window (the SPI-flash controller) —
@@ -18,8 +18,11 @@
 //!   the TX-ready poll, so the assertion sees the register the firmware
 //!   actually observed.
 //!
-//! Built for `riscv32im-unknown-none-elf`: the VexRiscv variant in the
-//! descriptor is `rv32im_zicsr_zifencei` (no compressed, no atomics).
+//! Built for `riscv32im-unknown-none-elf`: the tested CPU subset is RV32IM
+//! (no compressed or atomic instructions). The `verilated-liteuart-profile`
+//! feature relocates the UART and timer to the addresses in Renode's imported
+//! Verilated LiteUART REPL. That profile uses LabWired's LiteX UART CSR model;
+//! it does not run Renode's external CoSimulatedUART implementation.
 
 #![no_std]
 #![no_main]
@@ -28,18 +31,38 @@
 use panic_halt as _;
 use riscv_rt::entry;
 
-/// LiteX UART CSR window (rxtx @ +0x00, txfull @ +0x04; see the chip
-/// descriptor for the register-layout source).
+/// LiteX UART CSR window (rxtx @ +0x00, txfull @ +0x04).
+#[cfg(feature = "verilated-liteuart-profile")]
+const UART_RXTX: *mut u32 = 0xe000_1000 as *mut u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const UART_RXTX: *mut u32 = 0x6000_1800 as *mut u32;
+#[cfg(feature = "verilated-liteuart-profile")]
+const UART_TXFULL: *const u32 = 0xe000_1004 as *const u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const UART_TXFULL: *const u32 = 0x6000_1804 as *const u32;
 
 /// LiteX timer CSR window (`litex/soc/cores/timer.py`): load @ +0x00,
 /// reload @ +0x04, en @ +0x08, update_value @ +0x0C, value @ +0x10,
 /// ev_status @ +0x14, ev_pending @ +0x18, ev_enable @ +0x1C.
+#[cfg(feature = "verilated-liteuart-profile")]
+const TIMER_LOAD: *mut u32 = 0xe000_2800 as *mut u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const TIMER_LOAD: *mut u32 = 0x6000_2800 as *mut u32;
+#[cfg(feature = "verilated-liteuart-profile")]
+const TIMER_RELOAD: *mut u32 = 0xe000_2804 as *mut u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const TIMER_RELOAD: *mut u32 = 0x6000_2804 as *mut u32;
+#[cfg(feature = "verilated-liteuart-profile")]
+const TIMER_EN: *mut u32 = 0xe000_2808 as *mut u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const TIMER_EN: *mut u32 = 0x6000_2808 as *mut u32;
+#[cfg(feature = "verilated-liteuart-profile")]
+const TIMER_EV_STATUS: *const u32 = 0xe000_2814 as *const u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const TIMER_EV_STATUS: *const u32 = 0x6000_2814 as *const u32;
+#[cfg(feature = "verilated-liteuart-profile")]
+const TIMER_EV_PENDING: *mut u32 = 0xe000_2818 as *mut u32;
+#[cfg(not(feature = "verilated-liteuart-profile"))]
 const TIMER_EV_PENDING: *mut u32 = 0x6000_2818 as *mut u32;
 
 /// An unmodelled LiteX CSR window (the SPI-flash controller at 0x60005000).
@@ -73,6 +96,23 @@ fn put_hex32(value: u32) {
             _ => b'a' + nibble - 10,
         });
     }
+}
+
+/// Keep the M-extension check explicit so constant folding cannot replace it.
+#[cfg(feature = "verilated-liteuart-profile")]
+#[inline(never)]
+fn multiply(left: u32, right: u32) -> u32 {
+    let result: u32;
+    unsafe {
+        core::arch::asm!(
+            "mul {result}, {left}, {right}",
+            result = lateout(reg) result,
+            left = in(reg) left,
+            right = in(reg) right,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    result
 }
 
 fn put_dec32(value: u32) {
@@ -130,6 +170,14 @@ fn timer_one_shot(cycles: u32) {
 #[entry]
 fn main() -> ! {
     puts("LITEX VEXRISCV SMOKE\n");
+    #[cfg(feature = "verilated-liteuart-profile")]
+    {
+        puts("cpu=rv32im uart=litex-csr-model\n");
+        puts("mul=");
+        put_hex32(multiply(17, 19));
+        putc(b'\n');
+    }
+    #[cfg(not(feature = "verilated-liteuart-profile"))]
     puts("cpu=rv32im uart=litex\n");
 
     // Keep the explicit stub probe only in the original generic LiteX profile.

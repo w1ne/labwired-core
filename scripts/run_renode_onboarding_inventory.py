@@ -63,6 +63,12 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_vexriscv_tftp-smoke.yaml",
     },
+    "litex_vexriscv_verilated_liteuart": {
+        "crate": "firmware-litex-vexriscv-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "features": "no-unmodelled-spi-probe,verilated-liteuart-profile",
+        "script": "examples/renode-onboarding/litex_vexriscv_verilated_liteuart-smoke.yaml",
+    },
     "litex_tock": {
         "crate": "firmware-litex-tock-smoke",
         "target": "riscv32imac-unknown-none-elf",
