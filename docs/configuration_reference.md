@@ -479,6 +479,7 @@ canonical `type:`; the table below is rendered from that file by
 | `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
+| `ili9488` | SPI | 320×480 SPI TFT controller with modelled 18-bit COLMOD |
 | `inmp441` | SPI | Omnidirectional MEMS microphone, 24-bit I2S digital output |
 | `led-matrix` | SPI | 8×8 LED matrix driven by a MAX7219 serial display driver over SPI |
 | `lora-sx1278` | SPI | Semtech SX1278 SPI LoRa register shell (no RF) |
