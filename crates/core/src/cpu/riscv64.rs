@@ -1007,12 +1007,13 @@ pub struct Rv64Params {
     pub mtime_divider: u64,
 }
 
-/// PolarFire SoC MSS (every MPFSxxxT): hart 0 is the E51 monitor core, harts
-/// 1-4 the U54 application cores. This model runs the first U54, which is the
-/// hart Zephyr's `mpfs_icicle/polarfire/u54` target boots on
-/// (`CONFIG_RV_BOOT_HART=1`). CLINT at 0x0200_0000 (PolarFire SoC MSS TRM,
-/// memory map; Zephyr `mpfs.dtsi` `clint@2000000`). `mtime` counts the 1 MHz
-/// RTC reference (`CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC=1000000` on the board).
+/// PolarFire SoC MSS (every MPFSxxxT, including BeagleV-Fire): hart 0 is the
+/// E51 monitor core, harts 1-4 the U54 application cores. This model runs the
+/// first U54, which is the hart used by Zephyr's
+/// `mpfs_icicle/polarfire/u54` target (`CONFIG_RV_BOOT_HART=1`). The CLINT at
+/// 0x0200_0000 follows the PolarFire SoC MSS memory map and Zephyr's `mpfs.dtsi`
+/// `clint@2000000`. `mtime` counts the 1 MHz RTC reference
+/// (`CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC=1000000` on the board).
 const MPFS_U54_HART: u64 = 1;
 const MPFS_CLINT_BASE: u64 = 0x0200_0000;
 const MPFS_MTIME_HZ: u64 = 1_000_000;
@@ -1024,7 +1025,7 @@ impl Rv64Params {
 
     pub fn for_chip_name(name: &str, cpu_hz: u64) -> Self {
         let name = name.to_ascii_lowercase();
-        if name.starts_with("mpfs") {
+        if name.starts_with("mpfs") || name == "beaglev-fire" {
             return Self {
                 hart_id: MPFS_U54_HART,
                 clint_base: Some(MPFS_CLINT_BASE),

@@ -1,5 +1,5 @@
-2026-11-05T06:40:48.792908Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mpfs-icicle-kit.yaml
-2026-11-05T06:40:48.794202Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+2026-11-05T07:02:29.618321Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mpfs-icicle-kit.yaml
+2026-11-05T07:02:29.619642Z  INFO labwired_loader: ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 59956062 of 60000000 device cycles (43938 interpreted)

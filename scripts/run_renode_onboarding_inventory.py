@@ -39,6 +39,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",
     },
+    "beaglev-fire": {
+        "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
+        "script": "examples/renode-onboarding/beaglev-fire-smoke.yaml",
+    },
     "litex_vexriscv_linux": {
         "crate": "firmware-litex-vexriscv-linux-smoke",
         "target": "riscv32im-unknown-none-elf",

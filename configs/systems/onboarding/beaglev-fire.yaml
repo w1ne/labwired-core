@@ -6,3 +6,4 @@
 
 name: beaglev-fire
 chip: ../../chips/onboarding/beaglev-fire.yaml
+debug_uart: mmuart1

@@ -992,6 +992,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
             script: examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml
             system: configs/systems/onboarding/mpfs-icicle-kit.yaml
+          # BeagleV-Fire shares the PolarFire SoC; exercise the same stock U54
+          # Zephyr image against its exact imported, bounded system profile.
+          - id: beaglev-fire
+            prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
+            script: examples/renode-onboarding/beaglev-fire-smoke.yaml
+            system: configs/systems/onboarding/beaglev-fire.yaml
 
     steps:
       - uses: actions/checkout@v4
