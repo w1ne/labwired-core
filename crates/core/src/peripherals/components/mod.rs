@@ -53,7 +53,9 @@ pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
 pub mod iolink_native;
 pub mod iolink_station;
+pub mod joystick;
 pub mod lcd1602;
+pub mod limit_switch;
 pub mod max30102;
 pub mod mcp2515;
 pub mod microsd;

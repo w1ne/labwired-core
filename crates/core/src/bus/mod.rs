@@ -41,6 +41,7 @@ mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
+pub(crate) use motors::classify_logic_rail;
 mod observed_device;
 pub(crate) mod part_pack;
 mod pms;
