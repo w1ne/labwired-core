@@ -65,6 +65,13 @@ jobs:
             profile_dir: release
             script: examples/nucleo-f103rb/io-smoke.yaml
             system: configs/systems/nucleo-f103rb.yaml
+          - id: stm32f103c8-bluepill
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103c8-bluepill-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f103c8-bluepill/io-smoke.yaml
+            system: configs/systems/stm32f103c8-bluepill.yaml
           # NTC lab: its io-smoke asserts the ADC CONVERSION (boot reading =
           # divider midpoint, later reading rises after the 80 C stimulus). It
           # ran in no workflow, so the firmware's F2/F4 SWSTART (bit 30) on an

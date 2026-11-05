@@ -1,0 +1,12 @@
+# STM32F103C8T6 Blue Pill onboard LED smoke.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103c8-bluepill-smoke"
+  system: "../../configs/systems/stm32f103c8-bluepill.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 4
+  - expected_stop_reason: max_steps

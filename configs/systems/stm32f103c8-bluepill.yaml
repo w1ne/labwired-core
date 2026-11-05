@@ -1,0 +1,12 @@
+# STM32F103C8T6 Blue Pill system profile.
+# The active-low PC13 user LED is the only board connection modeled here.
+name: "stm32f103c8-bluepill"
+chip: "../chips/stm32f103c8-bluepill-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false
