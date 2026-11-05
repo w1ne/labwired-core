@@ -857,6 +857,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml
             system: configs/systems/onboarding/vegaboard_ri5cy.yaml
+          # The generic RI5CY import uses the same upstream core, memory map,
+          # and LPUART0, but is tested through its own exact imported system.
+          - id: ri5cy
+            crate: firmware-vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/ri5cy-smoke.yaml
+            system: configs/systems/onboarding/ri5cy.yaml
           # Imported SiFive FE310 narrowed to RV32IMAC memory and uart0.
           - id: sifive-fe310
             crate: firmware-sifive-fe310-smoke

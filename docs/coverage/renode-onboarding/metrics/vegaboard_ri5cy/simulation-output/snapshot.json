@@ -4,7 +4,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      2652,
+      2624,
       537067376,
       536872960,
       0,
@@ -13,7 +13,7 @@
       3518435328,
       1074012160,
       10,
-      267016,
+      267013,
       3221225472,
       0,
       1000001536,
@@ -36,7 +36,7 @@
       53248,
       999424
     ],
-    "pc": 652,
+    "pc": 648,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 4000000,
-  "cycles": 8001036,
+  "cycles": 8001028,
   "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "202a0bfda323be57df6873db9fa1ab8c9dc0b8abf6a65f90fd96779d657642da",
+  "firmware_hash": "6934bdb740b2a45c7b101076751d9d51f9fc6f417cd37e45e1e43f47644f2500",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/vegaboard_ri5cy.yaml",

@@ -6,7 +6,7 @@ inputs:
 limits:
   max_steps: 4000000
 assertions:
-  - uart_contains: "VEGABOARD RI5CY SMOKE"
+  - uart_contains: "RI5CY RV32IMC SMOKE"
   - uart_ordered:
       - "cpu=rv32imc uart=lpuart"
       - "mul=0000002a"

@@ -592,6 +592,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imc-unknown-none-elf",
         "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml",
     },
+    "ri5cy": {
+        "crate": "firmware-vegaboard-ri5cy-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/ri5cy-smoke.yaml",
+    },
     "sifive-fe310": {
         "crate": "firmware-sifive-fe310-smoke",
         "target": "riscv32im-unknown-none-elf",

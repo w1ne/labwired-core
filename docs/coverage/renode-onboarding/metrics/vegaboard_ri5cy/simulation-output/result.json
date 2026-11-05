@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 4000000,
-  "cycles": 8001036,
+  "cycles": 8001028,
   "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -30,7 +30,7 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "VEGABOARD RI5CY SMOKE"
+        "uart_contains": "RI5CY RV32IMC SMOKE"
       },
       "passed": true
     },
@@ -57,7 +57,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      2652,
+      2624,
       537067376,
       536872960,
       0,
@@ -66,7 +66,7 @@
       3518435328,
       1074012160,
       10,
-      267016,
+      267013,
       3221225472,
       0,
       1000001536,
@@ -89,7 +89,7 @@
       53248,
       999424
     ],
-    "pc": 652,
+    "pc": 648,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -125,7 +125,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "202a0bfda323be57df6873db9fa1ab8c9dc0b8abf6a65f90fd96779d657642da",
+  "firmware_hash": "6934bdb740b2a45c7b101076751d9d51f9fc6f417cd37e45e1e43f47644f2500",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/vegaboard_ri5cy.yaml",
@@ -155,7 +155,7 @@
   "uart_lines": {
     "lines": [
       {
-        "text": "VEGABOARD RI5CY SMOKE",
+        "text": "RI5CY RV32IMC SMOKE",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -201,14 +201,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 2802,
+    "text_bytes": 2774,
     "data_bytes": 0,
     "bss_bytes": 196608,
-    "flash_used_bytes": 2802,
+    "flash_used_bytes": 2774,
     "ram_static_bytes": 196608,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 196608,
-    "flash_used_pct": 0.27,
+    "flash_used_pct": 0.26,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -221,28 +221,28 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 8001036,
+    "cycles": 8001028,
     "instructions": 4000000,
     "steps_executed": 4000000,
     "memory_reads": 4000004,
     "memory_writes": 47,
-    "peripheral_accesses": 274,
+    "peripheral_accesses": 270,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 652,
+        "pc": 648,
         "count": 5235,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 652,
+        "count": 5196,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 650,
-        "count": 5196,
-        "symbol": "firmware_vegaboard_ri5cy_smoke::spin"
-      },
-      {
-        "pc": 648,
         "count": 5194,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+        "symbol": "firmware_vegaboard_ri5cy_smoke::spin"
       }
     ]
   }

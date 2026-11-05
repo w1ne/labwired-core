@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.578959">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.638014">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="202a0bfda323be57df6873db9fa1ab8c9dc0b8abf6a65f90fd96779d657642da"/>
+    <property name="firmware_hash" value="6934bdb740b2a45c7b101076751d9d51f9fc6f417cd37e45e1e43f47644f2500"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.578959">
+  <testcase classname="labwired" name="run" time="0.638014">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: VEGABOARD RI5CY SMOKE" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: RI5CY RV32IMC SMOKE" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=rv32imc uart=lpuart&quot;, &quot;mul=0000002a&quot;, &quot;hb=0 stat=00c00000&quot;, &quot;hb=1 stat=00c00000&quot;, &quot;hb=2 stat=00c000…" time="0.000000">
   </testcase>

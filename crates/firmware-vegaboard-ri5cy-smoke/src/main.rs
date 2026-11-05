@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Vega board (RI5CY) smoke firmware.
+//! RI5CY smoke firmware shared by imported Renode RI5CY profiles.
 //!
-//! The board's SoC maps 1 MiB of flash at 0x0, 192 KiB of SRAM at 0x20000000
+//! The RI5CY SoC map has 1 MiB of flash at 0x0, 192 KiB of SRAM at 0x20000000
 //! and an NXP LPUART0 at 0x40042000. The ELF is loaded directly (fast boot).
 //!
 //! Prints a banner, executes a `mul` instruction (`mul=0000002a`), and emits
@@ -75,7 +75,7 @@ fn spin(iterations: u32) {
 
 #[entry]
 fn main() -> ! {
-    puts("VEGABOARD RI5CY SMOKE\n");
+    puts("RI5CY RV32IMC SMOKE\n");
     puts("cpu=rv32imc uart=lpuart\n");
 
     let product: u32;
