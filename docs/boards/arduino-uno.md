@@ -26,6 +26,9 @@ canvas.
 | Playground board id | `arduino-uno` |
 | Hosted compile | Arduino (PlatformIO `uno`) and Rust (`avr-none`, `atmega328p`) |
 | Tier (snapshot) | L1 smoke. Datasheet-derived. **No silicon capture yet.** |
+| Vendor lifecycle | Microchip live page reported **Not Recommended for new designs** on 2026-11-05; this page records existing coverage, not a new-part recommendation. |
+
+The status check is recorded in [`examples/arduino-uno-blinky/evidence/vendor-status.md`](../../examples/arduino-uno-blinky/evidence/vendor-status.md). The Uno/Nano path is retained for existing users and maintenance; ATmega328P is not a new onboarding target under the no-NRND rule.
 
 The Nano ([`configs/systems/arduino-nano.yaml`](../../configs/systems/arduino-nano.yaml)) is the same chip in the TQFP package, which adds ADC6/ADC7. Everything on this page applies to it except the header layout.
 
