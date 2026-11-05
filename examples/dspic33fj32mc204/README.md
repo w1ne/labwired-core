@@ -23,6 +23,20 @@ cargo build --release -p labwired-cli
 ./target/release/labwired test --script examples/dspic33fj32mc204/io-smoke.yaml
 ```
 
+## Mixed-signal GPIO inputs
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes two generic
+MNA devices to RB0 and RB1: a temperature-controlled Beta NTC divider and an
+independent Shockley diode load line. The board-specific test checks both solved
+voltages and the PORTB threshold/hysteresis response:
+
+```bash
+cargo test -p labwired-core --test cosim_dspic33fj32mc204_analog
+```
+
+The GPIO thresholds are simulation assumptions shared with the MC202 example;
+this proves the modeled GPIO input route, not ADC support or silicon behavior.
+
 ## The firmware
 
 Five committed ELFs exercise the chip:
