@@ -49,6 +49,34 @@ fn expected_diode_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+fn adc_channel_input_count(bus: &mut SystemBus, channel: u8) -> u16 {
+    let adc_index = bus
+        .find_peripheral_index_by_name("sens_sar_adc")
+        .expect("the classic ESP32 profile declares the SENS SAR ADC");
+    let adc = bus.peripherals[adc_index]
+        .dev
+        .as_any_mut()
+        .expect("SENS SAR downcasts")
+        .downcast_mut::<Esp32SarAdc>()
+        .expect("sens_sar_adc uses the classic ESP32 SAR model");
+    adc.channel_input_count(channel)
+}
+
+fn convert_adc1_channel(bus: &mut SystemBus, channel: u8) -> u16 {
+    // SENS_SAR_READ_CTRL.SAR1_SAMPLE_BIT = 0b11 selects 12-bit conversion.
+    bus.write_u32(u64::from(SENS_BASE), 3 << 16)
+        .expect("select 12-bit SAR1 conversion");
+    // SAR_MEAS_START1: EN_PAD is one-hot at CHANNEL, force is set, then SAR starts.
+    let start = (1u32 << (19 + u32::from(channel))) | (1 << 18) | (1 << 17);
+    bus.write_u32(u64::from(SENS_BASE) + 0x54, start)
+        .expect("start SAR1 conversion on the routed channel");
+    let result = bus
+        .read_u32(u64::from(SENS_BASE) + 0x54)
+        .expect("read firmware-visible SAR1 result");
+    assert_ne!(result & (1 << 16), 0, "DONE_SAR is raised");
+    (result & 0x0FFF) as u16
+}
+
 #[test]
 fn feather_esp32_diode_netlist_reaches_sens_sar_channel_and_one_shot_result() {
     let system_path = root("examples/adafruit-feather-esp32-v2/analog-diode-system.yaml");
@@ -238,5 +266,103 @@ fn esp32_wroom_32_ntc_netlist_reaches_sens_sar_channel_and_one_shot_result() {
     assert_eq!(
         samples[1].2, 2047,
         "25 °C puts the matched divider at half scale"
+    );
+}
+
+/// The e-paper system profile uses the same classic ESP32 ADC routing as the
+/// bare WROOM profile. Exercise the profile itself with two unrelated generic
+/// circuits so coverage proves both nonlinear device physics and channel
+/// isolation through the one-shot conversion registers.
+#[test]
+fn esp32_wroom_epaper_ntc_and_diode_reach_distinct_sens_adc_channels() {
+    let profile_path = root("configs/systems/esp32-wroom-epaper.yaml");
+    let mut profile = SystemManifest::from_file(&profile_path).expect("load e-paper profile");
+    assert_eq!(profile.name, "esp32-wroom-epaper");
+    let analog_path = root("examples/esp32-wroom-epaper/analog-ntc-diode-system.yaml");
+    let analog = SystemManifest::from_file(&analog_path).expect("load generic analog fixture");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = profile_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load classic ESP32 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build e-paper ESP32 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries generic NTC and diode models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the NTC and diode must bind to distinct SENS SAR channels"
+    );
+    assert_eq!(adc_channel_input_count(&mut bus, 6), 0xFFFF);
+    assert_eq!(adc_channel_input_count(&mut bus, 7), 0xFFFF);
+    assert_eq!(adc_channel_input_count(&mut bus, 5), 0xFFFF);
+
+    let expected_diode_v = expected_diode_voltage();
+    let mut cycles = 0;
+    let mut ntc_samples = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature input");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve both analog circuits and route their outputs");
+        assert_eq!(steps.len(), 2, "both devices cross the 1 us boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = match session.signals().get("adc.sens_sar_adc.6_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the NTC voltage did not reach ADC1 channel 6: {other:?}"),
+        };
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_ntc_v = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "at {temperature_c} °C the Beta divider should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+
+        let diode_v = match session.signals().get("adc.sens_sar_adc.7_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the diode voltage did not reach ADC1 channel 7: {other:?}"),
+        };
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the independent Shockley load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+
+        for (channel, voltage) in [(6, ntc_v), (7, diode_v)] {
+            let expected_mv = (voltage * 1000.0 + 0.5).floor() as u16;
+            let expected_count = (u32::from(expected_mv) * 4095 / 3300) as u16;
+            assert_eq!(
+                adc_channel_input_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed only the selected ADC channel"
+            );
+            assert_eq!(
+                convert_adc1_channel(&mut bus, channel),
+                expected_count,
+                "the firmware-visible one-shot conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_input_count(&mut bus, 5),
+            0xFFFF,
+            "the adjacent undriven channel remains untouched"
+        );
+        ntc_samples.push((ntc_v, adc_channel_input_count(&mut bus, 6)));
+    }
+
+    assert!(
+        ntc_samples[2].0 > ntc_samples[1].0 && ntc_samples[1].0 > ntc_samples[0].0,
+        "the NTC divider voltage rises as it heats: {ntc_samples:?}"
+    );
+    assert!(
+        ntc_samples[2].1 > ntc_samples[1].1 && ntc_samples[1].1 > ntc_samples[0].1,
+        "the ADC result follows the temperature-dependent divider: {ntc_samples:?}"
+    );
+    assert_eq!(
+        ntc_samples[1].1, 2047,
+        "25 °C puts the divider at half scale"
     );
 }
