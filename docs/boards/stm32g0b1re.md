@@ -1,7 +1,7 @@
 # STM32G0B1RE — USART1, TIM2, and GPIO EXTI examples
 
 A narrow **STM32G0B1RE** slice for the IO-Link reference firmware:
-Cortex-M0+, 512 KB flash, 128 KB SRAM, 16 MHz HSI. The modelled
+Cortex-M0+, 512 KB flash, 144 KB SRAM, 16 MHz reset HSI. The modelled
 peripherals are the ones that slice uses. This page is the runnable
 illustration of those peripherals. It is not a silicon capture and it
 does not claim a full G0B1.
@@ -39,6 +39,8 @@ customer IO-Link image is a different file, built by
 | Signal | Pin | Alternate function |
 |--------|-----|--------------------|
 | USART1_TX | PA9 | AF1 |
+| USART1_RX | PA10 | AF1 |
+| USART2_TX / RX | PA2 / PA3 | AF1 |
 | EXTI line 0 | PB0 | port code `1` in `EXTICR1` |
 
 TIM2 has no pin in this example. The prescaler is programmed directly.
@@ -47,12 +49,41 @@ TIM2 has no pin in this example. The prescaler is programmed directly.
 
 | Peripheral | Example | Limit |
 |------------|---------|-------|
-| RCC, G0 offsets | ✅ clocks GPIOA, TIM2, USART1 | HSI ready only; no PLL |
+| RCC, G0 offsets | ✅ clocks GPIOA, TIM2, USART1 | This smoke exercises HSI only; see the fixed PLL profile below |
 | GPIOA `stm32v2` | ✅ PA9 mode and AFRH | Other ports are declared, not exercised here |
 | USART1 | ✅ `OK` at 115200 8N1 | No RX, no COM2 byte exchange |
 | TIM2 | ✅ `PSC = 15` (1 MHz from 16 MHz) | Counter is not started |
 | EXTI, G0 GPIO bank | ✅ PB0 falling, `IMR1` unmasked | No pad edge in this smoke; see `g0_exti` and the customer ELF |
 | SYSCFG | ❌ | Declared window, stub only |
+
+## Exact IO-Link operating-point extension
+
+The original smoke above remains the 16 MHz UART-console prerequisite.
+[`examples/iolink-g0b1re-tiol112`](../../examples/iolink-g0b1re-tiol112/README.md)
+adds USART2 at `0x40004400`, shared USART2/LPUART2 IRQ28, the complete 144 KiB
+SRAM address range, and a separate TIOL112 transceiver model. PWR CR1/SR2 and
+FLASH ACR are available for the 64 MHz clock-setup sequence; this does not
+validate the other G0B1 flash/programming/power modes.
+
+`peripherals::stm32g0_clock::validate_timed_uart_clock` derives HSI/PLL,
+AHB/APB and TIM clocks from the actual RCC registers. It rejects a 16 MHz
+firmware image measured against a 64 MHz timebase, divided APB, alternate UART
+kernel clocks and non-reset USART PRESC. Simulation time remains a fixed
+operating-point assumption; oscillator startup, changing clock frequency,
+flash wait-state execution penalties and IAR instruction timing are unproven.
+The DMA extension declares DMA1 at `0x40020000` and seven modeled DMAMUX
+outputs at `0x40020800`. USART1 RX/TX request IDs are 50/51. The G0 DMA profile
+implements actual memory/RDR/TDR transfers, circular reload, HT/TC/TE flags,
+channel interrupt groups 9/10/11, disable/rearm, and reset. CNDTR and completion
+flags advance only after a successful bus copy. USART TC remains separate
+from DMA TC and follows the final stop bit. Timed USART DMA reception applies
+the documented DDRE and OVRDIS policies, including delayed receiver service.
+
+DMA2 is outside this slice. The physical DMAMUX block has twelve outputs;
+accessing the five unmodeled DMA2 outputs fails explicitly. Neither this
+extension nor its simulator tests establish silicon bus-contention timing,
+analog noise behavior, or a complete G0B1 DMA/DMAMUX validation. The example
+separates IRQ, CMSIS DMA and actual ST HAL DMA firmware evidence by ELF hash.
 
 ## How to run
 

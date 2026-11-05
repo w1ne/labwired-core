@@ -52,7 +52,7 @@ pub enum PinSense {
 
 impl PinSense {
     #[inline]
-    fn level(&self) -> bool {
+    pub(crate) fn level(&self) -> bool {
         match self {
             PinSense::Const(v) => *v,
             PinSense::Cell(c) => c.load(Ordering::Relaxed),

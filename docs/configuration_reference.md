@@ -404,6 +404,7 @@ canonical `type:`; the table below is rendered from that file by
 | `max485` | UART | Half-duplex RS-485 transceiver between a UART and a shared A/B pair |
 | `neo6m-gps` | UART | GPS module streaming NMEA sentences over UART RX |
 | `sim800l` | UART | SIM800L UART AT command shell (no cellular RF) |
+| `tiol112` | UART | TI IO-Link digital transceiver: EN, inverted CQ, WAKE and NFAULT |
 | `xy-md02` | UART | SHT20 RS-485 temperature and humidity transmitter speaking Modbus RTU |
 | `ydlidar-scanner` | UART | Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud |
 | `ads1015` | I²C | 4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115 |
