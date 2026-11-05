@@ -260,3 +260,13 @@ fn esp32c3_mlx90640_thermal_ntc_and_diode_netlists_reach_adc1_channels() {
         false,
     );
 }
+
+#[test]
+fn esp32c3_nokia5110_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_c3_analog_inputs(
+        "configs/systems/esp32c3-nokia5110-workshop.yaml",
+        "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
+        "esp32c3-nokia5110-workshop",
+        false,
+    );
+}
