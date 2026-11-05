@@ -3,7 +3,7 @@ set -eu
 if [ -n "${ARM_TOOLCHAIN_BIN:-}" ]; then
   export PATH="$ARM_TOOLCHAIN_BIN:$PATH"
 fi
-example_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+example_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 arm_cc=${ARM_CC:-arm-none-eabi-gcc}
 arm_size=${ARM_SIZE:-arm-none-eabi-size}
 arm_nm=${ARM_NM:-arm-none-eabi-nm}
