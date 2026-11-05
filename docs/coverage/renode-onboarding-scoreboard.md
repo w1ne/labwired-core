@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `140`
-- booted: `140/245`
-- boot_and_smoke_passed: `140/245`
-- not_run: `105`
-- pass: `140`
+- run_attempted: `141`
+- booted: `141/245`
+- boot_and_smoke_passed: `141/245`
+- not_run: `104`
+- pass: `141`
 - fail: `0`
-- median_elapsed_ms: `777`
-- median_elapsed_seconds: `0.777`
+- median_elapsed_ms: `778`
+- median_elapsed_seconds: `0.778`
 - threshold_seconds: `3600`
-- threshold_met: `140/140`
+- threshold_met: `141/141`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -248,7 +248,7 @@
 | `up_squared_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `777` | `0.777` | `True` | `n/a` | n/a | n/a |
 | `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1397` | `1.397` | `True` | `n/a` | n/a | n/a |
-| `verilated_ibex` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `877` | `0.877` | `True` | `n/a` | n/a | n/a |
 | `versatile` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `vexpress` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `vybrid` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |

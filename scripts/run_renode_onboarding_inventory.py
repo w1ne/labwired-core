@@ -610,6 +610,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imc-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_ibex-smoke.yaml",
     },
+    "verilated_ibex": {
+        "crate": "firmware-litex-ibex-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/verilated_ibex-smoke.yaml",
+    },
     "litex_picorv32": {
         "crate": "firmware-litex-picorv32-smoke",
         "target": "riscv32imc-unknown-none-elf",

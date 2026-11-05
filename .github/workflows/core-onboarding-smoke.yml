@@ -866,6 +866,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/litex_ibex-smoke.yaml
             system: configs/systems/onboarding/litex_ibex.yaml
+          # This imported descriptor is narrowed to LabWired's RV32IMC path,
+          # modeled LiteX UART and timer; the external Verilated CPU is excluded.
+          - id: verilated_ibex
+            crate: firmware-litex-ibex-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/verilated_ibex-smoke.yaml
+            system: configs/systems/onboarding/verilated_ibex.yaml
           # Direct RV32IMC firmware exercises the imported Earl Grey's
           # implemented UART0 without claiming OpenTitan ROM boot or stubs.
           - id: opentitan-earlgrey
