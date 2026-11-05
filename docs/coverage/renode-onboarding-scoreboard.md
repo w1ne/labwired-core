@@ -8,8 +8,8 @@
 - not_run: `94`
 - pass: `151`
 - fail: `0`
-- median_elapsed_ms: `1149`
-- median_elapsed_seconds: `1.149`
+- median_elapsed_ms: `1101`
+- median_elapsed_seconds: `1.101`
 - threshold_seconds: `3600`
 - threshold_met: `151/151`
 
@@ -141,7 +141,7 @@
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | `n/a` | n/a | n/a |
 | `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `813` | `0.813` | `True` | `n/a` | n/a | n/a |
 | `nxp-frdm-imx8mplus` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `nxp-k6xf` | `pass` | `True` | `yes` | `yes` | `8189` | `8.189` | `True` | `n/a` | n/a | n/a |
+| `nxp-k6xf` | `pass` | `True` | `yes` | `yes` | `796` | `0.796` | `True` | `n/a` | n/a | n/a |
 | `nxp-mimx8ml` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `nxp-s32k388` | `pass` | `True` | `yes` | `yes` | `1435` | `1.435` | `True` | `n/a` | n/a | n/a |
 | `nxp-s32k388evb` | `pass` | `True` | `yes` | `yes` | `7818` | `7.818` | `True` | `n/a` | n/a | n/a |
