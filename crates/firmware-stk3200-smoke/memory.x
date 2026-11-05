@@ -1,0 +1,6 @@
+/* Renode EFM32ZG222 map: 32 KiB flash at zero and 4 KiB SRAM. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 32K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 4K
+}

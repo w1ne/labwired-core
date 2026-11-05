@@ -1,0 +1,8 @@
+2026-11-05T01:42:30.260936Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stk3800.yaml
+2026-11-05T01:42:30.261751Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-05T01:42:30.262781Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "STK3800 EFM32WG995 UART0 smoke" }) (captured len=0)
+FAIL  1/2 checks · stk3800-smoke · 100000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4000_E00C (BFAR valid), at PC 0x0000_045A in `core::ptr::write_volatile` (mod.rs:2178), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x4000E00C
