@@ -98,19 +98,34 @@ fn expected_adc_count(volts: f64) -> u16 {
     (millivolts * 4095 / 3300).min(4095) as u16
 }
 
-#[test]
-fn esp32s3_oled_demo_ntc_and_diode_netlists_reach_sens_adc1() {
-    let system_path = root("configs/systems/esp32s3-oled-demo.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load S3 OLED profile");
-    assert_eq!(profile.name, "esp32s3-oled-demo");
-    assert!(
-        profile
-            .external_devices
-            .iter()
-            .any(|device| device.id == "oled"),
-        "analog coverage must retain the board's SSD1306 device"
-    );
-    let analog_path = root("examples/esp32s3-oled-demo/analog-ntc-diode-system.yaml");
+fn assert_s3_profile_analog(
+    profile_name: &str,
+    analog_fixture: &str,
+    expected_external_device: Option<&str>,
+    expect_zero_status_led: bool,
+) {
+    let system_path = root(&format!("configs/systems/{profile_name}.yaml"));
+    let mut profile = SystemManifest::from_file(&system_path).expect("load ESP32-S3 profile");
+    assert_eq!(profile.name, profile_name);
+    if let Some(device_id) = expected_external_device {
+        assert!(
+            profile
+                .external_devices
+                .iter()
+                .any(|device| device.id == device_id),
+            "analog coverage must retain external device {device_id}"
+        );
+    }
+    if expect_zero_status_led {
+        assert!(
+            profile
+                .board_io
+                .iter()
+                .any(|io| io.id == "status_led" && io.pin == 48),
+            "analog coverage must retain the ESP32-S3-Zero GPIO48 status LED"
+        );
+    }
+    let analog_path = root(analog_fixture);
     let analog = SystemManifest::from_file(&analog_path).expect("load generic NTC and diode");
     profile.cosim_models = analog.cosim_models;
 
@@ -199,5 +214,25 @@ fn esp32s3_oled_demo_ntc_and_diode_netlists_reach_sens_adc1() {
     assert_eq!(
         ntc_samples[1].1, 2047,
         "25 °C produces the matched half-scale divider"
+    );
+}
+
+#[test]
+fn esp32s3_oled_demo_ntc_and_diode_netlists_reach_sens_adc1() {
+    assert_s3_profile_analog(
+        "esp32s3-oled-demo",
+        "examples/esp32s3-oled-demo/analog-ntc-diode-system.yaml",
+        Some("oled"),
+        false,
+    );
+}
+
+#[test]
+fn esp32s3_zero_ntc_and_diode_netlists_reach_sens_adc1() {
+    assert_s3_profile_analog(
+        "esp32s3-zero",
+        "examples/esp32s3-zero/analog-ntc-diode-system.yaml",
+        None,
+        true,
     );
 }
