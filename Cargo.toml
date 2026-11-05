@@ -149,6 +149,7 @@ members = [
     "crates/firmware-litex-vexriscv-smoke",
     "crates/firmware-litex-vexriscv-linux-smoke",
     "crates/firmware-litex-ibex-smoke",
+    "crates/firmware-opentitan-earlgrey-smoke",
     "crates/firmware-litex-picorv32-smoke",
     "crates/firmware-litex-minerva-smoke",
     "crates/firmware-nucleo-wb55rg-demo",

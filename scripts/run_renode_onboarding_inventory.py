@@ -657,6 +657,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imc-unknown-none-elf",
         "script": "examples/renode-onboarding/picosoc-smoke.yaml",
     },
+    "opentitan-earlgrey": {
+        "crate": "firmware-opentitan-earlgrey-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/opentitan-earlgrey-smoke.yaml",
+    },
 }
 
 

@@ -1997,6 +1997,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-opentitan-earlgrey-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-perf-spin"
 version = "0.25.0"
 dependencies = [

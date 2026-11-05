@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/A2_CV32E40P-smoke.yaml",
   "system": "configs/systems/onboarding/A2_CV32E40P.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T06:02:06Z",
-  "finished_at_utc": "2026-11-05T06:02:20Z",
-  "elapsed_seconds": 15,
-  "elapsed_ms": 14135,
+  "started_at_utc": "2026-11-05T06:18:22Z",
+  "finished_at_utc": "2026-11-05T06:18:22Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 831,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 13.526,
-    "build_firmware": 0.197,
-    "run_smoke": 0.401
+    "build_cli": 0.383,
+    "build_firmware": 0.162,
+    "run_smoke": 0.276
   },
   "stages_ms": {
-    "build_cli": 13526,
-    "build_firmware": 197,
-    "run_smoke": 401
+    "build_cli": 383,
+    "build_firmware": 162,
+    "run_smoke": 276
   }
 }
