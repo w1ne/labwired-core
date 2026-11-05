@@ -1,4 +1,4 @@
-2026-11-05T12:36:26.020871Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/fomu.yaml
-2026-11-05T12:36:26.021615Z  INFO labwired_loader: ELF Entry Point: 0x0
+2026-11-05T12:56:37.622739Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/fomu.yaml
+2026-11-05T12:56:37.623212Z  INFO labwired_loader: ELF Entry Point: 0x0
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  2/2 checks · fomu-smoke · 100000 steps · 0.02s

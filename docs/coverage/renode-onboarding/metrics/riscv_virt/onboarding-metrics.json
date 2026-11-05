@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/riscv_virt-smoke.yaml",
   "system": "configs/systems/onboarding/riscv_virt.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T12:37:21Z",
-  "finished_at_utc": "2026-11-05T12:37:21Z",
+  "started_at_utc": "2026-11-05T12:57:32Z",
+  "finished_at_utc": "2026-11-05T12:57:32Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 744,
+  "elapsed_ms": 778,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.282,
-    "build_firmware": 0.167,
-    "run_smoke": 0.285
+    "build_cli": 0.291,
+    "build_firmware": 0.175,
+    "run_smoke": 0.301
   },
   "stages_ms": {
-    "build_cli": 282,
-    "build_firmware": 167,
-    "run_smoke": 285
+    "build_cli": 291,
+    "build_firmware": 175,
+    "run_smoke": 301
   }
 }

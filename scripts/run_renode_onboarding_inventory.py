@@ -15,6 +15,11 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "ambiq-apollo4": {
+        "crate": "firmware-apollo4p-evb-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/ambiq-apollo4-smoke.yaml",
+    },
     "core-v-mcu": {
         "crate": "firmware-cv32e40p-smoke",
         "target": "riscv32imc-unknown-none-elf",

@@ -28,6 +28,7 @@ on:
       - "crates/firmware-stm32l071-smoke/**"
       - "crates/firmware-stm32l072-smoke/**"
       - "crates/firmware-stm32l151-smoke/**"
+      - "crates/firmware-apollo4p-evb-smoke/**"
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
       - "crates/firmware-efm32tg840-smoke/**"
@@ -94,6 +95,7 @@ on:
       - "crates/firmware-ramn-smoke/**"
       - "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
       - "examples/renode-onboarding/ramn-smoke.yaml"
+      - "examples/renode-onboarding/ambiq-apollo4-smoke.yaml"
       - "scripts/run_renode_onboarding_inventory.py"
       - "examples/renode-onboarding/fomu-smoke.yaml"
       - "scripts/onboarding_smoke.sh"
@@ -124,6 +126,14 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stm32w108-boot-smoke.yaml
             system: configs/systems/onboarding/stm32w108.yaml
+          # The imported Apollo4 boot-ROM scaffold was superseded by a sourced
+          # M4F profile. This smoke covers UART0, GPIO, PWRCTRL and memories;
+          # the SBL and every other Apollo4 peripheral remain outside scope.
+          - id: ambiq-apollo4
+            crate: firmware-apollo4p-evb-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/ambiq-apollo4-smoke.yaml
+            system: configs/systems/onboarding/ambiq-apollo4.yaml
           # EOS S3 smokes cover only the corrected M4 code/SRAM windows and
           # the model-backed PL011; generated peripheral claims are omitted.
           - id: eos-s3
