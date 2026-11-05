@@ -60,10 +60,7 @@ fn main() -> ! {
     loop {
         led_high = !led_high;
         unsafe {
-            core::ptr::write_volatile(
-                GPIOA_BSRR,
-                if led_high { LED_PA5 } else { LED_PA5 << 16 },
-            );
+            core::ptr::write_volatile(GPIOA_BSRR, if led_high { LED_PA5 } else { LED_PA5 << 16 });
         }
     }
 }

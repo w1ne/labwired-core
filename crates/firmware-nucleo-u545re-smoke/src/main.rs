@@ -37,9 +37,7 @@ fn main() -> ! {
 
         // LD2 is active-high on PA5. The VCP's USART1 TX is PA9 (AF7).
         let moder = core::ptr::read_volatile(GPIOA_MODER);
-        let moder = (moder & !((0b11 << 10) | (0b11 << 18)))
-            | (0b01 << 10)
-            | (0b10 << 18);
+        let moder = (moder & !((0b11 << 10) | (0b11 << 18))) | (0b01 << 10) | (0b10 << 18);
         core::ptr::write_volatile(GPIOA_MODER, moder);
         let afrh = core::ptr::read_volatile(GPIOA_AFRH);
         core::ptr::write_volatile(GPIOA_AFRH, (afrh & !(0xF << 4)) | (7 << 4));

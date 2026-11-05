@@ -28,10 +28,7 @@ fn main() -> ! {
     for _ in 0..32 {
         unsafe {
             let high = read_volatile(GPIO_ODR) & LD1_PB0 == 0;
-            write_volatile(
-                GPIO_BSRR,
-                if high { LD1_PB0 } else { LD1_PB0 << 16 },
-            );
+            write_volatile(GPIO_BSRR, if high { LD1_PB0 } else { LD1_PB0 << 16 });
         }
         core::hint::spin_loop();
     }

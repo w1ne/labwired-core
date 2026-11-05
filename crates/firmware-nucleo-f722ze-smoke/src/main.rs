@@ -19,10 +19,7 @@ fn main() -> ! {
     unsafe {
         // Enable GPIOB and configure PB0 as an output. Start LD1 off before
         // the acceptance sequence; ST documents a high output as LED on.
-        write_volatile(
-            RCC_AHB1ENR,
-            read_volatile(RCC_AHB1ENR) | GPIOB_CLOCK_ENABLE,
-        );
+        write_volatile(RCC_AHB1ENR, read_volatile(RCC_AHB1ENR) | GPIOB_CLOCK_ENABLE);
         write_volatile(GPIOB_BSRR, LD1_PB0 << 16);
         let moder = read_volatile(GPIOB_MODER);
         write_volatile(GPIOB_MODER, (moder & !0b11) | 0b01);

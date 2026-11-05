@@ -53,10 +53,7 @@ fn main() -> ! {
             (moder & !((0b11 << 16) | (0b11 << 18))) | (0b10 << 16) | (0b10 << 18),
         );
         let afrh = core::ptr::read_volatile(GPIOD_AFRH);
-        core::ptr::write_volatile(
-            GPIOD_AFRH,
-            (afrh & !0xFF) | (7 << 0) | (7 << 4),
-        );
+        core::ptr::write_volatile(GPIOD_AFRH, (afrh & !0xFF) | (7 << 0) | (7 << 4));
 
         // USART3 at 115200 8N1 from the 16 MHz HSI reset clock.
         core::ptr::write_volatile(USART3_BRR, 0x008B);

@@ -54,9 +54,7 @@ fn main() -> ! {
         let moder_value = read_volatile(moder);
         write_volatile(
             moder,
-            (moder_value & !((0b11 << 16) | (0b11 << 18)))
-                | (0b10 << 16)
-                | (0b10 << 18),
+            (moder_value & !((0b11 << 16) | (0b11 << 18))) | (0b10 << 16) | (0b10 << 18),
         );
         let afrh = (GPIOD + GPIO_AFRH) as *mut u32;
         let afrh_value = read_volatile(afrh);

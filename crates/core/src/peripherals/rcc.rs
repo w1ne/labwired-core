@@ -1833,18 +1833,18 @@ impl RccModel for H7Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct L4Rcc {
     cr: u32,
-    cfgr: u32,     // 0x08
-    pllcfgr: u32,  // 0x0C
-    ahbenr: u32,   // AHB2ENR 0x4C (GPIO ports)
-    apb1enr: u32,  // APB1ENR1 0x58
-    apb1enr2: u32, // APB1ENR2 0x5C (LPUART1EN bit 0)
-    apb2enr: u32,  // 0x60
-    ahbrstr: u32,  // AHB2RSTR 0x2C
-    apb1rstr: u32, // APB1RSTR1 0x38
+    cfgr: u32,      // 0x08
+    pllcfgr: u32,   // 0x0C
+    ahbenr: u32,    // AHB2ENR 0x4C (GPIO ports)
+    apb1enr: u32,   // APB1ENR1 0x58
+    apb1enr2: u32,  // APB1ENR2 0x5C (LPUART1EN bit 0)
+    apb2enr: u32,   // 0x60
+    ahbrstr: u32,   // AHB2RSTR 0x2C
+    apb1rstr: u32,  // APB1RSTR1 0x38
     apb1rstr2: u32, // APB1RSTR2 0x3C
-    apb2rstr: u32, // 0x40
-    bdcr: u32,     // 0x90 — LSE/RTC backup domain control
-    csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
+    apb2rstr: u32,  // 0x40
+    bdcr: u32,      // 0x90 — LSE/RTC backup domain control
+    csr: u32,       // 0x94 — LSION bit0 → LSIRDY bit1
 }
 
 impl L4Rcc {

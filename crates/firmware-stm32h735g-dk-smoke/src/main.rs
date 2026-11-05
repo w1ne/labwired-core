@@ -84,7 +84,11 @@ fn main() -> ! {
         write_volatile((GPIOC + BSRR) as *mut u32, USER_LEDS_PC2_PC3 << 16);
 
         // PD8/PD9 are USART3 TX/RX on AF7; the default core clock is 64 MHz.
-        reg_rmw(GPIOD + MODER, (0b11 << 16) | (0b11 << 18), (0b10 << 16) | (0b10 << 18));
+        reg_rmw(
+            GPIOD + MODER,
+            (0b11 << 16) | (0b11 << 18),
+            (0b10 << 16) | (0b10 << 18),
+        );
         reg_rmw(GPIOD + AFRH, 0xFF, 0x77);
         write_volatile(USART_BRR, 556);
         write_volatile(USART_CR1, USART_CR1_UE_TE);

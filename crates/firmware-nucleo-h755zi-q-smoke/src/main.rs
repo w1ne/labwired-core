@@ -24,7 +24,11 @@ fn main() -> ! {
         for edge in 0..32 {
             write_volatile(
                 GPIOB_BSRR,
-                if edge & 1 == 0 { LD1_PB0 } else { LD1_PB0 << 16 },
+                if edge & 1 == 0 {
+                    LD1_PB0
+                } else {
+                    LD1_PB0 << 16
+                },
             );
             core::hint::spin_loop();
         }

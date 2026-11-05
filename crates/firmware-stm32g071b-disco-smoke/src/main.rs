@@ -30,9 +30,7 @@ fn main() -> ! {
         let moder = read_volatile(GPIOB_MODER);
         write_volatile(
             GPIOB_MODER,
-            (moder & !((0b11 << 16) | (0b11 << 18)))
-                | (0b10 << 16)
-                | (0b10 << 18),
+            (moder & !((0b11 << 16) | (0b11 << 18))) | (0b10 << 16) | (0b10 << 18),
         );
         let afrh = read_volatile(GPIOB_AFRH);
         write_volatile(GPIOB_AFRH, afrh & !0xFF);

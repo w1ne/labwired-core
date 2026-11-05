@@ -37,7 +37,7 @@ const SERCOM3_SYNCBUSY: *const u32 = 0x4101_401C as *const u32;
 const SERCOM3_DATA: *mut u16 = 0x4101_4028 as *mut u16;
 
 const LED: u32 = 1 << 16; // PA16 — D13 / LED_BUILTIN
-// PCHCTRL: GEN=0 | CHEN=1 → bit 6.
+                          // PCHCTRL: GEN=0 | CHEN=1 → bit 6.
 const GCLK_PCHCTRL_CHEN: u32 = 1 << 6;
 const CTRLA_MODE_USART_INT_CLK: u32 = 1 << 2;
 const CTRLA_RXPO_PAD1: u32 = 1 << 20;

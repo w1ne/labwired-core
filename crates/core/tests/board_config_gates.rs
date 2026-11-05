@@ -127,11 +127,11 @@ fn ra4m1_from_config_builds() {
 
 #[test]
 fn teensy4_gpio_from_config_builds() {
-    for system in ["configs/systems/teensy-40.yaml", "configs/systems/teensy-41.yaml"] {
-        let (chip, bus) = from_config(
-            system,
-            "MIMXRT1062 / Teensy 4.x D13 profile must build",
-        );
+    for system in [
+        "configs/systems/teensy-40.yaml",
+        "configs/systems/teensy-41.yaml",
+    ] {
+        let (chip, bus) = from_config(system, "MIMXRT1062 / Teensy 4.x D13 profile must build");
 
         assert_eq!(chip.name, "mimxrt1062-teensy4-gpio-smoke");
         assert_eq!(chip.core.as_deref(), Some("cortex-m7"));

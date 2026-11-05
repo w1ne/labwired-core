@@ -20,10 +20,7 @@ fn main() -> ! {
     unsafe {
         // Enable GPIOG and configure PG13 as an output. Start LD3 off before
         // the acceptance sequence; ST's BSP uses a high output to turn it on.
-        write_volatile(
-            RCC_AHB1ENR,
-            read_volatile(RCC_AHB1ENR) | GPIOG_CLOCK_ENABLE,
-        );
+        write_volatile(RCC_AHB1ENR, read_volatile(RCC_AHB1ENR) | GPIOG_CLOCK_ENABLE);
         write_volatile(GPIOG_BSRR, LD3_PG13 << 16);
         let moder = read_volatile(GPIOG_MODER);
         write_volatile(GPIOG_MODER, (moder & !(0b11 << 26)) | (0b01 << 26));
