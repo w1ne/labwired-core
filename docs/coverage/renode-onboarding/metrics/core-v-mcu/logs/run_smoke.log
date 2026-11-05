@@ -1,4 +1,4 @@
-2026-11-05T11:55:58.761555Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/core-v-mcu.yaml
-2026-11-05T11:55:58.762062Z  INFO labwired_loader: ELF Entry Point: 0x1a000000
+2026-11-05T12:13:48.698090Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/core-v-mcu.yaml
+2026-11-05T12:13:48.698619Z  INFO labwired_loader: ELF Entry Point: 0x1a000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  2/2 checks · core-v-mcu-smoke · 100000 steps · 0.01s

@@ -86,6 +86,7 @@ on:
       - "crates/firmware-picosoc-smoke/**"
       - "crates/firmware-cv32e40p-smoke/**"
       - "crates/firmware-riscv-virt-smoke/**"
+      - "crates/firmware-riscv-verilated-uartlite-smoke/**"
       - "crates/firmware-andes-ae350-n25-smoke/**"
       - "crates/firmware-tock-veer-el2-smoke/**"
       - "crates/firmware-fomu-smoke/**"
@@ -1053,6 +1054,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/riscv_virt-smoke.yaml
             system: configs/systems/onboarding/riscv_virt.yaml
+          # Local RV32IM and RAM only; the imported external Verilated CPU,
+          # interrupt controllers, and UART co-sim are not part of this smoke.
+          - id: riscv_verilated_uartlite
+            crate: firmware-riscv-verilated-uartlite-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml
+            system: configs/systems/onboarding/riscv_verilated_uartlite.yaml
           # The AE350 profile is narrowed to the RV32IM and bounded DRAM path;
           # its wide-register UART and Andes-specific ISA extensions are not claimed.
           - id: andes_ae350_n25

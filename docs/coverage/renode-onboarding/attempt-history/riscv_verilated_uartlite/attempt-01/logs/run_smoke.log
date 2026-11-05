@@ -1,0 +1,8 @@
+2026-11-05T12:11:58.101511Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/riscv_verilated_uartlite.yaml
+2026-11-05T12:11:58.102042Z  INFO labwired_loader: ELF Entry Point: 0x60000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-05T12:11:58.102693Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0x663ffffc
+2026-11-05T12:11:58.102973Z ERROR labwired_cli::execute: Memory assertion failed at 0x60001000 (size 4): expected 0x143, got 0x0 (mask 0xffffffff)
+2026-11-05T12:11:58.102978Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1610616832, expected_value: 323, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-05T12:11:58.102986Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/2 checks · riscv_verilated_uartlite-smoke · 0 steps · 0.00s

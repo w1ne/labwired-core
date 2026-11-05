@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/core-v-mcu-smoke.yaml",
   "system": "configs/systems/onboarding/core-v-mcu.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T11:55:58Z",
-  "finished_at_utc": "2026-11-05T11:55:58Z",
+  "started_at_utc": "2026-11-05T12:13:47Z",
+  "finished_at_utc": "2026-11-05T12:13:48Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 728,
+  "elapsed_ms": 811,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.283,
-    "build_firmware": 0.159,
-    "run_smoke": 0.276
+    "build_cli": 0.307,
+    "build_firmware": 0.175,
+    "run_smoke": 0.319
   },
   "stages_ms": {
-    "build_cli": 283,
-    "build_firmware": 159,
-    "run_smoke": 276
+    "build_cli": 307,
+    "build_firmware": 175,
+    "run_smoke": 319
   }
 }

@@ -1,0 +1,14 @@
+# Direct-ELF RV32IM and RAM smoke against the exact imported UARTLite system.
+# Renode's external Verilated CPU/peripheral co-simulation is not run here.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke"
+  system: "../../configs/systems/onboarding/riscv_verilated_uartlite.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x60001000
+      expected_value: 0x00000143
+      size: 4
+  - expected_stop_reason: max_steps

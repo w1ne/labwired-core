@@ -89,6 +89,7 @@ members = [
     "crates/firmware-picosoc-smoke",
     "crates/firmware-cv32e40p-smoke",
     "crates/firmware-riscv-virt-smoke",
+    "crates/firmware-riscv-verilated-uartlite-smoke",
     "crates/firmware-andes-ae350-n25-smoke",
     "crates/firmware-tock-veer-el2-smoke",
     "crates/firmware-fomu-smoke",

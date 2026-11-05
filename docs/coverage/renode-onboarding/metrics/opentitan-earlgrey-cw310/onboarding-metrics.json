@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/opentitan-earlgrey-cw310-smoke.yaml",
   "system": "configs/systems/onboarding/opentitan-earlgrey-cw310.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T11:57:04Z",
-  "finished_at_utc": "2026-11-05T11:57:05Z",
+  "started_at_utc": "2026-11-05T12:14:54Z",
+  "finished_at_utc": "2026-11-05T12:14:55Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 843,
+  "elapsed_ms": 769,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.326,
-    "build_firmware": 0.203,
-    "run_smoke": 0.303
+    "build_cli": 0.302,
+    "build_firmware": 0.173,
+    "run_smoke": 0.283
   },
   "stages_ms": {
-    "build_cli": 326,
-    "build_firmware": 203,
-    "run_smoke": 303
+    "build_cli": 302,
+    "build_firmware": 173,
+    "run_smoke": 283
   }
 }
