@@ -78,6 +78,7 @@ on:
       - "crates/firmware-mimxrt595-evk-smoke/**"
       - "crates/firmware-litex-minerva-smoke/**"
       - "crates/firmware-litex-tock-smoke/**"
+      - "crates/firmware-litex-zephyr-i2s-smoke/**"
       - "crates/firmware-litex-vexriscv-smp-smoke/**"
       - "crates/firmware-litex-vexriscv-tftp-smoke/**"
       - "crates/firmware-opentitan-earlgrey-smoke/**"
@@ -901,6 +902,14 @@ jobs:
             target: riscv32imac-unknown-none-elf
             script: examples/renode-onboarding/litex_tock-smoke.yaml
             system: configs/systems/onboarding/litex_tock.yaml
+          # The Zephyr/I2S import is bounded to its RV32IMAC core, RAM, and
+          # modeled LiteX UART; this direct-ELF smoke does not boot Zephyr or
+          # exercise I2S, Ethernet, or the timer.
+          - id: litex_zephyr_vexriscv_i2s
+            crate: firmware-litex-zephyr-i2s-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/renode-onboarding/litex_zephyr_vexriscv_i2s-smoke.yaml
+            system: configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml
           - id: arty_litex_vexriscv
             crate: firmware-arty-litex-smoke
             target: riscv32im-unknown-none-elf

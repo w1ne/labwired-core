@@ -1702,6 +1702,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-litex-zephyr-i2s-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-max32652-smoke"
 version = "0.1.0"
 dependencies = [

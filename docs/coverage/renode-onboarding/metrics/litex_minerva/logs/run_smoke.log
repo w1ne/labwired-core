@@ -1,4 +1,4 @@
-2026-11-05T09:58:17.691126Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_minerva.yaml
-2026-11-05T09:58:17.691822Z  INFO labwired_loader: ELF Entry Point: 0x10000000
+2026-11-05T10:20:07.886649Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_minerva.yaml
+2026-11-05T10:20:07.887288Z  INFO labwired_loader: ELF Entry Point: 0x10000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · litex_minerva-smoke · 100000 steps · 0.03s

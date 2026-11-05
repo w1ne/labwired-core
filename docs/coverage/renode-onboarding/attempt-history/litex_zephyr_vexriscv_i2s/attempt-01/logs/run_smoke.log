@@ -1,0 +1,2 @@
+2026-11-05T10:14:59.462823Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/litex_zephyr_vexriscv_i2s.yaml
+2026-11-05T10:14:59.462921Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: missing field `flash` at line 4 column 1

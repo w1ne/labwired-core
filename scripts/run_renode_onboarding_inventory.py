@@ -68,6 +68,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imac-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_tock-smoke.yaml",
     },
+    "litex_zephyr_vexriscv_i2s": {
+        "crate": "firmware-litex-zephyr-i2s-smoke",
+        "target": "riscv32imac-unknown-none-elf",
+        "script": "examples/renode-onboarding/litex_zephyr_vexriscv_i2s-smoke.yaml",
+    },
     "renesas-ek_ra8m1": {
         "crate": "firmware-ek-ra8m1-smoke",
         "target": "thumbv8m.main-none-eabi",
