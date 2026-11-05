@@ -87,6 +87,8 @@ on:
       - "crates/firmware-riscv-virt-smoke/**"
       - "crates/firmware-andes-ae350-n25-smoke/**"
       - "crates/firmware-tock-veer-el2-smoke/**"
+      - "crates/firmware-fomu-smoke/**"
+      - "examples/renode-onboarding/fomu-smoke.yaml"
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
       - "crates/cli/**"
@@ -1024,6 +1026,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml
             system: configs/systems/onboarding/tock_veer_el2_sim.yaml
+          # Fomu's VexRiscv is bounded here to RV32IM, its boot ROM, and SRAM.
+          # USB, SPI flash, and board I/O are not claimed.
+          - id: fomu
+            crate: firmware-fomu-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/fomu-smoke.yaml
+            system: configs/systems/onboarding/fomu.yaml
           # Run the committed stock Zephyr RV64 image against the imported
           # MPFS Icicle Kit system; the exact imported profile exposes the U54
           # memory, in-core CLINT, MMUART0/1, and explicit startup stubs for

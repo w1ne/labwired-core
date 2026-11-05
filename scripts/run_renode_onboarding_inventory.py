@@ -686,6 +686,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imc-unknown-none-elf",
         "script": "examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml",
     },
+    "fomu": {
+        "crate": "firmware-fomu-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/fomu-smoke.yaml",
+    },
     "picosoc": {
         "crate": "firmware-picosoc-smoke",
         "target": "riscv32imc-unknown-none-elf",

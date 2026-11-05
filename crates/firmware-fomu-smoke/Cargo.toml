@@ -1,0 +1,13 @@
+[package]
+name = "firmware-fomu-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+build = "build.rs"
+
+[[bin]]
+name = "firmware-fomu-smoke"
+path = "src/main.rs"
+test = false
+bench = false
