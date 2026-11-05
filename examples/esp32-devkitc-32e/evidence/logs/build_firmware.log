@@ -1,0 +1,27 @@
+Processing devkitc32e (platform: espressif32; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (8.0.0) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32-libs @ 3.3.12
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in debug mode
+Retrieving maximum program size .pio/build/devkitc32e/firmware.elf
+Checking size .pio/build/devkitc32e/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   6.7% (used 22108 bytes from 327680 bytes)
+Flash: [==        ]  20.7% (used 271048 bytes from 1310720 bytes)
+========================= [SUCCESS] Took 0.87 seconds =========================

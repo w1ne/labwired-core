@@ -1,0 +1,7 @@
+# Espressif ESP32-DevKitC-32E / ESP32-WROOM-32E narrow GPIO smoke.
+# J3 pin 2 is GPIO23. This board has a 5 V power indicator, not a user LED;
+# the smoke measures the header signal and does not claim an on-board LED.
+name: "esp32-devkitc-32e-gpio-smoke"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+external_devices: []
+board_io: []

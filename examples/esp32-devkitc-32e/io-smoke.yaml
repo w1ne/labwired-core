@@ -1,0 +1,14 @@
+# ESP32-DevKitC-32E: boot Arduino firmware and observe GPIO23/J3-2 toggles.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-gpio-smoke.yaml"
+limits:
+  max_steps: 800000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_min_steps: 650000
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - gpio_edges:
+      pin: "gpio:23"
+      min_edges: 16
