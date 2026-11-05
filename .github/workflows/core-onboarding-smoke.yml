@@ -1151,6 +1151,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
             script: examples/renode-onboarding/beaglev-fire-smoke.yaml
             system: configs/systems/onboarding/beaglev-fire.yaml
+          # Reuse the stock MPFS U54 Zephyr image against the corrected,
+          # bounded imported PolarFire SoC profile.
+          - id: polarfire-soc
+            prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
+            script: examples/renode-onboarding/polarfire-soc-smoke.yaml
+            system: configs/systems/onboarding/polarfire-soc.yaml
 
     steps:
       - uses: actions/checkout@v4

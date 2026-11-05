@@ -1,60 +1,49 @@
 # Validation Report: polarfire-soc
 
-**Architecture:** RISC-V RV64GC.
+**Architecture:** RISC-V RV64IMAC, one U54 application hart in M-mode.
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Structural Check Passed (structural-ok)
+## Renode Onboarding Smoke
 
-```json
-{
-  "system_manifest": true,
-  "chip_descriptor": true,
-  "flash_base_present": true,
-  "ram_base_present": true
-}
-```
+**Status:** Booted and smoke-passing in the local LabWired CLI.
 
+The imported descriptor was narrowed from a mislabeled ARM profile with broad
+stub windows to the sourced PolarFire MSS memory map, one RV64IMAC U54, the
+model-backed MMUART0/1, and explicit zero-answering startup stubs. The stubs do
+not model PLIC, GPIO, I2C, or SPI behavior. The E51, other U54 harts, F/D,
+supervisor mode, DMA, storage, and other MSS peripherals are outside this
+profile.
 
-## Hardware Coverage Report
+The committed stock Zephyr v4.1.0 `mpfs_icicle` hello fixture booted on the
+profile, printed its boot banner and `Hello World! mpfs_icicle/polarfire/u54`,
+and stopped at the 60,000,000-cycle limit after executing 43,938 instructions.
+Both smoke assertions passed. This is a local LabWired CLI simulation against
+the bounded profile; it is not execution in Renode or on physical hardware.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `pdma` | `0x03000000` | `mpfs_pdma` |
-| `mmuart0` | `0x20000000` | `ns16550` |
-| `mmuart1` | `0x20100000` | `ns16550` |
-| `mmuart2` | `0x20102000` | `ns16550` |
-| `mmuart3` | `0x20104000` | `ns16550` |
-| `mmuart4` | `0x20106000` | `ns16550` |
-| `mmc` | `0x20008000` | `mpfs_sdcontroller` |
-| `spi0` | `0x20108000` | `stub` |
-| `spi1` | `0x20109000` | `stub` |
-| `i2c0` | `0x2010a000` | `stub` |
-| `i2c1` | `0x2010b000` | `stub` |
-| `can0` | `0x2010c000` | `stub` |
-| `can1` | `0x2010d000` | `stub` |
-| `gpio0` | `0x20120000` | `mpfs_gpio` |
-| `gpio1` | `0x20121000` | `mpfs_gpio` |
-| `gpio2` | `0x20122000` | `mpfs_gpio` |
-| `wdog0` | `0x20001000` | `stub` |
-| `wdog1` | `0x20101000` | `stub` |
-| `wdog2` | `0x20103000` | `stub` |
-| `wdog3` | `0x20105000` | `stub` |
-| `wdog4` | `0x20107000` | `stub` |
-| `rtc` | `0x20124000` | `stub` |
-| `mstimer` | `0x20125000` | `mpfs_timer` |
-| `envmCfg` | `0x20200000` | `stub` |
-| `usb` | `0x20201000` | `stub` |
-| `pcie0` | `0x53004000` | `stub` |
-| `pcieRC0` | `0x00000000` | `stub` |
-| `pcieRC1` | `0x00000000` | `stub` |
-| `pcieMem` | `0x00000001` | `stub` |
-| `mailbox` | `0x37020800` | `arraymemory` |
-| `ioscb` | `0x37080000` | `pythonperipheral` |
-| `DDR_CTRLR` | `0x3e001000` | `stub` |
-| `DDR_PHY` | `0x20007000` | `stub` |
-| `SCB_DDR_PLL` | `0x3e010000` | `stub` |
-| `DDRCFG` | `0x20080000` | `stub` |
-| `CacheConfig_WayEnable` | `0x02010008` | `pythonperipheral` |
-| `TopSystemRegisters` | `0x20002000` | `stub` |
+| Evidence | Path |
+|---|---|
+| Current aggregate scoreboard | [Renode onboarding scoreboard](../coverage/renode-onboarding-scoreboard.md) |
+| Per-target metrics | [onboarding-metrics.json](../coverage/renode-onboarding/metrics/polarfire-soc/onboarding-metrics.json) |
+| Simulator result | [result.json](../coverage/renode-onboarding/metrics/polarfire-soc/simulation-output/result.json) |
+| UART capture | [uart.log](../coverage/renode-onboarding/metrics/polarfire-soc/simulation-output/uart.log) |
+| JUnit assertions | [junit.xml](../coverage/renode-onboarding/metrics/polarfire-soc/simulation-output/junit.xml) |
 
-**Total Peripherals:** 37
+The initial profile attempt is retained under
+`docs/coverage/renode-onboarding/attempt-history/polarfire-soc/`; it booted but
+failed because the imported chip name did not select the existing MPFS U54
+CLINT parameters.
+
+## Bounded Profile
+
+| Block | Declared profile |
+|---|---|
+| CPU | RV64IMAC U54 application hart, M-mode; CLINT at `0x02000000` |
+| eNVM window | `0x20220000`, 128 KiB |
+| DDR window | `0x80000000`, 8 MiB |
+| L2 LIM | `0x08000000`, 512 KiB |
+| MMUART0/1 | Model-backed DesignWare APB UARTs at `0x20000000` / `0x20100000` |
+| PLIC, MSS GPIO0–2, I2C0/1, SPI1 | Explicit zero-answering stubs used during startup; behavior is not claimed |
+
+The register map follows the [Microchip PolarFire SoC MSS Technical Reference
+Manual](https://www.microchip.com/content/dam/mchp/documents/FPGA/ProductDocuments/ReferenceManuals/PolarFire_SoC_FPGA_MSS_Technical_Reference_Manual_VC.pdf)
+and Zephyr v4.1.0's `dts/riscv/microchip/mpfs.dtsi` and `mpfs_icicle` board
+description.

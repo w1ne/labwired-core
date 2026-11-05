@@ -48,6 +48,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/beaglev-fire-smoke.yaml",
     },
+    "polarfire-soc": {
+        "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
+        "script": "examples/renode-onboarding/polarfire-soc-smoke.yaml",
+    },
     "starfive-jh7100": {
         "crate": "firmware-starfive-jh7100-smoke",
         "target": "riscv64imac-unknown-none-elf",

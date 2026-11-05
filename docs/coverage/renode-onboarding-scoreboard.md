@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `151`
-- booted: `151/245`
-- boot_and_smoke_passed: `151/245`
-- not_run: `94`
-- pass: `151`
+- run_attempted: `152`
+- booted: `152/245`
+- boot_and_smoke_passed: `152/245`
+- not_run: `93`
+- pass: `152`
 - fail: `0`
-- median_elapsed_ms: `1101`
-- median_elapsed_seconds: `1.101`
+- median_elapsed_ms: `1125`
+- median_elapsed_seconds: `1.125`
 - threshold_seconds: `3600`
-- threshold_met: `151/151`
+- threshold_met: `152/152`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -148,7 +148,7 @@
 | `opentitan-earlgrey` | `pass` | `True` | `yes` | `yes` | `841` | `0.841` | `True` | `n/a` | n/a | n/a |
 | `opentitan-earlgrey-cw310` | `pass` | `True` | `yes` | `yes` | `1349` | `1.349` | `True` | `n/a` | n/a | n/a |
 | `picosoc` | `pass` | `True` | `yes` | `yes` | `1288` | `1.288` | `True` | `n/a` | n/a | n/a |
-| `polarfire-soc` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `polarfire-soc` | `pass` | `True` | `yes` | `yes` | `87319` | `87.319` | `True` | `n/a` | n/a | n/a |
 | `quark-c1000` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `quark_c1000-cc2520` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `ramn` | `pass` | `True` | `yes` | `yes` | `1208` | `1.208` | `True` | `n/a` | n/a | n/a |

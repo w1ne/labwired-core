@@ -1025,7 +1025,7 @@ impl Rv64Params {
 
     pub fn for_chip_name(name: &str, cpu_hz: u64) -> Self {
         let name = name.to_ascii_lowercase();
-        if name.starts_with("mpfs") || name == "beaglev-fire" {
+        if name.starts_with("mpfs") || name == "beaglev-fire" || name == "polarfire-soc" {
             return Self {
                 hart_id: MPFS_U54_HART,
                 clint_base: Some(MPFS_CLINT_BASE),
