@@ -32,6 +32,14 @@ arch: "xtensa-lx6"
 # Matches the engine's own ESP32 constants: peripherals/esp32/uart.rs and
 # esp32/spi.rs both derive their dividers from CPU_CLOCK_HZ = 240 MHz.
 cpu_hz: 240_000_000
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# Espressif ESP32 Series Datasheet v5.3, section 5.2 Table 5-2: typical VDD 3.3 V;
+# section 5.3 Table 5-3: VIL max 0.25*VDD, VIH min 0.75*VDD.
+# https://documentation.espressif.com/esp32_datasheet_en.html
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
 
 flash:
   base: 0x400D0000

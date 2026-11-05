@@ -725,7 +725,7 @@ _L1 + stock RTOS, SIM-DERIVED. First AArch64 part: one Cortex-A53 PE (A64 Armv8.
 
 ### `r5f52618bgfp`
 
-_L1 + stock RTOS, SIM-DERIVED. First Renesas RX part: the RXv3 core (integer, DSP accumulators, single-precision FPU; ICU in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 61 pass + 1 skip) for ek_rx261 from the reset vector, on the polled SCI6 console with the CMT0 tick (examples/ek-rx261). PORT/MPC, DTC and BSC are declared stubs and SCI interrupts are not requested, so no advanced blocks exist to list._
+_L1 + stock RTOS, SIM-DERIVED. First Renesas RX part: the RXv3 core (integer, DSP accumulators, single-precision FPU; ICU in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization, tests/kernel/common (12 suites, 61 pass + 1 skip) and tests/drivers/uart/uart_basic_api (7/7 on the interrupt-driven SCI6 driver: RXI6/TXI6/TEI6 as ICU vectors 227/228/229) for ek_rx261 from the reset vector, with the CMT0 tick (examples/ek-rx261). PORT/MPC, DTC and BSC are declared stubs and SCI6 ERI is not requested, so no advanced blocks exist to list._
 
 ### `pic32mz2048efm144`
 

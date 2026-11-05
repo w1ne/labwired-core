@@ -581,6 +581,7 @@ jobs:
             scripts/perf/test_workload_perf.py \
             scripts/ci/test_board_matrix.py \
             scripts/ci/test_chip_coverage.py \
+            scripts/ci/test_part_coverage.py \
             scripts/ci/test_matrix_external_cache.py \
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
@@ -589,6 +590,7 @@ jobs:
             scripts/ci/test_host_clippy_scope.py \
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_gen_debug_schemas.py \
+            scripts/test_generate_chip_catalog.py \
             scripts/test_generate_firmware_exercise_matrix.py \
             scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \
@@ -621,6 +623,18 @@ jobs:
       # that adds it. Pure Python, seconds.
       - name: Chip coverage — every chip executed by a CLI gate, or a written reason
         run: python3 scripts/ci/chip_coverage.py --report
+
+      # The same question for PARTS. Every configs/devices/*.yaml is offered in
+      # the Playground catalog, and nothing asked whether any of them is ever
+      # attached to a board: 5 of 122 were attached by no lab and no test when
+      # this landed. Coverage is derived — an example lab whose manifest lists
+      # the part, or an integration test under crates/*/tests/ naming its
+      # `type:` — and configs/ci/part-coverage.yaml holds only what that cannot
+      # see, each with a reason. A new descriptor nothing exercises reddens this
+      # on the PR that adds it, and `min_lab_exercised:` stops a lab deletion
+      # from quietly dropping a part out of the Playground. Pure Python, seconds.
+      - name: Part coverage — every onboarded part exercised, or a written reason
+        run: python3 scripts/ci/part_coverage.py --report
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
@@ -1644,6 +1658,36 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
+      # RECLAIM DISK BEFORE THE BUILD. Measured failure, 2026-11-04: shard 2 died
+      # after 8 minutes (not at the 45-minute timeout) with
+      #
+      #   error: could not compile `labwired-cli` (test "rc_oscilloscope_lab")
+      #     No space left on device (os error 28)
+      #
+      # and shard 3 never uploaded its report at all. Every other shard red in
+      # this job - including the ones on `main` - is the same exhaustion, not a
+      # code failure. Each of the three shards builds the ENTIRE 270-binary
+      # workspace test set in one `cargo test --workspace --no-run` (that is
+      # deliberate: feature unification differs per-package, see the header of
+      # scripts/ci/workspace_test_shard.py), and the ubuntu-latest image spends
+      # most of its ~14 GB on preinstalled toolchains none of these tests use.
+      #
+      # The `.NET / Android / GHC / Swift` directories below are the standard
+      # reclaim set; skipping the download of the PowerShell and Chromium payloads
+      # saves the rest. This runs BEFORE checkout so the space is free when the
+      # build starts.
+      - name: Reclaim disk space
+        run: |
+          set -euo pipefail
+          before=$(df -m --output=avail / | tail -1)
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift \
+                      /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          after=$(df -m --output=avail / | tail -1)
+          echo "root filesystem free space: ${before} MB -> ${after} MB"
+          df -h / | sed 's/^/  /'
+
       # Full history, on purpose — the same reason as `full:`: the Tier-1
       # baseline ratchet (labwired-cli lib) and bus_proof_matrix
       # (labwired-core lib) resolve their baseline from

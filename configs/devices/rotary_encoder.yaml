@@ -59,6 +59,8 @@ emit:
     - { key: clk_pin, from_part_pin: [CLK] }
     - { key: dt_pin, from_part_pin: [DT] }
     - { key: cpu_hz, from: sim_cpu_hz }
-  # SW push switch → a plain board_io button (optional; omitted when unwired).
+  # SW push switch closes to GND: active-low, with released level pulled high.
+  # A plain board_io button (optional; omitted when unwired).
   board_io:
-    - { from_part_pin: [SW], kind: button, signal: input, active_high: true }
+    - { from_part_pin: [SW], kind: button, signal: input, active_high: false }
+

@@ -52,12 +52,13 @@
 //! same input sequence produce bit-identical voltages on every host.
 
 use super::device;
-use super::netlist::{AnalogError, Circuit, NodeRef, POWER_SINK_VMIN};
+use super::netlist::{AnalogError, Circuit, Diode, NodeRef, POWER_SINK_VMIN};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
-/// currents. Dense LU is `O(n³)`; at 64 unknowns one step is a few microseconds
-/// even in the browser, and a bigger circuit is a sign the user wants ngspice.
-pub const MAX_UNKNOWNS: usize = 64;
+/// currents. The bound accommodates routed-PCB resistor terminals while keeping
+/// dense LU's `O(n³)` factorization and two `O(n²)` matrix buffers bounded.
+/// Larger circuits belong on the ngspice adapter.
+pub const MAX_UNKNOWNS: usize = 128;
 
 /// Integration rule for the reactive companion models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -393,6 +394,18 @@ impl Solver {
     /// flowing from the element's first terminal to its second.
     pub fn branch_current(&self, index: usize) -> f64 {
         self.branch_i[index]
+    }
+
+    /// Current through diode `index`, flowing from anode to cathode, in amps.
+    ///
+    /// Evaluate the stamped device law at the accepted solution, using the
+    /// internal junction behind `RS`, not the external anode or Newton's
+    /// voltage-limited linearisation state. This includes reverse breakdown
+    /// when configured and the same `GMIN` current used in the solve.
+    pub fn diode_current(&self, index: usize) -> f64 {
+        let diode = &self.circuit.diodes[index];
+        let vj = self.node_voltage(diode.junction_anode) - self.node_voltage(diode.cathode);
+        diode_operating_point(diode, vj).id
     }
 
     /// Voltage across capacitor `index`, as carried into the next step.
@@ -871,7 +884,7 @@ impl Solver {
     }
 
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
-    /// implementation on purpose: the systems are at most 64×64, and a linear
+    /// implementation on purpose: the systems are at most 128×128, and a linear
     /// algebra dependency would have to compile to WASM and stay deterministic
     /// across hosts to buy nothing at this size.
     fn factorize(&mut self) -> Result<(), AnalogError> {
@@ -959,7 +972,7 @@ pub const MAX_STEP_CUTS: u32 = 10;
 /// Tighter than SPICE's `RELTOL` (1e-3) on purpose. The engine's job here is to
 /// be reproducible rather than fast: at 1e-3 the converged answer depends on
 /// the path the limiter took, which makes a golden worth nothing, and the extra
-/// iterations cost microseconds on a 64-unknown dense solve.
+/// iterations are bounded by the small dense system.
 pub const NEWTON_RELTOL: f64 = 1e-9;
 
 /// Absolute floor for a node voltage, volts. SPICE's `VNTOL` is 1e-6.
@@ -967,6 +980,20 @@ pub const NEWTON_VNTOL: f64 = 1e-12;
 
 /// Absolute floor for a branch current, amps. SPICE's `ABSTOL` is 1e-12.
 pub const NEWTON_ABSTOL: f64 = 1e-15;
+
+/// Share the exact device law between Newton stamping and current observation.
+fn diode_operating_point(diode: &Diode, vj: f64) -> device::DiodeOp {
+    match diode.breakdown {
+        None => device::diode_op(vj, diode.model.is, diode.model.n),
+        Some(xbv) => device::diode_op_breakdown(
+            vj,
+            diode.model.is,
+            diode.model.n,
+            xbv,
+            diode.model.nbv.unwrap_or(diode.model.n),
+        ),
+    }
+}
 
 impl Solver {
     /// Iterate the device stamps until the solution stops moving.
@@ -1192,16 +1219,7 @@ impl Solver {
                 );
             }
             let vj = self.diode_vj[index];
-            let op = match diode.breakdown {
-                None => device::diode_op(vj, diode.model.is, diode.model.n),
-                Some(xbv) => device::diode_op_breakdown(
-                    vj,
-                    diode.model.is,
-                    diode.model.n,
-                    xbv,
-                    diode.model.nbv.unwrap_or(diode.model.n),
-                ),
-            };
+            let op = diode_operating_point(diode, vj);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
             stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
             stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));

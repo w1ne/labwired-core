@@ -1062,6 +1062,9 @@ pub struct Uart {
     /// RXI/TXI/TEI interrupt events, linked to the NVIC through the RA ICU.
     /// `None` keeps the polled-only SCI.
     sci_b_irq: Option<Box<sci_b_irq::SciBIrq>>,
+    /// The SCI requests are interrupt vectors of a core-side ICU (the
+    /// Renesas RX ICU) rather than ELC events for the RA ICU to link.
+    sci_irq_vectors: bool,
     /// Classic SCI layout: FCR as firmware last wrote it, without the
     /// write-only RFRST/TFRST bits.
     sci_fcr: u16,
@@ -1161,6 +1164,7 @@ impl Uart {
             avr_baud_set: false,
             sci_b_regs: SCI_B_RESET,
             sci_b_irq: None,
+            sci_irq_vectors: false,
             sci_fcr: 0,
             sci_scr: 0,
             last_tx_on_bus: false,
@@ -1201,6 +1205,16 @@ impl Uart {
             self.sci_b_irq = Some(Box::new(sci_b_irq::SciBIrq::new(rxi_event, clock_hz, baud)));
         }
         self
+    }
+
+    /// Classic SCI on a Renesas RX: raise RXI/TXI/TEI as ICU vectors
+    /// `rxi_vector`, +1, +2 (RX261 SCI6: 227/228/229), which the core's ICU
+    /// latches in `IRn` directly; there is no event link. Timing as
+    /// [`set_sci_events`].
+    pub fn set_sci_vectors(self, rxi_vector: u32, clock_hz: u64, baud: u64) -> Self {
+        let mut uart = self.set_sci_events(rxi_vector, clock_hz, baud);
+        uart.sci_irq_vectors = uart.sci_b_irq.is_some();
+        uart
     }
 
     /// Bus cycle for the SCI_B event timing (0 on a bus without a clock).
@@ -2632,9 +2646,10 @@ impl crate::Peripheral for Uart {
         }
     }
 
-    /// SCI_B with interrupt events: its explicit IRQs are ELC event numbers.
+    /// SCI_B with interrupt events: its explicit IRQs are ELC event numbers
+    /// (RA), or interrupt vectors the bus pends as-is (RX).
     fn explicit_irqs_are_link_events(&self) -> bool {
-        self.sci_b_irq.is_some()
+        self.sci_b_irq.is_some() && !self.sci_irq_vectors
     }
 
     /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event
@@ -2950,6 +2965,18 @@ mod tests {
     use super::{Uart, UartRegMap, UartRegisterLayout};
     use crate::Peripheral;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn sci_requests_are_link_events_on_ra_and_vectors_on_rx() {
+        let ra = Uart::new_with_layout(UartRegisterLayout::Sci).set_sci_events(0x180, 0, 0);
+        assert!(ra.explicit_irqs_are_link_events());
+        let rx = Uart::new_with_layout(UartRegisterLayout::Sci).set_sci_vectors(227, 0, 0);
+        assert!(rx.sci_b_irq.is_some());
+        assert!(!rx.explicit_irqs_are_link_events());
+        // Not an SCI layout: no requests, so nothing to route either way.
+        let stm = Uart::new_with_layout(UartRegisterLayout::Stm32F1).set_sci_vectors(227, 0, 0);
+        assert!(stm.sci_b_irq.is_none() && !stm.explicit_irqs_are_link_events());
+    }
 
     #[test]
     fn test_word_write_preserves_timed_transmit_and_disable() {

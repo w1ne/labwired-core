@@ -16,11 +16,12 @@ RX target is an RXv1 RX62N; Renode has no RX).
 | String ops (SMOVF/SMOVB/SMOVU/SSTR/SCMPU/SUNTIL/SWHILE), RMPA | unit + firmware | `smovf_copies_and_sstr_fills`, `scmpu_…`; Zephyr's reset copy and context switch use SMOVF/SMOVB/SSTR |
 | PSW.U stack switching (USP/ISP), INT/BRK/RTE, undefined-instruction exception via EXTB | unit + firmware | `int_switches_to_the_interrupt_stack_and_rte_returns`, `undefined_instruction_…`; `INT #1` thread switches |
 | ICU: IR/IER/IPR (RX261 low-vector IPR sharing), IPL masking, IR cleared on acceptance, SWINTR, fast interrupt | unit + firmware | `icu_takes_the_highest_enabled_request_above_ipl`, `swintr_raises_vector_27`; CMT0 tick on vector 28 |
+| SCI6 interrupts: RXI6/TXI6/TEI6 as ICU vectors 227/228/229 (no event link), TDRE/TEND paced by the 115200-baud frame in ICLK cycles, RXI once per received character | unit + firmware | `sci_requests_are_link_events_on_ra_and_vectors_on_rx`, `uart_basic_api_runs_on_the_sci6_icu_vectors`; `zephyr-uart-basic-api.yaml` 7/7 |
 | CMT: PCLKB/8..512 count, compare-match clear + CMI, CMSTR start/stop, one live scheduler wake | unit + firmware | `rx_cmt` tests (both scheduler modes); `synchronization`, `clock`, `common_1cpu` suites |
 | SYSTEM: OSCOVFSR from the stop bits, OPCCR transition, USB/CANFD clock-switch handshake; FLASH 0xAA-keyed MEMWAITR | unit + firmware | `rx_sysc` tests; RDP `mcu_clock_setup` completes |
 | WAIT idle fast-forward (pending-but-masked requests do not block it) | firmware | hello idles 63.96 M of 64 M cycles |
-| Instruction support for the three images | audited | `unsupported_instruction_audit.sh`: hello to its end (11,570), sync and kernel/common 2,000,000 each, 0 unsupported; an `FF FF FF` patched into `main` reports 1 |
-| Negative controls | checked | SUB carry inverted: nothing boots (both scripts FAIL). CMT compare-match never requesting: hello still passes, sync stops after the first greeting, kernel/common hangs in `boot_delay` |
+| Instruction support for the four images | audited | `unsupported_instruction_audit.sh`: hello to its end (11,570), sync, kernel/common and uart_basic_api 2,000,000 each, 0 unsupported; an `FF FF FF` patched into `main` reports 1 |
+| Negative controls | checked | SUB carry inverted: nothing boots (both scripts FAIL). CMT compare-match never requesting: hello still passes, sync stops after the first greeting, kernel/common hangs in `boot_delay`. SCI6 requests left as RA ELC events (no RX ICU route): `test_uart_fifo_fill` fails its timeout |
 | Determinism | checked | fixtures rebuild byte-identically (`build.sh`, sha256 in its output) |
 
 ## Not claimed
@@ -34,7 +35,9 @@ RX target is an RXv1 RX62N; Renode has no RX).
   exceptions, cause/flag bits never set, denormals not flushed).
 - **ICU**: DTC transfers, group interrupts, IRQ pin edge detection (`IRQCRn`
   is storage), NMI; every request is edge-detected.
-- **SCI6**: polled TX/RX only; TXI/RXI/TEI/ERI are never requested.
+- **SCI6**: ERI6 (receive errors) is never requested, and RXI/TXI/TEI are
+  edges into IRn; the hardware manual's per-source detection mode was not
+  transcribed. No FIFO, multiprocessor, smart-card, simple I2C/SPI modes.
 - **Ports/MPC, BSC, DTC, the reset-status block**: declared stubs. FLASH
   programming/erase is not modelled (only the control registers are stored).
 - **Clocks**: no rate is derived from SCKCR/PLL settings; `cpu_hz` is the

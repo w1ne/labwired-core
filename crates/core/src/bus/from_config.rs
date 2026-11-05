@@ -188,6 +188,14 @@ impl SystemBus {
         self.debug_schemas = Self::load_debug_schemas(chip, manifest);
     }
 
+    /// Copy the GPIO supply and input thresholds from the resolved chip.
+    /// Programmatic peripheral banks call this because they bypass from_config.
+    /// Missing values stay absent so voltage routes fail instead of guessing.
+    pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
+        self.io_voltage_v = chip.io_voltage_v;
+        self.gpio_input_thresholds = chip.gpio_input_thresholds;
+    }
+
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         Self::from_config_with_plugins(chip, manifest, &[])
     }
@@ -526,8 +534,7 @@ impl SystemBus {
                 (adc.peripheral.clone(), adc.channel),
             );
         }
-        bus.io_voltage_v = chip.io_voltage_v;
-        bus.gpio_input_thresholds = chip.gpio_input_thresholds;
+        bus.attach_chip_io_levels(chip);
         bus.supply = crate::power::SupplySupervisor::new(chip.supply_monitor.clone());
 
         let merged_peripherals = merged_peripheral_configs(chip, manifest);
@@ -840,13 +847,17 @@ impl SystemBus {
                     // guest believes its cycles run at and `baud` the line
                     // rate, which time the TDRE/TEND edges. Without
                     // `elc_event` the SCI is polled.
-                    if let Some(event) = p_cfg.config.get("elc_event").and_then(|v| v.as_u64()) {
-                        let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
-                        uart = uart.set_sci_events(
-                            event as u32,
-                            get("clock_hz").unwrap_or(manifest.cpu_hz.unwrap_or(chip.cpu_hz)),
-                            get("baud").unwrap_or(115_200),
-                        );
+                    // On a Renesas RX `rxi_vector` takes its place: the
+                    // RXI ICU vector (TXI/TEI follow), latched by the core's
+                    // ICU without an event link.
+                    let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+                    let sci_clock =
+                        get("clock_hz").unwrap_or(manifest.cpu_hz.unwrap_or(chip.cpu_hz));
+                    let sci_baud = get("baud").unwrap_or(115_200);
+                    if let Some(event) = get("elc_event") {
+                        uart = uart.set_sci_events(event as u32, sci_clock, sci_baud);
+                    } else if let Some(vector) = get("rxi_vector") {
+                        uart = uart.set_sci_vectors(vector as u32, sci_clock, sci_baud);
                     }
                     if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
                         // Vendor-neutral YAML map. `tx_offset` is required;
