@@ -735,6 +735,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32g474_zephyr_survival"),
     },
     ChipConf {
+        // G431RB: same RM0440 G4 silicon family as g474re (same peripheral map,
+        // same `stm32g4` RCC profile), different memory/orderable. No silicon
+        // reset capture. Behavior gate = the TIER1 raw-register self-test
+        // firmware, which boots and reports PASS for every wired class.
+        name: "stm32g431rb",
+        yaml: "configs/chips/stm32g431rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32h563",
         yaml: "configs/chips/stm32h563.yaml",
         reset_oracle: None,

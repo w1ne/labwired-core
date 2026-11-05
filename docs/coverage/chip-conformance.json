@@ -560,6 +560,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32g431rb",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,

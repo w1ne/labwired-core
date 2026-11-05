@@ -67,6 +67,10 @@
     "sha256": "706e1f6cbc37c7d81885cbe785f6962123a710597eba2c39fc4e7bd3c225e92e",
     "source_rev": "a1c9ec61e7f4308a4fc1b371324feffe98b3ea22"
   },
+  "stm32g431rb.elf": {
+    "sha256": "f81414b4fa4fc17950224f4943994c92c27dd14f8551c4063a6f9d8da4fa905c",
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+  },
   "stm32g474re.elf": {
     "sha256": "1a854cbf4b3ec27f60683bb10595e9806d2b5ad69cd87d515f0a0800ea0bd6d9",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
