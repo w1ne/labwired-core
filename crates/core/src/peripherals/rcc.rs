@@ -2722,21 +2722,20 @@ impl WchRcc {
         }
     }
 
-    /// Return SYSCLK after the AHB prescaler in CFGR0.HPRE.
+    /// Return SYSCLK after the AHB prescaler in CFGR0.HPRE[3:0] (bits 4–7).
+    ///
+    /// The divisor table is the official WCH firmware's `APBAHBPrescTable`
+    /// (`ch32v00x_rcc.c`, WCH V1.0.0): {1,2,3,4,5,6,7,8, 1,2,3,4,5,6,7,8}. The
+    /// field is NOT a plain power-of-two log: 0x1 is /2 and 0x2 is /3, and the
+    /// second half of the range repeats the first, so 0x8 is /1 again (the
+    /// `RCC_HCLK_Div1` default). The header's named macros confirm the sparse
+    /// high end: Div16 = 0xB (field 11), Div32 = 0xC, Div64 = 0xD,
+    /// Div128 = 0xE, Div256 = 0xF.
     pub fn hclk_hz(&self) -> u32 {
-        let hpre = ((self.cfgr0 >> 4) & 0xF) as u8;
-        let divisor = match hpre {
-            0..=7 => 1,
-            8 => 2,
-            9 => 4,
-            10 => 8,
-            11 => 16,
-            12 => 64,
-            13 => 128,
-            14 => 256,
-            _ => 512,
-        };
-        self.sysclk_hz() / divisor
+        const HPRE_DIVISOR: [u32; 16] =
+            [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+        let hpre = ((self.cfgr0 >> 4) & 0xF) as usize;
+        self.sysclk_hz() / HPRE_DIVISOR[hpre]
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -3211,13 +3210,21 @@ mod tests {
         assert_eq!(wch.sysclk_hz(), 48_000_000);
         assert_eq!(wch.hclk_hz(), 48_000_000);
 
-        // HPRE encoding 8 divides AHB by two while SYSCLK remains 48 MHz.
-        rcc.write_u32(0x04, 0x82).unwrap();
+        // HPRE field 9 divides AHB by two (official WCH APBAHBPrescTable[9]=2)
+        // while SYSCLK remains 48 MHz. Field 2 divides by three, not by one —
+        // the field is not a power-of-two log. Keep SW=PLL (bits 0–1) set.
+        rcc.write_u32(0x04, 0x2 | (0x9 << 4)).unwrap();
         let Rcc::Wch(wch) = &rcc else {
             unreachable!();
         };
         assert_eq!(wch.sysclk_hz(), 48_000_000);
         assert_eq!(wch.hclk_hz(), 24_000_000);
+
+        rcc.write_u32(0x04, 0x2 | (0x2 << 4)).unwrap();
+        let Rcc::Wch(wch) = &rcc else {
+            unreachable!();
+        };
+        assert_eq!(wch.hclk_hz(), 16_000_000);
     }
 
     #[test]
