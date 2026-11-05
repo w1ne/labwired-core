@@ -60,6 +60,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml",
     },
+    "alif_ae822fa0e5597bs0": {
+        "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml",
+    },
     "starfive-jh7100": {
         "crate": "firmware-starfive-jh7100-smoke",
         "target": "riscv64imac-unknown-none-elf",

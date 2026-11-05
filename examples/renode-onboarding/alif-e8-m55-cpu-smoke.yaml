@@ -1,0 +1,10 @@
+# CPU-only Cortex-M55 integer smoke against the imported Alif E8 system.
+# The profile has one M55-HP and its local memories; it performs no MMIO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/alif-e8-m55-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/alif_ae822fa0e5597bs0.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

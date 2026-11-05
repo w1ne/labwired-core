@@ -1,0 +1,6 @@
+2026-11-05T23:51:29.601525Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/alif_ae822fa0e5597bs0.yaml
+2026-11-05T23:51:29.602153Z  INFO labwired_loader: ELF Entry Point: 0x9
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 99952 of 100000 device cycles (48 interpreted)
+PASS  1/1 checks · alif-e8-m55-cpu-smoke · 100000 steps · 0.00s

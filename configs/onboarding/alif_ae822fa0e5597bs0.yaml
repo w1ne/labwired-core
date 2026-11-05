@@ -1,6 +1,6 @@
 name: alif_ae822fa0e5597bs0
-description: 'alif_ae822fa0e5597bs0 (root platform, Alif Ensemble). Architecture:
-  ARM Cortex-M.'
+description: 'Alif Ensemble E8 AE822FA0E5597BS0, represented as one Cortex-M55-HP core with local ITCM and DTCM only.'
+url: https://alifsemi.com/ensemble-e8-series/
 family: Alif Ensemble
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"

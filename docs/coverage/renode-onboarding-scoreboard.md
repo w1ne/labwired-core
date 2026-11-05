@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `154`
-- booted: `154/245`
-- boot_and_smoke_passed: `154/245`
-- not_run: `91`
-- pass: `154`
+- run_attempted: `155`
+- booted: `155/245`
+- boot_and_smoke_passed: `155/245`
+- not_run: `90`
+- pass: `155`
 - fail: `0`
-- median_elapsed_ms: `1162`
-- median_elapsed_seconds: `1.162`
+- median_elapsed_ms: `1175`
+- median_elapsed_seconds: `1.175`
 - threshold_seconds: `3600`
-- threshold_met: `154/154`
+- threshold_met: `155/155`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -20,7 +20,7 @@
 | `A2_CV32E40P` | `pass` | `True` | `yes` | `yes` | `91017` | `91.017` | `True` | `n/a` | n/a | n/a |
 | `a20` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `acrn_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `alif_ae822fa0e5597bs0` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `alif_ae822fa0e5597bs0` | `pass` | `True` | `yes` | `yes` | `7479` | `7.479` | `True` | `n/a` | n/a | n/a |
 | `ambiq-apollo4` | `pass` | `True` | `yes` | `yes` | `5634` | `5.634` | `True` | `n/a` | n/a | n/a |
 | `andes_ae350_n25` | `pass` | `True` | `yes` | `yes` | `1074` | `1.074` | `True` | `n/a` | n/a | n/a |
 | `arduino_101-shield` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
