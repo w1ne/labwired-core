@@ -1618,7 +1618,7 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-C3 / ESP32-C6 / ESP32-S3
+    /// Install a GPIO edge observer on ESP32 / ESP32-C3 / ESP32-C6 / ESP32-S2 / ESP32-S3
     /// GPIO models when present.
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke

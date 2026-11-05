@@ -40,7 +40,15 @@ pub(super) fn build(
     req: BuildRequest<'_>,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
-    if req.chip.is_esp32s3() {
+    if req.chip.is_esp32s2() {
+        match (&req.firmware, req.boot) {
+            (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s2(&req, elf, plugins),
+            _ => Err(anyhow!(
+                "not supported: ESP32-S2 smoke profile accepts an ELF fast boot only (chip '{}')",
+                req.chip.name
+            )),
+        }
+    } else if req.chip.is_esp32s3() {
         match (&req.firmware, req.boot) {
             (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s3(&req, elf, plugins),
             (FirmwareSource::FlashImage { image, symbols }, BootMode::RomBoot) => {
@@ -65,6 +73,55 @@ pub(super) fn build(
             )),
         }
     }
+}
+
+/// Narrow ESP32-S2 single-core fast boot for the DevKitM-1-N4R2 GPIO smoke.
+///
+/// This path uses the board's chip descriptor for memory and peripheral
+/// construction. It enters the ELF directly as a 2nd-stage-bootloader handoff;
+/// ROM boot, flash MMU setup, Wi-Fi, USB OTG, PSRAM, and S2 peripherals beyond
+/// the declared UART0/GPIO slice remain outside this profile.
+fn build_esp32s2(
+    req: &BuildRequest<'_>,
+    firmware: &[u8],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
+    let (chip, manifest) = (req.chip, req.system);
+    crate::peripherals::esp_xtensa_common::rom_thunks::reset_esp32_session_state();
+
+    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)?;
+    // ESP32-S2 has no Cortex-M bit-band alias. Its 0x4008_0000 XIP window does
+    // not overlap the alias, but disabling the unrelated translation keeps the
+    // bus configuration aligned with the silicon.
+    bus.bit_band_enabled = false;
+
+    let console = ConsoleCapture::for_manifest(manifest);
+    let uart_sink = console.heard_sink();
+    bus.attach_host_console_echo(console.tapped(), uart_sink, req.options.echo_uart_stdout)
+        .map_err(|e| anyhow!(e))?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
+
+    let program_image = parse_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
+    let mut cpu = crate::cpu::XtensaLx7::new();
+    cpu.reset(&mut bus)
+        .map_err(|e| anyhow!("ESP32-S2 CPU reset: {e}"))?;
+    let cpu: Box<dyn Cpu> = Box::new(cpu);
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .load_firmware(&program_image)
+        .map_err(|e| anyhow!("Simulation Error: {e}"))?;
+    machine.cpu.set_pc(program_image.entry_point as u32);
+    // The ESP32-S2's 320 KiB SRAM ends at 0x4000_0000. The smoke uses the top
+    // of that data window for its stack, like the S2 app handoff does.
+    machine.cpu.set_sp(0x3FFF_FFF0);
+
+    Ok(built(
+        machine,
+        console,
+        uart_rx_bufs,
+        manifest,
+        firmware.to_vec(),
+    ))
 }
 
 /// `new_from_config_xtensa_esp32`: ESP32-classic (Xtensa LX6).

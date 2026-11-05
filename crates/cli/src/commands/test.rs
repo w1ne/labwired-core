@@ -1250,7 +1250,7 @@ pub(crate) fn run_test(
             // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
             // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
             // separate task).
-            let is_esp32s3 = {
+            let resolved_xtensa_chip = {
                 let chip_dir = sys_path
                     .parent()
                     .unwrap_or_else(|| std::path::Path::new("."));
@@ -1259,9 +1259,14 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.is_esp32s3())
-                .unwrap_or(false)
+                .ok()
             };
+            let is_esp32s3 = resolved_xtensa_chip
+                .as_ref()
+                .is_some_and(|chip| chip.is_esp32s3());
+            let is_esp32s2 = resolved_xtensa_chip
+                .as_ref()
+                .is_some_and(|chip| chip.is_esp32s2());
 
             let mut machine = if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
@@ -1589,6 +1594,86 @@ pub(crate) fn run_test(
                     );
                     machine
                 }
+            } else if is_esp32s2 {
+                // Narrow ESP32-S2 profile: build the board exactly from its
+                // chip/system descriptors, then enter the freestanding ELF at
+                // its linked address. This S2 profile intentionally does not
+                // borrow the classic ESP32 LX6 peripheral bank or S3 ROM path.
+                if args.rom_boot {
+                    let msg = "ESP32-S2 DevKitM-1 smoke profile supports ELF fast boot only; ROM boot is not modelled"
+                        .to_string();
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut bus = match labwired_core::system::builder::build_system_bus_with_plugins(
+                    resolved_system.as_ref(),
+                    plugins,
+                ) {
+                    Ok(bus) => bus,
+                    Err(e) => {
+                        let msg = format!("{e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                bus.bit_band_enabled = false;
+                bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                let mut cpu = labwired_core::cpu::XtensaLx7::new();
+                if let Err(e) = cpu.reset(&mut bus) {
+                    let msg = format!("ESP32-S2 CPU reset: {e}");
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut machine = labwired_core::Machine::new(cpu, bus);
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &rtt_tx,
+                        &itm_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(0x3FFF_FFF0);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                apply_run_speed_opts(&mut machine);
+                machine.add_observer(metrics.clone());
+                eprintln!(
+                    "labwired-cli test: ESP32-S2 descriptor fast-boot entry=0x{:08x}",
+                    program.entry_point
+                );
+                machine
             } else {
                 let (mut esp_bus, pro_cpu, app_cpu) =
                     match labwired_core::system::builder::build_esp32_system_from_manifest_with_plugins(

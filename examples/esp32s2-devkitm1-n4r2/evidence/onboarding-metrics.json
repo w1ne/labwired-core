@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32s2-devkitm1-n4r2",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32s2-devkitm1-n4r2/onboarding-smoke.yaml",
+  "system": "configs/systems/esp32s2-devkitm1-n4r2.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T04:18:17Z",
+  "finished_at_utc": "2026-11-05T04:18:31Z",
+  "elapsed_seconds": 15,
+  "elapsed_ms": 14333,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 13.678,
+    "build_firmware": 0.041,
+    "run_smoke": 0.602
+  },
+  "stages_ms": {
+    "build_cli": 13678,
+    "build_firmware": 41,
+    "run_smoke": 602
+  },
+  "firmware_build_script": "scripts/build-esp32s2-devkitm1-smoke.sh"
+}

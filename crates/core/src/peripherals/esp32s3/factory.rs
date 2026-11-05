@@ -35,7 +35,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
     let src = |default: u32| p_cfg.irq.unwrap_or(default);
 
     let dev: Box<dyn Peripheral> = match canonical_type {
-        "esp32s3_uart" => {
+        "esp32s3_uart" | "esp32s2_uart" => {
             // uart0 echoes to stdout (source 27); uart1/uart2 do not (28/29).
             let echo = p_cfg
                 .config
@@ -95,7 +95,11 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         }
         "esp32s3_core1_control" => Box::new(core1_control::Esp32s3Core1Control::new()),
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
-        "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
+        // ESP32-S2 and S3 share the GPIO matrix register head exercised by
+        // the S2 DevKitM smoke (OUT/ENABLE/W1TS/W1TC and FUNCn_OUT_SEL_CFG).
+        // The S2 board profile limits its claim to those GPIO output paths;
+        // S3-only pads, matrix signal indices and reset data are not claimed.
+        "esp32s3_gpio" | "esp32s2_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
         "esp32s3_io_mux" => Box::new(io_mux::Esp32s3IoMux::new()),
         // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x6000_8400), shared with
         // the GPIO model through the bus (`rebuild_rtc_io_link`).
@@ -133,6 +137,8 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 /// Canonical type strings this factory owns. Kept next to [`try_build`] so the
 /// two cannot drift; the migration's Stage-3 chip YAML draws from this set.
 pub const SUPPORTED_TYPES: &[&str] = &[
+    "esp32s2_uart",
+    "esp32s2_gpio",
     "esp32s3_uart",
     "esp32s3_timer_group",
     "esp32s3_gdma",

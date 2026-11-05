@@ -1,0 +1,15 @@
+# Espressif ESP32-S2-DevKitM-1-N4R2: UART0 and its on-board GPIO18 WS2812 RGB LED.
+# The USB-to-UART bridge, native USB, boot/reset buttons, Wi-Fi, and PSRAM are
+# not part of this narrow smoke profile.
+name: "esp32s2-devkitm1-n4r2"
+chip: "../chips/esp32s2.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO18"
+      num_pixels: 1
+      cpu_hz: 240_000_000
