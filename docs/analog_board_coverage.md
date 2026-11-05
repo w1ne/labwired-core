@@ -16,9 +16,9 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 | `arduino-uno` | [`cosim_avr_analog_diode::arduino_uno_diode_netlist_reaches_a0_and_firmware_adc0`](../crates/core/tests/cosim_avr_analog_diode.rs) |
 | `arduino-zero` | NO end-to-end analog coverage |
 | `arty-litex-vexriscv` | NO end-to-end analog coverage |
-| `atmega1281` | NO end-to-end analog coverage |
+| `atmega1281` | [`cosim_pin_routing::atmega1281_ntc_netlist_reaches_adc0_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — Beta NTC law through explicit ADC0 routing and ATmega1281 firmware-visible conversion |
 | `atmega2561` | NO end-to-end analog coverage |
-| `brd2709a` | NO end-to-end analog coverage |
+| `brd2709a` | [`cosim_pin_routing::brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — diode load line through the PD02 channel encoding and EFR32 Series-2 IADC single conversion |
 | `calliope-mini-v1` | NO end-to-end analog coverage |
 | `cc2538dk` | NO end-to-end analog coverage |
 | `ci-fixture-l476-readonly` | NO end-to-end analog coverage |
@@ -120,6 +120,8 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 - **NUCLEO-F103RB / NTC divider:** generic Beta NTC netlist → PA0/ADC1 route → STM32F103 ADC conversion. Example manifest: [analog-ntc-system.yaml](../examples/nucleo-f103rb/analog-ntc-system.yaml).
 - **NUCLEO-F401RE / diode load line:** generic MNA diode model → PA0/ADC1_IN0 descriptor route → STM32F401 ADC1 conversion. Example manifest: [analog-diode-system.yaml](../examples/nucleo-f401re/analog-diode-system.yaml).
 - **Arduino Nano 33 BLE / NTC divider:** generic Beta NTC netlist → explicit SAADC AIN0 route → nRF52840 12-bit EasyDMA conversion. Example manifest: [analog-ntc-system.yaml](../examples/arduino-nano-33-ble/analog-ntc-system.yaml).
+- **ATmega1281 / NTC divider:** generic Beta NTC netlist → explicit AVR ADC0 route → firmware-visible ADMUX/ADCSRA conversion at cold, nominal and hot temperatures.
+- **BRD2709A / diode load line:** generic MNA diode model → explicit IADC0 port/pin channel 50 route for PD02 → IADC single-conversion FIFO and done flag.
 
-All rows marked `NO end-to-end analog coverage` remain gaps. Apollo4 Plus EVB is the first remaining profile in inventory order, but its chip descriptor currently declares ADC as a stub. Arduino Uno R4 Minima and Arduino Zero also lack modeled ADC inputs; the next profile with an existing ADC model is ATmega1281, which can be exercised through the explicit `adc.adc.<channel>_volts` route.
+All rows marked `NO end-to-end analog coverage` remain gaps. Apollo4 Plus EVB's ADC is a stub; Arduino Uno R4 Minima and Arduino Zero have no modeled ADC inputs. ATmega2561 is the next remaining profile with an existing ADC model and can use the explicit `adc.adc.<channel>_volts` route.
 

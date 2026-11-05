@@ -999,6 +999,100 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
     assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
 }
 
+/// The ATmega1281 standalone profile has its own eight-channel ADC input
+/// peripheral and CPU variant. Route the generic Beta NTC netlist to ADC0,
+/// then run the firmware-visible ADMUX/ADCSRA conversion at three temperatures.
+#[test]
+fn atmega1281_ntc_netlist_reaches_adc0_end_to_end() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::{Cpu, Machine, SimulationConfig};
+
+    let (manifest, bus) = bus_and_manifest("configs/systems/atmega1281.yaml");
+    assert_eq!(manifest.name, "atmega1281");
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            1_000,
+            &[("temperature", "ui.ntc.temperature_c")],
+            &[("v_sense", "adc.adc.0_volts")],
+            "Vcc vcc 0 dc 5\n\
+             Rntc vcc sense 10k beta=3950 tnom=25 temp=25\n\
+             Rpull sense 0 10k\n",
+            &[("v_sense", "v(sense)")],
+            &[("temperature", "Rntc")],
+            5.0,
+        )],
+    );
+
+    let mut cpu = Avr::for_chip_name("atmega1281");
+    // LDI/STS selects AVcc + ADC0, then enables the ADC and starts a
+    // conversion. This is the AVR Mega-family ADC register sequence.
+    cpu.load_words(0, &[0xE400, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A]);
+    let mut machine = Machine::new(cpu, bus);
+    let config = SimulationConfig::default();
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the NTC netlist reads the temperature input");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route the NTC divider");
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let volts = match session.signals().get("adc.adc.0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the NTC divider did not reach ATmega1281 ADC0: {other:?}"),
+        };
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 5.0 * 10_000.0 / (ntc_ohms + 10_000.0);
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved NTC divider should be {expected_volts} V, got {volts} V"
+        );
+
+        machine.cpu.set_pc(0);
+        for _ in 0..4 {
+            machine
+                .cpu
+                .step(&mut machine.bus, &[], &config)
+                .expect("execute the ATmega1281 ADC0 register sequence");
+        }
+        let adc_count = u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl);
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor() as u32;
+        let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+        assert_eq!(
+            adc_count, expected_count,
+            "firmware ADC0 should convert the routed NTC voltage at {temperature_c} °C"
+        );
+        assert_eq!(machine.cpu.admux & 0x0f, 0, "the firmware selects ADC0");
+        assert_eq!(
+            machine.cpu.adcsra & (1 << 6),
+            0,
+            "ADSC clears after conversion"
+        );
+        assert_ne!(
+            machine.cpu.adcsra & (1 << 4),
+            0,
+            "ADIF records conversion complete"
+        );
+        samples.push((temperature_c, volts, adc_count));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "the NTC divider rises as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the ATmega1281 firmware ADC result follows the physical voltage: {samples:?}"
+    );
+    assert_eq!(samples[1].2, 512, "25 °C puts the divider at half scale");
+}
+
 /// The Arduino Nano uses the same ATmega328P silicon as the Uno, but its own
 /// system profile must still resolve the generic NTC netlist through PC0/A0
 /// and convert the resulting level with the CPU-owned ADC0 registers.
@@ -1324,6 +1418,123 @@ fn nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end() {
         f401_adc_convert(&mut bus, 0),
         u32::from(expected_count),
         "the NUCLEO-F401RE ADC1 conversion must report the diode voltage"
+    );
+}
+
+/// BRD2709A's IADC selects a physical port/pin pair instead of a numbered
+/// silicon channel. Route a generic MNA diode load line to LabWired's channel
+/// encoding for PD02, select PD02 through the IADC registers, and assert the
+/// conversion result. A wrong port, pin, route, or linearized diode model
+/// leaves this board's conversion at a different code.
+#[test]
+fn brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end() {
+    const CMU_CLKEN0: u64 = 0x4000_8064;
+    const IADC0: u64 = 0x4900_4000;
+    const IADC_EN: u64 = IADC0 + 0x04;
+    const IADC_CMD: u64 = IADC0 + 0x0C;
+    const IADC_STATUS: u64 = IADC0 + 0x14;
+    const IADC_SINGLEFIFODATA: u64 = IADC0 + 0x74;
+    const IADC_SINGLE: u64 = IADC0 + 0x98;
+    const IADC_CLKEN: u32 = 1 << 10;
+    const SINGLEFIFODV: u32 = 1 << 8;
+    const SINGLEDONE: u32 = 1 << 9;
+    const SUPPLY_V: f64 = 3.3;
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const DIODE_IS_A: f64 = 2.52e-9;
+    const DIODE_N: f64 = 1.752;
+    const DIODE_RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+
+    let system_path = root("configs/systems/brd2709a.yaml");
+    let manifest = SystemManifest::from_file(&system_path).expect("load BRD2709A profile");
+    assert_eq!(manifest.name, "brd2709a");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load EFR32MG26 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build BRD2709A bus");
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            1_000,
+            &[],
+            &[("v_diode", "adc.iadc0.50_volts")],
+            "Vcc supply 0 dc 3.3\n\
+             Rlim supply sense 1k\n\
+             D1 sense 0 DREF TEMP=25\n\
+             .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)\n",
+            &[("v_diode", "v(sense)")],
+            &[],
+            SUPPLY_V,
+        )],
+    );
+
+    // The IADC channel index is LabWired's (port << 4) | pin encoding:
+    // PD02 is (3 << 4) | 2 = 50. Enable the peripheral clock and select the
+    // corresponding silicon PORTPOS=11 / PINPOS=2 input.
+    bus.write_u32(CMU_CLKEN0, IADC_CLKEN)
+        .expect("enable the IADC clock");
+    bus.write_u32(IADC_EN, 1).expect("enable IADC0");
+    bus.write_u32(IADC_SINGLE, (11 << 12) | (2 << 8))
+        .expect("select PD02 on IADC0");
+
+    let boundary = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(boundary, &mut bus)
+        .expect("solve and route the diode load line");
+    assert_eq!(steps.len(), 1, "one 1 us analog boundary is crossed");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let routed_voltage = match session.signals().get("adc.iadc0.50_volts") {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("the diode voltage did not reach IADC0 channel 50 / PD02: {other:?}"),
+    };
+    let current_at_junction_voltage =
+        |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+    };
+    let mut low = 0.0;
+    let mut high = 1.2;
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_voltage = (low + high) / 2.0;
+    let expected_voltage =
+        junction_voltage + current_at_junction_voltage(junction_voltage) * DIODE_RS_OHMS;
+    assert!(
+        (routed_voltage - expected_voltage).abs() < 2e-5,
+        "the solved diode load line should be {expected_voltage} V, got {routed_voltage} V"
+    );
+
+    bus.write_u32(IADC_CMD, 1)
+        .expect("start IADC0 single conversion");
+    bus.tick_peripherals_fully();
+    let status = bus.read_u32(IADC_STATUS).expect("read IADC0 status");
+    assert_ne!(
+        status & SINGLEFIFODV,
+        0,
+        "conversion result enters the FIFO"
+    );
+    assert_ne!(
+        bus.read_u32(IADC0 + 0x24)
+            .expect("read IADC0 interrupt flags")
+            & SINGLEDONE,
+        0,
+        "IADC0 latches SINGLEDONE"
+    );
+    let code = bus
+        .read_u32(IADC_SINGLEFIFODATA)
+        .expect("read converted diode voltage");
+    let routed_mv = (expected_voltage * 1000.0 + 0.5).floor() as u32;
+    let expected_code = (routed_mv * 4096 / 3300).min(4095);
+    assert_eq!(
+        code, expected_code,
+        "IADC0's 12-bit PD02 conversion should follow the routed diode voltage"
     );
 }
 
