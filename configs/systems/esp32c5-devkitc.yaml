@@ -1,0 +1,8 @@
+# ESP32-C5-DevKitC-1 v1.2, current N8R8 variant.
+# The focused system profile exposes UART0 only. GPIO/RMT, USB, PSRAM, radios,
+# and the LP core are intentionally omitted.
+name: "esp32c5-devkitc"
+chip: "../chips/esp32c5.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices: []

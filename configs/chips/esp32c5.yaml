@@ -1,0 +1,42 @@
+# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART smoke.
+# Only the RISC-V HP core, on-chip memories and UART0 are exposed.
+name: "esp32c5"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 240_000_000
+
+flash:
+  # ESP-IDF C5 memory map uses the same unified IROM/DROM window base.
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  # 384 KiB HP SRAM at SOC_IRAM_LOW / SOC_DRAM_LOW.
+  base: 0x40800000
+  size: "384KB"
+memory_regions:
+  - name: "rom"
+    base: 0x40000000
+    size: "320KB"
+    image_env: "LABWIRED_ESP32C5_ROM"
+  - name: "lp_sram"
+    base: 0x50000000
+    size: "16KB"
+
+peripherals:
+  # UART0: C5 uses the modern Espressif UART register map. The board's USB-UART
+  # bridge is connected to GPIO11/U0TXD and GPIO12/U0RXD; pad-level propagation
+  # is not modeled in this focused profile. Firmware selects PLL_F80M and
+  # enables its function clock; dynamic clock-tree behavior is not modeled.
+  - id: "pcr"
+    type: "esp32c5_pcr"
+    base_address: 0x60096000
+    size: "8"
+  - id: "uart0"
+    type: "esp32c5_uart"
+    irq: 47
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_SCLK_CONF", bit: 22 }
+    config:
+      echo_stdout: true

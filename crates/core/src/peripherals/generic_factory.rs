@@ -132,6 +132,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // C5 uses the same modern UART register map, with its own interrupt ids
+    // and fixed PLL_F80M source clock for the onboarding profile.
+    "esp32c5_uart",
+    "esp32c5_pcr",
     // H2's narrowly reused GPIO output model is built by the Espressif family
     // factory. Keep its name canonical so the generic `gpio` fallback cannot
     // replace it with a register-layout placeholder before that factory runs.

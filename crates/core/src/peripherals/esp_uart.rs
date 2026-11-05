@@ -350,6 +350,8 @@ pub struct EspUart {
     /// Core clock this instance is paced against (S3 = 240 MHz, C3 = 160 MHz).
     /// 0 only via `Default`, which no bus path uses; `cycles_per_byte` clamps.
     cpu_clock_hz: u64,
+    /// Source clock selected for this UART instance's baud divider.
+    uart_source_clock_hz: u64,
     /// ESP32-C6 UART register tail: `UART_FSM_STATUS` lives at 0x70 (C3 had
     /// `POSPULSE` there). ROM `uart_tx_wait_idle` polls `ST_UTX_OUT` in bits
     /// [7:4] and spins forever if the C3 POSPULSE reset (0xFFF) is returned.
@@ -432,6 +434,7 @@ impl EspUart {
             clock: None,
             scheduled: false,
             cpu_clock_hz,
+            uart_source_clock_hz: UART_SCLK_HZ,
             c6_reg_map: false,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
             rx_source_exposed: Cell::new(false),
@@ -717,7 +720,7 @@ impl EspUart {
         } else {
             clkdiv
         };
-        (10 * clkdiv * self.cpu_clock_hz / UART_SCLK_HZ).max(1)
+        (10 * clkdiv * self.cpu_clock_hz / self.uart_source_clock_hz).max(1)
     }
 
     /// INT_RAW = latched edge bits OR the live level conditions.
@@ -748,6 +751,16 @@ impl EspUart {
     /// ESP32-C6: remap offset 0x70 to idle `UART_FSM_STATUS` (see field docs).
     pub fn with_c6_reg_map(mut self) -> Self {
         self.c6_reg_map = true;
+        self
+    }
+
+    /// Override the UART source clock used to pace FIFO transmission.
+    ///
+    /// Most current ESP32 UART profiles use the 80 MHz PLL source. The
+    /// ESP32-C5 bare-metal smoke selects PLL_F80M in PCR and programs CLKDIV
+    /// for that source; this keeps simulated wire time aligned with firmware.
+    pub fn with_uart_source_clock_hz(mut self, hz: u64) -> Self {
+        self.uart_source_clock_hz = hz.max(1);
         self
     }
 

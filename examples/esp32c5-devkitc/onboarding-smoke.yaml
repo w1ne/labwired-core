@@ -1,0 +1,10 @@
+# ESP32-C5-DevKitC-1 v1.2 smoke: exercise UART0 through its TX FIFO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c5-devkitc-smoke"
+  system: "../../configs/systems/esp32c5-devkitc.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ESP32_C5_UART0_OK"
+  - expected_stop_reason: max_steps
