@@ -1,0 +1,26 @@
+# The ADXL345 I2C lab with a separate diode load-line circuit on PA6/ADC1_IN6.
+# Keeping this as a system variant leaves the ordinary accelerometer example
+# free of test-specific analog wiring.
+name: "adxl345-sensor-lab-analog-diode"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "adxl345"
+    type: "adxl345"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x53
+board_io: []
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
