@@ -869,6 +869,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/A2_CV32E40P-smoke.yaml
             system: configs/systems/onboarding/A2_CV32E40P.yaml
+          # CORE-V MCU uses the same CV32E40P execution profile and memory
+          # windows; only its exact imported system is under test here.
+          - id: core-v-mcu
+            crate: firmware-cv32e40p-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/core-v-mcu-smoke.yaml
+            system: configs/systems/onboarding/core-v-mcu.yaml
           # riscv_virt is RV32IMAC with DRAM and NS16550 in Renode. The
           # imported profile exposes only the bounded DRAM aperture used by
           # this smoke plus NS16550 polling TX; it does not claim the full

@@ -15,6 +15,11 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "core-v-mcu": {
+        "crate": "firmware-cv32e40p-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/core-v-mcu-smoke.yaml",
+    },
     "A2_CV32E40P": {
         "crate": "firmware-cv32e40p-smoke",
         "target": "riscv32imc-unknown-none-elf",
