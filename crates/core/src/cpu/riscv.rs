@@ -32,6 +32,8 @@ pub enum RiscVCoreProfile {
     Esp32C3,
     /// Baseline RV32 profile used by generic RISC-V targets.
     StandardRv32,
+    /// RV32E profile: the integer register file contains x0..x15 only.
+    Rv32e,
 }
 
 impl RiscVCoreProfile {
@@ -46,16 +48,112 @@ impl RiscVCoreProfile {
     /// the historical ESP32-C3 default, so descriptors written before this
     /// selection existed behave exactly as they did.
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
+        let core = chip
+            .core
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        if matches!(core.as_str(), "rv32e" | "rv32ec" | "rv32emc" | "rv32em") {
+            return Self::Rv32e;
+        }
         if chip.name.to_ascii_lowercase().contains("esp32") {
             return Self::Esp32C3;
         }
-        match chip.core.as_deref() {
-            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
-                Self::StandardRv32
-            }
-            _ => Self::Esp32C3,
+        if core.starts_with("rv32") {
+            Self::StandardRv32
+        } else {
+            Self::Esp32C3
         }
     }
+}
+
+/// Architectural integer-register operands used by an instruction. The
+/// implicit stack-pointer operands in the compressed formats are x2, which is
+/// legal in RV32E; compressed prime-register formats are already decoded to
+/// x8..x15 by `decode_rv32`.
+fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
+    use Instruction::*;
+    match *instruction {
+        Lui { rd, .. } | Auipc { rd, .. } | Jal { rd, .. } => [Some(rd), None, None],
+        Jalr { rd, rs1, .. } => [Some(rd), Some(rs1), None],
+        Beq { rs1, rs2, .. }
+        | Bne { rs1, rs2, .. }
+        | Blt { rs1, rs2, .. }
+        | Bge { rs1, rs2, .. }
+        | Bltu { rs1, rs2, .. }
+        | Bgeu { rs1, rs2, .. }
+        | Sb { rs1, rs2, .. }
+        | Sh { rs1, rs2, .. }
+        | Sw { rs1, rs2, .. } => [Some(rs1), Some(rs2), None],
+        Lb { rd, rs1, .. }
+        | Lh { rd, rs1, .. }
+        | Lw { rd, rs1, .. }
+        | Lbu { rd, rs1, .. }
+        | Lhu { rd, rs1, .. }
+        | Addi { rd, rs1, .. }
+        | Slti { rd, rs1, .. }
+        | Sltiu { rd, rs1, .. }
+        | Xori { rd, rs1, .. }
+        | Ori { rd, rs1, .. }
+        | Andi { rd, rs1, .. }
+        | Slli { rd, rs1, .. }
+        | Srli { rd, rs1, .. }
+        | Srai { rd, rs1, .. }
+        | Csrrw { rd, rs1, .. }
+        | Csrrs { rd, rs1, .. }
+        | Csrrc { rd, rs1, .. }
+        | LrW { rd, rs1 } => [Some(rd), Some(rs1), None],
+        Add { rd, rs1, rs2 }
+        | Sub { rd, rs1, rs2 }
+        | Sll { rd, rs1, rs2 }
+        | Slt { rd, rs1, rs2 }
+        | Sltu { rd, rs1, rs2 }
+        | Xor { rd, rs1, rs2 }
+        | Srl { rd, rs1, rs2 }
+        | Sra { rd, rs1, rs2 }
+        | Or { rd, rs1, rs2 }
+        | And { rd, rs1, rs2 }
+        | Mul { rd, rs1, rs2 }
+        | Mulh { rd, rs1, rs2 }
+        | Mulhsu { rd, rs1, rs2 }
+        | Mulhu { rd, rs1, rs2 }
+        | Div { rd, rs1, rs2 }
+        | Divu { rd, rs1, rs2 }
+        | Rem { rd, rs1, rs2 }
+        | Remu { rd, rs1, rs2 }
+        | ScW { rd, rs1, rs2 }
+        | AmoSwapW { rd, rs1, rs2 }
+        | AmoAddW { rd, rs1, rs2 }
+        | AmoXorW { rd, rs1, rs2 }
+        | AmoOrW { rd, rs1, rs2 }
+        | AmoAndW { rd, rs1, rs2 }
+        | AmoMinW { rd, rs1, rs2 }
+        | AmoMaxW { rd, rs1, rs2 }
+        | AmoMinuW { rd, rs1, rs2 }
+        | AmoMaxuW { rd, rs1, rs2 } => [Some(rd), Some(rs1), Some(rs2)],
+        Csrrwi { rd, .. } | Csrrsi { rd, .. } | Csrrci { rd, .. } => {
+            [Some(rd), None, None]
+        }
+        CAddi { rd, .. } | CLi { rd, .. } | CSli { rd, .. } => [Some(rd), None, None],
+        CLw { rd, rs1, .. } => [Some(rd), Some(rs1), None],
+        CSw { rs2, rs1, .. } => [Some(rs1), Some(rs2), None],
+        CJr { rs1 } | CJalr { rs1 } | CBeqz { rs1, .. } | CBnez { rs1, .. } => {
+            [Some(rs1), None, None]
+        }
+        CMv { rd, rs2 } => [Some(rd), Some(rs2), None],
+        CAddi16sp { .. } => [Some(2), None, None],
+        CAddi4spn { rd, .. } | CLwsp { rd, .. } => [Some(rd), Some(2), None],
+        CSwsp { rs2, .. } => [Some(2), Some(rs2), None],
+        Fence | Ecall | Ebreak | Mret | Wfi | CJ { .. } | Unknown(_) => [None, None, None],
+    }
+}
+
+fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
+    rv32e_reg_operands(instruction)
+        .into_iter()
+        .flatten()
+        .any(|register| register >= 16)
 }
 
 #[derive(Debug)]
@@ -748,10 +846,18 @@ impl RiscV {
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            // QingKe RV32E exposes the standard cycle counter CSR pair just
+            // like the baseline profile; register-count checking is separate.
+            0xC00 if matches!(
+                self.core_profile,
+                RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+            ) => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            0xC80 if matches!(
+                self.core_profile,
+                RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+            ) => {
                 (self.mtime >> 32) as u32
             }
             _ => return None,
@@ -1173,6 +1279,17 @@ impl Cpu for RiscV {
             instruction,
             inst_len
         );
+
+        // RV32E reserves every integer register field above x15. Check all
+        // operands before trigger handling or instruction execution so an
+        // illegal register use cannot perform a partial memory/CSR effect.
+        if self.core_profile == RiscVCoreProfile::Rv32e
+            && rv32e_uses_high_register(&instruction)
+        {
+            self.mtval = 0;
+            self.handle_trap(2, self.pc);
+            return Ok(());
+        }
 
         let mut next_pc = self.pc.wrapping_add(inst_len);
 
@@ -2158,3 +2275,7 @@ impl Cpu for RiscV {
 #[cfg(test)]
 #[path = "riscv_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "riscv_rv32e_tests.rs"]
+mod rv32e_tests;

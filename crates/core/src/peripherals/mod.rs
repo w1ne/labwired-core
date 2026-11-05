@@ -94,6 +94,7 @@ pub mod pic32_timer;
 pub mod pic32_uart;
 pub mod pio;
 pub mod pwr;
+pub mod pfic;
 pub mod quadspi;
 pub mod ra_adc12;
 pub mod ra_agt;
