@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 26 have end-to-end analog coverage; 77 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 27 have end-to-end analog coverage; 76 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -28,7 +28,7 @@ Current inventory: **103 profiles; 26 have end-to-end analog coverage; 77 have n
 | `cc2538dk` | [`cosim_cc2538_analog.rs`](../crates/core/tests/cosim_cc2538_analog.rs)::`cc2538dk_ntc_and_diode_netlists_drive_gpio_inputs_through_thresholds` — generic Beta NTC and Shockley diode netlists route to PC4/PC5 and assert GPIO DATA levels, threshold crossings, and retained hysteresis; this is GPIO threshold coverage, not ADC support |
 | `curiosity-pic32mz-ef` | [`cosim_curiosity_pic32mz_analog.rs`](../crates/core/tests/cosim_curiosity_pic32mz_analog.rs)::`curiosity_pic32mz_generic_ntc_and_diode_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists reach bounded GPIOB inputs and assert solved voltages, PORTB threshold crossings, and hysteresis. The thresholds are simulation assumptions; this is not silicon validation or ADC support. |
 | `ci-fixture-l476-readonly` | [`cosim_nucleo_l476_analog.rs`](../crates/core/tests/cosim_nucleo_l476_analog.rs)::`nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds` — same generic NTC and Shockley diode solve and reach GPIOA input thresholds on the read-only L476 fixture |
-| `ci-fixture-riscv-uart1` | **NO E2E analog coverage** |
+| `ci-fixture-riscv-uart1` | [`cosim_ci_fixture_riscv_analog.rs`](../crates/core/tests/cosim_ci_fixture_riscv_analog.rs)::`ci_fixture_riscv_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach separate synthetic GPIOA inputs; asserts solved voltages, input levels, and Schmitt hysteresis. This CI-only endpoint is simulation-only, with no hardware claim. |
 | `ci-fixture-uart1` | **NO E2E analog coverage** |
 | `ci-fixture-unknown-arch` | **NO E2E analog coverage** |
 | `dspic33fj32mc202-demo` | [`cosim_dspic33fj32mc202_analog.rs`](../crates/core/tests/cosim_dspic33fj32mc202_analog.rs)::`dspic33fj32mc202_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists reach separate GPIOB inputs; asserts solved voltages, PORTB levels, and Schmitt hysteresis. GPIO thresholds are simulation assumptions; this is not ADC support or silicon validation. |
