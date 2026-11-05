@@ -1,33 +1,35 @@
-# ESP32-DevKitC-32E GPIO23 smoke
+# ESP32-DevKitC-32E GPIO + UART0 console smoke
 
 **Demand rank:** ESP32 is rank 1 in the demand list (38% in the 2025 JetBrains
-State of Embedded MCU survey). This adds a board-level profile for the common
-ESP32-DevKitC-32E using the existing classic ESP32 model; it does not add a new
-chip core.
+State of Embedded MCU survey). This extends the existing ESP32-DevKitC-32E
+profile from GPIO-only to GPIO plus UART0 output; it does not add a chip or
+board variant.
 
 ## Board and scope
 
-The board is Espressif's ESP32-DevKitC-32E, carrying an ESP32-WROOM-32E with
-4 MB flash. The narrow profile exposes the real GPIO model and maps J3 pin 2 to
-GPIO23. The physical board has a 5 V power indicator rather than a GPIO-driven
-user LED, so the smoke observes GPIO23 directly and does not invent an
-on-board LED. To see a blink on physical hardware, connect an LED in series
-with a resistor from GPIO23 to GND.
+The board is Espressif's ESP32-DevKitC-32E with an ESP32-WROOM-32E module and
+4 MB flash. The narrow profile exposes the classic ESP32 GPIO and UART0 models.
+It maps J3 pin 2 to GPIO23. The smoke observes GPIO23 directly and does not
+invent an on-board user LED; the board's 5 V power indicator is not GPIO-driven.
+For a physical blink, connect an LED in series with a resistor from GPIO23 to
+GND.
 
-| Board connection | MCU signal | Smoke |
+| Board connection | MCU behavior | Smoke |
 | --- | --- | --- |
 | J3 pin 2 | GPIO23 | Arduino firmware toggles output; local assertion requires 16 edges |
+| UART0 output | Serial console capture | Sends `ESP32_DEVKITC32E_UART0_OK`; local assertion checks the UART marker |
 
-This profile does not claim UART0 or the USB-to-UART bridge, Wi-Fi/Bluetooth,
-I2C, SPI, timers, flash boot behavior, or the power LED. Espressif's live guide
-and the current lifecycle/availability check are recorded in
+The UART0 controller is modeled. The board's USB-to-UART bridge and the
+pin-level UART TX/RX waveforms are not, so the console capture does not prove
+USB serial behavior or a signal at the board header. Wi-Fi/Bluetooth, I2C,
+SPI, timers, flash boot behavior, and the power LED are also outside this
+profile. Espressif's live guide and the lifecycle/availability check are in
 [`evidence/vendor-status.md`](evidence/vendor-status.md).
 
 ## Firmware
 
-The committed sketch uses the ESP-IDF GPIO API exposed by Arduino. It is the
-same simple example you can copy into `src/main.cpp` in a PlatformIO
-`esp32dev` Arduino project:
+The committed sketch uses Arduino `Serial` and the ESP-IDF GPIO API. Copy it
+into `src/main.cpp` in a PlatformIO `esp32dev` Arduino project:
 
 ```cpp
 #include <Arduino.h>
@@ -36,6 +38,9 @@ same simple example you can copy into `src/main.cpp` in a PlatformIO
 constexpr gpio_num_t kHeaderPin = GPIO_NUM_23;
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("ESP32_DEVKITC32E_UART0_OK");
+
   gpio_reset_pin(kHeaderPin);
   gpio_set_direction(kHeaderPin, GPIO_MODE_OUTPUT);
   gpio_set_level(kHeaderPin, 0);
@@ -62,13 +67,15 @@ RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 ```
 
 The firmware build log, local simulator result, and generated onboarding
-metrics are committed under `evidence/`. The local CLI run passed after
-660,000 steps with 479 captured GPIO23 transitions. This is digital-twin smoke
-evidence, not a physical-board run.
+metrics are committed under `evidence/`. The smoke requires the UART marker and
+at least 16 GPIO23 edges. This is local digital-twin evidence, not a
+physical-board run.
 
-The separate hosted LabWired verifier observed the GPIO toggle but returned
-`unsupported`: the classic ESP32 hosted profile then faulted on an unmapped
-read at `0x3fc9b2b4` (faulting PC `0x4008813e`). The full result is preserved
-in [`evidence/hosted-verification.json`](evidence/hosted-verification.json);
-it is not a model-verification pass. The narrow repository profile uses the
-native ESP32 GPIO model and no zero-answering peripheral stubs.
+The hosted `labwired_verify` rejects a serial oracle for the classic ESP32 with
+`SERIAL_NOT_OBSERVABLE`: that hosted profile stubs `HardwareSerial`. Its result
+is recorded separately from the local CLI smoke as `unsupported`; it is not a
+model-verification pass. The exercised GPIO and UART blocks use real models.
+The wider classic ESP32 builder still installs zero-answering `SystemStub`
+windows for Wi-Fi MAC/PHY and unused I2S/PCNT/RMT/UHCI blocks. APB_CTRL has a
+separate register placeholder, and the analog-AHB catch-all reads as zero.
+This smoke does not assert behavior from those blocks.

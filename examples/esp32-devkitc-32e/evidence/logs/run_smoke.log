@@ -1,8 +1,9 @@
-2026-11-05T04:35:53.857904Z  INFO labwired_loader: ELF Entry Point: 0x400819b0
-2026-11-05T04:35:53.858630Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-devkitc-32e-gpio-smoke.yaml
+2026-11-05T05:30:37.434815Z  INFO labwired_loader: ELF Entry Point: 0x40081a7c
+2026-11-05T05:30:37.435523Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-devkitc-32e-gpio-smoke.yaml
 labwired-cli test: seeded examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e/partitions.bin (3072 bytes) @ flash 0x8000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: seeded g_rom_flashchip @0x3ffae270 (post-BROM flash attach state)
 labwired-cli test: pxCurrentTCBs @0x3ffc27e4 (hybrid preserve key)
-labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x4008e794
-PASS  1/1 checks · io-smoke · 660000 steps · 0.28s
+labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x4008f2bc
+ESP32_DEVKITC32E_UART0_OK
+PASS  2/2 checks · io-smoke · 680000 steps · 0.30s

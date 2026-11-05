@@ -6,24 +6,24 @@
   "script": "examples/esp32-devkitc-32e/io-smoke.yaml",
   "system": "configs/systems/esp32-devkitc-32e-gpio-smoke.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T04:35:52Z",
-  "finished_at_utc": "2026-11-05T04:35:54Z",
-  "elapsed_seconds": 3,
-  "elapsed_ms": 2161,
+  "started_at_utc": "2026-11-05T05:30:18Z",
+  "finished_at_utc": "2026-11-05T05:30:37Z",
+  "elapsed_seconds": 20,
+  "elapsed_ms": 19786,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.389,
-    "build_firmware": 1.087,
-    "run_smoke": 0.675
+    "build_cli": 14.957,
+    "build_firmware": 4.049,
+    "run_smoke": 0.769
   },
   "stages_ms": {
-    "build_cli": 389,
-    "build_firmware": 1087,
-    "run_smoke": 675
+    "build_cli": 14957,
+    "build_firmware": 4049,
+    "run_smoke": 769
   },
   "firmware_build_script": "scripts/build-esp32-devkitc-32e-smoke.sh"
 }

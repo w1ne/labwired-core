@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 660000,
-  "cycles": 660000,
-  "instructions": 660000,
+  "steps_executed": 680000,
+  "cycles": 680000,
+  "instructions": 680000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -24,6 +24,12 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "ESP32_DEVKITC32E_UART0_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "gpio_edges": {
           "pin": "gpio:23",
           "min_edges": 16
@@ -35,15 +41,15 @@
   "cpu_state": {
     "type": "xtensa_lx7",
     "registers": [
-      2148475437,
+      2148487969,
       1073469424,
       0,
       181,
       3007315967,
-      1061202188,
+      1061159228,
       0,
       181,
-      2148378674,
+      2148385550,
       1073469360,
       0,
       0,
@@ -52,13 +58,13 @@
       262176,
       1073469391
     ],
-    "pc": 1074288378,
+    "pc": 1074288582,
     "ps": 262176,
     "window_base": 14,
     "window_start": 22008,
     "vecbase": 1074266112
   },
-  "firmware_hash": "ffd582a3f50effaa84694917b7a3bd7a7b3106621c26c7037a7092b68e1e19a8",
+  "firmware_hash": "2faba249c2745470dc3a47382c98a32962f3e62dda2f13c36d8dacd3102cc79c",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-gpio-smoke.yaml",
@@ -168,7 +174,1646 @@
         "name": "uart0",
         "kind": "native",
         "base": 1072955392,
-        "registers": [],
+        "registers": [
+          {
+            "name": "FIFO",
+            "offset": 0,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_RD_BYTE",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 4,
+            "size": 32,
+            "value": 16386,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_RAW",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_RAW",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "PARITY_ERR_INT_RAW",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "FRM_ERR_INT_RAW",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_RAW",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DSR_CHG_INT_RAW",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS_CHG_INT_RAW",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BRK_DET_INT_RAW",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_TOUT_INT_RAW",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XON_INT_RAW",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XOFF_INT_RAW",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "GLITCH_DET_INT_RAW",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_DONE_INT_RAW",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_IDLE_DONE_INT_RAW",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_DONE_INT_RAW",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "RS485_PARITY_ERR_INT_RAW",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_FRM_ERR_INT_RAW",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_CLASH_INT_RAW",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "AT_CMD_CHAR_DET_INT_RAW",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_ST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_ST",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PARITY_ERR_INT_ST",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "FRM_ERR_INT_ST",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_ST",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DSR_CHG_INT_ST",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS_CHG_INT_ST",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BRK_DET_INT_ST",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_TOUT_INT_ST",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XON_INT_ST",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XOFF_INT_ST",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "GLITCH_DET_INT_ST",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_DONE_INT_ST",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_IDLE_DONE_INT_ST",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_DONE_INT_ST",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_PARITY_ERR_INT_ST",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_FRM_ERR_INT_ST",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_CLASH_INT_ST",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "AT_CMD_CHAR_DET_INT_ST",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 12,
+            "size": 32,
+            "value": 405,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_ENA",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_ENA",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PARITY_ERR_INT_ENA",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "FRM_ERR_INT_ENA",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_ENA",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "DSR_CHG_INT_ENA",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS_CHG_INT_ENA",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BRK_DET_INT_ENA",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "RXFIFO_TOUT_INT_ENA",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "SW_XON_INT_ENA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XOFF_INT_ENA",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "GLITCH_DET_INT_ENA",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_DONE_INT_ENA",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_IDLE_DONE_INT_ENA",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_DONE_INT_ENA",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_PARITY_ERR_INT_ENA",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_FRM_ERR_INT_ENA",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_CLASH_INT_ENA",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "AT_CMD_CHAR_DET_INT_ENA",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_CLR",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_CLR",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "PARITY_ERR_INT_CLR",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "FRM_ERR_INT_CLR",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_CLR",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DSR_CHG_INT_CLR",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS_CHG_INT_CLR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "BRK_DET_INT_CLR",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_TOUT_INT_CLR",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XON_INT_CLR",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_XOFF_INT_CLR",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "GLITCH_DET_INT_CLR",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_DONE_INT_CLR",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_IDLE_DONE_INT_CLR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_DONE_INT_CLR",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_PARITY_ERR_INT_CLR",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_FRM_ERR_INT_CLR",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_CLASH_INT_CLR",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "AT_CMD_CHAR_DET_INT_CLR",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CLKDIV",
+            "offset": 20,
+            "size": 32,
+            "value": 10485768,
+            "fields": [
+              {
+                "name": "CLKDIV",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 8
+              },
+              {
+                "name": "FRAG",
+                "bits": [
+                  23,
+                  20
+                ],
+                "value": 10
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AUTOBAUD",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "GLITCH_FILT",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_CNT",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ST_URX_OUT",
+                "bits": [
+                  11,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "DSRN",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXD",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_CNT",
+                "bits": [
+                  23,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "ST_UTX_OUT",
+                "bits": [
+                  27,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTRN",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSN",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXD",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CONF0",
+            "offset": 32,
+            "size": 32,
+            "value": 28,
+            "fields": [
+              {
+                "name": "PARITY",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "PARITY_EN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "BIT_NUM",
+                "bits": [
+                  3,
+                  2
+                ],
+                "value": 3
+              },
+              {
+                "name": "STOP_BIT_NUM",
+                "bits": [
+                  5,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "SW_RTS",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "SW_DTR",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXD_BRK",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRDA_DPLX",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRDA_TX_EN",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRDA_WCTL",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRDA_TX_INV",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRDA_RX_INV",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "LOOPBACK",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_FLOW_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRDA_EN",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_RST",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_RST",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXD_INV",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS_INV",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "DSR_INV",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXD_INV",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTS_INV",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "DTR_INV",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLK_EN",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERR_WR_MASK",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "TICK_REF_ALWAYS_ON",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CONF1",
+            "offset": 36,
+            "size": 32,
+            "value": 24696,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_THRHD",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 120
+              },
+              {
+                "name": "TXFIFO_EMPTY_THRHD",
+                "bits": [
+                  14,
+                  8
+                ],
+                "value": 96
+              },
+              {
+                "name": "RX_FLOW_THRHD",
+                "bits": [
+                  22,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_FLOW_EN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_TOUT_THRHD",
+                "bits": [
+                  30,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_TOUT_EN",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "LOWPULSE",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MIN_CNT",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "HIGHPULSE",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MIN_CNT",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RXD_CNT",
+            "offset": 48,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXD_EDGE_CNT",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FLOW_CONF",
+            "offset": 52,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SW_FLOW_CON_EN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XONOFF_DEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "FORCE_XON",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "FORCE_XOFF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEND_XON",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SEND_XOFF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF",
+            "offset": 56,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ACTIVE_THRESHOLD",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF",
+            "offset": 60,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "XON_THRESHOLD",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOFF_THRESHOLD",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "XON_CHAR",
+                "bits": [
+                  23,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOFF_CHAR",
+                "bits": [
+                  31,
+                  24
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "IDLE_CONF",
+            "offset": 64,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RX_IDLE_THRHD",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_IDLE_NUM",
+                "bits": [
+                  19,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_BRK_NUM",
+                "bits": [
+                  27,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RS485_CONF",
+            "offset": 68,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RS485_EN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DL0_EN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "DL1_EN",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485TX_RX_EN",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485RXBY_TX_EN",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_RX_DLY_NUM",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "RS485_TX_DLY_NUM",
+                "bits": [
+                  9,
+                  6
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_PRECNT",
+            "offset": 72,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PRE_IDLE_NUM",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_POSTCNT",
+            "offset": 76,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "POST_IDLE_NUM",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_GAPTOUT",
+            "offset": 80,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RX_GAP_TOUT",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_CHAR",
+            "offset": 84,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "AT_CMD_CHAR",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "CHAR_NUM",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_CONF",
+            "offset": 88,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MEM_PD",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_SIZE",
+                "bits": [
+                  6,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_SIZE",
+                "bits": [
+                  10,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_FLOW_THRHD_H3",
+                "bits": [
+                  17,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_TOUT_THRHD_H3",
+                "bits": [
+                  20,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "XON_THRESHOLD_H2",
+                "bits": [
+                  22,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "XOFF_THRESHOLD_H2",
+                "bits": [
+                  24,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_MEM_FULL_THRHD",
+                "bits": [
+                  27,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_MEM_EMPTY_THRHD",
+                "bits": [
+                  30,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_TX_STATUS",
+            "offset": 92,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MEM_TX_STATUS",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_RX_STATUS",
+            "offset": 96,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "MEM_RX_STATUS",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MEM_RX_RD_ADDR",
+                "bits": [
+                  12,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MEM_RX_WR_ADDR",
+                "bits": [
+                  23,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_CNT_STATUS",
+            "offset": 100,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RX_MEM_CNT",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_MEM_CNT",
+                "bits": [
+                  5,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "POSPULSE",
+            "offset": 104,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "POSEDGE_MIN_CNT",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "NEGPULSE",
+            "offset": 108,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "NEGEDGE_MIN_CNT",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 120,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATE",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ID",
+            "offset": 124,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ID",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
         "artifacts": []
       },
       {
@@ -581,7 +2226,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 660000,
+    "now_cycle": 680000,
     "channels": [
       {
         "ch": 0,
@@ -591,1919 +2236,1055 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 629856,
+            "cycle": 663462,
             "value": 1
           },
           {
-            "cycle": 629919,
+            "cycle": 663525,
             "value": 0
           },
           {
-            "cycle": 629982,
+            "cycle": 663588,
             "value": 1
           },
           {
-            "cycle": 630045,
+            "cycle": 663651,
             "value": 0
           },
           {
-            "cycle": 630108,
+            "cycle": 663714,
             "value": 1
           },
           {
-            "cycle": 630171,
+            "cycle": 663777,
             "value": 0
           },
           {
-            "cycle": 630234,
+            "cycle": 663840,
             "value": 1
           },
           {
-            "cycle": 630297,
+            "cycle": 663903,
             "value": 0
           },
           {
-            "cycle": 630360,
+            "cycle": 663966,
             "value": 1
           },
           {
-            "cycle": 630423,
+            "cycle": 664029,
             "value": 0
           },
           {
-            "cycle": 630486,
+            "cycle": 664092,
             "value": 1
           },
           {
-            "cycle": 630549,
+            "cycle": 664155,
             "value": 0
           },
           {
-            "cycle": 630612,
+            "cycle": 664218,
             "value": 1
           },
           {
-            "cycle": 630675,
+            "cycle": 664281,
             "value": 0
           },
           {
-            "cycle": 630738,
+            "cycle": 664344,
             "value": 1
           },
           {
-            "cycle": 630801,
+            "cycle": 664407,
             "value": 0
           },
           {
-            "cycle": 630864,
+            "cycle": 664470,
             "value": 1
           },
           {
-            "cycle": 630927,
+            "cycle": 664533,
             "value": 0
           },
           {
-            "cycle": 630990,
+            "cycle": 664596,
             "value": 1
           },
           {
-            "cycle": 631053,
+            "cycle": 664659,
             "value": 0
           },
           {
-            "cycle": 631116,
+            "cycle": 664722,
             "value": 1
           },
           {
-            "cycle": 631179,
+            "cycle": 664785,
             "value": 0
           },
           {
-            "cycle": 631242,
+            "cycle": 664848,
             "value": 1
           },
           {
-            "cycle": 631305,
+            "cycle": 664911,
             "value": 0
           },
           {
-            "cycle": 631368,
+            "cycle": 664974,
             "value": 1
           },
           {
-            "cycle": 631431,
+            "cycle": 665037,
             "value": 0
           },
           {
-            "cycle": 631494,
+            "cycle": 665100,
             "value": 1
           },
           {
-            "cycle": 631557,
+            "cycle": 665163,
             "value": 0
           },
           {
-            "cycle": 631620,
+            "cycle": 665226,
             "value": 1
           },
           {
-            "cycle": 631683,
+            "cycle": 665289,
             "value": 0
           },
           {
-            "cycle": 631746,
+            "cycle": 665352,
             "value": 1
           },
           {
-            "cycle": 631809,
+            "cycle": 665415,
             "value": 0
           },
           {
-            "cycle": 631872,
+            "cycle": 665478,
             "value": 1
           },
           {
-            "cycle": 631935,
+            "cycle": 665541,
             "value": 0
           },
           {
-            "cycle": 631998,
+            "cycle": 665604,
             "value": 1
           },
           {
-            "cycle": 632061,
+            "cycle": 665667,
             "value": 0
           },
           {
-            "cycle": 632124,
+            "cycle": 665730,
             "value": 1
           },
           {
-            "cycle": 632187,
+            "cycle": 665793,
             "value": 0
           },
           {
-            "cycle": 632250,
+            "cycle": 665856,
             "value": 1
           },
           {
-            "cycle": 632313,
+            "cycle": 665919,
             "value": 0
           },
           {
-            "cycle": 632376,
+            "cycle": 665982,
             "value": 1
           },
           {
-            "cycle": 632439,
+            "cycle": 666045,
             "value": 0
           },
           {
-            "cycle": 632502,
+            "cycle": 666108,
             "value": 1
           },
           {
-            "cycle": 632565,
+            "cycle": 666171,
             "value": 0
           },
           {
-            "cycle": 632628,
+            "cycle": 666234,
             "value": 1
           },
           {
-            "cycle": 632691,
+            "cycle": 666297,
             "value": 0
           },
           {
-            "cycle": 632754,
+            "cycle": 666360,
             "value": 1
           },
           {
-            "cycle": 632817,
+            "cycle": 666423,
             "value": 0
           },
           {
-            "cycle": 632880,
+            "cycle": 666486,
             "value": 1
           },
           {
-            "cycle": 632943,
+            "cycle": 666549,
             "value": 0
           },
           {
-            "cycle": 633006,
+            "cycle": 666612,
             "value": 1
           },
           {
-            "cycle": 633069,
+            "cycle": 666675,
             "value": 0
           },
           {
-            "cycle": 633132,
+            "cycle": 666738,
             "value": 1
           },
           {
-            "cycle": 633195,
+            "cycle": 666801,
             "value": 0
           },
           {
-            "cycle": 633258,
+            "cycle": 666864,
             "value": 1
           },
           {
-            "cycle": 633321,
+            "cycle": 666927,
             "value": 0
           },
           {
-            "cycle": 633384,
+            "cycle": 666990,
             "value": 1
           },
           {
-            "cycle": 633447,
+            "cycle": 667053,
             "value": 0
           },
           {
-            "cycle": 633510,
+            "cycle": 667116,
             "value": 1
           },
           {
-            "cycle": 633573,
+            "cycle": 667179,
             "value": 0
           },
           {
-            "cycle": 633636,
+            "cycle": 667242,
             "value": 1
           },
           {
-            "cycle": 633699,
+            "cycle": 667305,
             "value": 0
           },
           {
-            "cycle": 633762,
+            "cycle": 667368,
             "value": 1
           },
           {
-            "cycle": 633825,
+            "cycle": 667431,
             "value": 0
           },
           {
-            "cycle": 633888,
+            "cycle": 667494,
             "value": 1
           },
           {
-            "cycle": 633951,
+            "cycle": 667557,
             "value": 0
           },
           {
-            "cycle": 634014,
+            "cycle": 667620,
             "value": 1
           },
           {
-            "cycle": 634077,
+            "cycle": 667683,
             "value": 0
           },
           {
-            "cycle": 634140,
+            "cycle": 667746,
             "value": 1
           },
           {
-            "cycle": 634203,
+            "cycle": 667809,
             "value": 0
           },
           {
-            "cycle": 634266,
+            "cycle": 667872,
             "value": 1
           },
           {
-            "cycle": 634329,
+            "cycle": 667935,
             "value": 0
           },
           {
-            "cycle": 634392,
+            "cycle": 667998,
             "value": 1
           },
           {
-            "cycle": 634455,
+            "cycle": 668061,
             "value": 0
           },
           {
-            "cycle": 634518,
+            "cycle": 668124,
             "value": 1
           },
           {
-            "cycle": 634581,
+            "cycle": 668187,
             "value": 0
           },
           {
-            "cycle": 634644,
+            "cycle": 668250,
             "value": 1
           },
           {
-            "cycle": 634707,
+            "cycle": 668313,
             "value": 0
           },
           {
-            "cycle": 634770,
+            "cycle": 668376,
             "value": 1
           },
           {
-            "cycle": 634833,
+            "cycle": 668439,
             "value": 0
           },
           {
-            "cycle": 634896,
+            "cycle": 668502,
             "value": 1
           },
           {
-            "cycle": 634959,
+            "cycle": 668565,
             "value": 0
           },
           {
-            "cycle": 635022,
+            "cycle": 668628,
             "value": 1
           },
           {
-            "cycle": 635085,
+            "cycle": 668691,
             "value": 0
           },
           {
-            "cycle": 635148,
+            "cycle": 668754,
             "value": 1
           },
           {
-            "cycle": 635211,
+            "cycle": 668817,
             "value": 0
           },
           {
-            "cycle": 635274,
+            "cycle": 668880,
             "value": 1
           },
           {
-            "cycle": 635337,
+            "cycle": 668943,
             "value": 0
           },
           {
-            "cycle": 635400,
+            "cycle": 669006,
             "value": 1
           },
           {
-            "cycle": 635463,
+            "cycle": 669069,
             "value": 0
           },
           {
-            "cycle": 635526,
+            "cycle": 669132,
             "value": 1
           },
           {
-            "cycle": 635589,
+            "cycle": 669195,
             "value": 0
           },
           {
-            "cycle": 635652,
+            "cycle": 669258,
             "value": 1
           },
           {
-            "cycle": 635715,
+            "cycle": 669321,
             "value": 0
           },
           {
-            "cycle": 635778,
+            "cycle": 669384,
             "value": 1
           },
           {
-            "cycle": 635841,
+            "cycle": 669447,
             "value": 0
           },
           {
-            "cycle": 635904,
+            "cycle": 669510,
             "value": 1
           },
           {
-            "cycle": 635967,
+            "cycle": 669573,
             "value": 0
           },
           {
-            "cycle": 636030,
+            "cycle": 669636,
             "value": 1
           },
           {
-            "cycle": 636093,
+            "cycle": 669699,
             "value": 0
           },
           {
-            "cycle": 636156,
+            "cycle": 669762,
             "value": 1
           },
           {
-            "cycle": 636219,
+            "cycle": 669825,
             "value": 0
           },
           {
-            "cycle": 636282,
+            "cycle": 669888,
             "value": 1
           },
           {
-            "cycle": 636345,
+            "cycle": 669951,
             "value": 0
           },
           {
-            "cycle": 636408,
+            "cycle": 670014,
             "value": 1
           },
           {
-            "cycle": 636471,
+            "cycle": 670077,
             "value": 0
           },
           {
-            "cycle": 636534,
+            "cycle": 670140,
             "value": 1
           },
           {
-            "cycle": 636597,
+            "cycle": 670203,
             "value": 0
           },
           {
-            "cycle": 636660,
+            "cycle": 670266,
             "value": 1
           },
           {
-            "cycle": 636723,
+            "cycle": 670329,
             "value": 0
           },
           {
-            "cycle": 636786,
+            "cycle": 670392,
             "value": 1
           },
           {
-            "cycle": 636849,
+            "cycle": 670455,
             "value": 0
           },
           {
-            "cycle": 636912,
+            "cycle": 670518,
             "value": 1
           },
           {
-            "cycle": 636975,
+            "cycle": 670581,
             "value": 0
           },
           {
-            "cycle": 637038,
+            "cycle": 670644,
             "value": 1
           },
           {
-            "cycle": 637101,
+            "cycle": 670707,
             "value": 0
           },
           {
-            "cycle": 637164,
+            "cycle": 670770,
             "value": 1
           },
           {
-            "cycle": 637227,
+            "cycle": 670833,
             "value": 0
           },
           {
-            "cycle": 637290,
+            "cycle": 670896,
             "value": 1
           },
           {
-            "cycle": 637353,
+            "cycle": 670959,
             "value": 0
           },
           {
-            "cycle": 637416,
+            "cycle": 671022,
             "value": 1
           },
           {
-            "cycle": 637479,
+            "cycle": 671085,
             "value": 0
           },
           {
-            "cycle": 637542,
+            "cycle": 671148,
             "value": 1
           },
           {
-            "cycle": 637605,
+            "cycle": 671211,
             "value": 0
           },
           {
-            "cycle": 637668,
+            "cycle": 671274,
             "value": 1
           },
           {
-            "cycle": 637731,
+            "cycle": 671337,
             "value": 0
           },
           {
-            "cycle": 637794,
+            "cycle": 671400,
             "value": 1
           },
           {
-            "cycle": 637857,
+            "cycle": 671463,
             "value": 0
           },
           {
-            "cycle": 637920,
+            "cycle": 671526,
             "value": 1
           },
           {
-            "cycle": 637983,
+            "cycle": 671589,
             "value": 0
           },
           {
-            "cycle": 638046,
+            "cycle": 671652,
             "value": 1
           },
           {
-            "cycle": 638109,
+            "cycle": 671715,
             "value": 0
           },
           {
-            "cycle": 638172,
+            "cycle": 671778,
             "value": 1
           },
           {
-            "cycle": 638235,
+            "cycle": 671841,
             "value": 0
           },
           {
-            "cycle": 638298,
+            "cycle": 671904,
             "value": 1
           },
           {
-            "cycle": 638361,
+            "cycle": 671967,
             "value": 0
           },
           {
-            "cycle": 638424,
+            "cycle": 672030,
             "value": 1
           },
           {
-            "cycle": 638487,
+            "cycle": 672093,
             "value": 0
           },
           {
-            "cycle": 638550,
+            "cycle": 672156,
             "value": 1
           },
           {
-            "cycle": 638613,
+            "cycle": 672219,
             "value": 0
           },
           {
-            "cycle": 638676,
+            "cycle": 672282,
             "value": 1
           },
           {
-            "cycle": 638739,
+            "cycle": 672345,
             "value": 0
           },
           {
-            "cycle": 638802,
+            "cycle": 672408,
             "value": 1
           },
           {
-            "cycle": 638865,
+            "cycle": 672471,
             "value": 0
           },
           {
-            "cycle": 638928,
+            "cycle": 672534,
             "value": 1
           },
           {
-            "cycle": 638991,
+            "cycle": 672597,
             "value": 0
           },
           {
-            "cycle": 639054,
+            "cycle": 672660,
             "value": 1
           },
           {
-            "cycle": 639117,
+            "cycle": 672723,
             "value": 0
           },
           {
-            "cycle": 639180,
+            "cycle": 672786,
             "value": 1
           },
           {
-            "cycle": 639243,
+            "cycle": 672849,
             "value": 0
           },
           {
-            "cycle": 639306,
+            "cycle": 672912,
             "value": 1
           },
           {
-            "cycle": 639369,
+            "cycle": 672975,
             "value": 0
           },
           {
-            "cycle": 639432,
+            "cycle": 673038,
             "value": 1
           },
           {
-            "cycle": 639495,
+            "cycle": 673101,
             "value": 0
           },
           {
-            "cycle": 639558,
+            "cycle": 673164,
             "value": 1
           },
           {
-            "cycle": 639621,
+            "cycle": 673227,
             "value": 0
           },
           {
-            "cycle": 639684,
+            "cycle": 673290,
             "value": 1
           },
           {
-            "cycle": 639747,
+            "cycle": 673353,
             "value": 0
           },
           {
-            "cycle": 639810,
+            "cycle": 673416,
             "value": 1
           },
           {
-            "cycle": 639873,
+            "cycle": 673479,
             "value": 0
           },
           {
-            "cycle": 639936,
+            "cycle": 673542,
             "value": 1
           },
           {
-            "cycle": 639999,
+            "cycle": 673605,
             "value": 0
           },
           {
-            "cycle": 640062,
+            "cycle": 673668,
             "value": 1
           },
           {
-            "cycle": 640125,
+            "cycle": 673731,
             "value": 0
           },
           {
-            "cycle": 640188,
+            "cycle": 673794,
             "value": 1
           },
           {
-            "cycle": 640251,
+            "cycle": 673857,
             "value": 0
           },
           {
-            "cycle": 640314,
+            "cycle": 673920,
             "value": 1
           },
           {
-            "cycle": 640377,
+            "cycle": 673983,
             "value": 0
           },
           {
-            "cycle": 640440,
+            "cycle": 674046,
             "value": 1
           },
           {
-            "cycle": 640503,
+            "cycle": 674109,
             "value": 0
           },
           {
-            "cycle": 640566,
+            "cycle": 674172,
             "value": 1
           },
           {
-            "cycle": 640629,
+            "cycle": 674235,
             "value": 0
           },
           {
-            "cycle": 640692,
+            "cycle": 674298,
             "value": 1
           },
           {
-            "cycle": 640755,
+            "cycle": 674361,
             "value": 0
           },
           {
-            "cycle": 640818,
+            "cycle": 674424,
             "value": 1
           },
           {
-            "cycle": 640881,
+            "cycle": 674487,
             "value": 0
           },
           {
-            "cycle": 640944,
+            "cycle": 674550,
             "value": 1
           },
           {
-            "cycle": 641007,
+            "cycle": 674613,
             "value": 0
           },
           {
-            "cycle": 641070,
+            "cycle": 674676,
             "value": 1
           },
           {
-            "cycle": 641133,
+            "cycle": 674739,
             "value": 0
           },
           {
-            "cycle": 641196,
+            "cycle": 674802,
             "value": 1
           },
           {
-            "cycle": 641259,
+            "cycle": 674865,
             "value": 0
           },
           {
-            "cycle": 641322,
+            "cycle": 674928,
             "value": 1
           },
           {
-            "cycle": 641385,
+            "cycle": 674991,
             "value": 0
           },
           {
-            "cycle": 641448,
+            "cycle": 675054,
             "value": 1
           },
           {
-            "cycle": 641511,
+            "cycle": 675117,
             "value": 0
           },
           {
-            "cycle": 641574,
+            "cycle": 675180,
             "value": 1
           },
           {
-            "cycle": 641637,
+            "cycle": 675243,
             "value": 0
           },
           {
-            "cycle": 641700,
+            "cycle": 675306,
             "value": 1
           },
           {
-            "cycle": 641763,
+            "cycle": 675369,
             "value": 0
           },
           {
-            "cycle": 641826,
+            "cycle": 675432,
             "value": 1
           },
           {
-            "cycle": 641889,
+            "cycle": 675495,
             "value": 0
           },
           {
-            "cycle": 641952,
+            "cycle": 675558,
             "value": 1
           },
           {
-            "cycle": 642015,
+            "cycle": 675621,
             "value": 0
           },
           {
-            "cycle": 642078,
+            "cycle": 675684,
             "value": 1
           },
           {
-            "cycle": 642141,
+            "cycle": 675747,
             "value": 0
           },
           {
-            "cycle": 642204,
+            "cycle": 675810,
             "value": 1
           },
           {
-            "cycle": 642267,
+            "cycle": 675873,
             "value": 0
           },
           {
-            "cycle": 642330,
+            "cycle": 675936,
             "value": 1
           },
           {
-            "cycle": 642393,
+            "cycle": 675999,
             "value": 0
           },
           {
-            "cycle": 642456,
+            "cycle": 676062,
             "value": 1
           },
           {
-            "cycle": 642519,
+            "cycle": 676125,
             "value": 0
           },
           {
-            "cycle": 642582,
+            "cycle": 676188,
             "value": 1
           },
           {
-            "cycle": 642645,
+            "cycle": 676251,
             "value": 0
           },
           {
-            "cycle": 642708,
+            "cycle": 676314,
             "value": 1
           },
           {
-            "cycle": 642771,
+            "cycle": 676377,
             "value": 0
           },
           {
-            "cycle": 642834,
+            "cycle": 676440,
             "value": 1
           },
           {
-            "cycle": 642897,
+            "cycle": 676503,
             "value": 0
           },
           {
-            "cycle": 642960,
+            "cycle": 676566,
             "value": 1
           },
           {
-            "cycle": 643023,
+            "cycle": 676629,
             "value": 0
           },
           {
-            "cycle": 643086,
+            "cycle": 676692,
             "value": 1
           },
           {
-            "cycle": 643149,
+            "cycle": 676755,
             "value": 0
           },
           {
-            "cycle": 643212,
+            "cycle": 676818,
             "value": 1
           },
           {
-            "cycle": 643275,
+            "cycle": 676881,
             "value": 0
           },
           {
-            "cycle": 643338,
+            "cycle": 676944,
             "value": 1
           },
           {
-            "cycle": 643401,
+            "cycle": 677007,
             "value": 0
           },
           {
-            "cycle": 643464,
+            "cycle": 677070,
             "value": 1
           },
           {
-            "cycle": 643527,
+            "cycle": 677133,
             "value": 0
           },
           {
-            "cycle": 643590,
+            "cycle": 677196,
             "value": 1
           },
           {
-            "cycle": 643653,
+            "cycle": 677259,
             "value": 0
           },
           {
-            "cycle": 643716,
+            "cycle": 677322,
             "value": 1
           },
           {
-            "cycle": 643779,
+            "cycle": 677385,
             "value": 0
           },
           {
-            "cycle": 643842,
+            "cycle": 677448,
             "value": 1
           },
           {
-            "cycle": 643905,
+            "cycle": 677511,
             "value": 0
           },
           {
-            "cycle": 643968,
+            "cycle": 677574,
             "value": 1
           },
           {
-            "cycle": 644031,
+            "cycle": 677637,
             "value": 0
           },
           {
-            "cycle": 644094,
+            "cycle": 677700,
             "value": 1
           },
           {
-            "cycle": 644157,
+            "cycle": 677763,
             "value": 0
           },
           {
-            "cycle": 644220,
+            "cycle": 677826,
             "value": 1
           },
           {
-            "cycle": 644283,
+            "cycle": 677889,
             "value": 0
           },
           {
-            "cycle": 644346,
+            "cycle": 677952,
             "value": 1
           },
           {
-            "cycle": 644409,
+            "cycle": 678015,
             "value": 0
           },
           {
-            "cycle": 644472,
+            "cycle": 678078,
             "value": 1
           },
           {
-            "cycle": 644535,
+            "cycle": 678141,
             "value": 0
           },
           {
-            "cycle": 644598,
+            "cycle": 678204,
             "value": 1
           },
           {
-            "cycle": 644661,
+            "cycle": 678267,
             "value": 0
           },
           {
-            "cycle": 644724,
+            "cycle": 678330,
             "value": 1
           },
           {
-            "cycle": 644787,
+            "cycle": 678393,
             "value": 0
           },
           {
-            "cycle": 644850,
+            "cycle": 678456,
             "value": 1
           },
           {
-            "cycle": 644913,
+            "cycle": 678519,
             "value": 0
           },
           {
-            "cycle": 644976,
+            "cycle": 678582,
             "value": 1
           },
           {
-            "cycle": 645039,
+            "cycle": 678645,
             "value": 0
           },
           {
-            "cycle": 645102,
+            "cycle": 678708,
             "value": 1
           },
           {
-            "cycle": 645165,
+            "cycle": 678771,
             "value": 0
           },
           {
-            "cycle": 645228,
+            "cycle": 678834,
             "value": 1
           },
           {
-            "cycle": 645291,
+            "cycle": 678897,
             "value": 0
           },
           {
-            "cycle": 645354,
+            "cycle": 678960,
             "value": 1
           },
           {
-            "cycle": 645417,
+            "cycle": 679023,
             "value": 0
           },
           {
-            "cycle": 645480,
+            "cycle": 679086,
             "value": 1
           },
           {
-            "cycle": 645543,
+            "cycle": 679149,
             "value": 0
           },
           {
-            "cycle": 645606,
+            "cycle": 679212,
             "value": 1
           },
           {
-            "cycle": 645669,
+            "cycle": 679275,
             "value": 0
           },
           {
-            "cycle": 645732,
+            "cycle": 679338,
             "value": 1
           },
           {
-            "cycle": 645795,
+            "cycle": 679401,
             "value": 0
           },
           {
-            "cycle": 645858,
+            "cycle": 679464,
             "value": 1
           },
           {
-            "cycle": 645921,
+            "cycle": 679527,
             "value": 0
           },
           {
-            "cycle": 645984,
+            "cycle": 679590,
             "value": 1
           },
           {
-            "cycle": 646047,
+            "cycle": 679653,
             "value": 0
           },
           {
-            "cycle": 646110,
+            "cycle": 679716,
             "value": 1
           },
           {
-            "cycle": 646173,
+            "cycle": 679779,
             "value": 0
           },
           {
-            "cycle": 646236,
+            "cycle": 679842,
             "value": 1
           },
           {
-            "cycle": 646299,
+            "cycle": 679905,
             "value": 0
           },
           {
-            "cycle": 646362,
-            "value": 1
-          },
-          {
-            "cycle": 646425,
-            "value": 0
-          },
-          {
-            "cycle": 646488,
-            "value": 1
-          },
-          {
-            "cycle": 646551,
-            "value": 0
-          },
-          {
-            "cycle": 646614,
-            "value": 1
-          },
-          {
-            "cycle": 646677,
-            "value": 0
-          },
-          {
-            "cycle": 646740,
-            "value": 1
-          },
-          {
-            "cycle": 646803,
-            "value": 0
-          },
-          {
-            "cycle": 646866,
-            "value": 1
-          },
-          {
-            "cycle": 646929,
-            "value": 0
-          },
-          {
-            "cycle": 646992,
-            "value": 1
-          },
-          {
-            "cycle": 647055,
-            "value": 0
-          },
-          {
-            "cycle": 647118,
-            "value": 1
-          },
-          {
-            "cycle": 647181,
-            "value": 0
-          },
-          {
-            "cycle": 647244,
-            "value": 1
-          },
-          {
-            "cycle": 647307,
-            "value": 0
-          },
-          {
-            "cycle": 647370,
-            "value": 1
-          },
-          {
-            "cycle": 647433,
-            "value": 0
-          },
-          {
-            "cycle": 647496,
-            "value": 1
-          },
-          {
-            "cycle": 647559,
-            "value": 0
-          },
-          {
-            "cycle": 647622,
-            "value": 1
-          },
-          {
-            "cycle": 647685,
-            "value": 0
-          },
-          {
-            "cycle": 647748,
-            "value": 1
-          },
-          {
-            "cycle": 647811,
-            "value": 0
-          },
-          {
-            "cycle": 647874,
-            "value": 1
-          },
-          {
-            "cycle": 647937,
-            "value": 0
-          },
-          {
-            "cycle": 648000,
-            "value": 1
-          },
-          {
-            "cycle": 648063,
-            "value": 0
-          },
-          {
-            "cycle": 648126,
-            "value": 1
-          },
-          {
-            "cycle": 648189,
-            "value": 0
-          },
-          {
-            "cycle": 648252,
-            "value": 1
-          },
-          {
-            "cycle": 648315,
-            "value": 0
-          },
-          {
-            "cycle": 648378,
-            "value": 1
-          },
-          {
-            "cycle": 648441,
-            "value": 0
-          },
-          {
-            "cycle": 648504,
-            "value": 1
-          },
-          {
-            "cycle": 648567,
-            "value": 0
-          },
-          {
-            "cycle": 648630,
-            "value": 1
-          },
-          {
-            "cycle": 648693,
-            "value": 0
-          },
-          {
-            "cycle": 648756,
-            "value": 1
-          },
-          {
-            "cycle": 648819,
-            "value": 0
-          },
-          {
-            "cycle": 648882,
-            "value": 1
-          },
-          {
-            "cycle": 648945,
-            "value": 0
-          },
-          {
-            "cycle": 649008,
-            "value": 1
-          },
-          {
-            "cycle": 649071,
-            "value": 0
-          },
-          {
-            "cycle": 649134,
-            "value": 1
-          },
-          {
-            "cycle": 649197,
-            "value": 0
-          },
-          {
-            "cycle": 649260,
-            "value": 1
-          },
-          {
-            "cycle": 649323,
-            "value": 0
-          },
-          {
-            "cycle": 649386,
-            "value": 1
-          },
-          {
-            "cycle": 649449,
-            "value": 0
-          },
-          {
-            "cycle": 649512,
-            "value": 1
-          },
-          {
-            "cycle": 649575,
-            "value": 0
-          },
-          {
-            "cycle": 649638,
-            "value": 1
-          },
-          {
-            "cycle": 649701,
-            "value": 0
-          },
-          {
-            "cycle": 649764,
-            "value": 1
-          },
-          {
-            "cycle": 649827,
-            "value": 0
-          },
-          {
-            "cycle": 649890,
-            "value": 1
-          },
-          {
-            "cycle": 649953,
-            "value": 0
-          },
-          {
-            "cycle": 650016,
-            "value": 1
-          },
-          {
-            "cycle": 650079,
-            "value": 0
-          },
-          {
-            "cycle": 650142,
-            "value": 1
-          },
-          {
-            "cycle": 650205,
-            "value": 0
-          },
-          {
-            "cycle": 650268,
-            "value": 1
-          },
-          {
-            "cycle": 650331,
-            "value": 0
-          },
-          {
-            "cycle": 650394,
-            "value": 1
-          },
-          {
-            "cycle": 650457,
-            "value": 0
-          },
-          {
-            "cycle": 650520,
-            "value": 1
-          },
-          {
-            "cycle": 650583,
-            "value": 0
-          },
-          {
-            "cycle": 650646,
-            "value": 1
-          },
-          {
-            "cycle": 650709,
-            "value": 0
-          },
-          {
-            "cycle": 650772,
-            "value": 1
-          },
-          {
-            "cycle": 650835,
-            "value": 0
-          },
-          {
-            "cycle": 650898,
-            "value": 1
-          },
-          {
-            "cycle": 650961,
-            "value": 0
-          },
-          {
-            "cycle": 651024,
-            "value": 1
-          },
-          {
-            "cycle": 651087,
-            "value": 0
-          },
-          {
-            "cycle": 651150,
-            "value": 1
-          },
-          {
-            "cycle": 651213,
-            "value": 0
-          },
-          {
-            "cycle": 651276,
-            "value": 1
-          },
-          {
-            "cycle": 651339,
-            "value": 0
-          },
-          {
-            "cycle": 651402,
-            "value": 1
-          },
-          {
-            "cycle": 651465,
-            "value": 0
-          },
-          {
-            "cycle": 651528,
-            "value": 1
-          },
-          {
-            "cycle": 651591,
-            "value": 0
-          },
-          {
-            "cycle": 651654,
-            "value": 1
-          },
-          {
-            "cycle": 651717,
-            "value": 0
-          },
-          {
-            "cycle": 651780,
-            "value": 1
-          },
-          {
-            "cycle": 651843,
-            "value": 0
-          },
-          {
-            "cycle": 651906,
-            "value": 1
-          },
-          {
-            "cycle": 651969,
-            "value": 0
-          },
-          {
-            "cycle": 652032,
-            "value": 1
-          },
-          {
-            "cycle": 652095,
-            "value": 0
-          },
-          {
-            "cycle": 652158,
-            "value": 1
-          },
-          {
-            "cycle": 652221,
-            "value": 0
-          },
-          {
-            "cycle": 652284,
-            "value": 1
-          },
-          {
-            "cycle": 652347,
-            "value": 0
-          },
-          {
-            "cycle": 652410,
-            "value": 1
-          },
-          {
-            "cycle": 652473,
-            "value": 0
-          },
-          {
-            "cycle": 652536,
-            "value": 1
-          },
-          {
-            "cycle": 652599,
-            "value": 0
-          },
-          {
-            "cycle": 652662,
-            "value": 1
-          },
-          {
-            "cycle": 652725,
-            "value": 0
-          },
-          {
-            "cycle": 652788,
-            "value": 1
-          },
-          {
-            "cycle": 652851,
-            "value": 0
-          },
-          {
-            "cycle": 652914,
-            "value": 1
-          },
-          {
-            "cycle": 652977,
-            "value": 0
-          },
-          {
-            "cycle": 653040,
-            "value": 1
-          },
-          {
-            "cycle": 653103,
-            "value": 0
-          },
-          {
-            "cycle": 653166,
-            "value": 1
-          },
-          {
-            "cycle": 653229,
-            "value": 0
-          },
-          {
-            "cycle": 653292,
-            "value": 1
-          },
-          {
-            "cycle": 653355,
-            "value": 0
-          },
-          {
-            "cycle": 653418,
-            "value": 1
-          },
-          {
-            "cycle": 653481,
-            "value": 0
-          },
-          {
-            "cycle": 653544,
-            "value": 1
-          },
-          {
-            "cycle": 653607,
-            "value": 0
-          },
-          {
-            "cycle": 653670,
-            "value": 1
-          },
-          {
-            "cycle": 653733,
-            "value": 0
-          },
-          {
-            "cycle": 653796,
-            "value": 1
-          },
-          {
-            "cycle": 653859,
-            "value": 0
-          },
-          {
-            "cycle": 653922,
-            "value": 1
-          },
-          {
-            "cycle": 653985,
-            "value": 0
-          },
-          {
-            "cycle": 654048,
-            "value": 1
-          },
-          {
-            "cycle": 654111,
-            "value": 0
-          },
-          {
-            "cycle": 654174,
-            "value": 1
-          },
-          {
-            "cycle": 654237,
-            "value": 0
-          },
-          {
-            "cycle": 654300,
-            "value": 1
-          },
-          {
-            "cycle": 654363,
-            "value": 0
-          },
-          {
-            "cycle": 654426,
-            "value": 1
-          },
-          {
-            "cycle": 654489,
-            "value": 0
-          },
-          {
-            "cycle": 654552,
-            "value": 1
-          },
-          {
-            "cycle": 654615,
-            "value": 0
-          },
-          {
-            "cycle": 654678,
-            "value": 1
-          },
-          {
-            "cycle": 654741,
-            "value": 0
-          },
-          {
-            "cycle": 654804,
-            "value": 1
-          },
-          {
-            "cycle": 654867,
-            "value": 0
-          },
-          {
-            "cycle": 654930,
-            "value": 1
-          },
-          {
-            "cycle": 654993,
-            "value": 0
-          },
-          {
-            "cycle": 655056,
-            "value": 1
-          },
-          {
-            "cycle": 655119,
-            "value": 0
-          },
-          {
-            "cycle": 655182,
-            "value": 1
-          },
-          {
-            "cycle": 655245,
-            "value": 0
-          },
-          {
-            "cycle": 655308,
-            "value": 1
-          },
-          {
-            "cycle": 655371,
-            "value": 0
-          },
-          {
-            "cycle": 655434,
-            "value": 1
-          },
-          {
-            "cycle": 655497,
-            "value": 0
-          },
-          {
-            "cycle": 655560,
-            "value": 1
-          },
-          {
-            "cycle": 655623,
-            "value": 0
-          },
-          {
-            "cycle": 655686,
-            "value": 1
-          },
-          {
-            "cycle": 655749,
-            "value": 0
-          },
-          {
-            "cycle": 655812,
-            "value": 1
-          },
-          {
-            "cycle": 655875,
-            "value": 0
-          },
-          {
-            "cycle": 655938,
-            "value": 1
-          },
-          {
-            "cycle": 656001,
-            "value": 0
-          },
-          {
-            "cycle": 656064,
-            "value": 1
-          },
-          {
-            "cycle": 656127,
-            "value": 0
-          },
-          {
-            "cycle": 656190,
-            "value": 1
-          },
-          {
-            "cycle": 656253,
-            "value": 0
-          },
-          {
-            "cycle": 656316,
-            "value": 1
-          },
-          {
-            "cycle": 656379,
-            "value": 0
-          },
-          {
-            "cycle": 656442,
-            "value": 1
-          },
-          {
-            "cycle": 656505,
-            "value": 0
-          },
-          {
-            "cycle": 656568,
-            "value": 1
-          },
-          {
-            "cycle": 656631,
-            "value": 0
-          },
-          {
-            "cycle": 656694,
-            "value": 1
-          },
-          {
-            "cycle": 656757,
-            "value": 0
-          },
-          {
-            "cycle": 656820,
-            "value": 1
-          },
-          {
-            "cycle": 656883,
-            "value": 0
-          },
-          {
-            "cycle": 656946,
-            "value": 1
-          },
-          {
-            "cycle": 657009,
-            "value": 0
-          },
-          {
-            "cycle": 657072,
-            "value": 1
-          },
-          {
-            "cycle": 657135,
-            "value": 0
-          },
-          {
-            "cycle": 657198,
-            "value": 1
-          },
-          {
-            "cycle": 657261,
-            "value": 0
-          },
-          {
-            "cycle": 657324,
-            "value": 1
-          },
-          {
-            "cycle": 657387,
-            "value": 0
-          },
-          {
-            "cycle": 657450,
-            "value": 1
-          },
-          {
-            "cycle": 657513,
-            "value": 0
-          },
-          {
-            "cycle": 657576,
-            "value": 1
-          },
-          {
-            "cycle": 657639,
-            "value": 0
-          },
-          {
-            "cycle": 657702,
-            "value": 1
-          },
-          {
-            "cycle": 657765,
-            "value": 0
-          },
-          {
-            "cycle": 657828,
-            "value": 1
-          },
-          {
-            "cycle": 657891,
-            "value": 0
-          },
-          {
-            "cycle": 657954,
-            "value": 1
-          },
-          {
-            "cycle": 658017,
-            "value": 0
-          },
-          {
-            "cycle": 658080,
-            "value": 1
-          },
-          {
-            "cycle": 658143,
-            "value": 0
-          },
-          {
-            "cycle": 658206,
-            "value": 1
-          },
-          {
-            "cycle": 658269,
-            "value": 0
-          },
-          {
-            "cycle": 658332,
-            "value": 1
-          },
-          {
-            "cycle": 658395,
-            "value": 0
-          },
-          {
-            "cycle": 658458,
-            "value": 1
-          },
-          {
-            "cycle": 658521,
-            "value": 0
-          },
-          {
-            "cycle": 658584,
-            "value": 1
-          },
-          {
-            "cycle": 658647,
-            "value": 0
-          },
-          {
-            "cycle": 658710,
-            "value": 1
-          },
-          {
-            "cycle": 658773,
-            "value": 0
-          },
-          {
-            "cycle": 658836,
-            "value": 1
-          },
-          {
-            "cycle": 658899,
-            "value": 0
-          },
-          {
-            "cycle": 658962,
-            "value": 1
-          },
-          {
-            "cycle": 659025,
-            "value": 0
-          },
-          {
-            "cycle": 659088,
-            "value": 1
-          },
-          {
-            "cycle": 659151,
-            "value": 0
-          },
-          {
-            "cycle": 659214,
-            "value": 1
-          },
-          {
-            "cycle": 659277,
-            "value": 0
-          },
-          {
-            "cycle": 659340,
-            "value": 1
-          },
-          {
-            "cycle": 659403,
-            "value": 0
-          },
-          {
-            "cycle": 659466,
-            "value": 1
-          },
-          {
-            "cycle": 659529,
-            "value": 0
-          },
-          {
-            "cycle": 659592,
-            "value": 1
-          },
-          {
-            "cycle": 659655,
-            "value": 0
-          },
-          {
-            "cycle": 659718,
-            "value": 1
-          },
-          {
-            "cycle": 659781,
-            "value": 0
-          },
-          {
-            "cycle": 659844,
-            "value": 1
-          },
-          {
-            "cycle": 659907,
-            "value": 0
-          },
-          {
-            "cycle": 659970,
+            "cycle": 679968,
             "value": 1
           }
         ],
@@ -2511,1928 +3292,1064 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 629732,
+            "cycle": 663337,
             "state": "0"
           },
           {
-            "cycle": 629856,
+            "cycle": 663462,
             "state": "1"
           },
           {
-            "cycle": 629919,
+            "cycle": 663525,
             "state": "0"
           },
           {
-            "cycle": 629982,
+            "cycle": 663588,
             "state": "1"
           },
           {
-            "cycle": 630045,
+            "cycle": 663651,
             "state": "0"
           },
           {
-            "cycle": 630108,
+            "cycle": 663714,
             "state": "1"
           },
           {
-            "cycle": 630171,
+            "cycle": 663777,
             "state": "0"
           },
           {
-            "cycle": 630234,
+            "cycle": 663840,
             "state": "1"
           },
           {
-            "cycle": 630297,
+            "cycle": 663903,
             "state": "0"
           },
           {
-            "cycle": 630360,
+            "cycle": 663966,
             "state": "1"
           },
           {
-            "cycle": 630423,
+            "cycle": 664029,
             "state": "0"
           },
           {
-            "cycle": 630486,
+            "cycle": 664092,
             "state": "1"
           },
           {
-            "cycle": 630549,
+            "cycle": 664155,
             "state": "0"
           },
           {
-            "cycle": 630612,
+            "cycle": 664218,
             "state": "1"
           },
           {
-            "cycle": 630675,
+            "cycle": 664281,
             "state": "0"
           },
           {
-            "cycle": 630738,
+            "cycle": 664344,
             "state": "1"
           },
           {
-            "cycle": 630801,
+            "cycle": 664407,
             "state": "0"
           },
           {
-            "cycle": 630864,
+            "cycle": 664470,
             "state": "1"
           },
           {
-            "cycle": 630927,
+            "cycle": 664533,
             "state": "0"
           },
           {
-            "cycle": 630990,
+            "cycle": 664596,
             "state": "1"
           },
           {
-            "cycle": 631053,
+            "cycle": 664659,
             "state": "0"
           },
           {
-            "cycle": 631116,
+            "cycle": 664722,
             "state": "1"
           },
           {
-            "cycle": 631179,
+            "cycle": 664785,
             "state": "0"
           },
           {
-            "cycle": 631242,
+            "cycle": 664848,
             "state": "1"
           },
           {
-            "cycle": 631305,
+            "cycle": 664911,
             "state": "0"
           },
           {
-            "cycle": 631368,
+            "cycle": 664974,
             "state": "1"
           },
           {
-            "cycle": 631431,
+            "cycle": 665037,
             "state": "0"
           },
           {
-            "cycle": 631494,
+            "cycle": 665100,
             "state": "1"
           },
           {
-            "cycle": 631557,
+            "cycle": 665163,
             "state": "0"
           },
           {
-            "cycle": 631620,
+            "cycle": 665226,
             "state": "1"
           },
           {
-            "cycle": 631683,
+            "cycle": 665289,
             "state": "0"
           },
           {
-            "cycle": 631746,
+            "cycle": 665352,
             "state": "1"
           },
           {
-            "cycle": 631809,
+            "cycle": 665415,
             "state": "0"
           },
           {
-            "cycle": 631872,
+            "cycle": 665478,
             "state": "1"
           },
           {
-            "cycle": 631935,
+            "cycle": 665541,
             "state": "0"
           },
           {
-            "cycle": 631998,
+            "cycle": 665604,
             "state": "1"
           },
           {
-            "cycle": 632061,
+            "cycle": 665667,
             "state": "0"
           },
           {
-            "cycle": 632124,
+            "cycle": 665730,
             "state": "1"
           },
           {
-            "cycle": 632187,
+            "cycle": 665793,
             "state": "0"
           },
           {
-            "cycle": 632250,
+            "cycle": 665856,
             "state": "1"
           },
           {
-            "cycle": 632313,
+            "cycle": 665919,
             "state": "0"
           },
           {
-            "cycle": 632376,
+            "cycle": 665982,
             "state": "1"
           },
           {
-            "cycle": 632439,
+            "cycle": 666045,
             "state": "0"
           },
           {
-            "cycle": 632502,
+            "cycle": 666108,
             "state": "1"
           },
           {
-            "cycle": 632565,
+            "cycle": 666171,
             "state": "0"
           },
           {
-            "cycle": 632628,
+            "cycle": 666234,
             "state": "1"
           },
           {
-            "cycle": 632691,
+            "cycle": 666297,
             "state": "0"
           },
           {
-            "cycle": 632754,
+            "cycle": 666360,
             "state": "1"
           },
           {
-            "cycle": 632817,
+            "cycle": 666423,
             "state": "0"
           },
           {
-            "cycle": 632880,
+            "cycle": 666486,
             "state": "1"
           },
           {
-            "cycle": 632943,
+            "cycle": 666549,
             "state": "0"
           },
           {
-            "cycle": 633006,
+            "cycle": 666612,
             "state": "1"
           },
           {
-            "cycle": 633069,
+            "cycle": 666675,
             "state": "0"
           },
           {
-            "cycle": 633132,
+            "cycle": 666738,
             "state": "1"
           },
           {
-            "cycle": 633195,
+            "cycle": 666801,
             "state": "0"
           },
           {
-            "cycle": 633258,
+            "cycle": 666864,
             "state": "1"
           },
           {
-            "cycle": 633321,
+            "cycle": 666927,
             "state": "0"
           },
           {
-            "cycle": 633384,
+            "cycle": 666990,
             "state": "1"
           },
           {
-            "cycle": 633447,
+            "cycle": 667053,
             "state": "0"
           },
           {
-            "cycle": 633510,
+            "cycle": 667116,
             "state": "1"
           },
           {
-            "cycle": 633573,
+            "cycle": 667179,
             "state": "0"
           },
           {
-            "cycle": 633636,
+            "cycle": 667242,
             "state": "1"
           },
           {
-            "cycle": 633699,
+            "cycle": 667305,
             "state": "0"
           },
           {
-            "cycle": 633762,
+            "cycle": 667368,
             "state": "1"
           },
           {
-            "cycle": 633825,
+            "cycle": 667431,
             "state": "0"
           },
           {
-            "cycle": 633888,
+            "cycle": 667494,
             "state": "1"
           },
           {
-            "cycle": 633951,
+            "cycle": 667557,
             "state": "0"
           },
           {
-            "cycle": 634014,
+            "cycle": 667620,
             "state": "1"
           },
           {
-            "cycle": 634077,
+            "cycle": 667683,
             "state": "0"
           },
           {
-            "cycle": 634140,
+            "cycle": 667746,
             "state": "1"
           },
           {
-            "cycle": 634203,
+            "cycle": 667809,
             "state": "0"
           },
           {
-            "cycle": 634266,
+            "cycle": 667872,
             "state": "1"
           },
           {
-            "cycle": 634329,
+            "cycle": 667935,
             "state": "0"
           },
           {
-            "cycle": 634392,
+            "cycle": 667998,
             "state": "1"
           },
           {
-            "cycle": 634455,
+            "cycle": 668061,
             "state": "0"
           },
           {
-            "cycle": 634518,
+            "cycle": 668124,
             "state": "1"
           },
           {
-            "cycle": 634581,
+            "cycle": 668187,
             "state": "0"
           },
           {
-            "cycle": 634644,
+            "cycle": 668250,
             "state": "1"
           },
           {
-            "cycle": 634707,
+            "cycle": 668313,
             "state": "0"
           },
           {
-            "cycle": 634770,
+            "cycle": 668376,
             "state": "1"
           },
           {
-            "cycle": 634833,
+            "cycle": 668439,
             "state": "0"
           },
           {
-            "cycle": 634896,
+            "cycle": 668502,
             "state": "1"
           },
           {
-            "cycle": 634959,
+            "cycle": 668565,
             "state": "0"
           },
           {
-            "cycle": 635022,
+            "cycle": 668628,
             "state": "1"
           },
           {
-            "cycle": 635085,
+            "cycle": 668691,
             "state": "0"
           },
           {
-            "cycle": 635148,
+            "cycle": 668754,
             "state": "1"
           },
           {
-            "cycle": 635211,
+            "cycle": 668817,
             "state": "0"
           },
           {
-            "cycle": 635274,
+            "cycle": 668880,
             "state": "1"
           },
           {
-            "cycle": 635337,
+            "cycle": 668943,
             "state": "0"
           },
           {
-            "cycle": 635400,
+            "cycle": 669006,
             "state": "1"
           },
           {
-            "cycle": 635463,
+            "cycle": 669069,
             "state": "0"
           },
           {
-            "cycle": 635526,
+            "cycle": 669132,
             "state": "1"
           },
           {
-            "cycle": 635589,
+            "cycle": 669195,
             "state": "0"
           },
           {
-            "cycle": 635652,
+            "cycle": 669258,
             "state": "1"
           },
           {
-            "cycle": 635715,
+            "cycle": 669321,
             "state": "0"
           },
           {
-            "cycle": 635778,
+            "cycle": 669384,
             "state": "1"
           },
           {
-            "cycle": 635841,
+            "cycle": 669447,
             "state": "0"
           },
           {
-            "cycle": 635904,
+            "cycle": 669510,
             "state": "1"
           },
           {
-            "cycle": 635967,
+            "cycle": 669573,
             "state": "0"
           },
           {
-            "cycle": 636030,
+            "cycle": 669636,
             "state": "1"
           },
           {
-            "cycle": 636093,
+            "cycle": 669699,
             "state": "0"
           },
           {
-            "cycle": 636156,
+            "cycle": 669762,
             "state": "1"
           },
           {
-            "cycle": 636219,
+            "cycle": 669825,
             "state": "0"
           },
           {
-            "cycle": 636282,
+            "cycle": 669888,
             "state": "1"
           },
           {
-            "cycle": 636345,
+            "cycle": 669951,
             "state": "0"
           },
           {
-            "cycle": 636408,
+            "cycle": 670014,
             "state": "1"
           },
           {
-            "cycle": 636471,
+            "cycle": 670077,
             "state": "0"
           },
           {
-            "cycle": 636534,
+            "cycle": 670140,
             "state": "1"
           },
           {
-            "cycle": 636597,
+            "cycle": 670203,
             "state": "0"
           },
           {
-            "cycle": 636660,
+            "cycle": 670266,
             "state": "1"
           },
           {
-            "cycle": 636723,
+            "cycle": 670329,
             "state": "0"
           },
           {
-            "cycle": 636786,
+            "cycle": 670392,
             "state": "1"
           },
           {
-            "cycle": 636849,
+            "cycle": 670455,
             "state": "0"
           },
           {
-            "cycle": 636912,
+            "cycle": 670518,
             "state": "1"
           },
           {
-            "cycle": 636975,
+            "cycle": 670581,
             "state": "0"
           },
           {
-            "cycle": 637038,
+            "cycle": 670644,
             "state": "1"
           },
           {
-            "cycle": 637101,
+            "cycle": 670707,
             "state": "0"
           },
           {
-            "cycle": 637164,
+            "cycle": 670770,
             "state": "1"
           },
           {
-            "cycle": 637227,
+            "cycle": 670833,
             "state": "0"
           },
           {
-            "cycle": 637290,
+            "cycle": 670896,
             "state": "1"
           },
           {
-            "cycle": 637353,
+            "cycle": 670959,
             "state": "0"
           },
           {
-            "cycle": 637416,
+            "cycle": 671022,
             "state": "1"
           },
           {
-            "cycle": 637479,
+            "cycle": 671085,
             "state": "0"
           },
           {
-            "cycle": 637542,
+            "cycle": 671148,
             "state": "1"
           },
           {
-            "cycle": 637605,
+            "cycle": 671211,
             "state": "0"
           },
           {
-            "cycle": 637668,
+            "cycle": 671274,
             "state": "1"
           },
           {
-            "cycle": 637731,
+            "cycle": 671337,
             "state": "0"
           },
           {
-            "cycle": 637794,
+            "cycle": 671400,
             "state": "1"
           },
           {
-            "cycle": 637857,
+            "cycle": 671463,
             "state": "0"
           },
           {
-            "cycle": 637920,
+            "cycle": 671526,
             "state": "1"
           },
           {
-            "cycle": 637983,
+            "cycle": 671589,
             "state": "0"
           },
           {
-            "cycle": 638046,
+            "cycle": 671652,
             "state": "1"
           },
           {
-            "cycle": 638109,
+            "cycle": 671715,
             "state": "0"
           },
           {
-            "cycle": 638172,
+            "cycle": 671778,
             "state": "1"
           },
           {
-            "cycle": 638235,
+            "cycle": 671841,
             "state": "0"
           },
           {
-            "cycle": 638298,
+            "cycle": 671904,
             "state": "1"
           },
           {
-            "cycle": 638361,
+            "cycle": 671967,
             "state": "0"
           },
           {
-            "cycle": 638424,
+            "cycle": 672030,
             "state": "1"
           },
           {
-            "cycle": 638487,
+            "cycle": 672093,
             "state": "0"
           },
           {
-            "cycle": 638550,
+            "cycle": 672156,
             "state": "1"
           },
           {
-            "cycle": 638613,
+            "cycle": 672219,
             "state": "0"
           },
           {
-            "cycle": 638676,
+            "cycle": 672282,
             "state": "1"
           },
           {
-            "cycle": 638739,
+            "cycle": 672345,
             "state": "0"
           },
           {
-            "cycle": 638802,
+            "cycle": 672408,
             "state": "1"
           },
           {
-            "cycle": 638865,
+            "cycle": 672471,
             "state": "0"
           },
           {
-            "cycle": 638928,
+            "cycle": 672534,
             "state": "1"
           },
           {
-            "cycle": 638991,
+            "cycle": 672597,
             "state": "0"
           },
           {
-            "cycle": 639054,
+            "cycle": 672660,
             "state": "1"
           },
           {
-            "cycle": 639117,
+            "cycle": 672723,
             "state": "0"
           },
           {
-            "cycle": 639180,
+            "cycle": 672786,
             "state": "1"
           },
           {
-            "cycle": 639243,
+            "cycle": 672849,
             "state": "0"
           },
           {
-            "cycle": 639306,
+            "cycle": 672912,
             "state": "1"
           },
           {
-            "cycle": 639369,
+            "cycle": 672975,
             "state": "0"
           },
           {
-            "cycle": 639432,
+            "cycle": 673038,
             "state": "1"
           },
           {
-            "cycle": 639495,
+            "cycle": 673101,
             "state": "0"
           },
           {
-            "cycle": 639558,
+            "cycle": 673164,
             "state": "1"
           },
           {
-            "cycle": 639621,
+            "cycle": 673227,
             "state": "0"
           },
           {
-            "cycle": 639684,
+            "cycle": 673290,
             "state": "1"
           },
           {
-            "cycle": 639747,
+            "cycle": 673353,
             "state": "0"
           },
           {
-            "cycle": 639810,
+            "cycle": 673416,
             "state": "1"
           },
           {
-            "cycle": 639873,
+            "cycle": 673479,
             "state": "0"
           },
           {
-            "cycle": 639936,
+            "cycle": 673542,
             "state": "1"
           },
           {
-            "cycle": 639999,
+            "cycle": 673605,
             "state": "0"
           },
           {
-            "cycle": 640062,
+            "cycle": 673668,
             "state": "1"
           },
           {
-            "cycle": 640125,
+            "cycle": 673731,
             "state": "0"
           },
           {
-            "cycle": 640188,
+            "cycle": 673794,
             "state": "1"
           },
           {
-            "cycle": 640251,
+            "cycle": 673857,
             "state": "0"
           },
           {
-            "cycle": 640314,
+            "cycle": 673920,
             "state": "1"
           },
           {
-            "cycle": 640377,
+            "cycle": 673983,
             "state": "0"
           },
           {
-            "cycle": 640440,
+            "cycle": 674046,
             "state": "1"
           },
           {
-            "cycle": 640503,
+            "cycle": 674109,
             "state": "0"
           },
           {
-            "cycle": 640566,
+            "cycle": 674172,
             "state": "1"
           },
           {
-            "cycle": 640629,
+            "cycle": 674235,
             "state": "0"
           },
           {
-            "cycle": 640692,
+            "cycle": 674298,
             "state": "1"
           },
           {
-            "cycle": 640755,
+            "cycle": 674361,
             "state": "0"
           },
           {
-            "cycle": 640818,
+            "cycle": 674424,
             "state": "1"
           },
           {
-            "cycle": 640881,
+            "cycle": 674487,
             "state": "0"
           },
           {
-            "cycle": 640944,
+            "cycle": 674550,
             "state": "1"
           },
           {
-            "cycle": 641007,
+            "cycle": 674613,
             "state": "0"
           },
           {
-            "cycle": 641070,
+            "cycle": 674676,
             "state": "1"
           },
           {
-            "cycle": 641133,
+            "cycle": 674739,
             "state": "0"
           },
           {
-            "cycle": 641196,
+            "cycle": 674802,
             "state": "1"
           },
           {
-            "cycle": 641259,
+            "cycle": 674865,
             "state": "0"
           },
           {
-            "cycle": 641322,
+            "cycle": 674928,
             "state": "1"
           },
           {
-            "cycle": 641385,
+            "cycle": 674991,
             "state": "0"
           },
           {
-            "cycle": 641448,
+            "cycle": 675054,
             "state": "1"
           },
           {
-            "cycle": 641511,
+            "cycle": 675117,
             "state": "0"
           },
           {
-            "cycle": 641574,
+            "cycle": 675180,
             "state": "1"
           },
           {
-            "cycle": 641637,
+            "cycle": 675243,
             "state": "0"
           },
           {
-            "cycle": 641700,
+            "cycle": 675306,
             "state": "1"
           },
           {
-            "cycle": 641763,
+            "cycle": 675369,
             "state": "0"
           },
           {
-            "cycle": 641826,
+            "cycle": 675432,
             "state": "1"
           },
           {
-            "cycle": 641889,
+            "cycle": 675495,
             "state": "0"
           },
           {
-            "cycle": 641952,
+            "cycle": 675558,
             "state": "1"
           },
           {
-            "cycle": 642015,
+            "cycle": 675621,
             "state": "0"
           },
           {
-            "cycle": 642078,
+            "cycle": 675684,
             "state": "1"
           },
           {
-            "cycle": 642141,
+            "cycle": 675747,
             "state": "0"
           },
           {
-            "cycle": 642204,
+            "cycle": 675810,
             "state": "1"
           },
           {
-            "cycle": 642267,
+            "cycle": 675873,
             "state": "0"
           },
           {
-            "cycle": 642330,
+            "cycle": 675936,
             "state": "1"
           },
           {
-            "cycle": 642393,
+            "cycle": 675999,
             "state": "0"
           },
           {
-            "cycle": 642456,
+            "cycle": 676062,
             "state": "1"
           },
           {
-            "cycle": 642519,
+            "cycle": 676125,
             "state": "0"
           },
           {
-            "cycle": 642582,
+            "cycle": 676188,
             "state": "1"
           },
           {
-            "cycle": 642645,
+            "cycle": 676251,
             "state": "0"
           },
           {
-            "cycle": 642708,
+            "cycle": 676314,
             "state": "1"
           },
           {
-            "cycle": 642771,
+            "cycle": 676377,
             "state": "0"
           },
           {
-            "cycle": 642834,
+            "cycle": 676440,
             "state": "1"
           },
           {
-            "cycle": 642897,
+            "cycle": 676503,
             "state": "0"
           },
           {
-            "cycle": 642960,
+            "cycle": 676566,
             "state": "1"
           },
           {
-            "cycle": 643023,
+            "cycle": 676629,
             "state": "0"
           },
           {
-            "cycle": 643086,
+            "cycle": 676692,
             "state": "1"
           },
           {
-            "cycle": 643149,
+            "cycle": 676755,
             "state": "0"
           },
           {
-            "cycle": 643212,
+            "cycle": 676818,
             "state": "1"
           },
           {
-            "cycle": 643275,
+            "cycle": 676881,
             "state": "0"
           },
           {
-            "cycle": 643338,
+            "cycle": 676944,
             "state": "1"
           },
           {
-            "cycle": 643401,
+            "cycle": 677007,
             "state": "0"
           },
           {
-            "cycle": 643464,
+            "cycle": 677070,
             "state": "1"
           },
           {
-            "cycle": 643527,
+            "cycle": 677133,
             "state": "0"
           },
           {
-            "cycle": 643590,
+            "cycle": 677196,
             "state": "1"
           },
           {
-            "cycle": 643653,
+            "cycle": 677259,
             "state": "0"
           },
           {
-            "cycle": 643716,
+            "cycle": 677322,
             "state": "1"
           },
           {
-            "cycle": 643779,
+            "cycle": 677385,
             "state": "0"
           },
           {
-            "cycle": 643842,
+            "cycle": 677448,
             "state": "1"
           },
           {
-            "cycle": 643905,
+            "cycle": 677511,
             "state": "0"
           },
           {
-            "cycle": 643968,
+            "cycle": 677574,
             "state": "1"
           },
           {
-            "cycle": 644031,
+            "cycle": 677637,
             "state": "0"
           },
           {
-            "cycle": 644094,
+            "cycle": 677700,
             "state": "1"
           },
           {
-            "cycle": 644157,
+            "cycle": 677763,
             "state": "0"
           },
           {
-            "cycle": 644220,
+            "cycle": 677826,
             "state": "1"
           },
           {
-            "cycle": 644283,
+            "cycle": 677889,
             "state": "0"
           },
           {
-            "cycle": 644346,
+            "cycle": 677952,
             "state": "1"
           },
           {
-            "cycle": 644409,
+            "cycle": 678015,
             "state": "0"
           },
           {
-            "cycle": 644472,
+            "cycle": 678078,
             "state": "1"
           },
           {
-            "cycle": 644535,
+            "cycle": 678141,
             "state": "0"
           },
           {
-            "cycle": 644598,
+            "cycle": 678204,
             "state": "1"
           },
           {
-            "cycle": 644661,
+            "cycle": 678267,
             "state": "0"
           },
           {
-            "cycle": 644724,
+            "cycle": 678330,
             "state": "1"
           },
           {
-            "cycle": 644787,
+            "cycle": 678393,
             "state": "0"
           },
           {
-            "cycle": 644850,
+            "cycle": 678456,
             "state": "1"
           },
           {
-            "cycle": 644913,
+            "cycle": 678519,
             "state": "0"
           },
           {
-            "cycle": 644976,
+            "cycle": 678582,
             "state": "1"
           },
           {
-            "cycle": 645039,
+            "cycle": 678645,
             "state": "0"
           },
           {
-            "cycle": 645102,
+            "cycle": 678708,
             "state": "1"
           },
           {
-            "cycle": 645165,
+            "cycle": 678771,
             "state": "0"
           },
           {
-            "cycle": 645228,
+            "cycle": 678834,
             "state": "1"
           },
           {
-            "cycle": 645291,
+            "cycle": 678897,
             "state": "0"
           },
           {
-            "cycle": 645354,
+            "cycle": 678960,
             "state": "1"
           },
           {
-            "cycle": 645417,
+            "cycle": 679023,
             "state": "0"
           },
           {
-            "cycle": 645480,
+            "cycle": 679086,
             "state": "1"
           },
           {
-            "cycle": 645543,
+            "cycle": 679149,
             "state": "0"
           },
           {
-            "cycle": 645606,
+            "cycle": 679212,
             "state": "1"
           },
           {
-            "cycle": 645669,
+            "cycle": 679275,
             "state": "0"
           },
           {
-            "cycle": 645732,
+            "cycle": 679338,
             "state": "1"
           },
           {
-            "cycle": 645795,
+            "cycle": 679401,
             "state": "0"
           },
           {
-            "cycle": 645858,
+            "cycle": 679464,
             "state": "1"
           },
           {
-            "cycle": 645921,
+            "cycle": 679527,
             "state": "0"
           },
           {
-            "cycle": 645984,
+            "cycle": 679590,
             "state": "1"
           },
           {
-            "cycle": 646047,
+            "cycle": 679653,
             "state": "0"
           },
           {
-            "cycle": 646110,
+            "cycle": 679716,
             "state": "1"
           },
           {
-            "cycle": 646173,
+            "cycle": 679779,
             "state": "0"
           },
           {
-            "cycle": 646236,
+            "cycle": 679842,
             "state": "1"
           },
           {
-            "cycle": 646299,
+            "cycle": 679905,
             "state": "0"
           },
           {
-            "cycle": 646362,
-            "state": "1"
-          },
-          {
-            "cycle": 646425,
-            "state": "0"
-          },
-          {
-            "cycle": 646488,
-            "state": "1"
-          },
-          {
-            "cycle": 646551,
-            "state": "0"
-          },
-          {
-            "cycle": 646614,
-            "state": "1"
-          },
-          {
-            "cycle": 646677,
-            "state": "0"
-          },
-          {
-            "cycle": 646740,
-            "state": "1"
-          },
-          {
-            "cycle": 646803,
-            "state": "0"
-          },
-          {
-            "cycle": 646866,
-            "state": "1"
-          },
-          {
-            "cycle": 646929,
-            "state": "0"
-          },
-          {
-            "cycle": 646992,
-            "state": "1"
-          },
-          {
-            "cycle": 647055,
-            "state": "0"
-          },
-          {
-            "cycle": 647118,
-            "state": "1"
-          },
-          {
-            "cycle": 647181,
-            "state": "0"
-          },
-          {
-            "cycle": 647244,
-            "state": "1"
-          },
-          {
-            "cycle": 647307,
-            "state": "0"
-          },
-          {
-            "cycle": 647370,
-            "state": "1"
-          },
-          {
-            "cycle": 647433,
-            "state": "0"
-          },
-          {
-            "cycle": 647496,
-            "state": "1"
-          },
-          {
-            "cycle": 647559,
-            "state": "0"
-          },
-          {
-            "cycle": 647622,
-            "state": "1"
-          },
-          {
-            "cycle": 647685,
-            "state": "0"
-          },
-          {
-            "cycle": 647748,
-            "state": "1"
-          },
-          {
-            "cycle": 647811,
-            "state": "0"
-          },
-          {
-            "cycle": 647874,
-            "state": "1"
-          },
-          {
-            "cycle": 647937,
-            "state": "0"
-          },
-          {
-            "cycle": 648000,
-            "state": "1"
-          },
-          {
-            "cycle": 648063,
-            "state": "0"
-          },
-          {
-            "cycle": 648126,
-            "state": "1"
-          },
-          {
-            "cycle": 648189,
-            "state": "0"
-          },
-          {
-            "cycle": 648252,
-            "state": "1"
-          },
-          {
-            "cycle": 648315,
-            "state": "0"
-          },
-          {
-            "cycle": 648378,
-            "state": "1"
-          },
-          {
-            "cycle": 648441,
-            "state": "0"
-          },
-          {
-            "cycle": 648504,
-            "state": "1"
-          },
-          {
-            "cycle": 648567,
-            "state": "0"
-          },
-          {
-            "cycle": 648630,
-            "state": "1"
-          },
-          {
-            "cycle": 648693,
-            "state": "0"
-          },
-          {
-            "cycle": 648756,
-            "state": "1"
-          },
-          {
-            "cycle": 648819,
-            "state": "0"
-          },
-          {
-            "cycle": 648882,
-            "state": "1"
-          },
-          {
-            "cycle": 648945,
-            "state": "0"
-          },
-          {
-            "cycle": 649008,
-            "state": "1"
-          },
-          {
-            "cycle": 649071,
-            "state": "0"
-          },
-          {
-            "cycle": 649134,
-            "state": "1"
-          },
-          {
-            "cycle": 649197,
-            "state": "0"
-          },
-          {
-            "cycle": 649260,
-            "state": "1"
-          },
-          {
-            "cycle": 649323,
-            "state": "0"
-          },
-          {
-            "cycle": 649386,
-            "state": "1"
-          },
-          {
-            "cycle": 649449,
-            "state": "0"
-          },
-          {
-            "cycle": 649512,
-            "state": "1"
-          },
-          {
-            "cycle": 649575,
-            "state": "0"
-          },
-          {
-            "cycle": 649638,
-            "state": "1"
-          },
-          {
-            "cycle": 649701,
-            "state": "0"
-          },
-          {
-            "cycle": 649764,
-            "state": "1"
-          },
-          {
-            "cycle": 649827,
-            "state": "0"
-          },
-          {
-            "cycle": 649890,
-            "state": "1"
-          },
-          {
-            "cycle": 649953,
-            "state": "0"
-          },
-          {
-            "cycle": 650016,
-            "state": "1"
-          },
-          {
-            "cycle": 650079,
-            "state": "0"
-          },
-          {
-            "cycle": 650142,
-            "state": "1"
-          },
-          {
-            "cycle": 650205,
-            "state": "0"
-          },
-          {
-            "cycle": 650268,
-            "state": "1"
-          },
-          {
-            "cycle": 650331,
-            "state": "0"
-          },
-          {
-            "cycle": 650394,
-            "state": "1"
-          },
-          {
-            "cycle": 650457,
-            "state": "0"
-          },
-          {
-            "cycle": 650520,
-            "state": "1"
-          },
-          {
-            "cycle": 650583,
-            "state": "0"
-          },
-          {
-            "cycle": 650646,
-            "state": "1"
-          },
-          {
-            "cycle": 650709,
-            "state": "0"
-          },
-          {
-            "cycle": 650772,
-            "state": "1"
-          },
-          {
-            "cycle": 650835,
-            "state": "0"
-          },
-          {
-            "cycle": 650898,
-            "state": "1"
-          },
-          {
-            "cycle": 650961,
-            "state": "0"
-          },
-          {
-            "cycle": 651024,
-            "state": "1"
-          },
-          {
-            "cycle": 651087,
-            "state": "0"
-          },
-          {
-            "cycle": 651150,
-            "state": "1"
-          },
-          {
-            "cycle": 651213,
-            "state": "0"
-          },
-          {
-            "cycle": 651276,
-            "state": "1"
-          },
-          {
-            "cycle": 651339,
-            "state": "0"
-          },
-          {
-            "cycle": 651402,
-            "state": "1"
-          },
-          {
-            "cycle": 651465,
-            "state": "0"
-          },
-          {
-            "cycle": 651528,
-            "state": "1"
-          },
-          {
-            "cycle": 651591,
-            "state": "0"
-          },
-          {
-            "cycle": 651654,
-            "state": "1"
-          },
-          {
-            "cycle": 651717,
-            "state": "0"
-          },
-          {
-            "cycle": 651780,
-            "state": "1"
-          },
-          {
-            "cycle": 651843,
-            "state": "0"
-          },
-          {
-            "cycle": 651906,
-            "state": "1"
-          },
-          {
-            "cycle": 651969,
-            "state": "0"
-          },
-          {
-            "cycle": 652032,
-            "state": "1"
-          },
-          {
-            "cycle": 652095,
-            "state": "0"
-          },
-          {
-            "cycle": 652158,
-            "state": "1"
-          },
-          {
-            "cycle": 652221,
-            "state": "0"
-          },
-          {
-            "cycle": 652284,
-            "state": "1"
-          },
-          {
-            "cycle": 652347,
-            "state": "0"
-          },
-          {
-            "cycle": 652410,
-            "state": "1"
-          },
-          {
-            "cycle": 652473,
-            "state": "0"
-          },
-          {
-            "cycle": 652536,
-            "state": "1"
-          },
-          {
-            "cycle": 652599,
-            "state": "0"
-          },
-          {
-            "cycle": 652662,
-            "state": "1"
-          },
-          {
-            "cycle": 652725,
-            "state": "0"
-          },
-          {
-            "cycle": 652788,
-            "state": "1"
-          },
-          {
-            "cycle": 652851,
-            "state": "0"
-          },
-          {
-            "cycle": 652914,
-            "state": "1"
-          },
-          {
-            "cycle": 652977,
-            "state": "0"
-          },
-          {
-            "cycle": 653040,
-            "state": "1"
-          },
-          {
-            "cycle": 653103,
-            "state": "0"
-          },
-          {
-            "cycle": 653166,
-            "state": "1"
-          },
-          {
-            "cycle": 653229,
-            "state": "0"
-          },
-          {
-            "cycle": 653292,
-            "state": "1"
-          },
-          {
-            "cycle": 653355,
-            "state": "0"
-          },
-          {
-            "cycle": 653418,
-            "state": "1"
-          },
-          {
-            "cycle": 653481,
-            "state": "0"
-          },
-          {
-            "cycle": 653544,
-            "state": "1"
-          },
-          {
-            "cycle": 653607,
-            "state": "0"
-          },
-          {
-            "cycle": 653670,
-            "state": "1"
-          },
-          {
-            "cycle": 653733,
-            "state": "0"
-          },
-          {
-            "cycle": 653796,
-            "state": "1"
-          },
-          {
-            "cycle": 653859,
-            "state": "0"
-          },
-          {
-            "cycle": 653922,
-            "state": "1"
-          },
-          {
-            "cycle": 653985,
-            "state": "0"
-          },
-          {
-            "cycle": 654048,
-            "state": "1"
-          },
-          {
-            "cycle": 654111,
-            "state": "0"
-          },
-          {
-            "cycle": 654174,
-            "state": "1"
-          },
-          {
-            "cycle": 654237,
-            "state": "0"
-          },
-          {
-            "cycle": 654300,
-            "state": "1"
-          },
-          {
-            "cycle": 654363,
-            "state": "0"
-          },
-          {
-            "cycle": 654426,
-            "state": "1"
-          },
-          {
-            "cycle": 654489,
-            "state": "0"
-          },
-          {
-            "cycle": 654552,
-            "state": "1"
-          },
-          {
-            "cycle": 654615,
-            "state": "0"
-          },
-          {
-            "cycle": 654678,
-            "state": "1"
-          },
-          {
-            "cycle": 654741,
-            "state": "0"
-          },
-          {
-            "cycle": 654804,
-            "state": "1"
-          },
-          {
-            "cycle": 654867,
-            "state": "0"
-          },
-          {
-            "cycle": 654930,
-            "state": "1"
-          },
-          {
-            "cycle": 654993,
-            "state": "0"
-          },
-          {
-            "cycle": 655056,
-            "state": "1"
-          },
-          {
-            "cycle": 655119,
-            "state": "0"
-          },
-          {
-            "cycle": 655182,
-            "state": "1"
-          },
-          {
-            "cycle": 655245,
-            "state": "0"
-          },
-          {
-            "cycle": 655308,
-            "state": "1"
-          },
-          {
-            "cycle": 655371,
-            "state": "0"
-          },
-          {
-            "cycle": 655434,
-            "state": "1"
-          },
-          {
-            "cycle": 655497,
-            "state": "0"
-          },
-          {
-            "cycle": 655560,
-            "state": "1"
-          },
-          {
-            "cycle": 655623,
-            "state": "0"
-          },
-          {
-            "cycle": 655686,
-            "state": "1"
-          },
-          {
-            "cycle": 655749,
-            "state": "0"
-          },
-          {
-            "cycle": 655812,
-            "state": "1"
-          },
-          {
-            "cycle": 655875,
-            "state": "0"
-          },
-          {
-            "cycle": 655938,
-            "state": "1"
-          },
-          {
-            "cycle": 656001,
-            "state": "0"
-          },
-          {
-            "cycle": 656064,
-            "state": "1"
-          },
-          {
-            "cycle": 656127,
-            "state": "0"
-          },
-          {
-            "cycle": 656190,
-            "state": "1"
-          },
-          {
-            "cycle": 656253,
-            "state": "0"
-          },
-          {
-            "cycle": 656316,
-            "state": "1"
-          },
-          {
-            "cycle": 656379,
-            "state": "0"
-          },
-          {
-            "cycle": 656442,
-            "state": "1"
-          },
-          {
-            "cycle": 656505,
-            "state": "0"
-          },
-          {
-            "cycle": 656568,
-            "state": "1"
-          },
-          {
-            "cycle": 656631,
-            "state": "0"
-          },
-          {
-            "cycle": 656694,
-            "state": "1"
-          },
-          {
-            "cycle": 656757,
-            "state": "0"
-          },
-          {
-            "cycle": 656820,
-            "state": "1"
-          },
-          {
-            "cycle": 656883,
-            "state": "0"
-          },
-          {
-            "cycle": 656946,
-            "state": "1"
-          },
-          {
-            "cycle": 657009,
-            "state": "0"
-          },
-          {
-            "cycle": 657072,
-            "state": "1"
-          },
-          {
-            "cycle": 657135,
-            "state": "0"
-          },
-          {
-            "cycle": 657198,
-            "state": "1"
-          },
-          {
-            "cycle": 657261,
-            "state": "0"
-          },
-          {
-            "cycle": 657324,
-            "state": "1"
-          },
-          {
-            "cycle": 657387,
-            "state": "0"
-          },
-          {
-            "cycle": 657450,
-            "state": "1"
-          },
-          {
-            "cycle": 657513,
-            "state": "0"
-          },
-          {
-            "cycle": 657576,
-            "state": "1"
-          },
-          {
-            "cycle": 657639,
-            "state": "0"
-          },
-          {
-            "cycle": 657702,
-            "state": "1"
-          },
-          {
-            "cycle": 657765,
-            "state": "0"
-          },
-          {
-            "cycle": 657828,
-            "state": "1"
-          },
-          {
-            "cycle": 657891,
-            "state": "0"
-          },
-          {
-            "cycle": 657954,
-            "state": "1"
-          },
-          {
-            "cycle": 658017,
-            "state": "0"
-          },
-          {
-            "cycle": 658080,
-            "state": "1"
-          },
-          {
-            "cycle": 658143,
-            "state": "0"
-          },
-          {
-            "cycle": 658206,
-            "state": "1"
-          },
-          {
-            "cycle": 658269,
-            "state": "0"
-          },
-          {
-            "cycle": 658332,
-            "state": "1"
-          },
-          {
-            "cycle": 658395,
-            "state": "0"
-          },
-          {
-            "cycle": 658458,
-            "state": "1"
-          },
-          {
-            "cycle": 658521,
-            "state": "0"
-          },
-          {
-            "cycle": 658584,
-            "state": "1"
-          },
-          {
-            "cycle": 658647,
-            "state": "0"
-          },
-          {
-            "cycle": 658710,
-            "state": "1"
-          },
-          {
-            "cycle": 658773,
-            "state": "0"
-          },
-          {
-            "cycle": 658836,
-            "state": "1"
-          },
-          {
-            "cycle": 658899,
-            "state": "0"
-          },
-          {
-            "cycle": 658962,
-            "state": "1"
-          },
-          {
-            "cycle": 659025,
-            "state": "0"
-          },
-          {
-            "cycle": 659088,
-            "state": "1"
-          },
-          {
-            "cycle": 659151,
-            "state": "0"
-          },
-          {
-            "cycle": 659214,
-            "state": "1"
-          },
-          {
-            "cycle": 659277,
-            "state": "0"
-          },
-          {
-            "cycle": 659340,
-            "state": "1"
-          },
-          {
-            "cycle": 659403,
-            "state": "0"
-          },
-          {
-            "cycle": 659466,
-            "state": "1"
-          },
-          {
-            "cycle": 659529,
-            "state": "0"
-          },
-          {
-            "cycle": 659592,
-            "state": "1"
-          },
-          {
-            "cycle": 659655,
-            "state": "0"
-          },
-          {
-            "cycle": 659718,
-            "state": "1"
-          },
-          {
-            "cycle": 659781,
-            "state": "0"
-          },
-          {
-            "cycle": 659844,
-            "state": "1"
-          },
-          {
-            "cycle": 659907,
-            "state": "0"
-          },
-          {
-            "cycle": 659970,
+            "cycle": 679968,
             "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 479
+        "edge_count": 263
       }
     ]
   },
@@ -4449,17 +4366,28 @@
       "drive": "1"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ESP32_DEVKITC32E_UART0_OK",
+        "cycle_lo": 650000,
+        "cycle": 660000,
+        "end_cycle": 670000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 207455,
-    "data_bytes": 67697,
-    "bss_bytes": 5300,
-    "flash_used_bytes": 275152,
-    "ram_static_bytes": 72997,
+    "text_bytes": 223295,
+    "data_bytes": 70153,
+    "bss_bytes": 5308,
+    "flash_used_bytes": 293448,
+    "ram_static_bytes": 75461,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 196608,
-    "flash_used_pct": 6.56,
-    "ram_static_pct": 37.13,
+    "flash_used_pct": 7.0,
+    "ram_static_pct": 38.38,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -4471,92 +4399,93 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 660000,
-    "instructions": 660000,
-    "steps_executed": 660000,
+    "cycles": 680000,
+    "instructions": 680000,
+    "steps_executed": 680000,
     "memory_reads": 0,
     "memory_writes": 0,
-    "peripheral_accesses": 363846,
+    "peripheral_accesses": 381945,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1074288378,
-        "count": 157,
+        "pc": 1074288582,
+        "count": 235,
         "symbol": "esp_cpu_wait_for_intr"
       },
       {
-        "pc": 1073790940,
-        "count": 117
+        "pc": 1074299617,
+        "count": 79,
+        "symbol": "spinlock_acquire"
       },
       {
-        "pc": 1074271810,
-        "count": 117,
-        "symbol": "spi_flash_disable_interrupts_caches_and_other_cpu"
-      },
-      {
-        "pc": 1074271801,
+        "pc": 1074272005,
         "count": 78,
         "symbol": "spi_flash_disable_interrupts_caches_and_other_cpu"
       },
       {
-        "pc": 1074288058,
+        "pc": 1074272014,
         "count": 78,
-        "symbol": "esp_cpu_compare_and_set"
+        "symbol": "spi_flash_disable_interrupts_caches_and_other_cpu"
       },
       {
-        "pc": 1074285651,
+        "pc": 1074299404,
+        "count": 78,
+        "symbol": "xPortEnterCriticalTimeout"
+      },
+      {
+        "pc": 1074285858,
         "count": 40,
         "symbol": "memcpy"
       },
       {
-        "pc": 1074309690,
+        "pc": 1074323753,
         "count": 40,
-        "symbol": "spi_flash_hal_read"
+        "symbol": "memspi_host_read_data_slicer"
       },
       {
-        "pc": 1074311421,
-        "count": 40,
-        "symbol": "mwdt_ll_config_stage"
+        "pc": 1074271698,
+        "count": 39,
+        "symbol": "spi1_end"
       },
       {
-        "pc": 1074271804,
+        "pc": 1074272008,
         "count": 39,
         "symbol": "spi_flash_disable_interrupts_caches_and_other_cpu"
       },
       {
-        "pc": 1074271807,
-        "count": 39,
-        "symbol": "spi_flash_disable_interrupts_caches_and_other_cpu"
-      },
-      {
-        "pc": 1074272596,
+        "pc": 1074272794,
         "count": 39,
         "symbol": "restore_app_mmu_from_pro_mmu"
       },
       {
-        "pc": 1074275941,
+        "pc": 1074275891,
+        "count": 39,
+        "symbol": "heap_caps_aligned_alloc_base"
+      },
+      {
+        "pc": 1074276131,
         "count": 39,
         "symbol": "heap_caps_malloc_base"
       },
       {
-        "pc": 1074278386,
+        "pc": 1074276501,
         "count": 39,
-        "symbol": "esp_timer_impl_get_counter_reg"
+        "symbol": "esp_dport_access_reg_read"
       },
       {
-        "pc": 1074285612,
+        "pc": 1074276503,
         "count": 39,
-        "symbol": "memcpy"
+        "symbol": "esp_dport_access_reg_read"
       },
       {
-        "pc": 1074285615,
+        "pc": 1074276508,
         "count": 39,
-        "symbol": "memcpy"
+        "symbol": "esp_dport_access_reg_read"
       },
       {
-        "pc": 1074285675,
+        "pc": 1074276836,
         "count": 39,
-        "symbol": "memcpy"
+        "symbol": "esp_intr_noniram_enable"
       }
     ]
   }

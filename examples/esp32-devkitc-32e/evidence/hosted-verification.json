@@ -10,48 +10,43 @@
     "diagram": {
       "version": 1,
       "board": "esp32",
-      "parts": [{ "id": "mcu", "type": "esp32" }],
+      "parts": [
+        {
+          "id": "mcu",
+          "type": "esp32"
+        }
+      ],
       "wires": []
     },
-    "source": "#include <Arduino.h>\n#include <driver/gpio.h>\nconstexpr gpio_num_t kHeaderPin = GPIO_NUM_23;\nvoid setup() { gpio_reset_pin(kHeaderPin); gpio_set_direction(kHeaderPin, GPIO_MODE_OUTPUT); }\nvoid loop() { gpio_set_level(kHeaderPin, 1); delay(10); gpio_set_level(kHeaderPin, 0); delay(10); }\n",
-    "oracle": { "gpio": [{ "pin": "GPIO23", "state": "toggled" }] },
+    "source": "#include <Arduino.h>\n#include <driver/gpio.h>\n\nnamespace {\nconstexpr gpio_num_t kHeaderPin = GPIO_NUM_23;\n}\n\nvoid setup() {\n  Serial.begin(115200);\n  Serial.println(\"ESP32_DEVKITC32E_UART0_OK\");\n\n  gpio_reset_pin(kHeaderPin);\n  gpio_set_direction(kHeaderPin, GPIO_MODE_OUTPUT);\n  gpio_set_level(kHeaderPin, 0);\n}\n\nvoid loop() {\n  static bool output_high = false;\n  output_high = !output_high;\n  gpio_set_level(kHeaderPin, output_high ? 1 : 0);\n}\n",
+    "oracle": {
+      "serial": [
+        {
+          "contains": "ESP32_DEVKITC32E_UART0_OK"
+        }
+      ],
+      "gpio": [
+        {
+          "pin": "GPIO23",
+          "state": "toggled"
+        }
+      ]
+    },
     "max_steps": 20000000
   },
   "result": {
-    "ok": true,
+    "error": "SERIAL_NOT_OBSERVABLE",
     "status": "unsupported",
     "proven": false,
-    "oracle_results": [
-      {
-        "kind": "gpio",
-        "passed": true,
-        "detail": "GPIO23 toggled (gpio_pins pad)"
-      }
-    ],
-    "run_status": "error",
-    "stop_reason": "memory_violation",
+    "board": "esp32",
+    "detail": "Board \"esp32\" runs via the arduino-esp32 snapshot profile, which stubs HardwareSerial::write / uartWrite. A serial oracle can never pass here \u2014 the twin only proves itself by panel paint (display oracle), GPIO/register clauses, or by rebuilding on esp32-c3-supermini / esp32-s3-zero where ROM boot captures UART0. Do not wait for no_paint; change the oracle or the board.",
     "gaps": [
       {
-        "code": "unmapped_mmio",
+        "code": "unsupported_clause",
         "scope": "model",
-        "detail": "read",
-        "address": "0x3fc9b2b4"
-      },
-      {
-        "code": "unmapped_mmio",
-        "scope": "model",
-        "detail": "read",
-        "address": "0xffffffff"
-      },
-      {
-        "code": "approximation",
-        "scope": "model",
-        "detail": "no power net drives the MCU; VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+        "detail": "classic ESP32 profile does not capture Serial"
       }
-    ],
-    "diagnosis": {
-      "summary": "Simulation stopped with reason: memory_violation.",
-      "faulting_pc": "0x4008813e"
-    }
-  }
+    ]
+  },
+  "call_summary": "summary: labwired_verify NOT ok | error=SERIAL_NOT_OBSERVABLE | prove=unsupported"
 }

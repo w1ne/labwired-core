@@ -1,8 +1,8 @@
 # Narrow ESP32-DevKitC-32E onboarding profile.
 #
-# The smoke exercises only the classic ESP32 GPIO controller on GPIO23, which
-# Espressif maps to J3 pin 2. UART/USB bridge, Wi-Fi/Bluetooth, timers, I2C,
-# SPI, and the board's 5 V power LED are outside this profile.
+# The smoke exercises classic ESP32 GPIO23 and UART0 console output. The
+# USB-to-UART bridge and pin-level UART TX/RX signals, Wi-Fi/Bluetooth, timers,
+# I2C, SPI, and the 5 V power LED are outside this profile.
 name: "esp32-devkitc-32e-gpio-smoke"
 arch: "xtensa-lx6"
 cpu_hz: 240000000
@@ -22,6 +22,13 @@ pins:
   GPIO23: { gpio: "gpio", bit: 23, functions: [{ type: gpio, peripheral: gpio }] }
 
 peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x3FF40000
+    size: "256B"
+    config:
+      debug_schema: "../peripherals/esp32/uart0.yaml"
+
   - id: "gpio"
     type: "esp32_gpio"
     base_address: 0x3FF44000

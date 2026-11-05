@@ -3,15 +3,15 @@
   "cpu": {
     "type": "xtensa_lx7",
     "registers": [
-      2148475437,
+      2148487969,
       1073469424,
       0,
       181,
       3007315967,
-      1061202188,
+      1061159228,
       0,
       181,
-      2148378674,
+      2148385550,
       1073469360,
       0,
       0,
@@ -20,15 +20,15 @@
       262176,
       1073469391
     ],
-    "pc": 1074288378,
+    "pc": 1074288582,
     "ps": 262176,
     "window_base": 14,
     "window_start": 22008,
     "vecbase": 1074266112
   },
-  "steps_executed": 660000,
-  "cycles": 660000,
-  "instructions": 660000,
+  "steps_executed": 680000,
+  "cycles": 680000,
+  "instructions": 680000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -46,7 +46,7 @@
     "stop_when_assertions_pass_settle_steps": 1000,
     "stop_when_assertions_pass_min_steps": 650000
   },
-  "firmware_hash": "ffd582a3f50effaa84694917b7a3bd7a7b3106621c26c7037a7092b68e1e19a8",
+  "firmware_hash": "2faba249c2745470dc3a47382c98a32962f3e62dda2f13c36d8dacd3102cc79c",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-gpio-smoke.yaml",

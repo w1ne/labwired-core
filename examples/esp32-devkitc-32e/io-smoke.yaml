@@ -9,6 +9,7 @@ limits:
   stop_when_assertions_pass_min_steps: 650000
   stop_when_assertions_pass_settle_steps: 1000
 assertions:
+  - uart_contains: "ESP32_DEVKITC32E_UART0_OK"
   - gpio_edges:
       pin: "gpio:23"
       min_edges: 16

@@ -6,6 +6,9 @@ constexpr gpio_num_t kHeaderPin = GPIO_NUM_23;
 }
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("ESP32_DEVKITC32E_UART0_OK");
+
   gpio_reset_pin(kHeaderPin);
   gpio_set_direction(kHeaderPin, GPIO_MODE_OUTPUT);
   gpio_set_level(kHeaderPin, 0);
