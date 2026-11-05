@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.015352">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.016967">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="7a19013074c32786c5f79d83276269fa274eb920b4f249d4747c982a856b60ac"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.015352">
+  <testcase classname="labwired" name="run" time="0.016967">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;LITEX VEXRISCV SMP SINGLE-HART SMOKE&quot;, &quot;cpu=rv32im hart=0 uart=litex&quot;, &quot;mul=000000d1&quot;]" time="0.000000">
   </testcase>

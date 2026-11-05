@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/litex_tock-smoke.yaml",
   "system": "configs/systems/onboarding/litex_tock.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T13:14:48Z",
-  "finished_at_utc": "2026-11-05T13:14:49Z",
-  "elapsed_seconds": 1,
-  "elapsed_ms": 800,
+  "started_at_utc": "2026-11-05T14:48:30Z",
+  "finished_at_utc": "2026-11-05T14:48:31Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1077,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.297,
-    "build_firmware": 0.177,
-    "run_smoke": 0.316
+    "build_cli": 0.285,
+    "build_firmware": 0.476,
+    "run_smoke": 0.305
   },
   "stages_ms": {
-    "build_cli": 297,
-    "build_firmware": 177,
-    "run_smoke": 316
+    "build_cli": 285,
+    "build_firmware": 476,
+    "run_smoke": 305
   }
 }

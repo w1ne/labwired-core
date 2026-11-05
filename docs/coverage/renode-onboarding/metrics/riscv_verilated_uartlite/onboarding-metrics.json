@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml",
   "system": "configs/systems/onboarding/riscv_verilated_uartlite.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T13:15:39Z",
-  "finished_at_utc": "2026-11-05T13:15:39Z",
-  "elapsed_seconds": 1,
-  "elapsed_ms": 775,
+  "started_at_utc": "2026-11-05T14:49:35Z",
+  "finished_at_utc": "2026-11-05T14:49:36Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1297,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.301,
-    "build_firmware": 0.174,
-    "run_smoke": 0.29
+    "build_cli": 0.309,
+    "build_firmware": 0.596,
+    "run_smoke": 0.38
   },
   "stages_ms": {
-    "build_cli": 301,
-    "build_firmware": 174,
-    "run_smoke": 290
+    "build_cli": 309,
+    "build_firmware": 596,
+    "run_smoke": 380
   }
 }

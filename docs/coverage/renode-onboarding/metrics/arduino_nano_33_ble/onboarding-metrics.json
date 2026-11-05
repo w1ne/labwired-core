@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
   "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T13:14:02Z",
-  "finished_at_utc": "2026-11-05T13:14:04Z",
+  "started_at_utc": "2026-11-05T14:47:31Z",
+  "finished_at_utc": "2026-11-05T14:47:33Z",
   "elapsed_seconds": 3,
-  "elapsed_ms": 2096,
+  "elapsed_ms": 2450,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.316,
-    "build_firmware": 0.177,
-    "run_smoke": 1.594
+    "build_cli": 0.286,
+    "build_firmware": 0.548,
+    "run_smoke": 1.606
   },
   "stages_ms": {
-    "build_cli": 316,
-    "build_firmware": 177,
-    "run_smoke": 1594
+    "build_cli": 286,
+    "build_firmware": 548,
+    "run_smoke": 1606
   }
 }

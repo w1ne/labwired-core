@@ -13,4 +13,10 @@ workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.15s
+   Compiling embedded-hal v1.0.0
+   Compiling critical-section v1.2.0
+   Compiling firmware-kendryte-k210-smoke v0.1.0 (/home/andrii/worktrees/labwired-core/renode/crates/firmware-kendryte-k210-smoke)
+   Compiling panic-halt v0.2.0
+   Compiling riscv-rt v0.12.2
+   Compiling riscv v0.11.1
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.91s

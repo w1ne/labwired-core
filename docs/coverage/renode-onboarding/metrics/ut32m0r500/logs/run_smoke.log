@@ -1,5 +1,5 @@
-2026-11-05T13:16:27.243941Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/ut32m0r500.yaml
-2026-11-05T13:16:27.244640Z  INFO labwired_loader: ELF Entry Point: 0x10000c1
+2026-11-05T14:50:38.551717Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/ut32m0r500.yaml
+2026-11-05T14:50:38.552450Z  INFO labwired_loader: ELF Entry Point: 0x10000c1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · ut32m0r500-smoke · 100000 steps · 0.00s
