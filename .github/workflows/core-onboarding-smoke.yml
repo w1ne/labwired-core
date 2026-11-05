@@ -44,6 +44,7 @@ on:
       - "crates/firmware-efr32mg1-smoke/**"
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
+      - "crates/firmware-starfive-jh7100-smoke/**"
       - "crates/firmware-kendryte-k210-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-ezr32hg320-smoke/**"
@@ -902,6 +903,12 @@ jobs:
             target: riscv64imac-unknown-none-elf
             script: examples/renode-onboarding/sifive-fu740-smoke.yaml
             system: configs/systems/onboarding/sifive-fu740.yaml
+          # JH7100 is narrowed to one RV64IMAC U74, on-chip memory, and UART0.
+          - id: starfive-jh7100
+            crate: firmware-starfive-jh7100-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/starfive-jh7100-smoke.yaml
+            system: configs/systems/onboarding/starfive-jh7100.yaml
           # K210 is narrowed to one RV64IMAC hart, its mapped memory window,
           # and the model-backed SiFive UART; the second hart and K210-specific
           # peripherals are outside this smoke.

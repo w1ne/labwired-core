@@ -1,5 +1,5 @@
-2026-11-05T07:01:25.830963Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
-2026-11-05T07:01:25.832276Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+2026-11-05T07:41:37.337064Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
+2026-11-05T07:41:37.338420Z  INFO labwired_loader: ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 59956062 of 60000000 device cycles (43938 interpreted)

@@ -1,0 +1,33 @@
+{
+  "target_id": "starfive-jh7100",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-starfive-jh7100-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/starfive-jh7100-smoke.yaml",
+  "system": "configs/systems/onboarding/starfive-jh7100.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T07:35:44Z",
+  "finished_at_utc": "2026-11-05T07:36:16Z",
+  "elapsed_seconds": 32,
+  "elapsed_ms": 31793,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error: package ID specification `firmware-starfive-jh7100-smoke` did not match any packages",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 31.42,
+    "build_firmware": 0.36,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 31420,
+    "build_firmware": 360,
+    "run_smoke": null
+  }
+}

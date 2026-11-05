@@ -43,6 +43,11 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/beaglev-fire-smoke.yaml",
     },
+    "starfive-jh7100": {
+        "crate": "firmware-starfive-jh7100-smoke",
+        "target": "riscv64imac-unknown-none-elf",
+        "script": "examples/renode-onboarding/starfive-jh7100-smoke.yaml",
+    },
     "litex_vexriscv_linux": {
         "crate": "firmware-litex-vexriscv-linux-smoke",
         "target": "riscv32im-unknown-none-elf",

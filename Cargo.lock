@@ -2259,6 +2259,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-starfive-jh7100-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-stk3200-smoke"
 version = "0.1.0"
 dependencies = [

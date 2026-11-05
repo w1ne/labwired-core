@@ -1,5 +1,5 @@
-2026-11-05T07:02:48.578355Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas-r7fa2l1a.yaml
-2026-11-05T07:02:48.579071Z  INFO labwired_loader: ELF Entry Point: 0x801
+2026-11-05T07:43:16.813276Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas-r7fa2l1a.yaml
+2026-11-05T07:43:16.813978Z  INFO labwired_loader: ELF Entry Point: 0x801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · renesas-r7fa2l1a-smoke · 100000 steps · 0.00s
