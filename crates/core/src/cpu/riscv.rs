@@ -43,7 +43,7 @@ impl RiscVCoreProfile {
     /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
     /// the C3 is the part whose ROM and performance-counter block the engine
     /// models, and the C6 shares that register surface today. Any other chip
-    /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
+    /// that declares a generic non-E `rv32*` core (e.g. `core: "rv32im"` on a
     /// VexRiscv SoC) runs the standard profile. A chip with no `core:` keeps
     /// the historical ESP32-C3 default, so descriptors written before this
     /// selection existed behave exactly as they did.
@@ -132,9 +132,7 @@ fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
         | AmoMaxW { rd, rs1, rs2 }
         | AmoMinuW { rd, rs1, rs2 }
         | AmoMaxuW { rd, rs1, rs2 } => [Some(rd), Some(rs1), Some(rs2)],
-        Csrrwi { rd, .. } | Csrrsi { rd, .. } | Csrrci { rd, .. } => {
-            [Some(rd), None, None]
-        }
+        Csrrwi { rd, .. } | Csrrsi { rd, .. } | Csrrci { rd, .. } => [Some(rd), None, None],
         CAddi { rd, .. } | CLi { rd, .. } | CSli { rd, .. } => [Some(rd), None, None],
         CLw { rd, rs1, .. } => [Some(rd), Some(rs1), None],
         CSw { rs2, rs1, .. } => [Some(rs1), Some(rs2), None],
@@ -846,18 +844,22 @@ impl RiscV {
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            // QingKe RV32E exposes the standard cycle counter CSR pair just
-            // like the baseline profile; register-count checking is separate.
-            0xC00 if matches!(
-                self.core_profile,
-                RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
-            ) => {
+            // The requested RV32E profile shares the baseline profile's cycle
+            // CSR behavior; this profile choice is separate from register count.
+            0xC00
+                if matches!(
+                    self.core_profile,
+                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                ) =>
+            {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC80 if matches!(
-                self.core_profile,
-                RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
-            ) => {
+            0xC80
+                if matches!(
+                    self.core_profile,
+                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                ) =>
+            {
                 (self.mtime >> 32) as u32
             }
             _ => return None,
@@ -1283,9 +1285,7 @@ impl Cpu for RiscV {
         // RV32E reserves every integer register field above x15. Check all
         // operands before trigger handling or instruction execution so an
         // illegal register use cannot perform a partial memory/CSR effect.
-        if self.core_profile == RiscVCoreProfile::Rv32e
-            && rv32e_uses_high_register(&instruction)
-        {
+        if self.core_profile == RiscVCoreProfile::Rv32e && rv32e_uses_high_register(&instruction) {
             self.mtval = 0;
             self.handle_trap(2, self.pc);
             return Ok(());

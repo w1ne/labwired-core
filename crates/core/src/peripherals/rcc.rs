@@ -3184,13 +3184,16 @@ impl crate::Peripheral for Rcc {
 
 #[cfg(test)]
 mod tests {
-    use super::{Rcc, RccRegisterLayout, WchRcc};
+    use super::{Rcc, RccRegisterLayout};
     use crate::Peripheral;
 
     #[test]
     fn wch_rcc_pll_ready_switches_sysclk() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Wch);
-        assert_eq!(" WCH ".parse::<RccRegisterLayout>().unwrap(), RccRegisterLayout::Wch);
+        assert_eq!(
+            " WCH ".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Wch
+        );
 
         // Request PLL before enabling it: SWS remains on the reset HSI source.
         rcc.write_u32(0x04, 0x2).unwrap();

@@ -1,13 +1,14 @@
 //! WCH PFIC register block and interrupt arbitration.
 //!
-//! Register offsets are relative to a future PFIC mapping at 0xE000_E000.
-//! Source IDs in this API are zero-based (0..27); the brief's 23 peripheral
-//! plus 4 core sources are represented, while reserved register bits read as
-//! zero. Priority ordering is a simulator convention pending confirmation from
-//! the CH32V003 reference manual: larger four-bit values outrank smaller ones.
+//! Offsets are relative to a future PFIC mapping at `0xE000_E000`. The status,
+//! enable, pending, active, priority, and SCTLR addresses are those listed in
+//! the task brief. The PFIC-to-IRQ-number mapping and priority ordering were
+//! not verified against CH32V003RM; this model uses zero-based API source IDs
+//! and treats larger four-bit priority values as more urgent.
 
 use crate::{Peripheral, SimResult};
 
+/// Four core and 23 peripheral sources, as specified by the task brief.
 pub const PFIC_SOURCE_COUNT: usize = 27;
 
 const ISR1: u64 = 0x000;
@@ -26,12 +27,17 @@ const IPRIOR_BASE: u64 = 0x400;
 const SCTLR: u64 = 0xD10;
 const SOURCE_MASK: u64 = (1u64 << PFIC_SOURCE_COUNT) - 1;
 
-/// WCH programmable fast interrupt controller state.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct VectorFreeEntry {
+    source: u8,
+    handler: u32,
+}
+
+/// Self-contained model of WCH's programmable fast interrupt controller.
 ///
-/// The register bank supports two 32-bit words as listed in the task. The
-/// CH32V003 source count occupies the low 27 bits of word 1; word 2 and unused
-/// bits are reserved. `acknowledge` enters a source and clears its pending
-/// latch; `complete` exits the most recently acknowledged source (LIFO).
+/// Source IDs in this API are zero-based 0..26. The source-to-bit mapping is a
+/// model convention because the CH32V003 IRQ-number allocation was unavailable
+/// for verification. Register bit operations use that same source numbering.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Pfic {
     enabled: u64,
@@ -39,7 +45,9 @@ pub struct Pfic {
     active: u64,
     priorities: [u8; PFIC_SOURCE_COUNT],
     sctlr: u32,
+    nesting_enabled: bool,
     active_stack: Vec<u8>,
+    vector_free_entries: Vec<Option<VectorFreeEntry>>,
 }
 
 impl Default for Pfic {
@@ -50,7 +58,9 @@ impl Default for Pfic {
             active: 0,
             priorities: [0; PFIC_SOURCE_COUNT],
             sctlr: 0,
+            nesting_enabled: false,
             active_stack: Vec::new(),
+            vector_free_entries: Vec::new(),
         }
     }
 }
@@ -68,11 +78,25 @@ impl Pfic {
         1u64 << source
     }
 
+    /// Enable nested interrupt arbitration. The integration layer can drive
+    /// this when the CPU's interrupt-nesting control is modeled.
+    pub fn set_nesting_enabled(&mut self, enabled: bool) {
+        self.nesting_enabled = enabled;
+    }
+
     pub fn set_pending(&mut self, source: u8) -> bool {
         if !Self::valid_source(source) {
             return false;
         }
         self.pending |= Self::bit(source);
+        true
+    }
+
+    pub fn clear_pending(&mut self, source: u8) -> bool {
+        if !Self::valid_source(source) {
+            return false;
+        }
+        self.pending &= !Self::bit(source);
         true
     }
 
@@ -88,34 +112,32 @@ impl Pfic {
         Self::valid_source(source) && self.active & Self::bit(source) != 0
     }
 
-    /// Return the highest-ranked enabled, pending and inactive source.
-    /// Equal-priority sources are ordered by ascending source ID. At most two
-    /// interrupt levels may be active at once, and a nested source must outrank
-    /// the current top of the active stack.
+    /// Return the highest-priority enabled, pending and inactive source.
+    /// Equal priorities use ascending source ID. At most two levels can be
+    /// active at once; a nested source must outrank the currently active one.
     pub fn pending_source(&self) -> Option<u8> {
         if self.active_stack.len() >= 2 {
             return None;
         }
-        let active_priority = self
-            .active_stack
-            .last()
-            .map(|source| self.priorities[usize::from(*source)]);
+        let running = self.active_stack.last().copied();
         (0..PFIC_SOURCE_COUNT)
             .filter(|source| {
                 let bit = 1u64 << source;
-                self.enabled & self.pending & !self.active & bit != 0
-                    && active_priority.is_none_or(|priority| self.priorities[*source] > priority)
+                if self.enabled & self.pending & !self.active & bit == 0 {
+                    return false;
+                }
+                match running {
+                    Some(_) if !self.nesting_enabled => false,
+                    Some(top) => self.priorities[*source] > self.priorities[usize::from(top)],
+                    None => true,
+                }
             })
-            .max_by(|left, right| {
-                self.priorities[*left]
-                    .cmp(&self.priorities[*right])
-                    .then_with(|| right.cmp(left))
-            })
+            .max_by_key(|source| (self.priorities[*source], core::cmp::Reverse(*source)))
             .map(|source| source as u8)
     }
 
-    /// Acknowledge the winning source: clear its pending bit, mark it active,
-    /// and return its zero-based source ID.
+    /// Acknowledge the selected source: clear pending, mark active, and return
+    /// its zero-based source ID for the CPU interrupt path.
     pub fn acknowledge(&mut self) -> Option<u8> {
         let source = self.pending_source()?;
         let bit = Self::bit(source);
@@ -125,8 +147,8 @@ impl Pfic {
         Some(source)
     }
 
-    /// Complete the top active interrupt. Interrupt nesting is LIFO; a source
-    /// that is not currently on top is left untouched.
+    /// Complete the most recently acknowledged source (nested interrupts are
+    /// completed in LIFO order).
     pub fn complete(&mut self, source: u8) -> bool {
         if self.active_stack.last().copied() != Some(source) {
             return false;
@@ -136,12 +158,36 @@ impl Pfic {
         true
     }
 
+    /// Configure an abstract vector-table-free entry. VTF register offsets and
+    /// slot count were not present in the brief, so those details remain outside
+    /// the MMIO map until verified. The API lets a future bus integration query
+    /// the handler without inventing those offsets.
+    pub fn configure_vector_free_entry(&mut self, slot: usize, source: u8, handler: u32) -> bool {
+        if !Self::valid_source(source) {
+            return false;
+        }
+        if self.vector_free_entries.len() <= slot {
+            self.vector_free_entries.resize(slot + 1, None);
+        }
+        self.vector_free_entries[slot] = Some(VectorFreeEntry { source, handler });
+        true
+    }
+
+    pub fn vector_free_handler(&self, source: u8) -> Option<u32> {
+        Self::valid_source(source).then_some(())?;
+        self.vector_free_entries
+            .iter()
+            .flatten()
+            .find(|entry| entry.source == source)
+            .map(|entry| entry.handler)
+    }
+
     fn valid_mask(word: u64) -> u32 {
-        let shift = word * 32;
-        if shift >= PFIC_SOURCE_COUNT as u64 {
+        let first_source = word * 32;
+        if first_source >= PFIC_SOURCE_COUNT as u64 {
             0
         } else {
-            let remaining = PFIC_SOURCE_COUNT as u64 - shift;
+            let remaining = PFIC_SOURCE_COUNT as u64 - first_source;
             if remaining >= 32 {
                 u32::MAX
             } else {
@@ -155,29 +201,30 @@ impl Pfic {
     }
 
     fn write_set(bits: &mut u64, word: u64, value: u32) {
-        let mask = u64::from(value & Self::valid_mask(word)) << (word * 32);
-        *bits |= mask;
+        *bits |= u64::from(value & Self::valid_mask(word)) << (word * 32);
+        *bits &= SOURCE_MASK;
     }
 
     fn write_clear(bits: &mut u64, word: u64, value: u32) {
-        let mask = u64::from(value & Self::valid_mask(word)) << (word * 32);
-        *bits &= !mask;
+        *bits &= !(u64::from(value & Self::valid_mask(word)) << (word * 32));
+        *bits &= SOURCE_MASK;
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             ISR1 => Self::read_word(self.enabled, 0),
             ISR2 => Self::read_word(self.enabled, 1),
-            IENR1 | IENR2 | IRER1 | IRER2 => 0,
+            IENR1 | IENR2 | IRER1 | IRER2 | IPRR1 | IPRR2 => 0,
             IPSR1 => Self::read_word(self.pending, 0),
             IPSR2 => Self::read_word(self.pending, 1),
-            IPRR1 | IPRR2 => 0,
             IACTR1 => Self::read_word(self.active, 0),
             IACTR2 => Self::read_word(self.active, 1),
-            offset if (IPRIOR_BASE..IPRIOR_BASE + 4 * PFIC_SOURCE_COUNT as u64)
-                .contains(&offset)
-                && offset % 4 == 0 => self.priorities[((offset - IPRIOR_BASE) / 4) as usize]
-                as u32,
+            offset
+                if (IPRIOR_BASE..IPRIOR_BASE + 4 * PFIC_SOURCE_COUNT as u64).contains(&offset)
+                    && offset % 4 == 0 =>
+            {
+                self.priorities[((offset - IPRIOR_BASE) / 4) as usize] as u32
+            }
             SCTLR => self.sctlr,
             _ => 0,
         }
@@ -193,11 +240,12 @@ impl Pfic {
             IPSR2 => Self::write_set(&mut self.pending, 1, value),
             IPRR1 => Self::write_clear(&mut self.pending, 0, value),
             IPRR2 => Self::write_clear(&mut self.pending, 1, value),
-            offset if (IPRIOR_BASE..IPRIOR_BASE + 4 * PFIC_SOURCE_COUNT as u64)
-                .contains(&offset)
-                && offset % 4 == 0 => {
-                    self.priorities[((offset - IPRIOR_BASE) / 4) as usize] = (value & 0xF) as u8;
-                }
+            offset
+                if (IPRIOR_BASE..IPRIOR_BASE + 4 * PFIC_SOURCE_COUNT as u64).contains(&offset)
+                    && offset % 4 == 0 =>
+            {
+                self.priorities[((offset - IPRIOR_BASE) / 4) as usize] = (value & 0xF) as u8;
+            }
             SCTLR => self.sctlr = value,
             // Status registers and reserved addresses are read-only / inert.
             _ => {}
@@ -249,8 +297,10 @@ mod tests {
         let mut pfic = Pfic::new();
         pfic.write_u32(IENR1, (1 << 3) | (1 << 6)).unwrap();
         assert_eq!(pfic.read_u32(ISR1).unwrap(), (1 << 3) | (1 << 6));
+        pfic.write_u32(IENR1, 1).unwrap();
+        assert_eq!(pfic.read_u32(ISR1).unwrap(), (1 << 3) | (1 << 6) | 1);
         pfic.write_u32(IRER1, 1 << 3).unwrap();
-        assert_eq!(pfic.read_u32(ISR1).unwrap(), 1 << 6);
+        assert_eq!(pfic.read_u32(ISR1).unwrap(), (1 << 6) | 1);
     }
 
     #[test]
@@ -263,10 +313,12 @@ mod tests {
     }
 
     #[test]
-    fn priority_registers_select_the_highest_pending_enabled_source() {
+    fn priority_selects_highest_pending_enabled_source() {
         let mut pfic = Pfic::new();
-        pfic.write_u32(IENR1, (1 << 1) | (1 << 4) | (1 << 7)).unwrap();
-        pfic.write_u32(IPSR1, (1 << 1) | (1 << 4) | (1 << 7)).unwrap();
+        pfic.write_u32(IENR1, (1 << 1) | (1 << 4) | (1 << 7))
+            .unwrap();
+        pfic.write_u32(IPSR1, (1 << 1) | (1 << 4) | (1 << 7))
+            .unwrap();
         pfic.write_u32(IPRIOR_BASE + 4, 3).unwrap();
         pfic.write_u32(IPRIOR_BASE + 16, 12).unwrap();
         pfic.write_u32(IPRIOR_BASE + 28, 7).unwrap();
@@ -277,17 +329,28 @@ mod tests {
     }
 
     #[test]
-    fn nested_arbitration_allows_two_levels_and_completes_lifo() {
+    fn higher_priority_interrupt_nests_to_two_active_levels() {
         let mut pfic = Pfic::new();
-        pfic.write_u32(IENR1, (1 << 1) | (1 << 2) | (1 << 3)).unwrap();
-        pfic.write_u32(IPSR1, (1 << 1) | (1 << 2) | (1 << 3)).unwrap();
+        pfic.set_nesting_enabled(true);
+        pfic.write_u32(IENR1, (1 << 1) | (1 << 2)).unwrap();
         pfic.write_u32(IPRIOR_BASE + 4, 2).unwrap();
         pfic.write_u32(IPRIOR_BASE + 8, 9).unwrap();
-        pfic.write_u32(IPRIOR_BASE + 12, 15).unwrap();
-        assert_eq!(pfic.acknowledge(), Some(3));
+        pfic.set_pending(1);
+        assert_eq!(pfic.acknowledge(), Some(1));
+        pfic.set_pending(2);
         assert_eq!(pfic.acknowledge(), Some(2));
+        assert_eq!(pfic.read_u32(IACTR1).unwrap(), (1 << 1) | (1 << 2));
         assert_eq!(pfic.pending_source(), None);
         assert!(pfic.complete(2));
-        assert!(pfic.complete(3));
+        assert!(pfic.complete(1));
+    }
+
+    #[test]
+    fn vector_free_handler_can_be_queried_by_source() {
+        let mut pfic = Pfic::new();
+        assert!(pfic.configure_vector_free_entry(0, 4, 0x2000_0100));
+        assert_eq!(pfic.vector_free_handler(4), Some(0x2000_0100));
+        assert_eq!(pfic.vector_free_handler(5), None);
+        assert!(!pfic.configure_vector_free_entry(1, 27, 0x2000_0200));
     }
 }
