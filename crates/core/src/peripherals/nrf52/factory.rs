@@ -69,9 +69,6 @@ pub fn try_build(
         "nrf52840_temp" | "nrf52_temp" => {
             Box::new(crate::peripherals::nrf52::temp::Nrf52Temp::new())
         }
-        "adc" if p_cfg.r#type.eq_ignore_ascii_case("nrf51_adc") => {
-            Box::new(crate::peripherals::nrf52::nrf51_adc::Nrf51Adc::new())
-        }
         "nrf52840_adc" | "nrf52840_saadc" | "nrf52_saadc" => {
             Box::new(crate::peripherals::nrf52::saadc::Nrf52Saadc::new())
         }

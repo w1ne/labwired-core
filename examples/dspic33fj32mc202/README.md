@@ -47,6 +47,15 @@ cargo build --release -p labwired-cli
   TMP102 on `i2c1` and the SPI loopback on `spi1` for the session builder
   (the base `system.yaml` stays device-free for the CLI `test` path).
 
+## Mixed-signal input example
+
+`analog-ntc-diode-system.yaml` wires the generic Beta NTC divider and an
+unrelated Shockley diode load line to RB0 and RB1. The integration test
+`crates/core/tests/cosim_dspic33fj32mc202_analog.rs` checks each solved voltage,
+the PORTB threshold result, and NTC Schmitt hysteresis across temperature
+changes. The GPIO thresholds in the chip descriptor are simulation
+assumptions, and this example does not route netlist voltages into ADC1.
+
 Rebuild the ELFs (Linux x86-64 container; XC16 itself is proprietary and is
 not redistributed — only its output is committed):
 

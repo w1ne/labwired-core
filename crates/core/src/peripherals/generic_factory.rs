@@ -17,6 +17,12 @@ use crate::peripherals::rcc::RccRegisterLayout;
 use crate::Peripheral;
 use labwired_config::{PeripheralConfig, SystemManifest};
 
+// nRF51 uses a legacy single-sample converter distinct from the nRF52 SAADC.
+// Keep this model outside the recursively silicon-watched nrf52/ tree so an
+// nRF51-only addition does not change the nRF52840 validation digest.
+#[path = "nrf51_adc.rs"]
+mod nrf51_adc;
+
 /// Canonical model-type names — the single source of truth for "is this string
 /// already a real, modelled peripheral type?".
 ///
@@ -307,6 +313,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf52_lpcomp",
     "nrf52_mwu",
     "nrf52_nfct",
+    "nrf51_adc",
     "nrf52_nvmc",
     "nrf52_pdm",
     "nrf52_ppi",
@@ -1327,6 +1334,7 @@ pub fn try_build(
             }
             Box::new(g)
         }
+        "nrf51_adc" => Box::new(nrf51_adc::Nrf51Adc::new()),
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "ADC")?;

@@ -19,6 +19,7 @@ set and serial pins. There is no silicon capture.
 | M2 T1/PWM1/QEI1 on 202 pins | ✅ | real XC16 M2 ELF; `crates/core/tests/pic24_xc16_202_m2.rs` (PWM pads, quadrature, index reset, T1IF) |
 | M3 ADC1/SPI1/I2C1 on 202 pins | ✅ | real XC16 M3 ELF; `crates/core/tests/pic24_xc16_202_m3.rs` (AN4=RB2, AN0-AN5 only; SPI1 0xA5 loopback; TMP102 at 0x48; `M3 OK`, marker 0xBEEF) |
 | M3 demo system | ✅ | `system-m3.yaml` — TMP102 on `i2c1`, loopback on `spi1` |
+| Generic mixed-signal GPIO input | ✅ | `analog-ntc-diode-system.yaml`; `crates/core/tests/cosim_dspic33fj32mc202_analog.rs` solves an NTC and a Shockley diode onto RB0/RB1 and asserts PORTB levels and hysteresis |
 | M0-M3 scope | ✅ complete | all four milestones evidenced below; nothing remains in M0-M3 |
 | Silicon capture / oracle | ❌ none | simulation-derived only |
 
@@ -47,6 +48,9 @@ cargo test -p labwired-core --test pic24_xc16_202_m3
 #   test result: ok
 #   passes when the M3 ELF reaches 0xBEEF with ADC1BUF0 = 0x2AA (AN4),
 #   SPI1 = 0xA5 (loopback), TMP102 = 0x19/0x00 (25.0 °C) and "M3 OK\n" on UART1
+
+# 2e. Generic mixed-signal netlists on GPIOB inputs (assumed thresholds)
+cargo test -p labwired-core --test cosim_dspic33fj32mc202_analog
 
 # 3. Conformance row + catalogue build
 cargo test -p labwired-core --test chip_conformance
@@ -93,7 +97,11 @@ is no silicon capture, so no reset-oracle match is claimed.
   SPI has no SS/CS routing (the first device answers; the example uses a wire
   loopback); I²C ACK bits are not delivered to the slave model; 10-bit
   addressing is decoded but cannot match a 7-bit slave address; ANx/SPI/I²C
-  pin electrical mapping is not routed through the pad model.
+  pin electrical mapping is not routed through the pad model. The new GPIO
+  netlist example reaches the modeled digital pads, not the CPU's ADC1.
+- The GPIO `io_voltage_v` and `gpio_input_thresholds` values are simulation
+  assumptions until checked against silicon; no ADC support or silicon
+  validation is implied by the GPIO-level mixed-signal proof.
 - UART1 and the other controllers remain CPU-internal; the three pads are
   the only bus peripherals.
 - No external devices are attached in `system.yaml`; `system-m3.yaml`

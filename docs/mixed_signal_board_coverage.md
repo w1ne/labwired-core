@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 24 have end-to-end analog coverage; 79 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 25 have end-to-end analog coverage; 78 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -31,7 +31,7 @@ Current inventory: **103 profiles; 24 have end-to-end analog coverage; 79 have n
 | `ci-fixture-riscv-uart1` | **NO E2E analog coverage** |
 | `ci-fixture-uart1` | **NO E2E analog coverage** |
 | `ci-fixture-unknown-arch` | **NO E2E analog coverage** |
-| `dspic33fj32mc202-demo` | **NO E2E analog coverage** |
+| `dspic33fj32mc202-demo` | [`cosim_dspic33fj32mc202_analog.rs`](../crates/core/tests/cosim_dspic33fj32mc202_analog.rs)::`dspic33fj32mc202_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists reach separate GPIOB inputs; asserts solved voltages, PORTB levels, and Schmitt hysteresis. GPIO thresholds are simulation assumptions; this is not ADC support or silicon validation. |
 | `dspic33fj32mc204-demo` | **NO E2E analog coverage** |
 | `ek-ra6m5` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end` — Beta NTC and Shockley diode netlists route to ADC1 channels 0/2 and produce 12-bit scan results |
 | `ek-ra8m1` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`ek_ra8m1_ntc_and_diode_netlists_reach_adc1_end_to_end` — the same generic Beta NTC and Shockley diode netlists route to ADC1 channels 0/2 and produce 12-bit scan results |

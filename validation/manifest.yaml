@@ -8618,7 +8618,8 @@ boards:
       - crates/core/src/peripherals/nrf52/ficr.rs
       - crates/core/src/peripherals/nrf52/gpiote.rs
       - crates/core/src/peripherals/nrf52/mod.rs
-      - crates/core/src/peripherals/nrf52/nrf51_adc.rs
+      - crates/core/src/peripherals/nrf51_adc.rs
+      - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/nrf52/nvmc.rs
       - crates/core/src/peripherals/nrf52/ppi.rs
       - crates/core/src/peripherals/nrf52/radio.rs
