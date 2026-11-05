@@ -370,10 +370,7 @@ impl SystemBus {
         use crate::peripherals::components::button::Button;
         let pending: Vec<(u64, u8, bool)> = self
             .gpio_devices_of_mut::<Button>()
-            .filter_map(|b| {
-                let (level, changed) = b.service();
-                changed.then_some((b.gpio.0, b.gpio.1, level))
-            })
+            .flat_map(Button::pending_inputs)
             .collect();
         for (addr, bit, level) in pending {
             self.drive_input_bit(addr, bit, level);
