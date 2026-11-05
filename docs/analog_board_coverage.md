@@ -10,7 +10,7 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 | `adxl345-sensor-lab` | [`cosim_pin_routing::adxl345_sensor_lab_diode_netlist_reaches_pa6_adc1_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) |
 | `apollo4p-evb` | NO end-to-end analog coverage |
 | `arduino-mega-2560` | [`cosim_pin_routing::arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — explicit ADC8 route and ATmega2560 MUX5 conversion |
-| `arduino-nano-33-ble` | NO end-to-end analog coverage |
+| `arduino-nano-33-ble` | [`cosim_pin_routing::arduino_nano_33_ble_ntc_netlist_reaches_saadc_ain0_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — explicit SAADC AIN0 route and EasyDMA conversion |
 | `arduino-nano` | NO end-to-end analog coverage |
 | `arduino-uno-r4-minima` | NO end-to-end analog coverage |
 | `arduino-uno` | [`cosim_avr_analog_diode::arduino_uno_diode_netlist_reaches_a0_and_firmware_adc0`](../crates/core/tests/cosim_avr_analog_diode.rs) |
@@ -70,7 +70,7 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 | `nrf54lm20dk` | NO end-to-end analog coverage |
 | `nucleo-f103rb-epaper` | NO end-to-end analog coverage |
 | `nucleo-f103rb` | [`cosim_pin_routing::nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) |
-| `nucleo-f401re` | NO end-to-end analog coverage |
+| `nucleo-f401re` | [`cosim_pin_routing::nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) |
 | `nucleo-f407` | NO end-to-end analog coverage |
 | `nucleo-f767zi` | NO end-to-end analog coverage |
 | `nucleo-g071rb` | NO end-to-end analog coverage |
@@ -117,6 +117,8 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 - **Arduino Uno R3 / diode load line:** generic MNA diode model → PC0/ADC0 descriptor route → ATmega328P conversion. Example manifest: [analog-diode-system.yaml](../examples/arduino-uno-io/analog-diode-system.yaml).
 - **Arduino Mega 2560 / NTC divider:** generic Beta NTC netlist → explicit ADC8 route → ATmega2560 MUX5 and firmware ADC conversion at cold, nominal and hot temperatures. Example manifest: [analog-ntc-system.yaml](../examples/arduino-mega-2560-io/analog-ntc-system.yaml).
 - **NUCLEO-F103RB / NTC divider:** generic Beta NTC netlist → PA0/ADC1 route → STM32F103 ADC conversion. Example manifest: [analog-ntc-system.yaml](../examples/nucleo-f103rb/analog-ntc-system.yaml).
+- **NUCLEO-F401RE / diode load line:** generic MNA diode model → PA0/ADC1_IN0 descriptor route → STM32F401 ADC1 conversion. Example manifest: [analog-diode-system.yaml](../examples/nucleo-f401re/analog-diode-system.yaml).
+- **Arduino Nano 33 BLE / NTC divider:** generic Beta NTC netlist → explicit SAADC AIN0 route → nRF52840 12-bit EasyDMA conversion. Example manifest: [analog-ntc-system.yaml](../examples/arduino-nano-33-ble/analog-ntc-system.yaml).
 
-All rows marked `NO end-to-end analog coverage` remain gaps; the next round should take one of those profiles and preserve this strict criterion. Apollo4 Plus EVB is the first remaining profile in this inventory, but its chip descriptor currently declares ADC as a stub; the current coverage slice avoids claiming ADC behavior without a sourced Apollo4 register contract.
+All rows marked `NO end-to-end analog coverage` remain gaps; the next round should take one of those profiles and preserve this strict criterion. Apollo4 Plus EVB is the first remaining profile in this inventory, but its chip descriptor currently declares ADC as a stub; Arduino Nano is the next profile with a modeled ADC and resolvable pad route.
 

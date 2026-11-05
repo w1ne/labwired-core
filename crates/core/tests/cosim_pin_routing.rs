@@ -999,6 +999,106 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
     assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
 }
 
+/// The Nano 33 BLE uses the modeled nRF52840 SAADC. This routes the generic
+/// Beta NTC model to physical AIN0, then verifies its voltage in the channel
+/// conversion buffer and that the adjacent, undriven AIN1 remains at zero.
+#[test]
+fn arduino_nano_33_ble_ntc_netlist_reaches_saadc_ain0_end_to_end() {
+    const SAADC: u64 = 0x4000_7000;
+    const RESULT: u64 = 0x2000_0000;
+
+    let (manifest, mut bus) =
+        bus_and_manifest("examples/arduino-nano-33-ble/analog-ntc-system.yaml");
+    assert_eq!(manifest.name, "arduino-nano-33-ble-analog-ntc");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+
+    // CH[0] samples AIN0; CH[1] samples AIN1, which is deliberately left
+    // undriven. Gain 1/4 with VDD/4 reference spans the 0..3.3 V divider.
+    bus.write_u32(SAADC + 0x510, 1).expect("select CH0 AIN0");
+    bus.write_u32(SAADC + 0x518, (2 << 8) | (1 << 12))
+        .expect("configure CH0 gain and reference");
+    bus.write_u32(SAADC + 0x520, 2).expect("select CH1 AIN1");
+    bus.write_u32(SAADC + 0x528, (2 << 8) | (1 << 12))
+        .expect("configure CH1 gain and reference");
+    bus.write_u32(SAADC + 0x5f0, 2)
+        .expect("select 12-bit resolution");
+    bus.write_u32(SAADC + 0x62c, RESULT as u32)
+        .expect("set EasyDMA result pointer");
+    bus.write_u32(SAADC + 0x630, 2)
+        .expect("reserve two scan results");
+    bus.write_u32(SAADC + 0x500, 1).expect("enable SAADC");
+
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set the NTC temperature input");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC divider");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let volts = match session.signals().get("adc.saadc.0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the NTC voltage did not reach SAADC AIN0: {other:?}"),
+        };
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved NTC divider should be {expected_volts} V, got {volts} V"
+        );
+
+        // START re-arms the scan after END. The regular bus tick completes the
+        // SAADC EasyDMA operation using the channel level seeded by routing.
+        bus.write_u32(SAADC + 0x104, 0)
+            .expect("clear prior END event");
+        bus.write_u32(SAADC, 1).expect("start SAADC scan");
+        bus.write_u32(SAADC + 0x004, 1)
+            .expect("sample SAADC channels");
+        bus.tick_peripherals_fully();
+
+        assert_eq!(
+            bus.read_u32(SAADC + 0x104).expect("read END event"),
+            1,
+            "the two-channel scan must complete"
+        );
+        assert_eq!(
+            bus.read_u32(SAADC + 0x634).expect("read result amount"),
+            2,
+            "both enabled conversion channels must write results"
+        );
+        let routed_mv = (expected_volts * 1000.0).round() as u32;
+        let expected_code = (routed_mv * 4096 / 3300).min(4095) as u16;
+        assert_eq!(
+            bus.read_u16(RESULT).expect("read AIN0 DMA result"),
+            expected_code,
+            "SAADC AIN0 must convert the routed NTC voltage at {temperature_c} °C"
+        );
+        assert_eq!(
+            bus.read_u16(RESULT + 2).expect("read AIN1 DMA result"),
+            0,
+            "the adjacent undriven AIN1 must remain at ground"
+        );
+        samples.push((temperature_c, volts, expected_code));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "the NTC divider voltage should rise as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the SAADC result should follow the NTC voltage: {samples:?}"
+    );
+    assert_eq!(
+        samples[1].2, 2048,
+        "25 °C puts the matched divider at half scale"
+    );
+}
+
 /// The system-profile inventory counts each board integration independently.
 /// This profile keeps its ADXL345 on I2C1 while a separate generic diode
 /// netlist routes through the STM32F103's declared PA6 → ADC1_IN6 mapping.

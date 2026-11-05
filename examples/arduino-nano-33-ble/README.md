@@ -49,6 +49,14 @@ cd core
   --output-dir out/arduino-nano-33-ble-smoke --no-uart-stdout
 ```
 
+## Mixed-signal NTC example
+
+The separate [analog-ntc-system.yaml](analog-ntc-system.yaml) manifest solves a
+Beta-model thermistor divider and routes it to SAADC AIN0. The example keeps the
+ADC channel explicit because the nRF52840 descriptor does not yet declare
+package-pad aliases for its analog inputs. Its board-specific integration test
+asserts the cold, nominal and hot voltages and the two-channel EasyDMA results.
+
 ## What the board models
 
 | Surface | State |

@@ -1,0 +1,26 @@
+# Arduino Nano 33 BLE with a temperature-driven NTC divider routed to SAADC AIN0.
+# The direct ADC-channel route is explicit because this chip descriptor does not yet
+# declare GPIO-pad-to-AIN aliases for the nRF52840 package.
+name: "arduino-nano-33-ble-analog-ntc"
+chip: "../../configs/chips/nrf52840.yaml"
+debug_uart: "uart0"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "adc.saadc.0_volts"
+    config:
+      vdd: 3.3
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
