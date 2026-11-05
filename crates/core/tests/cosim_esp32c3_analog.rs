@@ -280,3 +280,13 @@ fn esp32c3_oled_128x32_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
         false,
     );
 }
+
+#[test]
+fn esp32c3_oled_demo_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_c3_analog_inputs(
+        "configs/systems/esp32c3-oled-demo.yaml",
+        "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
+        "esp32c3-oled-demo",
+        false,
+    );
+}
