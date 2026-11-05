@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 23 have end-to-end analog coverage; 80 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 24 have end-to-end analog coverage; 79 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -26,11 +26,11 @@ Current inventory: **103 profiles; 23 have end-to-end analog coverage; 80 have n
 | `brd2709a` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end` |
 | `calliope-mini-v1` | [`cosim_calliope_mini_analog.rs`](../crates/core/tests/cosim_calliope_mini_analog.rs)::`calliope_mini_ntc_and_diode_netlists_reach_distinct_adc_channels` — generic Beta NTC and unrelated Shockley diode netlists reach nRF51 ADC channels 0/1 and produce asserted 10-bit firmware-visible results; no analog pad aliases or silicon ADC validation are claimed |
 | `cc2538dk` | [`cosim_cc2538_analog.rs`](../crates/core/tests/cosim_cc2538_analog.rs)::`cc2538dk_ntc_and_diode_netlists_drive_gpio_inputs_through_thresholds` — generic Beta NTC and Shockley diode netlists route to PC4/PC5 and assert GPIO DATA levels, threshold crossings, and retained hysteresis; this is GPIO threshold coverage, not ADC support |
+| `curiosity-pic32mz-ef` | [`cosim_curiosity_pic32mz_analog.rs`](../crates/core/tests/cosim_curiosity_pic32mz_analog.rs)::`curiosity_pic32mz_generic_ntc_and_diode_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists reach bounded GPIOB inputs and assert solved voltages, PORTB threshold crossings, and hysteresis. The thresholds are simulation assumptions; this is not silicon validation or ADC support. |
 | `ci-fixture-l476-readonly` | [`cosim_nucleo_l476_analog.rs`](../crates/core/tests/cosim_nucleo_l476_analog.rs)::`nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds` — same generic NTC and Shockley diode solve and reach GPIOA input thresholds on the read-only L476 fixture |
 | `ci-fixture-riscv-uart1` | **NO E2E analog coverage** |
 | `ci-fixture-uart1` | **NO E2E analog coverage** |
 | `ci-fixture-unknown-arch` | **NO E2E analog coverage** |
-| `curiosity-pic32mz-ef` | **NO E2E analog coverage** |
 | `dspic33fj32mc202-demo` | **NO E2E analog coverage** |
 | `dspic33fj32mc204-demo` | **NO E2E analog coverage** |
 | `ek-ra6m5` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end` — Beta NTC and Shockley diode netlists route to ADC1 channels 0/2 and produce 12-bit scan results |
