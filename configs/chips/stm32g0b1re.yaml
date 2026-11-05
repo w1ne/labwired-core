@@ -9,6 +9,16 @@ name: stm32g0b1re
 arch: arm
 core: cortex-m0+
 cpu_hz: 16000000
+# GPIO supply and digital input thresholds for co-simulation voltage routes.
+# DS13560 Rev 5, section 5.3.14, Table 55: the ordinary I/Os (including PA0
+# and PA1) have VIL max 0.3·VDDIOx and VIH min 0.7·VDDIOx for
+# 1.62 V < VDDIOx < 3.6 V. The customer startup profile has no board-rail
+# declaration, so the analog fixture assumes a 3.3 V I/O rail. This models
+# thresholded inputs, not the G0B1 ADC.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 flash:
   base: 0x8000000
   size: 512KB
