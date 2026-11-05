@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 43 have end-to-end analog coverage; 60 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 44 have end-to-end analog coverage; 59 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -50,7 +50,7 @@ Current inventory: **103 profiles; 43 have end-to-end analog coverage; 60 have n
 | `esp32c6-devkitc` | [`cosim_esp32c3_analog.rs`](../crates/core/tests/cosim_esp32c3_analog.rs)::`esp32c6_devkitc_ntc_and_diode_netlists_reach_adc1_channels` — generic Beta NTC and unrelated Shockley diode netlists solve to ADC1_CH0/CH2 through the shared APB_SARADC model at the C6 register base; independent voltages, channel isolation, undriven CH1/CH3, and 12-bit one-shot results are asserted |
 | `esp32s3-oled-demo` | [`cosim_esp32s3_analog.rs`](../crates/core/tests/cosim_esp32s3_analog.rs)::`esp32s3_oled_demo_ntc_and_diode_netlists_reach_sens_adc1` — preserves the SSD1306 profile while a generic Beta NTC and unrelated Shockley diode solve to SENS ADC1_CH0/CH2; independent voltages, channel isolation, and firmware-visible one-shot readings are asserted |
 | `esp32s3-zero` | [`cosim_esp32s3_analog.rs`](../crates/core/tests/cosim_esp32s3_analog.rs)::`esp32s3_zero_ntc_and_diode_netlists_reach_sens_adc1` — generic Beta NTC and unrelated Shockley diode netlists solve through the board profile to distinct SENS ADC1 channels; voltages, channel isolation, and one-shot readings are asserted while retaining the GPIO48 status LED mapping |
-| `esp32s3` | **NO E2E analog coverage** |
+| `esp32s3` | [`cosim_esp32s3_analog.rs`](../crates/core/tests/cosim_esp32s3_analog.rs)::`esp32s3_ntc_and_diode_netlists_reach_sens_adc1` — generic Beta NTC and unrelated Shockley diode netlists reach the bare ESP32-S3 profile's SENS ADC1_CH0/CH2; independent voltages, channel isolation, and firmware-visible one-shot readings are asserted |
 | `feather-f405` | **NO E2E analog coverage** |
 | `frdm-k64f` | **NO E2E analog coverage** |
 | `frdm-kw41z-lcd` | **NO E2E analog coverage** |

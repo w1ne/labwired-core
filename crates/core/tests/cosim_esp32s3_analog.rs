@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic analog device netlists drive the ESP32-S3 OLED profile through its
-//! SENS ADC1 channels and firmware-visible one-shot conversion registers.
+//! Generic analog device netlists drive ESP32-S3 profiles through their SENS
+//! ADC1 channels and firmware-visible one-shot conversion registers.
 
 mod common;
 use common::root;
@@ -134,7 +134,7 @@ fn assert_s3_profile_analog(
     let mut bus = SystemBus::new();
     configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::for_chip(&chip));
     attach_esp32_external_devices(&mut bus, &profile)
-        .expect("attach the profile's SSD1306 to the S3 I2C controller");
+        .expect("attach the profile's external devices to the S3 controllers");
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
         .expect("fixture carries two analog netlists");
@@ -234,5 +234,15 @@ fn esp32s3_zero_ntc_and_diode_netlists_reach_sens_adc1() {
         "examples/esp32s3-zero/analog-ntc-diode-system.yaml",
         None,
         true,
+    );
+}
+
+#[test]
+fn esp32s3_ntc_and_diode_netlists_reach_sens_adc1() {
+    assert_s3_profile_analog(
+        "esp32s3",
+        "examples/esp32s3-oled-demo/analog-ntc-diode-system.yaml",
+        None,
+        false,
     );
 }
