@@ -2906,6 +2906,7 @@ external_devices:
     );
     assert_eq!(bus.motor_snapshots()[0].id, "wheel");
 
+    bus.write_u32(0x4800_0000, 0x55).unwrap(); // PA0..PA3 output mode
     bus.write_u32(0x4800_0014, 0b1011).unwrap(); // PWM, direction, enable
     bus.set_current_cycle(100);
     bus.tick_peripherals_with_costs();
@@ -2977,6 +2978,7 @@ motor_models:
     );
 
     // PWM + enable high, direction constant-true, brake constant-false → forward.
+    bus.write_u32(0x4800_0000, 0x41).unwrap(); // PA0/PA3 output mode
     bus.write_u32(0x4800_0014, 0b1001).unwrap(); // PA0 pwm, PA3 enable
     bus.set_current_cycle(100);
     bus.tick_peripherals_with_costs();
@@ -3031,6 +3033,7 @@ motor_models:
     )
     .unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4800_0000, 0x05).unwrap(); // PA0/PA1 output mode
     bus.write_u32(0x4800_0014, 0b0011).unwrap(); // PWM + direction, no enable bit
     bus.set_current_cycle(100);
     bus.tick_peripherals_with_costs();
@@ -3126,6 +3129,7 @@ motor_models:
     );
 
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4800_0000, 0x55).unwrap(); // PA0..PA3 output mode
     bus.write_u32(0x4800_0014, 0b1011).unwrap(); // PWM, direction, enable
 
     let initial = bus.motor_snapshots();
@@ -3174,6 +3178,7 @@ motor_models:
     };
     config.simulation_clock_hz = 40_000_000;
     let mut slower_clock = SystemBus::from_config(&chip, &slower_clock_manifest).unwrap();
+    slower_clock.write_u32(0x4800_0000, 0x55).unwrap();
     slower_clock.write_u32(0x4800_0014, 0b1011).unwrap();
     slower_clock.set_current_cycle(100);
     slower_clock.tick_peripherals_with_costs();
@@ -3238,6 +3243,7 @@ motor_models:
         SystemBus::from_config(&chip, &manifest).unwrap()
     }
     fn configure_pwm(bus: &mut SystemBus) {
+        bus.write_u32(0x4800_0000, 1).unwrap(); // PA0 output, feedback pads input
         bus.write_u32(0x4800_0014, 1).unwrap(); // inverter enable
         bus.write_u32(0x4001_2c2c, 99).unwrap(); // ARR
         bus.write_u32(0x4001_2c38, 25).unwrap(); // CH2: complementary low
