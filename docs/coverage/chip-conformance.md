@@ -86,7 +86,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f407vg | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ze | **L0** | ✓ | 34 | — | — | — |
 | stm32f407zg | **L0** | ✓ | 34 | — | — | — |
-| stm32g0b1re | **L0** | ✓ | 13 | — | — | — |
+| stm32g0b1re | **L0** | ✓ | 15 | — | — | — |
 | stm32g474re | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
