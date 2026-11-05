@@ -6,7 +6,7 @@ a board-specific test solves an analog device/netlist, routes the solved signal 
 profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
 traces without an ADC conversion, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 7 have end-to-end analog coverage; 96 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 8 have end-to-end analog coverage; 95 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -15,7 +15,7 @@ Current inventory: **103 profiles; 7 have end-to-end analog coverage; 96 have no
 | `apollo4p-evb` | **NO E2E analog coverage** |
 | `arduino-mega-2560` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end` |
 | `arduino-nano-33-ble` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_nano_33_ble_ntc_netlist_reaches_saadc_ain0_end_to_end` — explicit SAADC AIN0 route and two-channel EasyDMA scan |
-| `arduino-nano` | **NO E2E analog coverage** |
+| `arduino-nano` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_nano_ntc_netlist_reaches_pc0_adc0_end_to_end` |
 | `arduino-uno-r4-minima` | **NO E2E analog coverage** |
 | `arduino-uno` | [`cosim_avr_analog_diode.rs`](../crates/core/tests/cosim_avr_analog_diode.rs)::`arduino_uno_diode_netlist_reaches_a0_and_firmware_adc0` |
 | `arduino-zero` | **NO E2E analog coverage** |

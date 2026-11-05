@@ -999,6 +999,100 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
     assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
 }
 
+/// The Arduino Nano uses the same ATmega328P silicon as the Uno, but its own
+/// system profile must still resolve the generic NTC netlist through PC0/A0
+/// and convert the resulting level with the CPU-owned ADC0 registers.
+#[test]
+fn arduino_nano_ntc_netlist_reaches_pc0_adc0_end_to_end() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::{Cpu, Machine, SimulationConfig};
+
+    let profile_path = root("configs/systems/arduino-nano.yaml");
+    let mut manifest = SystemManifest::from_file(&profile_path).expect("load Arduino Nano profile");
+    assert_eq!(manifest.name, "arduino-nano");
+    let analog_path = root("examples/arduino-nano/analog-ntc-system.yaml");
+    let analog_manifest =
+        SystemManifest::from_file(&analog_path).expect("load Nano analog fixture");
+    manifest.cosim_models = analog_manifest.cosim_models;
+    let chip_path = profile_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ATmega328P descriptor");
+    let bus = SystemBus::from_config(&chip, &manifest).expect("build Arduino Nano bus");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+
+    let mut cpu = Avr::for_chip_name("atmega328p");
+    // LDI/STS selects AVcc reference and ADC0, then enables and starts a
+    // conversion. Re-running from PC 0 lets each temperature drive a fresh
+    // conversion through the same firmware-visible registers.
+    cpu.load_words(0, &[0xE400, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A]);
+    let mut machine = Machine::new(cpu, bus);
+    let config = SimulationConfig::default();
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the analog netlist reads the routed temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route NTC divider");
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let volts = match session.signals().get("board.analog.pc0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the NTC voltage did not reach Nano PC0/A0: {other:?}"),
+        };
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 5.0 * 10_000.0 / (ntc_ohms + 10_000.0);
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved NTC divider should be {expected_volts} V, got {volts} V"
+        );
+
+        machine.cpu.set_pc(0);
+        for _ in 0..4 {
+            machine
+                .cpu
+                .step(&mut machine.bus, &[], &config)
+                .expect("execute the ATmega328P ADC0 register sequence");
+        }
+        let adc_count = u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl);
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor() as u32;
+        let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+        assert_eq!(
+            adc_count, expected_count,
+            "firmware ADC0 should convert the routed NTC voltage at {temperature_c} °C"
+        );
+        assert_eq!(
+            machine.cpu.admux & 0x0f,
+            0,
+            "the firmware selects ADC0 / A0"
+        );
+        assert_eq!(
+            machine.cpu.adcsra & (1 << 6),
+            0,
+            "ADSC clears after conversion"
+        );
+        assert_ne!(
+            machine.cpu.adcsra & (1 << 4),
+            0,
+            "ADIF records conversion complete"
+        );
+        samples.push((temperature_c, volts, adc_count));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "an NTC divider rises as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the firmware ADC0 result follows the physical voltage: {samples:?}"
+    );
+    assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
+}
+
 /// The Nano 33 BLE uses the modeled nRF52840 SAADC. This routes the generic
 /// Beta NTC model to physical AIN0, then verifies its voltage in the channel
 /// conversion buffer and that the adjacent, undriven AIN1 remains at zero.

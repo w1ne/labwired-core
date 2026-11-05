@@ -1,6 +1,6 @@
 # Mixed-signal board coverage
 
-Coverage is strict: a profile is covered only when an analog device is driven through the in-core MNA netlist, its solved voltage is asserted after board pin/ADC routing, and the ADC result is asserted. The Arduino Uno test also executes the ATmega328P ADC register sequence. Unit tests, bare-chip tests, analog examples without an end-to-end assertion, and digital-only board tests do not count.
+Coverage is strict: a profile is covered only when an analog device is driven through the in-core MNA netlist, its solved voltage is asserted after board pin/ADC routing, and the ADC result is asserted. The Arduino Uno and Nano tests also execute the ATmega328P ADC register sequence. Unit tests, bare-chip tests, analog examples without an end-to-end assertion, and digital-only board tests do not count.
 
 This inventory mirrors every `configs/systems/*.yaml` profile (103 at last update). Several profiles are demos, fixtures, or variants, so each file is listed independently to avoid silently treating one board test as coverage for another profile.
 
@@ -11,7 +11,7 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 | `apollo4p-evb` | NO end-to-end analog coverage |
 | `arduino-mega-2560` | [`cosim_pin_routing::arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — explicit ADC8 route and ATmega2560 MUX5 conversion |
 | `arduino-nano-33-ble` | [`cosim_pin_routing::arduino_nano_33_ble_ntc_netlist_reaches_saadc_ain0_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — explicit SAADC AIN0 route and EasyDMA conversion |
-| `arduino-nano` | NO end-to-end analog coverage |
+| `arduino-nano` | [`cosim_pin_routing::arduino_nano_ntc_netlist_reaches_pc0_adc0_end_to_end`](../crates/core/tests/cosim_pin_routing.rs) — Beta NTC law through PC0/A0 descriptor routing and the ATmega328P ADC0 conversion |
 | `arduino-uno-r4-minima` | NO end-to-end analog coverage |
 | `arduino-uno` | [`cosim_avr_analog_diode::arduino_uno_diode_netlist_reaches_a0_and_firmware_adc0`](../crates/core/tests/cosim_avr_analog_diode.rs) |
 | `arduino-zero` | NO end-to-end analog coverage |
@@ -116,9 +116,10 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 - **Adafruit Feather ESP32 V2 / diode load line:** generic MNA diode model → `adc.sens_sar_adc.6_volts` → classic ESP32 SENS SAR one-shot conversion. The classic ESP32 descriptor has no `analog_pins:` entries yet, so this slice exercises the supported explicit ADC-channel route without claiming a GPIO-to-ADC pad alias. Example manifest: [analog-diode-system.yaml](../examples/adafruit-feather-esp32-v2/analog-diode-system.yaml).
 - **Arduino Uno R3 / diode load line:** generic MNA diode model → PC0/ADC0 descriptor route → ATmega328P conversion. Example manifest: [analog-diode-system.yaml](../examples/arduino-uno-io/analog-diode-system.yaml).
 - **Arduino Mega 2560 / NTC divider:** generic Beta NTC netlist → explicit ADC8 route → ATmega2560 MUX5 and firmware ADC conversion at cold, nominal and hot temperatures. Example manifest: [analog-ntc-system.yaml](../examples/arduino-mega-2560-io/analog-ntc-system.yaml).
+- **Arduino Nano / NTC divider:** generic Beta NTC netlist → PC0/A0 descriptor route → ATmega328P ADC0 firmware-register conversion at cold, nominal and hot temperatures. Example manifest: [analog-ntc-system.yaml](../examples/arduino-nano/analog-ntc-system.yaml).
 - **NUCLEO-F103RB / NTC divider:** generic Beta NTC netlist → PA0/ADC1 route → STM32F103 ADC conversion. Example manifest: [analog-ntc-system.yaml](../examples/nucleo-f103rb/analog-ntc-system.yaml).
 - **NUCLEO-F401RE / diode load line:** generic MNA diode model → PA0/ADC1_IN0 descriptor route → STM32F401 ADC1 conversion. Example manifest: [analog-diode-system.yaml](../examples/nucleo-f401re/analog-diode-system.yaml).
 - **Arduino Nano 33 BLE / NTC divider:** generic Beta NTC netlist → explicit SAADC AIN0 route → nRF52840 12-bit EasyDMA conversion. Example manifest: [analog-ntc-system.yaml](../examples/arduino-nano-33-ble/analog-ntc-system.yaml).
 
-All rows marked `NO end-to-end analog coverage` remain gaps; the next round should take one of those profiles and preserve this strict criterion. Apollo4 Plus EVB is the first remaining profile in this inventory, but its chip descriptor currently declares ADC as a stub; Arduino Nano is the next profile with a modeled ADC and resolvable pad route.
+All rows marked `NO end-to-end analog coverage` remain gaps. Apollo4 Plus EVB is the first remaining profile in inventory order, but its chip descriptor currently declares ADC as a stub. Arduino Uno R4 Minima and Arduino Zero also lack modeled ADC inputs; the next profile with an existing ADC model is ATmega1281, which can be exercised through the explicit `adc.adc.<channel>_volts` route.
 
