@@ -16,20 +16,27 @@ use riscv_rt::entry;
 
 /// Microchip CoreUARTapb at 0x70001000: TxData@+0x00, Status@+0x10;
 /// TXRDY is bit 0 and is set while the transmitter can accept a byte.
-const UART_TXDATA: *mut u32 = 0x7000_1000 as *mut u32;
-const UART_STATUS: *const u32 = 0x7000_1010 as *const u32;
+const UART_BASE: usize = 0x7000_1000;
+
+fn putc_at(base: usize, byte: u8) {
+    unsafe {
+        while core::ptr::read_volatile((base + 0x10) as *const u32) & 1 == 0 {}
+        core::ptr::write_volatile(base as *mut u32, byte as u32);
+    }
+}
 
 fn putc(byte: u8) {
-    unsafe {
-        while core::ptr::read_volatile(UART_STATUS) & 1 == 0 {}
-        core::ptr::write_volatile(UART_TXDATA, byte as u32);
+    putc_at(UART_BASE, byte);
+}
+
+fn puts_at(base: usize, text: &str) {
+    for byte in text.bytes() {
+        putc_at(base, byte);
     }
 }
 
 fn puts(text: &str) {
-    for byte in text.bytes() {
-        putc(byte);
-    }
+    puts_at(UART_BASE, text);
 }
 
 fn put_hex32(value: u32) {
@@ -64,6 +71,12 @@ fn main() -> ! {
     puts("mul=");
     put_hex32(multiply(17, 19));
     putc(b'\n');
+
+    #[cfg(feature = "additional-uarts")]
+    {
+        puts_at(0x7000_8000, "MIV ADDITIONAL UART 1\n");
+        puts_at(0x7000_9000, "MIV ADDITIONAL UART 2\n");
+    }
 
     loop {
         unsafe {

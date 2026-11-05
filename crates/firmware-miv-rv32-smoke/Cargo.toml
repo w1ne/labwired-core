@@ -13,6 +13,9 @@ license = "MIT"
 riscv-rt = "0.12"
 panic-halt = "0.2"
 
+[features]
+additional-uarts = []
+
 [[bin]]
 name = "firmware-miv-rv32-smoke"
 path = "src/main.rs"

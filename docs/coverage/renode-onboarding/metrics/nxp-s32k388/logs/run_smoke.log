@@ -1,5 +1,5 @@
-2026-11-05T02:39:28.501160Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nxp-s32k388.yaml
-2026-11-05T02:39:28.506198Z  INFO labwired_loader: ELF Entry Point: 0x400401
+2026-11-05T02:57:40.352365Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nxp-s32k388.yaml
+2026-11-05T02:57:40.357403Z  INFO labwired_loader: ELF Entry Point: 0x400401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  1/1 checks · nxp-s32k388-smoke · 100000 steps · 0.00s

@@ -122,7 +122,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "7f505587ae27d9211a6ffc95c16bdf7eef96118a7b2dc21bf83c065546a17773",
+  "firmware_hash": "23acfd6ca8d60f0bc8ead2b259f8f6ae17575d378d3eafd429dc0b538663adf4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/miv_rv32.yaml",
