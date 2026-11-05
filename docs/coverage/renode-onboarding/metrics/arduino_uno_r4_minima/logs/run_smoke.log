@@ -1,5 +1,5 @@
-2026-11-05T12:13:35.436781Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/arduino_uno_r4_minima.yaml
-2026-11-05T12:13:35.438020Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-05T12:35:48.284526Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/arduino_uno_r4_minima.yaml
+2026-11-05T12:35:48.285765Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 799877 of 800000 device cycles (123 interpreted)

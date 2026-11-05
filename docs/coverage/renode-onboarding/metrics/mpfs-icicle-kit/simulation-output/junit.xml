@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001749">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001686">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxCycles"/>
     <property name="firmware_hash" value="3781dda7eb3ba32fe33678ec8328f65878511ffcc49741dcf96cb038387639cc"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001749">
+  <testcase classname="labwired" name="run" time="0.001686">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;*** Booting Zephyr OS build v4.1.0 ***&quot;, &quot;Hello World! mpfs_icicle/polarfire/u54&quot;]" time="0.000000">
   </testcase>

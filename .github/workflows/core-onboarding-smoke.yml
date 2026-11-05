@@ -91,7 +91,10 @@ on:
       - "crates/firmware-tock-veer-el2-smoke/**"
       - "crates/firmware-fomu-smoke/**"
       - "crates/firmware-zolertia-firefly-smoke/**"
+      - "crates/firmware-ramn-smoke/**"
       - "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
+      - "examples/renode-onboarding/ramn-smoke.yaml"
+      - "scripts/run_renode_onboarding_inventory.py"
       - "examples/renode-onboarding/fomu-smoke.yaml"
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
@@ -213,6 +216,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/ut32m0r500-smoke.yaml
             system: configs/systems/onboarding/ut32m0r500.yaml
+          # RAMN is STM32L552: this bounded smoke checks one Cortex-M33 core,
+          # its imported code flash, and the sourced 256 KiB SRAM range only.
+          - id: ramn
+            crate: firmware-ramn-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/ramn-smoke.yaml
+            system: configs/systems/onboarding/ramn.yaml
           # The imported imxrt500 scaffold is narrowed to the MIMXRT595S
           # Cortex-M33, XIP/SRAM, modeled clock/reset/pin control, GPIO, and
           # FLEXCOMM0 path exercised by this exact-system smoke.

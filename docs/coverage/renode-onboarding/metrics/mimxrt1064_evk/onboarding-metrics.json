@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/mimxrt1064_evk-smoke.yaml",
   "system": "configs/systems/onboarding/mimxrt1064_evk.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T12:14:35Z",
-  "finished_at_utc": "2026-11-05T12:14:36Z",
+  "started_at_utc": "2026-11-05T12:36:48Z",
+  "finished_at_utc": "2026-11-05T12:36:49Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 747,
+  "elapsed_ms": 802,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.281,
-    "build_firmware": 0.185,
-    "run_smoke": 0.271
+    "build_cli": 0.302,
+    "build_firmware": 0.184,
+    "run_smoke": 0.305
   },
   "stages_ms": {
-    "build_cli": 281,
-    "build_firmware": 185,
-    "run_smoke": 271
+    "build_cli": 302,
+    "build_firmware": 184,
+    "run_smoke": 305
   }
 }

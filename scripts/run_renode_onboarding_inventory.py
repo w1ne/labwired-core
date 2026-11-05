@@ -722,6 +722,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/zolertia-firefly-smoke.yaml",
     },
+    "ramn": {
+        "crate": "firmware-ramn-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/ramn-smoke.yaml",
+    },
     "picosoc": {
         "crate": "firmware-picosoc-smoke",
         "target": "riscv32imc-unknown-none-elf",
