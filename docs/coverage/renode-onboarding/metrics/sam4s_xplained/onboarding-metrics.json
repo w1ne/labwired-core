@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
   "system": "configs/systems/onboarding/sam4s_xplained.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T08:52:05Z",
-  "finished_at_utc": "2026-11-05T08:52:07Z",
-  "elapsed_seconds": 3,
-  "elapsed_ms": 2151,
+  "started_at_utc": "2026-11-05T09:17:45Z",
+  "finished_at_utc": "2026-11-05T09:17:46Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1028,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 1.041,
-    "build_firmware": 0.387,
-    "run_smoke": 0.691
+    "build_cli": 0.364,
+    "build_firmware": 0.337,
+    "run_smoke": 0.314
   },
   "stages_ms": {
-    "build_cli": 1041,
-    "build_firmware": 387,
-    "run_smoke": 691
+    "build_cli": 364,
+    "build_firmware": 337,
+    "run_smoke": 314
   }
 }

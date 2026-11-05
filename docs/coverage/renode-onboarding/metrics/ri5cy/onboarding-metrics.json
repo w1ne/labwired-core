@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/ri5cy-smoke.yaml",
   "system": "configs/systems/onboarding/ri5cy.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T08:51:55Z",
-  "finished_at_utc": "2026-11-05T08:51:56Z",
+  "started_at_utc": "2026-11-05T09:17:38Z",
+  "finished_at_utc": "2026-11-05T09:17:40Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1380,
+  "elapsed_ms": 1711,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.294,
-    "build_firmware": 0.173,
-    "run_smoke": 0.902
+    "build_cli": 0.571,
+    "build_firmware": 0.191,
+    "run_smoke": 0.93
   },
   "stages_ms": {
-    "build_cli": 294,
-    "build_firmware": 173,
-    "run_smoke": 902
+    "build_cli": 571,
+    "build_firmware": 191,
+    "run_smoke": 930
   }
 }

@@ -1,0 +1,17 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-litex-tock-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+build = "build.rs"
+
+[[bin]]
+name = "firmware-litex-tock-smoke"
+path = "src/main.rs"
+test = false
+bench = false

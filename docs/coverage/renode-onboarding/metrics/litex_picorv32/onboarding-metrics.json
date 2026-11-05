@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/litex_picorv32-smoke.yaml",
   "system": "configs/systems/onboarding/litex_picorv32.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T08:51:09Z",
-  "finished_at_utc": "2026-11-05T08:51:11Z",
+  "started_at_utc": "2026-11-05T09:16:28Z",
+  "finished_at_utc": "2026-11-05T09:16:30Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1961,
+  "elapsed_ms": 1905,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.3,
+    "build_cli": 0.289,
     "build_firmware": 0.169,
-    "run_smoke": 1.48
+    "run_smoke": 1.438
   },
   "stages_ms": {
-    "build_cli": 300,
+    "build_cli": 289,
     "build_firmware": 169,
-    "run_smoke": 1480
+    "run_smoke": 1438
   }
 }

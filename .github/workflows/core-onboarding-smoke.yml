@@ -77,6 +77,7 @@ on:
       - "crates/firmware-mimxrt798s-smoke/**"
       - "crates/firmware-mimxrt595-evk-smoke/**"
       - "crates/firmware-litex-minerva-smoke/**"
+      - "crates/firmware-litex-tock-smoke/**"
       - "crates/firmware-litex-vexriscv-smp-smoke/**"
       - "crates/firmware-litex-vexriscv-tftp-smoke/**"
       - "crates/firmware-opentitan-earlgrey-smoke/**"
@@ -884,6 +885,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv_tftp-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv_tftp.yaml
+          # Tock's LiteX profile checks RV32IMAC arithmetic and its modeled
+          # UART over the imported platform's flash and SRAM windows.
+          - id: litex_tock
+            crate: firmware-litex-tock-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/renode-onboarding/litex_tock-smoke.yaml
+            system: configs/systems/onboarding/litex_tock.yaml
           - id: arty_litex_vexriscv
             crate: firmware-arty-litex-smoke
             target: riscv32im-unknown-none-elf
