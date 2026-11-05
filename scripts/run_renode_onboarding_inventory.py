@@ -39,6 +39,11 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",
     },
+    "litex_vexriscv_linux": {
+        "crate": "firmware-litex-vexriscv-linux-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/litex_vexriscv_linux-smoke.yaml",
+    },
     "renesas-ek_ra8m1": {
         "crate": "firmware-ek-ra8m1-smoke",
         "target": "thumbv8m.main-none-eabi",

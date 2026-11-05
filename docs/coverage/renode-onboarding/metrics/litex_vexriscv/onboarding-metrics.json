@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/litex_vexriscv-smoke.yaml",
   "system": "configs/systems/onboarding/litex_vexriscv.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T05:39:38Z",
-  "finished_at_utc": "2026-11-05T05:39:40Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1965,
+  "started_at_utc": "2026-11-05T06:03:05Z",
+  "finished_at_utc": "2026-11-05T06:03:07Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2041,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.285,
-    "build_firmware": 0.169,
-    "run_smoke": 1.501
+    "build_cli": 0.288,
+    "build_firmware": 0.176,
+    "run_smoke": 1.565
   },
   "stages_ms": {
-    "build_cli": 285,
-    "build_firmware": 169,
-    "run_smoke": 1501
+    "build_cli": 288,
+    "build_firmware": 176,
+    "run_smoke": 1565
   }
 }

@@ -1,5 +1,5 @@
-2026-11-05T05:39:32.665802Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/ezr32wg330.yaml
-2026-11-05T05:39:32.666607Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-05T06:02:59.213140Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/ezr32wg330.yaml
+2026-11-05T06:02:59.213942Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · ezr32wg330-smoke · 100000 steps · 0.00s
