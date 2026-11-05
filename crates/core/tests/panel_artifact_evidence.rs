@@ -185,8 +185,14 @@ fn ssd1306_full_plane_logs_one_frame_sha() {
         oled_paint(&mut bus, &[0xAF], &[0xFF; 32]);
         let device = inspect_panel(bus);
         let art = evidence(&device);
-        let hist = art.meta["frames_seen"].as_array().cloned().unwrap_or_default();
-        assert!(hist.is_empty(), "partial plane must not log frames_seen: {hist:?}");
+        let hist = art.meta["frames_seen"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            hist.is_empty(),
+            "partial plane must not log frames_seen: {hist:?}"
+        );
     }
 
     // Full plane in 32-byte chunks (control 0x40 each), matching Wire MAX.
@@ -204,7 +210,10 @@ fn ssd1306_full_plane_logs_one_frame_sha() {
     assert_eq!(hist.len(), 1, "one full plane => one frame: {hist:?}");
     let sha = hist[0]["sha256"].as_str().expect("sha256");
     assert_eq!(sha.len(), 64);
-    assert_eq!(art.meta["generation_history"].as_array().map(|a| a.len()), Some(1));
+    assert_eq!(
+        art.meta["generation_history"].as_array().map(|a| a.len()),
+        Some(1)
+    );
 }
 
 /// The IMAX Console's panel. Same 1-bpp page geometry as the SSD1306, and it
