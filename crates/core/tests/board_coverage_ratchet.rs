@@ -550,6 +550,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
+        // CH32V003F4P6 on the WCH evaluation board has GPIO and USART smoke
+        // profiles and workflow gates, but no Playground catalog board or
+        // physical-silicon differential. Promote only after both exist.
+        "ch32v003f4p6-gpio-smoke",
+        "ch32v003f4p6-usart-smoke",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)

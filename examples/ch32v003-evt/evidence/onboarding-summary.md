@@ -1,8 +1,8 @@
-# Onboarding Smoke: ch32v003f4p6
+# Onboarding Smoke: ch32v003f4p6-gpio
 
 - status: `pass`
-- elapsed_seconds: `18`
-- elapsed_ms: `17246`
+- elapsed_seconds: `24`
+- elapsed_ms: `23523`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

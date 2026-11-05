@@ -130,6 +130,9 @@ pub enum RccRegisterLayout {
     /// RCC_AHB2ENR1@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-U3C5ZI-Q
     /// GPIO smoke; the U3 clock tree and other RCC registers are out of scope.
     Stm32U3,
+    /// WCH CH32V003 onboarding subset. RCC_APB2PCENR at offset 0x18 models
+    /// only the GPIOD and USART1 clock gates used by the current smokes.
+    Ch32v003,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -138,9 +141,8 @@ impl FromStr for RccRegisterLayout {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
-            // CH32V003 APB2PCENR is at the F1 APB2ENR offset (0x18); this
-            // alias exposes only the compatible enable-register address map.
-            "stm32f1" | "f1" | "legacy" | "ch32v003" => Ok(Self::Stm32F1),
+            "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            "ch32v003" => Ok(Self::Ch32v003),
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32v2" | "v2" | "modern" | "stm32-modern" => Ok(Self::Stm32V2),
             "h5" | "stm32h5" => Ok(Self::Stm32H5),
@@ -158,7 +160,7 @@ impl FromStr for RccRegisterLayout {
             "stm32u0" | "u0" => Ok(Self::Stm32U0),
             "stm32u3" | "u3" => Ok(Self::Stm32U3),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0, stm32c0, stm32c5, stm32u0, stm32u3, ch32v003",
                 value
             )),
         }
@@ -2757,6 +2759,42 @@ impl RccModel for U3Rcc {
     }
 }
 
+/// Narrow CH32V003 clock gates used by the GPIO and USART onboarding smokes.
+///
+/// The WCH reference manual places RCC_APB2PCENR at 0x4002_1018 and assigns
+/// bit 5 to IOPDEN and bit 14 to USART1EN. This profile models those reset-low
+/// gates only; oscillator selection, PLLs, reset controls, and all other RCC
+/// gates remain outside the descriptor's claim.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Ch32v003Rcc {
+    apb2pcenr: u32,
+}
+
+impl RccModel for Ch32v003Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x18 => self.apb2pcenr,
+            _ => {
+                crate::census_reg!("rcc:Ch32v003Rcc", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // Retain only GPIOD and USART1, the blocks present in the two
+            // narrow CH32V003 smoke descriptors.
+            0x18 => self.apb2pcenr = value & ((1 << 5) | (1 << 14)),
+            _ => crate::census_reg!("rcc:Ch32v003Rcc", offset, "write"),
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 
 /// RCC peripheral — one variant per chip family. Each variant's registers are
@@ -2778,6 +2816,7 @@ pub enum Rcc {
     Stm32C5(C5Rcc),
     Stm32U0(U0Rcc),
     Stm32U3(U3Rcc),
+    Ch32v003(Ch32v003Rcc),
 }
 
 impl Default for Rcc {
@@ -2808,6 +2847,7 @@ impl Rcc {
             RccRegisterLayout::Stm32C5 => Self::Stm32C5(C5Rcc::default()),
             RccRegisterLayout::Stm32U0 => Self::Stm32U0(U0Rcc::default()),
             RccRegisterLayout::Stm32U3 => Self::Stm32U3(U3Rcc::default()),
+            RccRegisterLayout::Ch32v003 => Self::Ch32v003(Ch32v003Rcc::default()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
@@ -3002,6 +3042,10 @@ impl Rcc {
                 "ahb2enr" | "ahb2enr1" => Some(0x8C),
                 _ => None,
             },
+            Self::Ch32v003(_) => match r.as_str() {
+                "apb2pcenr" | "apb2enr" => Some(0x18),
+                _ => None,
+            },
             // WB (RM0434, 0x4C/0x58/0x60) and WBA (RM0493, H5-style
             // 0x8C/0x9C/0xA4): the six shared slots, read off the instance's
             // own map. `cfgr1` is WBA RCC_CFGR1@0x1C (WB has RCC_CIFR there
@@ -3071,6 +3115,7 @@ impl Rcc {
             Self::Stm32C5(r) => r,
             Self::Stm32U0(r) => r,
             Self::Stm32U3(r) => r,
+            Self::Ch32v003(r) => r,
         }
     }
 
@@ -3091,6 +3136,7 @@ impl Rcc {
             Self::Stm32C5(r) => r,
             Self::Stm32U0(r) => r,
             Self::Stm32U3(r) => r,
+            Self::Ch32v003(r) => r,
         }
     }
 }
@@ -4284,6 +4330,23 @@ mod tests {
         rcc.write_u32(0x8C, u32::MAX).unwrap();
         assert_eq!(rcc.read_u32(0x8C).unwrap(), (1 << 30) | 1);
         assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "must not alias U5 AHB2ENR");
+    }
+
+    /// WCH APB2PCENR bits 5 and 14 enable GPIOD and USART1. The narrow profile
+    /// must not inherit STM32F1 oscillator reset behavior or unrelated gates.
+    #[test]
+    fn ch32v003_models_only_the_smoked_gpio_and_usart_clock_gates() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Ch32v003);
+        assert_eq!(
+            "ch32v003".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Ch32v003
+        );
+        assert_eq!(rcc.read_u32(0x18).unwrap(), 0);
+        assert_eq!(rcc.rcc_reg_offset("apb2pcenr"), Some(0x18));
+        assert_eq!(rcc.rcc_reg_offset("cr"), None);
+
+        rcc.write_u32(0x18, u32::MAX).unwrap();
+        assert_eq!(rcc.read_u32(0x18).unwrap(), (1 << 5) | (1 << 14));
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360

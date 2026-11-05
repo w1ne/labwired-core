@@ -1,29 +1,29 @@
 {
-  "target_id": "ch32v003f4p6",
+  "target_id": "ch32v003f4p6-gpio",
   "status": "pass",
   "crate": "",
   "target_triple": "",
   "script": "examples/ch32v003-evt/onboarding-smoke.yaml",
   "system": "configs/systems/ch32v003evt-gpio-smoke.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T03:46:29Z",
-  "finished_at_utc": "2026-11-05T03:46:46Z",
-  "elapsed_seconds": 18,
-  "elapsed_ms": 17246,
+  "started_at_utc": "2026-11-05T11:08:55Z",
+  "finished_at_utc": "2026-11-05T11:09:18Z",
+  "elapsed_seconds": 24,
+  "elapsed_ms": 23523,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 16.885,
-    "build_firmware": 0.064,
-    "run_smoke": 0.287
+    "build_cli": 23.141,
+    "build_firmware": 0.065,
+    "run_smoke": 0.305
   },
   "stages_ms": {
-    "build_cli": 16885,
-    "build_firmware": 64,
-    "run_smoke": 287
+    "build_cli": 23141,
+    "build_firmware": 65,
+    "run_smoke": 305
   },
   "firmware_build_script": "examples/ch32v003-evt/build-firmware.sh"
 }

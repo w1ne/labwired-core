@@ -1,4 +1,4 @@
-2026-11-05T04:55:03.565424Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v003f4p6-usart-smoke.yaml
-2026-11-05T04:55:03.566430Z  INFO labwired_loader: ELF Entry Point: 0x8000000
+2026-11-05T11:09:25.005074Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v003f4p6-usart-smoke.yaml
+2026-11-05T11:09:25.006105Z  INFO labwired_loader: ELF Entry Point: 0x8000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · usart-smoke · 100000 steps · 0.02s
