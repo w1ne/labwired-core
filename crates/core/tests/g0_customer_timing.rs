@@ -1,4 +1,4 @@
-//! Real Cortex-M0+ ELF through STM32G0B1RE IRQ UART -> TIOL112 -> timed master.
+//! Real Cortex-M0+ ELF through STM32G0B1RE UART -> TIOL112 -> timed master.
 //! Requires an external, source/compiler-pinned ELF; never skips a missing one.
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
@@ -16,11 +16,16 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::OnceLock;
 
+#[path = "common/g0_dma_recovery.rs"]
+mod dma_recovery;
+
 #[derive(Debug)]
 struct DllProbe {
     base: u64,
     fields: std::collections::BTreeMap<String, (u64, u64)>,
     proof: Value,
+    board_dma_layout: Value,
+    board_backend_layout: Value,
 }
 static DLL_PROBE: OnceLock<DllProbe> = OnceLock::new();
 
@@ -52,8 +57,79 @@ fn setup_dll_probe(elf_bytes: &[u8]) {
     }
     DLL_PROBE.set(DllProbe {
         base, fields,
+        board_dma_layout: layout["board_dma_stats"].clone(),
+        board_backend_layout: layout["board_uart_backend"].clone(),
         proof: json!({"elf_sha256":sha, "verification":layout["verification"], "offsets":layout["offsets"], "field_width_bytes":layout["field_width_bytes"]}),
     }).unwrap();
+}
+
+fn transport_snapshot(machine: &Machine<CortexM>, elf_bytes: &[u8]) -> Value {
+    let backend_address = labwired_loader::resolve_symbol_in_elf(elf_bytes, "board_uart_backend");
+    let backend = backend_address.map(|addr| machine.bus.read_u32(u64::from(addr)).unwrap());
+    let mut firmware_stats = serde_json::Map::new();
+    if let (Some(probe), Some(addr)) = (
+        DLL_PROBE.get(),
+        labwired_loader::resolve_symbol_in_elf(elf_bytes, "board_dma_stats"),
+    ) {
+        assert_eq!(
+            probe.board_backend_layout["width"].as_u64(),
+            Some(4),
+            "backend width must be ELF/DWARF verified"
+        );
+        let size = probe.board_dma_layout["size_bytes"]
+            .as_u64()
+            .expect("DMA stats need per-ELF DWARF layout");
+        let base = u64::from(addr);
+        assert!(base >= 0x2000_0000 && base + size <= 0x2002_4000);
+        for (name, field) in probe.board_dma_layout["fields"].as_object().unwrap() {
+            let offset = field["offset"].as_u64().unwrap();
+            assert_eq!(field["width"].as_u64(), Some(4));
+            assert!(offset + 4 <= size);
+            firmware_stats.insert(
+                name.clone(),
+                json!(machine.bus.read_u32(base + offset).unwrap()),
+            );
+        }
+    }
+    let model = machine
+        .bus
+        .find_peripheral_index_by_name("dma1")
+        .map(|idx| machine.bus.peripherals[idx].dev.snapshot())
+        .unwrap_or(Value::Null);
+    let channels = &model["observations"];
+    json!({
+        "backend":backend, "backend_symbol_address":backend_address,
+        "firmware_stats":firmware_stats,
+        "dma_model": {
+            "profile":model["profile"],
+            "rx_transfers":channels[0]["completed_items"],
+            "tx_transfers":channels[1]["completed_items"],
+            "channels":channels,
+            "count_boundary":"after the actual bus source read and successful destination write"
+        },
+        "provenance":"backend and driver counters read through ELF-resolved symbols and hash-bound DWARF; DMA counters are independently observed bus copies"
+    })
+}
+
+fn assert_expected_transport(observed: &Value) {
+    if let Ok(expected) = std::env::var("IOLINKI_G0_EXPECT_BACKEND") {
+        let expected: u64 = expected
+            .parse()
+            .expect("IOLINKI_G0_EXPECT_BACKEND is 0, 1 or 2");
+        assert!(expected <= 2);
+        assert_eq!(
+            observed["backend"].as_u64(),
+            Some(expected),
+            "missing/mismatched actual board_uart_backend"
+        );
+        if expected != 0 {
+            assert!(
+                !observed["firmware_stats"].as_object().unwrap().is_empty(),
+                "DMA transport needs actual firmware counters"
+            );
+            assert_eq!(observed["dma_model"]["profile"], "stm32g0");
+        }
+    }
 }
 
 fn dll_snapshot(machine: &Machine<CortexM>) -> Value {
@@ -458,8 +534,9 @@ fn real_g0_firmware_timed_cq_session() {
     }
     save_auxiliary(
         "startup-state",
-        &json!({"firmware_dll_timing_enforcement":firmware_timing, "dll":initial_dll}),
+        &json!({"firmware_dll_timing_enforcement":firmware_timing, "dll":initial_dll, "observed_transport":transport_snapshot(&machine, &elf_bytes)}),
     );
+    assert_expected_transport(&transport_snapshot(&machine, &elf_bytes));
     validate_timed_uart_clock(&machine.bus, "usart1").unwrap();
     assert_eq!(
         machine.bus.read_u32(0x40000028).unwrap() as u64 + 1,
@@ -550,16 +627,31 @@ fn real_g0_firmware_timed_cq_session() {
             "DPP TYPE2V/OD1 capabilitycode4"
         );
     }
+    let recovery_enabled = std::env::var("IOLINKI_G0_DMA_RECOVERY").is_ok_and(|v| v == "1");
+    let mut recovery_cases = Vec::new();
+    let operate_start = if recovery_enabled {
+        assert!(full_profile);
+        recovery_cases.push(dma_recovery::circular_startup(
+            &mut machine,
+            &master,
+            fmt,
+            &elf_bytes,
+        ));
+        machine.total_cycles + recovery
+    } else {
+        capability_start + recovery
+    };
     let (_, mut operate) = exchange_at(
         &mut machine,
         &master,
         fmt,
         request(vec![0x20, 0, 0x99]),
         1,
-        Some(capability_start + recovery),
+        Some(operate_start),
     );
     operate["phase"] = json!("PREOPERATE_DEVICE_OPERATE");
-    operate["actual_request_interval_us"] = json!(recovery as f64 * 1_000_000.0 / hz as f64);
+    operate["actual_request_interval_us"] =
+        json!((operate_start - capability_start) as f64 * 1_000_000.0 / hz as f64);
     records.push(operate);
     let mut cyclic_ta = Vec::new();
     let mut negative_controls = Vec::new();
@@ -670,15 +762,37 @@ fn real_g0_firmware_timed_cq_session() {
             records.push(timing);
         }
     }
+    if recovery_enabled {
+        let (recovery_replies, cases) =
+            dma_recovery::run(&mut machine, &master, fmt, &elf_bytes, recovery_cases);
+        records.extend(recovery_replies);
+        recovery_cases = cases;
+    }
     let fidelity = labwired_core::fidelity::report();
+    // The recovery test deliberately points RX CMAR at this unmapped address
+    // once. Keep the hit in the report and reject any other gap or duplicate.
+    let intentional_bus_fault = recovery_enabled
+        && fidelity.undecoded_instructions.is_empty()
+        && fidelity.unmapped_mmio.len() == 1
+        && fidelity
+            .unmapped_mmio
+            .get(&0x7000_0000)
+            .is_some_and(|gap| gap.count == 1 && gap.detail == "write");
     assert!(
-        fidelity.is_empty(),
+        if recovery_enabled {
+            intentional_bus_fault
+        } else {
+            fidelity.is_empty()
+        },
         "unmodelled firmware access: {fidelity}"
     );
     let report = json!({
         "profile": if full_profile { "type2v_pd32" } else { "reference_startup" },
         "firmware": elf, "cpu_hz": hz, "baud": baud,
         "observed_firmware_setup": observed_setup,
+        "observed_transport": transport_snapshot(&machine, &elf_bytes),
+        "dma_recovery_cases": recovery_cases,
+        "intentional_dma_bus_fault": if intentional_bus_fault { json!({"address":"0x70000000","access":"write","count":1,"source":"explicit RX DMA CMAR fault injection; retained in fidelity_gaps"}) } else { Value::Null },
         "firmware_dll_timing_enforcement": firmware_timing,
         "firmware_dll_initial": initial_dll,
         "firmware_dll_final": dll_snapshot(&machine),
@@ -735,5 +849,41 @@ fn real_g0_firmware_timed_cq_session() {
         if let Some(errors) = report["firmware_dll_final"]["values"]["dll.timing_errors"].as_u64() {
             assert_eq!(errors, 0, "firmware DLL timing monitor reported violations; inspect the preserved counter snapshot");
         }
+    }
+    assert_expected_transport(&report["observed_transport"]);
+    if report["observed_transport"]["backend"]
+        .as_u64()
+        .is_some_and(|backend| backend != 0)
+    {
+        let model = &report["observed_transport"]["dma_model"];
+        let replies: u64 = report["transactions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["reply"].as_array().unwrap().len() as u64)
+            .sum();
+        let requests: u64 = report["transactions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["request"].as_array().unwrap().len() as u64)
+            .sum();
+        assert_eq!(
+            model["tx_transfers"].as_u64(),
+            Some(replies),
+            "every reply octet must be a real DMA TDR write"
+        );
+        assert!(
+            model["rx_transfers"].as_u64().unwrap() >= requests,
+            "every request octet must enter RAM through DMA"
+        );
+        assert_eq!(
+            model["channels"][0]["last_source"].as_u64(),
+            Some(0x4001_3824)
+        );
+        assert_eq!(
+            model["channels"][1]["last_destination"].as_u64(),
+            Some(0x4001_3828)
+        );
     }
 }

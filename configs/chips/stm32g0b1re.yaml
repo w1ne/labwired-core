@@ -6,7 +6,8 @@
 # A fixed 64MHz operating-point run must validate RCC PLL + bus prescalers;
 # oscillator startup, dynamic clock transitions and flash wait states are not
 # timing claims. UART1/2, TIM2 and GPIO/EXTI are the supported IO-Link slice.
-# DMA/DMAMUX and GPIO EXTI SWIER/internal event lines are not modelled here.
+# DMA1 / DMAMUX outputs 0..6 support the USART1 RX50/TX51 request slice.
+# DMA2 / DMAMUX outputs 7..11 and GPIO EXTI SWIER/internal lines are unsupported.
 name: stm32g0b1re
 arch: arm
 core: cortex-m0+
@@ -163,6 +164,24 @@ peripherals:
   clock:
     reg: apbenr1
     bit: 0
+- id: dma1
+  type: dma
+  base_address: 0x40020000
+  size: 1KB
+  config:
+    profile: stm32g0
+  clock: {reg: ahbenr, bit: 0}
+- id: dmamux
+  type: dmamux
+  base_address: 0x40020800
+  size: 1KB
+  irq: 11
+  config:
+    dma: dma1
+    channels: 7
+    physical_channels: 12
+    requests: {usart1_rx: 50, usart1_tx: 51}
+  clock: {reg: ahbenr, bit: 0}
 - id: exti
   type: exti
   base_address: 0x40021800

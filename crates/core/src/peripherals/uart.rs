@@ -2676,8 +2676,11 @@ impl crate::Peripheral for Uart {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         if self.timed.is_some() {
             let now = self.timed_now();
+            let irq = self.timed_service(now);
+            let dma_signals = self.timed_dma_signals();
             return crate::PeripheralTickResult {
-                irq: self.timed_service(now),
+                irq,
+                dma_signals: (!dma_signals.is_empty()).then_some(dma_signals),
                 ..Default::default()
             };
         }
@@ -2820,10 +2823,12 @@ impl crate::Peripheral for Uart {
         }
         if self.timed.is_some() {
             let now = bus.current_cycle();
+            self.timed_event_fired();
             let raise = self.timed_service(now);
             let next = self.timed_claim_wake(now);
             return crate::sched::EventResult {
                 raise_own_irq: raise,
+                dma_signals: self.timed_dma_signals(),
                 reschedule_delay: next.map(|t| t - now),
                 ..Default::default()
             };

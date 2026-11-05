@@ -1298,6 +1298,15 @@ boards:
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
     # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
     # digests. RCC clock publication is opt-in and STM32G0-only; the existing
     # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
@@ -1772,7 +1781,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: aca3b3247d240bf53257995c9d6ef4398141cda9a345a7b517cacdf399fc2d4f
+    drift_ack_digest: 2f67afbca2f38eae45a3aa52b28985001b33ab2a0dc40c50b703f88473ee11b6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3429,6 +3438,15 @@ boards:
     drift_ack: 2026-11-01
 
   - id: nucleo-l476rg
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
     # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
     # digests. RCC clock publication is opt-in and STM32G0-only; the existing
     # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
@@ -3885,7 +3903,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 5062f49abedd74815fad2fda9d6b5d596f3c2b0d22b18b70dd2d022d7c35ab7d
+    drift_ack_digest: 2566aebdd4d3710ea4afc4f16d7541fed8479adf7e962b252420f7eabcbe457b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4534,6 +4552,15 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
     # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
     # digests. RCC clock publication is opt-in and STM32G0-only; the existing
     # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
@@ -4949,7 +4976,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 838ed58f5a74538c3e0bfdeda5908c9064487d8cf54789cf5fe0e4387aafbdb0
+    drift_ack_digest: d048302c796b6ba2cd436fcc8243c0f97adf10586d4547a056e7fce728275250
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5535,6 +5562,15 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f103
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
     # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
     # digests. RCC clock publication is opt-in and STM32G0-only; the existing
     # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
@@ -6004,7 +6040,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: efd782abde09a22e6842100ff4cd87cb1551c1f124d5d9b3bd24d031e7846973
+    drift_ack_digest: 78960e78c1828b5e75aa08d28ea1900a3bdabbe28c59e79eb788800e96a4d193
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6660,6 +6696,15 @@ boards:
     # UART register maps, byte paths and IRQ timing are unchanged. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
   - id: stm32f407
+    # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
+    # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
+    # existing constructors retain their legacy profile. The bus completion
+    # hook defaults to no-op. Timed UART adds real DMAR/DMAT requests, documented
+    # DDRE/OVRDIS receive policies and consumed-wake rearming; byte-stream
+    # capture paths retain their behavior. G0 DMA register/fault/reset tests,
+    # existing DMA walk/event differential and G071 DMAMUX gates pass. Real
+    # CMSIS/HAL ELF recovery and one-action tests are model evidence only.
+    # No live silicon capture; preserve capture dates, ack age and expiry.
     # 2026-11-05 (#1702): TIOL112 attachment changes the shared UART/RCC file
     # digests. RCC clock publication is opt-in and STM32G0-only; the existing
     # H5/L4/L0/F1/F4 RCC implementations are unchanged. UART EN/CQ gating and
@@ -7092,7 +7137,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 1a18597f5c7487021319ee0d937ce07fa32af822547e9b2f9925af90fa7233ec
+    drift_ack_digest: 37c8b28cb423baec9b08d7107e118004006c94090d0cadf1dec1c21f330a4dac
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

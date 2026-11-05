@@ -27,8 +27,11 @@
 //!   line (the edge pends the NVIC), and reported as a level to the bus so a
 //!   write that lowers it drops the pend.
 //!
-//! Not modelled here, and said so: DMA reception (CR3.DMAR — recorded on the
-//! timeline once when set), the IDLE and LIN-break flags, hardware flow
+//! DMA requests follow RXNE / TXE and are serviced by the configured DMA
+//! controller through real RDR/TDR bus accesses. DMA TC is separate from
+//! USART TC: the last TDR write can precede the last stop bit by two frames.
+//!
+//! Not modelled here: the IDLE and LIN-break flags, hardware flow
 //! control, 9-bit transmit data (the high bit of DR is not captured), and the
 //! APB prescaler (BRR is read in core clock cycles — true when PCLK = HCLK).
 
@@ -51,6 +54,9 @@ const CR1_OVER8: u32 = 1 << 15;
 // CR3.
 const CR3_EIE: u32 = 1 << 0;
 const CR3_DMAR: u32 = 1 << 6;
+const CR3_DMAT: u32 = 1 << 7;
+const CR3_OVRDIS: u32 = 1 << 12;
+const CR3_DDRE: u32 = 1 << 13;
 // SR.
 const SR_PE: u8 = 1 << 0;
 const SR_FE: u8 = 1 << 1;
@@ -82,7 +88,6 @@ pub(crate) struct TimedRegs {
     irq_prev: bool,
     /// The cycle our pending scheduler wake is for, if any.
     next_wake: Option<u64>,
-    dmar_noted: bool,
     tx_on_cq: bool,
     local_echo: Option<(u64, u16)>,
 }
@@ -374,12 +379,11 @@ impl Uart {
         true
     }
 
-    /// After a config register write: publish the new format and note DMA
-    /// reception once, since timed mode does not carry it out.
+    /// After a config register write: publish the new format and reset a
+    /// disabled UART. Request levels are derived from the live registers.
     pub(crate) fn timed_config_written(&mut self) {
         self.timed_publish();
         let now = self.timed_now();
-        let cr3 = self.cr3;
         let enabled = self.timed_enabled();
         if let Some(t) = &self.timed {
             let mut r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
@@ -388,11 +392,6 @@ impl Uart {
                     t.port.abort_tx(now);
                 }
                 *r = TimedRegs::default();
-            }
-            if cr3 & CR3_DMAR != 0 && !r.dmar_noted {
-                r.dmar_noted = true;
-                t.port
-                    .note_unmodelled(now, "USART DMA reception (CR3.DMAR)");
             }
         }
     }
@@ -512,8 +511,18 @@ impl Uart {
         }) {
             receive_format.rx_enabled = false; // shared CQ contention: no clean peer character
         }
-        let (loaded, overruns) = t.port.receive_due(now, &receive_format, r.rxne);
-        if overruns > 0 {
+        let overwrite = self.modern_timed() && cr3 & CR3_OVRDIS != 0;
+        // RM0444 Rev6 §33.8.4: DDRE=0 drops a faulty DMA item before
+        // setting RXNE. Apply the policy per character, not after a batch.
+        let drop_errors = self.modern_timed() && cr3 & CR3_DMAR != 0 && cr3 & CR3_DDRE == 0;
+        let (loaded, overruns, errors) =
+            t.port
+                .receive_due_policy(now, &receive_format, r.rxne, overwrite, drop_errors);
+        if self.modern_timed() {
+            r.pe |= errors & 1 != 0;
+            r.fe |= errors & 2 != 0;
+        }
+        if overruns > 0 && !overwrite {
             r.ore = true;
         }
         if let Some(d) = loaded {
@@ -532,7 +541,7 @@ impl Uart {
             let _ = due;
             r.local_echo = None;
             if fmt.rx_enabled {
-                if r.rxne {
+                if r.rxne && !overwrite {
                     r.ore = true;
                 } else {
                     r.rdr = value;
@@ -559,6 +568,14 @@ impl Uart {
             let c = c.max(now + 1);
             due = Some(due.map_or(c, |d| d.min(c)));
         };
+        // These are level requests: if the DMA is disabled or loses an
+        // arbitration slot, keep requesting until an RDR read / TDR write
+        // acknowledges the item. The G0 DMA coalesces the held level.
+        if self.timed_rx_dma_requested(&r, &fmt)
+            || (fmt.tx_enabled && self.cr3 & CR3_DMAT != 0 && r.tdr.is_none())
+        {
+            want(now + 1);
+        }
         if r.tx_active {
             want(r.shift_busy_until);
         }
@@ -573,6 +590,39 @@ impl Uart {
             want(c);
         }
         due
+    }
+
+    fn timed_rx_dma_requested(&self, r: &TimedRegs, fmt: &LineFormat) -> bool {
+        fmt.rx_enabled
+            && self.cr3 & CR3_DMAR != 0
+            && r.rxne
+            && !(self.modern_timed() && self.cr3 & CR3_DDRE != 0 && (r.pe || r.fe))
+    }
+
+    pub(crate) fn timed_dma_signals(&self) -> Vec<u32> {
+        let Some(t) = &self.timed else {
+            return Vec::new();
+        };
+        let r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
+        let fmt = self.timed_format();
+        let mut signals = Vec::new();
+        if self.timed_rx_dma_requested(&r, &fmt) {
+            signals.push(crate::DMA_SIGNAL_RX);
+        }
+        if fmt.tx_enabled && self.cr3 & CR3_DMAT != 0 && r.tdr.is_none() {
+            signals.push(crate::DMA_SIGNAL_TX);
+        }
+        signals
+    }
+
+    /// Consume the scheduled wake before recalculating the next deadline.
+    /// A bootstrap or stale event can arrive before the current deadline; it
+    /// must not leave a token that suppresses rearming after this event ends.
+    pub(crate) fn timed_event_fired(&self) {
+        if let Some(t) = &self.timed {
+            let mut r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
+            r.next_wake = None;
+        }
     }
 
     /// Ask for a wake at the next due cycle unless an earlier (or equal) one

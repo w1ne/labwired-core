@@ -71,8 +71,19 @@ firmware image measured against a 64 MHz timebase, divided APB, alternate UART
 kernel clocks and non-reset USART PRESC. Simulation time remains a fixed
 operating-point assumption; oscillator startup, changing clock frequency,
 flash wait-state execution penalties and IAR instruction timing are unproven.
-DMA/DMAMUX are not declared by this device slice. The timed UART reports
-CR3.DMAR as unsupported, so an IRQ/polling run cannot establish DMA coverage.
+The DMA extension declares DMA1 at `0x40020000` and seven modeled DMAMUX
+outputs at `0x40020800`. USART1 RX/TX request IDs are 50/51. The G0 DMA profile
+implements actual memory/RDR/TDR transfers, circular reload, HT/TC/TE flags,
+channel interrupt groups 9/10/11, disable/rearm, and reset. CNDTR and completion
+flags advance only after a successful bus copy. USART TC remains separate
+from DMA TC and follows the final stop bit. Timed USART DMA reception applies
+the documented DDRE and OVRDIS policies, including delayed receiver service.
+
+DMA2 is outside this slice. The physical DMAMUX block has twelve outputs;
+accessing the five unmodeled DMA2 outputs fails explicitly. Neither this
+extension nor its simulator tests establish silicon bus-contention timing,
+analog noise behavior, or a complete G0B1 DMA/DMAMUX validation. The example
+separates IRQ, CMSIS DMA and actual ST HAL DMA firmware evidence by ELF hash.
 
 ## How to run
 

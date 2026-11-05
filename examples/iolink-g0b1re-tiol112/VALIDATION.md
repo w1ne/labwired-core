@@ -148,7 +148,13 @@ correlation before promising a hardware maximum. Dynamic clock switching is
 outside the fixed operating-point model. TI's 4 µs enable/disable delays are
 configurable typical scenarios, not guaranteed bounds. Cable/voltage/current,
 protection, wake-current detection, EMC and conformance testing remain outside
-this digital run. DMA/DMAMUX are unsupported and absent from the descriptor.
+this digital run. The DMA extension adds the separately tested DMA1 profile
+and the first seven DMAMUX outputs to the descriptor. The historical IRQ
+measurements above do not validate DMA firmware. DMA2, arbitration under
+competing bus masters, analog noise injection and complete DMA/DMAMUX silicon
+validation remain outside this slice. See the README's separate CMSIS/HAL
+DMA matrix and same-instance fault diagnostic; each result must identify its
+own compiler, ELF, model source and actual backend.
 
 The full ISDU application service suite is separately exercised against the
 real stack in the companion protocol fixture; cyclic timing tests alone do

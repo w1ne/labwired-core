@@ -1,6 +1,6 @@
 # STM32G0B1RE + TIOL112 + timed IO-Link master
 
-This rig executes a real Cortex-M0+ ELF through the G0 USART1 interrupt path,
+This rig executes a real Cortex-M0+ ELF through the G0 USART1 driver path,
 the TIOL112 digital driver and a timed virtual master. It records the final
 request stop-bit end and the first reply start bit on CQ. The 32-byte reply is
 selected from the current one-byte PDout, so a stale previous-cycle selection
@@ -31,6 +31,7 @@ COM3 runs use distinct ELF hashes and reports.
 cargo test -p labwired-core --test g0_tiol112 --test modern_uart_timing
 cargo test -p labwired-core --test iolink_master_config
 cargo test -p labwired-core --features event-scheduler --test g0_tiol112 --test modern_uart_timing
+cargo test -p labwired-core --features event-scheduler --test stm32g0_uart_dma --test stm32g0_dmamux_generators --test stm32_dma_walk_differential
 ```
 
 ## Run the one-action functional fixture
@@ -52,7 +53,7 @@ This same path is exercised against a real Cortex-M0+ ELF by:
 
 ```bash
 IOLINKI_G0_ELF=/absolute/path/protocol-rig-64mhz.elf \
-cargo test -p labwired-core --test iolink_master_config \
+cargo test -p labwired-core --features event-scheduler --test iolink_master_config \
   real_type2v_elf_runs_the_same_one_action_uart_fixture -- --ignored --nocapture
 ```
 
@@ -124,3 +125,77 @@ That is a prerequisite result and cannot establish the 64 MHz PD32 behavior.
 
 See [VALIDATION](VALIDATION.md) for measured/assumed boundaries,
 [sources](REQUIRED_DOCS.md), and [external components](EXTERNAL_COMPONENTS.md).
+
+## CMSIS DMA and ST HAL DMA profiles
+
+The companion firmware selects `IOLINK_G0_UART_BACKEND=0` for its IRQ port,
+`1` for CMSIS DMA, or `2` for ST HAL UART/DMA. The HAL profile links the actual
+vendor UART/DMA implementation; it does not replace the board's CMSIS clock,
+GPIO or TIM2 initialization. Build each backend and COM mode as a separate
+image with `IOLINK_G0_SYSCLK_HZ=64000000`, `IOLINK_G0_PROTOCOL_PROFILE=1`,
+`IOLINK_RIG_TIMING_ENFORCE=1` and `IOLINK_RIG_COM=2|3`. Follow the companion
+README for the pinned CMSIS/HAL dependencies. GCC/newlib and diagnostic
+Clang builds are separate evidence lanes.
+
+| Function | Exact DMA path |
+|---|---|
+| Receive | USART1 RDR → DMA1 channel 1 → 128-byte circular RAM buffer |
+| Transmit | RAM → DMA1 channel 2 → USART1 TDR, normal mode |
+| Request routing | DMAMUX channel 0 / request 50 RX; channel 1 / request 51 TX |
+| Interrupts | DMA1 channel 1 IRQ9; channels 2/3 IRQ10; USART1 IRQ27 |
+| Driver release | USART TC after the last stop bit, separately from DMA TC |
+
+The strict G0 DMA model advances CNDTR, memory pointers and HT/TC only after
+an actual successful bus transfer. A failed transfer raises TE instead. Its
+observed channel item counts are independent of the firmware counters. The
+report resolves `board_uart_backend` and `board_dma_stats` from the ELF and
+uses that ELF's hash-bound DWARF layout; a label alone cannot satisfy the DMA
+assertions. The fixture requires every reply byte to reach TDR through DMA
+and every request byte to reach RAM through DMA.
+
+For a bounded probe, add `IOLINKI_G0_EXPECT_BACKEND=1|2` and the matching
+`IOLINKI_G0_DLL_LAYOUT` to the timed command above. Use
+`--features event-scheduler`, the feature enabled by the browser and default
+CLI. The optional matrix runner builds/runs this same test and requires both
+DMA backends at both COM modes:
+
+```bash
+python3 scripts/run-iolink-uart-matrix.py /absolute/path/images.json \
+  --output /absolute/path/results
+```
+
+Each `images` entry supplies `id`, `backend` (`cmsis-dma` or `hal-dma`),
+`baud`, `elf`, `sha256`, `layout` and the explicit supply assumption
+`power_model: ideal_vdd`. Source/compiler/HAL provenance fields are retained.
+The runner checks file hashes before and after each invocation, observes the
+executing backend, checks DMA/UART completion counts against actual replies,
+and refuses source changes during a matrix. Short or selected runs are marked
+diagnostic, not a complete four-profile result.
+
+### Separate fault and circular-buffer diagnostic
+
+Set `IOLINKI_G0_DMA_RECOVERY=1` on a bounded timed run to exercise the same
+firmware instance through parity, framing and DMA bus errors. Only the final
+character of an otherwise checksum-valid request is damaged. The driver must
+reject it, record an actual UART error, rearm itself and answer a fresh request
+with the current PD32 payload. The DMA error case deliberately writes an
+unmapped destination into the active receive channel; the firmware's TE path
+must restore its buffer address and resume reception. The single intentional
+write to `0x70000000` remains visible in `fidelity_gaps`; any other unmapped
+access, extra hit or undecoded instruction still fails.
+
+Successful replies rearm the receive ring. To test a full ring lap, the
+optional diagnostic first sends 66 checksum-valid `0F 2D` legacy transition
+commands after the real DPP reads and before DeviceOperate. They are silent
+in the stack's PREOPERATE/ESTAB_COM path and are spaced by 100 Tbit. The test
+requires 132 independent DMA transfers and 132 firmware-consumed bytes, one
+HT event, one TC event, CNDTR=124, no overrun and no rearm. It then completes
+normal DeviceOperate and requires the usual current-selector replies. This
+legacy transition sequence is a transport diagnostic, not an IO-Link
+conformance sequence. There is no reset, firmware reload, forced DLL state,
+masked fallback policy or fabricated DMA completion.
+
+Recovery results are kept separately from the clean matrix. DMA2, analog
+noise injection, bus-arbitration contention and silicon timing correlation
+remain outside the admitted model. Live byte-stream success does not
+establish C/Q timing; the native waveform report supplies that separate gate.

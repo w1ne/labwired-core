@@ -8,11 +8,18 @@ on:
       - 'crates/core/src/peripherals/components/iolink_master.rs'
       - 'crates/core/src/peripherals/stm32g0_clock.rs'
       - 'crates/core/src/peripherals/rcc.rs'
+      - 'crates/core/src/peripherals/dma.rs'
+      - 'crates/core/src/peripherals/dmamux.rs'
+      - 'crates/core/src/peripherals/generic_factory.rs'
+      - 'crates/core/src/peripheral.rs'
+      - 'crates/core/src/bus/tick.rs'
       - 'crates/core/src/peripherals/uart*'
       - 'crates/core/src/peripherals/uart/**'
       - 'crates/core/src/network/timed_uart.rs'
       - 'crates/core/tests/g0_*'
       - 'crates/core/tests/iolink_master_config.rs'
+      - 'crates/core/tests/stm32g0_uart_dma.rs'
+      - 'crates/core/tests/common/g0_dma_recovery.rs'
       - '.github/workflows/g0-tiol112.yml'
   workflow_dispatch:
 permissions:
@@ -26,4 +33,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p labwired-core --test g0_tiol112 --test modern_uart_timing --test g0_uart_pad --test g0_exti
       - run: cargo test -p labwired-core --test iolink_master_config
-      - run: cargo test -p labwired-core --features event-scheduler --test g0_tiol112 --test modern_uart_timing
+      - run: cargo test -p labwired-core --test stm32g0_uart_dma --test stm32g0_dmamux_generators
+      - run: cargo test -p labwired-core --features event-scheduler --test g0_tiol112 --test modern_uart_timing --test stm32g0_uart_dma --test stm32_dma_walk_differential
