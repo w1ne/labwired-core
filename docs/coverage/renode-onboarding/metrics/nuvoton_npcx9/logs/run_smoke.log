@@ -1,5 +1,5 @@
-2026-11-05T04:25:47.962490Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
-2026-11-05T04:25:47.963304Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-05T04:38:54.706920Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
+2026-11-05T04:38:54.707642Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · nuvoton_npcx9-smoke · 100000 steps · 0.00s

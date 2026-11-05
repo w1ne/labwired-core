@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001823">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001804">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="74deaf136c48edaf4200062a1403dc1ef03a7c7a6e9dedd661b1b4331dbe6f15"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001823">
+  <testcase classname="labwired" name="run" time="0.001804">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EOS S3 Cortex-M4F PL011 smoke" time="0.000000">
   </testcase>
