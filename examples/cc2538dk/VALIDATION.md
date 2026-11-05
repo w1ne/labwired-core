@@ -24,6 +24,7 @@ ELFs are not run. No wider Renode parity claim is made.
 | SYS_CTRL gating effect on other blocks | **not modelled** | gates are storage only; UART0 works with the gate clear too |
 | UART0 (PL011-compatible) TX @ 115200 from 16 MHz, `IBRD 8` / `FBRD 44` | smoke-tested | `uart0 … ibrd=8 fbrd=44` + heartbeat lines on the console sink |
 | GPIO address-masked `GPIO_DATA` write + read | smoke-tested | `led=yellow on pin=1 leds=02` … (one masked store per LED; the nibble read proves no other pin moved); unit tests cover the SWRU319C Figure 9-2/9-3 examples |
+| Synthetic NTC and diode netlists on PC4/PC5 | co-simulation tested | `cosim_cc2538_analog.rs`: solved voltages cross the descriptor's GPIO thresholds and the test asserts GPIO DATA levels, including Schmitt-state retention; this does not cover the declared-stub SoC ADC |
 | GPIO `GPIO_DIR` / `GPIO_AFSEL` | smoke-tested | LEDs driven only after DIR; PA0/PA1 handed to UART0 |
 | Key inputs at the reset IOC pull-up | smoke-tested | `keys select=1 left=1 right=1 up=1 down=1` |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
