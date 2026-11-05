@@ -1,5 +1,5 @@
-2026-11-05T12:57:42.222924Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/slwstk6220a.yaml
-2026-11-05T12:57:42.223711Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-05T13:15:50.332758Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/slwstk6220a.yaml
+2026-11-05T13:15:50.333532Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · slwstk6220a-smoke · 100000 steps · 0.00s

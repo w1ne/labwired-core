@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "89cc1f21c638eb214ee85ed344e37129f47215dfcc5ef48af822738e10e59944",
+  "firmware_hash": "b6d76b7677093d8d09542c678bd4f496770a19c99cda401d78e347c9878fed4f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv.yaml",

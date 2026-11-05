@@ -890,6 +890,14 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv_verilated_liteuart-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv_verilated_liteuart.yaml
+          # The imported CFU profile runs the local RV32IM, memory, LiteX UART,
+          # and timer subset; external CFU co-simulation is not included.
+          - id: litex_vexriscv_verilated_cfu
+            crate: firmware-litex-vexriscv-smoke
+            features: no-unmodelled-spi-probe,verilated-cfu-profile
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_verilated_cfu-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_verilated_cfu.yaml
           - id: litex_ibex
             crate: firmware-litex-ibex-smoke
             target: riscv32imc-unknown-none-elf

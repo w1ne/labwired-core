@@ -128,7 +128,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "12448249434db8db314a2baa092b0c410110c216e0dfd1fe1de9cf1c8e884102",
+  "firmware_hash": "e0544de698e760600689931e7e902049a33fec43efcb3f9fc28147aae7f703cf",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv_verilated_liteuart.yaml",

@@ -32,37 +32,93 @@ use panic_halt as _;
 use riscv_rt::entry;
 
 /// LiteX UART CSR window (rxtx @ +0x00, txfull @ +0x04).
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const UART_RXTX: *mut u32 = 0xf000_3000 as *mut u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const UART_RXTX: *mut u32 = 0xe000_1000 as *mut u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const UART_RXTX: *mut u32 = 0x6000_1800 as *mut u32;
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const UART_TXFULL: *const u32 = 0xf000_3004 as *const u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const UART_TXFULL: *const u32 = 0xe000_1004 as *const u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const UART_TXFULL: *const u32 = 0x6000_1804 as *const u32;
 
 /// LiteX timer CSR window (`litex/soc/cores/timer.py`): load @ +0x00,
 /// reload @ +0x04, en @ +0x08, update_value @ +0x0C, value @ +0x10,
 /// ev_status @ +0x14, ev_pending @ +0x18, ev_enable @ +0x1C.
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const TIMER_LOAD: *mut u32 = 0xf000_2800 as *mut u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const TIMER_LOAD: *mut u32 = 0xe000_2800 as *mut u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const TIMER_LOAD: *mut u32 = 0x6000_2800 as *mut u32;
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const TIMER_RELOAD: *mut u32 = 0xf000_2804 as *mut u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const TIMER_RELOAD: *mut u32 = 0xe000_2804 as *mut u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const TIMER_RELOAD: *mut u32 = 0x6000_2804 as *mut u32;
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const TIMER_EN: *mut u32 = 0xf000_2808 as *mut u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const TIMER_EN: *mut u32 = 0xe000_2808 as *mut u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const TIMER_EN: *mut u32 = 0x6000_2808 as *mut u32;
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const TIMER_EV_STATUS: *const u32 = 0xf000_2814 as *const u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const TIMER_EV_STATUS: *const u32 = 0xe000_2814 as *const u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const TIMER_EV_STATUS: *const u32 = 0x6000_2814 as *const u32;
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(feature = "verilated-cfu-profile")]
+const TIMER_EV_PENDING: *mut u32 = 0xf000_2818 as *mut u32;
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    feature = "verilated-liteuart-profile"
+))]
 const TIMER_EV_PENDING: *mut u32 = 0xe000_2818 as *mut u32;
-#[cfg(not(feature = "verilated-liteuart-profile"))]
+#[cfg(all(
+    not(feature = "verilated-cfu-profile"),
+    not(feature = "verilated-liteuart-profile")
+))]
 const TIMER_EV_PENDING: *mut u32 = 0x6000_2818 as *mut u32;
 
 /// An unmodelled LiteX CSR window (the SPI-flash controller at 0x60005000).
@@ -99,7 +155,10 @@ fn put_hex32(value: u32) {
 }
 
 /// Keep the M-extension check explicit so constant folding cannot replace it.
-#[cfg(feature = "verilated-liteuart-profile")]
+#[cfg(any(
+    feature = "verilated-liteuart-profile",
+    feature = "verilated-cfu-profile"
+))]
 #[inline(never)]
 fn multiply(left: u32, right: u32) -> u32 {
     let result: u32;
@@ -170,7 +229,10 @@ fn timer_one_shot(cycles: u32) {
 #[entry]
 fn main() -> ! {
     puts("LITEX VEXRISCV SMOKE\n");
-    #[cfg(feature = "verilated-liteuart-profile")]
+    #[cfg(any(
+        feature = "verilated-liteuart-profile",
+        feature = "verilated-cfu-profile"
+    ))]
     {
         puts("cpu=rv32im uart=litex-csr-model\n");
         puts("mul=");

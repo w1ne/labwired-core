@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml",
   "system": "configs/systems/onboarding/stm32f4_discovery-kit.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T12:57:54Z",
-  "finished_at_utc": "2026-11-05T12:57:56Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1884,
+  "started_at_utc": "2026-11-05T13:16:02Z",
+  "finished_at_utc": "2026-11-05T13:16:04Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2020,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.279,
-    "build_firmware": 0.166,
-    "run_smoke": 1.429
+    "build_cli": 0.291,
+    "build_firmware": 0.264,
+    "run_smoke": 1.456
   },
   "stages_ms": {
-    "build_cli": 279,
-    "build_firmware": 166,
-    "run_smoke": 1429
+    "build_cli": 291,
+    "build_firmware": 264,
+    "run_smoke": 1456
   }
 }
