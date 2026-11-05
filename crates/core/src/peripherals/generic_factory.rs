@@ -422,6 +422,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
     // staged onboarding/ambiq-apollo4 descriptor, which keeps its placeholder.
     "apollo4_gpio",
+    "apollo4_adc",
     "apollo4_pwrctrl",
     "apollo4_cpu",
     // NXP S32K3 SIUL2: MSCR pad mux + GPDO/GPDI/PGPDO/PGPDI/MPGPDO GPIO.
@@ -1820,6 +1821,7 @@ pub fn try_build(
         "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
+        "apollo4_adc" => Box::new(crate::peripherals::apollo4_adc::Apollo4Adc::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),

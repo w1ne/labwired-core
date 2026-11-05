@@ -14,10 +14,16 @@ Authoritative sources used by this example (retrieved 2026-10-30):
 The chip descriptor (`configs/chips/amap42kp.yaml`) carries the same values
 transcribed with its own citations; this package does not restate them.
 
-Not consulted: the Apollo4 Plus SoC datasheet register chapters directly (the
-CMSIS header is generated from the same register database) and the EVB
-schematic (the board wiring is taken from the Zephyr board port, which Ambiq
-maintains).
+## ADC model sources (consulted 2026-11-05)
+
+| Doc | Used for |
+| :--- | :--- |
+| [Apollo4 Plus SoC Datasheet v1.6.0](https://contentportal.ambiq.com/documents/20123/388415/Apollo4-Plus-SoC-Datasheet.pdf) | General-purpose ADC channel count, single-ended input, 1.19 V reference, scan modes and FIFO format |
+| [Apollo4 Family Programmer's Guide v7.0](https://ambiq.com/wp-content/uploads/2022/10/Apollo4-Family-Programmers-Guide.pdf) | Software-trigger value, enabled-slot scans, FIFO count/slot fields, 14.6 result format and FIFO pop behavior |
+| [Apollo4 Plus CMSIS header `apollo4p.h`](https://github.com/zephyrproject-rtos/hal_ambiq/blob/main/CMSIS/AmbiqMicro/Include/apollo4p.h) | ADC register offsets and CFG/slot bit positions |
+
+Not consulted: the EVB schematic. The EVB board wiring in this package is
+taken from the Zephyr board port, which Ambiq maintains.
 
 Open items: the boot ROM / SBL, CLKGEN, the PL011 `CR` storage gap and the
 unmodelled blocks are the explicit L1 boundary, not documentation gaps.

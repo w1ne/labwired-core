@@ -6,13 +6,13 @@ a board-specific test solves an analog device/netlist, routes the solved signal 
 profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
 traces without an ADC conversion, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 14 have end-to-end analog coverage; 89 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 15 have end-to-end analog coverage; 88 have no end-to-end analog coverage.** Each round selects the next uncovered profile; when its ADC was a stub, the round adds the model slice needed to route an explicit ADC-channel netlist. Profiles with an unmodeled ADC remain listed as uncovered.
 
 | System profile | End-to-end proof |
 |---|---|
 | `adafruit-feather-esp32-v2` | [`cosim_esp32_analog_diode.rs`](../crates/core/tests/cosim_esp32_analog_diode.rs)::`feather_esp32_diode_netlist_reaches_sens_sar_channel_and_one_shot_result` |
 | `adxl345-sensor-lab` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`adxl345_sensor_lab_diode_netlist_reaches_pa6_adc1_end_to_end` |
-| `apollo4p-evb` | **NO E2E analog coverage** |
+| `apollo4p-evb` | [`cosim_apollo4_analog.rs`](../crates/core/tests/cosim_apollo4_analog.rs)::`apollo4p_evb_ntc_and_diode_netlists_reach_adc_slots_and_scan_fifo` — generic Beta NTC and unrelated Shockley diode are solved into ADC SE0/SE1 and asserted through the scan FIFO; adjacent SE2 is checked undriven |
 | `arduino-mega-2560` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end` |
 | `arduino-nano-33-ble` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_nano_33_ble_ntc_netlist_reaches_saadc_ain0_end_to_end` — explicit SAADC AIN0 route and two-channel EasyDMA scan |
 | `arduino-nano` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_nano_ntc_netlist_reaches_pc0_adc0_end_to_end` |
@@ -114,4 +114,4 @@ Current inventory: **103 profiles; 14 have end-to-end analog coverage; 89 have n
 | `teensy-41` | **NO E2E analog coverage** |
 | `vegaboard-ri5cy` | **NO E2E analog coverage** |
 
-The EK-RA6M5 and EK-RA8M1 proofs reuse the same generic Beta NTC and Shockley diode netlists and explicit RA ADC12 channel routing; both profiles lack pin-to-ADC aliases for these channels. The shared fixture is [examples/ek-ra6m5/analog-ntc-system.yaml](../examples/ek-ra6m5/analog-ntc-system.yaml).
+The EK-RA6M5 and EK-RA8M1 proofs reuse the same generic Beta NTC and Shockley diode netlists and explicit RA ADC12 channel routing; both profiles lack pin-to-ADC aliases for these channels. The shared fixture is [examples/ek-ra6m5/analog-ntc-system.yaml](../examples/ek-ra6m5/analog-ntc-system.yaml). Apollo4 Plus uses the same generic analog adapter with an explicit channel route; its model currently covers single scans of external slots and FIFO output.

@@ -27,9 +27,12 @@ Ambiq dump).
     their peripherals. The PL011 UART model does not store `CR`, so the
     Ambiq `CLKEN`/`CLKSEL` UART clock selection is written but not checked.
     Non-GPIO pad functions (`FNCSEL` ≠ 3) are not routed, and GPIO interrupts
-    are not raised. CLKGEN, MCUCTRL, RSTGEN, IOM0–7, MSPI0–2, ADC, timers,
-    STIMER, RTC, WDT, security, crypto, GPU/display, SDIO, USB and audio are
-    declared stubs. There is no silicon capture: **SIM-DERIVED**.
+    are not raised. The ADC models software-triggered single scans of external
+    inputs and the result FIFO; board pad muxing to ADC pins, DMA, comparator,
+    timer-trigger and low-power behavior are not modelled. CLKGEN, MCUCTRL,
+    RSTGEN, IOM0–7, MSPI0–2, timers, STIMER, RTC, WDT, security, crypto,
+    GPU/display, SDIO, USB and audio are declared stubs. There is no silicon
+    capture: **SIM-DERIVED**.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -63,10 +66,11 @@ Ambiq dump).
 | GPIO | `0x4001_0000` | modelled (`apollo4_gpio`) — PADKEY, PINCFG, RD/WT/WTS/WTC/EN banks |
 | UART0 (console) | `0x4001_C000` | modelled — PL011 layout, IRQ 15 |
 | UART1–3 | `0x4001_D000`–`0x4001_F000` | modelled — same layout, unexercised |
+| ADC | `0x4003_8000` | modelled (`apollo4_adc`) — software single scans, routed external inputs, FIFO; see [analog NTC and diode fixture](../../examples/apollo4p-evb/analog-ntc-diode-system.yaml) |
 | LEDs | LED0 GPIO30, LED1 GPIO90, LED2 GPIO97 | modelled GPIO — active low, push-pull |
 | Buttons | BTN0 GPIO18, BTN1 GPIO19 | modelled GPIO input — active low, PULLCFG pull-up |
 | UART0 VCOM | GPIO60 (TX) / GPIO47 (RX), FNCSEL 4 | simulator captures the UART0 stream; the J-Link bridge is not modelled |
-| CLKGEN / MCUCTRL / RSTGEN / IOM / MSPI / ADC / timers / RTC / WDT / security / crypto / GPU / display / SDIO / USB / audio | see descriptor | `type: stub` |
+| CLKGEN / MCUCTRL / RSTGEN / IOM / MSPI / timers / RTC / WDT / security / crypto / GPU / display / SDIO / USB / audio | see descriptor | `type: stub` |
 
 ## Boot path
 

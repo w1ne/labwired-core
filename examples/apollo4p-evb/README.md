@@ -3,8 +3,9 @@
 The [Ambiq Apollo4 Plus EVB](https://ambiq.com/apollo4-plus/) (ordering code
 **AMAP4PEVB**): an **AMAP42KP-KBR** Apollo4 Plus SoC (Cortex-M4F, up to
 192 MHz, 2 MiB MRAM, 2.75 MiB RAM) with an on-board SEGGER J-Link. This is the
-**UART+LED L1 slice** and the first Ambiq part — the rest of the SoC is
-declared stubs.
+**UART+LED L1 slice** and the first Ambiq part. The general-purpose ADC also
+has a simulation-only single-scan and FIFO model for explicit analog co-sim
+channel routes.
 
 ## What runs here
 
@@ -29,6 +30,18 @@ A bare-register smoke firmware (`crates/firmware-apollo4p-evb-smoke`) that:
 The image is linked at `0x0001_8000`, after the secure bootloader, so the
 same ELF is laid out the way the Apollo4 Plus SBL expects. The simulator
 fast-boots it at that vector table.
+
+### Analog co-simulation
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes a generic
+Beta NTC divider and an unrelated Shockley diode load line to ADC channels 0
+(SE0) and 1 (SE1). The ADC input routes are explicit because this profile does
+not yet route ADC pad functions through GPIO. Run the end-to-end netlist and
+FIFO proof with:
+
+```bash
+cargo test -p labwired-core --test cosim_apollo4_analog -- --nocapture
+```
 
 ### Stock Zephyr hello_world
 
@@ -111,7 +124,9 @@ hb=1 led0=0 led1=1 led2=1
 - The **pad mux** for non-GPIO functions is not routed: `FNCSEL 4` on
   GPIO60/47 is stored, and the console model does not depend on it.
 - **GPIO interrupts** are never raised (software can only set/clear STAT).
-- **CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT,
+- **ADC pad muxing, DMA, comparator, timer-trigger and low-power behavior**
+  are not modelled; analog co-simulation uses an explicit ADC channel route.
+- **CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, timers, STIMER, RTC, WDT,
   security, crypto, GPU/display, SDIO, USB, audio** are declared stubs.
 
 See `VALIDATION.md` for the tier table.
