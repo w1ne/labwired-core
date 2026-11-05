@@ -1,0 +1,41 @@
+# ESP32-C61 HP RISC-V profile for the ESP32-C61-DevKitC-1 v2.0 UART smoke.
+# The focused model exposes only UART0, used by the board's USB-UART bridge.
+name: "esp32c61"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  # ESP-IDF SOC_IROM_LOW; the N8R2 module has 8 MB SPI flash.
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  # ESP-IDF SOC_IRAM_LOW..SOC_IRAM_HIGH: 320 KiB HP SRAM.
+  base: 0x40800000
+  size: "320KB"
+memory_regions:
+  # 256 KiB mask ROM address window. This fast-boot profile does not execute
+  # the Espressif ROM or model its helpers.
+  - name: "rom"
+    base: 0x40000000
+    size: "256KB"
+    image_env: "LABWIRED_ESP32C61_ROM"
+peripherals:
+  # C61 PCR keeps UART0_CONF at +0x00, UART0_SCLK_CONF at +0x04 and the same
+  # APB/function-clock bits as C5/C6. The C6 PCR model supplies the register
+  # storage and enforces the UART0 APB clock gate used by this smoke.
+  - id: "pcr"
+    type: "esp32c6_pcr"
+    base_address: 0x60096000
+    size: "4KB"
+  # C61 UART0's FIFO/register head matches the C6 map through UART_ID at +0x9C.
+  # IRQ 40 is ETS_UART0_INTR_SOURCE in ESP-IDF's C61 interrupts.h.
+  - id: "uart0"
+    type: "esp32c6_uart"
+    irq: 40
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/uart0.yaml"

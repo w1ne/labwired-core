@@ -1,0 +1,10 @@
+# ESP32-C61-DevKitC-1 v2.0 smoke: exercise UART0 through its TX FIFO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-devkitc-smoke"
+  system: "../../configs/systems/esp32c61-devkitc.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ESP32_C61_UART0_OK"
+  - expected_stop_reason: max_steps

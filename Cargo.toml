@@ -37,6 +37,7 @@ members = [
     "crates/firmware-esp32c6-demo",
     "crates/firmware-esp32c6-bme280-smoke",
     "crates/firmware-esp32c5-devkitc-smoke",
+    "crates/firmware-esp32c61-devkitc-smoke",
     "crates/firmware-esp32h2-demo",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
@@ -365,6 +366,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-esp32c6-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c61-devkitc-smoke]
 codegen-units = 1
 opt-level = "s"
 

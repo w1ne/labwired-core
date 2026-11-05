@@ -1,0 +1,28 @@
+{
+  "target_id": "esp32c61-devkitc",
+  "status": "pass",
+  "crate": "firmware-esp32c61-devkitc-smoke",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/esp32c61-devkitc/onboarding-smoke.yaml",
+  "system": "configs/systems/esp32c61-devkitc.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T21:31:54Z",
+  "finished_at_utc": "2026-11-05T21:33:21Z",
+  "elapsed_seconds": 88,
+  "elapsed_ms": 87111,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 82.239,
+    "build_firmware": 4.087,
+    "run_smoke": 0.772
+  },
+  "stages_ms": {
+    "build_cli": 82239,
+    "build_firmware": 4087,
+    "run_smoke": 772
+  }
+}
