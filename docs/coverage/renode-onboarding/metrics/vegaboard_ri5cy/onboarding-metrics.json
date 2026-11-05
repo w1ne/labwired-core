@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/vegaboard_ri5cy-smoke.yaml",
   "system": "configs/systems/onboarding/vegaboard_ri5cy.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T07:44:09Z",
-  "finished_at_utc": "2026-11-05T07:44:10Z",
+  "started_at_utc": "2026-11-05T08:04:44Z",
+  "finished_at_utc": "2026-11-05T08:04:45Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1337,
+  "elapsed_ms": 1324,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.292,
-    "build_firmware": 0.171,
+    "build_cli": 0.283,
+    "build_firmware": 0.166,
     "run_smoke": 0.863
   },
   "stages_ms": {
-    "build_cli": 292,
-    "build_firmware": 171,
+    "build_cli": 283,
+    "build_firmware": 166,
     "run_smoke": 863
   }
 }

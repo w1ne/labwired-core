@@ -2405,6 +2405,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-ut32m0r500-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-vegaboard-ri5cy-smoke"
 version = "0.1.0"
 dependencies = [

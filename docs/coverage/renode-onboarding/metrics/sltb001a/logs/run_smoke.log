@@ -1,5 +1,5 @@
-2026-11-05T07:43:30.928976Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sltb001a.yaml
-2026-11-05T07:43:30.929787Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-05T08:04:05.037397Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sltb001a.yaml
+2026-11-05T08:04:05.038265Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · sltb001a-smoke · 100000 steps · 0.00s

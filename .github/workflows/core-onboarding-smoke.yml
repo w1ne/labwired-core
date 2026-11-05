@@ -45,6 +45,8 @@ on:
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-starfive-jh7100-smoke/**"
+      - "crates/firmware-ut32m0r500-smoke/**"
+      - "examples/renode-onboarding/ut32m0r500-smoke.yaml"
       - "crates/firmware-kendryte-k210-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-ezr32hg320-smoke/**"
@@ -194,6 +196,14 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/s32k118-smoke.yaml
             system: configs/systems/onboarding/s32k118.yaml
+          # UT32M0R500 is bounded to its sourced M0+ core, code flash, SRAM,
+          # and modeled Gaisler UART0. The other imported peripheral windows
+          # are omitted from this profile.
+          - id: ut32m0r500
+            crate: firmware-ut32m0r500-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/ut32m0r500-smoke.yaml
+            system: configs/systems/onboarding/ut32m0r500.yaml
           # The imported imxrt500 scaffold is narrowed to the MIMXRT595S
           # Cortex-M33, XIP/SRAM, modeled clock/reset/pin control, GPIO, and
           # FLEXCOMM0 path exercised by this exact-system smoke.

@@ -1,5 +1,5 @@
-2026-11-05T07:43:24.874318Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s16c.yaml
-2026-11-05T07:43:24.875598Z  INFO labwired_loader: ELF Entry Point: 0x400401
+2026-11-05T08:03:57.744908Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s16c.yaml
+2026-11-05T08:03:57.746187Z  INFO labwired_loader: ELF Entry Point: 0x400401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · sam4s16c-smoke · 100000 steps · 0.00s

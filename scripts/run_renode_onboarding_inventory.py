@@ -48,6 +48,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv64imac-unknown-none-elf",
         "script": "examples/renode-onboarding/starfive-jh7100-smoke.yaml",
     },
+    "ut32m0r500": {
+        "crate": "firmware-ut32m0r500-smoke",
+        "target": "thumbv6m-none-eabi",
+        "script": "examples/renode-onboarding/ut32m0r500-smoke.yaml",
+    },
     "litex_vexriscv_linux": {
         "crate": "firmware-litex-vexriscv-linux-smoke",
         "target": "riscv32im-unknown-none-elf",
