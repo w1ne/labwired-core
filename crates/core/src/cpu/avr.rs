@@ -58,6 +58,8 @@ pub const SRAM_START: u16 = 0x0100;
 pub enum AvrModel {
     #[default]
     Atmega328p,
+    /// ATmega328PB shares the 328P core geometry and adds a second USART.
+    Atmega328pb,
     Atmega1281,
     Atmega2560,
     Attiny202,
@@ -96,7 +98,8 @@ impl AvrModel {
     /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
     /// 256 KB three-byte-PC mega core; the listed tinyAVR 0-series parts
     /// select the AVRxt data map and their exact flash/SRAM geometry. Other
-    /// names default to the ATmega328P.
+    /// names default to the ATmega328P. ATmega328PB is matched explicitly so
+    /// its second USART is not silently treated as the 328P's unused I/O.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
         if n.contains("attiny202") || n.contains("attiny 202") {
@@ -155,13 +158,15 @@ impl AvrModel {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
+        } else if n.contains("328pb") {
+            AvrModel::Atmega328pb
         } else {
             AvrModel::Atmega328p
         }
     }
     pub fn flash_size(self) -> usize {
         match self {
-            AvrModel::Atmega328p => FLASH_SIZE,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
@@ -181,7 +186,7 @@ impl AvrModel {
     }
     pub fn sram_start(self) -> u16 {
         match self {
-            AvrModel::Atmega328p => SRAM_START,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
@@ -205,7 +210,7 @@ impl AvrModel {
     }
     pub fn ramend(self) -> u16 {
         match self {
-            AvrModel::Atmega328p => RAMEND,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             AvrModel::Attiny202
             | AvrModel::Attiny204
@@ -232,7 +237,7 @@ impl AvrModel {
     /// at 0x1_002F..0x1_0034, where the 328P keeps its 8-channel window).
     pub fn adc_input_base(self) -> u64 {
         match self {
-            AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Attiny202
             | AvrModel::Attiny204
@@ -268,6 +273,12 @@ impl AvrModel {
     /// Whether this model implements EIND, EIJMP and EICALL.
     pub fn supports_eind(self) -> bool {
         self == AvrModel::Atmega2560
+    }
+
+    /// The ATmega328PB has a second polling USART at data-space 0xC8..0xCE.
+    /// Its USART interrupts are not yet modelled.
+    pub const fn has_usart1(self) -> bool {
+        matches!(self, AvrModel::Atmega328pb)
     }
 
     /// Whether this part uses the AVRxt data-space map and direct I/O
@@ -734,7 +745,9 @@ impl Avr {
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => {
+                matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
@@ -765,7 +778,9 @@ impl Avr {
     #[inline]
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => {
+                (AVR_PINB..=AVR_PIND + 2).contains(&addr)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
@@ -962,6 +977,29 @@ impl Avr {
                     Ok(0)
                 }
             }
+            // ATmega328PB USART1 mirrors the 328P USART0 register layout at
+            // data-space 0xC8..0xCE. Its local control registers use the I/O
+            // file; the bus-side UART owns RX buffering and peer connections.
+            0x00C8 if self.model.has_usart1() => {
+                let rxc = if Self::usart1_on_bus(bus) {
+                    bus.read_u8(AVR_IO_MIRROR_BASE + 0xC8)? & UCSRA_RXC
+                } else {
+                    0
+                };
+                let flags = self.io[(0xC8 - 0x20) as usize] & !UCSRA_RXC;
+                Ok(flags | UCSRA_UDRE | rxc)
+            }
+            0x00C9 | 0x00CA | 0x00CC | 0x00CD if self.model.has_usart1() => {
+                Ok(self.io[(addr - 0x20) as usize])
+            }
+            // UDR1 read pops one received byte from the bus-side USART.
+            0x00CE if self.model.has_usart1() => {
+                if Self::usart1_on_bus(bus) {
+                    bus.read_u8(AVR_IO_MIRROR_BASE + 0xCE)
+                } else {
+                    Ok(0)
+                }
+            }
             // SPI: SPCR/SPSR/SPDR (ATmega328P data space)
             0x004C => Ok(self.spcr),
             0x004D => Ok(self.spsr),
@@ -1136,6 +1174,42 @@ impl Avr {
                 // console text: the bus-side model says so at +7.
                 let on_bus =
                     Self::usart_on_bus(bus) && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC7)? & 1 != 0;
+                if !on_bus {
+                    if let Some(sink) = &self.serial_sink {
+                        if let Ok(mut g) = sink.lock() {
+                            g.push(value);
+                        }
+                    }
+                }
+                Ok(())
+            }
+            0x00C8 if self.model.has_usart1() => {
+                // U2X1/MPCM1 are writable. TXC1 is write-one-to-clear and
+                // returns once the instantaneous transmitter becomes empty;
+                // RXC1 is supplied by the bus-side USART queue.
+                let i = (0xC8 - 0x20) as usize;
+                let txc = if value & UCSRA_TXC != 0 {
+                    0
+                } else {
+                    self.io[i] & UCSRA_TXC
+                };
+                self.io[i] = txc | (value & 0x03);
+                Self::usart1_mirror_write(bus, 0xC8, value)?;
+                Ok(())
+            }
+            0x00C9 | 0x00CA | 0x00CC | 0x00CD if self.model.has_usart1() => {
+                self.io[(addr - 0x20) as usize] = value;
+                Self::usart1_mirror_write(bus, u64::from(addr), value)?;
+                Ok(())
+            }
+            0x00CE if self.model.has_usart1() => {
+                self.serial_tx.push(value);
+                let status = &mut self.io[(0xC8 - 0x20) as usize];
+                *status |= UCSRA_UDRE | UCSRA_TXC;
+                bus.write_u8(u64::from(addr), value)?;
+                Self::usart1_mirror_write(bus, 0xCE, value)?;
+                let on_bus =
+                    Self::usart1_on_bus(bus) && bus.read_u8(AVR_IO_MIRROR_BASE + 0xCF)? & 1 != 0;
                 if !on_bus {
                     if let Some(sink) = &self.serial_sink {
                         if let Ok(mut g) = sink.lock() {
@@ -1779,6 +1853,20 @@ impl Avr {
     /// is one. A refused write on a bus that does have the window is an error.
     fn usart_mirror_write(bus: &mut dyn Bus, reg: u64, value: u8) -> SimResult<()> {
         if Self::usart_on_bus(bus) {
+            bus.write_u8(AVR_IO_MIRROR_BASE + reg, value)?;
+        }
+        Ok(())
+    }
+
+    /// Whether the bus maps the ATmega328PB USART1 host window.
+    fn usart1_on_bus(bus: &dyn Bus) -> bool {
+        bus.has_mmio_window(AVR_IO_MIRROR_BASE + 0xC8)
+    }
+
+    /// Forward a USART1 register write when the chip descriptor has a host
+    /// UART window. A refused write on a mapped window is an error.
+    fn usart1_mirror_write(bus: &mut dyn Bus, reg: u64, value: u8) -> SimResult<()> {
+        if Self::usart1_on_bus(bus) {
             bus.write_u8(AVR_IO_MIRROR_BASE + reg, value)?;
         }
         Ok(())
@@ -2472,6 +2560,7 @@ mod tests {
 
     struct MockBus {
         mem: HashMap<u64, u8>,
+        mmio_bases: Vec<u64>,
         config: SimulationConfig,
     }
 
@@ -2479,6 +2568,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 mem: HashMap::new(),
+                mmio_bases: Vec::new(),
                 config: SimulationConfig::default(),
             }
         }
@@ -2500,6 +2590,9 @@ mod tests {
         }
         fn config(&self) -> &SimulationConfig {
             &self.config
+        }
+        fn has_mmio_window(&self, addr: u64) -> bool {
+            self.mmio_bases.contains(&addr)
         }
     }
 
@@ -3307,6 +3400,86 @@ mod tests {
             assert_ne!(cpu.data_read(0xC0, &bus).unwrap() & UCSRA_UDRE, 0);
         }
         assert_eq!(cpu.serial_tx, b"Hi");
+    }
+
+    #[test]
+    fn atmega328pb_selects_shared_geometry_and_routes_usart1() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328pb.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328pb config");
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "atmega328pb-usart1-smoke".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: Vec::new(),
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("PB bus");
+        let usart1 = AVR_IO_MIRROR_BASE + 0xC8;
+        assert!(
+            bus.has_mmio_window(usart1),
+            "USART1 host window must be mapped"
+        );
+        assert!(
+            bus.has_mmio_window(AVR_IO_MIRROR_BASE + 0xC0),
+            "USART0 remains a separate window"
+        );
+
+        let mut cpu = Avr::for_chip_name("ATmega328PB-AU");
+        assert_eq!(cpu.model, AvrModel::Atmega328pb);
+        assert_eq!(cpu.flash.len(), 32 * 1024);
+        assert_eq!(cpu.sram.len(), 2 * 1024);
+        assert_eq!(cpu.sp, 0x08FF);
+        let console = Arc::new(Mutex::new(Vec::new()));
+        cpu.set_serial_sink(Arc::clone(&console));
+
+        // Execute a small AVR firmware image: configure U2X1, USART1 TX/RX,
+        // and UBRR1, then write 'P' through UDR1. STS is the 328PB data-space
+        // access used by avr-gcc for this extended I/O window.
+        cpu.load_words(
+            0,
+            &[
+                0xE002, 0x9300, 0x00C8, // LDI r16,2; STS UCSR1A,r16
+                0xE108, 0x9300, 0x00C9, // LDI r16,0x18; STS UCSR1B,r16
+                0xE007, 0x9300, 0x00CC, // LDI r16,7; STS UBRR1L,r16
+                0xE000, 0x9300, 0x00CD, // LDI r16,0; STS UBRR1H,r16
+                0xE500, 0x9300, 0x00CE, // LDI r16,'P'; STS UDR1,r16
+            ],
+        );
+        for _ in 0..10 {
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+        }
+
+        assert_eq!(cpu.serial_tx, b"P");
+        assert_eq!(*console.lock().unwrap(), b"P");
+        assert_ne!(cpu.data_read(0xC8, &bus).unwrap() & UCSRA_UDRE, 0);
+        assert_ne!(cpu.data_read(0xC8, &bus).unwrap() & UCSRA_TXC, 0);
+
+        // RXC1 and UDR1 come from the second bus-side USART, not USART0.
+        let mut rx_bus = MockBus::new();
+        rx_bus.mmio_bases.push(usart1);
+        rx_bus.mem.insert(usart1, UCSRA_RXC);
+        rx_bus.mem.insert(usart1 + 6, b'R');
+        assert_ne!(cpu.data_read(0xC8, &rx_bus).unwrap() & UCSRA_RXC, 0);
+        assert_eq!(cpu.data_read(0xCE, &rx_bus).unwrap(), b'R');
+
+        // The 328P does not acquire the PB-only USART1 window by fallback.
+        let mut p = Avr::for_chip_name("atmega328p");
+        p.data_write(0xCE, b'X', &mut rx_bus).unwrap();
+        assert!(p.serial_tx.is_empty());
     }
 
     #[test]

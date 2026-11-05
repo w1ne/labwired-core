@@ -44,6 +44,12 @@ boards:
     kind: sim-validate
     path: examples/atmega2561-io
     gate: true
+  # ATmega328PB: builds the exact AVR-GCC target and verifies USART1 + PB5.
+  - id: atmega328pb-usart1
+    kind: sim-validate
+    path: examples/atmega328pb-usart1
+    apt: [gcc-avr, binutils-avr, avr-libc]
+    gate: true
   # PIC18F4520: the first PIC18 part. Committed SDCC 4.4.0 ELF (rebuilding
   # needs the upstream SDCC pic16 port, so CI checks the HEX->ELF wrap is
   # byte-identical instead), the EUSART/LED io-smoke and a clean 200k-step run.
