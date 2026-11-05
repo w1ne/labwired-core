@@ -479,6 +479,7 @@ canonical `type:`; the table below is rendered from that file by
 | `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
+| `ili9488` | SPI | 320×480 SPI TFT controller with modelled 18-bit COLMOD |
 | `inmp441` | SPI | Omnidirectional MEMS microphone, 24-bit I2S digital output |
 | `led-matrix` | SPI | 8×8 LED matrix driven by a MAX7219 serial display driver over SPI |
 | `lora-sx1278` | SPI | Semtech SX1278 SPI LoRa register shell (no RF) |
@@ -519,6 +520,7 @@ canonical `type:`; the table below is rendered from that file by
 | `keypad` | GPIO | 4×4 membrane keypad (row-drive / column-read) |
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
 | `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
+| `limit-switch` | GPIO | Mechanical end-stop with common, normally-open and normally-closed contacts |
 | `logic_level_shifter_4ch` | GPIO | BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB) |
 | `neopixel` | GPIO | Addressable RGB LED strip on one data pin (edge-timed bit stream) |
 | `pybadge_buttons` | GPIO | Eight active-low buttons through the board's SN74HC165 |
@@ -531,7 +533,9 @@ canonical `type:`; the table below is rendered from that file by
 | `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
 | `uln2803` | GPIO | Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay |
+| `acs712` | Analog | Ratiometric Hall current sensor, 185 mV/A and VCC/2 at zero current |
 | `gp2y0a21` | Analog | Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC) |
+| `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |

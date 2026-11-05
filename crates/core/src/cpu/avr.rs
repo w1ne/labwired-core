@@ -487,6 +487,8 @@ impl std::fmt::Debug for Avr {
 pub const AVR_IO_MIRROR_BASE: u64 = 0x0001_0000;
 /// `MCUCR` in data space (I/O 0x35), ATmega328P datasheet §14.4.1.
 pub const ADDR_MCUCR: u16 = 0x0055;
+/// MCU Status Register in data space (I/O 0x34), reset flags are write-zero-clear.
+pub const ADDR_MCUSR: u16 = 0x0054;
 /// `MCUCR.PUD`: pull-up disable for every port.
 pub const MCUCR_PUD: u8 = 1 << 4;
 /// `PINB` data-space address; `DDRB`/`PORTB` follow it.
@@ -1331,6 +1333,10 @@ impl Avr {
                 if !self.is_mega() || addr == ext_int::ADDR_SMCR =>
             {
                 self.ext_write(addr, value, bus);
+                Ok(())
+            }
+            ADDR_MCUSR => {
+                self.io[usize::from(ADDR_MCUSR - 0x20)] &= value & 0x0f;
                 Ok(())
             }
             ADDR_MCUCR => {
@@ -2296,6 +2302,17 @@ impl Cpu for Avr {
         self.irq_shadow = false;
         // Keep attached SPI/I2C slaves across reset (same wiring as real board).
         Ok(())
+    }
+
+    fn on_supply_reset(&mut self, cause: crate::power::SupplyResetCause) {
+        if self.is_avrxt() {
+            return;
+        }
+        let flags = &mut self.io[usize::from(ADDR_MCUSR - 0x20)];
+        match cause {
+            crate::power::SupplyResetCause::PowerOn => *flags = 1, // PORF
+            crate::power::SupplyResetCause::BrownOut => *flags |= 1 << 2, // BORF
+        }
     }
 
     /// One instruction, plus the standardized instruction trace.

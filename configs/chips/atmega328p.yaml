@@ -18,6 +18,20 @@ gpio_input_thresholds:
   vil: 0.3
   vih: 0.6
 
+# Microchip DS40002061B, "System and Reset Characteristics":
+# typical POR rising/falling 1.4/1.3 V; BOD centers 1.8, 2.7, 4.3 V with
+# 50 mV hysteresis (VBOT +/- VHYST/2). Fuse-selected BOD is disabled unless
+# bor_level is explicitly set. The supervisor models voltage thresholds,
+# not oscillator/fuse start-up delays or short-pulse rejection.
+# https://www.microchip.com/bin/mchp/product-ds.ATmega328P.pdf
+supply_monitor:
+  por_rising_v: 1.4
+  pdr_falling_v: 1.3
+  bor_levels:
+    bod1v8: { falling_v: 1.775, rising_v: 1.825 }
+    bod2v7: { falling_v: 2.675, rising_v: 2.725 }
+    bod4v3: { falling_v: 4.275, rising_v: 4.325 }
+
 flash:
   base: 0x00000000
   size: "32KB"
