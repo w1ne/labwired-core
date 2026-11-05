@@ -61,6 +61,9 @@ on:
       - "configs/chips/stm32f411re-nucleo-bme280-smoke.yaml"
       - "configs/systems/nucleo-f411re-bme280.yaml"
       - "scripts/build_nucleo_f411re_bme280_smoke.sh"
+      - "examples/nucleo-f411re-mcp9808/**"
+      - "configs/systems/nucleo-f411re-mcp9808.yaml"
+      - "scripts/build_nucleo_f411re_mcp9808_smoke.sh"
       - "crates/firmware-nucleo-f103rb-smoke/**"
       - "crates/firmware-nucleo-f207zg-smoke/**"
       - "crates/firmware-nucleo-f411re-smoke/**"
@@ -373,6 +376,12 @@ jobs:
             firmware_build_script: scripts/build_nucleo_f411re_bme280_smoke.sh
             script: examples/nucleo-f411re-bme280/onboarding-smoke.yaml
             system: configs/systems/nucleo-f411re-bme280.yaml
+          - id: nucleo-f411re-mcp9808
+            crate: examples/nucleo-f411re-mcp9808
+            target: ""
+            firmware_build_script: scripts/build_nucleo_f411re_mcp9808_smoke.sh
+            script: examples/nucleo-f411re-mcp9808/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f411re-mcp9808.yaml
           - id: nucleo-f413zh
             crate: firmware-nucleo-f413zh-smoke
             target: thumbv7em-none-eabi

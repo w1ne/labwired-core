@@ -1,8 +1,8 @@
-# Focused NUCLEO-F411RE profile for the ST-LINK VCP and an I2C1 BME280.
+# Focused NUCLEO-F411RE profile for the ST-LINK VCP and I2C1 sensor smokes.
 # Wire defaults to Arduino D14/D15 (PB9/PB8) on the Nucleo variant. The rest of
 # the F411RE peripheral map is omitted and therefore unsupported in this smoke.
 
-name: "stm32f411re-nucleo-bme280-smoke"
+name: "stm32f411re-nucleo-i2c-smoke"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 150

@@ -1,0 +1,17 @@
+# NUCLEO-F411RE plus an Adafruit MCP9808 I2C temperature sensor breakout.
+name: "nucleo-f411re-mcp9808"
+chip: "../chips/stm32f411re-nucleo-bme280-smoke.yaml"
+debug_uart: "usart2"
+external_devices:
+  - id: "mcp9808"
+    type: "mcp9808"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x18
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
