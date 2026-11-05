@@ -16,7 +16,6 @@ MODEL_FILES = [
     "crates/core/src/peripherals/uart.rs",
     "crates/core/src/peripherals/uart/timed.rs",
     "crates/core/tests/g0_customer_timing.rs",
-    "crates/core/tests/g0_tiol112.rs",
 ]
 
 
@@ -29,9 +28,12 @@ def main():
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--elf", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--core-commit", required=True,
+                        help="Published commit containing the runtime model; harness hash is separate")
     parser.add_argument("--compiler", required=True)
     parser.add_argument("--artifact-url")
     parser.add_argument("--firmware-manifest", type=Path)
+    parser.add_argument("--published-source", type=Path)
     parser.add_argument("--test-status", choices=["passed", "failed"], required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -40,10 +42,16 @@ def main():
     firmware_manifest = (
         json.loads(args.firmware_manifest.read_text()) if args.firmware_manifest else None
     )
+    published_source = (
+        json.loads(args.published_source.read_text()) if args.published_source else None
+    )
     elf_sha = digest(args.elf)
     if firmware_manifest:
         assert firmware_manifest["elf_sha256"] == elf_sha, "ELF/manifest mismatch"
-        assert firmware_manifest["source_commit"] == args.source_commit, "source mismatch"
+        if firmware_manifest["source_commit"] != args.source_commit:
+            assert published_source, "source mismatch requires a published-source byte-match record"
+            assert published_source["elf_sha256"] == elf_sha, "published-source ELF mismatch"
+            assert published_source["published_commit"] == args.source_commit, "published source mismatch"
     phases = {}
     for record in report["transactions"]:
         key = "/".join(
@@ -77,14 +85,17 @@ def main():
             "compiler": args.compiler,
             "artifact_url": args.artifact_url,
             "build_manifest": firmware_manifest,
+            "published_source_match": published_source,
         },
-        "core_base_commit": subprocess.check_output(
+        "runtime_model_commit": args.core_commit,
+        "core_workspace_base_commit": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=root, text=True
         ).strip(),
         "model_source_sha256": {name: digest(root / name) for name in MODEL_FILES},
         "raw_report_sha256": digest(args.report),
         "cpu_hz": report["cpu_hz"],
         "baud": report["baud"],
+        "firmware_dll_timing_enforcement": report["firmware_dll_timing_enforcement"],
         "benchmark_read_count": report["benchmark_read_count"],
         "benchmark_write_count": report["benchmark_write_count"],
         "phase_results": groups,

@@ -256,6 +256,7 @@ fn real_g0_firmware_timed_cq_session() {
     }
     let elf = std::env::var("IOLINKI_G0_ELF")
         .expect("IOLINKI_G0_ELF is required; no missing-artifact pass");
+    let elf_bytes = std::fs::read(&elf).unwrap();
     let hz: u64 = std::env::var("IOLINKI_G0_HZ")
         .unwrap_or("16000000".into())
         .parse()
@@ -298,6 +299,29 @@ fn real_g0_firmware_timed_cq_session() {
     for _ in 0..500_000 {
         machine.step().unwrap();
     }
+    let declared_enforcement = std::env::var("IOLINKI_G0_DLL_TIMING_ENFORCED")
+        .ok()
+        .map(|value| match value.as_str() {
+            "0" => false,
+            "1" => true,
+            _ => panic!("IOLINKI_G0_DLL_TIMING_ENFORCED must be 0 or 1"),
+        });
+    let observed_enforcement =
+        labwired_loader::resolve_symbol_in_elf(&elf_bytes, "rig_timing_enforced")
+            .map(|addr| machine.bus.read_u32(u64::from(addr)).unwrap() & 0xff != 0);
+    if let (Some(declared), Some(observed)) = (declared_enforcement, observed_enforcement) {
+        assert_eq!(
+            declared, observed,
+            "firmware exported timing state differs from build declaration"
+        );
+    }
+    let firmware_timing = json!({
+        "enabled": observed_enforcement.or(declared_enforcement),
+        "evidence": if observed_enforcement.is_some() { "ELF-resolved rig_timing_enforced RAM value" }
+            else if declared_enforcement.is_some() { "source-pinned build declaration; legacy ELF has no exported timing flag" }
+            else { "not inspected" },
+        "external_cq_ta_and_gap_assertions": "always enabled, independent of DLL enforcement"
+    });
     validate_timed_uart_clock(&machine.bus, "usart1").unwrap();
     assert_eq!(
         machine.bus.read_u32(0x40000028).unwrap() as u64 + 1,
@@ -494,6 +518,7 @@ fn real_g0_firmware_timed_cq_session() {
     let report = json!({
         "profile": if full_profile { "type2v_pd32" } else { "reference_startup" },
         "firmware": elf, "cpu_hz": hz, "baud": baud,
+        "firmware_dll_timing_enforcement": firmware_timing,
         "transactions": records, "cyclic_count": cyclic_ta.len(),
         "benchmark_read_count": read_count, "benchmark_write_count": write_count,
         "negative_controls": negative_controls,

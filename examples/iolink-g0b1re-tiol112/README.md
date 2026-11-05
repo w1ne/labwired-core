@@ -66,6 +66,7 @@ a missing firmware artifact into a pass.
 IOLINKI_G0_ELF=/absolute/path/protocol-rig-64mhz.elf \
 IOLINKI_G0_HZ=64000000 IOLINKI_G0_BAUD=230400 \
 IOLINKI_G0_PROFILE=type2v IOLINKI_G0_CYCLES=100 \
+IOLINKI_G0_DLL_TIMING_ENFORCED=0 \
 IOLINKI_G0_REPORT=out/type2v-cq-timing.json \
 cargo test -p labwired-core --test g0_customer_timing -- --ignored --nocapture
 ```

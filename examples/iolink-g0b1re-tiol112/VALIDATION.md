@@ -50,7 +50,33 @@ Each device reply's stop-end to next-start byte gap is also checked against
 0..3 bit times. Both limits come from the v1.1.4 specification's A.3.4/A.3.5.
 The JSON is saved before the tA and maximum byte-gap gates are evaluated.
 
+## Preserved measured evidence
+
+The checked-in `evidence/` summaries pin firmware source, compiler, ELF hash,
+runtime-model commit and the exact harness source hash. Large network traces
+are represented by a hash of the raw report.
+
+| Run | Coverage | Result |
+|---|---|---|
+| `type2v-com3-zig-disabled.json` | 100 READ + 100 WRITE + 8 application-rate replies | Timed C/Q model gate passed; 208 OPERATE replies, tA 26.473..39.769 µs, zero reply byte gaps |
+| `type2v-com2-minimum-delay-failure.json` | 4 READ + 4 WRITE + 8 application-rate replies | Preserved failure: response starts too early for COM2; OPERATE tA 15.789..25.914 µs |
+| `reference16-gcc-startup.json` | Actual 16 MHz GCC reference startup, DPP and DeviceOperate | Timed UART/EXTI/PHY prerequisite passed; this is not the 64 MHz PD32 profile |
+
+The first two runs use the explicitly labeled Zig/Clang diagnostic runtime.
+Their internal DLL timing enforcement is disabled; the external CQ tA and gap
+gates are enabled. The COM2 failure is retained as a witness for the separate
+minimum-response-delay fix. These results do not establish silicon timing.
+
 ## Explicit limits
+
+Firmware DLL timing enforcement and the external oracle are separate. The
+baseline profile inherits `IOLINK_TIMING_ENFORCE_DEFAULT=0`; setting the legacy
+20 ms completion threshold does not enable its checks. The report records the
+ELF-resolved `rig_timing_enforced` flag when exported, or an explicit
+source-pinned `IOLINKI_G0_DLL_TIMING_ENFORCED=0|1` declaration for an older image.
+The external CQ tA and byte-gap assertions remain enabled in both cases.
+An enabled firmware variant is a separate artifact and must pass its own
+receive-timestamp/timeout tests.
 
 This proves a reproducible digital model result for a particular ELF. It is
 not an IAR 9.70 build, a calibrated Cortex-M0+ worst-case execution model,
