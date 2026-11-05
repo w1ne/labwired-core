@@ -7,4 +7,12 @@ limits:
   max_steps: 1000000
 assertions:
   - uart_contains: "ESP32_C5_UART0_OK"
+  - gpio_edges:
+      pin: "gpio:27"
+      min_edges: 48
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1
   - expected_stop_reason: max_steps

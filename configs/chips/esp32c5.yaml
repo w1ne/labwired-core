@@ -1,5 +1,5 @@
-# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART smoke.
-# Only the RISC-V HP core, on-chip memories and UART0 are exposed.
+# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART/RGB LED smoke.
+# The board slice exposes on-chip memories, UART0 and GPIO27 direct output.
 name: "esp32c5"
 arch: "riscv"
 core: "rv32imac"
@@ -23,6 +23,10 @@ memory_regions:
     base: 0x50000000
     size: "16KB"
 
+pins:
+  # This board profile exposes GPIO27, routed to the onboard RGB LED.
+  GPIO27: { gpio: "gpio", bit: 27 }
+
 peripherals:
   # UART0: C5 uses the modern Espressif UART register map. The board's USB-UART
   # bridge is connected to GPIO11/U0TXD and GPIO12/U0RXD; pad-level propagation
@@ -40,3 +44,18 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_SCLK_CONF", bit: 22 }
     config:
       echo_stdout: true
+  # DevKitC's addressable RGB LED uses GPIO27. The model covers the direct
+  # GPIO output registers and this pad's GPIO_FUNC output selector only.
+  - id: "gpio"
+    type: "esp32c5_gpio"
+    base_address: 0x60091000
+    size: "2868"
+    config:
+      debug_schema: "../peripherals/esp32c5/gpio_gpio27.yaml"
+  # Only GPIO27's function-select word is modelled in this board profile.
+  - id: "io_mux"
+    type: "esp32c5_io_mux"
+    base_address: 0x60090000
+    size: "112"
+    config:
+      debug_schema: "../peripherals/esp32c5/io_mux_gpio27.yaml"

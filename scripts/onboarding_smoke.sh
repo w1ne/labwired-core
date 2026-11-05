@@ -224,6 +224,46 @@ else
   fi
 fi
 
+# Validate the structured verdict as well as the command exit status. The
+# onboarding gate should not publish pass metrics unless every assertion passed.
+if [[ "${status}" == "pass" ]]; then
+  result_file="${run_smoke_output_dir}/result.json"
+  if ! validation_output="$(python3 - "${result_file}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    print(f"missing smoke result: {path}")
+    raise SystemExit(1)
+try:
+    result = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    print(f"invalid smoke result {path}: {exc}")
+    raise SystemExit(1)
+
+failed = [
+    item.get("assertion", {})
+    for item in result.get("assertions", [])
+    if not item.get("passed", False)
+]
+if result.get("status") != "pass" or failed:
+    print(f"smoke result status: {result.get('status', 'missing')}")
+    if failed:
+        print(f"failed assertions: {json.dumps(failed, sort_keys=True)}")
+    raise SystemExit(1)
+print("structured smoke verdict: pass; all assertions passed")
+PY
+)"; then
+    status="fail"
+    failure_stage="run_smoke"
+    first_error_signature="${validation_output:-smoke result validation failed}"
+    failure_hint="Inspect the structured result in simulation-output/result.json and fix the failed assertion."
+    printf '%s\n' "${first_error_signature}" >>"${OUT_DIR}/logs/run_smoke.log"
+  fi
+fi
+
 run_finished_ms="$(date +%s%3N)"
 run_finished_iso="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 elapsed_ms=$((run_finished_ms - run_started_ms))

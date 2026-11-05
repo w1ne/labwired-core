@@ -6,23 +6,23 @@
   "script": "examples/esp32c5-devkitc/onboarding-smoke.yaml",
   "system": "configs/systems/esp32c5-devkitc.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T07:41:56Z",
-  "finished_at_utc": "2026-11-05T07:42:42Z",
-  "elapsed_seconds": 46,
-  "elapsed_ms": 45928,
+  "started_at_utc": "2026-11-05T23:42:48Z",
+  "finished_at_utc": "2026-11-05T23:43:09Z",
+  "elapsed_seconds": 22,
+  "elapsed_ms": 21491,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 44.692,
-    "build_firmware": 0.439,
-    "run_smoke": 0.786
+    "build_cli": 20.28,
+    "build_firmware": 0.255,
+    "run_smoke": 0.916
   },
   "stages_ms": {
-    "build_cli": 44692,
-    "build_firmware": 439,
-    "run_smoke": 786
+    "build_cli": 20280,
+    "build_firmware": 255,
+    "run_smoke": 916
   }
 }

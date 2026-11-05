@@ -10,6 +10,8 @@ use labwired_config::PeripheralConfig;
 pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<dyn Peripheral>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "esp32c5_pcr" => Box::new(super::pcr::Esp32c5Pcr::new()),
+        "esp32c5_gpio" => Box::new(super::gpio::Esp32c5Gpio::new()),
+        "esp32c5_io_mux" => Box::new(super::io_mux::Esp32c5IoMux::new()),
         "esp32c5_uart" => {
             let source_id = p_cfg
                 .irq

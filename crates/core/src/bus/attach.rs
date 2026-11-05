@@ -1256,6 +1256,40 @@ impl SystemBus {
         }
     }
 
+    /// Share the C5 GPIO27 IO_MUX function-select word with the narrow GPIO
+    /// model so changing MCU_SEL disconnects the DevKitC RGB LED pad.
+    pub(crate) fn wire_esp32c5_pad_controls(&mut self) {
+        use crate::peripherals::esp32c5::gpio::Esp32c5Gpio;
+        use crate::peripherals::esp32c5::io_mux::Esp32c5IoMux;
+
+        let io_mux_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32c5IoMux>()));
+        let gpio_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32c5Gpio>()));
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let control = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32c5IoMux>())
+            .map(Esp32c5IoMux::pad_control);
+        if let (Some(control), Some(gpio)) = (
+            control,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c5Gpio>()),
+        ) {
+            gpio.set_io_mux_gpio27(control);
+        }
+    }
+
     /// Does this bus have either peripheral the pad brackets exist for?
     ///
     /// The brackets run at the MMIO write choke, and before this they cost four
