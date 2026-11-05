@@ -36,6 +36,7 @@
 //! * Channel-to-channel leakage, V_OL budgeting, and the 400 kHz timing spec:
 //!   this engine models the byte protocol, not the analogue bus.
 
+use crate::peripherals::device::I2cBusSwitch;
 use crate::peripherals::i2c::I2cDevice;
 
 /// Lowest address the strap pins can produce (A2=A1=A0=0).
@@ -158,6 +159,22 @@ impl Tca9548a {
         }
         self.selected.downstream = selected;
     }
+
+    // Shared pass-gate routing for variants with a different control register
+    // and latch timing, such as the four-channel PCA9545A.
+    pub(super) fn set_control_register(&mut self, value: u8) {
+        self.control = value;
+    }
+
+    pub(super) fn write_downstream(&mut self, data: u8) {
+        self.for_each_selected(|d| d.write(data));
+    }
+
+    pub(super) fn read_with_control_value(&mut self, control: u8) -> u8 {
+        let mut byte = if self.selected.control { control } else { 0xff };
+        self.for_each_selected(|d| byte &= d.read());
+        byte
+    }
 }
 
 impl Default for Tca9548a {
@@ -183,7 +200,25 @@ impl std::fmt::Debug for Tca9548a {
     }
 }
 
+impl I2cBusSwitch for Tca9548a {
+    fn channel_count(&self) -> usize {
+        TCA9548A_CHANNELS
+    }
+
+    fn attach(&mut self, channel: u8, device: Box<dyn I2cDevice>) -> anyhow::Result<()> {
+        Tca9548a::attach(self, channel, device)
+    }
+}
+
 impl I2cDevice for Tca9548a {
+    fn as_bus_switch(&self) -> Option<&dyn I2cBusSwitch> {
+        Some(self)
+    }
+
+    fn as_bus_switch_mut(&mut self) -> Option<&mut dyn I2cBusSwitch> {
+        Some(self)
+    }
+
     /// The switch's OWN address. Resolution never goes through this — see
     /// [`I2cDevice::claims_address`] — but the bus trace uses it to label the
     /// device and tooling uses it to identify the part.
@@ -254,7 +289,7 @@ impl I2cDevice for Tca9548a {
         if self.selected.control {
             self.control = data;
         }
-        self.for_each_selected(|d| d.write(data));
+        self.write_downstream(data);
     }
 
     /// A byte clocked back from the selected target(s).
@@ -275,16 +310,7 @@ impl I2cDevice for Tca9548a {
     ///   job is to reproduce the garbled read instead of silently picking a
     ///   winner.
     fn read(&mut self) -> u8 {
-        let mut byte = if self.selected.control {
-            self.control
-        } else if self.selected.downstream.is_empty() {
-            // Nothing selected: the bus is left to the pull-ups.
-            return 0xFF;
-        } else {
-            0xFF
-        };
-        self.for_each_selected(|d| byte &= d.read());
-        byte
+        self.read_with_control_value(self.control)
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

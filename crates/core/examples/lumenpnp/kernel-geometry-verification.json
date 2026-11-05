@@ -1,0 +1,1551 @@
+{
+  "source_sha256": "39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9",
+  "final_source_revision": {
+    "scheme": "sha256",
+    "id": "39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9",
+    "evaluation_artifact_id": "/tmp/kernelcad-step-AYTFpp"
+  },
+  "earlier_studio_preview": {
+    "project_id": "b2d916d8-1aa7-4b55-b195-e4a5433a4046",
+    "slug": "ZbbGJ2TP",
+    "version": 2,
+    "url": "https://app.kernelcad.com/p/ZbbGJ2TP?version=2",
+    "mesh_url": "https://mesh.kernelcad.com/mesh-artifacts/ZbbGJ2TP/v2.json",
+    "current_source": false,
+    "difference": "Preview revision 2 predates the final 45-degree R1 pad orientation correction."
+  },
+  "final_mesh_derivation": {
+    "base_mesh": "kernelcad-mesh-studio-v2.json",
+    "base_mesh_sha256": "cc7d54bd2233c38ec6a31ea3429a2b541325ba930d88539ea4d2790c52e8a0da",
+    "base_studio_revision": 2,
+    "corrected_feature": "solvedAssembly_1__pads-r1",
+    "operation": "Rigid 45-degree Z rotation about source-space (290,250,0), baked into vertex positions and normals. Every other body remains unchanged.",
+    "correction_matrix_column_major": [
+      0.7071067811865476,
+      0.7071067811865475,
+      0.0,
+      0.0,
+      -0.7071067811865475,
+      0.7071067811865476,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      261.71572875253804,
+      -131.83766184073568,
+      0.0,
+      1.0
+    ],
+    "evaluated_source_sha256": "39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9",
+    "final_evaluation_artifact_id": "/tmp/kernelcad-step-AYTFpp",
+    "final_evaluated_occt_bounds_mm": [
+      [
+        287.737258300203,
+        247.73725830020305,
+        160.0
+      ],
+      [
+        292.26274169979695,
+        252.26274169979698,
+        160.035
+      ]
+    ],
+    "derived_mesh_bounds_mm": [
+      [
+        287.73725830020305,
+        247.73725830020305,
+        160.0
+      ],
+      [
+        292.26274169979695,
+        252.26274169979695,
+        160.035
+      ]
+    ],
+    "max_bound_error_mm": 5.684341886080802e-14,
+    "final_mesh_sha256": "d4e05e89d33ace6e704f4bcdb4b4f94b693302ae5752b7ee44f7090cd070f212",
+    "vertex_count": 48
+  },
+  "export_validation": {
+    "step": {
+      "file": "labwired-smt-pick-place.step",
+      "sha256": "32897d0722d9cfcabf74f5af92541d147870e3791f6207d544a62667778d70c6",
+      "reader": "CadQuery/OCP STEPControl",
+      "solid_count": 66,
+      "all_solids_brep_valid": true,
+      "volume_mm3": 3842190.7781219995,
+      "world_bounds_mm": [
+        [
+          -105.0,
+          -77.0,
+          0.0
+        ],
+        [
+          565.0,
+          565.0,
+          369.0
+        ]
+      ],
+      "r1_pad_solid_bounds_mm": [
+        [
+          287.7372583002,
+          247.73725830019998,
+          160.0
+        ],
+        [
+          292.26274169979,
+          252.26274169979,
+          160.035
+        ]
+      ],
+      "r1_final_mesh_bounds_mm": [
+        [
+          287.73725830020305,
+          247.73725830020305,
+          160.0
+        ],
+        [
+          292.26274169979695,
+          252.26274169979695,
+          160.035
+        ]
+      ],
+      "r1_bounds_max_error_mm": 6.934897101018578e-12,
+      "source_sha256": "39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9"
+    },
+    "glb": {
+      "file": "labwired-smt-pick-place.glb",
+      "bytes": 2211640,
+      "sha256": "018a1543b82f0c230a1f2497d39292b37a6f6fb346c757b35f655b86df83c7c1",
+      "named_meshes": 66,
+      "triangles": 59408,
+      "source_mesh_sha256": "d4e05e89d33ace6e704f4bcdb4b4f94b693302ae5752b7ee44f7090cd070f212",
+      "source_cad_sha256": "39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9",
+      "derivation": "Lossless topology export from evaluated named mesh arrays, positions and normals converted to float32. Named part transforms preserved. Scene root converts millimetres Z-up to metres Y-up.",
+      "validation": {
+        "reader": "VTK vtkGLTFReader",
+        "mesh_count": 66,
+        "expected_world_bounds_m": [
+          [
+            -0.105,
+            0.0,
+            -0.5650000000000001
+          ],
+          [
+            0.5650000000000001,
+            0.369,
+            0.077
+          ]
+        ],
+        "imported_world_bounds_m": [
+          [
+            -0.10500000417232513,
+            0.0,
+            -0.5649999976158142
+          ],
+          [
+            0.5649999976158142,
+            0.36900001764297485,
+            0.07700000703334808
+          ]
+        ],
+        "max_bound_error_m": 1.7642974858844696e-08
+      }
+    }
+  },
+  "kernel_server_build": "0.1.0+38ac60b876a0@2026-11-05T01:11:40.830Z",
+  "evaluation_artifact_id": "/tmp/kernelcad-step-AYTFpp",
+  "evaluation": {
+    "ok": true,
+    "mechanism": "real",
+    "mechanism_summary": {
+      "verdict": "real",
+      "maxLevel": "ok",
+      "statement": "Motion checked: 17 poses across 7 joints (each joint at its limits), all mates satisfied, no collisions, fastened parts stay rigid. Gravity not checked.",
+      "checked": [
+        "17 poses across 7 joints (each joint at its limits)",
+        "all mates satisfied",
+        "no collisions",
+        "fastened parts stay rigid"
+      ],
+      "skipped": [],
+      "failures": []
+    },
+    "scene": {
+      "valid": true,
+      "volume": 3842190.778122002,
+      "faceCount": 1192,
+      "size": [
+        670,
+        642,
+        369
+      ]
+    }
+  },
+  "design_loop": {
+    "ok": false,
+    "functional": true,
+    "quality_ok": false,
+    "review_facts": [
+      {
+        "code": "assembly.connectivity.assumed-root",
+        "severity": "warning",
+        "message": "No stable root is declared; assuming the first part 'frame-front' is grounded (the mate solver holds it still).",
+        "hint": "connectivity.assumed-root \u2014 if 'frame-front' is the fixed base this is fine; otherwise list the base first in arm.add(...) order or declare arm.physicalUseCase(..., { stableParts: ['<base part>'] })."
+      },
+      {
+        "code": "assembly.connectivity.assumed-root",
+        "severity": "warning",
+        "message": "No stable root is declared; assuming the first part 'frame-front' is grounded (the mate solver holds it still).",
+        "hint": "connectivity.assumed-root \u2014 if 'frame-front' is the fixed base this is fine; otherwise list the base first in arm.add(...) order or declare arm.physicalUseCase(..., { stableParts: ['<base part>'] })."
+      }
+    ],
+    "passed_checks": [
+      "validator-no-errors",
+      "pose-envelope-solved",
+      "pose-envelope-no-interference",
+      "tracked-connectors-move"
+    ],
+    "mechanism_summary": {
+      "sampleCount": 15,
+      "interferenceCount": 0,
+      "trackedConnectorCount": 2,
+      "maxTrackedTravelMm": 400,
+      "jointTopologyIssueCount": 1
+    }
+  },
+  "grounding_boundary": "The first frame-front part is held fixed by the mate solver. This models a rigidly grounded bench machine.",
+  "calibration_pose_count": 7,
+  "maximum_affine_residual_mm": 2.842170943040401e-14,
+  "calibration": [
+    {
+      "name": "firmware-initial-state",
+      "axis": {
+        "X": 20,
+        "Y": 20,
+        "Z": 25,
+        "A": 0,
+        "B": 0
+      },
+      "nozzle_a_tip_world_mm": [
+        20.0,
+        20.0,
+        185.0
+      ],
+      "nozzle_b_tip_world_mm": [
+        68.0,
+        20.0,
+        185.0
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 0.0,
+      "nozzle_a_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        20.0,
+        20.0,
+        25.0,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        20.0,
+        20.0,
+        25.0,
+        1.0
+      ]
+    },
+    {
+      "name": "home-safe",
+      "axis": {
+        "X": 0,
+        "Y": 0,
+        "Z": 25,
+        "A": 0,
+        "B": 0
+      },
+      "nozzle_a_tip_world_mm": [
+        0.0,
+        0.0,
+        185.0
+      ],
+      "nozzle_b_tip_world_mm": [
+        48.0,
+        0.0,
+        185.0
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 0.0,
+      "nozzle_a_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        25.0,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        25.0,
+        1.0
+      ]
+    },
+    {
+      "name": "A-pick-QFN",
+      "axis": {
+        "X": 50,
+        "Y": 60,
+        "Z": 1.4,
+        "A": 0,
+        "B": 0
+      },
+      "nozzle_a_tip_world_mm": [
+        50.0,
+        60.0,
+        161.4
+      ],
+      "nozzle_b_tip_world_mm": [
+        98.0,
+        60.0,
+        208.60000000000002
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 2.842170943040401e-14,
+      "nozzle_a_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        50.0,
+        60.0,
+        1.4000000000000057,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        50.0,
+        60.0,
+        48.60000000000002,
+        1.0
+      ]
+    },
+    {
+      "name": "B-pick-backup",
+      "axis": {
+        "X": 26,
+        "Y": 60,
+        "Z": 48.6,
+        "A": 0,
+        "B": 0
+      },
+      "nozzle_a_tip_world_mm": [
+        26.0,
+        60.0,
+        208.60000000000002
+      ],
+      "nozzle_b_tip_world_mm": [
+        74.0,
+        60.0,
+        161.4
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 2.842170943040401e-14,
+      "nozzle_a_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        26.0,
+        60.0,
+        48.60000000000002,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        26.0,
+        60.0,
+        1.4000000000000057,
+        1.0
+      ]
+    },
+    {
+      "name": "B-place-rotated",
+      "axis": {
+        "X": 217,
+        "Y": 225,
+        "Z": 48.6,
+        "A": 0,
+        "B": 90
+      },
+      "nozzle_a_tip_world_mm": [
+        217.0,
+        225.0,
+        208.60000000000002
+      ],
+      "nozzle_b_tip_world_mm": [
+        265.0,
+        225.0,
+        161.4
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 2.842170943040401e-14,
+      "nozzle_a_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        217.0,
+        225.0,
+        48.60000000000002,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        1.1102230246251565e-16,
+        1.0,
+        0.0,
+        0.0,
+        -1.0,
+        1.1102230246251565e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        265.0,
+        177.0,
+        1.4000000000000057,
+        1.0
+      ]
+    },
+    {
+      "name": "A-place-diagonal",
+      "axis": {
+        "X": 290,
+        "Y": 250,
+        "Z": 1.4,
+        "A": 45,
+        "B": 0
+      },
+      "nozzle_a_tip_world_mm": [
+        290.0,
+        250.0,
+        161.4
+      ],
+      "nozzle_b_tip_world_mm": [
+        338.0,
+        250.0,
+        208.60000000000002
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 2.842170943040401e-14,
+      "nozzle_a_matrix_column_major": [
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        290.0,
+        250.0,
+        1.4000000000000057,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        290.0,
+        250.0,
+        48.60000000000002,
+        1.0
+      ]
+    },
+    {
+      "name": "far-limit-safe",
+      "axis": {
+        "X": 400,
+        "Y": 400,
+        "Z": 25,
+        "A": 180,
+        "B": -180
+      },
+      "nozzle_a_tip_world_mm": [
+        400.0,
+        400.0,
+        185.0
+      ],
+      "nozzle_b_tip_world_mm": [
+        448.0,
+        400.0,
+        185.0
+      ],
+      "head_separation_mm": 48.0,
+      "z_link_sum_mm": 50.0,
+      "maximum_affine_residual_mm": 0.0,
+      "nozzle_a_matrix_column_major": [
+        -1.0,
+        1.2246467991473532e-16,
+        0.0,
+        0.0,
+        -1.2246467991473532e-16,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        400.0,
+        400.0,
+        25.0,
+        1.0
+      ],
+      "nozzle_b_matrix_column_major": [
+        -1.0,
+        -1.2246467991473532e-16,
+        0.0,
+        0.0,
+        1.2246467991473532e-16,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        496.0,
+        400.0,
+        25.0,
+        1.0
+      ]
+    }
+  ],
+  "mesh_sealing_face_checks": {
+    "A": {
+      "inner_radius_range_mm": [
+        0.24957764322951687,
+        0.2504595775769016
+      ],
+      "outer_radius_range_mm": [
+        0.2995880504960103,
+        0.3003897468290154
+      ],
+      "quantization_tolerance_mm": 0.001,
+      "face_local_z_mm": 160.0
+    },
+    "B": {
+      "inner_radius_range_mm": [
+        0.24957764322951814,
+        0.25045957757690224
+      ],
+      "outer_radius_range_mm": [
+        0.2995880504960103,
+        0.30038974682901254
+      ],
+      "quantization_tolerance_mm": 0.001,
+      "face_local_z_mm": 160.0
+    }
+  },
+  "evaluated_part_bounds_mm": {
+    "frame-front": [
+      [
+        -70,
+        -70,
+        20
+      ],
+      [
+        530,
+        -50,
+        40.000000000000114
+      ]
+    ],
+    "frame-left": [
+      [
+        -90,
+        -60,
+        20
+      ],
+      [
+        -70,
+        540,
+        40.000000000000114
+      ]
+    ],
+    "frame-right": [
+      [
+        530,
+        -60,
+        20
+      ],
+      [
+        550,
+        540,
+        40.000000000000114
+      ]
+    ],
+    "frame-back": [
+      [
+        -70,
+        530,
+        20
+      ],
+      [
+        530,
+        550,
+        40.000000000000114
+      ]
+    ],
+    "leg-0": [
+      [
+        -96,
+        -76,
+        5
+      ],
+      [
+        -64,
+        -44,
+        240
+      ]
+    ],
+    "rubber-foot-0": [
+      [
+        -97,
+        -77,
+        0
+      ],
+      [
+        -63,
+        -43,
+        5
+      ]
+    ],
+    "leg-1": [
+      [
+        524,
+        -76,
+        5
+      ],
+      [
+        556,
+        -44,
+        240
+      ]
+    ],
+    "rubber-foot-1": [
+      [
+        523,
+        -77,
+        0
+      ],
+      [
+        557,
+        -43,
+        5
+      ]
+    ],
+    "leg-2": [
+      [
+        -96,
+        524,
+        5
+      ],
+      [
+        -64,
+        556,
+        240
+      ]
+    ],
+    "rubber-foot-2": [
+      [
+        -97,
+        523,
+        0
+      ],
+      [
+        -63,
+        557,
+        5
+      ]
+    ],
+    "leg-3": [
+      [
+        524,
+        524,
+        5
+      ],
+      [
+        556,
+        556,
+        240
+      ]
+    ],
+    "rubber-foot-3": [
+      [
+        523,
+        523,
+        0
+      ],
+      [
+        557,
+        557,
+        5
+      ]
+    ],
+    "y-extrusion-left": [
+      [
+        -90,
+        -60,
+        220
+      ],
+      [
+        -70,
+        540,
+        240.0000000000001
+      ]
+    ],
+    "y-extrusion-right": [
+      [
+        530,
+        -60,
+        220
+      ],
+      [
+        550,
+        540,
+        240.0000000000001
+      ]
+    ],
+    "stage-support-left": [
+      [
+        -90,
+        -60,
+        136.8
+      ],
+      [
+        -70,
+        540,
+        156.80000000000013
+      ]
+    ],
+    "stage-support-right": [
+      [
+        530,
+        -60,
+        136.8
+      ],
+      [
+        550,
+        540,
+        156.80000000000013
+      ]
+    ],
+    "stage-support-front": [
+      [
+        -70,
+        10,
+        136.8
+      ],
+      [
+        530,
+        30,
+        156.80000000000013
+      ]
+    ],
+    "stage-support-back": [
+      [
+        -70,
+        400,
+        136.8
+      ],
+      [
+        530,
+        420,
+        156.80000000000013
+      ]
+    ],
+    "staging-plate": [
+      [
+        -55,
+        -25,
+        156.8
+      ],
+      [
+        485,
+        455,
+        158.4
+      ]
+    ],
+    "rail-y-left": [
+      [
+        -86,
+        -35,
+        239.99999999999997
+      ],
+      [
+        -74,
+        515,
+        248
+      ]
+    ],
+    "rail-y-right": [
+      [
+        534,
+        -35,
+        239.99999999999997
+      ],
+      [
+        546,
+        515,
+        248
+      ]
+    ],
+    "y-carriage-0": [
+      [
+        -94,
+        42,
+        248
+      ],
+      [
+        -66,
+        88,
+        261
+      ]
+    ],
+    "gantry-end-0": [
+      [
+        -99,
+        38,
+        261
+      ],
+      [
+        -61,
+        92,
+        266
+      ]
+    ],
+    "gantry-y": [
+      [
+        -70,
+        55,
+        266
+      ],
+      [
+        530,
+        75,
+        286.0000000000001
+      ]
+    ],
+    "gantry-end-1": [
+      [
+        521,
+        38,
+        261
+      ],
+      [
+        559,
+        92,
+        266
+      ]
+    ],
+    "y-carriage-1": [
+      [
+        526,
+        42,
+        248
+      ],
+      [
+        554,
+        88,
+        261
+      ]
+    ],
+    "rail-x": [
+      [
+        -45,
+        59,
+        286
+      ],
+      [
+        505,
+        71.00000000000006,
+        294
+      ]
+    ],
+    "belt-x": [
+      [
+        -60,
+        75,
+        270
+      ],
+      [
+        520,
+        76.5,
+        276
+      ]
+    ],
+    "motor-y-mount-left": [
+      [
+        -105,
+        515,
+        240
+      ],
+      [
+        -55,
+        565,
+        245
+      ]
+    ],
+    "motor-y-mount-right": [
+      [
+        515,
+        515,
+        240
+      ],
+      [
+        565,
+        565,
+        245
+      ]
+    ],
+    "motor-y-left": [
+      [
+        -101,
+        519,
+        245
+      ],
+      [
+        -59,
+        561,
+        283
+      ]
+    ],
+    "motor-y-right": [
+      [
+        519,
+        519,
+        245
+      ],
+      [
+        561,
+        561,
+        283
+      ]
+    ],
+    "motor-x-mount": [
+      [
+        -105,
+        40,
+        286
+      ],
+      [
+        -55,
+        90,
+        291
+      ]
+    ],
+    "motor-x": [
+      [
+        -101,
+        44,
+        291
+      ],
+      [
+        -59,
+        86,
+        329
+      ]
+    ],
+    "x-carriage": [
+      [
+        1,
+        51,
+        294
+      ],
+      [
+        47,
+        79,
+        306
+      ]
+    ],
+    "head-x": [
+      [
+        -21,
+        35,
+        185
+      ],
+      [
+        69,
+        73,
+        357
+      ]
+    ],
+    "motor-z": [
+      [
+        -14.633802276324186,
+        41.99999999999999,
+        327
+      ],
+      [
+        27.366197723675814,
+        80,
+        369
+      ]
+    ],
+    "rail-z-a": [
+      [
+        -4.5,
+        31,
+        197
+      ],
+      [
+        4.5,
+        35,
+        297
+      ]
+    ],
+    "slide-z-a": [
+      [
+        -16,
+        -16,
+        204
+      ],
+      [
+        16,
+        31,
+        244
+      ]
+    ],
+    "motor-a": [
+      [
+        -14,
+        -14,
+        206
+      ],
+      [
+        14,
+        14,
+        239
+      ]
+    ],
+    "nozzle-bearing-a": [
+      [
+        -7,
+        -7,
+        198
+      ],
+      [
+        7,
+        7,
+        206
+      ]
+    ],
+    "nozzle-a": [
+      [
+        -4.2,
+        -4.2,
+        160
+      ],
+      [
+        4.2,
+        4.2,
+        247
+      ]
+    ],
+    "pneumatic-fitting-a": [
+      [
+        -5.5,
+        -5.5,
+        244
+      ],
+      [
+        5.5,
+        5.5,
+        258
+      ]
+    ],
+    "rail-z-b": [
+      [
+        43.5,
+        31,
+        197
+      ],
+      [
+        52.5,
+        35,
+        297
+      ]
+    ],
+    "slide-z-b": [
+      [
+        32,
+        -16,
+        204
+      ],
+      [
+        64,
+        31,
+        244
+      ]
+    ],
+    "motor-b": [
+      [
+        34,
+        -14,
+        206
+      ],
+      [
+        62,
+        14,
+        239
+      ]
+    ],
+    "nozzle-bearing-b": [
+      [
+        41,
+        -7,
+        198
+      ],
+      [
+        55,
+        7,
+        206
+      ]
+    ],
+    "nozzle-b": [
+      [
+        43.8,
+        -4.2,
+        160
+      ],
+      [
+        52.2,
+        4.2,
+        247
+      ]
+    ],
+    "pneumatic-fitting-b": [
+      [
+        42.5,
+        -5.5,
+        244
+      ],
+      [
+        53.5,
+        5.5,
+        258
+      ]
+    ],
+    "z-idler-lower-left": [
+      [
+        0.7999999999999998,
+        23,
+        184.43380227632417
+      ],
+      [
+        11.932395447351627,
+        42,
+        195.56619772367583
+      ]
+    ],
+    "z-idler-lower-right": [
+      [
+        36.067604552648376,
+        23,
+        184.43380227632417
+      ],
+      [
+        47.2,
+        42,
+        195.56619772367583
+      ]
+    ],
+    "z-idler-upper-right": [
+      [
+        36.067604552648376,
+        23,
+        342.4338022763242
+      ],
+      [
+        47.2,
+        42,
+        353.5661977236758
+      ]
+    ],
+    "z-belt": [
+      [
+        -0.8000000000000043,
+        19.99999999999999,
+        182.83380227632418
+      ],
+      [
+        48.80000000000001,
+        23.00000000000001,
+        355.1661977236758
+      ]
+    ],
+    "z-drive-pulley": [
+      [
+        0.7999999999999998,
+        23,
+        342.4338022763242
+      ],
+      [
+        11.932395447351627,
+        42,
+        353.5661977236758
+      ]
+    ],
+    "work-pcb": [
+      [
+        200,
+        200,
+        158.4
+      ],
+      [
+        320,
+        280,
+        160
+      ]
+    ],
+    "pads-u1": [
+      [
+        227.1,
+        222.1,
+        160
+      ],
+      [
+        232.9,
+        227.9,
+        160.035
+      ]
+    ],
+    "pads-u2": [
+      [
+        262.6,
+        222.1,
+        160
+      ],
+      [
+        267.40000000000003,
+        227.9,
+        160.035
+      ]
+    ],
+    "pads-r1": [
+      [
+        287.737258300203,
+        247.73725830020305,
+        160
+      ],
+      [
+        292.26274169979695,
+        252.26274169979698,
+        160.035
+      ]
+    ],
+    "component-tray": [
+      [
+        41,
+        54,
+        158.4
+      ],
+      [
+        83,
+        66,
+        161.1
+      ]
+    ],
+    "part-qfn": [
+      [
+        47.5,
+        57.5,
+        160
+      ],
+      [
+        52.5,
+        62.5,
+        161.4
+      ]
+    ],
+    "part-chip": [
+      [
+        64.4,
+        59.2,
+        160
+      ],
+      [
+        67.60000000000001,
+        60.800000000000004,
+        161.4
+      ]
+    ],
+    "part-soic": [
+      [
+        71.5,
+        58,
+        160
+      ],
+      [
+        76.5,
+        62,
+        161.4
+      ]
+    ],
+    "down-camera": [
+      [
+        12,
+        51,
+        228
+      ],
+      [
+        36,
+        75,
+        249
+      ]
+    ],
+    "down-camera-lens": [
+      [
+        16,
+        55,
+        226
+      ],
+      [
+        32,
+        71,
+        228
+      ]
+    ],
+    "up-camera": [
+      [
+        138,
+        128,
+        140.4
+      ],
+      [
+        172,
+        162,
+        158.4
+      ]
+    ],
+    "up-camera-lens": [
+      [
+        146,
+        136,
+        158.4
+      ],
+      [
+        164,
+        154,
+        159.9
+      ]
+    ]
+  },
+  "evaluated_package_properties": {
+    "part-qfn": {
+      "source_pocket": 0,
+      "bounds_mm": [
+        [
+          47.5,
+          57.5,
+          160
+        ],
+        [
+          52.5,
+          62.5,
+          161.4
+        ]
+      ],
+      "volume_mm3": 35.0,
+      "mass_kg": 6.3e-05,
+      "density_kg_m3": 1800
+    },
+    "part-chip": {
+      "source_pocket": 2,
+      "bounds_mm": [
+        [
+          64.4,
+          59.2,
+          160
+        ],
+        [
+          67.60000000000001,
+          60.800000000000004,
+          161.4
+        ]
+      ],
+      "volume_mm3": 7.167999999993451,
+      "mass_kg": 1.2902399999988213e-05,
+      "density_kg_m3": 1800
+    },
+    "part-soic": {
+      "source_pocket": 3,
+      "bounds_mm": [
+        [
+          71.5,
+          58,
+          160
+        ],
+        [
+          76.5,
+          62,
+          161.4
+        ]
+      ],
+      "volume_mm3": 28.00000000007064,
+      "mass_kg": 5.0400000000127155e-05,
+      "density_kg_m3": 1800
+    }
+  },
+  "source_geometry_assumptions": [
+    "Nominal 48 mm head separation and reduced 0..400 mm XY travel",
+    "Package bodies are rectangular dimensional envelopes",
+    "Effective molded-package density 1800 kg/m3",
+    "Rigid axes and no-slip ideal GT2 belt",
+    "Initial package constraints are replaced by the co-simulation contact state during pickup and placement"
+  ],
+  "scope": "Verified captured rigid kinematics, evaluated dimensions and sampled interference. Physical calibration, load capacity and runtime payload collision checks require separate evidence.",
+  "provenance": {
+    "kind": "legacy-local-capture",
+    "trust_anchor": "Existing local captured-evidence receipt",
+    "assurance": "Input-file integrity and recomputed checks over recorded kernel results",
+    "fresh_kernel_evaluation": false,
+    "server_authenticated": false
+  },
+  "coverage": {
+    "captured_input_identity": "passed",
+    "rigid_kinematics": "passed",
+    "sampled_interference": "passed",
+    "quality_review": "failed",
+    "physical_calibration": "unverified",
+    "load_capacity": "unverified",
+    "runtime_payload_collisions": "unverified"
+  },
+  "evidence_sha256": {
+    "kernel-evaluation.json": "a29d9f024dfed0ead868b310545c404a4d180749dd3185eb6ec232389c176e70",
+    "kernel-design-review.json": "44a47521b0b10864b5937f5fb4d860cd7a2f2bcba77fffe88acdf68ab583f611",
+    "kernel-assembly-inspection.json": "6d561cae654cb180e8b2dc4e4f549c1d1cb2f3476d662acd06b42220b26f2ed0",
+    "kernel-calibration.json": "42f403979ba4e7330572e93bdb74a38212a4fde1d482c92159881da8aaed2b56",
+    "kernelcad-mesh.json": "d4e05e89d33ace6e704f4bcdb4b4f94b693302ae5752b7ee44f7090cd070f212",
+    "mesh-derivation.json": "1488385cd4ac4d3a4bd373f772c679124257eef3dd7e3c42f2aa1270769c5567",
+    "step-verification.json": "2ee97024842de1a72f5da291a4fc15615c5c7eeb74eb2c0453907648bdda6718",
+    "glb-verification.json": "68b067ff3c247cc36f89b199982c0d8e9c0b0f57a32aaa27b5e3aa6044afa1ce",
+    "kernel-studio-artifact.json": "0fcd085283bdf615fd3a5ed161ee0c67845849e8b97a7c183c50775474846429",
+    "kernelcad-mesh-studio-v2.json": "cc7d54bd2233c38ec6a31ea3429a2b541325ba930d88539ea4d2790c52e8a0da",
+    "labwired-smt-pick-place.step": "32897d0722d9cfcabf74f5af92541d147870e3791f6207d544a62667778d70c6",
+    "labwired-smt-pick-place.glb": "018a1543b82f0c230a1f2497d39292b37a6f6fb346c757b35f655b86df83c7c1"
+  }
+}

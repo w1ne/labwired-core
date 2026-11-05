@@ -52,6 +52,19 @@ gate that silently never fires. The gate is evaluated in exactly ONE place —
 peripheral model must never grow a clock check of its own:** a new gating reason
 is a line of yaml, not a second mechanism in `crates/core/src/peripherals/`.
 
+For native STM32 timers, the same declaration also selects the timer clock
+domain. The F1 and F4 RCC models propagate APB1/APB2 prescalers, including the
+timer clock multiplier when APB is divided. Counters, scheduled interrupts,
+PWM outputs and input-capture filters use the resulting period in CPU cycles.
+Disabling the resolved RCC gate pauses these clocks while retaining counter,
+prescaler and output phase. Re-enabling the gate resumes the remaining ticks
+and rearms scheduled work.
+Runtime rate changes preserve CNT and TIMx_PSC state and restart the RCC divider
+phase at the register-write boundary. Hardware prescaler-switch latency, F4
+TIMPRE selection, dynamic changes to the configured CPU frequency, and clock
+rates for other RCC families remain unmodelled. A timer requires its `clock:`
+declaration to receive a domain rate.
+
 The full register schema is documented in
 [`declarative_registers.md`](declarative_registers.md). Generate a starting point:
 

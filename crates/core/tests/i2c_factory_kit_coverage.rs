@@ -18,7 +18,8 @@ use std::path::PathBuf;
 const FACTORY_ONLY_ALLOWLIST: &[&str] = &[
     // Bus switch: attach needs the full manifest to assemble children; kit
     // AttachCtx does not carry the manifest yet (see universal-modules-design).
-    "tca9548a", "pca9548a", "tca9548",
+    // The four-channel PCA9545A also needs manifest-owned child topology.
+    "tca9548a", "pca9548a", "tca9548", "pca9545a",
     // Shared-memory cosim fixture — not a product part.
     "shm_i2c",
 ];

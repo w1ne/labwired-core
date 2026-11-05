@@ -22,6 +22,7 @@ impl SystemBus {
     /// would re-gate any peripheral probed after the RCC.
     pub fn set_clock_gating_bypass(&mut self, bypass: bool) {
         self.clock_gating_bypass = bypass;
+        self.refresh_all_timer_clocks();
     }
 
     /// Accept every write into the ESP32-C3 PMS register span, for the same
@@ -57,6 +58,7 @@ impl SystemBus {
         self.fault_unclocked
             .entry(idx)
             .or_insert_with(|| std::sync::atomic::AtomicU64::new(0));
+        self.refresh_all_timer_clocks();
         Ok(())
     }
 

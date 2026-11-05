@@ -472,6 +472,18 @@ impl SystemBus {
     /// If a controller register read fails, the peripheral is treated as clocked
     /// (fail-open: never wedge a chip that has no modelled clock unit).
     pub(crate) fn is_peripheral_clocked(&self, idx: usize) -> bool {
+        let enabled = self.peripheral_clock_enabled(idx);
+        if !enabled {
+            if let Some(suppressed) = self.fault_unclocked.get(&idx) {
+                suppressed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        enabled
+    }
+
+    /// Side-effect-free gate state for clock propagation. Suppressed-access
+    /// accounting belongs to `is_peripheral_clocked`, the access/tick choke.
+    fn peripheral_clock_enabled(&self, idx: usize) -> bool {
         // missing_clock fault: force the peripheral unclocked and count the
         // suppressed access as the runtime fired-observation. Checked before the
         // bypass so a fault is honoured even under measurement mode.
@@ -490,8 +502,7 @@ impl SystemBus {
         // re-attributing existing work, not new work: the two program totals
         // agree. A per-function delta is not a cost until the total moves with
         // it.
-        if let Some(suppressed) = self.fault_unclocked.get(&idx) {
-            suppressed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if self.fault_unclocked.contains_key(&idx) {
             return false;
         }
         if self.clock_gating_bypass {
@@ -535,6 +546,40 @@ impl SystemBus {
         {
             Some(g) => g.clk_enabled(gclk_id),
             None => false,
+        }
+    }
+
+    /// Propagate a controller's live APB timer rates through resolved gates.
+    /// A timer synchronizes using its previous divider before accepting the
+    /// new one, then invalidates and rearms counter and waveform deadlines.
+    pub(crate) fn refresh_timer_clocks(&mut self, controller: usize) {
+        if !self.timer_clock_controllers.contains(&controller) {
+            return;
+        }
+        for idx in 0..self.peripherals.len() {
+            let divider = self.peripherals[idx].clock_gate.as_ref().and_then(|gate| {
+                gate.requires.iter().find_map(|requirement| {
+                    if requirement.controller_idx == controller {
+                        self.peripherals[controller]
+                            .dev
+                            .timer_clock_divider(requirement.reg_offset)
+                    } else {
+                        None
+                    }
+                })
+            });
+            if let Some(divider) = divider {
+                let enabled = self.peripheral_clock_enabled(idx);
+                if self.peripherals[idx].dev.set_timer_clock(divider, enabled) {
+                    self.collect_scheduled_events(idx);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn refresh_all_timer_clocks(&mut self) {
+        for controller in self.timer_clock_controllers.clone() {
+            self.refresh_timer_clocks(controller);
         }
     }
 }

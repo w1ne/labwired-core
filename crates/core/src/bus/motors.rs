@@ -204,6 +204,9 @@ pub struct MotorSnapshot {
     pub commutation_sector: Option<u8>,
     pub control_state: String,
     pub faults: Vec<String>,
+    /// STEP/DIR commanded-motion capabilities and latched input diagnostics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_dir: Option<crate::peripherals::components::step_dir_motor::StepDirModelReport>,
 }
 
 pub(super) enum MotorRuntime {
@@ -1198,6 +1201,7 @@ impl SystemBus {
                             .then(|| "stalled".to_owned())
                             .into_iter()
                             .collect(),
+                        step_dir: None,
                     }
                 }
                 MotorRuntime::Bldc {
@@ -1253,6 +1257,7 @@ impl SystemBus {
                         commutation_sector: Some(s.commutation_sector),
                         control_state: control_state.clone(),
                         faults,
+                        step_dir: None,
                     }
                 }
             })
@@ -1267,6 +1272,12 @@ impl SystemBus {
                 continue;
             }
             let angle_deg = m.angle_degrees_f64();
+            let step_dir = m.model_report(self.current_cycle);
+            let faults = if step_dir.timing.violations.is_empty() {
+                Vec::new()
+            } else {
+                vec!["step-dir-timing".to_owned()]
+            };
             out.push(MotorSnapshot {
                 id: m.id().to_string(),
                 kind: STEPPER_SNAPSHOT_KIND,
@@ -1289,7 +1300,8 @@ impl SystemBus {
                 } else {
                     "idle".to_owned()
                 },
-                faults: Vec::new(),
+                faults,
+                step_dir: Some(step_dir),
             });
         }
         out

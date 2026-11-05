@@ -142,6 +142,7 @@ peripherals:
     base_address: 0x40000400
     size: "1KB"
     irq: 29
+    clock: { reg: "apb1enr", bit: 1 }
     config:
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f407/tim3.yaml"
@@ -150,6 +151,7 @@ peripherals:
     base_address: 0x40000800
     size: "1KB"
     irq: 30
+    clock: { reg: "apb1enr", bit: 2 }
     config:
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f407/tim4.yaml"
@@ -158,6 +160,7 @@ peripherals:
     base_address: 0x40000C00
     size: "1KB"
     irq: 50
+    clock: { reg: "apb1enr", bit: 3 }
     config:
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f407/tim5.yaml"

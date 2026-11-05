@@ -10,6 +10,7 @@ use panic_halt as _;
 static MSG: &[u8] = b"semihost hello\n\0";
 
 fn semihost(op: u32, arg: u32) {
+    #[cfg(target_arch = "arm")]
     unsafe {
         core::arch::asm!(
             "bkpt #0xAB",
@@ -18,6 +19,8 @@ fn semihost(op: u32, arg: u32) {
             options(preserves_flags, nostack),
         );
     }
+    #[cfg(not(target_arch = "arm"))]
+    panic!("ARM semihosting requires an ARM target (op={op:#x}, arg={arg:#x})");
 }
 
 #[entry]

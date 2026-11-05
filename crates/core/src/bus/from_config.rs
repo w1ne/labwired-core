@@ -455,6 +455,7 @@ impl SystemBus {
             pad_claim_links: Default::default(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
+            timer_clock_controllers: Vec::new(),
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),

@@ -143,6 +143,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_i2c::CAP1188_KIT,
     &components::drv2605::DRV2605_KIT,
     &components::nau88l21::NAU88L21_KIT,
+    &components::xgzp6857d::XGZP6857D_KIT,
     &components::mlx90640::MLX90640_KIT,
     // GPIO-group actuators migrated off from_config residual arms.
     &components::servo::SERVO_KIT,
@@ -239,7 +240,8 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // STEP/DIR driver family.
     ("drv8825", "a4988"),
     ("tmc2209", "a4988"),
-    // Bipolar NEMA17 plant behind an A4988-class driver (same StepDirMotor).
+    ("tmc2226", "a4988"),
+    // NEMA17 form-factor alias retains A4988 timing and full-step defaults.
     ("nema17", "a4988"),
     // H-bridge family.
     ("tb6612", "l298n"),

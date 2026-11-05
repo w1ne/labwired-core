@@ -450,6 +450,21 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Timer-kernel clock period in CPU cycles for an enable-register domain.
+    /// Clock controllers return `None` for domains whose rate is not modelled.
+    /// The bus resolves the domain through the same `clock:` declaration as
+    /// the enable gate and republishes its rate after controller writes.
+    fn timer_clock_divider(&self, _gate_reg_offset: u64) -> Option<u32> {
+        None
+    }
+
+    /// Apply a timer-kernel period and the bus's resolved clock-enable state
+    /// after synchronizing the old clock to now.
+    /// Return true when scheduled deadlines need to be collected again.
+    fn set_timer_clock(&mut self, _divider: u32, _enabled: bool) -> bool {
+        false
+    }
+
     /// Cortex-M7 L1 cache capability: the I/D cache geometry this peripheral
     /// declares (`cortex_m7_cache`). `configure_cortex_m` asks every
     /// peripheral and hands the answer to the SCB's CLIDR/CTR/CCSIDR, so the

@@ -165,7 +165,9 @@ use std::path::{Path, PathBuf};
 /// (`jit_gate_allows`), not a per-instruction path. A `Bus` capability method
 /// would retire both JIT-gate reaches at once; until then this ceiling records
 /// the second one rather than leaving it uncounted.
-const MAX_AS_ANY: usize = 195;
+// 195 → 194: I²C topology queries the I2cBusSwitch construction capability
+// instead of inspecting concrete TCA9548A/PCA9545A types.
+const MAX_AS_ANY: usize = 194;
 // GPIO schedule migration removes four concrete sensor downcasts.
 // 195 → 196: `tests/sim_input_reachability.rs` reads the ADXL345 back out of
 // `Rp2040I2c` by downcast, the same independent-witness reach every other
@@ -247,8 +249,11 @@ const MAX_DOWNCAST_REF: usize = 196;
 // 272 → 273 / 338 → 339: the RP2040 row of `tests/sim_input_reachability.rs`
 // reads its ADXL345 back by `as_any_mut()` + `downcast_mut`, like every other
 // row's readback (see MAX_DOWNCAST_REF). Test-only.
-const MAX_AS_ANY_MUT: usize = 273;
-const MAX_DOWNCAST_MUT: usize = 339;
+// 273 → 272 / 339 → 338: the same switch capability attaches downstream
+// devices through each model's channel validation, retiring the factory's
+// concrete TCA9548A reach. The pressure-tree regression uses I²C readback.
+const MAX_AS_ANY_MUT: usize = 272;
+const MAX_DOWNCAST_MUT: usize = 338;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

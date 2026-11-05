@@ -2907,6 +2907,22 @@ impl crate::Peripheral for Rcc {
         self.rcc_reg_offset(name)
     }
 
+    fn timer_clock_divider(&self, gate_reg_offset: u64) -> Option<u32> {
+        // RM0008 §7.2 / RM0090 §7.2: APB /1 clocks timers at PCLK,
+        // every divided APB clocks them at 2 * PCLK. Relative to HCLK the
+        // timer divisors are therefore 1, 1, 2, 4, 8 for APB /1,/2,/4,/8,/16.
+        // F4Rcc models the F405/407 clock tree (no F42x/F43x TIMPRE selector).
+        let (cfgr, shift) = match (self, gate_reg_offset) {
+            (Self::Stm32F1(rcc), 0x1C) => (rcc.cfgr, 8),
+            (Self::Stm32F1(rcc), 0x18) => (rcc.cfgr, 11),
+            (Self::Stm32F4(rcc), 0x40) => (rcc.cfgr, 10),
+            (Self::Stm32F4(rcc), 0x44) => (rcc.cfgr, 13),
+            _ => return None,
+        };
+        let ppre = (cfgr >> shift) & 0x7;
+        Some(1 << ppre.saturating_sub(4))
+    }
+
     // Inert walk: clock-control register bank; tick() is the trait-default no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

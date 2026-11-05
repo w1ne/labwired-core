@@ -605,6 +605,9 @@ pub struct SystemBus {
     /// in O(1) instead of scanning by name. `None` on buses with no RCC (e.g.
     /// most non-STM32 chips), in which case no peripheral is ever gated.
     rcc_idx: Option<usize>,
+    /// Clock controllers with resolved timer-rate domains. Kept at config
+    /// resolution so ordinary peripheral writes avoid scanning clock gates.
+    timer_clock_controllers: Vec<usize>,
     /// Measurement-only escape hatch: when `true`, [`is_peripheral_clocked`]
     /// short-circuits to `true` so RCC clock-gating never suppresses an access.
     /// Off by default (the runtime always gates); only diagnostic tooling such

@@ -104,6 +104,7 @@ impl SystemBus {
         }
         if matches!(r, Ok(true)) {
             self.finish_rtc_io_write(rtc_io_capture);
+            self.refresh_timer_clocks(idx);
         }
         self.maybe_service_edge_driven_gpio_devices(idx);
         #[cfg(feature = "event-scheduler")]
@@ -1317,6 +1318,7 @@ impl crate::Bus for SystemBus {
             }
             if r.is_ok() {
                 self.finish_rtc_io_write(rtc_io_capture);
+                self.refresh_timer_clocks(idx);
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
@@ -1517,6 +1519,7 @@ impl crate::Bus for SystemBus {
             }
             if r.is_ok() {
                 self.finish_rtc_io_write(rtc_io_capture);
+                self.refresh_timer_clocks(idx);
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
