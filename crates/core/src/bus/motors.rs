@@ -154,7 +154,7 @@ pub(super) struct MotorFeedbackBindings {
 /// Supply / ground rail vocabulary shared with board-config power-rails
 /// (union of the names LabWired already treats as rails). Classification is by
 /// normalized identity, not "pin named VCC".
-fn classify_logic_rail(label: &str) -> Option<bool> {
+pub(crate) fn classify_logic_rail(label: &str) -> Option<bool> {
     let n = label.trim().to_ascii_uppercase();
     // Strip a trailing `.N` multi-instance suffix (GND.2 → GND).
     let n = n.split('.').next().unwrap_or(&n);
@@ -215,6 +215,7 @@ pub(super) enum MotorRuntime {
         steering: DcSteering,
         brake: MotorControlSource,
         enable: MotorControlSource,
+        enable2: MotorControlSource,
         feedback: MotorFeedbackBindings,
         index: Option<ResolvedPin>,
         fault: Option<ResolvedPin>,
@@ -515,6 +516,10 @@ impl SystemBus {
                 Some(p) => self.resolve_motor_control(&c.id, "enable", p)?,
                 None => MotorControlSource::Constant(true),
             },
+            enable2: match c.enable2_pin.as_deref() {
+                Some(p) => self.resolve_motor_control(&c.id, "enable2", p)?,
+                None => MotorControlSource::Constant(true),
+            },
             feedback: MotorFeedbackBindings {
                 encoder_a: self.resolve_optional_motor_input(
                     &c.id,
@@ -566,6 +571,7 @@ impl SystemBus {
             steering: DcSteering::Direction(MotorControlSource::Constant(true)),
             brake: MotorControlSource::Constant(false),
             enable: MotorControlSource::Constant(false),
+            enable2: MotorControlSource::Constant(false),
             feedback: MotorFeedbackBindings {
                 encoder_a: self.resolve_optional_motor_input(
                     &c.id,
@@ -705,9 +711,12 @@ impl SystemBus {
     }
 
     fn pin_output(&self, pin: ResolvedPin) -> bool {
+        // Motor controls are wires, not GPIO output latches. A timer may own
+        // an AF pad while ODR retains the opposite level, and disabling that
+        // timer must not leave the motor driven by the stale latch.
         self.peripherals[pin.peripheral]
             .dev
-            .read_gpio_output(pin.bit)
+            .read_gpio_pad(pin.bit)
             .unwrap_or(false)
     }
 
@@ -755,6 +764,7 @@ impl SystemBus {
                     steering,
                     brake,
                     enable,
+                    enable2,
                     feedback,
                     index,
                     fault,
@@ -800,9 +810,11 @@ impl SystemBus {
                             None => (f64::from(self.control_level(*pwm)), true),
                         };
                         let braking = self.control_level(*brake);
+                        let enables_high =
+                            self.control_level(*enable) && self.control_level(*enable2);
                         let (state, duty) = match *steering {
                             DcSteering::Direction(direction) => {
-                                let enabled = self.control_level(*enable) && timer_gate;
+                                let enabled = enables_high && timer_gate;
                                 let state = if !enabled {
                                     HBridgeState::Coast
                                 } else if braking {
@@ -824,12 +836,9 @@ impl SystemBus {
                                 // low, it does not disable the bridge. A separate
                                 // PWM/enable pad that stops gates the bridge off.
                                 let (enabled, duty) = if pwm_input.is_some() {
-                                    (
-                                        self.control_level(*enable),
-                                        if timer_gate { duty } else { 0.0 },
-                                    )
+                                    (enables_high, if timer_gate { duty } else { 0.0 })
                                 } else {
-                                    (self.control_level(*enable) && timer_gate, duty)
+                                    (enables_high && timer_gate, duty)
                                 };
                                 terminal_drive(
                                     enabled,
