@@ -32,13 +32,16 @@ pub enum RiscVCoreProfile {
     Esp32C3,
     /// Baseline RV32 profile used by generic RISC-V targets.
     StandardRv32,
+    /// Standard RV32EC: RV32E's x0..x15 register file plus the C extension.
+    /// M/A instructions and references to x16..x31 are illegal.
+    StandardRv32EC,
 }
 
 impl RiscVCoreProfile {
     /// Select the profile a chip descriptor runs.
     ///
-    /// The engine models two profiles: the standard RV32 machine and the
-    /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
+    /// The engine models standard RV32/RV32EC machines and the ESP32-C3's
+    /// vendor CSR set. An `esp32*` chip keeps the vendor profile —
     /// the C3 is the part whose ROM and performance-counter block the engine
     /// models, and the C6 shares that register surface today. Any other chip
     /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
@@ -50,6 +53,9 @@ impl RiscVCoreProfile {
             return Self::Esp32C3;
         }
         match chip.core.as_deref() {
+            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32ec") => {
+                Self::StandardRv32EC
+            }
             Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
                 Self::StandardRv32
             }
@@ -717,6 +723,9 @@ impl RiscV {
                 return self.triggers.read_csr(csr)
             }
             0x300 => self.mstatus,
+            // RV32EC: MXL=32-bit, E base integer register set, and C.
+            // The CSR is read-only; no M/A extension bits are advertised.
+            0x301 if self.core_profile == RiscVCoreProfile::StandardRv32EC => 0x4000_0014,
             // medeleg / mideleg — M-mode only emulator; esp_intr_alloc on C6
             // does `csrrc mideleg` when binding CPU ints. Accept as RAZ/WI.
             0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
@@ -748,10 +757,20 @@ impl RiscV {
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            0xC00
+                if matches!(
+                    self.core_profile,
+                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::StandardRv32EC
+                ) =>
+            {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            0xC80
+                if matches!(
+                    self.core_profile,
+                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::StandardRv32EC
+                ) =>
+            {
                 (self.mtime >> 32) as u32
             }
             _ => return None,
@@ -1166,6 +1185,21 @@ impl Cpu for RiscV {
             }
             (instruction, inst_len)
         };
+        if self.core_profile == RiscVCoreProfile::StandardRv32EC
+            && !instruction.is_rv32ec_instruction()
+        {
+            // RV32E reserves register encodings x16..x31, and RV32EC has no
+            // M/A extension. Match the architectural illegal-instruction
+            // exception rather than allowing the 32-slot host backing array to
+            // make an invalid guest instruction appear to work.
+            self.mtval = if inst_len == 2 {
+                opcode & 0xFFFF
+            } else {
+                opcode
+            };
+            self.handle_trap(2, retired_pc);
+            return Ok(());
+        }
         tracing::debug!(
             "PC={:#x}, Op={:#08x}, Instr={:?}, Len={}",
             self.pc,
@@ -1835,6 +1869,7 @@ impl Cpu for RiscV {
         {
             self.jit_enabled = config.riscv_jit_enabled;
             if self.jit_enabled
+                && self.core_profile != RiscVCoreProfile::StandardRv32EC
                 && max_count > 1
                 && !self.triggers.armed()
                 && self.jit_gate_allows(bus, observers)
