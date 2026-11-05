@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 29 have end-to-end analog coverage; 74 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 30 have end-to-end analog coverage; 73 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -35,7 +35,7 @@ Current inventory: **103 profiles; 29 have end-to-end analog coverage; 74 have n
 | `dspic33fj32mc204-demo` | [`cosim_dspic33fj32mc204_analog.rs`](../crates/core/tests/cosim_dspic33fj32mc204_analog.rs)::`dspic33fj32mc204_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists reach separate GPIOB inputs; asserts solved voltages, PORTB levels, and Schmitt hysteresis. GPIO thresholds are simulation assumptions; this is not ADC support or silicon validation. |
 | `ek-ra6m5` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end` — Beta NTC and Shockley diode netlists route to ADC1 channels 0/2 and produce 12-bit scan results |
 | `ek-ra8m1` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`ek_ra8m1_ntc_and_diode_netlists_reach_adc1_end_to_end` — the same generic Beta NTC and Shockley diode netlists route to ADC1 channels 0/2 and produce 12-bit scan results |
-| `ek-rx261` | **NO E2E analog coverage** |
+| `ek-rx261` | [`cosim_ek_rx261_analog.rs`](../crates/core/tests/cosim_ek_rx261_analog.rs)::`ek_rx261_ntc_and_diode_netlists_reach_simulated_gpio_thresholds` — generic NTC and unrelated Shockley diode netlists reach two input-only simulation endpoints; asserts solved voltages, threshold levels, and hysteresis. This is direct SystemBus coverage only: PORT/MPC registers and firmware GPIO access remain unsupported, and thresholds are simulation assumptions. |
 | `esp32-wroom-32` | [`cosim_esp32_analog_diode.rs`](../crates/core/tests/cosim_esp32_analog_diode.rs)::`esp32_wroom_32_ntc_netlist_reaches_sens_sar_channel_and_one_shot_result` — Beta NTC divider reaches the profile's SENS SAR ADC1 channel 6 and one-shot result |
 | `esp32-wroom-epaper` | **NO E2E analog coverage** |
 | `esp32c3-ble-pong` | **NO E2E analog coverage** |
@@ -116,3 +116,5 @@ Current inventory: **103 profiles; 29 have end-to-end analog coverage; 74 have n
 | `vegaboard-ri5cy` | **NO E2E analog coverage** |
 
 The EK-RA6M5 and EK-RA8M1 proofs reuse the same generic Beta NTC and Shockley diode netlists and explicit RA ADC12 channel routing; both profiles lack pin-to-ADC aliases for these channels. The shared fixture is [examples/ek-ra6m5/analog-ntc-system.yaml](../examples/ek-ra6m5/analog-ntc-system.yaml). Apollo4 Plus uses the same generic analog adapter with an explicit channel route; its model currently covers single scans of external slots and FIFO output.
+
+EK-RX261 uses the reusable input-only `input_pin_bank` endpoint because its PORT/MPC register map remains a stub. It demonstrates the shared MNA-to-thresholded-input route for two unrelated devices, but does not model silicon GPIO thresholds, analog pad muxing, ADC conversion, or firmware-visible port registers.

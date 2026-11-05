@@ -38,7 +38,10 @@ RX target is an RXv1 RX62N; Renode has no RX).
 - **SCI6**: ERI6 (receive errors) is never requested, and RXI/TXI/TEI are
   edges into IRn; the hardware manual's per-source detection mode was not
   transcribed. No FIFO, multiprocessor, smart-card, simple I2C/SPI modes.
-- **Ports/MPC, BSC, DTC, the reset-status block**: declared stubs. FLASH
+- **Ports/MPC register behavior, BSC, DTC, the reset-status block**: not
+  modelled. The `port` window has two input-only `input_pin_bank` endpoints for
+  co-simulation; they do not implement RX registers or firmware-visible GPIO
+  reads, and their voltage thresholds are simulation assumptions. FLASH
   programming/erase is not modelled (only the control registers are stored).
 - **Clocks**: no rate is derived from SCKCR/PLL settings; `cpu_hz` is the
   64 MHz ICLK Zephyr's board configures and the CMT counts PCLKB = 32 MHz.

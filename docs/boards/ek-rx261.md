@@ -17,10 +17,12 @@ at the fixed reset vector:
 | `zephyr-uart-basic-api.yaml` | `tests/drivers/uart/uart_basic_api` | 7/7 on the interrupt-driven SCI driver (RXI6/TXI6/TEI6 ICU vectors) |
 
 !!! warning "Not claimed yet"
-    PORT/MPC pin control (no LEDs or switches), SCI6 ERI (receive-error
-    interrupt), DTC, group interrupts, IRQ pins, the RXv3 register banks,
-    user-mode privilege checks and FPU exceptions. SIM-DERIVED: no bench
-    part.
+    PORT/MPC register behavior (no firmware-accessible LEDs or switches), SCI6
+    ERI (receive-error interrupt), DTC, group interrupts, IRQ pins, the RXv3
+    register banks, user-mode privilege checks and FPU exceptions. The
+    `port.0`/`port.1` mixed-signal endpoints are simulation-only input hooks;
+    their thresholds are assumptions, not RX261 electrical data. SIM-DERIVED:
+    no bench part.
 
 Evidence and the full claim table: `examples/ek-rx261/VALIDATION.md`.
 Rebuild the fixtures: `crates/firmware-ek-rx261-zephyr/build.sh`.

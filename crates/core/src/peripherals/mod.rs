@@ -72,6 +72,7 @@ pub mod icache;
 pub mod imx_ccm;
 pub mod imx_iomuxc;
 pub mod imxrt;
+pub mod input_pin_bank;
 pub mod itm;
 pub mod iwdg;
 pub mod jpeg_baseline;

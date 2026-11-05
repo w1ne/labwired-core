@@ -45,6 +45,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // Generic core types (built here or by `from_config` descriptor loaders).
     "uart",
     "gpio",
+    // Simulation-only external input endpoints for profiles whose silicon
+    // GPIO register model is not available yet.
+    "input_pin_bank",
     "avr_gpio",
     "avr_adc",
     "pic24_gpio",
@@ -623,6 +626,26 @@ pub fn try_build(
     _bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
+        "input_pin_bank" => {
+            let pin_count = p_cfg
+                .config
+                .get("pin_count")
+                .and_then(|value| value.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "input_pin_bank '{}' requires config.pin_count in 1..=32",
+                        p_cfg.id
+                    )
+                })?;
+            anyhow::ensure!(
+                (1..=32).contains(&pin_count),
+                "input_pin_bank '{}' config.pin_count must be in 1..=32, got {pin_count}",
+                p_cfg.id
+            );
+            Box::new(crate::peripherals::input_pin_bank::InputPinBank::new(
+                pin_count as u8,
+            )?)
+        }
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
             // supply the silicon value via `config: { calib: ... }`.
