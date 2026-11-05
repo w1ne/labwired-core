@@ -1678,6 +1678,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-litex-vexriscv-smp-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-max32652-smoke"
 version = "0.1.0"
 dependencies = [

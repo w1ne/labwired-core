@@ -74,6 +74,7 @@ on:
       - "crates/firmware-mimxrt798s-smoke/**"
       - "crates/firmware-mimxrt595-evk-smoke/**"
       - "crates/firmware-litex-minerva-smoke/**"
+      - "crates/firmware-litex-vexriscv-smp-smoke/**"
       - "crates/firmware-opentitan-earlgrey-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
@@ -857,6 +858,13 @@ jobs:
             target: riscv32i-unknown-none-elf
             script: examples/renode-onboarding/litex_minerva-smoke.yaml
             system: configs/systems/onboarding/litex_minerva.yaml
+          # The imported SMP platform has four RV32IMA harts. This engine
+          # profile checks one RV32IM-compatible hart and LiteX UART only.
+          - id: litex_vexriscv_smp
+            crate: firmware-litex-vexriscv-smp-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_smp-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_smp.yaml
           - id: arty_litex_vexriscv
             crate: firmware-arty-litex-smoke
             target: riscv32im-unknown-none-elf

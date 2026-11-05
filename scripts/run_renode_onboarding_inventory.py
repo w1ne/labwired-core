@@ -591,6 +591,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32i-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_minerva-smoke.yaml",
     },
+    "litex_vexriscv_smp": {
+        "crate": "firmware-litex-vexriscv-smp-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/litex_vexriscv_smp-smoke.yaml",
+    },
     "arty_litex_vexriscv": {
         "crate": "firmware-arty-litex-smoke",
         "target": "riscv32im-unknown-none-elf",

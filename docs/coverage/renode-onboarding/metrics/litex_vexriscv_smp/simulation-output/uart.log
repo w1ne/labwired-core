@@ -1,0 +1,3 @@
+LITEX VEXRISCV SMP SINGLE-HART SMOKE
+cpu=rv32im hart=0 uart=litex
+mul=000000d1
