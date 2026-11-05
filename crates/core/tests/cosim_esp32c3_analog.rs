@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic analog netlists drive the ESP32-C3 BLE Pong profile through explicit
-//! APB_SARADC channel routes and its firmware-visible one-shot path. The
-//! profile's existing GP2Y0A21 sensor stays routed to ADC1_CH1.
+//! Generic analog netlists drive ESP32-C3 profiles through explicit APB_SARADC
+//! channel routes and the firmware-visible one-shot path. The BLE Pong profile's
+//! existing GP2Y0A21 sensor stays routed to ADC1_CH1.
 
 mod common;
 use common::root;
@@ -237,6 +237,16 @@ fn esp32c3_epaper_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
         "configs/systems/esp32c3-epaper-workshop.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-epaper-workshop",
+        false,
+    );
+}
+
+#[test]
+fn esp32c3_jtag_watch_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_c3_analog_inputs(
+        "configs/systems/esp32c3-jtag-watch.yaml",
+        "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
+        "esp32c3-jtag-watch",
         false,
     );
 }
