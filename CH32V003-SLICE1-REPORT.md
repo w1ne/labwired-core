@@ -19,16 +19,50 @@ PFIC register offsets listed in the brief are implemented relative to a PFIC bas
 
 The WCH RCC supports the PLL-ready polling and clock switching path, an HSE frequency setter, AHB prescaling, and storage for the three peripheral-enable registers. The WCH model is reachable by `RccRegisterLayout::Wch`; chip mapping remains deferred.
 
-## Datasheet facts not verified
+## Datasheet facts — verified against the public CH32V003RM
 
-The LabWired Part Knowledge lookup for `CH32V003` returned `NOT_FOUND`; I could not verify CH32V003RM facts through the available cited-fact source. Values supplied in the task brief were used as requirements, not independently verified facts.
+The LabWired Part Knowledge lookup for `CH32V003` returned `NOT_FOUND`, so the
+original slice-1 facts were marked provisional. They were then verified
+out-of-band against the public sources:
 
-In particular, I could not verify:
+- CH32V003 Reference Manual (V1.5 / V1.9), §6.5.2 `R32_PFIC_*` register table.
+- Official WCH peripheral library `ch32v00x.h` / `ch32v00x_rcc.c` (WCH V1.0.0):
+  `RCC_TypeDef`, `APBAHBPrescTable`, and the `IRQn_Type` interrupt numbers.
 
-- The PFIC register addresses and semantics, source numbering, priority encoding/order, and nesting details against CH32V003RM.
-- VTF register offsets and slot count. The model therefore exposes vector-free entry configuration and lookup without assigning MMIO addresses.
-- The HSI 24 MHz, LSI 128 kHz, HSE 4–25 MHz and PLL ×2 claims against CH32V003RM.
-- The WCH RCC offsets and bit positions used by the provisional model: control register `0x00`, `CFGR0` `0x04`, `AHBPCENR` `0x14`, `APB2PCENR` `0x18`, `APB1PCENR` `0x1C`; HSI/HSE/PLL ready bits; SW/SWS, HPRE and PLLSRC fields; and the HPRE divisor encodings. These are marked provisional in code and must be checked before claiming silicon fidelity.
+### Verified (the brief values were correct)
+- PFIC offsets: `ISR1 0xE000E000`, `IENR1 0xE000E100`, `IRER1 0xE000E180`,
+  `IPSR1 0xE000E200`, `IPRR1 0xE000E280`, `IACTR1 0xE000E300`,
+  `IPRIORx 0xE000E400`, `SCTLR 0xE000ED10` — all match the RM.
+- RCC offsets: `CTLR 0x00`, `CFGR0 0x04`, `AHBPCENR 0x14`, `APB2PCENR 0x18`,
+  `APB1PCENR 0x1C` — match the official `RCC_TypeDef`.
+- Bit fields: `PLLSRC` CFGR0 bit 16, `PLLON` CTLR bit 24, `HSEON` CTLR bit 16,
+  `SW[1:0]` CFGR0 bits 0–1, `SWS[1:0]` bits 2–3.
+- `HSI = 24 MHz`, `HSE = 24 MHz` default (header `HSI_VALUE`/`HSE_VALUE`),
+  `PLL = source × 2`.
+
+### Newly known (previously "unknown" in this report)
+- VTF: `PFIC_VTFIDR 0xE000E050`, `PFIC_VTFADDRR0 0xE000E060`,
+  `PFIC_VTFADDRR1 0xE000E064`; `PFIC_CFGR 0xE000E048`, `PFIC_GISR 0xE000E04C`,
+  `PFIC_ITHRESDR 0xE000E040`.
+- IRQ map (`IRQn_Type`): `WWDG 16, PVD 17, FLASH 18, RCC 19, EXTI7_0 20,
+  AWU 21, DMA1_CH1..7 22–28, ADC 29, I2C1_EV 30, I2C1_ER 31, USART1 32,
+  SPI1 33, TIM1_BRK 34, TIM1_UP 35, TIM1_TRG_COM 36, TIM1_CC 37, TIM2 38`;
+  SysTick 12, software 14.
+
+### Corrected (one real bug)
+- `WchRcc::hclk_hz()` used a power-of-two-log HPRE divisor table
+  (`0..=7 => 1, 8 => 2, 9 => 4, … 512`) that was wrong on nearly every entry
+  and invented a `/512` encoding that does not exist. The verified table is the
+  WCH `APBAHBPrescTable` `{1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8}`: field `0x1` is
+  `/2`, `0x2` is `/3`, and the upper half repeats the lower (`0x8` is `/1`).
+  Fixed in commit `291821aa5`; the test now asserts the verified encodings.
+
+### Still provisional
+- PFIC priority encoding/order and the exact 2-level nesting semantics are a
+  model choice, not yet read bit-by-bit from the RM. Source IDs 0–26 are a
+  simulator convention; reconcile to the verified IRQ map when PFIC is wired
+  into a chip. `LSI = 128 kHz` and the `HSE 4–25 MHz` range remain unconfirmed
+  detail.
 
 ## Tests
 
