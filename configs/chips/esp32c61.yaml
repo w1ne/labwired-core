@@ -1,5 +1,6 @@
-# ESP32-C61 HP RISC-V profile for the ESP32-C61-DevKitC-1 v2.0 UART smoke.
-# The focused model exposes only UART0, used by the board's USB-UART bridge.
+# ESP32-C61 HP RISC-V profile for the ESP32-C61-DevKitC-1 v2.0 UART and GPIO8
+# addressable RGB LED smokes. Other C61 GPIO pads and peripherals stay out of
+# this focused board profile.
 name: "esp32c61"
 arch: "riscv"
 core: "rv32imac"
@@ -21,6 +22,8 @@ memory_regions:
     base: 0x40000000
     size: "256KB"
     image_env: "LABWIRED_ESP32C61_ROM"
+pins:
+  GPIO8: { gpio: "gpio", bit: 8 }
 peripherals:
   # C61 PCR keeps UART0_CONF at +0x00, UART0_SCLK_CONF at +0x04 and the same
   # APB/function-clock bits as C5/C6. The C6 PCR model supplies the register
@@ -39,3 +42,19 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
     config:
       debug_schema: "../peripherals/esp32c6/uart0.yaml"
+  # C61 GPIO differs from the C6 register head. The behavioral profile covers
+  # direct GPIO8 output only: OUT/W1TS/W1TC, ENABLE_W1TS, and the GPIO8 selector.
+  - id: "gpio"
+    type: "esp32c61_gpio"
+    base_address: 0x60091000
+    # GPIO_EXT begins at +0xE00 on C61; keep this profile's range before it.
+    size: "3584"
+    config:
+      debug_schema: "../peripherals/esp32c61/gpio_gpio8.yaml"
+  # The one IO_MUX word exercised by this smoke. GPIO8 is at +0x20 on C61.
+  - id: "io_mux"
+    type: "esp32c61_io_mux"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c61/io_mux_gpio8.yaml"

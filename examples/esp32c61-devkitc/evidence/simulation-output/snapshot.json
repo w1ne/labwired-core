@@ -4,8 +4,8 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107296568,
-      1082458096,
+      1107298162,
+      1082458080,
       1082132480,
       0,
       0,
@@ -13,10 +13,10 @@
       0,
       1082458112,
       0,
-      1610612736,
-      1107296963,
-      1107296963,
-      10,
+      0,
+      0,
+      256,
+      1611210752,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1107296910,
+    "pc": 1107298162,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 1000000,
-  "cycles": 2000232,
+  "cycles": 2000302,
   "instructions": 1000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "8ee5e911d80cf4a932a95503fbf78cddc65c1d2aaf7b0e06aa5bb504518d7c67",
+  "firmware_hash": "af5b3da4d943ab7bca4869f65f4dd8afbce1bde67f460bc4d7cb6ee5a7ef482f",
   "config": {
     "firmware": "examples/esp32c61-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-devkitc-smoke",
     "system": "examples/esp32c61-devkitc/../../configs/systems/esp32c61-devkitc.yaml",

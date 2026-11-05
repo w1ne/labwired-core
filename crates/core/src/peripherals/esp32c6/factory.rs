@@ -42,6 +42,11 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // is built with the C6 layout; the FSPI and UART TX numbers match.
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
+        // The C61 GPIO block has its own register head and selector placement;
+        // currently only the direct GPIO8 output path used by the DevKitC RGB
+        // LED is claimed.
+        "esp32c61_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c61()),
+        "esp32c61_io_mux" => Box::new(super::io_mux::Esp32c61IoMux::new()),
         // The H2 smoke uses only direct GPIO output on GPIO8. Espressif's
         // esp32h2.svd and esp32c6.svd agree on the GPIO base (0x6009_1000) and
         // the OUT/W1TS/W1TC, ENABLE/W1TS, and IN register offsets used here.
@@ -126,6 +131,8 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32c61_gpio",
+    "esp32c61_io_mux",
     "esp32h2_gpio",
     "esp32c6_pcr",
     "esp32c6_rmt",

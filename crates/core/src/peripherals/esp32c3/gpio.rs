@@ -179,6 +179,16 @@ const IN: u64 = 0x3C;
 const STATUS: u64 = 0x44;
 const STATUS_W1TS: u64 = 0x48;
 const STATUS_W1TC: u64 = 0x4C;
+// The C61's GPIO block moved output-enable/strap/input registers and places
+// GPIO_FUNC8_OUT_SEL_CFG at 0xAF4. This profile currently models the direct
+// GPIO8 output path used by the C61-DevKitC RGB LED.
+const C61_STRAP: u64 = 0x00;
+const C61_ENABLE: u64 = 0x34;
+const C61_ENABLE_W1TS: u64 = 0x38;
+const C61_ENABLE_W1TC: u64 = 0x3C;
+const C61_IN: u64 = 0x64;
+const C61_FUNC8_OUT_SEL: u64 = 0xAF4;
+const C61_SIG_GPIO_OUT: u32 = 256;
 const PCPU_INT: u64 = 0x5C;
 const PCPU_NMI_INT: u64 = 0x60;
 const CPUSDIO_INT: u64 = 0x64;
@@ -235,6 +245,9 @@ pub struct Esp32c3Gpio {
     intr_source: u32,
     /// Matrix numbering of the chip this block sits on (C3 or C6).
     layout: MatrixLayout,
+    /// C61 has a different GPIO register head and GPIO8 selector location.
+    /// Only the direct GPIO8 output path is exposed by the current C61 board.
+    esp32c61_layout: bool,
     /// Peripheral input signals bound to wire lines (`FUNCn_IN_SEL_CFG`).
     in_routes: crate::peripherals::esp_gpio_net::MatrixInputs,
     /// Pads on a world `gpio_net` ([`PinPort::join_wire`]).
@@ -274,6 +287,7 @@ impl Esp32c3Gpio {
             irq_watch: Default::default(),
             intr_source: GPIO_INTR_SOURCE,
             layout: C3_MATRIX,
+            esp32c61_layout: false,
             in_routes: Default::default(),
             net_pads: 0,
             wire_edges: Vec::new(),
@@ -299,6 +313,16 @@ impl Esp32c3Gpio {
             layout: C6_MATRIX,
             ..Self::with_intr_source(30)
         }
+    }
+
+    /// The ESP32-C61 direct GPIO output register path used by DevKitC GPIO8.
+    /// Its selector value is 256 (with OE_SEL at bit 10), and its output
+    /// enable W1TS register is at +0x38 rather than the C3/C6 +0x24.
+    pub fn for_esp32c61() -> Self {
+        let mut gpio = Self::new();
+        gpio.esp32c61_layout = true;
+        gpio.out_sel[8] = C61_SIG_GPIO_OUT;
+        gpio
     }
 
     /// Attach a device that observes transitions on this chip's GPIO pads.
@@ -483,6 +507,27 @@ impl Esp32c3Gpio {
         Some(self.out_sel[pin as usize] & 0x1FF)
     }
 
+    fn is_gpio_out_selector(&self, selector: u32) -> bool {
+        selector == SIG_GPIO_OUT || (self.esp32c61_layout && selector == C61_SIG_GPIO_OUT)
+    }
+
+    fn gpio_output_path_selected(&self, pin: u8) -> bool {
+        if !self.esp32c61_layout || pin != 8 {
+            return true;
+        }
+        let iomux_selected = self.pad_controls.as_ref().is_some_and(|controls| {
+            controls
+                .read()
+                .expect("ESP32-C61 IO_MUX pad controls poisoned")
+                .get(8)
+                .is_some_and(|word| {
+                    crate::peripherals::esp32c6::io_mux::gpio_function_selected(*word)
+                })
+        });
+        let selector = self.out_sel[8];
+        iomux_selected && selector & 0x1FF == C61_SIG_GPIO_OUT && selector & (1 << 10) != 0
+    }
+
     /// Clone the live GPIO-matrix route cell for the C3 I²C controller. It is
     /// intentionally shared rather than copied: `Wire.begin(sda, scl)` writes
     /// GPIO registers after system construction, and the slave gate must see
@@ -542,6 +587,9 @@ impl Esp32c3Gpio {
     fn driven_level(&self, pin: u8) -> Option<bool> {
         let mask = 1u32 << pin;
         if (self.enable & mask) == 0 {
+            return None;
+        }
+        if !self.gpio_output_path_selected(pin) {
             return None;
         }
         // Output matrix: pads routed to the I²C0 controller carry the live
@@ -628,8 +676,11 @@ impl Esp32c3Gpio {
         } else {
             Pull::None
         };
+        if !self.gpio_output_path_selected(pin) {
+            return Some(PadDriver::released(pull));
+        }
         if let Some(sig) = self.matrix_signal(pin) {
-            if sig != SIG_GPIO_OUT {
+            if !self.is_gpio_out_selector(sig) {
                 // The peripheral says what its output stage does: a line it
                 // drives drives the pad; a released or input line does not.
                 return self
@@ -685,7 +736,10 @@ impl Esp32c3Gpio {
         self.watch = Some(watch);
     }
 
-    fn out_sel_index(off: u64) -> Option<usize> {
+    fn out_sel_index(&self, off: u64) -> Option<usize> {
+        if self.esp32c61_layout && off == C61_FUNC8_OUT_SEL {
+            return Some(8);
+        }
         if (FUNC_OUT_SEL..FUNC_OUT_SEL + (PIN_COUNT as u64) * 4).contains(&off) {
             Some(((off - FUNC_OUT_SEL) / 4) as usize)
         } else {
@@ -777,10 +831,17 @@ impl Esp32c3Gpio {
     /// external one; `effective_input` already gates on `FUN_IE`. Only the
     /// writes that can move a drive pay for the before/after sample.
     fn with_own_drive_edges(&mut self, word_off: u64, f: impl FnOnce(&mut Self)) {
-        let moves_drive = matches!(
-            word_off,
-            OUT | OUT_W1TS | OUT_W1TC | ENABLE | ENABLE_W1TS | ENABLE_W1TC
-        ) || Self::out_sel_index(word_off).is_some();
+        let moves_drive = if self.esp32c61_layout {
+            matches!(
+                word_off,
+                OUT | OUT_W1TS | OUT_W1TC | C61_ENABLE | C61_ENABLE_W1TS | C61_ENABLE_W1TC
+            )
+        } else {
+            matches!(
+                word_off,
+                OUT | OUT_W1TS | OUT_W1TC | ENABLE | ENABLE_W1TS | ENABLE_W1TC
+            )
+        } || self.out_sel_index(word_off).is_some();
         if !moves_drive {
             return f(self);
         }
@@ -841,6 +902,21 @@ impl Esp32c3Gpio {
     }
 
     fn read_word(&self, word_off: u64) -> u32 {
+        if self.esp32c61_layout {
+            return match word_off {
+                C61_STRAP => self.strap,
+                OUT | OUT_W1TS | OUT_W1TC => self.out,
+                C61_ENABLE | C61_ENABLE_W1TS | C61_ENABLE_W1TC => self.enable,
+                C61_IN => self.effective_input(),
+                off => {
+                    if let Some(idx) = self.out_sel_index(off) {
+                        self.out_sel[idx]
+                    } else {
+                        0
+                    }
+                }
+            };
+        }
         match word_off {
             BT_SELECT => self.bt_select,
             OUT | OUT_W1TS | OUT_W1TC => self.out,
@@ -852,7 +928,7 @@ impl Esp32c3Gpio {
             PCPU_INT => self.cpu_interrupt_status(),
             PCPU_NMI_INT | CPUSDIO_INT => self.status,
             off => {
-                if let Some(idx) = Self::out_sel_index(off) {
+                if let Some(idx) = self.out_sel_index(off) {
                     self.out_sel[idx]
                 } else if let Some(idx) = Self::in_sel_index(off) {
                     self.in_sel[idx]
@@ -867,6 +943,24 @@ impl Esp32c3Gpio {
 
     fn write_word(&mut self, word_off: u64, value: u32) {
         let value = value & PIN_MASK;
+        if self.esp32c61_layout {
+            match word_off {
+                C61_STRAP | C61_IN => {}
+                OUT => self.out = value,
+                OUT_W1TS => self.out |= value,
+                OUT_W1TC => self.out &= !value,
+                C61_ENABLE => self.enable = value,
+                C61_ENABLE_W1TS => self.enable |= value,
+                C61_ENABLE_W1TC => self.enable &= !value,
+                off => {
+                    if let Some(idx) = self.out_sel_index(off) {
+                        self.out_sel[idx] = value;
+                    }
+                }
+            }
+            self.after_matrix_write();
+            return;
+        }
         match word_off {
             BT_SELECT => self.bt_select = value,
             OUT => self.out = value,
@@ -882,7 +976,7 @@ impl Esp32c3Gpio {
             STATUS_W1TC => self.status &= !value,
             PCPU_INT | PCPU_NMI_INT | CPUSDIO_INT => {}
             off => {
-                if let Some(idx) = Self::out_sel_index(off) {
+                if let Some(idx) = self.out_sel_index(off) {
                     self.out_sel[idx] = value;
                 } else if let Some(idx) = Self::in_sel_index(off) {
                     self.in_sel[idx] = value;
@@ -1099,6 +1193,12 @@ impl Peripheral for Esp32c3Gpio {
     /// every status/interrupt register stays [`SideEffecting`](MmioAccessClass::SideEffecting)
     /// so a display bit-bang or an INT_ST poll still disqualifies the skip.
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        if self.esp32c61_layout {
+            return match offset & !3 {
+                C61_IN | C61_STRAP => MmioAccessClass::SideEffectFree,
+                _ => MmioAccessClass::SideEffecting,
+            };
+        }
         match offset & !3 {
             IN | STRAP => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
@@ -1147,10 +1247,23 @@ impl Peripheral for Esp32c3Gpio {
         if offset & 1 == 0 {
             let word_off = offset & !3;
             let shift = (offset & 3) * 8;
-            if matches!(
-                word_off,
-                OUT_W1TS | OUT_W1TC | ENABLE_W1TS | ENABLE_W1TC | STATUS_W1TS | STATUS_W1TC
-            ) {
+            let w1_register = if self.esp32c61_layout {
+                matches!(
+                    word_off,
+                    OUT_W1TS
+                        | OUT_W1TC
+                        | C61_ENABLE_W1TS
+                        | C61_ENABLE_W1TC
+                        | STATUS_W1TS
+                        | STATUS_W1TC
+                )
+            } else {
+                matches!(
+                    word_off,
+                    OUT_W1TS | OUT_W1TC | ENABLE_W1TS | ENABLE_W1TC | STATUS_W1TS | STATUS_W1TC
+                )
+            };
+            if w1_register {
                 self.mutate_pads(|g| {
                     g.with_own_drive_edges(word_off, |g| {
                         g.write_word(word_off, (value as u32) << shift)
@@ -1177,7 +1290,7 @@ impl Peripheral for Esp32c3Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
-            "layout": "esp32c3",
+            "layout": if self.esp32c61_layout { "esp32c61-gpio8" } else { "esp32c3" },
             "odr": self.out,
             "idr": self.effective_input(),
             "enable": self.enable,
@@ -1225,7 +1338,7 @@ impl Peripheral for Esp32c3Gpio {
         }
         // Output driver enabled: consult the per-pad output-matrix selector.
         let sig = self.out_sel[pin as usize] & 0x1FF;
-        if sig == SIG_GPIO_OUT {
+        if self.is_gpio_out_selector(sig) {
             // Pad driven directly by the GPIO_OUT latch — a plain GPIO output.
             Some(GpioRouting {
                 mode: GpioMode::Output,

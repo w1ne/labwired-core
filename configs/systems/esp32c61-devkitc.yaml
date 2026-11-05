@@ -1,9 +1,16 @@
 # Espressif ESP32-C61-DevKitC-1 v2.0, ESP32-C61-WROOM-1-N8R2.
 # UART0 TX (GPIO11/U0TXD) connects to the on-board USB-to-UART bridge; RX is
-# GPIO10/U0RXD. GPIO pad routing and the addressable RGB LED on GPIO8 are not
-# exposed by this deliberately narrow system profile.
+# GPIO10/U0RXD. GPIO8 is mapped to the onboard WS2812B RGB LED. Other pads and
+# peripherals remain outside this deliberately narrow system profile.
 name: "esp32c61-devkitc"
 chip: "../chips/esp32c61.yaml"
 cpu_hz: 160_000_000
 debug_uart: "uart0"
-external_devices: []
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160_000_000

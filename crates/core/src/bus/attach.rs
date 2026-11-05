@@ -1218,6 +1218,44 @@ impl SystemBus {
         }
     }
 
+    /// Wire the C61 GPIO8 IO_MUX word into its GPIO slice so MCU_SEL gates the
+    /// DevKitC RGB LED output. Other C61 pads are outside this narrow model.
+    pub(crate) fn wire_esp32c61_pad_controls(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c6::io_mux::Esp32c61IoMux;
+
+        let io_mux_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c61IoMux>())
+                .unwrap_or(false)
+        });
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c3Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let controls = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32c61IoMux>())
+            .map(Esp32c61IoMux::pad_controls);
+        if let (Some(controls), Some(gpio)) = (
+            controls,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>()),
+        ) {
+            gpio.set_pad_controls(controls);
+        }
+    }
+
     /// Does this bus have either peripheral the pad brackets exist for?
     ///
     /// The brackets run at the MMIO write choke, and before this they cost four

@@ -136,6 +136,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // The C61 GPIO8 direct-output slice is built by the Espressif family
+    // factory; keep it canonical so the generic `gpio` heuristic cannot map
+    // it onto the STM32 placeholder before that factory runs.
+    "esp32c61_gpio",
+    "esp32c61_io_mux",
     // C5 uses the same modern UART register map, with its own interrupt ids
     // and fixed PLL_F80M source clock for the onboarding profile.
     "esp32c5_uart",

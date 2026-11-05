@@ -1409,6 +1409,10 @@ impl SystemBus {
         // `INPUT_PULLUP` changes the floating input level. No-op for every
         // other chip.
         bus.wire_esp32c3_pad_controls();
+        // ESP32-C61: the narrow GPIO8 output profile shares its IO_MUX
+        // function-select word with GPIO so a wrong MCU_SEL disconnects the
+        // attached WS2812B model from the output pad.
+        bus.wire_esp32c61_pad_controls();
         // Same for the ESP32-S3. (The S3's IO_MUX is registered by the coded
         // `configure_xtensa_esp32s3` path rather than the chip yaml, which
         // wires it there too; this keeps the declarative path honest if the
