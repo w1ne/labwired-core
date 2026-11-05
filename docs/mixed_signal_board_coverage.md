@@ -6,7 +6,7 @@ a board-specific test solves an analog device/netlist, routes the solved signal 
 profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
 traces without an ADC conversion, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 12 have end-to-end analog coverage; 91 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 13 have end-to-end analog coverage; 90 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -32,7 +32,7 @@ Current inventory: **103 profiles; 12 have end-to-end analog coverage; 91 have n
 | `curiosity-pic32mz-ef` | **NO E2E analog coverage** |
 | `dspic33fj32mc202-demo` | **NO E2E analog coverage** |
 | `dspic33fj32mc204-demo` | **NO E2E analog coverage** |
-| `ek-ra6m5` | **NO E2E analog coverage** |
+| `ek-ra6m5` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end` — Beta NTC and Shockley diode netlists route to ADC1 channels 0/2 and produce 12-bit scan results |
 | `ek-ra8m1` | **NO E2E analog coverage** |
 | `ek-rx261` | **NO E2E analog coverage** |
 | `esp32-wroom-32` | [`cosim_esp32_analog_diode.rs`](../crates/core/tests/cosim_esp32_analog_diode.rs)::`esp32_wroom_32_ntc_netlist_reaches_sens_sar_channel_and_one_shot_result` — Beta NTC divider reaches the profile's SENS SAR ADC1 channel 6 and one-shot result |
@@ -113,3 +113,5 @@ Current inventory: **103 profiles; 12 have end-to-end analog coverage; 91 have n
 | `stm32h735-smoke` | **NO E2E analog coverage** |
 | `teensy-41` | **NO E2E analog coverage** |
 | `vegaboard-ri5cy` | **NO E2E analog coverage** |
+
+The EK-RA6M5 proof uses generic in-core Beta NTC and Shockley diode models with explicit ADC-channel routing; the board profile has no pin-to-ADC aliases for these channels. The fixture is [examples/ek-ra6m5/analog-ntc-system.yaml](../examples/ek-ra6m5/analog-ntc-system.yaml).

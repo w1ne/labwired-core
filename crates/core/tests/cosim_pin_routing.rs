@@ -1646,6 +1646,182 @@ fn brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end() {
     );
 }
 
+/// The EK-RA6M5 system profile uses the generic MNA NTC and Shockley diode
+/// models on separate ADC1 channels. Advance a Cortex-M machine and both
+/// circuits in lockstep, then start the RA ADC12 scan through its MMIO
+/// registers and assert the converted voltages at cold, nominal and hot
+/// temperatures.
+#[test]
+fn ek_ra6m5_ntc_and_diode_netlists_reach_adc1_end_to_end() {
+    use labwired_core::system::cortex_m::configure_cortex_m;
+    use labwired_core::{AdvanceRequest, Cpu, Machine};
+
+    const ADC1: u64 = 0x4017_0200;
+    const ADANSA0: u64 = ADC1 + 0x04;
+    const ADDR0: u64 = ADC1 + 0x20;
+    const ADDR1: u64 = ADC1 + 0x22;
+    const ADDR2: u64 = ADC1 + 0x24;
+    const ADST: u16 = 1 << 15;
+    const IDLE: u32 = 0x2000_2000;
+
+    let profile_path = root("configs/systems/ek-ra6m5.yaml");
+    let mut profile = SystemManifest::from_file(&profile_path).expect("load EK-RA6M5 profile");
+    assert_eq!(profile.name, "ek-ra6m5");
+    let analog = SystemManifest::from_file(root("examples/ek-ra6m5/analog-ntc-system.yaml"))
+        .expect("load EK-RA6M5 NTC divider fixture");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = profile_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RA6M5 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build EK-RA6M5 bus");
+    let (cpu, _) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .bus
+        .write_u16(u64::from(IDLE), 0xE7FE)
+        .expect("write a branch-to-self instruction for lockstep time");
+    machine.cpu.set_pc(IDLE);
+    machine.cpu.set_sp(0x2000_7F00);
+
+    let mut session = build_session(&machine.bus, &profile.cosim_models);
+    let mut samples = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the NTC source reads the temperature input");
+
+        let mut reached_boundary = false;
+        for _ in 0..256 {
+            let advance = session
+                .advance(&mut machine, AdvanceRequest::single())
+                .expect("advance the machine and analog model in lockstep");
+            assert!(
+                advance.new_routing_errors.is_empty(),
+                "unexpected analog route errors: {:?}",
+                advance.new_routing_errors
+            );
+            if !advance.routed.is_empty() {
+                reached_boundary = true;
+                break;
+            }
+        }
+        assert!(
+            reached_boundary,
+            "the NTC model did not reach its next boundary"
+        );
+
+        let volts = match session.signals().get("adc.adc1.0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the NTC voltage did not reach RA ADC1 channel 0: {other:?}"),
+        };
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved divider should be {expected_volts} V, got {volts} V"
+        );
+
+        let diode_volts = match session.signals().get("adc.adc1.2_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the diode voltage did not reach RA ADC1 channel 2: {other:?}"),
+        };
+        const SUPPLY_V: f64 = 3.3;
+        const LIMIT_OHMS: f64 = 1_000.0;
+        const DIODE_IS_A: f64 = 2.52e-9;
+        const DIODE_N: f64 = 1.752;
+        const DIODE_RS_OHMS: f64 = 0.568;
+        const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+        let current_at_junction_voltage =
+            |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+        let residual = |junction_v: f64| {
+            let current = current_at_junction_voltage(junction_v);
+            (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+        };
+        let (mut low, mut high) = (0.0, 1.2);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let junction_v = (low + high) / 2.0;
+        let expected_diode_volts =
+            junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS;
+        assert!(
+            (diode_volts - expected_diode_volts).abs() < 2e-5,
+            "the independent diode load-line solution should be {expected_diode_volts} V, got {diode_volts} V"
+        );
+
+        machine
+            .bus
+            .write_u16(ADANSA0, 0b0101)
+            .expect("select RA ADC1 channels 0 and 2 only");
+        machine
+            .bus
+            .write_u16(ADC1, ADST)
+            .expect("start a firmware-visible ADC1 group-A scan");
+        let mut conversion_complete = false;
+        for _ in 0..2048 {
+            if machine.bus.read_u16(ADC1).expect("read ADC1 ADCSR") & ADST == 0 {
+                conversion_complete = true;
+                break;
+            }
+            let advance = session
+                .advance(&mut machine, AdvanceRequest::single())
+                .expect("advance the RA ADC12 conversion");
+            assert!(
+                advance.new_routing_errors.is_empty(),
+                "unexpected analog route errors: {:?}",
+                advance.new_routing_errors
+            );
+        }
+        assert!(conversion_complete, "RA ADC1 single scan did not complete");
+
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor() as u32;
+        let expected_count = (routed_mv * 4095 / 3300) as u16;
+        let diode_mv = (expected_diode_volts * 1000.0 + 0.5).floor() as u32;
+        let expected_diode_count = (diode_mv * 4095 / 3300) as u16;
+        assert_eq!(
+            machine.bus.read_u16(ADDR0).expect("read RA ADC1 ADDR0"),
+            expected_count,
+            "ADC1 channel 0 must convert the solved NTC voltage at {temperature_c} °C"
+        );
+        assert_eq!(
+            machine.bus.read_u16(ADDR2).expect("read RA ADC1 ADDR2"),
+            expected_diode_count,
+            "ADC1 channel 2 must convert the independent diode load line"
+        );
+        assert_eq!(
+            machine.bus.read_u16(ADDR1).expect("read RA ADC1 ADDR1"),
+            0,
+            "the unselected neighboring channel must not be converted"
+        );
+        samples.push((
+            temperature_c,
+            volts,
+            expected_count,
+            diode_volts,
+            expected_diode_count,
+        ));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "the divider voltage rises as the NTC heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "ADC1 follows the temperature-dependent NTC divider: {samples:?}"
+    );
+    assert_eq!(samples[1].2, 2047, "25 °C is half scale on 3.3 V");
+    assert!(
+        samples.iter().all(|sample| sample.4 == samples[0].4),
+        "the independent diode conversion remains constant as NTC temperature changes: {samples:?}"
+    );
+}
+
 /// VDDA is independent from the routed pad voltage. The ADC holds the pin in
 /// millivolts and converts it against the reference present at acquisition.
 #[test]
