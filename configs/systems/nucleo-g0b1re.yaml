@@ -1,12 +1,13 @@
-# LabWired - NUCLEO-G0B1RE system manifest
-#
-# Board wiring per ST UM2324 / MB1360 schematic:
-#   - LD4 user LED on PA5, active high.
-#   - B1 user button on PC13, active low.
-#   - USART2 PA2 (TX) / PA3 (RX) connects to the on-board ST-LINK VCP.
-#
-# This board profile claims only the paths represented by the STM32G0B1RE
-# chip slice. It does not imply USB, debug-probe, or unlisted peripheral models.
+# NUCLEO-G0B1RE, MB1360-G0B1RE-C02 carrier.
+# Board source: ST MB1360-G0B1RE-C02 schematic, sheets 3 and 5:
+# https://www.st.com/resource/en/schematic_pack/mb1360-g0b1re-c02_schematic.pdf
+# B1 pulls PC13 to ground; R29 (4.7 kohm) pulls the released input to VDD.
+# LD4 is driven by PA5, active high. USART2 PA2/PA3 is routed to ST-LINK VCP;
+# UART capture models the MCU endpoint, not the USB bridge.
+# The chip remains at its 16 MHz reset timebase. A fixed 64 MHz operating
+# profile must be requested explicitly and matched by the firmware clock setup.
+# Coverage: GPIO, USART1/2, TIM2/SysTick and the IO-Link fixture; no DMA claim.
+
 name: "nucleo-g0b1re"
 chip: "../chips/stm32g0b1re.yaml"
 external_devices: []

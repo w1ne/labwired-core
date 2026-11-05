@@ -55,6 +55,12 @@ markdown_extensions:
 plugins:
   - search
 
+extra_css:
+  - assets/chip-list.css
+
+extra_javascript:
+  - assets/chip-list.js
+
 nav:
   - Home: index.md
   - Fidelity: fidelity.md
@@ -166,12 +172,16 @@ nav:
     - APA102: parts/apa102.md
     - Servo: parts/servo.md
     - Button: parts/button.md
+    - Limit switch: parts/limit-switch.md
+    - Analog joystick: parts/joystick.md
+    - ACS712 current sensor: parts/acs712.md
     - Buzzer: parts/buzzer.md
     - Seven-segment: parts/seven-segment.md
     - Multiplexed segment display: parts/segment-display-mux.md
     - Multiplexed LED matrix: parts/led-matrix-mux.md
     - 74HC4051: parts/74hc4051.md
     - MAX485: parts/max485.md
+    - TIOL112: parts/tiol112.md
     - XY-MD02: parts/xy-md02.md
     - SHT40: parts/sht40.md
     - BME680: parts/bme680.md
@@ -212,6 +222,7 @@ nav:
     - Release Determinism: RELEASE_DETERMINISM.md
     - Verification Audit: labwired_audit_protocol.md
     - Coverage Scoreboard: coverage_scoreboard.md
+    - Chip list (all models): coverage/chips.md
     - Chip Conformance (live): coverage/chip-conformance.md
     - Tier-1 Matrix (live): coverage/tier1-scoreboard.md
     - Arduino Scoreboard: coverage/arduino-scoreboard.md

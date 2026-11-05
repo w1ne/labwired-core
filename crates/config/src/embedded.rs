@@ -56,6 +56,10 @@ impl DeviceDescriptor {
 /// the rest are legacy aliases resolving to the same file.
 pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
+        &["acs712"],
+        include_str!("../../../configs/devices/acs712.yaml"),
+    ),
+    (
         &["rotary_encoder", "rotary-encoder"],
         include_str!("../../../configs/devices/rotary_encoder.yaml"),
     ),
@@ -266,6 +270,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["ili9341"],
         include_str!("../../../configs/devices/ili9341.yaml"),
+    ),
+    (
+        &["ili9488"],
+        include_str!("../../../configs/devices/ili9488.yaml"),
     ),
     (
         &["st7735"],
@@ -606,6 +614,22 @@ mod spelling_tests {
     /// so a spelling in two rows silently shadows the later descriptor: a new
     /// row that reused `led-matrix` (MAX7219's alias) made the MAX7219 kit load
     /// the wrong YAML and panic on first use. One spelling, one row.
+    #[test]
+    fn ili9488_is_embedded_serial_color_18bit() {
+        let yaml = super::embedded_device_yaml("ili9488").expect("ili9488 embedded");
+        assert!(
+            yaml.contains("serial_color"),
+            "18-bit COLMOD path must use serial_color"
+        );
+        assert!(
+            yaml.contains("colmod: 6"),
+            "hardware default COLMOD is 18-bit"
+        );
+        assert!(yaml.contains("width: 320") && yaml.contains("height: 480"));
+        let desc = crate::DeviceDescriptor::from_yaml(yaml).expect("ili9488 descriptor parses");
+        assert_eq!(desc.r#type, "ili9488");
+    }
+
     #[test]
     fn every_type_spelling_names_exactly_one_descriptor() {
         let mut seen: std::collections::BTreeMap<&str, usize> = Default::default();

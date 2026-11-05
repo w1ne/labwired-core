@@ -34,10 +34,14 @@ Devices you attach to an MCU in Playground, system YAML, or an agent diagram: se
 | [APA102](apa102.md) | `apa102` | SPI-like |
 | [Servo](servo.md) | `servo` | GPIO PWM |
 | [Button](button.md) | `button` | GPIO |
+| [Limit switch](limit-switch.md) | `limit-switch` | GPIO contacts |
+| [Analog joystick](joystick.md) | `joystick` | ADC + GPIO |
+| [ACS712 current sensor](acs712.md) | `acs712` | ADC |
 | [Buzzer](buzzer.md) | `buzzer` | GPIO |
 | [Seven-segment](seven-segment.md) | `seven-segment` | GPIO / SPI |
 | [BT201 Bluetooth](bt201.md) | `bt201` | UART |
 | [MAX485 RS-485 transceiver](max485.md) | `max485` | UART + GPIO |
+| [TIOL112 IO-Link transceiver](tiol112.md) | `tiol112` | USART + EN/WAKE/NFAULT |
 | [XY-MD02](xy-md02.md) | `xy-md02` | UART behind a MAX485 |
 | [Multiplexed segment display](segment-display-mux.md) | `segment-display-mux` | GPIO |
 | [Multiplexed LED matrix](led-matrix-mux.md) | `led-matrix-mux` | GPIO |

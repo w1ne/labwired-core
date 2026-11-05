@@ -488,6 +488,7 @@ impl SystemBus {
             device_pin_pads: Vec::new(),
             observed: Vec::new(),
             motors: Vec::new(),
+            ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),

@@ -1224,7 +1224,13 @@ pub fn try_build(
         // (F1), or — `[channel, selector]` — to a channel while its L4
         // `CSELR` nibble holds the selector.
         "dma" | "stm32dma" => {
-            let mut dma = crate::peripherals::dma::Dma1::new();
+            let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
+                Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some(profile) => {
+                    anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
+                }
+            };
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()
@@ -1260,6 +1266,17 @@ pub fn try_build(
                 .and_then(|v| v.as_str())
                 .unwrap_or("dma1");
             let mut mux = crate::peripherals::dmamux::Dmamux::new(channels, dma);
+            if let Some(total) = p_cfg
+                .config
+                .get("physical_channels")
+                .and_then(|v| v.as_u64())
+            {
+                anyhow::ensure!(
+                    total as usize >= channels && total <= 32,
+                    "dmamux physical_channels must cover modeled channels and be <=32"
+                );
+                mux = mux.with_physical_channels(total as usize);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let Some(id) = v.as_u64() else {
                     anyhow::bail!(
