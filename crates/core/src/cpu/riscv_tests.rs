@@ -89,6 +89,41 @@ fn standard_rv32_rejects_esp32c3_rom_ustatus_clear() {
 }
 
 #[test]
+fn rv32e_traps_when_a_standard_instruction_names_x16() {
+    let mut bus = SystemBus::new();
+    // ADDI x16, x0, 1. RV32E has only x0..x15, so x16 is reserved.
+    const ADDI_X16: u32 = 0x0010_0813;
+    bus.flash.data = ADDI_X16.to_le_bytes().to_vec();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32E);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+
+    machine.step().unwrap();
+
+    assert_eq!(machine.cpu.mcause, 2, "x16 must trap as illegal");
+    assert_eq!(machine.cpu.mtval, ADDI_X16);
+    assert_eq!(machine.cpu.pc, 0x100);
+}
+
+#[test]
+fn rv32e_traps_when_a_compressed_instruction_names_x16() {
+    let mut bus = SystemBus::new();
+    // C.ADDI x16, 1 (little endian 0x0805). Keep a full fetch word available.
+    bus.flash.data = vec![0x05, 0x08, 0x00, 0x00];
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32E);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    let mut machine = Machine::new(cpu, bus);
+
+    machine.step().unwrap();
+
+    assert_eq!(machine.cpu.mcause, 2, "compressed x16 must trap as illegal");
+    assert_eq!(machine.cpu.mtval, 0x0000_0805);
+    assert_eq!(machine.cpu.pc, 0x100);
+}
+
+#[test]
 fn esp32c3_accepts_exact_rom_init_csrs_before_mtvec_initialization() {
     const ROM_PC: u32 = 0x4000_1ea4;
     let mut bus = SystemBus::new();
@@ -1863,6 +1898,11 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         RiscVCoreProfile::for_chip(&chip("arty-litex-vexriscv", Some("rv32im"))),
         RiscVCoreProfile::StandardRv32,
         "a generic rv32 core runs the standard profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("ch32v003", Some("rv32ec"))),
+        RiscVCoreProfile::StandardRv32E,
+        "RV32E core strings select the 16-register profile"
     );
     assert_eq!(
         RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),

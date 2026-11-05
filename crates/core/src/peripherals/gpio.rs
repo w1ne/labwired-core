@@ -109,7 +109,9 @@ impl FromStr for GpioRegisterLayout {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
-            "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            // CH32V003's CFGLR/CFGHR/INDR/OUTDR/BSHR subset shares the F1
+            // GPIO offsets and set/reset behavior used by this implementation.
+            "stm32f1" | "f1" | "legacy" | "ch32v003" => Ok(Self::Stm32F1),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" | "c5" | "stm32c5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
             "nrf54l" | "nrf54lm20a" | "nrf54l15" => Ok(Self::Nrf54l),

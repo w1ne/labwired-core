@@ -138,7 +138,9 @@ impl FromStr for RccRegisterLayout {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
-            "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            // CH32V003 APB2PCENR is at the F1 APB2ENR offset (0x18); this
+            // alias exposes only the compatible enable-register address map.
+            "stm32f1" | "f1" | "legacy" | "ch32v003" => Ok(Self::Stm32F1),
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32v2" | "v2" | "modern" | "stm32-modern" => Ok(Self::Stm32V2),
             "h5" | "stm32h5" => Ok(Self::Stm32H5),

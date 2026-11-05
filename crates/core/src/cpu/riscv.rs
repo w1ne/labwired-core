@@ -32,13 +32,17 @@ pub enum RiscVCoreProfile {
     Esp32C3,
     /// Baseline RV32 profile used by generic RISC-V targets.
     StandardRv32,
+    /// RV32E profile: the base integer ISA has only x0..x15. Reserved
+    /// instructions that name x16..x31 trap as illegal instead of using the
+    /// simulator's wider backing register array.
+    StandardRv32E,
 }
 
 impl RiscVCoreProfile {
     /// Select the profile a chip descriptor runs.
     ///
-    /// The engine models two profiles: the standard RV32 machine and the
-    /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
+    /// The engine models the standard RV32 machine, the RV32E register limit,
+    /// and the ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
     /// the C3 is the part whose ROM and performance-counter block the engine
     /// models, and the C6 shares that register surface today. Any other chip
     /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
@@ -50,11 +54,18 @@ impl RiscVCoreProfile {
             return Self::Esp32C3;
         }
         match chip.core.as_deref() {
+            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32e") => {
+                Self::StandardRv32E
+            }
             Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
                 Self::StandardRv32
             }
             _ => Self::Esp32C3,
         }
+    }
+
+    fn has_standard_rv32_counters(self) -> bool {
+        matches!(self, Self::StandardRv32 | Self::StandardRv32E)
     }
 }
 
@@ -144,6 +155,67 @@ const FETCH_WINDOW_BYTES: usize = 256;
 /// blocked, so the raised interrupt is taken at the next instruction boundary
 /// instead of the core executing bytes the hardware never delivered.
 const NOP_OPCODE: u32 = 0x0000_0013;
+
+/// RV32E reserves standard instructions that name an integer register above
+/// x15. This check runs on the encoded instruction so immediate bits are not
+/// mistaken for register operands. The compressed encodings that use compact
+/// registers are already limited to x8..x15 by construction.
+fn rv32e_uses_reserved_register(opcode: u32, inst_len: u32) -> bool {
+    let above_x15 = |reg: u32| reg > 15;
+    if inst_len == 2 {
+        let insn = opcode as u16 as u32;
+        let quadrant = insn & 0x3;
+        let funct3 = (insn >> 13) & 0x7;
+        let rd_rs1 = (insn >> 7) & 0x1f;
+        let rs2 = (insn >> 2) & 0x1f;
+        return match quadrant {
+            // C.ADDI4SPN, C.LW, and C.SW use x8..x15 encoded in three bits.
+            0 => false,
+            1 => match funct3 {
+                0 | 2 => above_x15(rd_rs1),            // C.ADDI / C.LI
+                3 if rd_rs1 != 2 => above_x15(rd_rs1), // C.LUI
+                _ => false,
+            },
+            2 => match funct3 {
+                0 | 2 => above_x15(rd_rs1), // C.SLLI / C.LWSP
+                4 => {
+                    let bit12 = (insn >> 12) & 1;
+                    if bit12 == 0 {
+                        if rs2 == 0 {
+                            above_x15(rd_rs1) // C.JR
+                        } else {
+                            above_x15(rd_rs1) || above_x15(rs2) // C.MV
+                        }
+                    } else if rs2 == 0 {
+                        rd_rs1 != 0 && above_x15(rd_rs1) // C.JALR (x0 encoding is EBREAK)
+                    } else {
+                        above_x15(rd_rs1) || above_x15(rs2) // C.ADD
+                    }
+                }
+                6 => above_x15(rs2), // C.SWSP
+                _ => false,
+            },
+            _ => false,
+        };
+    }
+
+    let rd = (opcode >> 7) & 0x1f;
+    let rs1 = (opcode >> 15) & 0x1f;
+    let rs2 = (opcode >> 20) & 0x1f;
+    match opcode & 0x7f {
+        0x37 | 0x17 | 0x6f => above_x15(rd), // LUI / AUIPC / JAL
+        0x67 | 0x03 => above_x15(rd) || above_x15(rs1), // JALR / LOAD
+        0x13 => above_x15(rd) || above_x15(rs1), // OP-IMM (rs2 bits are immediate)
+        0x23 | 0x63 => above_x15(rs1) || above_x15(rs2), // STORE / BRANCH
+        0x33 | 0x2f => above_x15(rd) || above_x15(rs1) || above_x15(rs2), // OP / AMO
+        0x73 => match (opcode >> 12) & 0x7 {
+            0 => false,                           // ECALL / EBREAK / MRET / WFI
+            5..=7 => above_x15(rd),               // CSR immediate forms: rs1 is a zimm field
+            _ => above_x15(rd) || above_x15(rs1), // CSR register forms
+        },
+        _ => false,
+    }
+}
 
 impl Default for RiscV {
     fn default() -> Self {
@@ -748,12 +820,10 @@ impl RiscV {
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            0xC00 if self.core_profile.has_standard_rv32_counters() => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
-                (self.mtime >> 32) as u32
-            }
+            0xC80 if self.core_profile.has_standard_rv32_counters() => (self.mtime >> 32) as u32,
             _ => return None,
         })
     }
@@ -1173,6 +1243,17 @@ impl Cpu for RiscV {
             instruction,
             inst_len
         );
+
+        // QingKe V2A is RV32EC: the standard register file ends at x15.
+        // The CPU uses a 32-entry backing array for shared RV32 code, so
+        // enforce the architectural limit at the instruction boundary.
+        if self.core_profile == RiscVCoreProfile::StandardRv32E
+            && rv32e_uses_reserved_register(opcode, inst_len)
+        {
+            self.mtval = opcode;
+            self.handle_trap(2, self.pc);
+            return Ok(());
+        }
 
         let mut next_pc = self.pc.wrapping_add(inst_len);
 
@@ -1835,6 +1916,7 @@ impl Cpu for RiscV {
         {
             self.jit_enabled = config.riscv_jit_enabled;
             if self.jit_enabled
+                && self.core_profile != RiscVCoreProfile::StandardRv32E
                 && max_count > 1
                 && !self.triggers.armed()
                 && self.jit_gate_allows(bus, observers)

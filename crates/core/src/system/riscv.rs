@@ -9,9 +9,10 @@ use crate::cpu::RiscV;
 
 pub fn configure_riscv(bus: &mut SystemBus) -> RiscV {
     // The profile is resolved once, at bus build, from the chip descriptor
-    // (`RiscVCoreProfile::for_chip`): a generic `rv32*` core runs the standard
-    // profile, an ESP32 part keeps the C3's vendor CSR set, and a descriptor
-    // without a `core:` keeps the historical C3 default. Every caller — CLI,
+    // (`RiscVCoreProfile::for_chip`): `rv32e*` gets the 16-register E profile,
+    // other generic `rv32*` gets the standard profile, an ESP32 part keeps the
+    // C3's vendor CSR set, and a descriptor without `core:` keeps the
+    // historical C3 default. Every caller — CLI,
     // browser, debugger, tests — shares this one resolution.
     RiscV::new_for(bus.riscv_profile)
 }
