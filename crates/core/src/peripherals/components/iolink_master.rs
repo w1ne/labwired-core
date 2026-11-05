@@ -4,7 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::peripherals::components::tiol112::Tiol112;
 use crate::peripherals::uart::UartStreamDevice;
+use crate::sim_input::{InputChannel, SimInput, SimInputError};
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -35,13 +37,25 @@ pub(crate) fn encode_type0(mc: u8) -> Vec<u8> {
     vec![mc, checksum6(&[mc, 0x00])]
 }
 
-/// Encode a Type 1 cyclic request: `[MC=0x00, CKT, PD_out..., OD=0x00]` with the
-/// M-sequence type 1_1 in CKT bits 6-7 and the A.1.6 checksum in bits 0-5
-/// (A.2.3/A.1.6; the request has no trailing checksum octet).
+/// Legacy LabWired demo envelope. Retained for the shipped DI/thermal fixtures;
+/// this mixed PD/OD shape is not the normative TYPE_1_1 interleaved protocol.
 pub(crate) fn encode_type1_cycle(pd_out: &[u8]) -> Vec<u8> {
     let mut frame = vec![0x00u8, 0x40];
     frame.extend_from_slice(pd_out);
     frame.push(0x00); // OD (1-byte, idle)
+    frame[1] |= checksum6(&frame);
+    frame
+}
+
+/// TYPE_2_x master message (IO-Link v1.1.4 A.2.4, Figure A.14): MC, CKT,
+/// PD-out, then OD for a WRITE. A READ omits the OD octets. The checksum is
+/// carried in CKT, with the TYPE_2 bits included in its calculation.
+pub(crate) fn encode_type2(mc: u8, pd_out: &[u8], od: &[u8]) -> Vec<u8> {
+    let mut frame = vec![mc, 0x80];
+    frame.extend_from_slice(pd_out);
+    if mc & 0x80 == 0 {
+        frame.extend_from_slice(od);
+    }
     frame[1] |= checksum6(&frame);
     frame
 }
@@ -63,8 +77,15 @@ pub(crate) struct OperateResponse {
 /// leading status octet: the checksum is over every data octet and CKS with
 /// its checksum bits (0-5) zeroed, the PD status is CKS bit 6 (1 = invalid)
 /// and the Event flag is CKS bit 7.
+#[cfg(test)]
 pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize) -> OperateResponse {
-    if data.len() < pd_in_len + 1 {
+    decode_operate_with_od(data, pd_in_len, 0)
+}
+
+/// READ replies include OD before PD; WRITE replies do not. Checksum covers
+/// both, while only the configured PD slice reaches the application.
+fn decode_operate_with_od(data: &[u8], pd_in_len: usize, od_len: usize) -> OperateResponse {
+    if data.len() != od_len + pd_in_len + 1 {
         return OperateResponse {
             pd: Vec::new(),
             pd_valid: false,
@@ -72,7 +93,7 @@ pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize) -> OperateResponse {
             event_present: false,
         };
     }
-    let pd = data[..pd_in_len].to_vec();
+    let pd = data[od_len..od_len + pd_in_len].to_vec();
     let cks = data[data.len() - 1];
     let mut masked = data.to_vec();
     if let Some(last) = masked.last_mut() {
@@ -260,6 +281,60 @@ struct PendingXfer {
     link_state: IolinkLinkState,
     raw_master: Vec<u8>,
     raw_device: Vec<u8>,
+    /// OD octets before PD in a TYPE_2 read reply; zero for writes.
+    response_od_len: usize,
+}
+
+/// Deliberate bring-up for the 32-in/1-out OD1 evaluation fixture. This is a
+/// bounded application profile, not complete IO-Link system management.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EvaluationPhase {
+    Armed,
+    Wake,
+    MinCycle,
+    Capability,
+    PdIn,
+    PdOut,
+    OperateCommand,
+    Operate,
+    Fault,
+}
+
+#[derive(Debug)]
+struct Evaluation {
+    phase: EvaluationPhase,
+    now_us: u64,
+    not_before_us: u64,
+    next_byte_us: u64,
+    last_start_us: u64,
+    reply_deadline_us: u64,
+    awaiting_reply: bool,
+    cycle_us: u64,
+    read_next: bool,
+    start_pressed: bool,
+    error: Option<String>,
+}
+
+impl Evaluation {
+    fn armed(com: IolinkComSpeed) -> Self {
+        Self {
+            phase: EvaluationPhase::Armed,
+            now_us: 0,
+            not_before_us: 0,
+            next_byte_us: 0,
+            last_start_us: 0,
+            reply_deadline_us: 0,
+            awaiting_reply: false,
+            cycle_us: if com == IolinkComSpeed::Com3 {
+                3_000
+            } else {
+                15_000
+            },
+            read_next: false,
+            start_pressed: false,
+            error: None,
+        }
+    }
 }
 
 /// Max trace records retained (oldest dropped).
@@ -283,29 +358,24 @@ const FRAME_GAP_TICKS: u32 = 6000;
 /// Drives a **deterministic, tick-paced** startup schedule rather than reacting
 /// to response timing: wake-up pulse → Type-0 READ of the Direct Parameter page
 /// MinCycleTime octet (spec transition T1, → PREOPERATE) → Type-0 WRITE of the
-/// DeviceOperate MasterCommand (→ ESTAB_COM) → cyclic Type 1 requests
-/// (→ OPERATE). Process data input is captured from the cyclic responses.
-/// Selects which protocol engine backs an [`IolinkMaster`]. The hand-rolled
-/// engine is always available; the `Native` variant drives the real
-/// `iolinki-master` C stack and only exists under the `iolink-native` feature.
-/// Trace/UART behavior still runs on the hand-rolled path for now — this enum
-/// currently records the chosen backend so the swap can land incrementally.
-///
-/// `allow(dead_code)`: under `iolink-native` only `Native` is constructed (so
-/// `HandRolled` looks unused) and the native port is held but not yet read
-/// because trace/UART still run hand-rolled. Removing it would force a
-/// premature migration. See plan Task 5.
-#[allow(dead_code)]
-#[derive(Debug)]
-enum IolinkMasterBackend {
-    HandRolled,
-    #[cfg(feature = "iolink-native")]
-    Native(super::iolink_native::NativeIolinkMasterPort),
-}
-
+/// DeviceOperate MasterCommand (→ ESTAB_COM) → configured cyclic requests.
+/// This fixture does not negotiate the full device identity, schedule ISDUs,
+/// enforce baud timing, or implement a complete conformant master state machine.
+/// The optional native C bridge is a separate API and does not drive this UART.
 #[derive(Debug, serde::Serialize)]
 pub struct IolinkMaster {
+    #[serde(skip)]
+    component_id: String,
+    #[serde(skip)]
+    evaluation: Option<Evaluation>,
+    #[serde(skip)]
+    wake_phy: Option<Tiol112>,
+    #[serde(skip)]
+    evaluation_log: Vec<String>,
     pd_in_len: usize,
+    pd_out: Vec<u8>,
+    pd_out_counter: bool,
+    m_seq_type: u8,
     od_len: usize,
     com: IolinkComSpeed,
     pub link_state: IolinkLinkState,
@@ -333,10 +403,6 @@ pub struct IolinkMaster {
     /// Monotonic per-frame sequence number.
     #[serde(skip)]
     frame_seq: u32,
-    /// Protocol engine backing this master (hand-rolled, or the real native
-    /// `iolinki-master` stack under the `iolink-native` feature).
-    #[serde(skip)]
-    backend: IolinkMasterBackend,
     /// Optional capture sink the master writes a human-readable record of what
     /// it received into: `MASTER PD=<hex>`, `MASTER VERDICT ...` (decoded
     /// thermal-fingerprint verdict for the 9-byte PD schema), and `MASTER EVENT
@@ -371,15 +437,77 @@ impl IolinkMaster {
         com: IolinkComSpeed,
         frame_gap_ticks: u32,
     ) -> Self {
-        #[cfg(feature = "iolink-native")]
-        let backend = IolinkMasterBackend::Native(
-            super::iolink_native::NativeIolinkMasterPort::new_type2_com3(pd_in_len as u8, 0),
-        );
-        #[cfg(not(feature = "iolink-native"))]
-        let backend = IolinkMasterBackend::HandRolled;
+        Self::build(pd_in_len, 0, 1, od_len, com, frame_gap_ticks.max(1))
+    }
 
-        let mut m = Self {
+    /// Explicit, bounded configuration. Engine enum 6 is TYPE_2_V; it is not
+    /// the DPP OPERATE capability code (4/5/6/7 for OD 1/2/8/32 on long PD).
+    /// Enum 1 preserves the historical receive-only LabWired demo envelope.
+    /// Enums 4/5 provide TYPE_2_1 / TYPE_2_2, and other enums are unsupported.
+    pub fn new_configured(
+        pd_in_len: usize,
+        pd_out_len: usize,
+        m_seq_type: u8,
+        od_len: usize,
+        com: IolinkComSpeed,
+        frame_gap_ticks: u32,
+    ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            pd_in_len <= 32 && pd_out_len <= 32,
+            "IO-Link PD lengths must be 0..32 bytes"
+        );
+        anyhow::ensure!(
+            matches!(od_len, 1 | 2 | 8 | 32),
+            "IO-Link od_len must be 1, 2, 8, or 32"
+        );
+        anyhow::ensure!(
+            frame_gap_ticks > 0,
+            "IO-Link frame_gap_ticks must be 1..4294967295"
+        );
+        match m_seq_type {
+            1 => anyhow::ensure!(pd_out_len == 0 && od_len == 1, "Legacy demo mode 1 supports pd_out_len=0 and od_len=1 only"),
+            4 => anyhow::ensure!(pd_in_len == 1 && pd_out_len == 0 && od_len == 1, "TYPE_2_1 (enum 4) requires PDin=1, PDout=0, OD=1"),
+            5 => anyhow::ensure!(pd_in_len == 2 && pd_out_len == 0 && od_len == 1, "TYPE_2_2 (enum 5) requires PDin=2, PDout=0, OD=1"),
+            6 => {
+                anyhow::ensure!(pd_in_len + pd_out_len > 0, "TYPE_2_V requires nonzero process data");
+                if od_len == 1 {
+                    // Table A.10: code 4 long-PD forms, plus code 0's former
+                    // TYPE_2_6 forms (2 input + 1/2 output, or vice versa).
+                    anyhow::ensure!(pd_in_len >= 3 || pd_out_len >= 3
+                        || (pd_in_len == 2 && pd_out_len >= 1)
+                        || (pd_out_len == 2 && pd_in_len >= 1),
+                        "TYPE_2_V OD1 requires long PD or a bidirectional 2-byte direction (Table A.10)");
+                }
+            }
+            _ => anyhow::bail!("Unsupported IO-Link m_seq_type {m_seq_type}; supported engine enums: 1 (legacy demo), 4, 5, 6"),
+        }
+        Ok(Self::build(
             pd_in_len,
+            pd_out_len,
+            m_seq_type,
+            od_len,
+            com,
+            frame_gap_ticks,
+        ))
+    }
+
+    fn build(
+        pd_in_len: usize,
+        pd_out_len: usize,
+        m_seq_type: u8,
+        od_len: usize,
+        com: IolinkComSpeed,
+        frame_gap_ticks: u32,
+    ) -> Self {
+        let mut m = Self {
+            component_id: String::new(),
+            evaluation: None,
+            wake_phy: None,
+            evaluation_log: Vec::new(),
+            pd_in_len,
+            pd_out: vec![0; pd_out_len],
+            pd_out_counter: false,
+            m_seq_type,
             od_len,
             com,
             link_state: IolinkLinkState::Startup,
@@ -387,12 +515,11 @@ impl IolinkMaster {
             rx_accum: Vec::new(),
             step: 0,
             gap_ticks: 0,
-            latest_pd: vec![0u8; pd_in_len.max(1)],
+            latest_pd: vec![0u8; pd_in_len],
             pd_valid: false,
             trace: VecDeque::new(),
             current: None,
             frame_seq: 0,
-            backend,
             log_sink: None,
             event_latched: false,
             event_readout: VecDeque::new(),
@@ -400,6 +527,119 @@ impl IolinkMaster {
         };
         m.queue_next_frame(); // queue the wake-up immediately
         m
+    }
+
+    /// Update the selector/output for subsequently queued frames. An already
+    /// queued frame and its trace retain the original snapshot.
+    pub fn set_process_data_output(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            bytes.len() == self.pd_out.len(),
+            "PD output must contain exactly {} bytes",
+            self.pd_out.len()
+        );
+        self.pd_out.copy_from_slice(bytes);
+        Ok(())
+    }
+
+    pub fn process_data_input(&self) -> &[u8] {
+        &self.latest_pd
+    }
+
+    fn enable_evaluation_profile(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            (
+                self.pd_in_len,
+                self.pd_out.len(),
+                self.m_seq_type,
+                self.od_len
+            ) == (32, 1, 6, 1)
+                && matches!(self.com, IolinkComSpeed::Com2 | IolinkComSpeed::Com3),
+            "tiol112-eval requires PDin32/PDout1/TYPE_2_V/OD1 and COM2 or COM3"
+        );
+        self.tx_queue.clear();
+        self.current = None;
+        self.rx_accum.clear();
+        self.frame_seq = 0;
+        self.evaluation = Some(Evaluation::armed(self.com));
+        Ok(())
+    }
+
+    /// One explicit action: assert the PHY's logical WAKE for 1 ms, release,
+    /// then perform the documented DPP/DeviceOperate sequence. This does not
+    /// simulate the physical master wake current or silently start on attach.
+    pub fn start_evaluation(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.evaluation.is_some(),
+            "Start requires startup_profile: tiol112-eval"
+        );
+        let phy = self
+            .wake_phy
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("tiol112-eval requires a TIOL112 on the same UART"))?;
+        phy.set_wake_asserted(true);
+        let e = self.evaluation.as_mut().unwrap();
+        e.phase = EvaluationPhase::Wake;
+        e.not_before_us = e.now_us + 1_000;
+        e.awaiting_reply = false;
+        e.read_next = false;
+        e.error = None;
+        self.tx_queue.clear();
+        self.current = None;
+        self.rx_accum.clear();
+        self.event_readout.clear();
+        self.link_state = IolinkLinkState::Startup;
+        self.pd_valid = false;
+        self.latest_pd.fill(0);
+        self.evaluation_message("START: logical WAKE asserted for 1000 us");
+        Ok(())
+    }
+
+    pub fn evaluation_error(&self) -> Option<&str> {
+        self.evaluation.as_ref().and_then(|e| e.error.as_deref())
+    }
+
+    /// Read-only presentation state for the explicit evaluation profile.
+    /// Legacy peers return `None`; this never advances the protocol schedule.
+    pub fn evaluation_phase(&self) -> Option<&'static str> {
+        self.evaluation.as_ref().map(|e| match e.phase {
+            EvaluationPhase::Armed => "armed",
+            EvaluationPhase::Wake => "wake",
+            EvaluationPhase::MinCycle => "min_cycle",
+            EvaluationPhase::Capability => "capability",
+            EvaluationPhase::PdIn => "pd_in",
+            EvaluationPhase::PdOut => "pd_out",
+            EvaluationPhase::OperateCommand => "operate_command",
+            EvaluationPhase::Operate => "operate",
+            EvaluationPhase::Fault => "fault",
+        })
+    }
+
+    fn evaluation_message(&mut self, message: &str) {
+        self.log_line(&format!("MASTER {message}"));
+        if self.evaluation_log.len() >= TRACE_CAP {
+            self.evaluation_log.remove(0);
+        }
+        self.evaluation_log.push(message.to_string());
+    }
+
+    fn character_us(&self) -> u64 {
+        let baud = match self.com {
+            IolinkComSpeed::Com1 => 4_800,
+            IolinkComSpeed::Com2 => 38_400,
+            IolinkComSpeed::Com3 => 230_400,
+        };
+        11_000_000u64.div_ceil(baud)
+    }
+
+    /// Optional demo stimulus: increment only the first output octet after
+    /// each queued OPERATE frame, wrapping at 255. Disabled by default.
+    pub fn set_process_data_output_counter(&mut self, enabled: bool) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !enabled || !self.pd_out.is_empty(),
+            "PD output counter requires pd_out_len >= 1"
+        );
+        self.pd_out_counter = enabled;
+        Ok(())
     }
 
     /// Wire a capture sink so the master records what it received over IO-Link
@@ -465,11 +705,7 @@ impl IolinkMaster {
     /// Name of the protocol engine currently backing this master. Used by the
     /// native-backend gating test; not part of the stable component API.
     pub fn backend_name_for_test(&self) -> &'static str {
-        match &self.backend {
-            IolinkMasterBackend::HandRolled => "hand-rolled",
-            #[cfg(feature = "iolink-native")]
-            IolinkMasterBackend::Native(_) => "iolinki-master",
-        }
+        "hand-rolled"
     }
 
     /// First process-data input byte (channel bitmap for a DI hub).
@@ -492,16 +728,252 @@ impl IolinkMaster {
     }
 
     fn operate_response_len(&self) -> usize {
-        self.pd_in_len + 1
+        self.pd_in_len + 1 + self.current.as_ref().map_or(0, |p| p.response_od_len)
+    }
+
+    fn complete_current(&mut self) {
+        if let Some(p) = self.current.take() {
+            let x = self.finalize_xfer(p);
+            if self.trace.len() >= TRACE_CAP {
+                self.trace.pop_front();
+            }
+            self.trace.push_back(x);
+        }
+        self.rx_accum.clear();
+    }
+
+    fn validate_evaluation_reply(&self, e: &mut Evaluation) -> anyhow::Result<()> {
+        let p = self
+            .current
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing pending request"))?;
+        let expected = if e.phase == EvaluationPhase::Operate {
+            self.pd_in_len + p.response_od_len + 1
+        } else if e.phase == EvaluationPhase::OperateCommand {
+            1
+        } else {
+            2
+        };
+        anyhow::ensure!(
+            p.raw_device.len() == expected,
+            "reply length {} != {expected}",
+            p.raw_device.len()
+        );
+        let mut checked = p.raw_device.clone();
+        *checked.last_mut().unwrap() &= 0xC0;
+        anyhow::ensure!(
+            checksum6(&checked) == (p.raw_device[expected - 1] & 0x3F),
+            "reply checksum failed"
+        );
+        match e.phase {
+            EvaluationPhase::MinCycle => {
+                let raw = p.raw_device[0];
+                let required = if self.com == IolinkComSpeed::Com3 {
+                    0x1E
+                } else {
+                    0x56
+                };
+                anyhow::ensure!(raw == required, "evaluation firmware MinCycleTime {raw:#04x} does not match required {required:#04x}");
+                let value = u64::from(raw & 0x3F);
+                let minimum = match raw >> 6 {
+                    0 => value * 100,
+                    1 => 6_400 + value * 400,
+                    2 => 32_000 + value * 1_600,
+                    _ => anyhow::bail!("reserved MinCycleTime encoding {raw:#04x}"),
+                };
+                anyhow::ensure!(minimum >= 400, "invalid MinCycleTime {raw:#04x}");
+                e.cycle_us = e.cycle_us.max(minimum);
+                e.phase = EvaluationPhase::Capability;
+            }
+            EvaluationPhase::Capability => {
+                let code = (p.raw_device[0] >> 1) & 7;
+                anyhow::ensure!(
+                    code == 4,
+                    "device OPERATE capability code {code} does not match OD1 TYPE_2_V code4"
+                );
+                e.phase = EvaluationPhase::PdIn;
+            }
+            EvaluationPhase::PdIn => {
+                anyhow::ensure!(
+                    p.raw_device[0] == 0x9F,
+                    "device PDin description must be 32 bytes (0x9F)"
+                );
+                e.phase = EvaluationPhase::PdOut;
+            }
+            EvaluationPhase::PdOut => {
+                anyhow::ensure!(
+                    p.raw_device[0] == 0x08,
+                    "device PDout description must be 8 bits (0x08)"
+                );
+                e.phase = EvaluationPhase::OperateCommand;
+            }
+            EvaluationPhase::OperateCommand => e.phase = EvaluationPhase::Operate,
+            EvaluationPhase::Operate => {
+                anyhow::ensure!(
+                    p.raw_device[expected - 1] & 0x40 == 0,
+                    "device marks process data invalid"
+                );
+            }
+            _ => anyhow::bail!("unexpected startup phase"),
+        }
+        Ok(())
+    }
+
+    fn queue_evaluation_frame(&mut self, e: &mut Evaluation) {
+        self.complete_current();
+        let (frame, kind) = match e.phase {
+            EvaluationPhase::MinCycle => (encode_type0(0xA2), IolinkFrameKind::Idle),
+            EvaluationPhase::Capability => (encode_type0(0xA3), IolinkFrameKind::Idle),
+            EvaluationPhase::PdIn => (encode_type0(0xA5), IolinkFrameKind::Idle),
+            EvaluationPhase::PdOut => (encode_type0(0xA6), IolinkFrameKind::Idle),
+            EvaluationPhase::OperateCommand => (
+                encode_type0_write(0x20, &[0x99]),
+                IolinkFrameKind::OperateReq,
+            ),
+            EvaluationPhase::Operate => {
+                self.link_state = IolinkLinkState::Operate;
+                // ISDU IDLE while exchanging cyclic PD. No service is in
+                // progress in this profile; IDLE must not interrupt one.
+                let control = mc(e.read_next, CHANNEL_ISDU, FLOWCTRL_IDLE);
+                e.read_next = !e.read_next;
+                (
+                    encode_type2(control, &self.pd_out, &[0]),
+                    IolinkFrameKind::Cyclic,
+                )
+            }
+            _ => return,
+        };
+        let cyclic = e.phase == EvaluationPhase::Operate;
+        let pd_out = if cyclic {
+            self.pd_out.clone()
+        } else {
+            Vec::new()
+        };
+        let response_od_len = if cyclic && frame[0] & 0x80 != 0 {
+            self.od_len
+        } else {
+            0
+        };
+        self.tx_queue.extend(frame.iter().copied());
+        self.current = Some(PendingXfer {
+            seq: self.frame_seq,
+            kind,
+            pd_out,
+            link_state: self.link_state,
+            raw_master: frame,
+            raw_device: Vec::new(),
+            response_od_len,
+        });
+        self.frame_seq = self.frame_seq.wrapping_add(1);
+        if cyclic && self.pd_out_counter {
+            self.pd_out[0] = self.pd_out[0].wrapping_add(1);
+        }
+        e.last_start_us = e.now_us;
+        e.next_byte_us = e.now_us;
+        e.reply_deadline_us = e.now_us + 50_000u64.max(e.cycle_us * 2);
+        e.awaiting_reply = true;
+    }
+
+    fn poll_evaluation(&mut self, elapsed_us: u32) -> Option<u8> {
+        let mut e = self.evaluation.take().unwrap();
+        e.now_us = e.now_us.saturating_add(u64::from(elapsed_us));
+        let character_us = self.character_us();
+        let mut result = None;
+        if e.phase == EvaluationPhase::Wake && e.now_us >= e.not_before_us {
+            self.wake_phy.as_ref().unwrap().set_wake_asserted(false);
+            self.evaluation_message(
+                "WAKE released; checking DPP MinCycleTime/capability/PD lengths",
+            );
+            e.phase = EvaluationPhase::MinCycle;
+            e.not_before_us = e.now_us + 100;
+        }
+        if !matches!(
+            e.phase,
+            EvaluationPhase::Armed | EvaluationPhase::Wake | EvaluationPhase::Fault
+        ) && e.now_us >= e.not_before_us
+        {
+            if self.tx_queue.is_empty() && e.awaiting_reply {
+                let n = if e.phase == EvaluationPhase::Operate {
+                    self.operate_response_len()
+                } else if e.phase == EvaluationPhase::OperateCommand {
+                    1
+                } else {
+                    2
+                };
+                let received = self.current.as_ref().map_or(0, |p| p.raw_device.len());
+                let previous_phase = e.phase;
+                let verdict = if received >= n {
+                    Some(self.validate_evaluation_reply(&mut e))
+                } else if e.now_us >= e.reply_deadline_us {
+                    Some(Err(anyhow::anyhow!(
+                        "reply timeout in {previous_phase:?}: received {received}/{n} bytes"
+                    )))
+                } else {
+                    None
+                };
+                if let Some(verdict) = verdict {
+                    match verdict {
+                        Ok(()) => {
+                            e.awaiting_reply = false;
+                            // TYPE_0 recovery: at least100 Tbit between master
+                            // request starts (v1.1.4 Tables A.7/A.8, A.3.9).
+                            let recovery = if self.com == IolinkComSpeed::Com3 {
+                                435
+                            } else {
+                                2_605
+                            };
+                            let period = if previous_phase == EvaluationPhase::Operate {
+                                e.cycle_us
+                            } else {
+                                recovery
+                            };
+                            e.not_before_us =
+                                (e.last_start_us + period).max(e.now_us + character_us);
+                            if previous_phase == EvaluationPhase::OperateCommand {
+                                self.evaluation_message(&format!(
+                                    "DPP accepted; OPERATE cycle >= {} us",
+                                    e.cycle_us
+                                ));
+                            }
+                        }
+                        Err(error) => {
+                            let error = error.to_string();
+                            self.evaluation_message(&format!(
+                                "FAULT: {error}; reset the run before retrying"
+                            ));
+                            e.error = Some(error);
+                            e.phase = EvaluationPhase::Fault;
+                            e.awaiting_reply = false;
+                            self.complete_current();
+                        }
+                    }
+                }
+            }
+            if !e.awaiting_reply && e.phase != EvaluationPhase::Fault && e.now_us >= e.not_before_us
+            {
+                self.queue_evaluation_frame(&mut e);
+            }
+            if e.phase != EvaluationPhase::Fault && e.now_us >= e.next_byte_us {
+                if let Some(byte) = self.tx_queue.pop_front() {
+                    e.next_byte_us = e.now_us + character_us;
+                    result = Some(byte);
+                }
+            }
+        }
+        self.evaluation = Some(e);
+        result
     }
 
     /// Turn a completed in-flight frame into a trace record, decoding the
     /// device response only for cyclic (OPERATE) frames.
     fn finalize_xfer(&self, p: PendingXfer) -> IolinkXfer {
-        let (pd_in, ck_ok, pd_valid) = if matches!(p.kind, IolinkFrameKind::Cyclic) {
-            let n = self.operate_response_len();
+        let (pd_in, ck_ok, pd_valid) = if matches!(p.kind, IolinkFrameKind::Cyclic)
+            || (self.m_seq_type >= 4 && matches!(p.kind, IolinkFrameKind::EventReadout))
+        {
+            let n = self.pd_in_len + p.response_od_len + 1;
             if p.raw_device.len() >= n {
-                let r = decode_operate(&p.raw_device[..n], self.pd_in_len);
+                let r =
+                    decode_operate_with_od(&p.raw_device[..n], self.pd_in_len, p.response_od_len);
                 (r.pd, Some(r.checksum_ok), Some(r.pd_valid))
             } else {
                 (Vec::new(), None, Some(false))
@@ -528,14 +1000,7 @@ impl IolinkMaster {
     /// Also finalizes the previous in-flight frame into the trace ring.
     fn queue_next_frame(&mut self) {
         // Finalize the previous frame (its response accumulated during the gap).
-        if let Some(p) = self.current.take() {
-            let x = self.finalize_xfer(p);
-            if self.trace.len() >= TRACE_CAP {
-                self.trace.pop_front();
-            }
-            self.trace.push_back(x);
-        }
-        self.rx_accum.clear();
+        self.complete_current();
 
         let (frame, kind): (Vec<u8>, IolinkFrameKind) = if self.step == 0 {
             (vec![0x55], IolinkFrameKind::WakeUp) // wake-up pulse (once)
@@ -562,18 +1027,35 @@ impl IolinkMaster {
             // process data: read StatusCode, the event slots, then write
             // StatusCode to clear the Event flag.
             if let Some((mc, is_write)) = self.event_readout.pop_front() {
-                let frame = if is_write {
+                let frame = if self.m_seq_type >= 4 {
+                    encode_type2(mc, &self.pd_out, &vec![0; self.od_len])
+                } else if is_write {
                     encode_type0_write(mc, &[0x00])
                 } else {
                     encode_type0(mc)
                 };
                 (frame, IolinkFrameKind::EventReadout)
             } else {
-                (encode_type1_cycle(&[]), IolinkFrameKind::Cyclic) // cyclic Type 1
+                let frame = if self.m_seq_type >= 4 {
+                    encode_type2(0x00, &self.pd_out, &vec![0; self.od_len])
+                } else {
+                    encode_type1_cycle(&[])
+                };
+                (frame, IolinkFrameKind::Cyclic)
             }
         };
 
-        let pd_out: Vec<u8> = Vec::new(); // DI device: master sends no PD out
+        let is_type2_operate = self.m_seq_type >= 4 && self.link_state == IolinkLinkState::Operate;
+        let pd_out = if is_type2_operate {
+            self.pd_out.clone()
+        } else {
+            Vec::new()
+        };
+        let response_od_len = if is_type2_operate && frame[0] & 0x80 != 0 {
+            self.od_len
+        } else {
+            0
+        };
         for &b in &frame {
             self.tx_queue.push_back(b);
         }
@@ -584,7 +1066,11 @@ impl IolinkMaster {
             link_state: self.link_state,
             raw_master: frame,
             raw_device: Vec::new(),
+            response_od_len,
         });
+        if is_type2_operate && self.pd_out_counter {
+            self.pd_out[0] = self.pd_out[0].wrapping_add(1);
+        }
         self.frame_seq = self.frame_seq.wrapping_add(1);
 
         // Hold `step` at the first cyclic index so it keeps repeating Type 1.
@@ -602,7 +1088,10 @@ impl UartStreamDevice for IolinkMaster {
         true
     }
 
-    fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+    fn poll(&mut self, elapsed_us: u32) -> Option<u8> {
+        if self.evaluation.is_some() {
+            return self.poll_evaluation(elapsed_us);
+        }
         if let Some(byte) = self.tx_queue.pop_front() {
             return Some(byte);
         }
@@ -619,23 +1108,24 @@ impl UartStreamDevice for IolinkMaster {
     fn on_tx_byte(&mut self, byte: u8) {
         // Accumulate the device's reply to the current frame. Once a cyclic
         // (OPERATE) response is complete, decode and latch the process data.
-        if self.rx_accum.len() < 64 {
+        if self.rx_accum.len() < 65 {
             self.rx_accum.push(byte);
         }
         if let Some(p) = self.current.as_mut() {
-            if p.raw_device.len() < 64 {
+            if p.raw_device.len() < 65 {
                 p.raw_device.push(byte);
             }
         }
         if self.link_state == IolinkLinkState::Operate
-            && self
-                .current
-                .as_ref()
-                .is_some_and(|p| matches!(p.kind, IolinkFrameKind::Cyclic))
+            && self.current.as_ref().is_some_and(|p| {
+                matches!(p.kind, IolinkFrameKind::Cyclic)
+                    || (self.m_seq_type >= 4 && matches!(p.kind, IolinkFrameKind::EventReadout))
+            })
             && self.rx_accum.len() >= self.operate_response_len()
         {
             let n = self.operate_response_len();
-            let resp = decode_operate(&self.rx_accum[..n], self.pd_in_len);
+            let od_len = self.current.as_ref().map_or(0, |p| p.response_od_len);
+            let resp = decode_operate_with_od(&self.rx_accum[..n], self.pd_in_len, od_len);
             if resp.checksum_ok && resp.pd_valid {
                 // Log only when the verdict changed, so the capture stays
                 // readable (one line per distinct verdict the master received).
@@ -666,6 +1156,68 @@ impl UartStreamDevice for IolinkMaster {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }
+
+    fn paced_by_device(&self) -> bool {
+        self.evaluation.is_some()
+    }
+
+    fn declared_baud(&self) -> Option<u32> {
+        self.evaluation.as_ref().map(|_| match self.com {
+            IolinkComSpeed::Com1 => 4_800,
+            IolinkComSpeed::Com2 => 38_400,
+            IolinkComSpeed::Com3 => 230_400,
+        })
+    }
+
+    fn device_id(&self) -> Option<&str> {
+        (!self.component_id.is_empty()).then_some(self.component_id.as_str())
+    }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn SimInput> {
+        Some(self)
+    }
+
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        vec![crate::peripheral_log::PeripheralLog::new(
+            "evaluation",
+            self.evaluation_log.clone(),
+        )]
+    }
+}
+
+static MASTER_INPUTS: &[InputChannel] = &[InputChannel {
+    key: std::borrow::Cow::Borrowed("start"),
+    label: std::borrow::Cow::Borrowed("Start TIOL112 evaluation (logical WAKE then DPP)"),
+    unit: std::borrow::Cow::Borrowed("bool"),
+    min: 0.0,
+    max: 1.0,
+    default: Some(0.0),
+}];
+
+impl SimInput for IolinkMaster {
+    fn input_channels(&self) -> &[InputChannel] {
+        MASTER_INPUTS
+    }
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
+        self.require_channel(key, value)?;
+        let pressed = value >= 0.5;
+        let e = self.evaluation.as_mut().ok_or_else(|| {
+            SimInputError::Evaluation("Start requires startup_profile: tiol112-eval".into())
+        })?;
+        let rising = pressed && !e.start_pressed;
+        e.start_pressed = pressed;
+        if rising {
+            self.start_evaluation()
+                .map_err(|e| SimInputError::Evaluation(e.to_string()))?;
+        }
+        Ok(())
+    }
+    fn component_id(&self) -> Option<&str> {
+        self.device_id()
+    }
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = id;
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -678,34 +1230,58 @@ pub struct IolinkMasterKit;
 pub static IOLINK_MASTER_KIT: IolinkMasterKit = IolinkMasterKit;
 
 static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
-    inputs: std::borrow::Cow::Borrowed(&[]),
+    inputs: std::borrow::Cow::Borrowed(MASTER_INPUTS),
     device_type: std::borrow::Cow::Borrowed("iolink-master"),
     label: std::borrow::Cow::Borrowed("IO-Link Master"),
     summary: std::borrow::Cow::Borrowed("IO-Link master state machine over UART."),
-    detail: std::borrow::Cow::Borrowed("Drives wake-up / startup / operate cycles, m-sequence types, process-data \
-             exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels."),
+    detail: std::borrow::Cow::Borrowed("Tick-paced IO-Link test peer with bounded process-data framing. \
+             Supports TYPE_2_1/2/variable and the legacy LabWired receive-only demo envelope. \
+             The opt-in tiol112-eval profile waits for explicit Start, schedules logical WAKE, \
+             validates DPP, and alternates TYPE_2_V PD reads/writes at the advertised minimum cycle. \
+             This peer does not prove physical baud timing, tA, master conformance, \
+             ISDU service execution, or Beckhoff compatibility."),
     transport: Transport::Uart,
     category: Category::Uart,
     config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
+            name: std::borrow::Cow::Borrowed("startup_profile"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("legacy (default) or tiol112-eval. Evaluation requires a TIOL112 attached earlier to the same UART, PDin32/PDout1/TYPE_2_V/OD1 and COM2/3. Explicit start input schedules a logical 1ms WAKE, validated DPP reads and DeviceOperate; cyclic ISDU-IDLE read/write PD follows. It does not execute ISDU services."),
+        },
+        ConfigKey {
             name: std::borrow::Cow::Borrowed("pd_in_len"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("Process-data input length in bytes. Defaults to 1 (single-byte DI device)."),
+            doc: std::borrow::Cow::Borrowed("Process-data input length, 0..32 bytes. Default 1. Must match the selected M-sequence."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("pd_out_len"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("Process-data output length, 0..32 bytes. Default 0; initialized to zero and changeable through set_process_data_output."),
         },
         ConfigKey {
             name: std::borrow::Cow::Borrowed("m_seq_type"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("M-sequence type (1..6). Used to derive od_len: one OD octet, or two for TYPE_2_V (Table A.10)."),
+            doc: std::borrow::Cow::Borrowed("Engine enum: 1=legacy receive-only demo (default), 4=TYPE_2_1, 5=TYPE_2_2, 6=TYPE_2_V. This is NOT the DPP capability code. Other values are rejected."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("pd_out_pattern"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("Optional demo stimulus: constant (default) or counter. Counter increments the first PD output octet once per queued OPERATE frame; requires pd_out_len >= 1."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("od_len"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("On-request octets: TYPE_2_V permits 1, 2, 8, 32; other supported modes require 1. Default 2 for TYPE_2_V, otherwise 1. Long-PD TYPE_2_V OD1 corresponds to DPP capability code 4."),
         },
         ConfigKey {
             name: std::borrow::Cow::Borrowed("com"),
             ty: ConfigType::Str,
-            doc: std::borrow::Cow::Borrowed("Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."),
+            doc: std::borrow::Cow::Borrowed("Communication speed: COM1, COM2 (default), or COM3. Legacy mode treats it as metadata; tiol112-eval paces bytes in simulated time and reports the baud to the UART guard. No physical timing claim."),
         },
         ConfigKey {
             name: std::borrow::Cow::Borrowed("frame_gap_ticks"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget."),
+            doc: std::borrow::Cow::Borrowed("Legacy inter-frame gap in UART polls, 1..4294967295 (default 6000). Not a cycle time in microseconds. Cannot be specified for tiol112-eval, which honors device MinCycleTime."),
         },
     ]),
     labs: std::borrow::Cow::Borrowed(&[LabRef {
@@ -721,39 +1297,295 @@ impl PeripheralKit for IolinkMasterKit {
         &IOLINK_MASTER_METADATA
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let pd_in_len = ctx.config_i64("pd_in_len").unwrap_or(1) as usize;
-        let m_seq_type = ctx.config_i64("m_seq_type").unwrap_or(1);
-        /* Table A.10: only TYPE_2_V (6) carries two OD octets; every other
-        M-sequence type carries one. */
-        let od_len: usize = if m_seq_type == 6 { 2 } else { 1 };
-        let com = match ctx
-            .config_str("com")
-            .unwrap_or("COM2")
-            .to_ascii_uppercase()
-            .as_str()
-        {
-            "COM1" => IolinkComSpeed::Com1,
-            "COM3" => IolinkComSpeed::Com3,
-            _ => IolinkComSpeed::Com2,
-        };
-        let frame_gap_ticks = ctx
-            .config_i64("frame_gap_ticks")
-            .map(|v| v.max(1) as u32)
-            .unwrap_or(FRAME_GAP_TICKS);
+        let mut master = configured_master(&ctx.ext.config)?;
+        master.set_component_id(ctx.ext.id.clone());
         let uart = ctx.uart()?;
-        uart.attach_stream(Box::new(IolinkMaster::new_with_gap(
-            pd_in_len,
-            od_len,
-            com,
-            frame_gap_ticks,
-        )));
+        if master.evaluation.is_some() {
+            master.wake_phy = Some(uart.tiol112().cloned().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "tiol112-eval requires a TIOL112 declared before the master on the same UART"
+                )
+            })?);
+        }
+        uart.attach_stream(Box::new(master));
         Ok(())
     }
+}
+
+/// Validate before narrowing signed YAML integers. Missing values have
+/// defaults; malformed or out-of-range supplied values never silently do.
+fn configured_master(
+    config: &std::collections::HashMap<String, serde_yaml::Value>,
+) -> anyhow::Result<IolinkMaster> {
+    let integer = |key: &str, default: u64, max: u64| -> anyhow::Result<u64> {
+        match config.get(key) {
+            None => Ok(default),
+            Some(value) => {
+                let number = value
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("IO-Link {key} must be an unsigned integer"))?;
+                anyhow::ensure!(number <= max, "IO-Link {key} must be <= {max}");
+                Ok(number)
+            }
+        }
+    };
+    let pd_in_len = integer("pd_in_len", 1, 32)? as usize;
+    let pd_out_len = integer("pd_out_len", 0, 32)? as usize;
+    let m_seq_type = integer("m_seq_type", 1, 6)? as u8;
+    let od_len = integer("od_len", if m_seq_type == 6 { 2 } else { 1 }, 32)? as usize;
+    let frame_gap_ticks =
+        integer("frame_gap_ticks", FRAME_GAP_TICKS as u64, u32::MAX as u64)? as u32;
+    let com_text = match config.get("com") {
+        None => "COM2",
+        Some(value) => value
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("IO-Link com must be COM1, COM2, or COM3"))?,
+    };
+    let com = match com_text.trim().to_ascii_uppercase().as_str() {
+        "COM1" => IolinkComSpeed::Com1,
+        "COM2" => IolinkComSpeed::Com2,
+        "COM3" => IolinkComSpeed::Com3,
+        _ => anyhow::bail!("IO-Link com must be COM1, COM2, or COM3"),
+    };
+    let mut master = IolinkMaster::new_configured(
+        pd_in_len,
+        pd_out_len,
+        m_seq_type,
+        od_len,
+        com,
+        frame_gap_ticks,
+    )?;
+    match config.get("pd_out_pattern").map(|v| v.as_str()) {
+        None | Some(Some("constant")) => {}
+        Some(Some("counter")) => master.set_process_data_output_counter(true)?,
+        _ => anyhow::bail!("IO-Link pd_out_pattern must be constant or counter"),
+    }
+    match config.get("startup_profile").map(|v| v.as_str()) {
+        None | Some(Some("legacy")) => {}
+        Some(Some("tiol112-eval")) => {
+            anyhow::ensure!(
+                !config.contains_key("frame_gap_ticks"),
+                "tiol112-eval uses advertised MinCycleTime; omit frame_gap_ticks"
+            );
+            master.enable_evaluation_profile()?;
+        }
+        _ => anyhow::bail!("IO-Link startup_profile must be legacy or tiol112-eval"),
+    }
+    Ok(master)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn requested_master(od_len: usize) -> IolinkMaster {
+        IolinkMaster::new_configured(32, 1, 6, od_len, IolinkComSpeed::Com3, 8).unwrap()
+    }
+
+    fn yaml_master(yaml: &str) -> anyhow::Result<IolinkMaster> {
+        configured_master(&serde_yaml::from_str(yaml).unwrap())
+    }
+
+    #[test]
+    fn configured_master_preserves_type2v_profile_and_legacy_defaults() {
+        let m = yaml_master("pd_in_len: 32\npd_out_len: 1\nm_seq_type: 6\nod_len: 1\ncom: COM3\nframe_gap_ticks: 250").unwrap();
+        assert_eq!(
+            (m.pd_in_len, m.pd_out.len(), m.m_seq_type, m.od_len),
+            (32, 1, 6, 1)
+        );
+        assert_eq!(m.com, IolinkComSpeed::Com3);
+        assert_eq!(m.frame_gap_ticks, 250);
+        assert_eq!(m.backend_name_for_test(), "hand-rolled");
+        let legacy = yaml_master("{}").unwrap();
+        assert_eq!(
+            (
+                legacy.pd_in_len,
+                legacy.pd_out.len(),
+                legacy.m_seq_type,
+                legacy.od_len
+            ),
+            (1, 0, 1, 1)
+        );
+        assert_eq!(legacy.com, IolinkComSpeed::Com2);
+        // Retain shipped thermal fixture compatibility, without pretending its
+        // legacy envelope is a conformant TYPE_1_1 process-data exchange.
+        assert!(yaml_master("pd_in_len: 9\nm_seq_type: 1").is_ok());
+    }
+
+    #[test]
+    fn config_rejects_malformed_values_before_integer_narrowing() {
+        for yaml in [
+            "pd_in_len: -1",
+            "pd_in_len: 33",
+            "pd_in_len: 1.5",
+            "pd_in_len: '32'",
+            "pd_out_len: -1",
+            "pd_out_len: 33",
+            "pd_out_len: true",
+            "m_seq_type: 2",
+            "m_seq_type: 3",
+            "m_seq_type: 256",
+            "m_seq_type: -1",
+            "od_len: 0",
+            "od_len: 3",
+            "od_len: 33",
+            "com: COM4",
+            "com: 3",
+            "frame_gap_ticks: 0",
+            "frame_gap_ticks: -1",
+            "frame_gap_ticks: 4294967296",
+            "frame_gap_ticks: 1.5",
+        ] {
+            assert!(
+                yaml_master(yaml).is_err(),
+                "accepted malformed config {yaml}"
+            );
+        }
+    }
+
+    #[test]
+    fn m_sequence_and_od_width_boundaries_are_checked() {
+        let config = |pi, po, typ, od| {
+            IolinkMaster::new_configured(pi, po, typ, od, IolinkComSpeed::Com2, 1)
+        };
+        for od in [1, 2, 8, 32] {
+            assert!(config(32, 32, 6, od).is_ok());
+            assert!(config(0, 32, 6, od).is_ok());
+            assert!(config(32, 0, 6, od).is_ok());
+            assert!(config(0, 0, 6, od).is_err());
+        }
+        assert!(config(1, 0, 6, 2).is_ok());
+        assert!(config(0, 1, 6, 32).is_ok());
+        assert!(config(2, 1, 6, 1).is_ok()); // Table A.10, code 0 former TYPE_2_6
+        assert!(config(1, 2, 6, 1).is_ok());
+        assert!(config(1, 1, 6, 1).is_err()); // TYPE_2_5 instead
+        assert!(config(1, 0, 6, 1).is_err()); // TYPE_2_1 instead
+        assert!(config(1, 0, 4, 1).is_ok());
+        assert!(config(2, 0, 5, 1).is_ok());
+        assert!(config(32, 1, 4, 1).is_err()); // DPP code 4 is not engine enum 4
+        assert!(config(1, 0, 4, 2).is_err());
+        assert!(config(2, 1, 5, 1).is_err());
+        assert!(config(1, 1, 1, 1).is_err());
+        assert!(config(1, 0, 1, 2).is_err());
+        assert!(IolinkMaster::new_configured(32, 1, 6, 1, IolinkComSpeed::Com3, u32::MAX).is_ok());
+    }
+
+    #[test]
+    fn type2_write_encoder_has_pd_before_od_and_checksum_in_ckt() {
+        // Independently calculated A.1.6 vectors: ck6(00 80 03 00)=35,
+        // ck6(C0 80 A5)=3A. A read contains no OD in its master message.
+        assert_eq!(
+            encode_type2(0x00, &[0x03], &[0x00]),
+            [0x00, 0xB5, 0x03, 0x00]
+        );
+        assert_eq!(encode_type2(0xC0, &[0xA5], &[0x00; 32]), [0xC0, 0xBA, 0xA5]);
+    }
+
+    #[test]
+    fn configured_scheduler_sends_selector_and_captures_all_32_pd_bytes() {
+        let mut m = requested_master(1);
+        m.set_process_data_output(&[0x03]).unwrap();
+        assert!(m.set_process_data_output(&[]).is_err());
+        assert!(m.set_process_data_output(&[1, 2]).is_err());
+        assert_eq!(drain(&mut m), [0x55]);
+        assert_eq!(drain(&mut m), [0xA2, 0x00]);
+        assert_eq!(drain(&mut m), [0x20, 0x06, 0x99]);
+        assert_eq!(drain(&mut m), [0x00, 0xB5, 0x03, 0x00]);
+        m.set_process_data_output(&[0xA5]).unwrap();
+        let expected: Vec<u8> = (0..32).collect();
+        for &b in &expected {
+            m.on_tx_byte(b);
+        }
+        assert!(
+            !m.pd_valid,
+            "a missing CKS must not validate a partial reply"
+        );
+        m.on_tx_byte(0x2D); // XOR(00..1F)=0, so ck6 is the seed-only value.
+        assert!(m.pd_valid);
+        assert_eq!(m.process_data_input(), expected);
+        assert_eq!(drain(&mut m), [0x00, 0x8A, 0xA5, 0x00]);
+        let trace = m.trace_snapshot();
+        let x = trace.last().unwrap();
+        assert_eq!(x.kind, IolinkFrameKind::Cyclic);
+        assert_eq!(x.pd_out, [0x03]); // output snapshot belongs to the sent frame
+        assert_eq!(x.pd_in, expected);
+        assert_eq!(x.raw_master.len(), 4);
+        assert_eq!(x.raw_device.len(), 33);
+        assert_eq!(x.ck_ok, Some(true));
+        assert_eq!(x.com, IolinkComSpeed::Com3);
+    }
+
+    #[test]
+    fn type2_event_reads_preserve_pd_and_accept_full_65_octet_reply() {
+        let mut m = requested_master(32);
+        m.set_process_data_output(&[0xA5]).unwrap();
+        while m.link_state != IolinkLinkState::Operate {
+            drain(&mut m);
+        }
+        assert_eq!(m.current.as_ref().unwrap().raw_master.len(), 35);
+        let mut flagged = vec![0; 32];
+        flagged.push(0x80);
+        let last = flagged.len() - 1;
+        flagged[last] |= checksum6(&flagged);
+        for b in flagged {
+            m.on_tx_byte(b);
+        }
+        assert_eq!(drain(&mut m), [0xC0, 0xBA, 0xA5]);
+        let mut reply = vec![0xEE; 32]; // OD must not be exposed as process data
+        reply.extend(0..32);
+        reply.push(0);
+        let last = reply.len() - 1;
+        reply[last] = checksum6(&reply);
+        for b in reply {
+            m.on_tx_byte(b);
+        }
+        assert_eq!(m.process_data_input(), &(0..32).collect::<Vec<u8>>());
+        drain(&mut m);
+        let trace = m.trace_snapshot();
+        let x = trace.last().unwrap();
+        assert_eq!(x.kind, IolinkFrameKind::EventReadout);
+        assert_eq!(x.raw_device.len(), 65);
+        assert_eq!(x.ck_ok, Some(true));
+        assert_eq!(x.pd_in.len(), 32);
+        assert_eq!(x.pd_in[0], 0);
+        assert_eq!(x.pd_out, [0xA5]);
+    }
+
+    #[test]
+    fn invalid_checksum_and_pd_invalid_do_not_latch_configured_payload() {
+        let mut m = requested_master(1);
+        while m.link_state != IolinkLinkState::Operate {
+            drain(&mut m);
+        }
+        for b in (0..32).chain([0x2C]) {
+            m.on_tx_byte(b);
+        } // one wrong checksum bit
+        assert!(!m.pd_valid);
+        drain(&mut m);
+        for b in (0..32).chain([0x75]) {
+            m.on_tx_byte(b);
+        } // correct CK6, PD invalid
+        assert!(!m.pd_valid);
+        assert_eq!(m.process_data_input(), &[0; 32]);
+    }
+
+    #[test]
+    fn explicit_output_counter_changes_only_future_operate_frames_and_wraps() {
+        let mut m = yaml_master("pd_in_len: 32\npd_out_len: 1\nm_seq_type: 6\nod_len: 1\ncom: COM3\npd_out_pattern: counter\nframe_gap_ticks: 8").unwrap();
+        m.set_process_data_output(&[254]).unwrap();
+        for _ in 0..3 {
+            drain(&mut m);
+        }
+        assert_eq!(drain(&mut m)[2], 254);
+        assert_eq!(drain(&mut m)[2], 255);
+        assert_eq!(drain(&mut m)[2], 0);
+        let trace = m.trace_snapshot();
+        assert_eq!(trace[3].pd_out, [254]);
+        assert_eq!(trace[4].pd_out, [255]);
+        assert!(yaml_master("pd_out_pattern: counter").is_err());
+        assert!(yaml_master("pd_out_pattern: random").is_err());
+        assert!(yaml_master("pd_out_pattern: 1").is_err());
+    }
 
     /// Pump ticks and return the bytes of exactly the next frame: skip any
     /// leading inter-frame gap, collect the frame's bytes, stop at the next gap.
@@ -847,7 +1679,9 @@ mod tests {
         // The invalid vector follows C1: Event and PD-status bits of CKS are
         // part of the checked message (only bits 0-5 are zeroed), so
         // CKS = 0x40 | ck6([0xA5, 0x40]) = 0x7A.
-        let od = decode_operate(&[0x10, 0x39], 0);
+        // This vector is an OD-only READ reply; the WRITE helper deliberately
+        // accepts no OD and now rejects any extra octet rather than guessing.
+        let od = decode_operate_with_od(&[0x10, 0x39], 0, 1);
         assert!(od.checksum_ok);
         assert!(od.pd_valid);
         assert!(od.pd.is_empty());
@@ -946,6 +1780,7 @@ mod tests {
             link_state: IolinkLinkState::Operate,
             raw_master: encode_type1_cycle(&[]),
             raw_device: resp.to_vec(),
+            response_od_len: 0,
         };
         let x = m.finalize_xfer(p);
         assert_eq!(x.seq, 7);
@@ -965,6 +1800,7 @@ mod tests {
             link_state: IolinkLinkState::Startup,
             raw_master: vec![0x55],
             raw_device: vec![],
+            response_od_len: 0,
         };
         let x = m.finalize_xfer(p);
         assert_eq!(x.ck_ok, None);
@@ -982,6 +1818,7 @@ mod tests {
             link_state: IolinkLinkState::Operate,
             raw_master: encode_type1_cycle(&[0]),
             raw_device: vec![0x20],
+            response_od_len: 0,
         };
         let x = m.finalize_xfer(p);
         assert_eq!(x.ck_ok, None);
