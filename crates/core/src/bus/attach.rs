@@ -529,6 +529,76 @@ impl SystemBus {
         }
     }
 
+    /// Route RP2040 PIO0/PIO1 GPIO outputs through the live IO_BANK0 mux and
+    /// onto SIO's pad observation path. The PIO models publish their output
+    /// level and direction wires; `FUNCSEL` decides which one currently owns
+    /// each pad.
+    pub(crate) fn wire_rp2040_pio_pads(&mut self) {
+        use crate::peripherals::pio::Pio;
+        use crate::peripherals::rp2040::io_bank0::{
+            Rp2040IoBank0, GPIO_FUNC_PIO0, GPIO_FUNC_PIO1, PAD_COUNT,
+        };
+        use crate::peripherals::rp2040::sio::Rp2040Sio;
+
+        let Some((bank_idx, functions, bank_irq)) =
+            self.peripherals.iter().enumerate().find_map(|(idx, p)| {
+                p.dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
+                    .map(|bank| (idx, bank.pad_functions(), bank.bank_irq()))
+            })
+        else {
+            return;
+        };
+        let Some(sio_idx) = self.find_peripheral_index_by_name("sio") else {
+            return;
+        };
+        {
+            let Some(sio) = self.peripherals[sio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Rp2040Sio>())
+            else {
+                return;
+            };
+            sio.attach_io_bank0(functions.clone(), bank_irq, bank_idx);
+        }
+
+        for (name, function, label) in [
+            ("pio0", GPIO_FUNC_PIO0, "PIO0"),
+            ("pio1", GPIO_FUNC_PIO1, "PIO1"),
+        ] {
+            let Some(pio_idx) = self.find_peripheral_index_by_name(name) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[pio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Pio>())
+                .map(Pio::pad_lines_arc)
+            else {
+                continue;
+            };
+            let Some(sio) = self.peripherals[sio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Rp2040Sio>())
+            else {
+                return;
+            };
+            for pin in 0..PAD_COUNT {
+                sio.bind_pad_route(
+                    functions.clone(),
+                    &lines,
+                    pin,
+                    function,
+                    pin as usize,
+                    label,
+                );
+            }
+        }
+    }
+
     /// Bind the RP2040 I²C controllers' wires to the pads IO_BANK0 can route
     /// them to, so `read_gpio_pad` — and the logic analyzer through it — sees
     /// the bus rather than the SIO output latch. No-op unless IO_BANK0, SIO and

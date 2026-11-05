@@ -1449,6 +1449,9 @@ impl SystemBus {
         // the routed pad and not just console text. This pass also pairs the
         // SIO with IO_BANK0 for the GPIO interrupt.
         bus.wire_rp2040_uart_pads();
+        // PIO0/PIO1 pin levels and directions are wires too: carry them
+        // through IO_BANK0 FUNCSEL to the same pad readers and captures.
+        bus.wire_rp2040_pio_pads();
         // And the RP2040 SPI controllers' SCK/MOSI/CSn, so a probe on an SPI pad
         // measures the shifted bytes rather than the SIO output latch. MISO is
         // deliberately unrouted — nothing drives it.
