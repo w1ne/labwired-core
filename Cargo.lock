@@ -2334,6 +2334,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32f103c6-gpio-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-stm32f103c8-bluepill-smoke"
 version = "0.1.0"
 dependencies = [
