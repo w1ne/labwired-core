@@ -145,15 +145,16 @@ fn bldc_hall_driver_advances_hall_when_enabled() {
 }
 
 #[test]
-fn ibt2_effort_matches_modulshop_arduino_example() {
-    // speed>0 → LPWM, speed<0 → RPWM, 0 → coast; both EN high.
+fn ibt2_effort_matches_motor_terminal_polarity() {
+    // The module's electrical sign is M+ relative to M-: RPWM positive,
+    // LPWM negative. A sketch's "forward" naming also depends on motor leads.
     let m = HBridgeMotor::new_ibt2("ibt", 10, 11, Some(12), Some(13));
     m.on_gpio_edge(12, true, 0);
     m.on_gpio_edge(13, true, 1);
     m.on_gpio_edge(10, true, 2); // LPWM
     m.on_gpio_edge(11, false, 3);
-    assert_eq!(m.effort(), 1.0);
+    assert_eq!(m.effort(), -1.0);
     m.on_gpio_edge(10, false, 4);
     m.on_gpio_edge(11, true, 5);
-    assert_eq!(m.effort(), -1.0);
+    assert_eq!(m.effort(), 1.0);
 }
