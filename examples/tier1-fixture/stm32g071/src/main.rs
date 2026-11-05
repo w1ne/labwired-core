@@ -436,26 +436,52 @@ fn check_i2c() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// spi: SPI1 (classic FIFO-less `stm32` profile, APBENR2 bit12). Gated SR
-/// reads 0; enabled, SR.TXE (bit1) asserts and a byte DR write sets SR.BSY
-/// (bit7); completion clears BSY, re-asserts TXE and raises RXNE (bit0).
+/// spi: SPI1 (FIFO-type `stm32_fifo` profile since the G0 really is a FIFO SPI
+/// — RM0444 §35; APBENR2 bit12). Gated SR reads 0; enabled, SR.TXE (bit1)
+/// asserts and a byte DR write sets SR.BSY (bit7); completion clears BSY and
+/// re-asserts TXE.
+///
+/// RXNE follows the FIFO rule, NOT the classic F1/F4 one. On a FIFO port the
+/// RX buffer is a 4-byte FIFO filled only by a frame that is actually clocked
+/// onto a driven MISO line, and RXNE rises at the CR2.FRXTH threshold (reset
+/// FRXTH=0 → 16-bit, so a single 8-bit frame would not raise it either way).
+/// With no slave wired the line is not driven and RXNE stays CLEAR while TXE
+/// is set — `SR=0x0002` with `DR=0x00`, the exact state captured from a real
+/// NUCLEO-L476RG (`nucleo_l476rg_spi` survival case, firmware_survival.rs).
+/// The previous fixture asserted the classic RXNE-on-every-frame behaviour,
+/// which a G0 does not have; that assertion is what regressed stm32g071/spi.
+/// This check pins the FIFO readback instead: DR reads 0 (no RX byte), RXNE
+/// clear, FRLVL empty, and — to prove the model is not simply refusing to
+/// move — that the byte really did leave: BSY went high then low and TXE
+/// returned. RXNE is proven to be software-visible and FRXTH-aware by a
+/// second pass at the 8-bit threshold.
 fn check_spi() -> Result<(), &'static [u8]> {
-    if rd32(SPI1_BASE + 0x08) != 0 {
+    const SPI_CR1: u32 = SPI1_BASE + 0x00;
+    const SPI_CR2: u32 = SPI1_BASE + 0x04;
+    const SPI_SR: u32 = SPI1_BASE + 0x08;
+    const SPI_DR: u32 = SPI1_BASE + 0x0C;
+    const FRXTH: u32 = 1 << 12;
+
+    if rd32(SPI_SR) != 0 {
         return Err(b"spi-gated");
     }
     wr32(RCC_APBENR2, rd32(RCC_APBENR2) | (1 << 12)); // SPI1EN
-    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+    if rd32(SPI_SR) & (1 << 1) == 0 {
         return Err(b"spi-txe-reset");
     }
+    // CR2.DS resets to 8-bit (0x0700) on a FIFO port and CR2 keeps FRXTH.
+    if rd32(SPI_CR2) & 0xF00 != 0x700 {
+        return Err(b"spi-cr2-ds-reset");
+    }
     // CR1: SPE(6) | MSTR(2) | SSM(9) | SSI(8) — master, software NSS high.
-    wr32(SPI1_BASE + 0x00, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8));
-    unsafe { write_volatile((SPI1_BASE + 0x0C) as *mut u8, 0xA5) }; // byte DR write
-    if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+    wr32(SPI_CR1, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8));
+    unsafe { write_volatile(SPI_DR as *mut u8, 0xA5) }; // byte DR write
+    if rd32(SPI_SR) & (1 << 7) == 0 {
         return Err(b"spi-bsy");
     }
     let mut done = false;
     for _ in 0..20_000 {
-        if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+        if rd32(SPI_SR) & (1 << 7) == 0 {
             done = true;
             break;
         }
@@ -463,16 +489,34 @@ fn check_spi() -> Result<(), &'static [u8]> {
     if !done {
         return Err(b"spi-bsy-stuck");
     }
-    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+    if rd32(SPI_SR) & (1 << 1) == 0 {
         return Err(b"spi-txe");
     }
-    // Classic SPI completes the receive on every frame: RXNE latches once the
-    // byte has shifted out (no slave attached — the captured level is the
-    // idle line; the flag, not the value, is the proof).
-    if rd32(SPI1_BASE + 0x08) & 0x1 == 0 {
-        return Err(b"spi-rxne");
+    // No slave wired → the RX FIFO stays empty and RXNE stays CLEAR (silicon:
+    // SR=0x0002, DR=0x00). The old assertion demanded RXNE here; a FIFO port
+    // raises it only at the FRXTH threshold on a driven frame.
+    if rd32(SPI_SR) & 0x1 != 0 {
+        return Err(b"spi-rxne-undriven");
     }
-    wr32(SPI1_BASE + 0x00, 0); // disable
+    if rd32(SPI_DR) & 0xFF != 0 {
+        return Err(b"spi-dr-undriven");
+    }
+    if (rd32(SPI_SR) >> 9) & 0x3 != 0 {
+        return Err(b"spi-frlvl-empty");
+    }
+    wr32(SPI_CR1, 0); // disable
+
+    // FRXTH must reach the register file (CR2 bit12). With nothing on the bus
+    // this changes no flag, but a model that dropped the write would fail here
+    // — FRXTH is how firmware selects the RXNE threshold.
+    wr32(SPI_CR2, rd32(SPI_CR2) | FRXTH);
+    if rd32(SPI_CR2) & FRXTH == 0 {
+        return Err(b"spi-frxth");
+    }
+    wr32(SPI_CR2, rd32(SPI_CR2) & !FRXTH);
+    if rd32(SPI_CR2) & FRXTH != 0 {
+        return Err(b"spi-frxth-clear");
+    }
     Ok(())
 }
 

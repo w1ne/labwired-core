@@ -17,7 +17,7 @@
 //! | YAML id           | CLASS_MARKER  | class  | status  |
 //! |-------------------|---------------|--------|---------|
 //! | uart0             | uart          | uart   | implicit PASS via `done` |
-//! | gpio              | gpio          | gpio   | PASS — OUT/ENABLE W1TS+W1TC side effects, matrix selectors, IN ≠ OUT |
+//! | gpio              | gpio          | gpio   | PASS — OUT/ENABLE W1TS+W1TC side effects, matrix selectors, IN reads back the driven pad |
 //! | interrupt_core0   | interrupt     | irq    | PASS — real CPU traps from the software doorbell AND from UART0's peripheral source |
 //! | pcr               | pcr           | clock  | PASS — PCR register round-trip + CLK_EN=0 really kills UART0 MMIO |
 //! | timg0             | timg          | timer  | PASS — T0UPDATE latches an advancing counter; disabled T0 frozen |
@@ -223,12 +223,14 @@ fn report(class: &str, result: Result<(), &'static str>) {
 // What is proven: the set/clear aliases are NOT independent storage on this
 // model — OUT_W1TS/OUT_W1TC really mutate the OUT latch and ENABLE_W1TS/W1TC
 // really mutate ENABLE, read back through OUT/ENABLE. The pad-selector words
-// of both matrices retain what firmware writes. IN is the pad-input word, not
-// the output latch: with no external drive on these pins it stays clear while
-// OUT drives ones.
+// of both matrices retain what firmware writes. IN is the pad-input word: a
+// pad whose output driver is on samples itself through its IO_MUX input
+// buffer, so IN READS BACK the driven level while the latch is high and drops
+// it again when the latch clears.
 //
 // What is NOT claimed: IO_MUX pad routing is declarative on the C6 (the yaml
-// says so), so this does not prove electrical pad behaviour.
+// says so), so this does not prove electrical pad behaviour, and no external
+// device drives these pins here.
 fn check_gpio() -> Result<(), &'static str> {
     const OUT: u32 = GPIO_BASE + 0x04;
     const OUT_W1TS: u32 = GPIO_BASE + 0x08;
@@ -292,14 +294,33 @@ fn check_gpio() -> Result<(), &'static str> {
         return Err("gpio-matrix-in-sel");
     }
 
-    // IN must NOT follow the OUT latch. No external device drives GPIO4/5 on
-    // the C6 system, and the C6 IO_MUX is a declarative stub (no pull-up
-    // electrical model), so the released input word is clear even while the
-    // output drivers are enabled and the latch is high.
+    // IN reads the pad back through its input buffer while the output driver
+    // is on. On real silicon (and in this model since #1344) an OUTPUT pad with
+    // IO_MUX FUN_IE set — which is what `pinMode(pin, OUTPUT)` leaves behind and
+    // what the C6's declarative IO_MUX stub counts as — samples the level it
+    // drives, so `digitalRead()` on an OUTPUT pin returns the latch. IN must
+    // therefore FOLLOW OUT here, and must drop again when the latch clears.
+    //
+    // Pad 4's output selector was rewritten to SIG_U0TXD above (that is the
+    // matrix round-trip test); hand it back to the plain GPIO_OUT latch first,
+    // or the pad is driven by the UART signal and not by OUT.
+    wr32(FUNC0_OUT_SEL_CFG + 4 * 4, SIG_GPIO_OUT);
     wr32(ENABLE, P4 | P5);
     wr32(OUT, P4 | P5);
-    if rd32(IN) & (P4 | P5) != 0 {
+    if rd32(IN) & (P4 | P5) != (P4 | P5) {
         return Err("gpio-in-follows-out");
+    }
+    // Clearing the latch without touching ENABLE clears the readback too —
+    // this is the driven level, not a latched stale input.
+    wr32(OUT, 0);
+    if rd32(IN) & (P4 | P5) != 0 {
+        return Err("gpio-in-latch-clear");
+    }
+    // Driving one pad high and the other low must read back exactly that
+    // pattern, not an all-or-nothing word.
+    wr32(OUT, P4);
+    if rd32(IN) & (P4 | P5) != P4 {
+        return Err("gpio-in-mixed");
     }
 
     // Leave the block quiet for the rest of the run.
