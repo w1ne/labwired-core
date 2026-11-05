@@ -1377,8 +1377,9 @@ impl WasmSimulator {
             .into_boxed_slice())
     }
 
-    /// Read the IO-Link master peer's live state: `{ link_state, pd_valid,
-    /// input_byte }`. Returns `null` if no master is wired.
+    /// Read the IO-Link master peer's live state. The optional evaluation phase
+    /// and error are read-only diagnostics, null for legacy peers.
+    /// Returns `null` if no master is wired.
     #[wasm_bindgen]
     pub fn get_iolink_master_state(&self) -> JsValue {
         use labwired_core::peripherals::components::{IolinkLinkState, IolinkMaster};
@@ -1410,6 +1411,8 @@ impl WasmSimulator {
                         "link_state": link,
                         "pd_valid": m.pd_valid,
                         "input_byte": m.input_byte(),
+                        "evaluation_phase": m.evaluation_phase(),
+                        "evaluation_error": m.evaluation_error(),
                     });
                     return serde_wasm_bindgen::to_value(&v).unwrap_or(JsValue::NULL);
                 }

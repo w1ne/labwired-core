@@ -124,7 +124,7 @@ impl LineFormat {
         }
     }
     /// Line level of bit `idx` (0 = start) of `value`; stop and idle are 1.
-    fn level_of_bit(&self, value: u16, idx: u64) -> bool {
+    pub(crate) fn level_of_bit(&self, value: u16, idx: u64) -> bool {
         let data = u64::from(self.data_bits);
         if idx == 0 {
             false
@@ -424,6 +424,9 @@ struct Port {
     hunt_ps: u64,
     rx_sniff: Sniffer,
     tx_sniff: Sniffer,
+    /// Digital transceiver propagation at this endpoint; zero on bare UARTs.
+    tx_path_delay_ps: u64,
+    rx_path_delay_ps: u64,
 }
 
 #[derive(Debug)]
@@ -655,6 +658,8 @@ impl TimedUartNet {
                 hunt_ps: 0,
                 rx_sniff: Sniffer::default(),
                 tx_sniff: Sniffer::default(),
+                tx_path_delay_ps: 0,
+                rx_path_delay_ps: 0,
             });
         }
         let dir_stats = |from: &Port, to: &Port| DirStats {
@@ -889,6 +894,15 @@ impl TimedUartPort {
         self.hz
     }
 
+    /// Add endpoint transceiver propagation separately from cable/link delay.
+    /// TX start events stay on the MCU UART pin; receive sampling includes the
+    /// sending driver's and receiving transceiver's delays.
+    pub fn set_path_delays(&self, tx_ps: u64, rx_ps: u64) {
+        let mut g = self.lock();
+        g.ports[self.port].tx_path_delay_ps = tx_ps;
+        g.ports[self.port].rx_path_delay_ps = rx_ps;
+    }
+
     /// The USART's registers changed: record its line format.
     pub fn publish_format(&self, fmt: LineFormat) {
         self.lock().ports[self.port].fmt = fmt;
@@ -928,6 +942,10 @@ impl TimedUartPort {
             }
         }
 
+        let rx_port = inner.links[link_idx].ports[dir ^ 1];
+        let path_delay = inner.ports[self.port]
+            .tx_path_delay_ps
+            .saturating_add(inner.ports[rx_port].rx_path_delay_ps);
         let link = &mut inner.links[link_idx];
         let stats = &mut link.stats[dir];
         stats.chars_sent += 1;
@@ -949,7 +967,11 @@ impl TimedUartPort {
             let jitter = link.rng.up_to(link.jitter_ps);
             // A wire carries one character at a time: a jittered start may not
             // overtake the previous character's end.
-            let t0 = (tx_start_ps + link.delay_ps + jitter).max(link.wire_free_ps[dir]);
+            let t0 = tx_start_ps
+                .saturating_add(link.delay_ps)
+                .saturating_add(jitter)
+                .saturating_add(path_delay)
+                .max(link.wire_free_ps[dir]);
             link.wire_free_ps[dir] = t0 + fmt.frame_ps();
             t0
         };
@@ -1033,12 +1055,28 @@ impl TimedUartPort {
         rx: &LineFormat,
         rdr_full: bool,
     ) -> (Option<Decoded>, u32) {
+        let (loaded, overruns, _) = self.receive_due_policy(now_cycle, rx, rdr_full, false, false);
+        (loaded, overruns)
+    }
+
+    /// USART policy applied per decoded character, including late service of
+    /// multiple characters. Error bits are PE=1 and FE=2. Kept separate from
+    /// the legacy entry point so other UART clients retain their behavior.
+    pub(crate) fn receive_due_policy(
+        &self,
+        now_cycle: u64,
+        rx: &LineFormat,
+        rdr_full: bool,
+        overwrite: bool,
+        drop_errors: bool,
+    ) -> (Option<Decoded>, u32, u8) {
         let now = cycles_to_ps(now_cycle, self.hz);
         let mut g = self.lock();
         let inner = &mut *g;
         let mut full = rdr_full;
         let mut loaded = None;
         let mut overruns = 0;
+        let mut error_flags = 0;
         let enabled = rx.configured() && rx.rx_enabled;
         loop {
             // Retire characters the receiver has passed without starting on.
@@ -1130,13 +1168,34 @@ impl TimedUartPort {
                 }
                 Ok(d) => {
                     let latency = due - tx_start;
-                    if full {
+                    if full && !overwrite {
                         overruns += 1;
                         inner.links[link_idx].stats[dir].overruns += 1;
                         inner.ports[self.port].rx_sniff.reset();
                         let mut ev = inner.port_event(self.port, due, NetEventKind::Overrun);
                         ev.char_id = Some(wid);
                         ev.value = Some(u32::from(d.value));
+                        inner.record(ev);
+                        continue;
+                    }
+                    error_flags |= u8::from(d.parity_error) | (u8::from(d.framing_error) << 1);
+                    if drop_errors && (d.parity_error || d.framing_error) {
+                        let stats = &mut inner.links[link_idx].stats[dir];
+                        stats.framing_errors += u64::from(d.framing_error);
+                        stats.parity_errors += u64::from(d.parity_error);
+                        inner.ports[self.port].rx_sniff.reset();
+                        let mut ev = inner.port_event(
+                            self.port,
+                            due,
+                            if d.framing_error {
+                                NetEventKind::FramingError
+                            } else {
+                                NetEventKind::ParityError
+                            },
+                        );
+                        ev.char_id = Some(wid);
+                        ev.value = Some(u32::from(d.value));
+                        ev.detail = Some("DMA DDRE=0: erroneous item discarded before RXNE".into());
                         inner.record(ev);
                         continue;
                     }
@@ -1200,7 +1259,7 @@ impl TimedUartPort {
         }
         let port = &mut inner.ports[self.port];
         port.serviced_ps = port.serviced_ps.max(now);
-        (loaded, overruns)
+        (loaded, overruns, error_flags)
     }
 
     /// The receiver's interrupt line rose because of received data (RXNE or
