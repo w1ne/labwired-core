@@ -250,3 +250,13 @@ fn esp32c3_jtag_watch_ntc_and_diode_netlists_reach_adc1_channels() {
         false,
     );
 }
+
+#[test]
+fn esp32c3_mlx90640_thermal_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_c3_analog_inputs(
+        "configs/systems/esp32c3-mlx90640-thermal.yaml",
+        "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
+        "esp32c3-mlx90640-thermal",
+        false,
+    );
+}
