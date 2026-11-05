@@ -13,21 +13,4 @@ workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
-   Compiling proc-macro2 v1.0.106
-   Compiling quote v1.0.45
-   Compiling unicode-ident v1.0.24
-   Compiling riscv v0.11.1
-   Compiling nb v1.1.0
-   Compiling riscv-rt v0.12.2
-   Compiling critical-section v1.2.0
-   Compiling riscv v0.10.1
-   Compiling embedded-hal v1.0.0
-   Compiling void v1.0.2
-   Compiling bit_field v0.10.3
-   Compiling firmware-esp32c61-devkitc-smoke v0.1.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/firmware-esp32c61-devkitc-smoke)
-   Compiling panic-halt v0.2.0
-   Compiling nb v0.1.3
-   Compiling embedded-hal v0.2.7
-   Compiling syn v2.0.117
-   Compiling riscv-rt-macros v0.2.2
-    Finished `release` profile [optimized + debuginfo] target(s) in 4.05s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.30s
