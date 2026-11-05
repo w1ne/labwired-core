@@ -1,0 +1,12 @@
+# NUCLEO-F070RB (STM32F070RBT6), narrowed to the modeled LD2 GPIO path.
+# ST UM1724 / MB1136: LD2 is active high on PA5.
+name: nucleo-f070rb
+chip: "../chips/stm32f070rb-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: led_ld2
+    kind: led
+    peripheral: gpioa
+    pin: 5
+    signal: output
+    active_high: true

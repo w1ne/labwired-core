@@ -1,0 +1,37 @@
+# Focused STM32F070RBT6 model for the NUCLEO-F070RB LD2 GPIO smoke.
+# Only reset-clock RCC and GPIOA through BSRR are exposed; the remaining MCU
+# peripherals are omitted. Sources: ST DS10697, RM0360, and UM1724 / MB1136.
+name: stm32f070rb-nucleo-smoke
+arch: arm
+core: cortex-m0
+# STM32F070 starts from HSI 8 MHz after reset (ST DS10697 / RM0360).
+cpu_hz: 8000000
+
+flash:
+  base: 0x08000000
+  size: 128KB
+ram:
+  base: 0x20000000
+  size: 16KB
+
+pins:
+  # NUCLEO-F070RB LD2 is active-high on PA5 (ST UM1724, MB1136).
+  PA5: { gpio: gpioa, bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # RCC_AHBENR at offset 0x14 gates GPIOA (bit 17).
+    size: 24
+    config:
+      profile: stm32f0
+
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    # Expose GPIOA through BSRR at offset 0x18, used to drive LD2.
+    size: 28
+    clock: { reg: ahbenr, bit: 17 }
+    config:
+      profile: stm32v2
