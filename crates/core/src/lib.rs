@@ -2153,6 +2153,7 @@ impl<C: Cpu> Machine<C> {
             return Ok(());
         };
         self.reset()?;
+        self.cpu.on_supply_reset(cause);
         for peripheral in &mut self.bus.peripherals {
             peripheral.dev.on_supply_reset(cause);
         }

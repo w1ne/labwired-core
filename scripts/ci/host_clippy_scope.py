@@ -65,6 +65,7 @@ USAGE
 
     python3 scripts/ci/host_clippy_scope.py --check       # assert the rule holds
     python3 scripts/ci/host_clippy_scope.py --cargo-args  # one --package= per line
+    python3 scripts/ci/host_clippy_scope.py --host-cargo-args  # all host packages
     python3 scripts/ci/host_clippy_scope.py --json
 
 The clippy step builds its invocation from `--cargo-args`, so it cannot fall
@@ -72,6 +73,11 @@ behind the tree: it holds no list to fall behind with. `--check` closes the
 other half — it asserts that the three scopes TOGETHER (the bare
 default-members command, the `-p labwired-wasm` step, and this one) still cover
 every host-lintable member, so no crate can fall between them either.
+
+The local pre-commit host check uses `--host-cargo-args`: the same classification,
+including default-members and labwired-wasm, without the clippy-only subtractions.
+Cross-target firmware keeps its target-specific checks instead of being compiled
+for the host by an incomplete, manually maintained exclusion list.
 """
 
 from __future__ import annotations
@@ -331,6 +337,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print one `--package=<name>` per line for a cargo clippy invocation",
     )
+    parser.add_argument(
+        "--host-cargo-args",
+        action="store_true",
+        help="print every host package, including default-members and labwired-wasm",
+    )
     parser.add_argument("--json", action="store_true", help="print the full classification")
     parser.add_argument(
         "--root",
@@ -341,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        _, cross = classify(args.root)
+        host, cross = classify(args.root)
         scope = clippy_packages(args.root)
     except Unclassified as exc:
         print(
@@ -350,13 +361,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    if args.host_cargo_args:
+        if not host:
+            print("host scope is empty; refusing an empty cargo invocation", file=sys.stderr)
+            return 1
+        for entry in host:
+            print(f"--package={entry['package']}")
+        return 0
+
     if args.cargo_args:
         for name in scope:
             print(f"--package={name}")
         return 0
 
     if args.json:
-        host, _ = classify(args.root)
         print(
             json.dumps(
                 {

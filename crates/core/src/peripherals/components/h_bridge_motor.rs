@@ -7,8 +7,8 @@
 //! Tracks IN1/IN2 direction and EN (or PWM) enable level. Exposes a signed
 //! "effort" in [-1, +1] for UI/oracle: +1 = forward, -1 = reverse, 0 = brake/coast.
 //! IBT-2 / BTS7960 boards use LPWM/RPWM + L_EN/R_EN instead of IN1/IN2/EN:
-//! Modulshop Arduino example maps speed>0 → LPWM=speed RPWM=0 (forward),
-//! speed<0 → opposite (reverse), 0 → both PWM low (coast). Both enables must
+//! RPWM drives M+ and LPWM drives M-; positive terminal voltage is RPWM high,
+//! LPWM low. Reversing the motor leads reverses mechanical direction. Both enables must
 //! be high. Digital GPIO edges only for v1 — duty-aware effort is not modelled.
 //! No motor dynamics — honest for direction + enable labs.
 
@@ -51,7 +51,7 @@ impl HBridgeMotor {
         l_en: Option<u8>,
         r_en: Option<u8>,
     ) -> Self {
-        Self::new_with_enables(id, lpwm, rpwm, l_en, r_en)
+        Self::new_with_enables(id, rpwm, lpwm, l_en, r_en)
     }
 
     fn new_with_enables(
@@ -104,9 +104,9 @@ impl HBridgeMotor {
         if !(s.en && s.en2) {
             return 0.0;
         }
-        // L298N: IN1 high / IN2 low = forward. IBT-2 Arduino example: LPWM
-        // high / RPWM low = forward (speed>0). Both-high is brake; both-low
-        // is coast — effort 0 either way for this digital twin.
+        // Positive means OUT1/M+ is high relative to OUT2/M-. Equal inputs
+        // report zero signed effort; the physical motor model distinguishes
+        // the brake and coast drive states.
         match (s.in1, s.in2) {
             (true, false) => 1.0,
             (false, true) => -1.0,
@@ -120,16 +120,21 @@ impl HBridgeMotor {
 
     pub fn on_gpio_edge(&self, pin: u8, to: bool, _sim_cycle: u64) {
         let mut s = self.state.lock().unwrap();
+        // Several bridge terminals can share one MCU pad (commonly L_EN and
+        // R_EN). An edge changes every connected terminal, not only the first.
         if pin == self.in1_pin {
             s.in1 = to;
             s.commanded = true;
-        } else if pin == self.in2_pin {
+        }
+        if pin == self.in2_pin {
             s.in2 = to;
             s.commanded = true;
-        } else if self.en_pin == Some(pin) {
+        }
+        if self.en_pin == Some(pin) {
             s.en = to;
             s.commanded = true;
-        } else if self.en2_pin == Some(pin) {
+        }
+        if self.en2_pin == Some(pin) {
             s.en2 = to;
             s.commanded = true;
         }
@@ -162,7 +167,10 @@ static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
     ),
     detail: std::borrow::Cow::Borrowed(
         "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when \
-             IN3/IN4 or BIN* keys are present. IBT-2 / BTS7960 boards use              LPWM/RPWM + L_EN/R_EN (Modulshop Arduino: speed>0 → LPWM, speed<0 →              RPWM, 0 → coast; both enables high). Digital on/off effort ±1 for              v1 — PWM duty is not observed. Aliases: tb6612, l293d, bts7960,              ibt-2, ibt2.",
+         IN3/IN4 or BIN* keys are present. IBT-2 / BTS7960 boards use LPWM/RPWM \
+         plus L_EN/R_EN: RPWM drives M+, LPWM drives M-, both enables must be \
+         high, and unwired enables are low. Digital on/off effort ±1; PWM duty \
+         is not observed. Aliases: tb6612, l293d, bts7960, ibt-2, ibt2.",
     ),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
@@ -185,12 +193,16 @@ static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: std::borrow::Cow::Borrowed("lpwm_pin"),
             ty: ConfigType::Str,
-            doc: std::borrow::Cow::Borrowed("IBT-2 LPWM (forward PWM); synonym LPWM."),
+            doc: std::borrow::Cow::Borrowed(
+                "IBT-2 LPWM controls M- (negative terminal voltage); synonym LPWM.",
+            ),
         },
         ConfigKey {
             name: std::borrow::Cow::Borrowed("rpwm_pin"),
             ty: ConfigType::Str,
-            doc: std::borrow::Cow::Borrowed("IBT-2 RPWM (reverse PWM); synonym RPWM."),
+            doc: std::borrow::Cow::Borrowed(
+                "IBT-2 RPWM controls M+ (positive terminal voltage); synonym RPWM.",
+            ),
         },
         ConfigKey {
             name: std::borrow::Cow::Borrowed("l_en_pin"),
@@ -212,36 +224,13 @@ impl PeripheralKit for HBridgeMotorKit {
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let ibt2 = ctx.ext.config.contains_key("lpwm_pin")
+        let ibt2 = matches!(ctx.device_type(), "bts7960" | "ibt-2" | "ibt2")
+            || ctx.ext.config.contains_key("lpwm_pin")
             || ctx.ext.config.contains_key("LPWM")
             || ctx.ext.config.contains_key("rpwm_pin")
             || ctx.ext.config.contains_key("RPWM");
         if ibt2 {
-            let lpwm = ctx
-                .config_gpio_pin("lpwm_pin", "LPWM", "GPIO16")
-                .or_else(|_| ctx.config_gpio_pin("LPWM", "lpwm", "GPIO16"))?;
-            let rpwm = ctx
-                .config_gpio_pin("rpwm_pin", "RPWM", "GPIO17")
-                .or_else(|_| ctx.config_gpio_pin("RPWM", "rpwm", "GPIO17"))?;
-            let l_en = ctx
-                .config_str("l_en_pin")
-                .or_else(|| ctx.config_str("L_EN"))
-                .or_else(|| ctx.config_str("LEN"))
-                .or_else(|| ctx.config_str("len_pin"))
-                .and_then(|l| ctx.parse_gpio_pin(l));
-            let r_en = ctx
-                .config_str("r_en_pin")
-                .or_else(|| ctx.config_str("R_EN"))
-                .or_else(|| ctx.config_str("REN"))
-                .or_else(|| ctx.config_str("ren_pin"))
-                .and_then(|l| ctx.parse_gpio_pin(l));
-            let motor = Arc::new(
-                HBridgeMotor::new_ibt2(format!("{}-a", ctx.device_id()), lpwm, rpwm, l_en, r_en)
-                    .with_declared_id(ctx.device_id().to_string()),
-            );
-            ctx.install_gpio_observer(motor.clone());
-            ctx.bus.observe_device(motor);
-            return Ok(());
+            return attach_ibt2(ctx);
         }
 
         let in1 = ctx
@@ -292,6 +281,136 @@ impl PeripheralKit for HBridgeMotorKit {
     }
 }
 
+/// Attach the IBT-2 control pins using either a native GPIO observer or the
+/// same pad-write seam used by servos on AVR/STM32. Port letters matter: PD7
+/// and PB0 are distinct enable pins even though they are on different ports.
+fn attach_ibt2(ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+    let label = |keys: &[&str]| {
+        keys.iter()
+            .find_map(|key| ctx.config_str(key))
+            .map(str::to_string)
+    };
+    let labels = [
+        Some(label(&["lpwm_pin", "LPWM", "lpwm"]).unwrap_or_else(|| "GPIO16".into())),
+        Some(label(&["rpwm_pin", "RPWM", "rpwm"]).unwrap_or_else(|| "GPIO17".into())),
+        Some(label(&["l_en_pin", "L_EN", "LEN", "len_pin"]).unwrap_or_else(|| "GND".into())),
+        Some(label(&["r_en_pin", "R_EN", "REN", "ren_pin"]).unwrap_or_else(|| "GND".into())),
+    ];
+    let parsed = labels
+        .each_ref()
+        .map(|pin| pin.as_deref().and_then(|p| ctx.parse_gpio_pin(p)));
+    let native = labels
+        .iter()
+        .zip(parsed)
+        .all(|(label, pin)| label.is_none() || pin.is_some());
+    let ids = if native {
+        parsed
+    } else {
+        [
+            Some(0),
+            Some(1),
+            labels[2].as_ref().map(|_| 2),
+            labels[3].as_ref().map(|_| 3),
+        ]
+    };
+    let motor = Arc::new(
+        HBridgeMotor::new_ibt2(
+            format!("{}-a", ctx.device_id()),
+            ids[0].unwrap(),
+            ids[1].unwrap(),
+            ids[2],
+            ids[3],
+        )
+        .with_declared_id(ctx.device_id().to_string()),
+    );
+    if !native || !ctx.install_gpio_observer(motor.clone()) {
+        let mut pads = Vec::new();
+        let mut addrs = Vec::new();
+        for (label, id) in labels.iter().zip(ids) {
+            if let (Some(label), Some(id)) = (label, id) {
+                if let Some(high) = crate::bus::classify_logic_rail(label) {
+                    motor.on_gpio_edge(id, high, 0);
+                    continue;
+                }
+                let (addr, bit) = ctx.resolve_pin_odr(label).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "BTS7960 '{}': control pin '{label}' is not a resolvable MCU pad",
+                        ctx.device_id()
+                    )
+                })?;
+                pads.push((id, addr, bit, None));
+                if !addrs.contains(&addr) {
+                    addrs.push(addr);
+                }
+            }
+        }
+        let mut watch = BridgePadWatch {
+            id: ctx.device_id().to_string(),
+            motor: motor.clone(),
+            pads,
+            addrs,
+        };
+        crate::bus::BusResidentDevice::service(&mut watch, ctx.bus, 0);
+        ctx.bus.gpio_devices.push(Box::new(watch));
+    }
+    ctx.bus.observe_device(motor);
+    Ok(())
+}
+
+#[derive(Debug)]
+struct BridgePadWatch {
+    id: String,
+    motor: Arc<HBridgeMotor>,
+    pads: Vec<(u8, u64, u8, Option<bool>)>,
+    addrs: Vec<u64>,
+}
+
+impl crate::bus::BusResidentDevice for BridgePadWatch {
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, now: u64) {
+        for (id, addr, bit, previous) in &mut self.pads {
+            // Unknown/high-Z AF outputs do not fall back to a stale ODR bit.
+            let high = pins.known_pad_bit(*addr, *bit).unwrap_or(false);
+            if *previous != Some(high) {
+                *previous = Some(high);
+                self.motor.on_gpio_edge(*id, high, now);
+            }
+        }
+    }
+    fn needs_per_cycle_service(&self) -> bool {
+        // A timer can change an AF pad without a GPIO store. Keep the write
+        // hook for immediate bit-banged edges, and sample autonomous outputs
+        // on the normal peripheral tick as well.
+        true
+    }
+    fn edge_service_addrs(&self) -> &[u64] {
+        &self.addrs
+    }
+    fn is_attached_device(&self) -> bool {
+        false
+    }
+    fn as_sim_input(&mut self) -> &mut dyn crate::sim_input::SimInput {
+        self
+    }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::sim_input::SimInput for BridgePadWatch {
+    fn input_channels(&self) -> &[crate::sim_input::InputChannel] {
+        &[]
+    }
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value).map(|_| ())
+    }
+}
+
 /// An H-bridge board carries two independent motor channels, so ONE
 /// declaration builds TWO models (`<id>-a`, `<id>-b`). Each reports its own
 /// channel identity as [`model_id`](crate::bus::ObservedDevice::model_id) and
@@ -338,32 +457,34 @@ mod tests {
         assert_eq!(m.effort(), -1.0);
     }
 
-    /// Modulshop IBT-2 Arduino example: speed>0 → LPWM high, RPWM low.
+    /// Electrical terminal polarity: RPWM high makes M+ positive to M-.
     #[test]
-    fn ibt2_forward_when_lpwm_high() {
+    fn ibt2_forward_when_rpwm_high() {
         // pins: LPWM=1, RPWM=2, L_EN=3, R_EN=4
-        let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
-        m.on_gpio_edge(3, true, 0);
-        m.on_gpio_edge(4, true, 1);
-        m.on_gpio_edge(1, true, 2);
-        m.on_gpio_edge(2, false, 3);
-        assert_eq!(m.effort(), 1.0);
-    }
-
-    /// Modulshop IBT-2 Arduino example: speed<0 → LPWM low, RPWM high.
-    #[test]
-    fn ibt2_reverse_when_rpwm_high() {
         let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
         m.on_gpio_edge(3, true, 0);
         m.on_gpio_edge(4, true, 1);
         m.on_gpio_edge(1, false, 2);
         m.on_gpio_edge(2, true, 3);
+        assert_eq!(m.effort(), 1.0);
+    }
+
+    /// LPWM high makes the opposite terminal positive.
+    #[test]
+    fn ibt2_reverse_when_lpwm_high() {
+        let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
+        m.on_gpio_edge(3, true, 0);
+        m.on_gpio_edge(4, true, 1);
+        m.on_gpio_edge(1, true, 2);
+        m.on_gpio_edge(2, false, 3);
         assert_eq!(m.effort(), -1.0);
     }
 
-    /// speed==0 → both PWM low → coast.
+    /// Both PWM low gives zero signed effort. With both inhibits high the
+    /// actual bridge shorts the terminals (brake); the physical motor model
+    /// handles that distinction, which this digital observer does not expose.
     #[test]
-    fn ibt2_coast_when_both_pwm_low() {
+    fn ibt2_zero_effort_when_both_pwm_low() {
         let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
         m.on_gpio_edge(3, true, 0);
         m.on_gpio_edge(4, true, 1);
