@@ -1,5 +1,5 @@
-2026-11-05T01:43:36.706892Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/atsamd51g19a.yaml
-2026-11-05T01:43:36.708165Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-05T01:59:57.213234Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/atsamd51g19a.yaml
+2026-11-05T01:59:57.214481Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 799878 of 800000 device cycles (122 interpreted)

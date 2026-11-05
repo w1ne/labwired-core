@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/renesas-r7fa6m5b-boot-smoke.yaml",
   "system": "configs/systems/onboarding/renesas-r7fa6m5b.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T01:44:36Z",
-  "finished_at_utc": "2026-11-05T01:44:37Z",
+  "started_at_utc": "2026-11-05T02:00:57Z",
+  "finished_at_utc": "2026-11-05T02:00:57Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 735,
+  "elapsed_ms": 744,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.296,
-    "build_firmware": 0.162,
-    "run_smoke": 0.267
+    "build_cli": 0.298,
+    "build_firmware": 0.173,
+    "run_smoke": 0.263
   },
   "stages_ms": {
-    "build_cli": 296,
-    "build_firmware": 162,
-    "run_smoke": 267
+    "build_cli": 298,
+    "build_firmware": 173,
+    "run_smoke": 263
   }
 }

@@ -478,6 +478,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efr32mg12-smoke.yaml
             system: configs/systems/onboarding/efr32mg12.yaml
+          # SLTB004A uses the EFR32MG12 M4F map and its model-backed USART0;
+          # the board's other imported devices are omitted from this smoke.
+          - id: sltb004a
+            crate: firmware-efr32mg12-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sltb004a-smoke.yaml
+            system: configs/systems/onboarding/sltb004a.yaml
           # The PG1 profile is limited to its 256 KiB flash, 32 KiB RAM, and
           # model-backed USART0 bring-up path.
           - id: efm32pg1

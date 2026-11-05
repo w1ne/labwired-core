@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32f103-smoke.yaml",
   "system": "configs/systems/onboarding/stm32f103.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T01:44:51Z",
-  "finished_at_utc": "2026-11-05T01:44:52Z",
+  "started_at_utc": "2026-11-05T02:01:11Z",
+  "finished_at_utc": "2026-11-05T02:01:13Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1130,
+  "elapsed_ms": 1086,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.283,
-    "build_firmware": 0.165,
-    "run_smoke": 0.668
+    "build_cli": 0.285,
+    "build_firmware": 0.16,
+    "run_smoke": 0.63
   },
   "stages_ms": {
-    "build_cli": 283,
-    "build_firmware": 165,
-    "run_smoke": 668
+    "build_cli": 285,
+    "build_firmware": 160,
+    "run_smoke": 630
   }
 }
