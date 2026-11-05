@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Renesas RA 12-bit successive-approximation A/D converter, ADC12.
+//! Renesas RA successive-approximation A/D converter family.
 //!
-//! Register layout from FSP `R7FA8M1AH.h` (`R_ADC0_Type`, 0x1E4 bytes): `ADCSR`
+//! Register layout from FSP `R7FA8M1AH.h` (`R_ADC0_Type`, 0x1E4 bytes) and
+//! the RA4M1 hardware manual (ADC140): `ADCSR`
 //! (u16) +0x00, `ADANSA0`/`ADANSA1` +0x04/+0x06, `ADADS0`/`ADADS1`
 //! +0x08/+0x0A, `ADADC` (u8) +0x0C, `ADCER` (u16) +0x0E, `ADDR0`-`ADDR28`
 //! (u16) +0x20-+0x58. One unit per 0x200 window (ADC0 0x4033_2000, ADC1
@@ -23,7 +24,8 @@
 //!   manual's state count), then every selected channel's `ADDRn` is
 //!   loaded, `ADST` clears (single scan) and the scan-end event fires;
 //! - the conversion code is `input_mv * (2^bits - 1) / vref_mv`, clamped,
-//!   with `bits` from `ADCER.ADPRC` (12/10/8) and left-justified when
+//!   with `bits` from `ADCER.ADPRC` (12/10/8 for ADC12; 12/14 for ADC14)
+//!   and left-justified when
 //!   `ADCER.ADRFMT` = 1 (the value shifted to bit 15);
 //! - A/D-converted value addition / averaging (`ADADS0/1` channel bits,
 //!   `ADADC.ADC` count 1/2/3/4/16, `ADADC.AVEE`): addition sums the
@@ -83,6 +85,10 @@ const ADPRC_MASK: u16 = 3;
 const AVEE: u8 = 1 << 7;
 const ADADC_COUNT_MASK: u8 = 7;
 
+const fn default_max_resolution_bits() -> u8 {
+    12
+}
+
 /// Zephyr's EK-RA8M1 ICLK, the rate the bus cycles run at.
 pub const DEFAULT_CLOCK_HZ: u64 = 480_000_000;
 /// The nominal conversion time per channel, 1 µs.
@@ -92,11 +98,13 @@ pub const DEFAULT_ELC_EVENT: u32 = 0x1AE;
 /// AVCC0/VREFH0 on the EK-RA8M1 (Zephyr `vref-mv = <3300>`).
 pub const DEFAULT_VREF_MV: u16 = 3300;
 
-/// One RA ADC12 unit.
+/// One RA ADC12 or ADC14 unit. The descriptor type selects supported modes.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct RaAdc12 {
     elc_event: u32,
     vref_mv: u16,
+    #[serde(default = "default_max_resolution_bits")]
+    max_resolution_bits: u8,
     conversion_cycles: u64,
     /// Plain register storage for the whole window; `ADDRn` lives in `data`.
     regs: Vec<u8>,
@@ -130,12 +138,23 @@ impl std::fmt::Debug for Probes {
 
 impl RaAdc12 {
     pub fn new(clock_hz: u64, elc_event: u32, vref_mv: u16) -> Self {
+        Self::new_with_max_resolution(clock_hz, elc_event, vref_mv, 12)
+    }
+
+    /// Construct a family model configured for a 12-bit or 14-bit RA ADC.
+    pub fn new_with_max_resolution(
+        clock_hz: u64,
+        elc_event: u32,
+        vref_mv: u16,
+        max_resolution_bits: u8,
+    ) -> Self {
         let conversion_cycles = (u128::from(clock_hz.max(1)) * u128::from(DEFAULT_CONVERSION_NS)
             / 1_000_000_000)
             .max(1) as u64;
         Self {
             elc_event,
             vref_mv: vref_mv.max(1),
+            max_resolution_bits: if max_resolution_bits == 14 { 14 } else { 12 },
             conversion_cycles,
             regs: vec![0; WINDOW],
             data: [0; CHANNELS],
@@ -200,10 +219,21 @@ impl RaAdc12 {
     }
 
     fn resolution_bits(&self) -> u32 {
-        match (self.reg16(ADCER) >> ADPRC_SHIFT) & ADPRC_MASK {
-            1 => 10,
-            2 => 8,
-            _ => 12,
+        let mode = (self.reg16(ADCER) >> ADPRC_SHIFT) & ADPRC_MASK;
+        if self.max_resolution_bits == 14 {
+            // ADC14 supports 12-bit accuracy at 00b and 14-bit accuracy at
+            // 11b. The other encodings are prohibited by the RA4M1 manual.
+            if mode == 3 {
+                14
+            } else {
+                12
+            }
+        } else {
+            match mode {
+                1 => 10,
+                2 => 8,
+                _ => 12,
+            }
         }
     }
 
@@ -397,7 +427,13 @@ impl Peripheral for RaAdc12 {
         let links = std::mem::take(&mut self.links);
         let probes = std::mem::take(&mut self.probes);
         let conversion_cycles = self.conversion_cycles;
-        *self = Self::new(DEFAULT_CLOCK_HZ, self.elc_event, self.vref_mv);
+        let max_resolution_bits = self.max_resolution_bits;
+        *self = Self::new_with_max_resolution(
+            DEFAULT_CLOCK_HZ,
+            self.elc_event,
+            self.vref_mv,
+            max_resolution_bits,
+        );
         self.conversion_cycles = conversion_cycles;
         self.inputs = inputs;
         self.clock = clock;

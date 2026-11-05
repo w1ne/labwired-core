@@ -360,10 +360,12 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12/14-bit ADC family and DAC, the IIC (RIIC) master and the GPT
+    // (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
+    "ra_adc14",
     "ra_dac12",
     "ra_iic",
     "ra_gpt",
@@ -1572,13 +1574,17 @@ pub fn try_build(
                 .with_output_pads(pads),
             )
         }
-        "ra_adc12" => {
+        "ra_adc12" | "ra_adc14" => {
             use crate::peripherals::ra_adc12 as adc;
             let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
-            let mut unit = adc::RaAdc12::new(
+            let default_resolution = if p_cfg.r#type == "ra_adc14" { 14 } else { 12 };
+            let max_resolution =
+                get("max_resolution_bits").map_or(default_resolution, |bits| bits as u8);
+            let mut unit = adc::RaAdc12::new_with_max_resolution(
                 get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
                 get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
                 get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+                max_resolution,
             );
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {
