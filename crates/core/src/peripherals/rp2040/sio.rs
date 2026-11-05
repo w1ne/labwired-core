@@ -594,6 +594,16 @@ impl Peripheral for Rp2040Sio {
         self.io_bank0_idx
     }
 
+    /// GPIO_OUT / GPIO_IN offsets so chip `pins:` (GP0..) resolve through
+    /// [`SystemBus::resolve_pin_odr`] / [`resolve_pin_idr`] for kit devices
+    /// (TM1637, rotary encoder) the same way STM32/nRF pads do.
+    fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
+        Some(crate::peripherals::gpio::GpioPortOffsets {
+            output: GPIO_OUT,
+            input: GPIO_IN,
+        })
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
