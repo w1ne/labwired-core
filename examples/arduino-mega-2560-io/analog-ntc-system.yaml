@@ -1,0 +1,25 @@
+# Arduino Mega 2560 with a temperature-driven NTC divider on ADC8 / A8.
+# Kept separate from the digital and potentiometer smoke manifests.
+name: "arduino-mega-2560-analog-ntc"
+chip: "../../configs/chips/atmega2560.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "adc.adc.8_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"

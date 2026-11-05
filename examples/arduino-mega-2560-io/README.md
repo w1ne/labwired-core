@@ -8,6 +8,12 @@ on ports E, G, F, B and H) and prints one line on Serial:
 
 `system.yaml` puts two 5 V potentiometers on A8 (ADC8) and A9 (ADC9).
 
+`analog-ntc-system.yaml` is the separate MNA co-simulation fixture: its
+temperature-driven NTC divider routes to ADC8, and
+`cosim_pin_routing::arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end`
+checks the solved voltage and the firmware-visible ADC result at three
+temperatures.
+
     cargo test -p labwired-core --test avr_mega2560_io
 
 The committed ELF (`tests/fixtures/avr/arduino-mega-2560-io.elf`) was built
