@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073791000,
+      46,
+      1073741824,
+      10,
+      0,
+      0,
+      0,
+      536903664,
+      0,
+      0,
+      0,
+      0,
+      2098360,
+      536903664,
+      2098353,
+      2098338
+    ],
+    "pc": 2098338,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 2097152,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "9a32f57073e75386cd69ff7fe0f5dc86b7f780ee646d222b84e349f5d64564f8",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-zolertia-firefly-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/zolertia-firefly.yaml",
+    "script": "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
+  }
+}

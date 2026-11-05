@@ -1,0 +1,11 @@
+# Direct Cortex-M3 execution and the model-backed CC2538 UART0 only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-zolertia-firefly-smoke"
+  system: "../../configs/systems/onboarding/zolertia-firefly.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke"
+  - fidelity_clean: true
+  - expected_stop_reason: max_steps

@@ -89,6 +89,8 @@ on:
       - "crates/firmware-andes-ae350-n25-smoke/**"
       - "crates/firmware-tock-veer-el2-smoke/**"
       - "crates/firmware-fomu-smoke/**"
+      - "crates/firmware-zolertia-firefly-smoke/**"
+      - "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
       - "examples/renode-onboarding/fomu-smoke.yaml"
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
@@ -286,6 +288,14 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/cc2538-smoke.yaml
             system: configs/systems/onboarding/cc2538.yaml
+          # Zolertia Firefly is a CC2538 Cortex-M3 plus CC1200 radio. This
+          # bounded profile tests direct code execution and UART0 only; the
+          # radio and unmodeled peripheral windows are omitted.
+          - id: zolertia-firefly
+            crate: firmware-zolertia-firefly-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/zolertia-firefly-smoke.yaml
+            system: configs/systems/onboarding/zolertia-firefly.yaml
           - id: atsamd51g19a
             crate: firmware-atsamd51-demo
             target: thumbv7em-none-eabi

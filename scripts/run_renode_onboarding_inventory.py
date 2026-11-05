@@ -696,6 +696,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/fomu-smoke.yaml",
     },
+    "zolertia-firefly": {
+        "crate": "firmware-zolertia-firefly-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/zolertia-firefly-smoke.yaml",
+    },
     "picosoc": {
         "crate": "firmware-picosoc-smoke",
         "target": "riscv32imc-unknown-none-elf",

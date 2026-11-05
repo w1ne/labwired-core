@@ -92,6 +92,7 @@ members = [
     "crates/firmware-andes-ae350-n25-smoke",
     "crates/firmware-tock-veer-el2-smoke",
     "crates/firmware-fomu-smoke",
+    "crates/firmware-zolertia-firefly-smoke",
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-sam4s-smoke",
     "crates/firmware-sam4s16c-smoke",
