@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 48 have end-to-end analog coverage; 55 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 49 have end-to-end analog coverage; 54 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -55,7 +55,7 @@ Current inventory: **103 profiles; 48 have end-to-end analog coverage; 55 have n
 | `frdm-k64f` | [`cosim_frdm_k64f_analog.rs`](../crates/core/tests/cosim_frdm_k64f_analog.rs)::`frdm_k64f_ntc_and_diode_netlists_reach_gpio_inputs_through_thresholds` — generic Beta NTC and Shockley diode netlists solve onto the profile's PTC6/PTA4 GPIO inputs; asserts solved voltages, firmware-visible PDIR levels, and Schmitt hysteresis. This profile has no ADC model, so the proof is GPIO threshold coverage. |
 | `frdm-kw41z-lcd` | [`cosim_frdm_kw41z_analog.rs`](../crates/core/tests/cosim_frdm_kw41z_analog.rs)::`frdm_kw41z_profiles_route_generic_ntc_and_diode_to_pb2_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve on PB2 and are asserted through GPIOC PDIR; threshold ratios are simulation assumptions, not silicon claims. No ADC model is present. |
 | `frdm-kw41z` | [`cosim_frdm_kw41z_analog.rs`](../crates/core/tests/cosim_frdm_kw41z_analog.rs)::`frdm_kw41z_profiles_route_generic_ntc_and_diode_to_pb2_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve on PB2 and are asserted through GPIOC PDIR; threshold ratios are simulation assumptions, not silicon claims. No ADC model is present. |
-| `iolink-multiport-demo` | **NO E2E analog coverage** |
+| `iolink-multiport-demo` | [`cosim_nucleo_l476_analog.rs`](../crates/core/tests/cosim_nucleo_l476_analog.rs)::`iolink_multiport_demo_routes_generic_ntc_and_diode_to_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve onto PA0/PA1 and are asserted through GPIOA IDR while retaining the four-port IO-Link device; coverage is GPIO threshold behavior, not ADC support. |
 | `iolinki-g0-startup` | **NO E2E analog coverage** |
 | `kv260-r5` | **NO E2E analog coverage** |
 | `labwired-demo-board` | **NO E2E analog coverage** |

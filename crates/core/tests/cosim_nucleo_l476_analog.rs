@@ -54,10 +54,23 @@ fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     }
 }
 
-fn assert_profile_routes_generic_analog_inputs(system_rel: &str, expected_name: &str) {
+fn assert_profile_routes_generic_analog_inputs(
+    system_rel: &str,
+    expected_name: &str,
+    expected_external_devices: &[&str],
+) {
     let system_path = root(system_rel);
     let mut profile = SystemManifest::from_file(&system_path).expect("load L476 profile");
     assert_eq!(profile.name, expected_name);
+    let external_device_ids: Vec<_> = profile
+        .external_devices
+        .iter()
+        .map(|device| device.id.as_str())
+        .collect();
+    assert_eq!(
+        external_device_ids, expected_external_devices,
+        "the analog fixture must preserve the profile's external devices"
+    );
     let analog_path = root("examples/nucleo-l476rg/analog-ntc-diode-system.yaml");
     let analog = SystemManifest::from_file(&analog_path).expect("load generic NTC and diode");
     profile.cosim_models = analog.cosim_models;
@@ -129,9 +142,20 @@ fn nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds() {
     assert_profile_routes_generic_analog_inputs(
         "configs/systems/nucleo-l476rg.yaml",
         "nucleo-l476rg",
+        &[],
     );
     assert_profile_routes_generic_analog_inputs(
         "configs/systems/ci-fixture-l476-readonly.yaml",
         "ci-fixture-l476-readonly",
+        &[],
+    );
+}
+
+#[test]
+fn iolink_multiport_demo_routes_generic_ntc_and_diode_to_gpio_thresholds() {
+    assert_profile_routes_generic_analog_inputs(
+        "configs/systems/iolink-multiport-demo.yaml",
+        "iolink-multiport-demo",
+        &["iolink_master_4p"],
     );
 }
