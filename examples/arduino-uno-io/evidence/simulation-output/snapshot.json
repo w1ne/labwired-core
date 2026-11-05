@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      217,
+      0,
+      1,
+      64,
+      120,
+      121,
+      2,
+      0,
+      176,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      1,
+      0,
+      184,
+      149,
+      0,
+      0,
+      224,
+      122,
+      2,
+      0,
+      0,
+      0,
+      81,
+      2,
+      192,
+      0
+    ],
+    "pc": 622,
+    "sp": 2299,
+    "sreg": 130
+  },
+  "steps_executed": 2000000,
+  "cycles": 2601358,
+  "instructions": 1999842,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "f1bb329f022754730d8d765473d774f351bbc77b4a073d0ab79bb4ef5d980169",
+  "config": {
+    "firmware": "examples/arduino-uno-io/../../tests/fixtures/avr/arduino-uno-io.elf",
+    "system": "examples/arduino-uno-io/./system.yaml",
+    "script": "examples/arduino-uno-io/io-smoke.yaml"
+  }
+}
