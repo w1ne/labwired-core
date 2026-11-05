@@ -32,6 +32,7 @@ members = [
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
     "crates/firmware-xiao-esp32c3-smoke",
+    "crates/firmware-esp32c3-devkitm1-smoke",
     "crates/firmware-esp32c6-demo",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
@@ -347,6 +348,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-xiao-esp32c3-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-devkitm1-smoke]
 codegen-units = 1
 opt-level = "s"
 

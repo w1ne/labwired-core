@@ -115,6 +115,7 @@ nav:
   - Boards:
     - Arduino Uno R3: boards/arduino-uno.md
     - ESP32-C3: boards/esp32c3.md
+    - ESP32-C3-DevKitM-1 N4X: boards/esp32c3-devkitm1-n4x.md
     - ESP32-C6: boards/esp32c6-devkitc.md
     - ESP32-S3: boards/esp32s3.md
     - nRF52840: boards/nrf52840.md

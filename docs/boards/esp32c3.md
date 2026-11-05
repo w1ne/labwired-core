@@ -163,6 +163,7 @@ Details: [First agent run](../agent/first-run.md) · [Tools](../agent/tools.md).
 | Path | What |
 |------|------|
 | `configs/systems/esp32c3-devkit.yaml` | Baseline system |
+| [ESP32-C3-DevKitM-1-N4X smoke](esp32c3-devkitm1-n4x.md) | Exact active board SKU; onboard RGB LED on GPIO8 |
 | `configs/systems/esp32c3-oled-demo.yaml` | Display lab |
 | `examples/esp32c3-blinky` | Minimal bring-up |
 | `docs/esp32c3_wifi_mac_bridge.md` | Wi-Fi fidelity |
