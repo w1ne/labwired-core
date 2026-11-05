@@ -20,9 +20,21 @@ flash: { base: 0, size: 0 }
 ram: { base: 0, size: "64MiB" }
 memory_regions:
   - { name: ocm, base: 0xfffc0000, size: "256KiB" }
-peripherals: []
+io_voltage_v: 3.3
+# Simulation assumptions for the two input-only co-simulation endpoints below.
+# These are not ZynqMP GPIO electrical specifications.
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
+peripherals:
+  # Abstract analog-to-digital input seam for the generic SystemBus co-sim
+  # path. This is not a ZynqMP GPIO register or pin mapping. The native RPU
+  # machine installs only native_rpu_peripherals and does not expose GPIO.
+  - id: cosim_inputs
+    type: input_pin_bank
+    base_address: 0xF0000000
+    size: "4KiB"
+    config: { pin_count: 2 }
 # Native Cortex-R5F (qemu-arm-system) platform map, installed only by the
-# native RPU path; the generic peripherals above remain empty.
+# native RPU path.
 # IRQs are GIC INTIDs (32 + SPI). TTC0 raises one SPI per counter: 68, 69, 70.
 # The TTC `input_hz` is the counter input clock the firmware was built for:
 # Zephyr's kv260_r5.dts `ttc0` clock-frequency.
