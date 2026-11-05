@@ -56,6 +56,10 @@ impl DeviceDescriptor {
 /// the rest are legacy aliases resolving to the same file.
 pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
+        &["acs712"],
+        include_str!("../../../configs/devices/acs712.yaml"),
+    ),
+    (
         &["rotary_encoder", "rotary-encoder"],
         include_str!("../../../configs/devices/rotary_encoder.yaml"),
     ),
