@@ -1,7 +1,7 @@
 # STM32G0B1RE — USART1, TIM2, and GPIO EXTI examples
 
 A narrow **STM32G0B1RE** slice for the IO-Link reference firmware:
-Cortex-M0+, 512 KB flash, 128 KB SRAM, 16 MHz HSI. The modelled
+Cortex-M0+, 512 KB flash, 144 KB SRAM, 16 MHz reset HSI. The modelled
 peripherals are the ones that slice uses. This page is the runnable
 illustration of those peripherals. It is not a silicon capture and it
 does not claim a full G0B1.
@@ -39,6 +39,8 @@ customer IO-Link image is a different file, built by
 | Signal | Pin | Alternate function |
 |--------|-----|--------------------|
 | USART1_TX | PA9 | AF1 |
+| USART1_RX | PA10 | AF1 |
+| USART2_TX / RX | PA2 / PA3 | AF1 |
 | EXTI line 0 | PB0 | port code `1` in `EXTICR1` |
 
 TIM2 has no pin in this example. The prescaler is programmed directly.
@@ -53,6 +55,24 @@ TIM2 has no pin in this example. The prescaler is programmed directly.
 | TIM2 | ✅ `PSC = 15` (1 MHz from 16 MHz) | Counter is not started |
 | EXTI, G0 GPIO bank | ✅ PB0 falling, `IMR1` unmasked | No pad edge in this smoke; see `g0_exti` and the customer ELF |
 | SYSCFG | ❌ | Declared window, stub only |
+
+## Exact IO-Link operating-point extension
+
+The original smoke above remains the16MHz UART-console prerequisite.
+[`examples/iolink-g0b1re-tiol112`](../../examples/iolink-g0b1re-tiol112/README.md)
+adds USART2 at `0x40004400`, shared USART2/LPUART2 IRQ28, the complete144KiB
+SRAM address range, and a separate TIOL112 transceiver model. PWR CR1/SR2 and
+FLASH ACR are available for the64MHz clock-setup sequence; this does not
+validate the other G0B1 flash/programming/power modes.
+
+`peripherals::stm32g0_clock::validate_timed_uart_clock` derives HSI/PLL,
+AHB/APB and TIM clocks from the actual RCC registers. It rejects a16MHz
+firmware image measured against a64MHz timebase, divided APB, alternate UART
+kernel clocks and non-reset USART PRESC. Simulation time remains a fixed
+operating-point assumption; oscillator startup, changing clock frequency,
+flash wait-state execution penalties and IAR instruction timing are unproven.
+DMA/DMAMUX are not declared by this device slice. The timed UART reports
+CR3.DMAR as unsupported, so an IRQ/polling run cannot establish DMA coverage.
 
 ## How to run
 

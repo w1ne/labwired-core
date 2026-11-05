@@ -53,6 +53,7 @@ pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
 pub mod iolink_native;
 pub mod iolink_station;
+pub mod tiol112;
 pub mod lcd1602;
 pub mod max30102;
 pub mod mcp2515;

@@ -1595,29 +1595,49 @@
       "device_type": "iolink-master",
       "label": "IO-Link Master",
       "summary": "IO-Link master state machine over UART.",
-      "detail": "Drives wake-up / startup / operate cycles, m-sequence types, process-data exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels.",
+      "detail": "Tick-paced IO-Link test peer with bounded process-data framing. Supports TYPE_2_1/2/variable and the legacy LabWired receive-only demo envelope. The opt-in tiol112-eval profile waits for explicit Start, schedules logical WAKE, validates DPP, and alternates TYPE_2_V PD reads/writes at the advertised minimum cycle. This peer does not prove physical baud timing, tA, master conformance, ISDU service execution, or Beckhoff compatibility.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
         {
+          "name": "startup_profile",
+          "ty": "str",
+          "doc": "legacy (default) or tiol112-eval. Evaluation requires a TIOL112 attached earlier to the same UART, PDin32/PDout1/TYPE_2_V/OD1 and COM2/3. Explicit start input schedules a logical 1ms WAKE, validated DPP reads and DeviceOperate; cyclic ISDU-IDLE read/write PD follows. It does not execute ISDU services."
+        },
+        {
           "name": "pd_in_len",
           "ty": "int",
-          "doc": "Process-data input length in bytes. Defaults to 1 (single-byte DI device)."
+          "doc": "Process-data input length, 0..32 bytes. Default 1. Must match the selected M-sequence."
+        },
+        {
+          "name": "pd_out_len",
+          "ty": "int",
+          "doc": "Process-data output length, 0..32 bytes. Default 0; initialized to zero and changeable through set_process_data_output."
         },
         {
           "name": "m_seq_type",
           "ty": "int",
-          "doc": "M-sequence type (1..6). Used to derive od_len: one OD octet, or two for TYPE_2_V (Table A.10)."
+          "doc": "Engine enum: 1=legacy receive-only demo (default), 4=TYPE_2_1, 5=TYPE_2_2, 6=TYPE_2_V. This is NOT the DPP capability code. Other values are rejected."
+        },
+        {
+          "name": "pd_out_pattern",
+          "ty": "str",
+          "doc": "Optional demo stimulus: constant (default) or counter. Counter increments the first PD output octet once per queued OPERATE frame; requires pd_out_len >= 1."
+        },
+        {
+          "name": "od_len",
+          "ty": "int",
+          "doc": "On-request octets: TYPE_2_V permits 1, 2, 8, 32; other supported modes require 1. Default 2 for TYPE_2_V, otherwise 1. Long-PD TYPE_2_V OD1 corresponds to DPP capability code 4."
         },
         {
           "name": "com",
           "ty": "str",
-          "doc": "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."
+          "doc": "Communication speed: COM1, COM2 (default), or COM3. Legacy mode treats it as metadata; tiol112-eval paces bytes in simulated time and reports the baud to the UART guard. No physical timing claim."
         },
         {
           "name": "frame_gap_ticks",
           "ty": "int",
-          "doc": "Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget."
+          "doc": "Legacy inter-frame gap in UART polls, 1..4294967295 (default 6000). Not a cycle time in microseconds. Cannot be specified for tiol112-eval, which honors device MinCycleTime."
         }
       ],
       "labs": [
@@ -1628,7 +1648,80 @@
           "demo_elf": "demo-iolink-dido.elf"
         }
       ],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "start",
+          "label": "Start TIOL112 evaluation (logical WAKE then DPP)",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "tiol112",
+      "label": "TIOL112",
+      "summary": "TI IO-Link digital transceiver: EN, inverted CQ, WAKE and NFAULT.",
+      "detail": "Digital behavior from TI SLLSFJ1D. Timed UART models TX/RX propagation; ordinary streams are byte-functional. Analog electrical behavior, wake-current detection and enable-time bounds are not modeled.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "en",
+          "ty": "str",
+          "doc": "Required driver-enable pad, or high/low rail. Low releases CQ."
+        },
+        {
+          "name": "wake",
+          "ty": "str",
+          "doc": "Optional WAKE active-low output pad, ideal pull-up."
+        },
+        {
+          "name": "nfault",
+          "ty": "str",
+          "doc": "Optional NFAULT active-low output pad, ideal pull-up."
+        },
+        {
+          "name": "driver_delay_ns",
+          "ty": "int",
+          "doc": "Timed-mode TX-to-CQ propagation, 0..1200 ns; default datasheet maximum1200."
+        },
+        {
+          "name": "receiver_delay_ns",
+          "ty": "int",
+          "doc": "Timed-mode CQ-to-RX propagation, 0..300 ns; default datasheet maximum300."
+        },
+        {
+          "name": "enable_delay_ns",
+          "ty": "int",
+          "doc": "Timed EN settling scenario, default4000ns TYPICAL, not a guaranteed maximum. Premature frames are rejected."
+        },
+        {
+          "name": "disable_delay_ns",
+          "ty": "int",
+          "doc": "Timed EN release scenario, default4000ns TYPICAL, not a guaranteed maximum."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "wake",
+          "label": "WAKE asserted",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "fault",
+          "label": "NFAULT asserted",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "ntc-thermistor",

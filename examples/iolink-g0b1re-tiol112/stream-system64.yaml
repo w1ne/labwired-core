@@ -1,0 +1,25 @@
+# One-action functional UART fixture. For physical CQ timing use
+# g0_customer_timing, which attaches a bit-timed master instead of this peer.
+name: iolink-g0b1re-tiol112-evaluation
+chip: ../../configs/chips/stm32g0b1re.yaml
+cpu_hz: 64000000
+external_devices:
+  - id: phy
+    type: tiol112
+    connection: usart1
+    config:
+      en: PA8
+      wake: PB0
+      nfault: PB1
+  - id: master
+    type: iolink-master
+    connection: usart1
+    config:
+      pd_in_len: 32
+      pd_out_len: 1
+      m_seq_type: 6
+      od_len: 1
+      com: COM3
+      pd_out_pattern: counter
+      startup_profile: tiol112-eval
+board_io: []

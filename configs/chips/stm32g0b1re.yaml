@@ -1,10 +1,12 @@
 # STM32G0B1RE IO-Link firmware slice; not a full-chip validation claim.
 # Sources: ST stm32g0b1re.pdf and RM0444; pinned ST CMSIS
 # stm32g0b1xx.h f576c24e123edf3332988ecd49512c0f35f85186.
-# 512KiB flash; expose the 128KiB parity-protected SRAM bank only.
-# Firmware resets HSI/APB/AHB to 16MHz; no PLL or alternate clock support
-# is asserted by this slice. Only the peripherals used by the reference
-# firmware are included. GPIO EXTI excludes SWIER/internal event lines.
+# 512KiB flash; 144KiB contiguous SRAM (128KiB parity + 16KiB non-parity).
+# The simulator does not inject SRAM parity faults. Reset HSI/APB/AHB is 16MHz.
+# A fixed 64MHz operating-point run must validate RCC PLL + bus prescalers;
+# oscillator startup, dynamic clock transitions and flash wait states are not
+# timing claims. UART1/2, TIM2 and GPIO/EXTI are the supported IO-Link slice.
+# DMA/DMAMUX and GPIO EXTI SWIER/internal event lines are not modelled here.
 name: stm32g0b1re
 arch: arm
 core: cortex-m0+
@@ -14,7 +16,7 @@ flash:
   size: 512KB
 ram:
   base: 0x20000000
-  size: 128KB
+  size: 144KB
 pins:
   # Pad map for the LQFP64 package (ST STM32_open_pin_data, mcu/
   # STM32G0B1R(B-C-E)Tx.xml @ 7d1f1514). Every pad on the three GPIO ports this
@@ -79,6 +81,22 @@ peripherals:
 - id: systick
   type: systick
   base_address: 0xe000e010
+- id: pwr
+  type: pwr
+  base_address: 0x40007000
+  size: 1KB
+  # Shared CR1.VOS / SR2.VOSF layout for the64MHz startup prerequisite.
+  # Voltage settling and low-power behavior are outside this slice.
+  clock:
+    reg: apbenr1
+    bit: 28
+- id: flash
+  type: flash
+  base_address: 0x40022000
+  size: 1KB
+  config:
+    # ACR latency register/readback only; no G0B1 programming/ECC claim.
+    profile: l4
 - id: gpioa
   type: gpio
   base_address: 0x50000000
@@ -125,6 +143,16 @@ peripherals:
   clock:
     reg: apbenr2
     bit: 14
+- id: usart2
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 28
+  config:
+    profile: stm32v2
+  clock:
+    reg: apbenr1
+    bit: 17
 - id: tim2
   type: timer
   base_address: 0x40000000

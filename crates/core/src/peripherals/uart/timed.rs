@@ -83,6 +83,8 @@ pub(crate) struct TimedRegs {
     /// The cycle our pending scheduler wake is for, if any.
     next_wake: Option<u64>,
     dmar_noted: bool,
+    tx_on_cq: bool,
+    local_echo: Option<(u64, u16)>,
 }
 
 #[derive(Debug)]
@@ -141,6 +143,10 @@ impl Uart {
         }
         // The console sink would splice protocol bytes into the log.
         self.set_sink(None, false);
+        if let Some(phy) = &self.tiol112 {
+            port.set_path_delays(phy.driver_delay_ps, phy.receiver_delay_ps);
+            phy.bind_timed_port(port.clone());
+        }
         self.timed = Some(Box::new(TimedUart {
             port,
             regs: Mutex::new(TimedRegs::default()),
@@ -452,8 +458,11 @@ impl Uart {
         };
         let mut r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
         // TX: a finished character frees the shifter; a waiting TDR moves in.
+        // TIOL112's GPIO observer schedules CQ release/truncation at the
+        // configured disable delay, even between UART scheduler wakes.
         if r.tx_active && now >= r.shift_busy_until {
             r.tx_active = false;
+            r.tx_on_cq = false;
             // Hardware completion sets TC even if software cleared it while
             // the shift register was busy.
             r.tc_cleared = false;
@@ -464,7 +473,27 @@ impl Uart {
                 if start <= now {
                     r.tdr = None;
                     if fmt.tx_enabled && fmt.configured() {
-                        t.port.transmit(start, value, fmt);
+                        let on_cq = self.tiol112.as_ref().is_none_or(|phy| {
+                            phy.allow_timed_tx(start, t.port.hz()) && self.presc == 0
+                        });
+                        if on_cq {
+                            t.port.transmit(start, value, fmt);
+                            if let Some(phy) = &self.tiol112 {
+                                phy.record_timed_tx(start, value, fmt, t.port.hz());
+                                let echo_delay = phy.driver_delay_ps
+                                    + phy.receiver_delay_ps
+                                    + fmt.sample_offset_ps();
+                                r.local_echo = Some((
+                                    start
+                                        + crate::network::timed_uart::ps_to_cycles_ceil(
+                                            echo_delay,
+                                            t.port.hz(),
+                                        ),
+                                    value,
+                                ));
+                            }
+                        }
+                        r.tx_on_cq = on_cq && self.tiol112.is_some();
                         r.tx_active = true;
                         r.shift_busy_until = start + frame_cycles;
                         if now >= r.shift_busy_until {
@@ -476,7 +505,14 @@ impl Uart {
             }
         }
         // RX.
-        let (loaded, overruns) = t.port.receive_due(now, &fmt, r.rxne);
+        let mut receive_format = fmt;
+        if self.tiol112.as_ref().is_some_and(|phy| {
+            phy.cq_driving_at(now, t.port.hz())
+                || (fmt.rx_enabled && fmt.configured() && (!phy.clock_valid() || self.presc != 0))
+        }) {
+            receive_format.rx_enabled = false; // shared CQ contention: no clean peer character
+        }
+        let (loaded, overruns) = t.port.receive_due(now, &receive_format, r.rxne);
         if overruns > 0 {
             r.ore = true;
         }
@@ -490,6 +526,18 @@ impl Uart {
             } else {
                 r.fe = d.framing_error;
                 r.pe = d.parity_error;
+            }
+        }
+        if let Some((due, value)) = r.local_echo.filter(|(due, _)| *due <= now) {
+            let _ = due;
+            r.local_echo = None;
+            if fmt.rx_enabled {
+                if r.rxne {
+                    r.ore = true;
+                } else {
+                    r.rdr = value;
+                    r.rxne = true;
+                }
             }
         }
         let level = self.timed_enabled() && r.level(cr1, cr3);
@@ -516,6 +564,9 @@ impl Uart {
         }
         if r.tdr.is_some() && !r.tx_active {
             want(r.shift_busy_until.max(r.tdr_written_cycle + 1));
+        }
+        if let Some((due, _)) = r.local_echo {
+            want(due);
         }
         drop(r);
         if let Some(c) = t.port.next_due_cycle(&fmt) {
