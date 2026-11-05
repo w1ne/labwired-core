@@ -1,0 +1,24 @@
+# LabWired - ILI9488 TFT Lab smoke test (18-bit COLMOD / rgb888 artifact)
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ili9488-tft-lab"
+  system: "./system.yaml"
+limits:
+  # Full 320×480 RGB666 fill (~460k SPI data bytes). wall_time_ms lifts the
+  # 50M step ceiling so the fill can finish before max_steps.
+  wall_time_ms: 120000
+  max_steps: 200000000
+assertions:
+  - uart_contains: "ILI9488 TFT Lab"
+  - uart_contains: "COLMOD 18-bit"
+  - uart_contains: "frame done"
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 0
+      w: 320
+      h: 480
+      min_ink: 1.0
+      colour: "0x07FF"
+      min_colour_pixels: 153600
+  - expected_stop_reason: max_steps
