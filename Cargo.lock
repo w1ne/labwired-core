@@ -2405,6 +2405,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-tock-veer-el2-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-uart-echo-fixture"
 version = "0.25.0"
 dependencies = [

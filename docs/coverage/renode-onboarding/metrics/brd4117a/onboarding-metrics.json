@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/brd4117a-smoke.yaml",
   "system": "configs/systems/onboarding/brd4117a.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T08:02:20Z",
-  "finished_at_utc": "2026-11-05T08:02:21Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1310,
+  "started_at_utc": "2026-11-05T08:50:34Z",
+  "finished_at_utc": "2026-11-05T08:50:35Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 741,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.382,
-    "build_firmware": 0.354,
-    "run_smoke": 0.554
+    "build_cli": 0.281,
+    "build_firmware": 0.17,
+    "run_smoke": 0.28
   },
   "stages_ms": {
-    "build_cli": 382,
-    "build_firmware": 354,
-    "run_smoke": 554
+    "build_cli": 281,
+    "build_firmware": 170,
+    "run_smoke": 280
   }
 }

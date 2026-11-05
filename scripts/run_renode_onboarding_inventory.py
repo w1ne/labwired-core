@@ -676,6 +676,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/murax_vexriscv-smoke.yaml",
     },
+    "tock_veer_el2_sim": {
+        "crate": "firmware-tock-veer-el2-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml",
+    },
     "picosoc": {
         "crate": "firmware-picosoc-smoke",
         "target": "riscv32imc-unknown-none-elf",

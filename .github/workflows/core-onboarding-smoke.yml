@@ -85,6 +85,7 @@ on:
       - "crates/firmware-cv32e40p-smoke/**"
       - "crates/firmware-riscv-virt-smoke/**"
       - "crates/firmware-andes-ae350-n25-smoke/**"
+      - "crates/firmware-tock-veer-el2-smoke/**"
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
       - "crates/cli/**"
@@ -1008,6 +1009,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/andes_ae350_n25-smoke.yaml
             system: configs/systems/onboarding/andes_ae350_n25.yaml
+          # Tock VeeR EL2 is narrowed to generic RV32IMC execution and the
+          # code/RAM windows exercised by this direct-ELF memory smoke.
+          - id: tock_veer_el2_sim
+            crate: firmware-tock-veer-el2-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml
+            system: configs/systems/onboarding/tock_veer_el2_sim.yaml
           # Run the committed stock Zephyr RV64 image against the imported
           # MPFS Icicle Kit system; the exact imported profile exposes the U54
           # memory, in-core CLINT, MMUART0/1, and explicit startup stubs for

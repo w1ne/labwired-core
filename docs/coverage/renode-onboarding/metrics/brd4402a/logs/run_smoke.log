@@ -1,5 +1,5 @@
-2026-11-05T08:02:28.706210Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/brd4402a.yaml
-2026-11-05T08:02:28.707371Z  INFO labwired_loader: ELF Entry Point: 0x801
+2026-11-05T08:50:39.844981Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/brd4402a.yaml
+2026-11-05T08:50:39.846087Z  INFO labwired_loader: ELF Entry Point: 0x801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · brd4402a-smoke · 100000 steps · 0.00s

@@ -90,6 +90,7 @@ members = [
     "crates/firmware-cv32e40p-smoke",
     "crates/firmware-riscv-virt-smoke",
     "crates/firmware-andes-ae350-n25-smoke",
+    "crates/firmware-tock-veer-el2-smoke",
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-sam4s-smoke",
     "crates/firmware-sam4s16c-smoke",
