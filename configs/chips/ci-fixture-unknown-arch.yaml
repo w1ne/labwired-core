@@ -16,6 +16,13 @@ registers_count: 16
 # CI fixture — see ci-fixture-cortex-m3-uart1.yaml.
 cpu_hz: 80_000_000
 
+# Synthetic mixed-signal endpoint used only by direct SystemBus/co-simulation
+# tests. The unknown architecture remains intentionally non-runnable in World.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x80000000
   size: "128KB"
@@ -27,3 +34,10 @@ peripherals:
     type: "uart"
     base_address: 0x4000C000
     size: "1KB"
+  # Generic GPIO endpoint for analog routing tests. Not silicon data.
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
