@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 37 have end-to-end analog coverage; 66 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 38 have end-to-end analog coverage; 65 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -44,7 +44,7 @@ Current inventory: **103 profiles; 37 have end-to-end analog coverage; 66 have n
 | `esp32c3-jtag-watch` | [`cosim_esp32c3_analog.rs`](../crates/core/tests/cosim_esp32c3_analog.rs)::`esp32c3_jtag_watch_ntc_and_diode_netlists_reach_adc1_channels` — generic Beta NTC and unrelated Shockley diode netlists solve to ADC1_CH0/CH2; independent voltages, channel isolation, undriven CH1/CH3, and APB_SARADC one-shot results are asserted |
 | `esp32c3-mlx90640-thermal` | [`cosim_esp32c3_analog.rs`](../crates/core/tests/cosim_esp32c3_analog.rs)::`esp32c3_mlx90640_thermal_ntc_and_diode_netlists_reach_adc1_channels` — preserves the profile's MLX90640 I²C device while generic Beta NTC and unrelated Shockley diode netlists solve to ADC1_CH0/CH2; independent voltages, channel isolation, undriven CH1/CH3, and APB_SARADC one-shot results are asserted |
 | `esp32c3-nokia5110-workshop` | [`cosim_esp32c3_analog.rs`](../crates/core/tests/cosim_esp32c3_analog.rs)::`esp32c3_nokia5110_workshop_ntc_and_diode_netlists_reach_adc1_channels` — preserves the profile's PCD8544 SPI display while generic Beta NTC and unrelated Shockley diode netlists solve to ADC1_CH0/CH2; independent voltages, channel isolation, undriven CH1/CH3, and APB_SARADC one-shot results are asserted |
-| `esp32c3-oled-128x32-workshop` | **NO E2E analog coverage** |
+| `esp32c3-oled-128x32-workshop` | [`cosim_esp32c3_analog.rs`](../crates/core/tests/cosim_esp32c3_analog.rs)::`esp32c3_oled_128x32_workshop_ntc_and_diode_netlists_reach_adc1_channels` — preserves the profile's SSD1306 I²C display while generic Beta NTC and unrelated Shockley diode netlists solve to ADC1_CH0/CH2; independent voltages, channel isolation, undriven CH1/CH3, and APB_SARADC one-shot results are asserted |
 | `esp32c3-oled-demo` | **NO E2E analog coverage** |
 | `esp32c3-tm1637-clock-workshop` | **NO E2E analog coverage** |
 | `esp32c6-devkitc` | **NO E2E analog coverage** |
