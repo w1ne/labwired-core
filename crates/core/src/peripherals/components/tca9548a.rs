@@ -36,6 +36,7 @@
 //! * Channel-to-channel leakage, V_OL budgeting, and the 400 kHz timing spec:
 //!   this engine models the byte protocol, not the analogue bus.
 
+use crate::peripherals::device::I2cBusSwitch;
 use crate::peripherals::i2c::I2cDevice;
 
 /// Lowest address the strap pins can produce (A2=A1=A0=0).
@@ -199,7 +200,25 @@ impl std::fmt::Debug for Tca9548a {
     }
 }
 
+impl I2cBusSwitch for Tca9548a {
+    fn channel_count(&self) -> usize {
+        TCA9548A_CHANNELS
+    }
+
+    fn attach(&mut self, channel: u8, device: Box<dyn I2cDevice>) -> anyhow::Result<()> {
+        Tca9548a::attach(self, channel, device)
+    }
+}
+
 impl I2cDevice for Tca9548a {
+    fn as_bus_switch(&self) -> Option<&dyn I2cBusSwitch> {
+        Some(self)
+    }
+
+    fn as_bus_switch_mut(&mut self) -> Option<&mut dyn I2cBusSwitch> {
+        Some(self)
+    }
+
     /// The switch's OWN address. Resolution never goes through this — see
     /// [`I2cDevice::claims_address`] — but the bus trace uses it to label the
     /// device and tooling uses it to identify the part.

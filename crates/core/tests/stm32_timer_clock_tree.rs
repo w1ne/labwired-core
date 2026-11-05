@@ -9,8 +9,9 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::cycle_clock::event_scheduler_enabled;
 use labwired_core::peripherals::rcc::{Rcc, RccRegisterLayout};
-use labwired_core::peripherals::timer::{Timer, TimerOutputSnapshot};
+use labwired_core::peripherals::timer::Timer;
 use labwired_core::{Bus, CycleClock, Peripheral};
 
 const RCC: u64 = 0x4002_3800;
@@ -38,7 +39,7 @@ fn start_timer(bus: &mut SystemBus, base: u64, prescaler: u32) {
 }
 
 fn advance_bus(bus: &mut SystemBus, cycles: u64) {
-    if cfg!(feature = "event-scheduler") {
+    if event_scheduler_enabled() {
         bus.set_current_cycle(bus.current_cycle + cycles);
     } else {
         for _ in 0..cycles {
@@ -48,15 +49,11 @@ fn advance_bus(bus: &mut SystemBus, cycles: u64) {
     }
 }
 
-fn tim2_snapshot(bus: &SystemBus) -> TimerOutputSnapshot {
+fn tim2_counter(bus: &SystemBus) -> u32 {
     let idx = bus.find_peripheral_index_by_name("tim2").unwrap();
-    bus.peripherals[idx]
-        .dev
-        .as_any()
-        .unwrap()
-        .downcast_ref::<Timer>()
-        .unwrap()
-        .output_snapshot()
+    // Observe CNT through the peripheral's register interface even while the
+    // bus-level RCC gate suppresses firmware MMIO access.
+    bus.peripherals[idx].dev.read_u32(0x24).unwrap()
 }
 
 #[test]
@@ -141,19 +138,14 @@ fn rcc_enable_gate_preserves_counter_and_both_divider_phases() {
     bus.write_u32(RCC + 0x08, 5 << 10).unwrap(); // timer /2
     start_timer(&mut bus, TIM2, 2);
     advance_bus(&mut bus, 11);
-    let before = tim2_snapshot(&bus);
-    assert_eq!((before.counter_ticks, before.prescaler_phase), (1, 5));
+    assert_eq!(tim2_counter(&bus), 1);
     bus.write_u32(RCC + 0x40, 0xE).unwrap(); // gate only TIM2
     advance_bus(&mut bus, 100);
-    let stopped = tim2_snapshot(&bus);
-    assert_eq!((stopped.counter_ticks, stopped.prescaler_phase), (1, 5));
-    assert!(stopped.counter_frozen);
+    assert_eq!(tim2_counter(&bus), 1);
     assert_eq!(bus.read_u32(TIM2 + 0x24).unwrap(), 0); // gated MMIO
     bus.write_u32(RCC + 0x40, 0xF).unwrap();
     advance_bus(&mut bus, 1);
-    let resumed = tim2_snapshot(&bus);
-    assert_eq!((resumed.counter_ticks, resumed.prescaler_phase), (2, 0));
-    assert!(!resumed.counter_frozen);
+    assert_eq!(tim2_counter(&bus), 2); // both divider phases survived the pause
 }
 
 #[test]
@@ -163,28 +155,31 @@ fn diagnostic_gate_bypass_and_missing_clock_fault_refresh_timer_state() {
     advance_bus(&mut bus, 3);
     bus.write_u32(RCC + 0x40, 0xE).unwrap();
     advance_bus(&mut bus, 10);
-    assert_eq!(tim2_snapshot(&bus).counter_ticks, 3);
+    assert_eq!(tim2_counter(&bus), 3);
     bus.set_clock_gating_bypass(true);
     advance_bus(&mut bus, 5);
-    assert_eq!(tim2_snapshot(&bus).counter_ticks, 8);
+    assert_eq!(tim2_counter(&bus), 8);
     bus.set_clock_gating_bypass(false);
     advance_bus(&mut bus, 5);
-    assert_eq!(tim2_snapshot(&bus).counter_ticks, 8);
+    assert_eq!(tim2_counter(&bus), 8);
     bus.set_clock_gating_bypass(true);
     bus.inject_missing_clock("tim2").unwrap();
     assert_eq!(bus.missing_clock_suppressed("tim2"), 0);
     advance_bus(&mut bus, 4);
-    assert_eq!(tim2_snapshot(&bus).counter_ticks, 8);
+    assert_eq!(tim2_counter(&bus), 8);
     assert_eq!(bus.read_u32(TIM2 + 0x24).unwrap(), 0);
     assert!(bus.missing_clock_suppressed("tim2") > 0);
 }
 
 fn advance_timer(timer: &mut Timer, clock: &CycleClock, cycle: u64) {
-    clock.publish(cycle);
     if timer.uses_scheduler() {
+        clock.publish(cycle);
         timer.sync_to(cycle);
     } else {
-        timer.tick();
+        for now in clock.now() + 1..=cycle {
+            clock.publish(now);
+            timer.tick();
+        }
     }
 }
 
@@ -249,9 +244,11 @@ fn gated_pwm_holds_its_level_and_resumes_the_remaining_phase() {
             advance_timer(&mut timer, &clock, cycle);
             let snapshot = timer.output_snapshot();
             assert_eq!((snapshot.counter_ticks, snapshot.prescaler_phase), (1, 1));
+            assert!(snapshot.counter_frozen);
             assert!(timer.output_level(0));
         }
         timer.set_timer_clock(2, true);
+        assert!(!timer.output_snapshot().counter_frozen);
         let new_events = timer.take_scheduled_events();
         if timer.uses_scheduler() {
             assert_eq!(new_events.len(), 1);
@@ -294,7 +291,6 @@ fn snapshot_keeps_kernel_phase_when_psc_is_reduced_below_its_live_phase() {
     }
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn rcc_rate_change_rearms_irq_deadline_and_invalidates_the_old_event() {
     let mut bus = f407_bus();
@@ -303,33 +299,46 @@ fn rcc_rate_change_rearms_irq_deadline_and_invalidates_the_old_event() {
     start_timer(&mut bus, TIM2, 2);
     bus.write_u32(TIM2 + 0x2C, 9).unwrap(); // update after 60 CPU cycles
     bus.write_u32(TIM2 + 0x0C, 1).unwrap();
-    let old = *bus.pending_schedule.last().unwrap();
-    assert_eq!((old.0, old.1), (timer_idx, 60));
+    let old = bus.pending_schedule.last().copied();
+    assert_eq!(
+        old.map(|(idx, cycle, _)| (idx, cycle)),
+        event_scheduler_enabled().then_some((timer_idx, 60)),
+    );
     bus.pending_schedule.clear();
-    bus.set_current_cycle(5);
+    advance_bus(&mut bus, 5);
     bus.write_u32(RCC + 0x08, 6 << 10).unwrap(); // remaining 28 kernel ticks at /4
-    let new = *bus.pending_schedule.last().unwrap();
-    assert_eq!((new.0, new.1), (timer_idx, 117));
-    assert_ne!(old.2, new.2);
+    let new = bus.pending_schedule.last().copied();
+    assert_eq!(
+        new.map(|(idx, cycle, _)| (idx, cycle)),
+        event_scheduler_enabled().then_some((timer_idx, 117)),
+    );
 
     let mut scheduler = labwired_core::sched::EventScheduler::new();
     let mut event_bus = SystemBus::empty();
-    scheduler.advance_to(old.1);
-    let stale = bus.peripherals[timer_idx]
-        .dev
-        .on_event(old.2, &mut scheduler, &mut event_bus);
-    assert!(!stale.raise_own_irq);
-    assert_eq!(stale.reschedule_delay, None);
-    scheduler.advance_to(new.1);
-    bus.set_current_cycle(new.1);
-    let fresh = bus.peripherals[timer_idx]
-        .dev
-        .on_event(new.2, &mut scheduler, &mut event_bus);
-    assert!(fresh.raise_own_irq);
+    advance_bus(&mut bus, 55);
+    if let Some(old) = old {
+        assert_ne!(old.2, new.unwrap().2);
+        scheduler.advance_to(old.1);
+        let stale = bus.peripherals[timer_idx]
+            .dev
+            .on_event(old.2, &mut scheduler, &mut event_bus);
+        assert!(!stale.raise_own_irq);
+        assert_eq!(stale.reschedule_delay, None);
+    }
+    assert_eq!(bus.read_u32(TIM2 + 0x10).unwrap() & 1, 0);
+    advance_bus(&mut bus, 56);
+    assert_eq!(bus.read_u32(TIM2 + 0x10).unwrap() & 1, 0);
+    advance_bus(&mut bus, 1);
+    if let Some(new) = new {
+        scheduler.advance_to(new.1);
+        let fresh = bus.peripherals[timer_idx]
+            .dev
+            .on_event(new.2, &mut scheduler, &mut event_bus);
+        assert!(fresh.raise_own_irq);
+    }
     assert_ne!(bus.read_u32(TIM2 + 0x10).unwrap() & 1, 0);
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn rcc_gate_retires_irq_deadlines_and_rearms_only_remaining_ticks() {
     let mut bus = f407_bus();
@@ -338,36 +347,48 @@ fn rcc_gate_retires_irq_deadlines_and_rearms_only_remaining_ticks() {
     start_timer(&mut bus, TIM2, 2);
     bus.write_u32(TIM2 + 0x2C, 9).unwrap();
     bus.write_u32(TIM2 + 0x0C, 1).unwrap();
-    let old = *bus.pending_schedule.last().unwrap();
-    assert_eq!(old.1, 60);
+    let old = bus.pending_schedule.last().copied();
+    assert_eq!(
+        old.map(|(_, cycle, _)| cycle),
+        event_scheduler_enabled().then_some(60),
+    );
     bus.pending_schedule.clear();
-    bus.set_current_cycle(5);
+    advance_bus(&mut bus, 5);
     bus.write_u32(RCC + 0x40, 0xE).unwrap();
     assert!(bus.pending_schedule.is_empty());
     let mut scheduler = labwired_core::sched::EventScheduler::new();
     let mut event_bus = SystemBus::empty();
-    scheduler.advance_to(60);
-    bus.set_current_cycle(60);
-    let stale = bus.peripherals[timer_idx]
-        .dev
-        .on_event(old.2, &mut scheduler, &mut event_bus);
-    assert!(!stale.raise_own_irq);
-    assert_eq!(stale.reschedule_delay, None);
-    bus.set_current_cycle(105);
+    advance_bus(&mut bus, 55);
+    if let Some(old) = old {
+        scheduler.advance_to(60);
+        let stale = bus.peripherals[timer_idx]
+            .dev
+            .on_event(old.2, &mut scheduler, &mut event_bus);
+        assert!(!stale.raise_own_irq);
+        assert_eq!(stale.reschedule_delay, None);
+    }
+    assert_eq!(tim2_counter(&bus), 0);
+    advance_bus(&mut bus, 45);
     bus.write_u32(RCC + 0x40, 0xF).unwrap();
-    let resumed = *bus.pending_schedule.last().unwrap();
-    assert_eq!(resumed.1, 160);
-    bus.set_current_cycle(159);
+    let resumed = bus.pending_schedule.last().copied();
+    assert_eq!(
+        resumed.map(|(_, cycle, _)| cycle),
+        event_scheduler_enabled().then_some(160),
+    );
+    advance_bus(&mut bus, 54);
     assert_eq!(bus.read_u32(TIM2 + 0x10).unwrap() & 1, 0);
-    scheduler.advance_to(160);
-    bus.set_current_cycle(160);
-    let event = bus.peripherals[timer_idx]
-        .dev
-        .on_event(resumed.2, &mut scheduler, &mut event_bus);
-    assert!(event.raise_own_irq);
+    advance_bus(&mut bus, 1);
+    if let Some(resumed) = resumed {
+        scheduler.advance_to(160);
+        let event =
+            bus.peripherals[timer_idx]
+                .dev
+                .on_event(resumed.2, &mut scheduler, &mut event_bus);
+        assert!(event.raise_own_irq);
+    }
+    assert_ne!(bus.read_u32(TIM2 + 0x10).unwrap() & 1, 0);
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn capture_filter_and_remaining_deadline_follow_the_timer_kernel_clock() {
     let clock = CycleClock::default();
@@ -377,23 +398,28 @@ fn capture_filter_and_remaining_deadline_follow_the_timer_kernel_clock() {
     timer.write_u32(0x18, 0x11).unwrap(); // CC1S=TI1, IC1F=2 kernel ticks
     timer.write_u32(0x20, 1).unwrap();
     timer.write_u32(0, 1).unwrap();
-    clock.publish(10);
-    timer.sync_to(10);
+    let filtered = timer.uses_scheduler();
+    advance_timer(&mut timer, &clock, 10);
     timer.input_edge(0, true, 10); // accepted at 14 under old clock
-    assert_eq!(timer.take_scheduled_events()[0].0, 3);
-    clock.publish(12);
+    assert_eq!(
+        timer.take_scheduled_events().first().map(|event| event.0),
+        filtered.then_some(3),
+    );
+    advance_timer(&mut timer, &clock, 12);
     timer.set_timer_clock(4, true); // one kernel tick remains, accepted at 16
-    assert_eq!(timer.take_scheduled_events()[0].0, 3);
-    clock.publish(15);
-    timer.sync_to(15);
-    assert_eq!(timer.read_u32(0x10).unwrap() & 2, 0);
-    clock.publish(16);
-    timer.sync_to(16);
+    assert_eq!(
+        timer.take_scheduled_events().first().map(|event| event.0),
+        filtered.then_some(3),
+    );
+    advance_timer(&mut timer, &clock, 15);
+    // The legacy input stage captures immediately, so its value and flag
+    // already belong to the edge at cycle10. Scheduler mode applies IC1F.
+    assert_eq!(timer.read_u32(0x10).unwrap() & 2 != 0, !filtered);
+    advance_timer(&mut timer, &clock, 16);
     assert_eq!(timer.read_u32(0x10).unwrap() & 2, 2);
-    assert_eq!(timer.read_u32(0x34).unwrap(), 7);
+    assert_eq!(timer.read_u32(0x34).unwrap(), if filtered { 7 } else { 5 });
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn gated_capture_filter_resumes_its_remaining_samples() {
     let clock = CycleClock::default();
@@ -403,34 +429,33 @@ fn gated_capture_filter_resumes_its_remaining_samples() {
     timer.write_u32(0x18, 0x11).unwrap();
     timer.write_u32(0x20, 1).unwrap();
     timer.write_u32(0, 1).unwrap();
-    clock.publish(10);
-    timer.sync_to(10);
+    let filtered = timer.uses_scheduler();
+    advance_timer(&mut timer, &clock, 10);
     timer.input_edge(0, true, 10);
-    clock.publish(11);
+    advance_timer(&mut timer, &clock, 11);
     timer.set_timer_clock(2, false);
     assert!(timer.take_scheduled_events().is_empty());
-    clock.publish(111);
-    timer.sync_to(111);
-    assert_eq!(timer.read_u32(0x10).unwrap() & 2, 0);
+    advance_timer(&mut timer, &clock, 111);
+    assert_eq!(timer.read_u32(0x10).unwrap() & 2 != 0, !filtered);
     timer.set_timer_clock(2, true);
-    assert_eq!(timer.take_scheduled_events()[0].0, 2);
-    clock.publish(113);
-    timer.sync_to(113);
-    assert_eq!(timer.read_u32(0x10).unwrap() & 2, 0);
-    clock.publish(114);
-    timer.sync_to(114);
+    assert_eq!(
+        timer.take_scheduled_events().first().map(|event| event.0),
+        filtered.then_some(2),
+    );
+    advance_timer(&mut timer, &clock, 113);
+    assert_eq!(timer.read_u32(0x10).unwrap() & 2 != 0, !filtered);
+    advance_timer(&mut timer, &clock, 114);
     assert_eq!(timer.read_u32(0x10).unwrap() & 2, 2);
-    assert_eq!(timer.read_u32(0x34).unwrap(), 7);
+    assert_eq!(timer.read_u32(0x34).unwrap(), if filtered { 7 } else { 5 });
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn input_changes_while_gated_cancel_obsolete_edges_and_restart_filtering() {
-    for (pending_rise, transitions, expect_capture) in [
-        (true, vec![(50, false)], false),
-        (false, vec![(50, true)], true),
-        (false, vec![(50, true), (60, false)], false),
-        (true, vec![(50, false), (60, true)], true),
+    for (initial_rise, transitions, expect_filtered_capture, expect_immediate_capture) in [
+        (true, vec![(50, false)], false, false),
+        (false, vec![(50, true)], true, true),
+        (false, vec![(50, true), (60, false)], false, false),
+        (true, vec![(50, false), (60, true)], true, false),
     ] {
         let clock = CycleClock::default();
         let mut timer = Timer::new_with_width(32).ccer_np(true);
@@ -439,28 +464,38 @@ fn input_changes_while_gated_cancel_obsolete_edges_and_restart_filtering() {
         timer.write_u32(0x18, 0x11).unwrap();
         timer.write_u32(0x20, 1).unwrap();
         timer.write_u32(0, 1).unwrap();
-        clock.publish(10);
-        timer.sync_to(10);
-        if pending_rise {
+        let filtered = timer.uses_scheduler();
+        advance_timer(&mut timer, &clock, 10);
+        if initial_rise {
             timer.input_edge(0, true, 10); // old acceptance cycle14
         }
-        clock.publish(11);
+        assert_eq!(
+            timer.read_u32(0x10).unwrap() & 2 != 0,
+            initial_rise && !filtered,
+        );
+        timer.write_u32(0x10, 0).unwrap();
+        advance_timer(&mut timer, &clock, 11);
         timer.set_timer_clock(2, false);
         for (cycle, level) in transitions {
-            clock.publish(cycle);
-            timer.sync_to(cycle);
+            advance_timer(&mut timer, &clock, cycle);
             timer.input_edge(0, level, cycle);
         }
-        clock.publish(111);
+        advance_timer(&mut timer, &clock, 111);
         timer.set_timer_clock(2, true);
-        clock.publish(114);
-        timer.sync_to(114);
-        assert_eq!(timer.read_u32(0x10).unwrap() & 2, 0);
-        clock.publish(115); // four fresh CPU cycles at /2
-        timer.sync_to(115);
+        advance_timer(&mut timer, &clock, 114);
+        assert_eq!(
+            timer.read_u32(0x10).unwrap() & 2 != 0,
+            !filtered && expect_immediate_capture,
+        );
+        advance_timer(&mut timer, &clock, 115); // four fresh CPU cycles at /2
+        let expect_capture = if filtered {
+            expect_filtered_capture
+        } else {
+            expect_immediate_capture
+        };
         assert_eq!(timer.read_u32(0x10).unwrap() & 2 != 0, expect_capture);
         if expect_capture {
-            assert_eq!(timer.read_u32(0x34).unwrap(), 7);
+            assert_eq!(timer.read_u32(0x34).unwrap(), if filtered { 7 } else { 5 });
         }
     }
 }

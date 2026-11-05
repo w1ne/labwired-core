@@ -13,6 +13,7 @@
 //! The byte protocol is modeled. Pass-gate resistance, pull-ups, line rise time,
 //! and external GPIO wiring of RESET/INT require a board-level connection.
 
+use crate::peripherals::device::I2cBusSwitch;
 use crate::peripherals::i2c::I2cDevice;
 
 use super::tca9548a::Tca9548a;
@@ -93,7 +94,25 @@ impl Default for Pca9545a {
     }
 }
 
+impl I2cBusSwitch for Pca9545a {
+    fn channel_count(&self) -> usize {
+        PCA9545A_CHANNELS
+    }
+
+    fn attach(&mut self, channel: u8, device: Box<dyn I2cDevice>) -> anyhow::Result<()> {
+        Pca9545a::attach(self, channel, device)
+    }
+}
+
 impl I2cDevice for Pca9545a {
+    fn as_bus_switch(&self) -> Option<&dyn I2cBusSwitch> {
+        Some(self)
+    }
+
+    fn as_bus_switch_mut(&mut self) -> Option<&mut dyn I2cBusSwitch> {
+        Some(self)
+    }
+
     fn address(&self) -> u8 {
         self.routing.address()
     }

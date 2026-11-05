@@ -471,6 +471,7 @@ canonical `type:`; the table below is rendered from that file by
 | `veml7700` | I²C | Ambient-light sensor (lux) over I2C |
 | `vl53l0x` | I²C | Laser time-of-flight distance sensor over I²C (ST VL53L0X) |
 | `vl53l1x` | I²C | Laser time-of-flight distance sensor over I2C |
+| `xgzp6857d` | I²C | XGZP6857D200KPGPN33 gauge pressure and temperature over I²C |
 | `74hc595` | SPI | 8-bit serial-in / parallel-out shift register over SPI |
 | `ads1256` | SPI | 8-channel 24-bit delta-sigma SPI ADC (RREG/WREG/RDATA, PGA, DRDY) |
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
@@ -506,7 +507,7 @@ canonical `type:`; the table below is rendered from that file by
 | `74hc245` | GPIO | Eight bidirectional bits; DIR picks the direction, OE isolates both buses |
 | `74hc4051` | GPIO | Routes one of eight analog inputs (Y0..Y7) to an ADC channel, selected by three GPIO pins |
 | `74lvc1t45` | GPIO | Single-bit bidirectional translator; DIR picks the direction, OE isolates |
-| `a4988` | GPIO | A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle) |
+| `a4988` | GPIO | A4988/DRV8825/TMC2209/TMC2226 commanded position with input timing diagnostics |
 | `bldc-motor` | GPIO | Configurable deterministic three-phase BLDC motor plant |
 | `bldc_hall_driver` | GPIO | PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled |
 | `dc-motor` | GPIO | Configurable deterministic brushed DC motor plant |

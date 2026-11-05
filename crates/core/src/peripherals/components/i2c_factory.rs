@@ -131,7 +131,7 @@ pub fn validate_i2c_mux_topology(
             );
         }
         let parent_channels = resolve_i2c_leaf(manifest, parent)?
-            .and_then(|device| mux_channel_count(device.as_ref()));
+            .and_then(|device| device.as_bus_switch().map(|switch| switch.channel_count()));
         let Some(parent_channels) = parent_channels else {
             anyhow::bail!(
                 "external device '{}' hangs off '{}', but '{}' is a '{}' — only an I²C bus \
@@ -205,7 +205,7 @@ pub fn build_i2c_tree(
         );
         return Ok(None);
     };
-    if !is_mux_device(device.as_ref()) {
+    if device.as_bus_switch().is_none() {
         anyhow::ensure!(
             !has_children,
             "external device '{}' has downstream devices but its resolved model is not an I²C bus switch",
@@ -239,33 +239,14 @@ pub fn build_i2c_tree(
         built.push((child.channel.unwrap_or(0), dev));
     }
     {
-        let mux = device.as_any_mut().expect("bus switch exposes its model");
-        if let Some(mux) = mux.downcast_mut::<super::tca9548a::Tca9548a>() {
-            for (channel, dev) in built {
-                mux.attach(channel, dev)?;
-            }
-        } else if let Some(mux) = mux.downcast_mut::<super::pca9545a::Pca9545a>() {
-            for (channel, dev) in built {
-                mux.attach(channel, dev)?;
-            }
+        let mux = device
+            .as_bus_switch_mut()
+            .expect("bus switch exposes downstream attachment");
+        for (channel, dev) in built {
+            mux.attach(channel, dev)?;
         }
     }
     Ok(Some(with_supply(device, ext)))
-}
-
-fn is_mux_device(device: &dyn I2cDevice) -> bool {
-    mux_channel_count(device).is_some()
-}
-
-fn mux_channel_count(device: &dyn I2cDevice) -> Option<usize> {
-    let model = device.as_any()?;
-    if model.is::<super::tca9548a::Tca9548a>() {
-        Some(super::tca9548a::TCA9548A_CHANNELS)
-    } else if model.is::<super::pca9545a::Pca9545a>() {
-        Some(super::pca9545a::PCA9545A_CHANNELS)
-    } else {
-        None
-    }
 }
 
 /// Resolve a single leaf for BOTH topology preflight and actual construction.

@@ -73,6 +73,12 @@ pub trait I2cSlaveHost {
     }
 }
 
+/// Construction capability for an I²C switch with downstream bus segments.
+pub trait I2cBusSwitch {
+    fn channel_count(&self) -> usize;
+    fn attach(&mut self, channel: u8, device: Box<dyn I2cDevice>) -> anyhow::Result<()>;
+}
+
 pub trait I2cDevice: Send {
     /// Optional transaction epoch. A change invalidates a controller selection.
     fn transaction_generation(&self) -> Option<u64> {
@@ -147,6 +153,16 @@ pub trait I2cDevice: Send {
     /// claim `addr` on the currently enabled channel(s).
     fn select_address(&mut self, addr: u8) {
         let _ = addr;
+    }
+
+    /// Downstream topology available when this device is an I²C bus switch.
+    fn as_bus_switch(&self) -> Option<&dyn I2cBusSwitch> {
+        self.wrapped_device()?.as_bus_switch()
+    }
+
+    /// Attach downstream devices through the switch's channel validation.
+    fn as_bus_switch_mut(&mut self) -> Option<&mut dyn I2cBusSwitch> {
+        self.wrapped_device_mut()?.as_bus_switch_mut()
     }
 
     /// Walk every [`SimInput`](crate::sim_input::SimInput) surface this device

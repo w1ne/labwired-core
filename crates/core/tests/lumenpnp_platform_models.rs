@@ -366,19 +366,43 @@ external_devices:
         let mut device = i2c_factory::build_i2c_tree(&manifest, &manifest.external_devices[0])
             .unwrap()
             .unwrap();
-        let mux = device
-            .as_any_mut()
-            .unwrap()
-            .downcast_mut::<labwired_core::peripherals::components::pca9545a::Pca9545a>()
-            .unwrap();
-        assert_eq!(mux.channel_devices(0)[0].address(), 0x6d);
-        assert_eq!(mux.channel_devices(1)[0].address(), 0x6d);
+        assert_eq!(device.address(), 0x70);
+        assert!(!device.claims_address(0x6d));
         let mut ids = Vec::new();
         device.for_each_sim_input(&mut |input| {
-            ids.push(input.component_id().unwrap().to_owned());
+            let id = input.component_id().unwrap().to_owned();
+            input
+                .set_input(
+                    "pressure_pa",
+                    if id == "vac1" { -30_000.0 } else { -60_000.0 },
+                )
+                .unwrap();
+            ids.push(id);
             false
         });
         assert_eq!(ids, ["vac1", "vac2"]);
+        for (mask, expected_raw) in [(1, -960_000i32), (2, -1_920_000i32)] {
+            device.select_address(0x70);
+            device.start();
+            device.write(mask);
+            device.stop();
+            assert!(device.claims_address(0x6d));
+            device.select_address(0x6d);
+            device.start();
+            device.write(0x30);
+            device.write(0x0a);
+            device.stop();
+            device.advance_time_us(20_000);
+            device.select_address(0x6d);
+            device.start();
+            device.write(0x06);
+            device.start();
+            assert_eq!(
+                [device.read(), device.read(), device.read()],
+                expected_raw.to_be_bytes()[1..]
+            );
+            device.stop();
+        }
         manifest.external_devices[2].channel = Some(4);
         assert!(i2c_factory::validate_i2c_mux_topology(&manifest).is_err());
     }
