@@ -1,0 +1,32 @@
+# NUCLEO-F401RE with a nonlinear diode load line routed to PA0 / ADC1_IN0.
+# Kept separate from the ordinary GPIO/UART smoke system.
+name: "nucleo-f401re-analog-diode"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io:
+  - id: "led2_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_user_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pa0_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"

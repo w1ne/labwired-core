@@ -1067,6 +1067,72 @@ fn adxl345_sensor_lab_diode_netlist_reaches_pa6_adc1_end_to_end() {
     );
 }
 
+/// The NUCLEO-F401RE board profile also carries a solved nonlinear device
+/// through the descriptor's PA0 → ADC1_IN0 route and into a real conversion.
+/// The independent load-line reference rejects a linearized or missing diode.
+#[test]
+fn nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end() {
+    let (manifest, mut bus) = bus_and_manifest("examples/nucleo-f401re/analog-diode-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let boundary = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(boundary, &mut bus)
+        .expect("solve the NUCLEO-F401RE diode load line");
+    assert_eq!(steps.len(), 1, "one 1 us analog boundary is crossed");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let volts = match session.signals().get("board.analog.pa0_volts") {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("the diode voltage was not routed to PA0: {other:?}"),
+    };
+
+    const SUPPLY_V: f64 = 3.3;
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const DIODE_IS_A: f64 = 2.52e-9;
+    const DIODE_N: f64 = 1.752;
+    const DIODE_RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+    let current_at_junction_voltage =
+        |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = (low + high) / 2.0;
+    let expected_volts = junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS;
+    assert!(
+        (volts - expected_volts).abs() < 2e-5,
+        "the solved diode load line should be {expected_volts} V, got {volts} V"
+    );
+
+    let expected_mv = (expected_volts * 1000.0).round() as u32;
+    let expected_count = (expected_mv * 4095 / 3300) as u16;
+    assert_eq!(
+        adc_channel_count(&mut bus, 0),
+        expected_count,
+        "PA0's descriptor route must seed ADC1_IN0"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 1),
+        0xFFFF,
+        "the adjacent ADC1 channel must remain undriven"
+    );
+    assert_eq!(
+        f401_adc_convert(&mut bus, 0),
+        u32::from(expected_count),
+        "the NUCLEO-F401RE ADC1 conversion must report the diode voltage"
+    );
+}
+
 /// VDDA is independent from the routed pad voltage. The ADC holds the pin in
 /// millivolts and converts it against the reference present at acquisition.
 #[test]
