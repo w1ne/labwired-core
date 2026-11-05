@@ -211,6 +211,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nxp-s32k388-smoke.yaml
             system: configs/systems/onboarding/nxp-s32k388.yaml
+          # The imported S32K388EVB alias is similarly bounded to CM7_0 and
+          # memory; its generated zero-answering peripheral windows are omitted.
+          - id: nxp-s32k388evb
+            crate: firmware-s32k388-onboarding-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/nxp-s32k388evb-smoke.yaml
+            system: configs/systems/onboarding/nxp-s32k388evb.yaml
           # S32K118 is bounded to Renode's Cortex-M0+ CPU, 256 KiB program
           # flash, and the 0x5800-byte upper SRAM window; no peripherals are
           # claimed by this instruction and memory smoke.

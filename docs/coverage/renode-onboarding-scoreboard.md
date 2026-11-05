@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `148`
-- booted: `148/245`
-- boot_and_smoke_passed: `148/245`
-- not_run: `97`
-- pass: `148`
+- run_attempted: `149`
+- booted: `149/245`
+- boot_and_smoke_passed: `149/245`
+- not_run: `96`
+- pass: `149`
 - fail: `0`
-- median_elapsed_ms: `1097`
-- median_elapsed_seconds: `1.097`
+- median_elapsed_ms: `1101`
+- median_elapsed_seconds: `1.101`
 - threshold_seconds: `3600`
-- threshold_met: `148/148`
+- threshold_met: `149/149`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -144,7 +144,7 @@
 | `nxp-k6xf` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `nxp-mimx8ml` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `nxp-s32k388` | `pass` | `True` | `yes` | `yes` | `1435` | `1.435` | `True` | `n/a` | n/a | n/a |
-| `nxp-s32k388evb` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `nxp-s32k388evb` | `pass` | `True` | `yes` | `yes` | `7818` | `7.818` | `True` | `n/a` | n/a | n/a |
 | `opentitan-earlgrey` | `pass` | `True` | `yes` | `yes` | `841` | `0.841` | `True` | `n/a` | n/a | n/a |
 | `opentitan-earlgrey-cw310` | `pass` | `True` | `yes` | `yes` | `1349` | `1.349` | `True` | `n/a` | n/a | n/a |
 | `picosoc` | `pass` | `True` | `yes` | `yes` | `1288` | `1.288` | `True` | `n/a` | n/a | n/a |
