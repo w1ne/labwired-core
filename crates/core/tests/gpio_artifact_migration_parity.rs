@@ -340,8 +340,21 @@ fn assert_same_artifact(got: &Artifact, want: &serde_json::Value, kind: &str, wh
         );
     }
     // Every key, both ways: a descriptor that publishes MORE than the model did
-    // is also a change, and one the browser would show.
-    let mut extra: Vec<&String> = have.keys().filter(|k| !want.contains_key(*k)).collect();
+    // is also a change, and one the browser would show. TM1637 Acc prove history
+    // (`ack_count` / `bus_frames` / `frames_seen` / `framing_errors` / live
+    // `grids`) is an intentional additive on top of the deleted model's meta —
+    // allow those keys so field-for-field decode parity stays the gate.
+    const TM1637_PROVE_META: &[&str] = &[
+        "ack_count",
+        "bus_frames",
+        "frames_seen",
+        "framing_errors",
+        "grids",
+    ];
+    let mut extra: Vec<&String> = have
+        .keys()
+        .filter(|k| !want.contains_key(*k) && !TM1637_PROVE_META.contains(&k.as_str()))
+        .collect();
     extra.sort();
     assert!(
         extra.is_empty(),
@@ -462,6 +475,18 @@ fn a_full_write_sequence_matches_the_deleted_model_field_for_field() {
     assert_eq!(got.meta["text"], "1234");
     assert_eq!(got.meta["brightness"], 7);
     assert_eq!(got.meta["display_on"], serde_json::Value::Bool(true));
+    // Prove-history additive (not in the deleted model): ACKs, bus txns, frames.
+    assert!(got.meta["ack_count"].as_u64().unwrap_or(0) >= 6, "ack_count={}", got.meta["ack_count"]);
+    assert_eq!(got.meta["framing_errors"].as_u64().unwrap_or(1), 0);
+    let bus = got.meta["bus_frames"].as_array().expect("bus_frames");
+    assert!(bus.iter().any(|f| f["bytes"] == serde_json::json!([0x40])), "{bus:?}");
+    assert!(
+        bus.iter()
+            .any(|f| f["bytes"] == serde_json::json!([0xC0, 0x06, 0x5B, 0x4F, 0x66])),
+        "{bus:?}"
+    );
+    let frames = got.meta["frames_seen"].as_array().expect("frames_seen");
+    assert!(frames.iter().any(|f| f["text"] == "1234"), "{frames:?}");
 }
 
 /// Fixed-address mode (0x44) writes ONE grid and does not advance the pointer.
