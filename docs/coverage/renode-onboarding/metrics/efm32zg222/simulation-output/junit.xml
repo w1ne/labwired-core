@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000665">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.000731">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="73d3f74f22ba81c194c4a6f7a681d36a4fd98163aa9df13f596e9617ebcf7e61"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000665">
+  <testcase classname="labwired" name="run" time="0.000731">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EFM32ZG222 USART1 smoke" time="0.000000">
   </testcase>

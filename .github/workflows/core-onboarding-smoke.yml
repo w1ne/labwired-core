@@ -373,6 +373,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/efr32mg1-smoke.yaml
             system: configs/systems/onboarding/efr32mg1.yaml
+          # SLTB001A inherits Renode's EFR32MG1 profile; the imported board is
+          # narrowed to the M4F memory map and model-backed USART0 smoke path.
+          - id: sltb001a
+            crate: firmware-efr32mg1-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sltb001a-smoke.yaml
+            system: configs/systems/onboarding/sltb001a.yaml
           # MG24 follows the xG24 REPL's M33/memory map and uses the modeled
           # Series-2 CMU and USART0; generated stub peripherals are omitted.
           - id: efr32mg24
