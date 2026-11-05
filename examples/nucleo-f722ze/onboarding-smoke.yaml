@@ -1,0 +1,12 @@
+# NUCLEO-F722ZE: boot and toggle the active-high green user LED LD1 on PB0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f722ze-smoke"
+  system: "../../configs/systems/nucleo-f722ze.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 24
+  - expected_stop_reason: max_steps

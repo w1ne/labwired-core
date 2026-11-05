@@ -31,6 +31,7 @@ on:
       - "crates/firmware-stm32f3-discovery-smoke/**"
       - "crates/firmware-stm32f3348-disco-smoke/**"
       - "crates/firmware-stm32f429i-disc1-smoke/**"
+      - "crates/firmware-nucleo-f722ze-smoke/**"
       - "crates/firmware-nucleo-f334r8-smoke/**"
       - "crates/firmware-nucleo-f303k8-smoke/**"
       - "crates/firmware-nucleo-f030r8-smoke/**"
@@ -128,6 +129,9 @@ on:
       - "configs/chips/stm32f429zi-f429i-disc1-smoke.yaml"
       - "configs/systems/stm32f429i-disc1.yaml"
       - "examples/stm32f429i-disc1/**"
+      - "configs/chips/stm32f722ze-nucleo-smoke.yaml"
+      - "configs/systems/nucleo-f722ze.yaml"
+      - "examples/nucleo-f722ze/**"
       - "configs/systems/stm32h573i-dk-smoke.yaml"
       - "configs/chips/stm32h573ii-dk-gpio-smoke.yaml"
       - "configs/systems/nucleo-c5a3zg.yaml"
@@ -248,6 +252,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/stm32f429i-disc1/onboarding-smoke.yaml
             system: configs/systems/stm32f429i-disc1.yaml
+          - id: nucleo-f722ze
+            crate: firmware-nucleo-f722ze-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f722ze/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f722ze.yaml
           - id: nucleo-f334r8
             crate: firmware-nucleo-f334r8-smoke
             target: thumbv7em-none-eabi

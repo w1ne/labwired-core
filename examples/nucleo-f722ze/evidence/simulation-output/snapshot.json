@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073873920,
+      1,
+      65536,
+      0,
+      0,
+      0,
+      0,
+      536936432,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536936432,
+      134218909,
+      134218896
+    ],
+    "pc": 134218896,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 20000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 20000
+    }
+  },
+  "limits": {
+    "max_steps": 20000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "d79364ed1b2956fb13f0593c04a62392c88aaaebfa87ed28f1977445d7961590",
+  "config": {
+    "firmware": "examples/nucleo-f722ze/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f722ze-smoke",
+    "system": "examples/nucleo-f722ze/../../configs/systems/nucleo-f722ze.yaml",
+    "script": "examples/nucleo-f722ze/onboarding-smoke.yaml"
+  }
+}

@@ -1,0 +1,11 @@
+# NUCLEO-F722ZE (MB1137), narrowed to LD1's PB0 route (SB120 ON, SB119 OFF).
+name: "nucleo-f722ze"
+chip: "../chips/stm32f722ze-nucleo-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "ld1_green"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
