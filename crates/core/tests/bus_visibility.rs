@@ -438,6 +438,21 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),
     (
+        "atmega328pb",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega328pb",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
+        "atmega328pb",
+        BusKind::Uart,
+        "USART1 emits bytes in the CPU smoke, but this edge gate has no AVR UART waveform bring-up",
+    ),
+    (
         "atmega2560",
         BusKind::I2c,
         "AVR from_config I2C is generic type:i2c without PadLines cell",

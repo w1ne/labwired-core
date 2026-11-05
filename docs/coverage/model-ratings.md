@@ -101,6 +101,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | mkw41z4 | open | L1 | 20 | 906.2 | 1.5 | ≥1× (CI) | [doc](docs/boards/mkw41z4.md) |
 | efr32mg26 | open | L2 | 34 | 1513.7 | 2.2 | ≥1× (CI) | [doc](docs/boards/efr32mg26.md) |
 | atmega328p | open | L1 | 7 | 1044.8 | 7.6 | ≥1× (CI) | — |
+| atmega328pb | open | L1 | 8 | — | — | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
