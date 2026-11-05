@@ -58,6 +58,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/litex_vexriscv_linux-smoke.yaml",
     },
+    "litex_vexriscv_tftp": {
+        "crate": "firmware-litex-vexriscv-tftp-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/litex_vexriscv_tftp-smoke.yaml",
+    },
     "renesas-ek_ra8m1": {
         "crate": "firmware-ek-ra8m1-smoke",
         "target": "thumbv8m.main-none-eabi",

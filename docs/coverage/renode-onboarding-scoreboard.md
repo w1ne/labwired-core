@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `133`
-- booted: `133/245`
-- boot_and_smoke_passed: `133/245`
-- not_run: `112`
-- pass: `133`
+- run_attempted: `134`
+- booted: `134/245`
+- boot_and_smoke_passed: `134/245`
+- not_run: `111`
+- pass: `134`
 - fail: `0`
-- median_elapsed_ms: `850`
-- median_elapsed_seconds: `0.85`
+- median_elapsed_ms: `852`
+- median_elapsed_seconds: `0.852`
 - threshold_seconds: `3600`
-- threshold_met: `133/133`
+- threshold_met: `134/134`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -107,7 +107,7 @@
 | `litex_vexriscv_linux` | `pass` | `True` | `yes` | `yes` | `2001` | `2.001` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_micropython` | `pass` | `True` | `yes` | `yes` | `2061` | `2.061` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_smp` | `pass` | `True` | `yes` | `yes` | `801` | `0.801` | `True` | `n/a` | n/a | n/a |
-| `litex_vexriscv_tftp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `litex_vexriscv_tftp` | `pass` | `True` | `yes` | `yes` | `94732` | `94.732` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_verilated_cfu` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_vexriscv_verilated_liteuart` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_vexriscv_zephyr` | `pass` | `True` | `yes` | `yes` | `2131` | `2.131` | `True` | `n/a` | n/a | n/a |

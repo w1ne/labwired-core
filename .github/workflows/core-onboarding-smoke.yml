@@ -78,6 +78,7 @@ on:
       - "crates/firmware-mimxrt595-evk-smoke/**"
       - "crates/firmware-litex-minerva-smoke/**"
       - "crates/firmware-litex-vexriscv-smp-smoke/**"
+      - "crates/firmware-litex-vexriscv-tftp-smoke/**"
       - "crates/firmware-opentitan-earlgrey-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
@@ -876,6 +877,12 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv_smp-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv_smp.yaml
+          # LiteX/VexRiscv TFTP platform, bounded to ROM/SRAM, UART, and timer.
+          - id: litex_vexriscv_tftp
+            crate: firmware-litex-vexriscv-tftp-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_vexriscv_tftp-smoke.yaml
+            system: configs/systems/onboarding/litex_vexriscv_tftp.yaml
           - id: arty_litex_vexriscv
             crate: firmware-arty-litex-smoke
             target: riscv32im-unknown-none-elf
