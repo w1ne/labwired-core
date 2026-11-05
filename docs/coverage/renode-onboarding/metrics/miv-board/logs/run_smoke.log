@@ -1,4 +1,4 @@
-2026-11-05T05:17:23.449380Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/miv-board.yaml
-2026-11-05T05:17:23.450168Z  INFO labwired_loader: ELF Entry Point: 0x60000000
+2026-11-05T05:39:50.458885Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/miv-board.yaml
+2026-11-05T05:39:50.459693Z  INFO labwired_loader: ELF Entry Point: 0x60000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · miv-board-smoke · 100000 steps · 0.02s

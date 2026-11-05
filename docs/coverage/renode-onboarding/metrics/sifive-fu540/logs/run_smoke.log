@@ -1,5 +1,5 @@
-2026-11-05T05:17:53.630923Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fu540.yaml
-2026-11-05T05:17:53.649095Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+2026-11-05T05:40:27.692991Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fu540.yaml
+2026-11-05T05:40:27.711291Z  INFO labwired_loader: ELF Entry Point: 0x20000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · sifive-fu540-smoke · 100000 steps · 0.00s

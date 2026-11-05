@@ -35,6 +35,10 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/andes_ae350_n25-smoke.yaml",
     },
+    "mpfs-icicle-kit": {
+        "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
+        "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",
+    },
     "renesas-ek_ra8m1": {
         "crate": "firmware-ek-ra8m1-smoke",
         "target": "thumbv8m.main-none-eabi",
@@ -747,16 +751,16 @@ def main() -> int:
                 )
             command.extend(
                 [
-                    "--crate",
-                    mapping["crate"],
-                    "--target",
-                    mapping["target"],
                     "--script",
                     mapping["script"],
                     "--threshold-seconds",
                     "3600",
                 ]
             )
+            if mapping.get("prebuilt_firmware"):
+                command.extend(["--prebuilt-firmware", mapping["prebuilt_firmware"]])
+            else:
+                command.extend(["--crate", mapping["crate"], "--target", mapping["target"]])
             if mapping.get("features"):
                 command.extend(["--features", mapping["features"]])
             attempted += 1

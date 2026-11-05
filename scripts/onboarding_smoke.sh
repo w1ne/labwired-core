@@ -8,6 +8,7 @@ TARGET=""
 SCRIPT=""
 SYSTEM=""
 OUT_DIR=""
+PREBUILT_FIRMWARE=""
 PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
 INVENTORY_ONLY="false"
@@ -19,6 +20,7 @@ Usage: scripts/onboarding_smoke.sh --target-id ID --system PATH --out-dir DIR [o
 
 Smoke mode options:
   --crate NAME --target TRIPLE --script PATH
+  --prebuilt-firmware PATH --script PATH
   --features NAME[,NAME...]
   --profile release|debug
   --threshold-seconds N
@@ -66,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       SCRIPT="$2"
       shift 2
       ;;
+    --prebuilt-firmware)
+      PREBUILT_FIRMWARE="$2"
+      shift 2
+      ;;
     --system)
       SYSTEM="$2"
       shift 2
@@ -97,12 +103,47 @@ for required in TARGET_ID SYSTEM OUT_DIR; do
 done
 
 if [[ "${INVENTORY_ONLY}" != "true" ]]; then
-  for required in CRATE TARGET SCRIPT; do
+  for required in SCRIPT; do
     if [[ -z "${!required}" ]]; then
       echo "Missing required argument: ${required}" >&2
       exit 2
     fi
   done
+  if [[ -z "${PREBUILT_FIRMWARE}" && ( -z "${CRATE}" || -z "${TARGET}" ) ]]; then
+    echo "Smoke mode requires --crate and --target, or --prebuilt-firmware." >&2
+    exit 2
+  fi
+  if [[ -n "${PREBUILT_FIRMWARE}" && ! -f "${PREBUILT_FIRMWARE}" ]]; then
+    echo "Prebuilt firmware does not exist: ${PREBUILT_FIRMWARE}" >&2
+    exit 2
+  fi
+  if [[ -n "${PREBUILT_FIRMWARE}" ]]; then
+    python3 - "${SCRIPT}" "${PREBUILT_FIRMWARE}" <<'PY'
+import sys
+from pathlib import Path
+
+script = Path(sys.argv[1])
+firmware = Path(sys.argv[2]).resolve()
+in_inputs = False
+script_firmware = None
+for line in script.read_text(encoding="utf-8").splitlines():
+    if not line.strip() or line.lstrip().startswith("#"):
+        continue
+    if not line.startswith(" "):
+        in_inputs = line.strip() == "inputs:"
+        continue
+    if in_inputs and line.strip().startswith("firmware:"):
+        value = line.split(":", 1)[1].strip().strip("\"'")
+        script_firmware = (script.parent / value).resolve()
+        break
+if script_firmware is None:
+    raise SystemExit(f"Smoke script has no inputs.firmware: {script}")
+if script_firmware != firmware:
+    raise SystemExit(
+        f"Prebuilt firmware {firmware} does not match smoke script input {script_firmware}"
+    )
+PY
+  fi
 fi
 
 if [[ "${INVENTORY_ONLY}" == "true" && -z "${NOT_RUN_REASON}" ]]; then
@@ -243,6 +284,11 @@ if [[ "${INVENTORY_ONLY}" == "true" ]]; then
   failure_hint="Add a compatible firmware build and smoke script before claiming a boot result."
 elif ! run_stage build_cli cargo build -p labwired-cli; then
   :
+elif [[ -n "${PREBUILT_FIRMWARE}" ]]; then
+  run_attempted="true"
+  if ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+    :
+  fi
 elif [[ "${PROFILE}" == "release" ]]; then
   if ! run_stage build_firmware "${firmware_build_args[@]}" --release --target "${TARGET}"; then
     :
@@ -279,7 +325,7 @@ if [[ "${status}" == "fail" ]]; then
   failure_hint="$(infer_failure_hint "${failure_stage}" "${first_error_signature}")"
 fi
 
-export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE INVENTORY_ONLY run_attempted
+export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PREBUILT_FIRMWARE PROFILE INVENTORY_ONLY run_attempted
 export run_started_iso run_finished_iso elapsed_seconds elapsed_ms
 export status failure_stage first_error_signature threshold_met THRESHOLD_SECONDS
 export build_cli_ms build_firmware_ms run_smoke_ms
@@ -327,8 +373,8 @@ metrics = {
     "booted": booted,
     "boot_evidence": boot_evidence,
     "smoke_passed": True if status == "pass" and run_attempted else False if run_attempted else None,
-    "crate": os.environ["CRATE"],
-    "target_triple": os.environ["TARGET"],
+    "crate": os.environ["CRATE"] or None,
+    "target_triple": os.environ["TARGET"] or None,
     "script": os.environ["SCRIPT"],
     "system": os.environ["SYSTEM"],
     "profile": os.environ["PROFILE"],
@@ -352,6 +398,8 @@ metrics = {
         "run_smoke": parse_int("run_smoke_ms"),
     },
 }
+if os.environ.get("PREBUILT_FIRMWARE"):
+    metrics["prebuilt_firmware"] = os.environ["PREBUILT_FIRMWARE"]
 
 summary_lines = [
     f"# Onboarding Smoke: {metrics['target_id']}",

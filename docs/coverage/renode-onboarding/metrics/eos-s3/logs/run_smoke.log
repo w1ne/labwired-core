@@ -1,5 +1,5 @@
-2026-11-05T05:17:03.033299Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
-2026-11-05T05:17:03.034234Z  INFO labwired_loader: ELF Entry Point: 0x401
+2026-11-05T05:39:30.370407Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
+2026-11-05T05:39:30.371445Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · eos-s3-smoke · 100000 steps · 0.00s

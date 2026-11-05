@@ -79,6 +79,8 @@ on:
       - "crates/firmware-cv32e40p-smoke/**"
       - "crates/firmware-riscv-virt-smoke/**"
       - "crates/firmware-andes-ae350-n25-smoke/**"
+      - "scripts/onboarding_smoke.sh"
+      - "tests/fixtures/mpfs-zephyr-hello.elf"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -966,6 +968,14 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/andes_ae350_n25-smoke.yaml
             system: configs/systems/onboarding/andes_ae350_n25.yaml
+          # Run the committed stock Zephyr RV64 image against the imported
+          # MPFS Icicle Kit system; the exact imported profile exposes the U54
+          # memory, in-core CLINT, MMUART0/1, and explicit startup stubs for
+          # PLIC/GPIO/I2C/SPI. Zephyr prints on MMUART1 and probes MMUART0.
+          - id: mpfs-icicle-kit
+            prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
+            script: examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml
+            system: configs/systems/onboarding/mpfs-icicle-kit.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -990,6 +1000,7 @@ jobs:
             --crate "${{ matrix.crate }}" \
             --features "${{ matrix.features }}" \
             --target "${{ matrix.target }}" \
+            --prebuilt-firmware "${{ matrix.prebuilt_firmware }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
