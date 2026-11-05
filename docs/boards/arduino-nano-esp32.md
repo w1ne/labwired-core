@@ -1,18 +1,22 @@
 # Arduino Nano ESP32
 
-The Arduino Nano ESP32 (ABX00083) places a u-blox NORA-W106 module with an
-ESP32-S3 in the Nano header footprint. The [Arduino store listing](https://store.arduino.cc/collections/most-popular/products/nano-esp32-with-headers)
-showed Add to cart on 2026-11-03; Espressif's [product selector](https://products.espressif.com/product-selector)
+The Arduino Nano ESP32 places a u-blox NORA-W106 module with an ESP32-S3 in
+the Nano header footprint. Arduino's [current store listing](https://store.arduino.cc/products/nano-esp32)
+identifies the headered SKU as ABX00092, lists it for €20.40, and offers Add
+to cart (checked 2026-11-05). Espressif's [product selector](https://products.espressif.com/product-selector)
 lists ESP32-S3R8 as Mass Production.
 
 ## Current modeled scope
 
 The narrow system profile at
 [`configs/systems/arduino-nano-esp32.yaml`](../../configs/systems/arduino-nano-esp32.yaml)
-declares the ESP32-S3 GPIO model and the active-low red RGB LED on GPIO46.
-The smoke drives GPIO46 low and the hosted oracle observes that pad state.
-This is **model evidence**, not a physical-board test. The hosted twin assumes
-an ideal 3.3 V rail, so power-on and brown-out reset behavior are not covered.
+declares the ESP32-S3 GPIO model and all three active-low RGB LED contacts on
+GPIO46, GPIO0, and GPIO45. The smoke toggles all three pads, and the hosted
+oracle checks their final states. Arduino documents a limited early batch with
+the green and blue LED contacts swapped; the profile names GPIO0 and GPIO45 by
+pad and does not guarantee their color assignment. This is **model evidence**,
+not a physical-board test. The hosted twin assumes an ideal 3.3 V rail, so
+power-on and brown-out reset behavior are not covered.
 
 The smoke does not claim Wi-Fi/Bluetooth, PSRAM, native USB, ADC, timer, I²C,
 or SPI support for this board profile. The hosted catalog's I²C map conflicts
@@ -36,14 +40,21 @@ and [official pinout](https://docs.arduino.cc/resources/pinouts/ABX00083-full-pi
 | D6 | 9 | A6 | 13 |
 | D7 | 10 | A7 | 14 |
 | D8 | 17 | D13 / SCK LED | 48 |
-| D9 | 18 | RGB red / LED_RED (14) | 46 |
-| D10 | 21 | RGB green / LED_GREEN (15) | 45 |
-| D11 / COPI | 38 | RGB blue / LED_BLUE (16) | 0 |
-| D12 / CIPO | 47 |  |  |
+| D9 | 18 | D10 | 21 |
+| D11 / COPI | 38 | D12 / CIPO | 47 |
 
-The RGB channels are active-low. A hosted probe of Arduino's `LED_BUILTIN`
+The onboard active-low RGB LED uses GPIO46, GPIO0, and GPIO45:
+
+| Arduino core alias | ESP32-S3 GPIO | Notes |
+|---|---:|---|
+| `LED_RED` | 46 | Red contact |
+| `LED_GREEN` | 0 | Some early boards swap the green and blue contacts |
+| `LED_BLUE` | 45 | Some early boards swap the green and blue contacts |
+
+The RGB contacts are active-low. A hosted probe of Arduino's `LED_BUILTIN`
 alias did not drive the documented D13/GPIO48 high; the accepted smoke uses
-physical GPIO46 directly. The hosted Arduino alias mapping remains unverified.
+physical GPIO numbers directly. The hosted Arduino alias mapping remains
+unverified.
 
 The hosted catalog currently reports I²C on
 GPIO8/GPIO9, but Arduino's official pinout identifies A4/SDA as GPIO11 and

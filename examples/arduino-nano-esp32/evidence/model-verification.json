@@ -20,7 +20,7 @@
       "address": "0x0"
     }
   ],
-  "verification": "GPIO46 is low (gpio_pins pad). Model-verified deterministically.",
+  "verification": "GPIO46 is low (gpio_pins pad); GPIO0 is low (gpio_pins pad); GPIO45 is low (gpio_pins pad). Model-verified deterministically.",
   "run_status": "pass",
   "stop_reason": "max_steps",
   "oracle_results": [
@@ -28,6 +28,16 @@
       "kind": "gpio",
       "passed": true,
       "detail": "GPIO46 is low (gpio_pins pad)"
+    },
+    {
+      "kind": "gpio",
+      "passed": true,
+      "detail": "GPIO0 is low (gpio_pins pad)"
+    },
+    {
+      "kind": "gpio",
+      "passed": true,
+      "detail": "GPIO45 is low (gpio_pins pad)"
     }
   ],
   "diagnosis": {

@@ -1,9 +1,9 @@
-# Arduino Nano ESP32 GPIO smoke
+# Arduino Nano ESP32 RGB LED smoke
 
-This smoke targets the Arduino Nano ESP32 and drives the onboard RGB LED's red
-channel through ESP32-S3 GPIO46. GPIO46 is active-low. Arduino's current store
-listing is the headered SKU ABX00092; the profile follows the same documented
-Nano ESP32 GPIO mapping.
+This smoke targets the Arduino Nano ESP32 and toggles its three active-low
+onboard RGB LED contacts on ESP32-S3 GPIO46, GPIO0, and GPIO45. Arduino's
+current store listing is the headered SKU ABX00092; the profile follows the
+documented Nano ESP32 GPIO mapping.
 The system profile is
 [`configs/systems/arduino-nano-esp32.yaml`](../../configs/systems/arduino-nano-esp32.yaml)
 and names only the real ESP32-S3 GPIO model needed for this check.
@@ -11,12 +11,12 @@ and names only the real ESP32-S3 GPIO model needed for this check.
 ## Scope
 
 - The repository smoke runs `firmware/board_gpio_smoke.c`, a minimal bare-metal
-  S3 image that writes the GPIO bank 1 enable/output registers for GPIO46. The
-  test requires at least two transitions, which turns the active-low red LED
-  channel on and off.
-- PlatformIO also builds `src/main.ino`, an Arduino sketch that sets GPIO46
-  high and then low. The hosted verifier checks the final low state and returns
-  **model-verified**; neither result is a physical-board test.
+  S3 image that configures GPIO0, GPIO45, and GPIO46 and repeatedly toggles all
+  three active-low LED contacts. The test requires at least two transitions on
+  each pad.
+- PlatformIO also builds `src/main.ino`, an Arduino sketch that drives all
+  three contacts low. The hosted verifier checks each final GPIO state and
+  returns **model-verified**; neither result is a physical-board test.
 - The local repository smoke uses the S3 fast-boot ELF path. Full Arduino
   framework startup through the mask ROM is outside this profile.
 - The hosted twin assumes an ideal 3.3 V rail, so power-on and brown-out reset
@@ -44,14 +44,22 @@ and [official pinout](https://docs.arduino.cc/resources/pinouts/ABX00083-full-pi
 | D6 | 9 | A6 | 13 |
 | D7 | 10 | A7 | 14 |
 | D8 | 17 | D13 / SCK LED | 48 |
-| D9 | 18 | RGB red / LED_RED (14) | 46 |
-| D10 | 21 | RGB green / LED_GREEN (15) | 45 |
-| D11 / COPI | 38 | RGB blue / LED_BLUE (16) | 0 |
-| D12 | 47 |  |  |
+| D9 | 18 | D10 | 21 |
+| D11 / COPI | 38 | D12 / CIPO | 47 |
 
-The RGB channels are active-low. A hosted probe using Arduino's `LED_BUILTIN`
-alias did not drive the documented D13/GPIO48 high, so the smoke addresses the
-physical GPIO46 directly. The accepted oracle is tied to that documented pad;
+The onboard active-low RGB LED uses GPIO46, GPIO0, and GPIO45:
+
+| Arduino core alias | ESP32-S3 GPIO | Notes |
+|---|---:|---|
+| `LED_RED` | 46 | Red contact |
+| `LED_GREEN` | 0 | Some early boards swap the green and blue contacts |
+| `LED_BLUE` | 45 | Some early boards swap the green and blue contacts |
+
+The RGB contacts are active-low. Arduino reports that some early boards have
+the green and blue contacts swapped, so the profile and local smoke identify
+GPIO0 and GPIO45 by pad instead of assigning them a guaranteed color. A hosted
+probe using Arduino's `LED_BUILTIN` alias did not drive the documented
+D13/GPIO48 high, so the smoke addresses the physical GPIO numbers directly;
 the hosted Arduino board-alias mapping remains an open model gap.
 
 ## Evidence
@@ -61,9 +69,10 @@ the hosted Arduino board-alias mapping remains an open model gap.
 - [`evidence/part-model.json`](evidence/part-model.json) records the hosted
   board identity and the unresolved hosted-versus-vendor I²C pin map.
 - [`evidence/alias-pin-probe.json`](evidence/alias-pin-probe.json) records the
-  failed hosted `LED_BUILTIN` alias probe that narrowed the smoke to GPIO46.
+  failed hosted `LED_BUILTIN` alias probe that led the smoke to address the
+  physical GPIO numbers directly.
 - [`evidence/verify-request.json`](evidence/verify-request.json) records the
-  board, source, diagram, and GPIO oracle.
+  board, source, diagram, and three GPIO oracle clauses.
 - [`evidence/model-verification.json`](evidence/model-verification.json) is the
   hosted LabWired verification result.
 - [`firmware/board_gpio_smoke.c`](firmware/board_gpio_smoke.c) is the local

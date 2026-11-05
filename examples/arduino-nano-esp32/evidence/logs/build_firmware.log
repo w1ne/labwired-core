@@ -22,10 +22,16 @@ Scanning dependencies...
 No dependencies
 Building in debug mode
 Compiling .pio/build/nano_esp32/src/main.ino.cpp.o
+Linking .pio/build/nano_esp32/firmware.elf
 Retrieving maximum program size .pio/build/nano_esp32/firmware.elf
 Checking size .pio/build/nano_esp32/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [==        ]  16.8% (used 55140 bytes from 327680 bytes)
-Flash: [=         ]  12.1% (used 381990 bytes from 3145728 bytes)
-========================= [SUCCESS] Took 1.52 seconds =========================
+Flash: [=         ]  12.1% (used 382030 bytes from 3145728 bytes)
+Building .pio/build/nano_esp32/firmware.bin
+esptool v5.4.0
+Creating ESP32-S3 image...
+Merged 3 ELF sections.
+Successfully created ESP32-S3 image.
+========================= [SUCCESS] Took 4.11 seconds =========================
 Using toolchain-xtensa-esp-elf@14.2.0+20260121 package

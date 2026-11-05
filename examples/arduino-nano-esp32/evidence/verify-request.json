@@ -2,6 +2,7 @@
   "board": "arduino-nano-esp32",
   "language": "arduino",
   "entryPath": "src/main.ino",
+  "max_steps": 20000000,
   "diagram": {
     "board": "arduino-nano-esp32",
     "parts": [
@@ -17,8 +18,16 @@
       {
         "pin": "GPIO46",
         "state": "low"
+      },
+      {
+        "pin": "GPIO0",
+        "state": "low"
+      },
+      {
+        "pin": "GPIO45",
+        "state": "low"
       }
     ]
   },
-  "source": "#include <Arduino.h>\n#include <driver/gpio.h>\n\nvoid setup() {\n  gpio_set_direction(GPIO_NUM_46, GPIO_MODE_OUTPUT); // RGB red, active low\n  gpio_set_level(GPIO_NUM_46, 1); // LED off\n  gpio_set_level(GPIO_NUM_46, 0);\n}\n\nvoid loop() {\n  delay(1000);\n}\n"
+  "source": "#include <Arduino.h>\n#include <driver/gpio.h>\n\nvoid setup() {\n  gpio_set_direction(GPIO_NUM_46, GPIO_MODE_OUTPUT); // RGB red, active low\n  gpio_set_direction(GPIO_NUM_0, GPIO_MODE_OUTPUT);  // standard RGB GPIO0 contact\n  gpio_set_direction(GPIO_NUM_45, GPIO_MODE_OUTPUT); // standard RGB GPIO45 contact\n  gpio_set_level(GPIO_NUM_46, 1); // RGB red off\n  gpio_set_level(GPIO_NUM_0, 1);  // RGB GPIO0 channel off\n  gpio_set_level(GPIO_NUM_45, 1); // RGB GPIO45 channel off\n  gpio_set_level(GPIO_NUM_46, 0);\n  gpio_set_level(GPIO_NUM_0, 0);\n  gpio_set_level(GPIO_NUM_45, 0);\n}\n\nvoid loop() {\n  delay(1000);\n}\n"
 }

@@ -4,7 +4,11 @@
   "board": "arduino-nano-esp32",
   "chip": "esp32s3",
   "diagram_mcu_component_type": "esp32-s3-devkitc-1",
-  "tested_gpio": "GPIO46",
+  "tested_gpio": [
+    "GPIO46",
+    "GPIO0",
+    "GPIO45"
+  ],
   "hosted_led_builtin_probe": {
     "status": "failed",
     "oracle": {
@@ -12,7 +16,7 @@
       "state": "high"
     },
     "observed": "GPIO48 is low",
-    "note": "The hosted Arduino profile did not apply the Nano's documented LED_BUILTIN/D13 alias. The accepted smoke uses the physical GPIO46 API instead."
+    "note": "The hosted Arduino profile did not apply the Nano's documented LED_BUILTIN/D13 alias. The accepted smoke uses the physical GPIO numbers instead."
   },
   "hosted_catalog_i2c_claim": {
     "sda": "GPIO8",

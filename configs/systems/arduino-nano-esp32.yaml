@@ -1,7 +1,7 @@
-# Narrow board profile for the Arduino Nano ESP32 GPIO smoke.
-# RGB red (Arduino LED_RED, pin 14) is ESP32-S3 GPIO46 and is active-low; aliases are recorded
-# in docs/boards/arduino-nano-esp32.md. The smoke does not claim the hosted
-# catalog's conflicting I2C pin map.
+# Narrow board profile for the Arduino Nano ESP32 onboard RGB LED GPIO smoke.
+# Its three active-low RGB contacts are ESP32-S3 GPIO46, GPIO0 and GPIO45.
+# Arduino documents a limited early batch with green and blue LED contacts
+# swapped, so this profile models the electrical contacts by GPIO number.
 name: "arduino-nano-esp32"
 chip: "../chips/esp32s3-arduino-nano-smoke.yaml"
 external_devices: []
@@ -12,3 +12,16 @@ board_io:
     pin: 46         # ESP32-S3 GPIO46 / Arduino Nano ESP32 LED_RED / RGB red
     signal: "output"
     active_high: false
+  - id: "rgb_gpio0_channel"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 0           # Arduino Nano ESP32 LED_GREEN on standard assemblies
+    signal: "output"
+    active_high: false
+  - id: "rgb_gpio45_channel"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 45           # Arduino Nano ESP32 LED_BLUE on standard assemblies
+    signal: "output"
+    active_high: false
+# The smoke does not claim the hosted catalog's conflicting I2C pin map.

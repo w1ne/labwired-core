@@ -39,6 +39,24 @@
     },
     {
       "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:0",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:45",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -47,30 +65,30 @@
   "cpu_state": {
     "type": "xtensa_lx7",
     "registers": [
+      2151121007,
+      1070464912,
+      45,
+      1,
       0,
-      1070464960,
       0,
       0,
-      0,
-      0,
-      0,
-      1070464960,
-      1610629144,
-      16384,
-      0,
+      1070464912,
+      8192,
+      1,
+      1,
       0,
       0,
       0,
       0,
       0
     ],
-    "pc": 1077379128,
+    "pc": 1077379280,
     "ps": 262144,
-    "window_base": 0,
-    "window_start": 1,
+    "window_base": 2,
+    "window_start": 5,
     "vecbase": 1073741824
   },
-  "firmware_hash": "a807276c47194eae203f6aa166e3b76c2eace3f7f810aae61ece8cac43b35d81",
+  "firmware_hash": "f9864f8b37aadef81364f4b07ca7f7274e9979e5cf955c0892518a56a9fe9700",
   "config": {
     "firmware": "examples/arduino-nano-esp32/../../target/xtensa-esp32s3-none-elf/release/firmware-arduino-nano-esp32-smoke",
     "system": "examples/arduino-nano-esp32/../../configs/systems/arduino-nano-esp32.yaml",
@@ -488,215 +506,15 @@
         "initial": 1,
         "transitions": [
           {
-            "cycle": 8,
+            "cycle": 63,
             "value": 0
           },
           {
-            "cycle": 12,
+            "cycle": 164,
             "value": 1
           },
           {
-            "cycle": 16,
-            "value": 0
-          },
-          {
-            "cycle": 23,
-            "value": 1
-          },
-          {
-            "cycle": 28,
-            "value": 0
-          },
-          {
-            "cycle": 35,
-            "value": 1
-          },
-          {
-            "cycle": 40,
-            "value": 0
-          },
-          {
-            "cycle": 47,
-            "value": 1
-          },
-          {
-            "cycle": 52,
-            "value": 0
-          },
-          {
-            "cycle": 59,
-            "value": 1
-          },
-          {
-            "cycle": 64,
-            "value": 0
-          },
-          {
-            "cycle": 71,
-            "value": 1
-          },
-          {
-            "cycle": 76,
-            "value": 0
-          },
-          {
-            "cycle": 83,
-            "value": 1
-          },
-          {
-            "cycle": 88,
-            "value": 0
-          },
-          {
-            "cycle": 95,
-            "value": 1
-          },
-          {
-            "cycle": 100,
-            "value": 0
-          },
-          {
-            "cycle": 107,
-            "value": 1
-          },
-          {
-            "cycle": 112,
-            "value": 0
-          },
-          {
-            "cycle": 119,
-            "value": 1
-          },
-          {
-            "cycle": 124,
-            "value": 0
-          },
-          {
-            "cycle": 131,
-            "value": 1
-          },
-          {
-            "cycle": 136,
-            "value": 0
-          },
-          {
-            "cycle": 143,
-            "value": 1
-          },
-          {
-            "cycle": 148,
-            "value": 0
-          },
-          {
-            "cycle": 155,
-            "value": 1
-          },
-          {
-            "cycle": 160,
-            "value": 0
-          },
-          {
-            "cycle": 167,
-            "value": 1
-          },
-          {
-            "cycle": 172,
-            "value": 0
-          },
-          {
-            "cycle": 179,
-            "value": 1
-          },
-          {
-            "cycle": 184,
-            "value": 0
-          },
-          {
-            "cycle": 191,
-            "value": 1
-          },
-          {
-            "cycle": 196,
-            "value": 0
-          },
-          {
-            "cycle": 203,
-            "value": 1
-          },
-          {
-            "cycle": 208,
-            "value": 0
-          },
-          {
-            "cycle": 215,
-            "value": 1
-          },
-          {
-            "cycle": 220,
-            "value": 0
-          },
-          {
-            "cycle": 227,
-            "value": 1
-          },
-          {
-            "cycle": 232,
-            "value": 0
-          },
-          {
-            "cycle": 239,
-            "value": 1
-          },
-          {
-            "cycle": 244,
-            "value": 0
-          },
-          {
-            "cycle": 251,
-            "value": 1
-          },
-          {
-            "cycle": 256,
-            "value": 0
-          },
-          {
-            "cycle": 263,
-            "value": 1
-          },
-          {
-            "cycle": 268,
-            "value": 0
-          },
-          {
-            "cycle": 275,
-            "value": 1
-          },
-          {
-            "cycle": 280,
-            "value": 0
-          },
-          {
-            "cycle": 287,
-            "value": 1
-          },
-          {
-            "cycle": 292,
-            "value": 0
-          },
-          {
-            "cycle": 299,
-            "value": 1
-          },
-          {
-            "cycle": 304,
-            "value": 0
-          },
-          {
-            "cycle": 311,
-            "value": 1
-          },
-          {
-            "cycle": 316,
+            "cycle": 245,
             "value": 0
           },
           {
@@ -704,455 +522,253 @@
             "value": 1
           },
           {
-            "cycle": 328,
+            "cycle": 404,
             "value": 0
           },
           {
-            "cycle": 335,
+            "cycle": 482,
             "value": 1
-          },
-          {
-            "cycle": 340,
-            "value": 0
-          },
-          {
-            "cycle": 347,
-            "value": 1
-          },
-          {
-            "cycle": 352,
-            "value": 0
-          },
-          {
-            "cycle": 359,
-            "value": 1
-          },
-          {
-            "cycle": 364,
-            "value": 0
-          },
-          {
-            "cycle": 371,
-            "value": 1
-          },
-          {
-            "cycle": 376,
-            "value": 0
-          },
-          {
-            "cycle": 383,
-            "value": 1
-          },
-          {
-            "cycle": 388,
-            "value": 0
-          },
-          {
-            "cycle": 395,
-            "value": 1
-          },
-          {
-            "cycle": 400,
-            "value": 0
-          },
-          {
-            "cycle": 407,
-            "value": 1
-          },
-          {
-            "cycle": 412,
-            "value": 0
-          },
-          {
-            "cycle": 419,
-            "value": 1
-          },
-          {
-            "cycle": 424,
-            "value": 0
-          },
-          {
-            "cycle": 431,
-            "value": 1
-          },
-          {
-            "cycle": 436,
-            "value": 0
-          },
-          {
-            "cycle": 443,
-            "value": 1
-          },
-          {
-            "cycle": 448,
-            "value": 0
-          },
-          {
-            "cycle": 455,
-            "value": 1
-          },
-          {
-            "cycle": 460,
-            "value": 0
-          },
-          {
-            "cycle": 467,
-            "value": 1
-          },
-          {
-            "cycle": 472,
-            "value": 0
-          },
-          {
-            "cycle": 479,
-            "value": 1
-          },
-          {
-            "cycle": 484,
-            "value": 0
-          },
-          {
-            "cycle": 491,
-            "value": 1
-          },
-          {
-            "cycle": 496,
-            "value": 0
-          },
-          {
-            "cycle": 503,
-            "value": 1
-          },
-          {
-            "cycle": 508,
-            "value": 0
-          },
-          {
-            "cycle": 515,
-            "value": 1
-          },
-          {
-            "cycle": 520,
-            "value": 0
-          },
-          {
-            "cycle": 527,
-            "value": 1
-          },
-          {
-            "cycle": 532,
-            "value": 0
-          },
-          {
-            "cycle": 539,
-            "value": 1
-          },
-          {
-            "cycle": 544,
-            "value": 0
-          },
-          {
-            "cycle": 551,
-            "value": 1
-          },
-          {
-            "cycle": 556,
-            "value": 0
           },
           {
             "cycle": 563,
-            "value": 1
-          },
-          {
-            "cycle": 568,
             "value": 0
           },
           {
-            "cycle": 575,
+            "cycle": 641,
             "value": 1
           },
           {
-            "cycle": 580,
+            "cycle": 722,
             "value": 0
           },
           {
-            "cycle": 587,
+            "cycle": 800,
             "value": 1
           },
           {
-            "cycle": 592,
-            "value": 0
-          },
-          {
-            "cycle": 599,
-            "value": 1
-          },
-          {
-            "cycle": 604,
-            "value": 0
-          },
-          {
-            "cycle": 611,
-            "value": 1
-          },
-          {
-            "cycle": 616,
-            "value": 0
-          },
-          {
-            "cycle": 623,
-            "value": 1
-          },
-          {
-            "cycle": 628,
-            "value": 0
-          },
-          {
-            "cycle": 635,
-            "value": 1
-          },
-          {
-            "cycle": 640,
-            "value": 0
-          },
-          {
-            "cycle": 647,
-            "value": 1
-          },
-          {
-            "cycle": 652,
-            "value": 0
-          },
-          {
-            "cycle": 659,
-            "value": 1
-          },
-          {
-            "cycle": 664,
-            "value": 0
-          },
-          {
-            "cycle": 671,
-            "value": 1
-          },
-          {
-            "cycle": 676,
-            "value": 0
-          },
-          {
-            "cycle": 683,
-            "value": 1
-          },
-          {
-            "cycle": 688,
-            "value": 0
-          },
-          {
-            "cycle": 695,
-            "value": 1
-          },
-          {
-            "cycle": 700,
-            "value": 0
-          },
-          {
-            "cycle": 707,
-            "value": 1
-          },
-          {
-            "cycle": 712,
-            "value": 0
-          },
-          {
-            "cycle": 719,
-            "value": 1
-          },
-          {
-            "cycle": 724,
-            "value": 0
-          },
-          {
-            "cycle": 731,
-            "value": 1
-          },
-          {
-            "cycle": 736,
-            "value": 0
-          },
-          {
-            "cycle": 743,
-            "value": 1
-          },
-          {
-            "cycle": 748,
-            "value": 0
-          },
-          {
-            "cycle": 755,
-            "value": 1
-          },
-          {
-            "cycle": 760,
-            "value": 0
-          },
-          {
-            "cycle": 767,
-            "value": 1
-          },
-          {
-            "cycle": 772,
-            "value": 0
-          },
-          {
-            "cycle": 779,
-            "value": 1
-          },
-          {
-            "cycle": 784,
-            "value": 0
-          },
-          {
-            "cycle": 791,
-            "value": 1
-          },
-          {
-            "cycle": 796,
-            "value": 0
-          },
-          {
-            "cycle": 803,
-            "value": 1
-          },
-          {
-            "cycle": 808,
-            "value": 0
-          },
-          {
-            "cycle": 815,
-            "value": 1
-          },
-          {
-            "cycle": 820,
-            "value": 0
-          },
-          {
-            "cycle": 827,
-            "value": 1
-          },
-          {
-            "cycle": 832,
-            "value": 0
-          },
-          {
-            "cycle": 839,
-            "value": 1
-          },
-          {
-            "cycle": 844,
-            "value": 0
-          },
-          {
-            "cycle": 851,
-            "value": 1
-          },
-          {
-            "cycle": 856,
-            "value": 0
-          },
-          {
-            "cycle": 863,
-            "value": 1
-          },
-          {
-            "cycle": 868,
-            "value": 0
-          },
-          {
-            "cycle": 875,
-            "value": 1
-          },
-          {
-            "cycle": 880,
-            "value": 0
-          },
-          {
-            "cycle": 887,
-            "value": 1
-          },
-          {
-            "cycle": 892,
-            "value": 0
-          },
-          {
-            "cycle": 899,
-            "value": 1
-          },
-          {
-            "cycle": 904,
-            "value": 0
-          },
-          {
-            "cycle": 911,
-            "value": 1
-          },
-          {
-            "cycle": 916,
-            "value": 0
-          },
-          {
-            "cycle": 923,
-            "value": 1
-          },
-          {
-            "cycle": 928,
-            "value": 0
-          },
-          {
-            "cycle": 935,
-            "value": 1
-          },
-          {
-            "cycle": 940,
-            "value": 0
-          },
-          {
-            "cycle": 947,
-            "value": 1
-          },
-          {
-            "cycle": 952,
+            "cycle": 881,
             "value": 0
           },
           {
             "cycle": 959,
             "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 63,
+            "state": "0"
           },
           {
-            "cycle": 964,
+            "cycle": 164,
+            "state": "1"
+          },
+          {
+            "cycle": 245,
+            "state": "0"
+          },
+          {
+            "cycle": 323,
+            "state": "1"
+          },
+          {
+            "cycle": 404,
+            "state": "0"
+          },
+          {
+            "cycle": 482,
+            "state": "1"
+          },
+          {
+            "cycle": 563,
+            "state": "0"
+          },
+          {
+            "cycle": 641,
+            "state": "1"
+          },
+          {
+            "cycle": 722,
+            "state": "0"
+          },
+          {
+            "cycle": 800,
+            "state": "1"
+          },
+          {
+            "cycle": 881,
+            "state": "0"
+          },
+          {
+            "cycle": 959,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 12
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpio",
+        "pin": 0,
+        "initial": 1,
+        "transitions": [
+          {
+            "cycle": 28,
             "value": 0
           },
           {
-            "cycle": 971,
+            "cycle": 187,
             "value": 1
           },
           {
-            "cycle": 976,
+            "cycle": 267,
             "value": 0
           },
           {
-            "cycle": 983,
+            "cycle": 346,
             "value": 1
           },
           {
-            "cycle": 988,
+            "cycle": 426,
             "value": 0
           },
           {
-            "cycle": 995,
+            "cycle": 505,
             "value": 1
           },
           {
-            "cycle": 1000,
+            "cycle": 585,
+            "value": 0
+          },
+          {
+            "cycle": 664,
+            "value": 1
+          },
+          {
+            "cycle": 744,
+            "value": 0
+          },
+          {
+            "cycle": 823,
+            "value": 1
+          },
+          {
+            "cycle": 903,
+            "value": 0
+          },
+          {
+            "cycle": 982,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 28,
+            "state": "0"
+          },
+          {
+            "cycle": 187,
+            "state": "1"
+          },
+          {
+            "cycle": 267,
+            "state": "0"
+          },
+          {
+            "cycle": 346,
+            "state": "1"
+          },
+          {
+            "cycle": 426,
+            "state": "0"
+          },
+          {
+            "cycle": 505,
+            "state": "1"
+          },
+          {
+            "cycle": 585,
+            "state": "0"
+          },
+          {
+            "cycle": 664,
+            "state": "1"
+          },
+          {
+            "cycle": 744,
+            "state": "0"
+          },
+          {
+            "cycle": 823,
+            "state": "1"
+          },
+          {
+            "cycle": 903,
+            "state": "0"
+          },
+          {
+            "cycle": 982,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 12
+      },
+      {
+        "ch": 2,
+        "channel": "CH2",
+        "peripheral": "gpio",
+        "pin": 45,
+        "initial": 1,
+        "transitions": [
+          {
+            "cycle": 46,
+            "value": 0
+          },
+          {
+            "cycle": 211,
+            "value": 1
+          },
+          {
+            "cycle": 291,
+            "value": 0
+          },
+          {
+            "cycle": 370,
+            "value": 1
+          },
+          {
+            "cycle": 450,
+            "value": 0
+          },
+          {
+            "cycle": 529,
+            "value": 1
+          },
+          {
+            "cycle": 609,
+            "value": 0
+          },
+          {
+            "cycle": 688,
+            "value": 1
+          },
+          {
+            "cycle": 768,
+            "value": 0
+          },
+          {
+            "cycle": 847,
+            "value": 1
+          },
+          {
+            "cycle": 927,
             "value": 0
           }
         ],
@@ -1160,676 +776,52 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 8,
+            "cycle": 46,
             "state": "0"
           },
           {
-            "cycle": 12,
+            "cycle": 211,
             "state": "1"
           },
           {
-            "cycle": 16,
+            "cycle": 291,
             "state": "0"
           },
           {
-            "cycle": 23,
+            "cycle": 370,
             "state": "1"
           },
           {
-            "cycle": 28,
+            "cycle": 450,
             "state": "0"
           },
           {
-            "cycle": 35,
+            "cycle": 529,
             "state": "1"
           },
           {
-            "cycle": 40,
+            "cycle": 609,
             "state": "0"
-          },
-          {
-            "cycle": 47,
-            "state": "1"
-          },
-          {
-            "cycle": 52,
-            "state": "0"
-          },
-          {
-            "cycle": 59,
-            "state": "1"
-          },
-          {
-            "cycle": 64,
-            "state": "0"
-          },
-          {
-            "cycle": 71,
-            "state": "1"
-          },
-          {
-            "cycle": 76,
-            "state": "0"
-          },
-          {
-            "cycle": 83,
-            "state": "1"
-          },
-          {
-            "cycle": 88,
-            "state": "0"
-          },
-          {
-            "cycle": 95,
-            "state": "1"
-          },
-          {
-            "cycle": 100,
-            "state": "0"
-          },
-          {
-            "cycle": 107,
-            "state": "1"
-          },
-          {
-            "cycle": 112,
-            "state": "0"
-          },
-          {
-            "cycle": 119,
-            "state": "1"
-          },
-          {
-            "cycle": 124,
-            "state": "0"
-          },
-          {
-            "cycle": 131,
-            "state": "1"
-          },
-          {
-            "cycle": 136,
-            "state": "0"
-          },
-          {
-            "cycle": 143,
-            "state": "1"
-          },
-          {
-            "cycle": 148,
-            "state": "0"
-          },
-          {
-            "cycle": 155,
-            "state": "1"
-          },
-          {
-            "cycle": 160,
-            "state": "0"
-          },
-          {
-            "cycle": 167,
-            "state": "1"
-          },
-          {
-            "cycle": 172,
-            "state": "0"
-          },
-          {
-            "cycle": 179,
-            "state": "1"
-          },
-          {
-            "cycle": 184,
-            "state": "0"
-          },
-          {
-            "cycle": 191,
-            "state": "1"
-          },
-          {
-            "cycle": 196,
-            "state": "0"
-          },
-          {
-            "cycle": 203,
-            "state": "1"
-          },
-          {
-            "cycle": 208,
-            "state": "0"
-          },
-          {
-            "cycle": 215,
-            "state": "1"
-          },
-          {
-            "cycle": 220,
-            "state": "0"
-          },
-          {
-            "cycle": 227,
-            "state": "1"
-          },
-          {
-            "cycle": 232,
-            "state": "0"
-          },
-          {
-            "cycle": 239,
-            "state": "1"
-          },
-          {
-            "cycle": 244,
-            "state": "0"
-          },
-          {
-            "cycle": 251,
-            "state": "1"
-          },
-          {
-            "cycle": 256,
-            "state": "0"
-          },
-          {
-            "cycle": 263,
-            "state": "1"
-          },
-          {
-            "cycle": 268,
-            "state": "0"
-          },
-          {
-            "cycle": 275,
-            "state": "1"
-          },
-          {
-            "cycle": 280,
-            "state": "0"
-          },
-          {
-            "cycle": 287,
-            "state": "1"
-          },
-          {
-            "cycle": 292,
-            "state": "0"
-          },
-          {
-            "cycle": 299,
-            "state": "1"
-          },
-          {
-            "cycle": 304,
-            "state": "0"
-          },
-          {
-            "cycle": 311,
-            "state": "1"
-          },
-          {
-            "cycle": 316,
-            "state": "0"
-          },
-          {
-            "cycle": 323,
-            "state": "1"
-          },
-          {
-            "cycle": 328,
-            "state": "0"
-          },
-          {
-            "cycle": 335,
-            "state": "1"
-          },
-          {
-            "cycle": 340,
-            "state": "0"
-          },
-          {
-            "cycle": 347,
-            "state": "1"
-          },
-          {
-            "cycle": 352,
-            "state": "0"
-          },
-          {
-            "cycle": 359,
-            "state": "1"
-          },
-          {
-            "cycle": 364,
-            "state": "0"
-          },
-          {
-            "cycle": 371,
-            "state": "1"
-          },
-          {
-            "cycle": 376,
-            "state": "0"
-          },
-          {
-            "cycle": 383,
-            "state": "1"
-          },
-          {
-            "cycle": 388,
-            "state": "0"
-          },
-          {
-            "cycle": 395,
-            "state": "1"
-          },
-          {
-            "cycle": 400,
-            "state": "0"
-          },
-          {
-            "cycle": 407,
-            "state": "1"
-          },
-          {
-            "cycle": 412,
-            "state": "0"
-          },
-          {
-            "cycle": 419,
-            "state": "1"
-          },
-          {
-            "cycle": 424,
-            "state": "0"
-          },
-          {
-            "cycle": 431,
-            "state": "1"
-          },
-          {
-            "cycle": 436,
-            "state": "0"
-          },
-          {
-            "cycle": 443,
-            "state": "1"
-          },
-          {
-            "cycle": 448,
-            "state": "0"
-          },
-          {
-            "cycle": 455,
-            "state": "1"
-          },
-          {
-            "cycle": 460,
-            "state": "0"
-          },
-          {
-            "cycle": 467,
-            "state": "1"
-          },
-          {
-            "cycle": 472,
-            "state": "0"
-          },
-          {
-            "cycle": 479,
-            "state": "1"
-          },
-          {
-            "cycle": 484,
-            "state": "0"
-          },
-          {
-            "cycle": 491,
-            "state": "1"
-          },
-          {
-            "cycle": 496,
-            "state": "0"
-          },
-          {
-            "cycle": 503,
-            "state": "1"
-          },
-          {
-            "cycle": 508,
-            "state": "0"
-          },
-          {
-            "cycle": 515,
-            "state": "1"
-          },
-          {
-            "cycle": 520,
-            "state": "0"
-          },
-          {
-            "cycle": 527,
-            "state": "1"
-          },
-          {
-            "cycle": 532,
-            "state": "0"
-          },
-          {
-            "cycle": 539,
-            "state": "1"
-          },
-          {
-            "cycle": 544,
-            "state": "0"
-          },
-          {
-            "cycle": 551,
-            "state": "1"
-          },
-          {
-            "cycle": 556,
-            "state": "0"
-          },
-          {
-            "cycle": 563,
-            "state": "1"
-          },
-          {
-            "cycle": 568,
-            "state": "0"
-          },
-          {
-            "cycle": 575,
-            "state": "1"
-          },
-          {
-            "cycle": 580,
-            "state": "0"
-          },
-          {
-            "cycle": 587,
-            "state": "1"
-          },
-          {
-            "cycle": 592,
-            "state": "0"
-          },
-          {
-            "cycle": 599,
-            "state": "1"
-          },
-          {
-            "cycle": 604,
-            "state": "0"
-          },
-          {
-            "cycle": 611,
-            "state": "1"
-          },
-          {
-            "cycle": 616,
-            "state": "0"
-          },
-          {
-            "cycle": 623,
-            "state": "1"
-          },
-          {
-            "cycle": 628,
-            "state": "0"
-          },
-          {
-            "cycle": 635,
-            "state": "1"
-          },
-          {
-            "cycle": 640,
-            "state": "0"
-          },
-          {
-            "cycle": 647,
-            "state": "1"
-          },
-          {
-            "cycle": 652,
-            "state": "0"
-          },
-          {
-            "cycle": 659,
-            "state": "1"
-          },
-          {
-            "cycle": 664,
-            "state": "0"
-          },
-          {
-            "cycle": 671,
-            "state": "1"
-          },
-          {
-            "cycle": 676,
-            "state": "0"
-          },
-          {
-            "cycle": 683,
-            "state": "1"
           },
           {
             "cycle": 688,
-            "state": "0"
-          },
-          {
-            "cycle": 695,
             "state": "1"
           },
           {
-            "cycle": 700,
+            "cycle": 768,
             "state": "0"
           },
           {
-            "cycle": 707,
+            "cycle": 847,
             "state": "1"
           },
           {
-            "cycle": 712,
-            "state": "0"
-          },
-          {
-            "cycle": 719,
-            "state": "1"
-          },
-          {
-            "cycle": 724,
-            "state": "0"
-          },
-          {
-            "cycle": 731,
-            "state": "1"
-          },
-          {
-            "cycle": 736,
-            "state": "0"
-          },
-          {
-            "cycle": 743,
-            "state": "1"
-          },
-          {
-            "cycle": 748,
-            "state": "0"
-          },
-          {
-            "cycle": 755,
-            "state": "1"
-          },
-          {
-            "cycle": 760,
-            "state": "0"
-          },
-          {
-            "cycle": 767,
-            "state": "1"
-          },
-          {
-            "cycle": 772,
-            "state": "0"
-          },
-          {
-            "cycle": 779,
-            "state": "1"
-          },
-          {
-            "cycle": 784,
-            "state": "0"
-          },
-          {
-            "cycle": 791,
-            "state": "1"
-          },
-          {
-            "cycle": 796,
-            "state": "0"
-          },
-          {
-            "cycle": 803,
-            "state": "1"
-          },
-          {
-            "cycle": 808,
-            "state": "0"
-          },
-          {
-            "cycle": 815,
-            "state": "1"
-          },
-          {
-            "cycle": 820,
-            "state": "0"
-          },
-          {
-            "cycle": 827,
-            "state": "1"
-          },
-          {
-            "cycle": 832,
-            "state": "0"
-          },
-          {
-            "cycle": 839,
-            "state": "1"
-          },
-          {
-            "cycle": 844,
-            "state": "0"
-          },
-          {
-            "cycle": 851,
-            "state": "1"
-          },
-          {
-            "cycle": 856,
-            "state": "0"
-          },
-          {
-            "cycle": 863,
-            "state": "1"
-          },
-          {
-            "cycle": 868,
-            "state": "0"
-          },
-          {
-            "cycle": 875,
-            "state": "1"
-          },
-          {
-            "cycle": 880,
-            "state": "0"
-          },
-          {
-            "cycle": 887,
-            "state": "1"
-          },
-          {
-            "cycle": 892,
-            "state": "0"
-          },
-          {
-            "cycle": 899,
-            "state": "1"
-          },
-          {
-            "cycle": 904,
-            "state": "0"
-          },
-          {
-            "cycle": 911,
-            "state": "1"
-          },
-          {
-            "cycle": 916,
-            "state": "0"
-          },
-          {
-            "cycle": 923,
-            "state": "1"
-          },
-          {
-            "cycle": 928,
-            "state": "0"
-          },
-          {
-            "cycle": 935,
-            "state": "1"
-          },
-          {
-            "cycle": 940,
-            "state": "0"
-          },
-          {
-            "cycle": 947,
-            "state": "1"
-          },
-          {
-            "cycle": 952,
-            "state": "0"
-          },
-          {
-            "cycle": 959,
-            "state": "1"
-          },
-          {
-            "cycle": 964,
-            "state": "0"
-          },
-          {
-            "cycle": 971,
-            "state": "1"
-          },
-          {
-            "cycle": 976,
-            "state": "0"
-          },
-          {
-            "cycle": 983,
-            "state": "1"
-          },
-          {
-            "cycle": 988,
-            "state": "0"
-          },
-          {
-            "cycle": 995,
-            "state": "1"
-          },
-          {
-            "cycle": 1000,
+            "cycle": 927,
             "state": "0"
           }
         ],
         "mode": "output",
-        "edge_count": 167
+        "edge_count": 11
       }
     ]
   },
@@ -1840,6 +832,28 @@
       "number": 46,
       "mode": "output",
       "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpio",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH2",
+      "peripheral": "gpio",
+      "number": 45,
+      "mode": "output",
+      "func": null,
       "output": false,
       "input": false,
       "pad": false,
@@ -1848,10 +862,10 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 75,
+    "text_bytes": 325,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 75,
+    "flash_used_bytes": 325,
     "ram_static_bytes": 0,
     "flash_total_bytes": 16777216,
     "ram_total_bytes": 524288,
@@ -1873,11 +887,11 @@
     "steps_executed": 1000,
     "memory_reads": 0,
     "memory_writes": 0,
-    "peripheral_accesses": 505,
+    "peripheral_accesses": 343,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1077379128,
+        "pc": 1077379280,
         "count": 3
       }
     ]

@@ -1,8 +1,8 @@
 # Onboarding Smoke: arduino-nano-esp32
 
 - status: `pass`
-- elapsed_seconds: `3`
-- elapsed_ms: `2843`
+- elapsed_seconds: `6`
+- elapsed_ms: `5742`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
