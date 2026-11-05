@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 46 have end-to-end analog coverage; 57 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 48 have end-to-end analog coverage; 55 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -53,8 +53,8 @@ Current inventory: **103 profiles; 46 have end-to-end analog coverage; 57 have n
 | `esp32s3` | [`cosim_esp32s3_analog.rs`](../crates/core/tests/cosim_esp32s3_analog.rs)::`esp32s3_ntc_and_diode_netlists_reach_sens_adc1` — generic Beta NTC and unrelated Shockley diode netlists reach the bare ESP32-S3 profile's SENS ADC1_CH0/CH2; independent voltages, channel isolation, and firmware-visible one-shot readings are asserted |
 | `feather-f405` | [`cosim_feather_f405_analog.rs`](../crates/core/tests/cosim_feather_f405_analog.rs)::`feather_f405_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC divider and unrelated Shockley diode netlist resolve through PA0/PA1 to ADC1 channels 0/1; solved voltages, channel isolation, and firmware-visible one-shot results are asserted |
 | `frdm-k64f` | [`cosim_frdm_k64f_analog.rs`](../crates/core/tests/cosim_frdm_k64f_analog.rs)::`frdm_k64f_ntc_and_diode_netlists_reach_gpio_inputs_through_thresholds` — generic Beta NTC and Shockley diode netlists solve onto the profile's PTC6/PTA4 GPIO inputs; asserts solved voltages, firmware-visible PDIR levels, and Schmitt hysteresis. This profile has no ADC model, so the proof is GPIO threshold coverage. |
-| `frdm-kw41z-lcd` | **NO E2E analog coverage** |
-| `frdm-kw41z` | **NO E2E analog coverage** |
+| `frdm-kw41z-lcd` | [`cosim_frdm_kw41z_analog.rs`](../crates/core/tests/cosim_frdm_kw41z_analog.rs)::`frdm_kw41z_profiles_route_generic_ntc_and_diode_to_pb2_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve on PB2 and are asserted through GPIOC PDIR; threshold ratios are simulation assumptions, not silicon claims. No ADC model is present. |
+| `frdm-kw41z` | [`cosim_frdm_kw41z_analog.rs`](../crates/core/tests/cosim_frdm_kw41z_analog.rs)::`frdm_kw41z_profiles_route_generic_ntc_and_diode_to_pb2_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve on PB2 and are asserted through GPIOC PDIR; threshold ratios are simulation assumptions, not silicon claims. No ADC model is present. |
 | `iolink-multiport-demo` | **NO E2E analog coverage** |
 | `iolinki-g0-startup` | **NO E2E analog coverage** |
 | `kv260-r5` | **NO E2E analog coverage** |
