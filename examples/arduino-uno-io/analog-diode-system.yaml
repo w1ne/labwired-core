@@ -1,0 +1,21 @@
+# Arduino Uno R3 with a diode load-line circuit driving A0/ADC0.
+# The separate manifest keeps the ordinary GPIO example free of lab wiring.
+name: "arduino-uno-analog-diode"
+chip: "../../configs/chips/atmega328p.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pc0_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
