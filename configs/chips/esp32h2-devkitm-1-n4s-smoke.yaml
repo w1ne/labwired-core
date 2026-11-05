@@ -1,0 +1,28 @@
+# Narrow ESP32-H2-DevKitM-1-N4S profile for the onboard GPIO8 WS2812 smoke.
+# The direct-entry firmware exercises only the RISC-V HP core, external-flash
+# XIP/RAM address ranges, and the GPIO output path. ROM boot, UART, USB,
+# Bluetooth LE, 802.15.4, timers, and every other peripheral are outside this
+# profile. GPIO register offsets used by this smoke match the Espressif H2 SVD.
+name: "esp32h2-devkitm-1-n4s-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 96_000_000
+
+flash:
+  # ESP32-H2 unified external flash XIP window. The N4S module has 4 MiB.
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  # ESP32-H2 HP SRAM: 320 KiB, SOC_IRAM_LOW..SOC_IRAM_HIGH.
+  base: 0x40800000
+  size: "320KB"
+
+pins:
+  GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32h2_gpio"
+    base_address: 0x60091000
+    size: "3840"

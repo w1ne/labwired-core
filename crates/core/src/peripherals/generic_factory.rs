@@ -132,6 +132,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // H2's narrowly reused GPIO output model is built by the Espressif family
+    // factory. Keep its name canonical so the generic `gpio` fallback cannot
+    // replace it with a register-layout placeholder before that factory runs.
+    "esp32h2_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA

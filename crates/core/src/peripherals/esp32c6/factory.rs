@@ -2,13 +2,15 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Data-driven factory for ESP32-C6 peripheral models.
+//! Data-driven factory for ESP32-C6 peripheral models and the narrow ESP32-H2
+//! GPIO output alias.
 //!
-//! Every arm here either parameterizes a shared model with the C6's values or
-//! aliases the C3 model whose register map the C6 genuinely shares. The C6 has
-//! no C3-only `system` / `rtc_cntl` / `apb_ctrl` blocks and no C6-specific
-//! behavioral model yet; the clock/reset (PCR) and IO_MUX windows are
-//! SVD-derived `declarative` descriptors wired directly in `esp32c6.yaml`.
+//! Every C6 arm either parameterizes a shared model with the C6's values or
+//! aliases the C3 model whose register map the C6 genuinely shares. The H2
+//! alias is limited to the direct GPIO output register path used by its board
+//! smoke and is not a general H2 peripheral implementation. The C6 has no
+//! C3-only `system` / `rtc_cntl` / `apb_ctrl` blocks; its PCR clock/reset and
+//! IO_MUX windows are SVD-derived `declarative` descriptors in `esp32c6.yaml`.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -40,6 +42,12 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // is built with the C6 layout; the FSPI and UART TX numbers match.
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
+        // The H2 smoke uses only direct GPIO output on GPIO8. Espressif's
+        // esp32h2.svd and esp32c6.svd agree on the GPIO base (0x6009_1000) and
+        // the OUT/W1TS/W1TC, ENABLE/W1TS, and IN register offsets used here.
+        // This alias deliberately does not claim H2 matrix numbering,
+        // interrupt sources, or GPIO26..GPIO27.
+        "esp32h2_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
         // PCR — the C6's clock/reset block. Register-backed (full SVD map) and
         // the clock controller the chip yaml's `clock:` gates resolve through
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
@@ -115,6 +123,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32h2_gpio",
     "esp32c6_pcr",
     "esp32c6_extmem",
     "esp32c6_systimer",
