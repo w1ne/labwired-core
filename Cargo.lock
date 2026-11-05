@@ -1403,6 +1403,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-efr32xg26-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ek-ra6m5-smoke"
 version = "0.1.0"
 dependencies = [

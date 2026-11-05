@@ -124,8 +124,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          peripheral (see attach_board_io_buttons), so the imported entry is inert. \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
          answers reads with zeros. Used by: onboarding/arduino_101-shield, \
-         onboarding/arty_litex_vexriscv, onboarding/brd4116a, onboarding/brd4117a, \
-         onboarding/brd4118a (+24 more).",
+         onboarding/arty_litex_vexriscv and other imported descriptors.",
     ),
     (
         "cadence_ttc",
@@ -370,8 +369,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "Renode board LED. LabWired models board LEDs through `board_io` / external devices, \
          not as a bus peripheral, so the imported entry is inert. Renode-imported onboarding \
          descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/arduino_101-shield, onboarding/arty_litex_vexriscv, \
-         onboarding/brd4116a, onboarding/brd4117a (+30 more).",
+         by: onboarding/arduino_101-shield, onboarding/arty_litex_vexriscv and other \
+         imported descriptors.",
     ),
     (
         "lis2ds12",
@@ -609,7 +608,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          has no register semantics at all. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: \
          onboarding/arduino_uno_r4_minima, onboarding/arvsom, onboarding/at91rm9200, \
-         onboarding/atsamd51g19a, onboarding/beaglev_starlight (+57 more).",
+         onboarding/atsamd51g19a, onboarding/beaglev_starlight and other imported descriptors.",
     ),
     (
         "ram",

@@ -103,6 +103,7 @@ members = [
     "crates/firmware-efm32lg942-smoke",
     "crates/firmware-efm32lg995-smoke",
     "crates/firmware-efr32mg26-smoke",
+    "crates/firmware-efr32xg26-smoke",
     "crates/firmware-efr32mg24-smoke",
     "crates/firmware-efr32xg22-smoke",
     "crates/firmware-efr32mg12-smoke",

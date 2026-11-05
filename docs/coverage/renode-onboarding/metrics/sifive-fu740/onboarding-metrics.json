@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sifive-fu740-smoke.yaml",
   "system": "configs/systems/onboarding/sifive-fu740.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-04T23:54:34Z",
-  "finished_at_utc": "2026-11-04T23:54:35Z",
+  "started_at_utc": "2026-11-05T00:19:03Z",
+  "finished_at_utc": "2026-11-05T00:19:04Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 703,
+  "elapsed_ms": 708,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.273,
-    "build_firmware": 0.159,
-    "run_smoke": 0.261
+    "build_cli": 0.275,
+    "build_firmware": 0.16,
+    "run_smoke": 0.263
   },
   "stages_ms": {
-    "build_cli": 273,
-    "build_firmware": 159,
-    "run_smoke": 261
+    "build_cli": 275,
+    "build_firmware": 160,
+    "run_smoke": 263
   }
 }

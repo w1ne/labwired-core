@@ -1,35 +1,27 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Narrow smoke profile for the imported BRD4117A / EFR32xG26 system. The
+# current Renode board description uses the xG26 Cortex-M33, 3,192 KiB flash,
+# 512 KiB SRAM, Series-2 CMU, and USART0. Radio and sequencer cores, GPIO board
+# wiring, and other peripherals are omitted from this profile.
 name: brd4117a
 arch: arm
+core: cortex-m33
+cpu_hz: 39000000
 flash:
-  base: 134217728
-  size: 3268608B
+  base: 0x08000000
+  size: 0x31E000
 ram:
-  base: 536870912
-  size: 524288B
+  base: 0x20000000
+  size: 0x80000
 peripherals:
-- id: led0
-  type: led
-  bus: gpioPort
-  base_address: 66
-- id: led1
-  type: led
-  bus: gpioPort
-  base_address: 67
-- id: button0
-  type: button
-  bus: gpioPort
-  base_address: 64
-- id: button1
-  type: button
-  bus: gpioPort
-  base_address: 65
-- id: DCDC_IF
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1342799912
+  - id: cmu
+    type: efr32s2_cmu
+    bus: sysbus
+    base_address: 0x40008000
+    size: 16KB
+  - id: usart0
+    type: efr32s2_usart
+    bus: sysbus
+    base_address: 0x400A0000
+    size: 16KB
+    clock: { reg: clken0, bit: 9 }
+    irq: 15

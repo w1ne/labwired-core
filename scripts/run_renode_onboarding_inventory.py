@@ -185,6 +185,31 @@ SMOKE_MAPPINGS = {
         "target": "thumbv8m.main-none-eabi",
         "script": "examples/renode-onboarding/efr32mg26-smoke.yaml",
     },
+    "brd4116a": {
+        "crate": "firmware-efr32xg26-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/brd4116a-smoke.yaml",
+    },
+    "brd4117a": {
+        "crate": "firmware-efr32xg26-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/brd4117a-smoke.yaml",
+    },
+    "brd4118a": {
+        "crate": "firmware-efr32xg26-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/brd4118a-smoke.yaml",
+    },
+    "brd4120a": {
+        "crate": "firmware-efr32xg26-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/brd4120a-smoke.yaml",
+    },
+    "brd4121a": {
+        "crate": "firmware-efr32xg26-smoke",
+        "target": "thumbv8m.main-none-eabi",
+        "script": "examples/renode-onboarding/brd4121a-smoke.yaml",
+    },
     "efr32mg1": {
         "crate": "firmware-efr32mg1-smoke",
         "target": "thumbv7em-none-eabi",

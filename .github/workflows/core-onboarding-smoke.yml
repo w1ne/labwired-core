@@ -34,6 +34,7 @@ on:
       - "crates/firmware-efm32lg942-smoke/**"
       - "crates/firmware-efm32lg995-smoke/**"
       - "crates/firmware-efr32mg26-smoke/**"
+      - "crates/firmware-efr32xg26-smoke/**"
       - "crates/firmware-efr32mg24-smoke/**"
       - "examples/renode-onboarding/brd4186c-smoke.yaml"
       - "examples/renode-onboarding/brd4162a-smoke.yaml"
@@ -338,6 +339,33 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/efr32mg26-smoke.yaml
             system: configs/systems/onboarding/efr32mg26.yaml
+          # The five BRD41xx radio boards use the xG26 Cortex-M33 platform.
+          # Each profile is narrowed to the main core, memory, CMU and USART0.
+          - id: brd4116a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4116a-smoke.yaml
+            system: configs/systems/onboarding/brd4116a.yaml
+          - id: brd4117a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4117a-smoke.yaml
+            system: configs/systems/onboarding/brd4117a.yaml
+          - id: brd4118a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4118a-smoke.yaml
+            system: configs/systems/onboarding/brd4118a.yaml
+          - id: brd4120a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4120a-smoke.yaml
+            system: configs/systems/onboarding/brd4120a.yaml
+          - id: brd4121a
+            crate: firmware-efr32xg26-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/brd4121a-smoke.yaml
+            system: configs/systems/onboarding/brd4121a.yaml
           # MG1 follows the imported M4F flash/SRAM map and model-backed USART0;
           # other generated peripherals are omitted until they are exercised.
           - id: efr32mg1
