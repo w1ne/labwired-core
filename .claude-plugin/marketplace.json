@@ -1,0 +1,25 @@
+{
+  "name": "labwired",
+  "owner": {
+    "name": "LabWired",
+    "url": "https://labwired.com"
+  },
+  "plugins": [
+    {
+      "name": "labwired",
+      "source": "./plugins/labwired",
+      "description": "Design electronic circuits, simulate and verify embedded firmware, and lay out supported PCBs with LabWired.",
+      "category": "development",
+      "keywords": [
+        "electronics",
+        "circuit",
+        "firmware",
+        "pcb",
+        "embedded",
+        "arduino",
+        "esp32",
+        "kicad"
+      ]
+    }
+  ]
+}
