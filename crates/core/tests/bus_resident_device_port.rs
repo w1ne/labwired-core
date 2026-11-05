@@ -399,6 +399,29 @@ fn a_tm1637_decodes_a_frame_with_no_bus_in_sight() {
     assert_eq!(a.meta["display_on"], serde_json::Value::Bool(true));
     assert_eq!(a.meta["brightness"], 7);
 
+    // Acc prove needs bus + panel history (ACK clocks counted, not driven).
+    assert!(
+        a.meta["ack_count"].as_u64().unwrap_or(0) >= 5,
+        "five ACK clocks for 0x40 + 0xC0/0x06/0x5B + 0x8F: {}",
+        a.meta["ack_count"]
+    );
+    assert_eq!(a.meta["framing_errors"].as_u64().unwrap_or(1), 0);
+    let bus = a.meta["bus_frames"].as_array().expect("bus_frames");
+    assert!(
+        bus.iter().any(|f| f["bytes"] == serde_json::json!([0x40])),
+        "data-cmd txn: {bus:?}"
+    );
+    assert!(
+        bus.iter()
+            .any(|f| f["bytes"] == serde_json::json!([0xC0, 0x06, 0x5B])),
+        "address+grids txn: {bus:?}"
+    );
+    let frames = a.meta["frames_seen"].as_array().expect("frames_seen");
+    assert!(
+        frames.iter().any(|f| f["text"] == "12  "),
+        "panel history includes decoded grids: {frames:?}"
+    );
+
     // A DISPLAY drives nothing. Both halves of the driving port must stay
     // untouched — a model that wrote a pad here would be inventing a level the
     // firmware never sampled.
