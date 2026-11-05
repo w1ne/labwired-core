@@ -52,6 +52,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/polarfire-soc-smoke.yaml",
     },
+    "nxp-frdm-imx8mplus": {
+        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml",
+    },
     "starfive-jh7100": {
         "crate": "firmware-starfive-jh7100-smoke",
         "target": "riscv64imac-unknown-none-elf",

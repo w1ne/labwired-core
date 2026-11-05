@@ -102,6 +102,11 @@ on:
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
       - "tests/fixtures/frdm-k64f-smoke.elf"
+      - "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.S"
+      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.ld"
+      - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml"
+      - "scripts/build_imx8mplus_a53_cpu_smoke.sh"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -1157,6 +1162,13 @@ jobs:
             prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
             script: examples/renode-onboarding/polarfire-soc-smoke.yaml
             system: configs/systems/onboarding/polarfire-soc.yaml
+          # One Cortex-A53 PE and DDR from the imported FRDM i.MX 8M Plus
+          # profile. The CPU-only fixture avoids claiming the other cores,
+          # peripherals, or boot flow.
+          - id: nxp-frdm-imx8mplus
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml
+            system: configs/systems/onboarding/nxp-frdm-imx8mplus.yaml
 
     steps:
       - uses: actions/checkout@v4
