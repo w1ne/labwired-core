@@ -12,3 +12,9 @@ name = "firmware-nucleo-u545re-smoke"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-nucleo-u545re-bme280"
+path = "src/bme280.rs"
+test = false
+bench = false

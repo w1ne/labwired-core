@@ -69,6 +69,9 @@ also differ, and USART2/GPIOF/GPIOI are absent on U545.
 
 [![NUCLEO-U545RE-Q pinout: Arduino header pin labels with MCU pins, LD2 PA5, B1 PC13, VCP USART1 PA9/PA10](../assets/boards/nucleo-u545re/pinout.svg)](../assets/boards/nucleo-u545re/pinout.svg)
 
+The [BME280 I2C1 example](../../examples/nucleo-u545re-bme280/README.md)
+exercises the board's D14/D15 bus and verifies the sensor chip ID in the twin.
+
 Illustration positions are measured from ST's product photo (ST CAD files were not
 reachable); see [`images/gen_images.py`](../../examples/nucleo-u545re/images/gen_images.py).
 

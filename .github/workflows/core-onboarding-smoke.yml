@@ -191,6 +191,10 @@ on:
       - "configs/peripherals/stm32f405/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-nucleo-u545re-smoke/**"
+      - "configs/chips/stm32u545.yaml"
+      - "configs/systems/nucleo-u545re-bme280.yaml"
+      - "examples/nucleo-u545re-bme280/**"
+      - "scripts/build_nucleo_u545re_bme280_smoke.sh"
       - "crates/firmware-atsamd51-demo/**"
       - "crates/firmware-atsamd51-pybadge-demo/**"
       - "crates/firmware-mkr-wifi-1010-smoke/**"
@@ -655,6 +659,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u545re/onboarding-smoke.yaml
             system: configs/systems/nucleo-u545re-smoke.yaml
+          - id: nucleo-u545re-bme280
+            crate: firmware-nucleo-u545re-smoke
+            target: thumbv8m.main-none-eabi
+            firmware_build_script: scripts/build_nucleo_u545re_bme280_smoke.sh
+            script: examples/nucleo-u545re-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-u545re-bme280.yaml
           # U5A5 uses the shared U575 demo only for its common Cortex-M33 boot
           # and USART1 `OK` path. Its PKA/HASH/SAES operation coverage remains
           # in the U5A5 SystemBus oracle, not in this board bring-up smoke.

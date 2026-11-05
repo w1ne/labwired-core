@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.037792">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="c87cc5b97189bd739dad36ffb9bd997542f5ae9da7864944b228793ca69afd21"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.037792">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO_U545RE_BME280_OK=0x60" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioa:5 &gt;= 2 edges" time="0.000000">
+  </testcase>
+</testsuite>
