@@ -1,0 +1,4 @@
+2026-11-05T15:06:30.312721Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/simavr-atmega328.yaml
+2026-11-05T15:06:30.313510Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · simavr-atmega328-smoke · 2000000 steps · 0.47s

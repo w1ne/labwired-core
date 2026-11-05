@@ -100,6 +100,7 @@ on:
       - "examples/renode-onboarding/fomu-smoke.yaml"
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
+      - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -600,6 +601,12 @@ jobs:
             target: thumbv7em-none-eabihf
             script: examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml
             system: configs/systems/onboarding/arduino_nano_33_ble.yaml
+          # The imported simavr ATmega328 profile keeps the modeled USART0 and
+          # GPIOB surfaces exercised by the existing Arduino Uno fixture.
+          - id: simavr-atmega328
+            prebuilt_firmware: tests/fixtures/avr/arduino-uno-blinky.elf
+            script: examples/renode-onboarding/simavr-atmega328-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega328.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima

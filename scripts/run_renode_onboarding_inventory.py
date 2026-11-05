@@ -205,6 +205,10 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabihf",
         "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
     },
+    "simavr-atmega328": {
+        "prebuilt_firmware": "tests/fixtures/avr/arduino-uno-blinky.elf",
+        "script": "examples/renode-onboarding/simavr-atmega328-smoke.yaml",
+    },
     "efm32g210": {
         "crate": "firmware-efm32g210-smoke",
         "target": "thumbv7m-none-eabi",
