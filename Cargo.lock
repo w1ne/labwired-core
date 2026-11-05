@@ -3716,6 +3716,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nucleo-f767zi-lsm6dsox-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

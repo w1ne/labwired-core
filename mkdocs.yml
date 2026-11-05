@@ -199,6 +199,7 @@ nav:
     - ADS1256: parts/ads1256.md
     - BMI160: parts/bmi160.md
     - LIS2DUX12: parts/lis2dux12.md
+    - LSM6DSOX: parts/lsm6dsox.md
     - BMM150: parts/bmm150.md
     - VEML6075: parts/veml6075.md
     - HT16K33: parts/ht16k33.md

@@ -559,6 +559,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f767zi/onboarding-smoke.yaml
             system: configs/systems/nucleo-f767zi.yaml
+          - id: nucleo-f767zi-lsm6dsox
+            crate: nucleo-f767zi-lsm6dsox-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f767zi-lsm6dsox/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f767zi-lsm6dsox.yaml
           - id: nucleo-g070rb
             crate: firmware-stm32g0-demo
             target: thumbv6m-none-eabi

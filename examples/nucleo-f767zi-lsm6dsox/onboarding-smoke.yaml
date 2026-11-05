@@ -1,0 +1,12 @@
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/nucleo-f767zi-lsm6dsox-smoke"
+  system: "../../configs/systems/nucleo-f767zi-lsm6dsox.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "LSM6DSOX_ID=0x6C XYZ=1000,-2000,4000 PASS"
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 1
+  - expected_stop_reason: max_steps

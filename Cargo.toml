@@ -194,6 +194,7 @@ members = [
     "crates/wasm",
     "examples/demo-blinky",
     "examples/nucleo-f407-i2c",
+    "examples/nucleo-f767zi-lsm6dsox",
     "examples/riscv-virt",
     "examples/adxl345-sensor-lab",
     "examples/ina219-power-lab",
