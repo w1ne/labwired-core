@@ -1,5 +1,6 @@
 # Direct-ELF RV32IM and RAM smoke against the exact imported UARTLite system.
-# Renode's external Verilated CPU/peripheral co-simulation is not run here.
+# This uses LabWired's local RV32IM interpreter, not Renode's RiscV32 model or
+# the external Verilated UART co-simulation.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke"
