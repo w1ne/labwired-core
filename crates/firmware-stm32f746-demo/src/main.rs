@@ -56,5 +56,6 @@ fn main() -> ! {
         // BSRR set PI1 (active-high LED on).
         write_volatile(GPIOI_BSRR, LED);
     }
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

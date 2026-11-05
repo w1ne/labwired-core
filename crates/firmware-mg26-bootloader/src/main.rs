@@ -225,6 +225,9 @@ fn jump_to_app() -> ! {
         core::ptr::write_volatile(SCB_VTOR, APP_BASE);
         let sp = core::ptr::read_volatile(APP_BASE as *const u32);
         let pc = core::ptr::read_volatile((APP_BASE + 4) as *const u32);
+        // Both operands are full 32-bit pointers read straight out of the
+        // vector table; the sub-register-argument lint cannot see that.
+        #[allow(clippy::suboptimal_flops)]
         core::arch::asm!(
             "cpsid i",
             "msr msp, {sp}",
@@ -368,6 +371,7 @@ fn main() -> ! {
             puts("OK\n");
         } else {
             puts("ERR\n");
+            #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
             loop {}
         }
     }
@@ -389,5 +393,6 @@ fn main() -> ! {
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

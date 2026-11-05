@@ -55,5 +55,6 @@ fn main() -> ! {
 
         write_volatile(GPIO2_DR_TOGGLE, LED);
     }
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

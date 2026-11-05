@@ -108,8 +108,8 @@ pub(crate) fn export_display_if_requested(
             PathBuf::from(p)
         };
         let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
-        for px in fb.chunks_exact(2) {
-            let v = u16::from_be_bytes([px[0], px[1]]);
+        for px in fb.as_chunks::<2>().0 {
+            let v = u16::from_be_bytes(*px);
             ppm.push((((v >> 11) & 0x1F) as u32 * 255 / 31) as u8);
             ppm.push((((v >> 5) & 0x3F) as u32 * 255 / 63) as u8);
             ppm.push(((v & 0x1F) as u32 * 255 / 31) as u8);

@@ -242,10 +242,10 @@ impl Stm32u5Saes {
         self.set_word(SR, (self.word(SR) | SR_BUSY) & !SR_CCF);
         match self.crypt_block(block) {
             Ok(result) => {
-                for bytes in result.chunks_exact(4) {
+                for bytes in result.as_chunks::<4>().0 {
                     self.output
                         .borrow_mut()
-                        .push_back(self.data_out_word(bytes.try_into().unwrap()));
+                        .push_back(self.data_out_word(*bytes));
                 }
                 self.set_word(SR, (self.word(SR) & !SR_BUSY) | SR_CCF);
                 self.set_word(ISR, self.word(ISR) | SR_CCF);
@@ -386,16 +386,12 @@ mod tests {
             0x17, 0x2a,
         ];
         saes.write_u32(CR, CR_EN | (2 << 1)).unwrap();
-        for (index, word) in key.chunks_exact(4).enumerate() {
-            saes.write_u32(
-                KEYR0 + index as u64 * 4,
-                u32::from_le_bytes(word.try_into().unwrap()),
-            )
-            .unwrap();
-        }
-        for word in plaintext.chunks_exact(4) {
-            saes.write_u32(DINR, u32::from_le_bytes(word.try_into().unwrap()))
+        for (index, word) in key.as_chunks::<4>().0.iter().enumerate() {
+            saes.write_u32(KEYR0 + index as u64 * 4, u32::from_le_bytes(*word))
                 .unwrap();
+        }
+        for word in plaintext.as_chunks::<4>().0 {
+            saes.write_u32(DINR, u32::from_le_bytes(*word)).unwrap();
         }
         let mut ciphertext = Vec::new();
         for _ in 0..4 {
@@ -451,23 +447,16 @@ mod tests {
             let mut saes = Stm32u5Saes::new();
             saes.write_u32(CR, CR_EN | (2 << 1) | (chaining << 5))
                 .unwrap();
-            for (index, word) in key.chunks_exact(4).enumerate() {
-                saes.write_u32(
-                    KEYR0 + index as u64 * 4,
-                    u32::from_le_bytes(word.try_into().unwrap()),
-                )
-                .unwrap();
-            }
-            for (index, word) in iv.chunks_exact(4).enumerate() {
-                saes.write_u32(
-                    IVR0 + index as u64 * 4,
-                    u32::from_le_bytes(word.try_into().unwrap()),
-                )
-                .unwrap();
-            }
-            for word in plaintext.chunks_exact(4) {
-                saes.write_u32(DINR, u32::from_le_bytes(word.try_into().unwrap()))
+            for (index, word) in key.as_chunks::<4>().0.iter().enumerate() {
+                saes.write_u32(KEYR0 + index as u64 * 4, u32::from_le_bytes(*word))
                     .unwrap();
+            }
+            for (index, word) in iv.as_chunks::<4>().0.iter().enumerate() {
+                saes.write_u32(IVR0 + index as u64 * 4, u32::from_le_bytes(*word))
+                    .unwrap();
+            }
+            for word in plaintext.as_chunks::<4>().0 {
+                saes.write_u32(DINR, u32::from_le_bytes(*word)).unwrap();
             }
             let output: Vec<_> = (0..4)
                 .flat_map(|_| saes.read_u32(DOUTR).unwrap().to_le_bytes())
