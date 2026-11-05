@@ -445,6 +445,11 @@ jobs:
     # 2026-09-30: it did. Two warm runs were cancelled at this wall inside
     # Firmware survival. The feature-off lib tests and the steps after them
     # moved to `pr-core-feature-off`, which is required on main.
+    # 2026-11-05: the default-members library compile reached the same wall
+    # after the earlier gates and Clippy passed. Its exact command now runs
+    # in the already-required `pr-core-feature-off` job, alongside its distinct
+    # core-only feature-off command. Required contexts and both 20-minute
+    # budgets are unchanged; no test or feature configuration is removed.
     timeout-minutes: 20
     steps:
       # Full history required: generate_validation_status.py uses
@@ -653,9 +658,10 @@ jobs:
             exit 1
           fi
 
-      # Clippy + lib tests over the workspace's default-members — cli, core,
+      # Clippy over the workspace's default-members — cli, core,
       # dap, loader, labwired-fuzz. Feature lanes and the firmware/matrix
-      # crates stay in nightly integrity-full.
+      # crates stay in nightly integrity-full. The matching bare library-test
+      # command runs in the required pr-core-feature-off job below.
       #
       # These two steps used to narrow to `-p labwired-core -p labwired-cli`,
       # which left `dap`, `loader` and `labwired-fuzz` compiled by NO pre-merge
@@ -695,10 +701,6 @@ jobs:
           cargo clippy --locked -p labwired-arm-system --all-targets -- -D warnings
           scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
 
-      - name: Unit tests (default-members lib)
-        run: cargo test --lib
-
-
   # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
   # Rust sources were cancelled at timeout-minutes 20 inside Firmware
   # survival, after every earlier step had passed. The note above pr-gate
@@ -731,13 +733,22 @@ jobs:
             . -> target
           save-if: false
 
-      # THE DEFAULT CONFIGURATION, WHICH NOTHING ELSE RUNS.
+      # This exact command moved from pr-gate after its default-members library
+      # compile reached the 20-minute wall on 2026-11-05. This job is already a
+      # required context and has the same unfiltered PR/dispatch condition,
+      # full checkout, Rust pin and cache. Keep the bare command: selecting
+      # only core would omit the CLI, DAP, loader and fuzz library tests.
+      - name: Unit tests (default-members lib)
+        run: cargo test --lib
+
+      # THE CORE-ONLY DEFAULT CONFIGURATION, WHICH NOTHING ELSE RUNS.
       #
       # `pr-workspace-tests` builds labwired-core's lib tests WITH
-      # `event-scheduler`, and so does `pr-scheduler-observable`. pr-gate's
-      # `cargo test --lib` is the default-members run, which does not carry the
-      # feature but also does not carry labwired-core's own scheduler-mode
-      # unit tests unless they are reachable from the default build.
+      # `event-scheduler`, and so does `pr-scheduler-observable`. The bare
+      # default-members command above unifies the CLI's default features,
+      # which enable event-scheduler. The explicit core-only command below
+      # has a different feature graph: core's own default feature set is empty.
+      # Both commands must remain; they do not substitute for each other.
       #
       # The gap is not theoretical: seven scheduler-mode unit tests added with
       # the nRF54L/ATSAMD21 walk migration passed every lane and failed
