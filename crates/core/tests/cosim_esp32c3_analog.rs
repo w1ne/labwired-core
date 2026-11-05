@@ -95,18 +95,22 @@ fn convert_channel(bus: &mut SystemBus, channel: u8) -> u16 {
     (data & 0x0FFF) as u16
 }
 
-#[test]
-fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
-    let system_path = root("configs/systems/esp32c3-ble-pong.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load BLE Pong profile");
-    assert_eq!(profile.name, "esp32c3-ble-pong");
-    let analog_path = root("examples/esp32c3-ble-pong/analog-ntc-diode-system.yaml");
+fn assert_generic_c3_analog_inputs(
+    system_rel: &str,
+    analog_rel: &str,
+    expected_profile: &str,
+    channel_one_has_board_source: bool,
+) {
+    let system_path = root(system_rel);
+    let mut profile = SystemManifest::from_file(&system_path).expect("load ESP32-C3 profile");
+    assert_eq!(profile.name, expected_profile);
+    let analog_path = root(analog_rel);
     let analog = SystemManifest::from_file(&analog_path).expect("load generic NTC and diode");
     profile.cosim_models = analog.cosim_models;
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load ESP32-C3 descriptor");
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build BLE Pong bus");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build ESP32-C3 bus");
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
         .expect("fixture carries two analog netlists");
@@ -122,16 +126,23 @@ fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
             "ADC1 channel {channel} starts without a co-sim injection"
         );
     }
-    let gp2y_count = adc_channel_count(&mut bus, 1);
-    assert_ne!(
-        gp2y_count, 0xFFFF,
-        "the profile's GP2Y0A21 analog source seeds GPIO1 / ADC1_CH1"
-    );
-    assert_eq!(
-        convert_channel(&mut bus, 1),
-        gp2y_count,
-        "APB_SARADC one-shot must read the onboard IR sensor input"
-    );
+    let channel_one_count = adc_channel_count(&mut bus, 1);
+    if channel_one_has_board_source {
+        assert_ne!(
+            channel_one_count, 0xFFFF,
+            "the BLE Pong profile's GP2Y0A21 source seeds GPIO1 / ADC1_CH1"
+        );
+        assert_eq!(
+            convert_channel(&mut bus, 1),
+            channel_one_count,
+            "APB_SARADC one-shot must read the onboard IR sensor input"
+        );
+    } else {
+        assert_eq!(
+            channel_one_count, 0xFFFF,
+            "the DevKit profile has no source connected to ADC1_CH1"
+        );
+    }
 
     let expected_diode_v = diode_voltage();
     let mut cycles = 0;
@@ -165,7 +176,7 @@ fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
             assert_eq!(
                 adc_channel_count(&mut bus, channel),
                 expected_count,
-                "the solved pad voltage must seed ADC1 channel {channel}"
+                "the solved voltage must seed ADC1 channel {channel}"
             );
             assert_eq!(
                 convert_channel(&mut bus, channel),
@@ -175,8 +186,8 @@ fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
         }
         assert_eq!(
             adc_channel_count(&mut bus, 1),
-            gp2y_count,
-            "generic netlists on ADC1_CH0/CH2 leave the onboard ADC1_CH1 sensor input alone"
+            channel_one_count,
+            "generic netlists on ADC1_CH0/CH2 leave ADC1_CH1 unchanged"
         );
         assert_eq!(
             adc_channel_count(&mut bus, 3),
@@ -192,10 +203,30 @@ fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
     );
     assert!(
         ntc_samples[2].1 > ntc_samples[1].1 && ntc_samples[1].1 > ntc_samples[0].1,
-        "firmware-visible ADC counts follow the solved NTC voltage: {ntc_samples:?}"
+        "ADC result counts follow the solved NTC voltage: {ntc_samples:?}"
     );
     assert_eq!(
         ntc_samples[1].1, 2047,
         "25 °C produces the matched half-scale divider"
+    );
+}
+
+#[test]
+fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_c3_analog_inputs(
+        "configs/systems/esp32c3-ble-pong.yaml",
+        "examples/esp32c3-ble-pong/analog-ntc-diode-system.yaml",
+        "esp32c3-ble-pong",
+        true,
+    );
+}
+
+#[test]
+fn esp32c3_devkit_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_c3_analog_inputs(
+        "configs/systems/esp32c3-devkit.yaml",
+        "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
+        "esp32c3-devkit",
+        false,
     );
 }
