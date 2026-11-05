@@ -63,6 +63,10 @@ const SIG_LEDC_LS_OUT0: u32 = 45;
 /// UART1 has no IO_MUX route on the C3 at all, so it is matrix-only.
 const SIG_U0TXD: u32 = 6;
 const SIG_U1TXD: u32 = 9;
+/// ESP32-C6 RMT TX outputs (channels 0 and 1) in the C6 GPIO matrix.
+/// Source: `components/soc/esp32c6/include/soc/gpio_sig_map.h`.
+const C6_SIG_RMT_OUT0: u32 = 71;
+const C6_SIG_RMT_OUT1: u32 = 72;
 
 /// ESP32-C3 GPIO-matrix OUTPUT signal index → signal name, for the I²C / SPI /
 /// UART signals the logic analyzer cares about (from esp-idf
@@ -146,6 +150,8 @@ impl MatrixLayout {
         Some(match idx {
             6 => "U0TXD",
             9 => "U1TXD",
+            C6_SIG_RMT_OUT0 if *self == C6_MATRIX => "RMT_SIG_OUT0",
+            C6_SIG_RMT_OUT1 if *self == C6_MATRIX => "RMT_SIG_OUT1",
             i if i == self.i2c_scl => "I2CEXT0_SCL",
             i if i == self.i2c_sda => "I2CEXT0_SDA",
             i if i == self.fspiclk => "FSPICLK",
@@ -301,6 +307,45 @@ impl Esp32c3Gpio {
         observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
     ) {
         self.gpio_observers.push(observer);
+    }
+
+    /// Pads whose C6 GPIO-matrix selector routes `signal_idx` to that pad.
+    /// Used by the C6 RMT TX model when starting a channel.
+    pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        (0..PIN_COUNT)
+            .filter(|&pin| self.out_sel[pin as usize] & 0x1FF == signal_idx)
+            .collect()
+    }
+
+    /// Drive one pad from a matrix peripheral's output stream. The GPIO output
+    /// latch is updated through the same pad-observer and interrupt chokepoint
+    /// as a firmware GPIO write, which lets attached parts observe RMT edges.
+    pub fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= PIN_COUNT {
+            return false;
+        }
+        let mask = 1u32 << pin;
+        self.mutate_pads(|g| {
+            g.with_own_drive_edges(OUT, |g| {
+                if level {
+                    g.out |= mask;
+                } else {
+                    g.out &= !mask;
+                }
+            });
+        });
+        true
+    }
+
+    /// Timed peripheral-output variant of [`Self::drive_pad_output`]. A
+    /// batched bus tick can emit several RMT edges at once, so preserve each
+    /// edge's scheduled cycle for attached GPIO observers.
+    pub fn drive_pad_output_at(&mut self, pin: u8, level: bool, sim_cycle: u64) -> bool {
+        let previous_cycle = self.cycle;
+        self.cycle = sim_cycle;
+        let driven = self.drive_pad_output(pin, level);
+        self.cycle = previous_cycle;
+        driven
     }
 
     /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit

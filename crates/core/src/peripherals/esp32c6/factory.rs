@@ -53,6 +53,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
         // what is and is not enforced.
         "esp32c6_pcr" => Box::new(super::pcr::Esp32c6Pcr::new()),
+        // C6's two-channel RMT TX path, symbol RAM, TX-end status and timed
+        // output through GPIO matrix signals 71/72. Source 49 is ETS_RMT_INTR_SOURCE.
+        "esp32c6_rmt" => Box::new(super::rmt::Esp32c6Rmt::new(p_cfg.irq.unwrap_or(49))),
         // EXTMEM / L1 cache — launch/done handshakes for Arduino cache_hal.
         "esp32c6_extmem" => Box::new(super::extmem::Esp32c6Extmem::new()),
         // SYSTIMER — same IP as C3/S3. TARGET0 matrix source 57 on C6.
@@ -125,6 +128,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_gpio",
     "esp32h2_gpio",
     "esp32c6_pcr",
+    "esp32c6_rmt",
     "esp32c6_extmem",
     "esp32c6_systimer",
     "esp32c6_gdma",

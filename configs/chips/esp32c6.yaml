@@ -231,10 +231,18 @@ peripherals:
     type: "stub"
     base_address: 0x60003000
     size: "1KB"
+  # RMT TX channels 0/1, 192-word symbol RAM and timed output path to GPIO
+  # matrix signals 71/72. RX capture/carrier/DMA remain outside the model.
   - id: "rmt"
-    type: "stub"
+    type: "esp32c6_rmt"
+    irq: 49 # ETS_RMT_INTR_SOURCE (ESP-IDF C6 interrupts.h)
     base_address: 0x60006000
-    size: "1KB"
+    size: "2KB"
+    clock: { controller: "pcr", reg: "RMT_CONF", bit: 0 }
+    config:
+      # The C6 and C3 SVDs carry the same older four-channel register head;
+      # the C6 model narrows active TX playback to channels 0/1.
+      debug_schema: "../peripherals/esp32c3/rmt.yaml"
   # Native esp_systimer (same IP as C3/S3; UNIT_OP bit29 = update-done). Stub
   # returned 0 forever → systimer_hal_get_counter_value spun at 0x40020876.
   # Matrix source 57 = ETS_SYSTIMER_TARGET0_INTR_SOURCE (esp32c6 interrupts.h).

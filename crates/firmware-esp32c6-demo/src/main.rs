@@ -10,9 +10,8 @@
 //! decodes (see `crates/core/src/decoder/riscv.rs`) but is deliberately not
 //! part of this L1 image — the LP core and SMP are out of scope.
 //!
-//! The smoke exercises UART0 and bit-bangs a WS2812 frame on the DevKitC-1's
-//! on-board GPIO8 LED. RMT is not modeled on the C6, so the RGB path uses the
-//! real GPIO set/clear registers and a cycle-counted waveform instead.
+//! The smoke exercises UART0 and sends a WS2812 frame through RMT channel 0
+//! and GPIO8's output matrix to the DevKitC-1's on-board RGB LED.
 
 use panic_halt as _;
 use riscv_rt::entry;
@@ -27,6 +26,9 @@ const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
 /// `DR_REG_PCR_BASE` = 0x6009_6000 (esp32c6.svd `PCR`).
 const PCR_UART0_CONF: *mut u32 = 0x6009_6000 as *mut u32;
 const PCR_UART0_SCLK_CONF: *mut u32 = 0x6009_6004 as *mut u32;
+/// PCR `RMT_CONF` @ +0x2C and `RMT_SCLK_CONF` @ +0x30.
+const PCR_RMT_CONF: *mut u32 = 0x6009_602C as *mut u32;
+const PCR_RMT_SCLK_CONF: *mut u32 = 0x6009_6030 as *mut u32;
 
 /// IO_MUX pad register for GPIO16 / U0TXD at +0x44 (`MCU_SEL` = FUNC 1).
 /// IO_MUX base `DR_REG_IO_MUX_BASE` = 0x6009_0000; U0TXD = GPIO16 per
@@ -37,55 +39,34 @@ const IO_MUX_GPIO16: *mut u32 = 0x6009_0044 as *mut u32;
 const UART0_CLKDIV: *mut u32 = 0x6000_0014 as *mut u32;
 
 /// ESP32-C6 GPIO output-latch aliases and output enable.
-const GPIO_OUT_W1TS: *mut u32 = 0x6009_1008 as *mut u32;
 const GPIO_OUT_W1TC: *mut u32 = 0x6009_100C as *mut u32;
 const GPIO_ENABLE_W1TS: *mut u32 = 0x6009_1024 as *mut u32;
 const GPIO8_MASK: u32 = 1 << 8;
 
+/// GPIO8 output selector to RMT channel 0 (`RMT_SIG_OUT0_IDX=71` in ESP-IDF
+/// `components/soc/esp32c6/include/soc/gpio_sig_map.h`).
+const GPIO_FUNC8_OUT_SEL_CFG: *mut u32 = 0x6009_1574 as *mut u32;
+const RMT_CH0_TX_CONF0: *mut u32 = 0x6000_6010 as *mut u32;
+const RMT_CH0_TX_END: *const u32 = 0x6000_6038 as *const u32;
+const RMT_CH0_INT_CLR: *mut u32 = 0x6000_6044 as *mut u32;
+const RMT_MEM: *mut u32 = 0x6000_6400 as *mut u32;
+
 /// IO_MUX GPIO8 register: base 0x6009_0000 + 0x04 + GPIO8 * 4.
 const IO_MUX_GPIO8: *mut u32 = 0x6009_0024 as *mut u32;
 
-// At 160 MHz, the WS2812 model classifies a bit by whether its HIGH pulse is
-// shorter or longer than 500 ns (80 core cycles). The surrounding MMIO writes
-// and branches contribute a few cycles to each pulse. These static NOP blocks
-// leave zero below and one above that threshold while keeping each bit close
-// to the WS2812's 1.25 us cell time.
 #[inline(always)]
-fn short_high() {
-    unsafe { core::arch::asm!(".rept 40\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-fn long_high() {
-    unsafe { core::arch::asm!(".rept 96\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-fn short_low() {
-    unsafe { core::arch::asm!(".rept 150\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-fn long_low() {
-    unsafe { core::arch::asm!(".rept 94\n nop\n .endr", options(nomem, nostack)) }
-}
-
-#[inline(always)]
-unsafe fn send_ws2812_byte(byte: u8) {
+unsafe fn write_ws2812_byte(byte: u8, index: &mut usize) {
     for bit in (0..8).rev() {
-        let one = (byte & (1 << bit)) != 0;
-        core::ptr::write_volatile(GPIO_OUT_W1TS, GPIO8_MASK);
-        if one {
-            long_high();
-        } else {
-            short_high();
-        }
-        core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO8_MASK);
-        if one {
-            long_low();
-        } else {
-            short_low();
-        }
+        let one = byte & (1 << bit) != 0;
+        // C6 RMT symbol: duration0[14:0], level0[15],
+        // duration1[30:16], level1[31]. At the modeled 80 MHz RMT source,
+        // each tick is two 160 MHz CPU cycles: a 20/50 tick high pulse is
+        // 250/625 ns, and each full bit is 1.25 us.
+        let high = if one { 50u32 } else { 20u32 };
+        let low = if one { 50u32 } else { 80u32 };
+        let symbol = high | (1 << 15) | (low << 16);
+        core::ptr::write_volatile(RMT_MEM.add(*index), symbol);
+        *index += 1;
     }
 }
 
@@ -114,14 +95,36 @@ fn main() -> ! {
         // 3. Divisor for the console clock (explicit; matches reset).
         core::ptr::write_volatile(UART0_CLKDIV, 694);
 
-        // 4. GPIO8 is the DevKitC-1's on-board WS2812B data pin. Send GRB for
-        //    solid red (G=0, R=255, B=0), then hold low through the reset gap.
+        // 4. Enable RMT's APB and function clocks. Preserve the PCR clock
+        //    divider and select the default 80 MHz source.
+        let rmt_conf = core::ptr::read_volatile(PCR_RMT_CONF);
+        core::ptr::write_volatile(PCR_RMT_CONF, rmt_conf | 1);
+        let rmt_sclk = core::ptr::read_volatile(PCR_RMT_SCLK_CONF);
+        core::ptr::write_volatile(PCR_RMT_SCLK_CONF, rmt_sclk | (1 << 22));
+
+        // GPIO8 is the DevKitC-1's on-board WS2812B data pin. Route it to RMT
+        // channel 0, enable the output driver, and write GRB for solid red.
         core::ptr::write_volatile(IO_MUX_GPIO8, 0x0000_0A00);
+        core::ptr::write_volatile(GPIO_FUNC8_OUT_SEL_CFG, 71);
         core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO8_MASK);
         core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO8_MASK);
-        send_ws2812_byte(0x00);
-        send_ws2812_byte(0xFF);
-        send_ws2812_byte(0x00);
+
+        // 24 symbols, one per bit, followed by a zero-duration END marker.
+        let mut symbol_index = 0;
+        write_ws2812_byte(0x00, &mut symbol_index);
+        write_ws2812_byte(0xFF, &mut symbol_index);
+        write_ws2812_byte(0x00, &mut symbol_index);
+        core::ptr::write_volatile(RMT_MEM.add(symbol_index), 0);
+
+        // Divider 1, one memory block, idle output enabled/low. Program the
+        // configuration before issuing the TX_START write trigger.
+        let tx_conf = (1 << 8) | (1 << 16) | (1 << 6);
+        core::ptr::write_volatile(RMT_CH0_TX_CONF0, tx_conf);
+        core::ptr::write_volatile(RMT_CH0_TX_CONF0, tx_conf | 1);
+        while core::ptr::read_volatile(RMT_CH0_TX_END) & 1 == 0 {}
+        core::ptr::write_volatile(RMT_CH0_INT_CLR, 1);
+
+        // Hold GPIO8 low past the WS2812 reset/latch interval.
         ws2812_reset_gap();
 
         // 5. UART0 capture confirms firmware reached the end of both outputs.

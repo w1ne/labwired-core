@@ -39,4 +39,5 @@ pub mod i2c_ana_mst;
 pub mod lp_timer;
 pub mod modem_lpcon;
 pub mod pcr;
+pub mod rmt;
 pub mod uart;

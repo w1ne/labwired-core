@@ -13,12 +13,9 @@ workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
    Compiling labwired-core v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/core)
    Compiling labwired-loader v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/loader)
    Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/gdbstub)
    Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/labwired-fuzz)
    Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 08s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 40.05s
