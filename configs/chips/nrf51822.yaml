@@ -21,8 +21,8 @@
 # The register blocks reuse the nRF52 models where the nRF51 block is the
 # same IP at the same address: UART (legacy personality, ENABLE=4), GPIO
 # (P0 at 0x50000000, OUT @+0x504), TIMER, RTC, RNG, TEMP, ECB, CLOCK/POWER,
-# RADIO, GPIOTE, PPI, WDT. Not modelled: ADC (0x40007000, nRF51-specific),
-# LPCOMP, QDEC, SPI/TWI slaves.
+# RADIO, GPIOTE, PPI, WDT. The nRF51 single-sample ADC is modelled separately
+# from the nRF52 SAADC at 0x40007000. Not modelled: LPCOMP, QDEC, SPI/TWI slaves.
 name: "nrf51822"
 arch: "arm"
 core: "cortex-m0"
@@ -83,6 +83,10 @@ peripherals:
     base_address: 0x40006000
     size: "4KB"
     irq: 6
+  - id: "adc"
+    type: "nrf51_adc"
+    base_address: 0x40007000
+    size: "4KB"
   - id: "timer0"
     type: "nrf52840_timer"
     base_address: 0x40008000

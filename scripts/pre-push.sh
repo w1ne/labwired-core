@@ -42,7 +42,11 @@ cargo test -p labwired-core --lib tests::yaml_owned_base_contract -- --quiet
 
 if [[ "${LABWIRED_PREPUSH_FULL:-}" == "1" ]]; then
   echo "--- [LABWIRED_PREPUSH_FULL=1: workspace tests] ---"
-  cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+  cargo test --workspace \
+    --exclude firmware \
+    --exclude firmware-ci-fixture \
+    --exclude riscv-ci-fixture \
+    --exclude firmware-semihost-smoke
 fi
 
 echo "--- [Pre-push passed] ---"

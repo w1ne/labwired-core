@@ -8604,7 +8604,7 @@ boards:
     doc: docs/boards/microbit-v1.md
     chip: configs/chips/nrf51822.yaml
     tier: smoke-manual
-    note: "BBC micro:bit V1, target nRF51822 (QFAA), modelled as the S110 v8 application region: flash from 0x18000, the MBR/SoftDevice range an empty hole. Bare-metal legacy UART smoke prints OK\\n, PSELTXD=P0.24 / PSELRXD=P0.25, BAUDRATE=115200, ENABLE=4. Blocks reuse the nRF52 models (UART0 legacy personality, NVMC page size 1 KiB) plus an nRF51 FICR. The 5x5 matrix is a mux primitive. ADC, LPCOMP, QDEC and the radio protocol are not claimed. SoftDevice API emulation lives in crates/nrf-softdevice-hle and is not this board's PR gate. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+    note: "BBC micro:bit V1, target nRF51822 (QFAA), modelled as the S110 v8 application region: flash from 0x18000, the MBR/SoftDevice range an empty hole. Bare-metal legacy UART smoke prints OK\\n, PSELTXD=P0.24 / PSELRXD=P0.25, BAUDRATE=115200, ENABLE=4. Blocks reuse the nRF52 models (UART0 legacy personality, NVMC page size 1 KiB) plus an nRF51 FICR. The 5x5 matrix is a mux primitive. The nRF51 ADC has a bounded SVD-derived input-channel model, with no analog pad aliases or silicon ADC validation claimed; LPCOMP, QDEC and the radio protocol are not modelled. SoftDevice API emulation lives in crates/nrf-softdevice-hle and is not this board's PR gate. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
     offline_tests:
       - "firmware_survival::test_nrf51822_microbit_v1_smoke_survival"
     models:
@@ -8614,8 +8614,11 @@ boards:
       - crates/core/src/peripherals/nvic.rs
       - crates/core/src/peripherals/nrf52/clock.rs
       - crates/core/src/peripherals/nrf52/ecb.rs
+      - crates/core/src/peripherals/nrf52/factory.rs
       - crates/core/src/peripherals/nrf52/ficr.rs
       - crates/core/src/peripherals/nrf52/gpiote.rs
+      - crates/core/src/peripherals/nrf52/mod.rs
+      - crates/core/src/peripherals/nrf52/nrf51_adc.rs
       - crates/core/src/peripherals/nrf52/nvmc.rs
       - crates/core/src/peripherals/nrf52/ppi.rs
       - crates/core/src/peripherals/nrf52/radio.rs

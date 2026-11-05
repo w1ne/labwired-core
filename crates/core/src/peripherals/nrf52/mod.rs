@@ -27,6 +27,7 @@ pub mod i2s;
 pub mod lpcomp;
 pub mod mwu;
 pub mod nfct;
+pub mod nrf51_adc;
 pub mod nvmc;
 pub mod pdm;
 pub mod pin_select;
