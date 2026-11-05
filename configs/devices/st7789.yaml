@@ -50,6 +50,10 @@ behavior:
     # SCL/SDA/CS/DC/RES and no VCC/GND describes a panel that is dark on a bench.
     supply_gated: true
     glass_crop: true
+    gpio_control:
+      power: { config_key: power_pin, active_level: true }
+      reset: { config_key: reset_pin, active_level: false }
+      backlight: { config_key: backlight_pin, active_level: true }
     # What the paint artifact publishes beside the pixels; see ssd1306.yaml.
     artifact_meta:
       [display_on, lit, awake, powered, inverted, painted_bytes, total_bytes,
@@ -113,6 +117,15 @@ metadata:
     - name: powered
       ty: bool
       doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED, because the curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, darkens the panel: it then ignores the SPI bus entirely and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`, which is what the part does on a bench."
+    - name: power_pin
+      ty: str
+      doc: "Optional GPIO label controlling the panel rail. When declared, the pin must be known high before the panel accepts SPI traffic."
+    - name: reset_pin
+      ty: str
+      doc: "Optional active-low hardware reset GPIO label."
+    - name: backlight_pin
+      ty: str
+      doc: "Optional active-high backlight GPIO label; it controls visibility, not frame memory."
     - name: col_offset
       ty: int
       doc: "First frame-memory column the glass shows. NOT a datasheet value -- the ST7789V document describes a 240-column frame memory and says nothing about which strip a given panel exposes. Leave unset to get the whole 240x320 frame memory, which is what the controller holds."

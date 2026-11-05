@@ -3403,6 +3403,8 @@ pub enum DisplaySerialEncoding {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DisplayGpioControl {
     #[serde(default)]
+    pub power: Option<DisplayControlInput>,
+    #[serde(default)]
     pub reset: Option<DisplayControlInput>,
     #[serde(default)]
     pub backlight: Option<DisplayControlInput>,
