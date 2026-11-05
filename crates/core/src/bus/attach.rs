@@ -2339,6 +2339,14 @@ impl SystemBus {
             (2, 'a', 2, LINE_TX, "USART2_TX"),
         ];
 
+        // WCH CH32V003 USART1 defaults to PD5 (WCH's official
+        // USART_IAP/USART1_CFG example configures GPIOD and USART1 and writes
+        // the GPIOD mode word that selects this TX pad). The CH32V003 has an
+        // F1-shaped GPIO register file but a different fixed USART pad map;
+        // it is selected explicitly by the descriptor, never inferred from
+        // the shared GPIO layout.
+        const CH32V003: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
+
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
             // `usart2` on the G4. Looking up both is what stops a rename in one
@@ -2349,6 +2357,11 @@ impl SystemBus {
             else {
                 continue;
             };
+            let ch32v003_pad_map = self.peripherals[uart_idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Uart>())
+                .is_some_and(Uart::uses_ch32v003_pad_map);
             // Plan every binding BEFORE touching the UART: `pad_lines_arc`
             // CREATES the pad cell, and a UART owning a cell no route reaches
             // still buffers and narrates on every transmitted byte into a wire
@@ -2390,7 +2403,8 @@ impl SystemBus {
                         }
                     }
                     GpioRegisterLayout::Stm32F1 => {
-                        for &(inst, p, pin, line, func) in F1 {
+                        let table = if ch32v003_pad_map { CH32V003 } else { F1 };
+                        for &(inst, p, pin, line, func) in table {
                             if inst == instance && p == port {
                                 plan.push((port, pin, None, line, func));
                             }

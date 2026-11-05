@@ -1,0 +1,13 @@
+# Boot RV32EC firmware, assert USART1 TX text, and observe repeated PD0 edges.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-usart-smoke.elf"
+  system: "../../configs/systems/ch32v003evt-usart-smoke.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "CH32V003_USART_OK"
+  - gpio_edges:
+      pin: "gpiod:0"
+      min_edges: 8
+  - expected_stop_reason: max_steps

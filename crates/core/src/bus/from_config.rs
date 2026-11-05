@@ -841,6 +841,14 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
+                    if p_cfg.config.get("pad_map").and_then(|v| v.as_str()) == Some("ch32v003") {
+                        anyhow::ensure!(
+                            matches!(layout, crate::peripherals::uart::UartRegisterLayout::Stm32F1),
+                            "Peripheral '{}' selects the CH32V003 pad map but not the STM32F1 USART register layout",
+                            p_cfg.id
+                        );
+                        uart = uart.set_ch32v003_pad_map();
+                    }
                     // Renesas SCI_B and classic SCI: `elc_event` is the
                     // channel's RXI event (TXI/TEI follow); the events reach
                     // the NVIC through the RA ICU. `clock_hz` is the rate the
