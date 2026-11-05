@@ -1469,6 +1469,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-ezr32-wonder-gecko-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ezr32hg320-smoke"
 version = "0.1.0"
 dependencies = [

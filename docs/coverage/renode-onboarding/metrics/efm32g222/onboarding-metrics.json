@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32g222-smoke.yaml",
   "system": "configs/systems/onboarding/efm32g222.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T04:08:36Z",
-  "finished_at_utc": "2026-11-05T04:08:37Z",
+  "started_at_utc": "2026-11-05T04:24:57Z",
+  "finished_at_utc": "2026-11-05T04:24:58Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 739,
+  "elapsed_ms": 720,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.292,
+    "build_cli": 0.287,
     "build_firmware": 0.161,
-    "run_smoke": 0.275
+    "run_smoke": 0.261
   },
   "stages_ms": {
-    "build_cli": 292,
+    "build_cli": 287,
     "build_firmware": 161,
-    "run_smoke": 275
+    "run_smoke": 261
   }
 }

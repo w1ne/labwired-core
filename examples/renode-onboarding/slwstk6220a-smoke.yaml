@@ -1,0 +1,10 @@
+# UART0 smoke against the exact imported SLWSTK6220A system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-ezr32-wonder-gecko-smoke"
+  system: "../../configs/systems/onboarding/slwstk6220a.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EZR32 Wonder Gecko UART0 smoke"
+  - expected_stop_reason: max_steps

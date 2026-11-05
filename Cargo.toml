@@ -114,6 +114,7 @@ members = [
     "crates/firmware-efr32mg13-smoke",
     "crates/firmware-efr32mg1-smoke",
     "crates/firmware-efm32wg995-smoke",
+    "crates/firmware-ezr32-wonder-gecko-smoke",
     "crates/firmware-ezr32-330-smoke",
     "crates/firmware-efm32-stk-m3-smoke",
     "crates/firmware-stk3200-smoke",

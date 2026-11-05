@@ -1,5 +1,5 @@
-2026-11-05T04:09:47.037943Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stk3200.yaml
-2026-11-05T04:09:47.038657Z  INFO labwired_loader: ELF Entry Point: 0xc1
+2026-11-05T04:26:08.695613Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stk3200.yaml
+2026-11-05T04:26:08.696238Z  INFO labwired_loader: ELF Entry Point: 0xc1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · stk3200-smoke · 100000 steps · 0.00s

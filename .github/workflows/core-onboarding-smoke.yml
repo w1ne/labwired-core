@@ -48,6 +48,8 @@ on:
       - "crates/firmware-efm32wg995-smoke/**"
       - "crates/firmware-ezr32hg320-smoke/**"
       - "crates/firmware-ezr32-330-smoke/**"
+      - "crates/firmware-ezr32-wonder-gecko-smoke/**"
+      - "examples/renode-onboarding/slwstk6220a-smoke.yaml"
       - "crates/firmware-efm32-stk-m3-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -480,6 +482,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/ezr32wg330-smoke.yaml
             system: configs/systems/onboarding/ezr32wg330.yaml
+          # The imported SLWSTK6220A profile is bounded to its Cortex-M4F
+          # memory windows and the modeled UART0 path used by this smoke.
+          - id: slwstk6220a
+            crate: firmware-ezr32-wonder-gecko-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/slwstk6220a-smoke.yaml
+            system: configs/systems/onboarding/slwstk6220a.yaml
           # STK3600 and STK3700 are narrowed to their imported Cortex-M3 memory
           # windows and the modeled UART0 surface exercised by the shared smoke.
           - id: stk3600

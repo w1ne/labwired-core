@@ -190,6 +190,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/ezr32wg330-smoke.yaml",
     },
+    "slwstk6220a": {
+        "crate": "firmware-ezr32-wonder-gecko-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/slwstk6220a-smoke.yaml",
+    },
     "efm32zg222": {
         "crate": "firmware-efm32zg222-smoke",
         "target": "thumbv6m-none-eabi",
