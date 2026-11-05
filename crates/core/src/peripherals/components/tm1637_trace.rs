@@ -107,10 +107,11 @@ impl Tm1637Trace {
             if !self.txn_bytes.is_empty() {
                 let bytes = std::mem::take(&mut self.txn_bytes);
                 let is_data_write = bytes.first() == Some(&0xC0) && bytes.len() >= 5;
-                let is_disp_ctrl = bytes.len() == 1 && (bytes[0] & 0x80) == 0x80;
                 self.push_bus(t_us, bytes);
+                // One frame per GRID data write (incl. identical re-paint). Display
+                // control alone only records when on/brightness actually change —
+                // avoids doubling every showCounter into CAP.
                 if is_data_write
-                    || is_disp_ctrl
                     || grids != self.last_grids
                     || display_on != self.last_display_on
                     || bright != self.last_bright
