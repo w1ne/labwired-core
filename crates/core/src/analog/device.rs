@@ -41,8 +41,10 @@
 //! The diode and BJT support their documented explicit instance `TEMP` laws;
 //! diode `CJO`, `VJ`, `M`, and transit time use their documented temperature
 //! equations. BJT transit times use `TTF*`/`TTR*`, and terminal resistances use
-//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. Other parameters are taken at
-//! [`TEMPERATURE_K`] as written. A `.model`
+//! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. JFET level-1 channel `VTO`/`BETA`
+//! use `VTOTC`/`TCV` and `BETATCE`/`BEX` when an instance `TEMP` is supplied;
+//! gate-junction temperature effects and MOSFET temperature laws are not
+//! modeled. Other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
 //! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
 //! [`super::netlist`]. Diode soft recovery covers the
@@ -62,7 +64,7 @@
 //! calculations, so drift or an incorrect equation fails a test.
 
 use super::netlist::BjtModel;
-use super::netlist::{MosChannelChargeModel, Mosfet};
+use super::netlist::{JfetModel, MosChannelChargeModel, Mosfet};
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
@@ -256,6 +258,35 @@ pub fn bjt_parameters_at_temperature(
     adjusted.vjc = vjc;
     adjusted.mjc = mjc;
     (adjusted, thermal_voltage)
+}
+
+/// SPICE level-1 JFET channel parameters adjusted for an explicit instance
+/// temperature. `VTOTC` overrides `TCV`; `BETATCE` overrides `BEX`, matching
+/// ngspice's documented alternatives. Gate-junction temperature effects are
+/// outside this helper.
+pub fn jfet_parameters_at_temperature(
+    model: JfetModel,
+    temperature_celsius: Option<f64>,
+) -> JfetModel {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return model;
+    };
+
+    let delta = temperature_celsius - model.tnom_celsius;
+    let mut adjusted = model;
+    adjusted.vto = if let Some(vtotc) = model.vtotc {
+        model.vto + vtotc * delta
+    } else {
+        model.vto - model.tcv * delta
+    };
+    adjusted.beta = if let Some(betatce) = model.betatce {
+        model.beta * libm::pow(1.01, betatce * delta)
+    } else {
+        let temperature_kelvin = temperature_celsius + 273.15;
+        let nominal_kelvin = model.tnom_celsius + 273.15;
+        model.beta * libm::pow(temperature_kelvin / nominal_kelvin, model.bex)
+    };
+    adjusted
 }
 
 /// Temperature-adjust one BJT depletion junction, matching ngspice's default

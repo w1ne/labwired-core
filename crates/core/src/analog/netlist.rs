@@ -26,7 +26,7 @@
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
-//! | JFET | `J<name> nd ng ns <model>` |
+//! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
@@ -84,8 +84,8 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode
-//! and BJT laws below,
+//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode,
+//! BJT, and JFET laws below,
 //! and most terminal resistances, …) are **accepted and ignored rather than
 //! rejected**. A diode instance's `TEMP` and model `TNOM`/`EG`/`XTI` adjust
 //! its thermal voltage and saturation currents; `TCV`/`TBV1` adjusts the
@@ -105,6 +105,11 @@
 //! `TTF1`/`TTF2` and `TTR1`/`TTR2` apply the same polynomial to forward and
 //! reverse transit times. Without instance `TEMP`, these parameters retain
 //! their nominal values.
+//! A JFET instance `TEMP` adjusts level-1 `VTO` by `VTOTC` when supplied, or
+//! otherwise by `-TCV`; it adjusts `BETA` by `1.01^(BETATCE·ΔT)` when
+//! `BETATCE` is supplied, or otherwise by `(T/TNOM)^BEX` using absolute
+//! temperatures. Without instance `TEMP`, the historical channel parameters
+//! are retained. Gate-junction temperature effects are not adjusted.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -121,7 +126,8 @@
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
 //! resistances `RB`/`RC`/`RE` are modelled. JFET
-//! channel current uses the Parker–Skellern fit `B` (default 1); terminal
+//! channel current uses the Parker–Skellern fit `B` (default 1), with explicit
+//! instance `TEMP` laws for level-1 `VTO` and `BETA`; terminal
 //! resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
@@ -1516,6 +1522,18 @@ pub struct JfetModel {
     pub pb: f64,
     /// Forward-bias depletion-capacitance coefficient `FC`.
     pub fc: f64,
+    /// Parameter measurement temperature `TNOM`, in Celsius.
+    pub tnom_celsius: f64,
+    /// Alternative threshold temperature coefficient. When supplied, even as
+    /// zero, this takes precedence over `TCV`.
+    pub vtotc: Option<f64>,
+    /// Threshold voltage temperature coefficient used when `VTOTC` is absent.
+    pub tcv: f64,
+    /// Alternative beta temperature coefficient. When supplied, even as
+    /// zero, this takes precedence over `BEX`.
+    pub betatce: Option<f64>,
+    /// Mobility temperature exponent used when `BETATCE` is absent.
+    pub bex: f64,
 }
 
 impl JfetModel {
@@ -1533,6 +1551,11 @@ impl JfetModel {
             cgd: 0.0,
             pb: 1.0,
             fc: 0.5,
+            tnom_celsius: 27.0,
+            vtotc: None,
+            tcv: 0.0,
+            betatce: None,
+            bex: 0.0,
         }
     }
 }
@@ -2160,7 +2183,7 @@ impl Mosfet {
     }
 }
 
-/// `J<name> nd ng ns <model>` — a SPICE level-1 JFET.
+/// `J<name> nd ng ns <model> [temp=<°C>]` — a SPICE level-1 JFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Jfet {
     /// Element name as written, e.g. `J1`.
@@ -2179,6 +2202,11 @@ pub struct Jfet {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: JfetModel,
+    /// `VTO` and `BETA` adjusted for this instance's explicit `TEMP`.
+    pub operating_model: JfetModel,
+    /// Explicit instance temperature, in Celsius. `None` preserves the
+    /// historical channel parameters.
+    pub temperature_celsius: Option<f64>,
 }
 
 /// Voltage threshold control for a switch: closes from the voltage between
@@ -2879,7 +2907,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
-                        "temp" if matches!(letter, 'D' | 'Q') => {
+                        "temp" if matches!(letter, 'D' | 'Q' | 'J') => {
                             temperature_celsius = Some(ctx.value(value, "temp")?)
                         }
                         other => {
@@ -3896,8 +3924,21 @@ fn bind_models(
                 let ModelCard::Jfet(model) = card else {
                     return Err(wrong_kind("J"));
                 };
-                if model.beta <= 0.0 || model.is <= 0.0 {
-                    return Err(ctx.parse_err("a JFET model needs BETA > 0 and IS > 0"));
+                if !model.vto.is_finite()
+                    || !model.beta.is_finite()
+                    || model.beta <= 0.0
+                    || !model.is.is_finite()
+                    || model.is <= 0.0
+                    || !model.tnom_celsius.is_finite()
+                    || model.tnom_celsius <= -273.15
+                    || !model.tcv.is_finite()
+                    || !model.bex.is_finite()
+                    || model.vtotc.is_some_and(|value| !value.is_finite())
+                    || model.betatce.is_some_and(|value| !value.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0 and IS > 0",
+                    ));
                 }
                 if !model.rd.is_finite()
                     || model.rd < 0.0
@@ -3922,6 +3963,18 @@ fn bind_models(
                     return Err(
                         ctx.parse_err("a JFET model needs CGS/CGD >= 0, PB > 0 and 0 <= FC < 1")
                     );
+                }
+                let operating_model = super::device::jfet_parameters_at_temperature(
+                    model,
+                    device.temperature_celsius,
+                );
+                if !operating_model.vto.is_finite()
+                    || !operating_model.beta.is_finite()
+                    || operating_model.beta <= 0.0
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted JFET VTO/BETA must be finite and BETA > 0",
+                    ));
                 }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
@@ -3950,6 +4003,8 @@ fn bind_models(
                     junction_s,
                     model_name: device.model_name,
                     model,
+                    operating_model,
+                    temperature_celsius: device.temperature_celsius,
                 });
             }
             _ => unreachable!("device letter filtered above"),
@@ -4361,6 +4416,11 @@ fn parse_model(
             (ModelCard::Jfet(model), "CGD") => model.cgd = value,
             (ModelCard::Jfet(model), "PB") => model.pb = value,
             (ModelCard::Jfet(model), "FC") => model.fc = value,
+            (ModelCard::Jfet(model), "TNOM") => model.tnom_celsius = value,
+            (ModelCard::Jfet(model), "VTOTC") => model.vtotc = Some(value),
+            (ModelCard::Jfet(model), "TCV") => model.tcv = value,
+            (ModelCard::Jfet(model), "BETATCE") => model.betatce = Some(value),
+            (ModelCard::Jfet(model), "BEX") => model.bex = value,
             (ModelCard::Jfet(_), "LEVEL") if value != 1.0 => {
                 return Err(ctx.parse_err(format!(
                     "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \

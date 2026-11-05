@@ -27,6 +27,22 @@ cargo run -q -p labwired-cli -- test \
 - UART-only smoke: **PASS, 2/2 assertions**, 200,000 steps. UART captured
   `OK`; stop reason was `MaxSteps`.
 
+## Mixed-signal ADC path
+
+The separate [`analog-ntc-system.yaml`](analog-ntc-system.yaml) manifest routes
+a temperature-driven NTC divider through the in-core MNA solver to
+`board.analog.pa0_volts`. The board-specific test resolves PA0 through the
+STM32F103RB descriptor and checks the firmware-visible ADC1 data register at
+cold, nominal, and hot temperatures.
+
+```sh
+cargo test -p labwired-core --test cosim_pin_routing \
+  nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end -- --nocapture
+```
+
+This is simulator evidence for NUCLEO-F103RB; it does not claim a physical
+board measurement.
+
 ## Unsupported-instruction audit
 
 ```sh

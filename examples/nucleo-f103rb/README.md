@@ -43,6 +43,10 @@ OK
 The runnable assertion scripts are `io-smoke.yaml` (UART plus four LD2 GPIO
 edges) and `uart-smoke.yaml` (UART output).
 
+`analog-ntc-system.yaml` is the board-specific mixed-signal example. It routes
+a temperature-driven NTC netlist to PA0 / ADC1_IN0; the executable end-to-end
+assertion is documented in [`VALIDATION.md`](VALIDATION.md#mixed-signal-adc-path).
+
 ## Source and validation boundary
 
 The board wiring follows ST UM1724 and the chip geometry follows ST DS5319.

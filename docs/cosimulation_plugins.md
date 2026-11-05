@@ -560,9 +560,11 @@ instance `TEMP` is supplied. BJT junction depletion parameters `CJE`/`VJE`/
 `TMJE1`/`TMJE2` and `TMJC1`/`TMJC2` add grading-coefficient temperature
 dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
 `TVJE`/`TVJC` potential coefficients. BJT terminal resistances continue to
-use their documented `TR*` coefficients. JFET and MOSFET models do not yet
-have a temperature model. These are external instance temperatures;
-self-heating is not modeled.
+use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
+use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
+`TEMP` is supplied. Gate-junction temperature effects and MOSFET temperature
+laws are not modeled. These are external instance temperatures; self-heating
+is not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the
 deck is specifically checking an in-core temperature law.
 

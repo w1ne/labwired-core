@@ -5500,6 +5500,92 @@ mod analog {
         }
     }
 
+    /// SPICE level-1 JFET temperature coefficients adjust the channel law at
+    /// the instance's external `TEMP`. Verify both coefficient alternatives,
+    /// their precedence, both channel polarities, and the resulting MNA
+    /// currents against an independently calculated model card.
+    #[test]
+    fn jfet_temperature_coefficients_match_level1_laws_in_solved_circuits() {
+        let (tnom, temperature, delta) = (40.0, 115.0, 75.0);
+        let (beta, lambda, is, vds) = (2e-4, 0.02, 1e-30, 1.0);
+        let cases = [
+            // VTOTC and BETATCE take precedence over the nonzero TCV and BEX.
+            ("NJF", 1.0, -2.0, Some(0.001), 0.02, Some(0.4), 2.5),
+            // With alternatives absent, TCV and the absolute-temperature BEX
+            // power law set VTO and BETA for a P-channel device.
+            ("PJF", -1.0, 2.0, None, -0.001, None, 1.2),
+        ];
+
+        for (kind, sign, vto, vtotc, tcv, betatce, bex) in cases {
+            let vtotc_parameter = vtotc.map_or_else(String::new, |value| format!(" VTOTC={value}"));
+            let betatce_parameter =
+                betatce.map_or_else(String::new, |value| format!(" BETATCE={value}"));
+            let delta_kelvin: f64 = (temperature + 273.15) / (tnom + 273.15);
+            let expected_vto = vtotc.map_or(vto - tcv * delta, |tc| vto + tc * delta);
+            let expected_beta = betatce.map_or_else(
+                || beta * delta_kelvin.powf(bex),
+                |tce| beta * 1.01_f64.powf(tce * delta),
+            );
+            let model_parameters = format!(
+                "TNOM={tnom} VTO={vto} BETA={beta} LAMBDA={lambda} IS={is} \
+                 TCV={tcv} BEX={bex}{vtotc_parameter}{betatce_parameter}"
+            );
+            let netlist = |model: String, instance_temp: Option<f64>| {
+                let temp = instance_temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "Vg g 0 dc 0\nVd d 0 dc {}\nVs s 0 dc 0\n\
+                     J1 d g s JMOD{temp}\n.model JMOD {kind}({model})\n",
+                    sign * vds
+                )
+            };
+
+            let operating = build(&netlist(model_parameters.clone(), Some(temperature)));
+            let explicit_model = format!(
+                "TNOM={tnom} VTO={expected_vto} BETA={expected_beta} \
+                 LAMBDA={lambda} IS={is}"
+            );
+            let explicit = build(&netlist(explicit_model, None));
+            let fixed = build(&netlist(model_parameters, None));
+            let adjusted = operating.circuit().jfets[0].operating_model;
+            assert_eq!(
+                operating.circuit().jfets[0].temperature_celsius,
+                Some(temperature)
+            );
+            assert!(
+                (adjusted.vto - expected_vto).abs() < 1e-14,
+                "{kind}: expected VTO(T)={expected_vto}, got {}",
+                adjusted.vto
+            );
+            assert!(
+                relative(adjusted.beta, expected_beta) < 1e-14,
+                "{kind}: expected BETA(T)={expected_beta}, got {}",
+                adjusted.beta
+            );
+
+            let channel_current = |effective_vto: f64, effective_beta: f64| {
+                let vgst = 0.0 - sign * effective_vto;
+                let channel = effective_beta * (1.0 + lambda * vds) * vds * (2.0 * vgst - vds);
+                channel + device::GMIN * vds - device::diode_op(-vds, is, 1.0).id
+            };
+            let expected_current = channel_current(expected_vto, expected_beta);
+            let actual_current = sign * source_current(&operating, "Vd");
+            let explicit_current = sign * source_current(&explicit, "Vd");
+            let fixed_current = sign * source_current(&fixed, "Vd");
+            assert!(
+                relative(actual_current, expected_current) < 2e-5,
+                "{kind}: level-1 temperature law predicts {expected_current} A, got {actual_current} A"
+            );
+            assert!(
+                relative(actual_current, explicit_current) < 2e-8,
+                "{kind}: TEMP model gives {actual_current} A, equivalent adjusted model gives {explicit_current} A"
+            );
+            assert!(
+                (actual_current - fixed_current).abs() > 1e-5,
+                "{kind}: explicit TEMP must change the solved channel current"
+            );
+        }
+    }
+
     /// The Parker–Skellern B fit changes both JFET channel regions. Its
     /// closed-form current and analytic partials are checked through the
     /// nonlinear MNA solve for both channel polarities.

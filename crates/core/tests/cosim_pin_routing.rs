@@ -42,6 +42,16 @@ fn f401_bus() -> SystemBus {
     chip_bus("stm32f401")
 }
 
+/// Load a board manifest and its referenced chip descriptor as one fixture.
+fn bus_and_manifest(rel_system_path: &str) -> (SystemManifest, SystemBus) {
+    let system_path = root(rel_system_path);
+    let manifest = SystemManifest::from_file(&system_path).expect("load board system");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let descriptor = ChipDescriptor::from_file(&chip_path).expect("load system chip descriptor");
+    let bus = SystemBus::from_config(&descriptor, &manifest).expect("build board bus");
+    (manifest, bus)
+}
+
 /// A `mock` model: static outputs from `config.outputs`, routed through the
 /// manifest's `outputs:` map like any other adapter's.
 fn mock_model(
@@ -80,7 +90,7 @@ fn build_session(bus: &SystemBus, models: &[CosimModelConfig]) -> CosimSession {
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "every path in this fixture must resolve on an F401"
+        "every path in this fixture must resolve on the modeled chip"
     );
     session
 }
@@ -182,6 +192,36 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     bus.write_u32(ADC1_BASE + 0x08, ADON | SWSTART)
         .expect("software-start ADC1 conversion");
     for _ in 0..15 {
+        bus.tick_peripherals_fully();
+    }
+    let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
+    assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
+    bus.read_u32(ADC1_BASE + 0x4c)
+        .expect("read firmware-visible ADC1 DR")
+}
+
+/// Convert one routed input through the STM32F1 ADC1 register interface.
+fn f103_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+    const RCC_BASE: u64 = 0x4002_1000;
+    const ADC1_BASE: u64 = 0x4001_2400;
+    const ADC1EN: u32 = 1 << 9;
+    const ADON: u32 = 1;
+    const EXTSEL_SOFTWARE: u32 = 0b111 << 17;
+    const EXTTRIG: u32 = 1 << 20;
+    const SWSTART: u32 = 1 << 22;
+    const EOC: u32 = 1 << 1;
+
+    let apb2enr = bus.read_u32(RCC_BASE + 0x18).expect("read APB2ENR");
+    bus.write_u32(RCC_BASE + 0x18, apb2enr | ADC1EN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_BASE + 0x34, u32::from(channel))
+        .expect("select SQR3 SQ1 channel");
+    let trigger = ADON | EXTSEL_SOFTWARE | EXTTRIG;
+    bus.write_u32(ADC1_BASE + 0x08, trigger)
+        .expect("power up ADC1 and enable software trigger");
+    bus.write_u32(ADC1_BASE + 0x08, trigger | SWSTART)
+        .expect("start ADC1 conversion");
+    for _ in 0..64 {
         bus.tick_peripherals_fully();
     }
     let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
@@ -797,6 +837,66 @@ fn an_in_core_ntc_netlist_drives_the_resolved_adc_channel() {
             f401_adc_convert(&mut bus, 0),
             u32::from(expected_count),
             "firmware reading ADC1_DR should see the routed PA0 sample at {temperature_c} °C"
+        );
+        samples.push((temperature_c, volts, count));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "an NTC divider rises as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the resolved ADC reading follows the physical voltage: {samples:?}"
+    );
+    assert_eq!(
+        samples[1].2, 2047,
+        "25 °C puts the matched divider at half scale"
+    );
+}
+
+/// The same generic NTC netlist and pin resolver must work on a second board,
+/// using that board's STM32F103RB package descriptor and F1 ADC register map.
+/// This covers the NUCLEO-F103RB board path, not only a bare F401 chip bus.
+#[test]
+fn nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end() {
+    let (manifest, mut bus) = bus_and_manifest("examples/nucleo-f103rb/analog-ntc-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the analog model reads the routed temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("step NTC netlist");
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let volts = match session.signals().get("board.analog.pa0_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("netlist did not publish NUCLEO-F103RB PA0 voltage: {other:?}"),
+        };
+        let count = adc_channel_count(&mut bus, 0);
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 3.3 * 10_000.0 / (ntc_ohms + 10_000.0);
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor();
+        let expected_count = (routed_mv * 4095.0 / 3300.0).floor() as u16;
+
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the solved NTC divider should be {expected_volts} V, got {volts} V"
+        );
+        assert_eq!(
+            count, expected_count,
+            "the resolved ADC1_IN0 should hold the routed voltage at {temperature_c} °C"
+        );
+        assert_eq!(
+            f103_adc_convert(&mut bus, 0),
+            u32::from(expected_count),
+            "firmware reading ADC1_DR on NUCLEO-F103RB should see the routed sample"
         );
         samples.push((temperature_c, volts, count));
     }

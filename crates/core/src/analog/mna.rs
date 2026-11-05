@@ -2585,8 +2585,8 @@ impl Solver {
             let op = device::jfet_op_with_b(
                 vgs,
                 vds,
-                sign * jfet.model.vto,
-                jfet.model.beta,
+                sign * jfet.operating_model.vto,
+                jfet.operating_model.beta,
                 jfet.model.lambda,
                 jfet.model.b,
                 jfet.model.pb,
