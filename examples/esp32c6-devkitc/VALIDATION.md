@@ -21,7 +21,7 @@ cargo build -p firmware-esp32c6-demo --release --target riscv32imc-unknown-none-
 
 Committed copy of the same artifact: `tests/fixtures/esp32c6-demo.elf`.
 
-## 3) Run deterministic UART0 console smoke
+## 3) Run deterministic UART0 + on-board RGB LED smoke
 
 ```bash
 cargo run -q -p labwired-cli -- test \
@@ -34,6 +34,8 @@ Pass criteria:
 
 1. exit code is `0`
 2. UART0 host capture contains `OK`
+3. GPIO8 records at least 48 edges from the WS2812 frame
+4. the `rgb_led` artifact contains a red pixel (`RGB565 0xF800`)
 
 ## 4) Run firmware survival gate
 

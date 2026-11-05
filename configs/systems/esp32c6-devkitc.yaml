@@ -1,11 +1,12 @@
 # LabWired - ESP32-C6-DevKitC-1 System Configuration
 #
 # Board wiring per the ESP32-C6-DevKitC-1 v1.2 user guide. This profile claims
-# only the UART0 console. The USB-to-UART bridge and GPIO16/GPIO17 pad-level
-# propagation are not modeled. The RGB LED, BOOT button, USB-device path, and
-# radio are omitted until their board-level behavior is modeled and exercised.
+# UART0 and the on-board WS2812 RGB LED. The smoke bit-bangs the LED through
+# GPIO8; the USB-to-UART bridge and GPIO16/GPIO17 pad-level propagation are
+# not modeled. RMT, BOOT button, USB-device path, and radio remain omitted.
 # Physical pin map: GPIO16/U0TXD -> bridge RX; bridge TX -> GPIO17/U0RXD.
-# Only the UART0 peripheral-to-host capture path is represented in the twin.
+# UART0 capture is direct to the host; GPIO8 pad transitions are decoded by
+# the attached WS2812 model. Neither path claims analog or power behavior.
 # RESET is wired to CHIP_EN, not a GPIO — not representable here.
 #
 # SIM-DERIVED / L1 smoke — no silicon diff. See docs/boards/esp32c6-devkitc.md.
@@ -14,4 +15,11 @@ name: "esp32c6-devkitc"
 chip: "../chips/esp32c6.yaml"
 cpu_hz: 160_000_000
 debug_uart: "uart0"
-external_devices: []
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160_000_000

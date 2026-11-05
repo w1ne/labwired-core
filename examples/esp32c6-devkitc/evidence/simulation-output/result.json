@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 200000,
-  "cycles": 400170,
+  "cycles": 400234,
   "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -36,6 +36,28 @@
     },
     {
       "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:8",
+          "min_edges": 48
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "rgb_led",
+          "x": 0,
+          "y": 0,
+          "min_ink": 1.0,
+          "colour": "0xF800",
+          "min_colour_pixels": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -45,8 +67,8 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107296568,
-      1082654704,
+      1107298124,
+      1082654688,
       1082132480,
       0,
       0,
@@ -54,11 +76,11 @@
       0,
       1082654720,
       0,
+      1107298191,
       1610612736,
-      1107296959,
-      1107296959,
+      1107298191,
       10,
-      0,
+      1611202560,
       0,
       0,
       0,
@@ -77,7 +99,7 @@
       0,
       0
     ],
-    "pc": 1107296920,
+    "pc": 1107298152,
     "mstatus": 0,
     "mie": 0,
     "mip": 0,
@@ -113,7 +135,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "c07d54130f2973268c93b9356933e7356e5f2ff779815b327f8cf9b672fc51ae",
+  "firmware_hash": "cbeb8de3a973272a0080de334e7149d0cb0d1ef11799660365f77ebd09e6763d",
   "config": {
     "firmware": "examples/esp32c6-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo",
     "system": "examples/esp32c6-devkitc/../../configs/systems/esp32c6-devkitc.yaml",
@@ -890,7 +912,7 @@
             "name": "ENABLE",
             "offset": 32,
             "size": 32,
-            "value": 0,
+            "value": 256,
             "fields": [
               {
                 "name": "DATA",
@@ -898,7 +920,7 @@
                   31,
                   0
                 ],
-                "value": 0
+                "value": 256
               }
             ],
             "access": "rw"
@@ -907,7 +929,7 @@
             "name": "ENABLE_W1TS",
             "offset": 36,
             "size": 32,
-            "value": 0,
+            "value": 256,
             "fields": [
               {
                 "name": "ENABLE_W1TS",
@@ -915,7 +937,7 @@
                   31,
                   0
                 ],
-                "value": 0
+                "value": 256
               }
             ],
             "access": "rw"
@@ -924,7 +946,7 @@
             "name": "ENABLE_W1TC",
             "offset": 40,
             "size": 32,
-            "value": 0,
+            "value": 256,
             "fields": [
               {
                 "name": "ENABLE_W1TC",
@@ -932,7 +954,7 @@
                   31,
                   0
                 ],
-                "value": 0
+                "value": 256
               }
             ],
             "access": "rw"
@@ -10833,7 +10855,7 @@
             "name": "GPIO8",
             "offset": 36,
             "size": 32,
-            "value": 2048,
+            "value": 2560,
             "fields": [
               {
                 "name": "MCU_OE",
@@ -10905,7 +10927,7 @@
                   9,
                   9
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "FUN_DRV",
@@ -18591,7 +18613,32 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "rgb_led",
+        "device_type": "neopixel",
+        "declared": true,
+        "attachment": {
+          "transport": "gpio",
+          "bus": "gpio"
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "rgb_led",
+            "meta": {
+              "data_pin": 8,
+              "format": "ws2812_grb",
+              "generation": 15475485528314852384,
+              "h": 1,
+              "lit_pixels": 1,
+              "pixels_decoded": 1,
+              "w": 1
+            }
+          }
+        ]
+      }
+    ]
   },
   "fidelity": [
     {
@@ -18602,27 +18649,449 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 8,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 106,
+            "value": 1
+          },
+          {
+            "cycle": 147,
+            "value": 0
+          },
+          {
+            "cycle": 300,
+            "value": 1
+          },
+          {
+            "cycle": 341,
+            "value": 0
+          },
+          {
+            "cycle": 494,
+            "value": 1
+          },
+          {
+            "cycle": 535,
+            "value": 0
+          },
+          {
+            "cycle": 688,
+            "value": 1
+          },
+          {
+            "cycle": 729,
+            "value": 0
+          },
+          {
+            "cycle": 882,
+            "value": 1
+          },
+          {
+            "cycle": 923,
+            "value": 0
+          },
+          {
+            "cycle": 1076,
+            "value": 1
+          },
+          {
+            "cycle": 1117,
+            "value": 0
+          },
+          {
+            "cycle": 1270,
+            "value": 1
+          },
+          {
+            "cycle": 1311,
+            "value": 0
+          },
+          {
+            "cycle": 1464,
+            "value": 1
+          },
+          {
+            "cycle": 1505,
+            "value": 0
+          },
+          {
+            "cycle": 1660,
+            "value": 1
+          },
+          {
+            "cycle": 1757,
+            "value": 0
+          },
+          {
+            "cycle": 1854,
+            "value": 1
+          },
+          {
+            "cycle": 1951,
+            "value": 0
+          },
+          {
+            "cycle": 2048,
+            "value": 1
+          },
+          {
+            "cycle": 2145,
+            "value": 0
+          },
+          {
+            "cycle": 2242,
+            "value": 1
+          },
+          {
+            "cycle": 2339,
+            "value": 0
+          },
+          {
+            "cycle": 2436,
+            "value": 1
+          },
+          {
+            "cycle": 2533,
+            "value": 0
+          },
+          {
+            "cycle": 2630,
+            "value": 1
+          },
+          {
+            "cycle": 2727,
+            "value": 0
+          },
+          {
+            "cycle": 2824,
+            "value": 1
+          },
+          {
+            "cycle": 2921,
+            "value": 0
+          },
+          {
+            "cycle": 3018,
+            "value": 1
+          },
+          {
+            "cycle": 3115,
+            "value": 0
+          },
+          {
+            "cycle": 3214,
+            "value": 1
+          },
+          {
+            "cycle": 3255,
+            "value": 0
+          },
+          {
+            "cycle": 3408,
+            "value": 1
+          },
+          {
+            "cycle": 3449,
+            "value": 0
+          },
+          {
+            "cycle": 3602,
+            "value": 1
+          },
+          {
+            "cycle": 3643,
+            "value": 0
+          },
+          {
+            "cycle": 3796,
+            "value": 1
+          },
+          {
+            "cycle": 3837,
+            "value": 0
+          },
+          {
+            "cycle": 3990,
+            "value": 1
+          },
+          {
+            "cycle": 4031,
+            "value": 0
+          },
+          {
+            "cycle": 4184,
+            "value": 1
+          },
+          {
+            "cycle": 4225,
+            "value": 0
+          },
+          {
+            "cycle": 4378,
+            "value": 1
+          },
+          {
+            "cycle": 4419,
+            "value": 0
+          },
+          {
+            "cycle": 4572,
+            "value": 1
+          },
+          {
+            "cycle": 4613,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 103,
+            "state": "0"
+          },
+          {
+            "cycle": 106,
+            "state": "1"
+          },
+          {
+            "cycle": 147,
+            "state": "0"
+          },
+          {
+            "cycle": 300,
+            "state": "1"
+          },
+          {
+            "cycle": 341,
+            "state": "0"
+          },
+          {
+            "cycle": 494,
+            "state": "1"
+          },
+          {
+            "cycle": 535,
+            "state": "0"
+          },
+          {
+            "cycle": 688,
+            "state": "1"
+          },
+          {
+            "cycle": 729,
+            "state": "0"
+          },
+          {
+            "cycle": 882,
+            "state": "1"
+          },
+          {
+            "cycle": 923,
+            "state": "0"
+          },
+          {
+            "cycle": 1076,
+            "state": "1"
+          },
+          {
+            "cycle": 1117,
+            "state": "0"
+          },
+          {
+            "cycle": 1270,
+            "state": "1"
+          },
+          {
+            "cycle": 1311,
+            "state": "0"
+          },
+          {
+            "cycle": 1464,
+            "state": "1"
+          },
+          {
+            "cycle": 1505,
+            "state": "0"
+          },
+          {
+            "cycle": 1660,
+            "state": "1"
+          },
+          {
+            "cycle": 1757,
+            "state": "0"
+          },
+          {
+            "cycle": 1854,
+            "state": "1"
+          },
+          {
+            "cycle": 1951,
+            "state": "0"
+          },
+          {
+            "cycle": 2048,
+            "state": "1"
+          },
+          {
+            "cycle": 2145,
+            "state": "0"
+          },
+          {
+            "cycle": 2242,
+            "state": "1"
+          },
+          {
+            "cycle": 2339,
+            "state": "0"
+          },
+          {
+            "cycle": 2436,
+            "state": "1"
+          },
+          {
+            "cycle": 2533,
+            "state": "0"
+          },
+          {
+            "cycle": 2630,
+            "state": "1"
+          },
+          {
+            "cycle": 2727,
+            "state": "0"
+          },
+          {
+            "cycle": 2824,
+            "state": "1"
+          },
+          {
+            "cycle": 2921,
+            "state": "0"
+          },
+          {
+            "cycle": 3018,
+            "state": "1"
+          },
+          {
+            "cycle": 3115,
+            "state": "0"
+          },
+          {
+            "cycle": 3214,
+            "state": "1"
+          },
+          {
+            "cycle": 3255,
+            "state": "0"
+          },
+          {
+            "cycle": 3408,
+            "state": "1"
+          },
+          {
+            "cycle": 3449,
+            "state": "0"
+          },
+          {
+            "cycle": 3602,
+            "state": "1"
+          },
+          {
+            "cycle": 3643,
+            "state": "0"
+          },
+          {
+            "cycle": 3796,
+            "state": "1"
+          },
+          {
+            "cycle": 3837,
+            "state": "0"
+          },
+          {
+            "cycle": 3990,
+            "state": "1"
+          },
+          {
+            "cycle": 4031,
+            "state": "0"
+          },
+          {
+            "cycle": 4184,
+            "state": "1"
+          },
+          {
+            "cycle": 4225,
+            "state": "0"
+          },
+          {
+            "cycle": 4378,
+            "state": "1"
+          },
+          {
+            "cycle": 4419,
+            "state": "0"
+          },
+          {
+            "cycle": 4572,
+            "state": "1"
+          },
+          {
+            "cycle": 4613,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 48
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 8,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
         "text": "OK",
-        "cycle_lo": 13980,
-        "cycle": 13981,
-        "end_cycle": 41740
+        "cycle_lo": 42656,
+        "cycle": 42657,
+        "end_cycle": 70416
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 814,
+    "text_bytes": 2046,
     "data_bytes": 0,
     "bss_bytes": 524288,
-    "flash_used_bytes": 814,
+    "flash_used_bytes": 2046,
     "ram_static_bytes": 524288,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 0.01,
+    "flash_used_pct": 0.02,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -18635,18 +19104,93 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400170,
+    "cycles": 400234,
     "instructions": 200000,
     "steps_executed": 200000,
     "memory_reads": 0,
-    "memory_writes": 1,
-    "peripheral_accesses": 11,
+    "memory_writes": 2,
+    "peripheral_accesses": 102,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107296920,
-        "count": 781,
+        "pc": 1107298152,
+        "count": 669,
         "symbol": "main"
+      },
+      {
+        "pc": 1107296872,
+        "count": 32,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107296868,
+        "count": 31,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107296870,
+        "count": 31,
+        "symbol": "firmware_esp32c6_demo::ws2812_reset_gap"
+      },
+      {
+        "pc": 1107296956,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::short_high"
+      },
+      {
+        "pc": 1107296972,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::short_high"
+      },
+      {
+        "pc": 1107297080,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::short_low"
+      },
+      {
+        "pc": 1107297096,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::short_low"
+      },
+      {
+        "pc": 1107297220,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::short_low"
+      },
+      {
+        "pc": 1107297236,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::short_low"
+      },
+      {
+        "pc": 1107297332,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::long_high"
+      },
+      {
+        "pc": 1107297440,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::long_high"
+      },
+      {
+        "pc": 1107297456,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::long_high"
+      },
+      {
+        "pc": 1107297580,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::long_low"
+      },
+      {
+        "pc": 1107297596,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::long_low"
+      },
+      {
+        "pc": 1107297704,
+        "count": 1,
+        "symbol": "firmware_esp32c6_demo::long_low"
       }
     ]
   }

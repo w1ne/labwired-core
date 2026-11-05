@@ -4,8 +4,8 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107296568,
-      1082654704,
+      1107298124,
+      1082654688,
       1082132480,
       0,
       0,
@@ -13,11 +13,11 @@
       0,
       1082654720,
       0,
+      1107298191,
       1610612736,
-      1107296959,
-      1107296959,
+      1107298191,
       10,
-      0,
+      1611202560,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1107296920,
+    "pc": 1107298152,
     "mstatus": 0,
     "mie": 0,
     "mip": 0,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 200000,
-  "cycles": 400170,
+  "cycles": 400234,
   "instructions": 200000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c07d54130f2973268c93b9356933e7356e5f2ff779815b327f8cf9b672fc51ae",
+  "firmware_hash": "cbeb8de3a973272a0080de334e7149d0cb0d1ef11799660365f77ebd09e6763d",
   "config": {
     "firmware": "examples/esp32c6-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-demo",
     "system": "examples/esp32c6-devkitc/../../configs/systems/esp32c6-devkitc.yaml",

@@ -220,6 +220,8 @@ pub struct Esp32c3Gpio {
     /// ([`PinPort::install_watch`]). Not snapshot state — the watch is
     /// re-armed by the frontend after a resume.
     watch: Option<crate::pins::PadWatch>,
+    /// Devices attached to GPIO pads (for example a WS2812 LED on a C6 board).
+    gpio_observers: Vec<std::sync::Arc<dyn crate::peripherals::device::GpioObserver>>,
     /// Matrix-line change detector for the scheduler chain.
     irq_watch: crate::peripherals::esp_gpio_net::IrqLevelWatch,
     /// `ETS_GPIO_INTR_SOURCE` of the chip this block sits on: 16 on the C3,
@@ -262,6 +264,7 @@ impl Esp32c3Gpio {
             i2c_lines: None,
             pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
             watch: None,
+            gpio_observers: Vec::new(),
             irq_watch: Default::default(),
             intr_source: GPIO_INTR_SOURCE,
             layout: C3_MATRIX,
@@ -290,6 +293,14 @@ impl Esp32c3Gpio {
             layout: C6_MATRIX,
             ..Self::with_intr_source(30)
         }
+    }
+
+    /// Attach a device that observes transitions on this chip's GPIO pads.
+    pub fn add_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) {
+        self.gpio_observers.push(observer);
     }
 
     /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit
@@ -728,8 +739,29 @@ impl Esp32c3Gpio {
         if !moves_drive {
             return f(self);
         }
+        let mut pad_before = [None; PIN_COUNT as usize];
+        if !self.gpio_observers.is_empty() {
+            for pin in 0..PIN_COUNT {
+                pad_before[pin as usize] = self.pad_level(pin);
+            }
+        }
         let before = self.effective_input();
         f(self);
+        if !self.gpio_observers.is_empty() {
+            for pin in 0..PIN_COUNT {
+                let Some(from) = pad_before[pin as usize] else {
+                    continue;
+                };
+                let Some(to) = self.pad_level(pin) else {
+                    continue;
+                };
+                if from != to {
+                    for observer in &self.gpio_observers {
+                        observer.on_pin_change(pin, from, to, self.cycle);
+                    }
+                }
+            }
+        }
         let changed = before ^ self.effective_input();
         if changed != 0 {
             let after = self.effective_input();

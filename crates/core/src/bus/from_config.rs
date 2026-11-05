@@ -1618,7 +1618,8 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    /// Install a GPIO edge observer on ESP32 / ESP32-C3 / ESP32-C6 / ESP32-S3
+    /// GPIO models when present.
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
     /// point — the same path `AttachCtx::install_gpio_observer` uses.
@@ -1631,6 +1632,19 @@ impl SystemBus {
             let any = bus.peripherals[idx].dev.as_any_mut();
             if let Some(gpio) =
                 any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
+            {
+                gpio.add_observer(observer);
+                return true;
+            }
+        }
+        // The C3 model is also the C6 GPIO implementation (with C6's matrix
+        // layout and interrupt source). Both chips expose pad transitions to
+        // attached GPIO devices.
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
             {
                 gpio.add_observer(observer);
                 return true;

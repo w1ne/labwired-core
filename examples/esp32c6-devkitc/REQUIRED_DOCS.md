@@ -15,6 +15,8 @@
 1. ESP32-C6-DevKitC-1 v1.2 user guide (8 MB SPI flash module, USB-to-UART bridge on
    U0TXD GPIO16 / U0RXD GPIO17, addressable RGB LED on GPIO8, BOOT on GPIO9):
    https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html
+2. ESP32-C6-DevKitC-1 schematic v1.4 (the GPIO8 addressable LED is a WS2812B):
+   https://docs.espressif.com/projects/esp-dev-kits/en/latest/_static/esp32c6/esp32-c6-devkitc-1/schematics/esp32-c6-devkitc-1-schematics.pdf
 
 ## Register / interrupt cross-check (authoritative for bases and IRQs)
 

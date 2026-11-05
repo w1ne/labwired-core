@@ -13,11 +13,12 @@ and no firmware beyond the in-tree fixtures/apps has been run.
 
 ## DevKitC-1 smoke profile
 
-The board manifest exposes only UART0 to the twin's host capture sink. The
-USB-to-UART bridge and electrical propagation through GPIO16/GPIO17 are not
-modeled. The RGB LED (WS2812), BOOT button, native USB console, and radios are
-omitted from the board profile; the chip-level GPIO model does not imply those
-board devices work.
+The board manifest exposes UART0 directly to the twin's host capture sink and
+attaches the on-board WS2812B to GPIO8. The GPIO8 smoke bit-bangs one valid GRB
+frame and asserts both pad edges and the decoded red pixel. The USB-to-UART
+bridge and electrical propagation through GPIO16/GPIO17 are not modeled. The
+BOOT button, native USB console, and radios remain omitted. RMT is still
+unmodeled; this profile does not claim RMT firmware compatibility.
 
 ## Proven at tier-1 (documented scenarios)
 
@@ -44,7 +45,7 @@ The full twelve-cell row, proven by `tests/fixtures/tier1/esp32c6.elf`:
 |------|-------------|---------------------------------|
 | PCR (`esp32c6_pcr`, full SVD register map) | All documented PCR registers store/read back with SVD reset values; `CLK_EN` gates are resolved and enforced through the shared bus gate. | `RST_EN` is recorded but **not enforced** (the generic gate cannot express its active-low/reset-at-boot polarity without gating the console at reset). No clock tree: dividers, `SYSCLK_CONF` mux, `PLL_DIV_CLK_EN` are storage only; nothing is paced from them (`cpu_hz` stays the single clock fact). Only HP PCR; LP clock registers are absent. |
 | UART0/UART1 (`esp32c6_uart`) | Head register map (FIFO/INT/CLKDIV/STATUS/CONF0/CONF1), 128-byte FIFOs, interrupt RAW/ST/ENA/CLR, baud-paced shifting, UART0 echoes to the host sink. | C6 tail registers (`SLEEP_CONF0-2` @0x30-0x38, `CLK_CONF` @0x88, `DATE` @0x8C, `ID` @0x9C) are unmodelled: those offsets answer with the C3/S3 tail layout. Flow control, RS-485, IR modulation, wake-up, and DMA (UHCI) coupling are not modelled. `INT_RAW` bits latch, but **no UART interrupt has been routed through the C6 matrix by a fixture** (see below). |
-| GPIO (`esp32c6_gpio`) | Shared C3-sized register block: OUT/W1TS/W1TC, ENABLE, IN, FUNC0_IN_SEL_CFG, FUNC0_OUT_SEL_CFG side effects. | Sized for 26 pins: **GPIO26–GPIO30 are not modelled** (C6 has 31). No GPIO interrupt generator fed to matrix source 30. IO_MUX pad routing is a register stub — the console shifts bytes regardless of `MCU_SEL`. |
+| GPIO (`esp32c6_gpio`) | Shared C3-sized register block: OUT/W1TS/W1TC, ENABLE, IN, FUNC0_IN_SEL_CFG, FUNC0_OUT_SEL_CFG side effects; attached GPIO observers see direct pad transitions. The DevKitC-1 smoke uses GPIO8 to drive and decode one WS2812B pixel. | Sized for 26 pins: **GPIO26–GPIO30 are not modelled** (C6 has 31). No GPIO interrupt generator fed to matrix source 30. IO_MUX pad routing is a register stub; no RMT or general peripheral-output matrix drive is claimed. |
 | TIMG0/TIMG1 (`esp32c6_mwdt`) | T0 counter with EN gate, LO/HI latch via UPDATE, preload, INT_RAW/INT_CLR plumbing, generic round-trip for other offsets; plus the C3/C6 MWDT path (`with_mwdt`): `WDTWPROTECT` write lock over `WDTCONFIG0..5`, `WDTFEED` reload, and the full four-stage chain — WDTCONFIG2..5 hold values, WDTCONFIG0 STG0..3 actions, expiry advancing `0→1→2→3→0`, every "interrupt" stage latching `INT_RAW_TIMERS.WDT_INT_RAW` (W1C via `INT_CLR_TIMERS`), off/reset stages advancing without latching. The config/hold registers seed their SVD reset values. The mwdt variant is walk-driven so a read-only status poll sees time pass; one count is one peripheral walk tick (512 CPU cycles under the CLI default), **not** 12.5 ns × prescaler, and WDTCONFIG1's prescaler does not scale the countdown. | One general-purpose timer per group on C6 (the model's T1 head at 0x24 is inert phantom storage, as on C3). The GP counter advances 1 per model tick, **not** at the programmed divider/clock-source. Stage actions 2/3 (reset CPU/system) advance the chain but **no reset is ever performed** — the bus exposes no safe reset-request path for a peripheral; a feed does not clear the latched interrupt (only INT_CLR does). **No TIMG interrupt is fired**: `TG0_T0_LEVEL` (51) and `TG0_WDT_LEVEL` (53) are declared on the descriptor but nothing routes them. |
 | I²C0 (`esp32c3_i2c`) | Command-list engine (RSTART/WRITE/READ/STOP), TX/RX FIFOs, INT RAW/ST/ENA/CLR, clock stretch/timeout storage. Reused from the C3; the C6 SVD head is offset-identical and the C6 source (I2C_EXT0=50) is passed through `irq:`. `Esp32c3Gpio::for_esp32c6()` + `wire_esp32c3_i2c_pads` carry matrix-routed SDA/SCL on signals **45/46** (SEL bit 7); proven by `crates/core/src/tests/esp32c6_i2c_waveform.rs` (pads 16/17, SSD1306 ACK + logic-capture match). | C6-only filter/timing tail registers are storage. No interrupt-matrix delivery of source 50 to the CPU. |
 | GP-SPI2 (`esp32c3_spi`) | CPU/W-buffer transaction engine: `SPI_CMD.USR` launch handshake, `TRANS_DONE` latching, W0..W15 shift, master/slave mode storage. Reused from the C3 (offset-identical head), C6 source 72 via `irq:`. | No CS gating, no DMA-coupled transfers, no slave-mode data path; `MSPI` source 40 and SPI0/SPI1 windows are undeclared. No interrupt-matrix delivery of source 72. |
