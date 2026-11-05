@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic analog netlists drive ESP32-C3 profiles through explicit APB_SARADC
-//! channel routes and the firmware-visible one-shot path. The BLE Pong profile's
-//! existing GP2Y0A21 sensor stays routed to ADC1_CH1.
+//! Generic analog netlists drive ESP32 profiles through explicit APB_SARADC
+//! channel routes and the modeled one-shot path. The BLE Pong profile's existing
+//! GP2Y0A21 sensor stays routed to ADC1_CH1; ESP32-C6 uses the shared one-shot
+//! peripheral model at its board-specific register base.
 
 mod common;
 use common::root;
@@ -15,7 +16,6 @@ use labwired_core::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc;
 use labwired_core::Bus;
 use std::path::Path;
 
-const APB_SARADC_BASE: u64 = 0x6004_0000;
 const CHANNEL_SHIFT: u32 = 25;
 const ONETIME_START: u32 = 1 << 29;
 const SAR1_ONETIME_SAMPLE: u32 = 1 << 31;
@@ -74,18 +74,24 @@ fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
         .channel_input_count(channel)
 }
 
+fn apb_saradc_base(bus: &SystemBus) -> u64 {
+    let index = bus
+        .find_peripheral_index_by_name("apb_saradc")
+        .expect("the profile declares APB_SARADC");
+    bus.peripherals[index].base
+}
+
 /// Drive the model's ONETIME_SAMPLE register like IDF's ADC oneshot driver,
 /// then check both the DONE handshake and packed channel/data result.
 fn convert_channel(bus: &mut SystemBus, channel: u8) -> u16 {
     let sample = SAR1_ONETIME_SAMPLE | ONETIME_START | (u32::from(channel) << CHANNEL_SHIFT);
-    bus.write_u32(APB_SARADC_BASE + 0x20, sample)
+    let base = apb_saradc_base(bus);
+    bus.write_u32(base + 0x20, sample)
         .expect("start SAR1 one-shot conversion");
-    let raw = bus
-        .read_u32(APB_SARADC_BASE + 0x44)
-        .expect("read APB_SARADC INT_RAW");
+    let raw = bus.read_u32(base + 0x44).expect("read APB_SARADC INT_RAW");
     assert_ne!(raw & SAR1_DONE, 0, "SAR1_DONE is latched");
     let data = bus
-        .read_u32(APB_SARADC_BASE + 0x2C)
+        .read_u32(base + 0x2C)
         .expect("read firmware-visible SAR1DATA_STATUS");
     assert_eq!(
         (data >> 13) & 0xF,
@@ -95,22 +101,22 @@ fn convert_channel(bus: &mut SystemBus, channel: u8) -> u16 {
     (data & 0x0FFF) as u16
 }
 
-fn assert_generic_c3_analog_inputs(
+fn assert_generic_esp32_analog_inputs(
     system_rel: &str,
     analog_rel: &str,
     expected_profile: &str,
     channel_one_has_board_source: bool,
 ) {
     let system_path = root(system_rel);
-    let mut profile = SystemManifest::from_file(&system_path).expect("load ESP32-C3 profile");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load ESP32 profile");
     assert_eq!(profile.name, expected_profile);
     let analog_path = root(analog_rel);
     let analog = SystemManifest::from_file(&analog_path).expect("load generic NTC and diode");
     profile.cosim_models = analog.cosim_models;
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load ESP32-C3 descriptor");
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build ESP32-C3 bus");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ESP32 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build ESP32 bus");
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
         .expect("fixture carries two analog netlists");
@@ -181,7 +187,7 @@ fn assert_generic_c3_analog_inputs(
             assert_eq!(
                 convert_channel(&mut bus, channel),
                 expected_count,
-                "the C3 one-shot result must report the solved channel {channel} voltage"
+                "the one-shot result must report the solved channel {channel} voltage"
             );
         }
         assert_eq!(
@@ -213,7 +219,7 @@ fn assert_generic_c3_analog_inputs(
 
 #[test]
 fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-ble-pong.yaml",
         "examples/esp32c3-ble-pong/analog-ntc-diode-system.yaml",
         "esp32c3-ble-pong",
@@ -223,7 +229,7 @@ fn esp32c3_ble_pong_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_devkit_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-devkit.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-devkit",
@@ -233,7 +239,7 @@ fn esp32c3_devkit_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_epaper_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-epaper-workshop.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-epaper-workshop",
@@ -243,7 +249,7 @@ fn esp32c3_epaper_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_jtag_watch_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-jtag-watch.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-jtag-watch",
@@ -253,7 +259,7 @@ fn esp32c3_jtag_watch_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_mlx90640_thermal_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-mlx90640-thermal.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-mlx90640-thermal",
@@ -263,7 +269,7 @@ fn esp32c3_mlx90640_thermal_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_nokia5110_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-nokia5110-workshop.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-nokia5110-workshop",
@@ -273,7 +279,7 @@ fn esp32c3_nokia5110_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_oled_128x32_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-oled-128x32-workshop.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-oled-128x32-workshop",
@@ -283,7 +289,7 @@ fn esp32c3_oled_128x32_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_oled_demo_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-oled-demo.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-oled-demo",
@@ -293,10 +299,20 @@ fn esp32c3_oled_demo_ntc_and_diode_netlists_reach_adc1_channels() {
 
 #[test]
 fn esp32c3_tm1637_clock_workshop_ntc_and_diode_netlists_reach_adc1_channels() {
-    assert_generic_c3_analog_inputs(
+    assert_generic_esp32_analog_inputs(
         "configs/systems/esp32c3-tm1637-clock-workshop.yaml",
         "examples/esp32c3-devkit/analog-ntc-diode-system.yaml",
         "esp32c3-tm1637-clock-workshop",
+        false,
+    );
+}
+
+#[test]
+fn esp32c6_devkitc_ntc_and_diode_netlists_reach_adc1_channels() {
+    assert_generic_esp32_analog_inputs(
+        "configs/systems/esp32c6-devkitc.yaml",
+        "examples/esp32c6-devkitc/analog-ntc-diode-system.yaml",
+        "esp32c6-devkitc",
         false,
     );
 }
