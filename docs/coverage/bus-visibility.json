@@ -1,6 +1,10 @@
 [
   {
     "buses": [],
+    "name": "am6234"
+  },
+  {
+    "buses": [],
     "name": "amap42kp"
   },
   {
@@ -155,6 +159,10 @@
   },
   {
     "buses": [],
+    "name": "mpfs095t"
+  },
+  {
+    "buses": [],
     "name": "nrf51822"
   },
   {
@@ -228,6 +236,14 @@
   {
     "buses": [],
     "name": "pic24f16ka102"
+  },
+  {
+    "buses": [],
+    "name": "pic32mz2048efm144"
+  },
+  {
+    "buses": [],
+    "name": "r5f52618bgfp"
   },
   {
     "buses": [],
@@ -658,5 +674,9 @@
   {
     "buses": [],
     "name": "vegaboard-ri5cy"
+  },
+  {
+    "buses": [],
+    "name": "xck26-rpu"
   }
 ]

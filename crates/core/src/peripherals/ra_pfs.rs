@@ -21,10 +21,18 @@
 //! build through `PWPR`. The simulator has no security state, so a `PmnPFS`
 //! store lands while either register has `PFSWE` set.
 //!
-//! NOT modelled: `PmnPFS` PODR/PDR (bits 0 and 2) are the same flip-flops as
-//! the port's `PCNTR1` on silicon, but here they are stored only and do not
-//! move the GPIO port; PIDR (bit 1) reads 0, not the pad; PSEL/PMR (the
-//! peripheral mux) has no routing effect.
+//! `PmnPFS` PODR/PDR (bits 0 and 2) are the same flip-flops as the port's
+//! `PCNTR1` on silicon: the bus hands every landed store that covers bits
+//! 2:0 to the linked port (`crate::pins::PadControl::output_write`), so a pin
+//! made an output here drives its pad. PMR/PSEL (the peripheral mux) reach
+//! the port after every store too (`crate::pins::PadControl::decode_function`)
+//! and hand the pad to a peripheral that publishes a wire for it (the GPT's
+//! GTIOC lines).
+//!
+//! NOT modelled: reading `PmnPFS` returns the last store, so PODR/PDR there
+//! do not follow later `PCNTR1`/`PCNTR3` writes; PIDR (bit 1) reads 0, not the
+//! pad; PMR/PSEL have no routing effect for peripherals without a wire (SCI,
+//! IIC, ADC).
 
 use crate::{Peripheral, SimResult};
 use std::any::Any;

@@ -1,0 +1,117 @@
+# LabWired - Microchip PolarFire SoC MPFS095T (MSS) chip configuration
+#
+# The part on the PolarFire SoC Discovery Kit (MPFS-DISCO-KIT, MPFS095T),
+# a current-production Microchip kit stocked at DigiKey / Mouser / Farnell.
+#
+# Sources:
+# - Microchip PolarFire SoC MSS Technical Reference Manual: the
+#   MSS memory map is identical across the MPFSxxxT family (CLINT 0x0200_0000,
+#   PLIC 0x0C00_0000, L2-LIM 0x0800_0000, MMUART0-4, eNVM 0x2022_0000, DDR
+#   cached window 0x8000_0000).
+# - Zephyr v4.1.0 `dts/riscv/microchip/mpfs.dtsi` + board `mpfs_icicle`
+#   (the same MSS): hart 0 E51 rv64imac, harts 1-4 U54 rv64gc; MMUARTs are
+#   `ns16550` with `reg-shift = <2>` (4-byte stride) and a 150 MHz APB clock;
+#   mtime counts at 1 MHz.
+#
+# Modelled: one U54 hart (mhartid 1) as an RV64IMAC M-mode core with the
+# CLINT inside the core (crates/core/src/cpu/riscv64.rs), the five MMUARTs as
+# 16550s (DLAB divisor latches, polled TX), L2-LIM and the DDR window as RAM.
+# Declared, not modelled (`type: stub`): PLIC (no external interrupts are
+# delivered yet), the GPIO/I2C/SPI/QSPI blocks and the system controller
+# mailbox. Not modelled in the core: F/D, S/U modes, Sv39, the E51 and the
+# other three U54s.
+
+name: "mpfs095t"
+arch: "riscv"
+core: "rv64imac"
+# U54 clock. mtime is CPU clock / 600 (1 MHz RTC reference), see
+# Rv64Params::for_chip_name.
+cpu_hz: 600_000_000
+
+# eNVM, the MSS's on-chip boot flash (128 KB).
+flash: { base: 0x20220000, size: "128KiB" }
+# DDR cached window. Zephyr's `sram1` (8 MB at 0x8000_0000) is where the
+# mpfs_icicle u54 image links and runs; the kit's DDR4 is larger, the engine
+# maps only the window firmware uses.
+ram: { base: 0x80000000, size: "8MiB" }
+flash_boot_alias: false
+memory_regions:
+  # L2 cache as loosely-integrated memory (Zephyr `sram0`).
+  - { name: "l2lim", base: 0x08000000, size: "512KiB" }
+peripherals:
+  - id: "mmuart0"
+    type: "uart"
+    base_address: 0x20000000
+    size: "4KB"
+    irq: 90
+    config:
+      profile: "dw_apb_uart"
+  - id: "mmuart1"
+    type: "uart"
+    base_address: 0x20100000
+    size: "4KB"
+    irq: 91
+    config:
+      profile: "dw_apb_uart"
+  - id: "mmuart2"
+    type: "uart"
+    base_address: 0x20102000
+    size: "4KB"
+    irq: 92
+    config:
+      profile: "dw_apb_uart"
+  - id: "mmuart3"
+    type: "uart"
+    base_address: 0x20104000
+    size: "4KB"
+    irq: 93
+    config:
+      profile: "dw_apb_uart"
+  - id: "mmuart4"
+    type: "uart"
+    base_address: 0x20106000
+    size: "4KB"
+    irq: 94
+    config:
+      profile: "dw_apb_uart"
+  # PLIC: priorities / pending / enables / threshold+claim. Stubbed until the
+  # core takes external interrupts.
+  - id: "plic"
+    type: "stub"
+    base_address: 0x0C000000
+    size: "65536KB"
+  # MSS GPIO_0..2. Named `mss_gpio*`, not `gpio*`: the bus reads a `gpio0` /
+  # `gpio1` peripheral as a Nordic GPIOTE port and keeps a per-cycle service
+  # pass for it, which these stubs do not need.
+  - id: "mss_gpio0"
+    type: "stub"
+    base_address: 0x20120000
+    size: "4KB"
+  - id: "mss_gpio1"
+    type: "stub"
+    base_address: 0x20121000
+    size: "4KB"
+  - id: "mss_gpio2"
+    type: "stub"
+    base_address: 0x20122000
+    size: "4KB"
+  - id: "i2c0"
+    type: "stub"
+    base_address: 0x2010A000
+    size: "4KB"
+  - id: "i2c1"
+    type: "stub"
+    base_address: 0x2010B000
+    size: "4KB"
+  - id: "spi1"
+    type: "stub"
+    base_address: 0x20109000
+    size: "4KB"
+  - id: "qspi"
+    type: "stub"
+    base_address: 0x21000000
+    size: "4KB"
+  - id: "sysctrl_mailbox"
+    type: "stub"
+    base_address: 0x37020000
+    size: "4KB"

@@ -1,0 +1,8 @@
+# LabWired - Renesas EK-RX261 evaluation kit system manifest
+#
+# R5F52618BGFP (RX261, RXv3). Zephyr's `ek_rx261` board puts its console on
+# SCI6, 115200 8N1 (the on-board E2 Lite virtual COM port).
+name: "ek-rx261"
+chip: "../chips/r5f52618bgfp.yaml"
+external_devices: []
+debug_uart: "sci6"

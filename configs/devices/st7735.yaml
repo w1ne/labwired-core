@@ -1,0 +1,142 @@
+# Sitronix ST7735R TFT controller, 1.8" 128x160 RGB565 module over 4-wire SPI —
+# declarative `display` primitive. Every constant here is read out of the
+# Sitronix ST7735R datasheet V0.2 (2009-08-05), Adafruit mirror
+# https://cdn-shop.adafruit.com/datasheets/ST7735R_V0.2.pdf (sha256 8940ff24...),
+# cited by section below.
+#
+# TYPE STRING. `st7735` is free: the tree's hand-written `st7735_color.rs`
+# decoder registers no device_type of its own (its only descriptor is the
+# test-only fixture `st7735r-memory-prototype`), so this catalog part takes the
+# controller's plain name. That decoder and the `st7735-*` CI workflows are
+# untouched; this descriptor uses the fixed-format RGB565 path the ST7789 and
+# ILI9341 use, NOT `serial_color`.
+#
+# THE FRAME MEMORY IS THE GM[1:0] = "11" CONFIGURATION, 128x160. The ST7735R
+# carries 132x162x18-bit RAM (section 9.9.1); the GM1/GM0 pads choose which of it
+# is the memory base. Section 9.9.3 / 9.9.6 and the reset table 9.15.1 (p.71)
+# give the 128RGB x 160 case: CASET XE resets to 007Fh (127), RASET YE to 009Fh
+# (159), swapped when MV = 1. That is the 1.8" 128x160 module this part is.
+# A GM = "00" glass (132x162 base — what drivers' "green tab" column/row offsets
+# compensate for) is a different strap and is NOT this descriptor.
+#
+# FRAMING comes from the D/C line ONLY. Section 9.4.1, Command Write Mode: in
+# the 4-line interface "If D/CX is 'low', the transmission byte is interpreted
+# as a command byte. If D/CX is 'high', the transmission byte is stored in the
+# display data RAM ... or command register as parameter." `dc_pin` is required;
+# there is no infer-framing-from-byte-values fallback, for the reason
+# st7789.yaml gives.
+#
+# A CS RELEASE DOES NOT CLOSE THE PIXEL STREAM (`cs_select: keeps_stream`).
+# Section 9.6, "Data transfer pause": if CSX is released after a whole byte of
+# frame memory data or parameter data, "driver will wait and continue the frame
+# memory data or parameter data transmission from the point where it was paused."
+#
+# NOT modelled:
+#   - COLMOD (3Ah, 10.1.30) is consumed for its one argument and otherwise
+#     ignored. The reset value is 6 (18-bit/pixel, table 9.15.1); this model is
+#     RGB565 throughout, so firmware that never sends COLMOD 05h would see a
+#     different pixel stream on silicon than here.
+#   - MADCTL ML / RGB / MH (D4, D3, D2) are held in the `madctl` var but do not
+#     change the artifact; only MY / MX / MV move the address map.
+#   - Out-of-range CASET/RASET: 10.1.19 says data out of range "will be ignored";
+#     this model CLAMPS the address to the last column/row in the current
+#     orientation, the same as st7789.yaml / ili9341.yaml.
+#   - RGBSET LUT (2Dh), gamma (26h, E0h/E1h), frame rate / power / VCOM
+#     (B1h..C5h, F0h..), partial mode (12h/30h), idle mode (38h/39h), tearing
+#     effect (34h/35h), every read command (04h, 09h..0Eh, 2Eh, DAh..DCh), and the
+#     post-SWRESET / post-SLPOUT 120 ms wait. None carry parameter counts here:
+#     an unlisted opcode is consumed and CLOSES the stream, and its parameter
+#     bytes then arrive with nothing open and are dropped (Note 2 under table
+#     10.1.3: "Undefined commands are treated as NOP").
+type: st7735
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 160
+    pixel_format: rgb565
+    artifact_format: rgb565_be
+    ram: { bytes: 40960, layout: row_major, stream: command }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    cs_select: keeps_stream
+    addressing: { modes: [horizontal], default: horizontal }
+    # 10.1.27 MADCTL: D7 MY (row address order), D6 MX (column address order),
+    # D5 MV (row/column exchange). Section 9.11.1 (p.62, the GM = "11" case)
+    # gives the CASET/RASET mapping per MV/MX/MY; MV also changes
+    # the legal column range (10.1.19: 0..127 when MV=0, 0..159 when MV=1), so it
+    # moves the window clamp as well as the pixel map.
+    vars: { madctl: 0 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    supply_gated: true
+    artifact_meta:
+      [display_on, lit, awake, powered, inverted, painted_bytes, total_bytes,
+       top_colour, top_colour_pixels]
+    commands:
+      # 10.1.2 SWRESET + reset table 9.15.1 "After S/W Reset": frame memory No
+      # Change, Sleep In, Display Off, Inversion Off, XS/YS 0000h, XE/YE the
+      # memory edge IN THE CURRENT MV, MADCTL and COLMOD No Change. Spelled out
+      # action by action rather than `reset_control`, because the engine's
+      # fixed-format `reset_control` also zeroes `madctl` — and MADCTL surviving
+      # SWRESET is in the table.
+      - opcode: 0x01
+        name: SWRESET
+        do:
+          - { awake: false }
+          - { display_on: false }
+          - { invert: false }
+          - set_window:
+              axis: col
+              start: { value: 0 }
+              end: { value: 0xFFFF, clamp_axis_max: true }
+          - set_window:
+              axis: row
+              start: { value: 0 }
+              end: { value: 0xFFFF, clamp_axis_max: true }
+      - { opcode: 0x10, name: SLPIN,  do: [ { awake: false } ] }     # 10.1.10
+      - { opcode: 0x11, name: SLPOUT, do: [ { awake: true } ] }      # 10.1.11
+      - { opcode: 0x13, name: NORON }                                # 10.1.13
+      - { opcode: 0x20, name: INVOFF, do: [ { invert: false } ] }    # 10.1.14
+      - { opcode: 0x21, name: INVON,  do: [ { invert: true } ] }     # 10.1.15
+      - { opcode: 0x28, name: DISPOFF, do: [ { display_on: false } ] }  # 10.1.17
+      - { opcode: 0x29, name: DISPON,  do: [ { display_on: true } ] }   # 10.1.18
+      # 10.1.19 CASET / 10.1.20 RASET: XS/XE and YS/YE, four parameter bytes,
+      # 16-bit big-endian (XS15..XS8 first).
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - opcode: 0x2B
+        name: RASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      # 10.1.21 RAMWR; section 9.11 (p.61) counter table: "When RAMWR/RAMRD command is
+      # accepted" the column and row counters return to the start column / row.
+      # "Contents of memory is not cleared" by S/W or H/W reset.
+      - { opcode: 0x2C, name: RAMWR, do: [ { ram_write: { reset_cursor: true } } ] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [ { set_var: { name: madctl, value: { args: [0] } } } ] }
+      - { opcode: 0x3A, name: COLMOD, args: 1 }                      # 10.1.30
+
+metadata:
+  label: "ST7735R TFT 1.8″"
+  summary: "1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI."
+  detail: "Sitronix ST7735R in the GM[1:0]=11 configuration: a 128x160 frame memory (datasheet V0.2 section 9.9.3, reset table 9.15.1). Command table SWRESET / SLPIN / SLPOUT / INVOFF / INVON / DISPOFF / DISPON / CASET / RASET / RAMWR / MADCTL / COLMOD, with MADCTL MY/MX/MV moving the address map and the window clamp. Reports `lit` (DISPON AND awake) beside the raw pixels, because a panel that never got SLPOUT is dark whatever is in memory. RGB565 throughout: COLMOD is consumed, not honoured."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select pin label."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes an init parameter byte 0x2C as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED. Only an explicit `false` darkens the panel: it then ignores the SPI bus and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`."

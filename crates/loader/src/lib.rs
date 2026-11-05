@@ -171,8 +171,22 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                         program_image.add_segment(v, segment_data);
                     }
                 }
+            } else if arch == labwired_core::Arch::Mips {
+                // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
+                let start_addr = labwired_core::system::mips::kseg_to_physical(ph.p_paddr);
+                debug!(
+                    "MIPS segment {:#x} -> physical {:#x}",
+                    ph.p_paddr, start_addr
+                );
+                program_image.add_segment(start_addr, segment_data);
             } else {
-                let start_addr = ph.p_paddr;
+                let start_addr = if arch == labwired_core::Arch::XtensaLx7 && ph.p_vaddr != 0 {
+                    // ESP-IDF app ELFs distinguish flash/load address from
+                    // runtime VMA. Fast boot must populate the latter.
+                    ph.p_vaddr
+                } else {
+                    ph.p_paddr
+                };
                 debug!(
                     "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
                     start_addr, size, offset

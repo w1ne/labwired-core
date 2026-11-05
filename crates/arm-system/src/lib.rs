@@ -1,4 +1,4 @@
-//! Embedded privileged ARMv7 Cortex-A7 with physical-bus callbacks.
+//! Embedded privileged ARMv7 (Cortex-A7, Cortex-R5F) with physical-bus callbacks.
 //!
 //! The opt-in `native` backend requires x86_64 Linux GNU and panic unwinding.
 //! Production builds use `cargo build --profile native-system --features native`.
@@ -24,6 +24,14 @@ pub trait PhysicalBus {
     /// Keys omit opcode, condition, Rt and read/write direction.
     fn cp15_read(&mut self, register_key: u32, wide: bool) -> Result<u64, String>;
     fn cp15_write(&mut self, register_key: u32, wide: bool, value: u64) -> Result<(), String>;
+}
+/// The pinned tlib CPU model the native engine is built as. Discriminants are
+/// the bridge's model selector; both are ARMv7 AArch32 with the same register
+/// numbering. Cortex-R5F is PMSAv7 (MPU, no MMU) with VFPv3-D16.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArmModel {
+    CortexA7 = 0,
+    CortexR5F = 1,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Execution {
@@ -56,6 +64,9 @@ pub struct ArmCpu;
 impl ArmCpu {
     pub fn new() -> Result<Self, String> {
         Err("ARM system backend requires the native feature".into())
+    }
+    pub fn with_model(_: ArmModel) -> Result<Self, String> {
+        Self::new()
     }
     pub fn register(&mut self, _: u8) -> Result<u32, String> {
         Self::disabled()

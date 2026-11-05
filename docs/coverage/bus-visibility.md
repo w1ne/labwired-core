@@ -10,6 +10,8 @@ This is NOT a pad-binding board. Binding answers the static question "what could
 
 Chips that cannot yet produce edges for a bus are listed here with a reason — never silently skipped.
 
+* **am6234**
+  * UART: no AArch64 core bring-up in this harness; bytes are proven by the sk_am62_zephyr survival gate
 * **amap42kp**
   * UART: no PWRCTRL/UART0 bring-up in this harness; bytes are proven by the apollo4p-evb survival smoke
 * **arty-litex-vexriscv**
@@ -62,6 +64,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: Kinetis I2C publishes no line_names / wire_lines (honest empty)
   * SPI: no edge bring-up path for Kinetis DSPI in this gate yet
   * UART: no edge bring-up path for Kinetis LPUART in this gate yet
+* **mpfs095t**
+  * UART: no 16550 MMUART bring-up in this harness; bytes are proven by the mpfs_disco_kit_zephyr survival gate
 * **nrf51822**
   * I2C: no nRF51 legacy-TWI bring-up in this harness (the nRF52 arm drives TWIM)
   * UART: no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE EasyDMA); bytes are proven by the microbit-v1 survival smoke
@@ -77,6 +81,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * SPI: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * UART: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
+* **pic32mz2048efm144**
+  * UART: no MIPS core bring-up in this harness; bytes are proven by the curiosity_pic32mz_nuttx survival gate
+* **r5f52618bgfp**
+  * UART: no RX core bring-up in this harness; bytes are proven by the ek_rx261_zephyr survival gate
 * **r7fa6m5bh**
   * UART: no SCI0 bring-up in this harness; bytes are proven by the ek-ra6m5 survival smoke
 * **r7fa8m1ah**
@@ -102,6 +110,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
+| am6234 | — | — | — |
 | amap42kp | — | — | — |
 | arty-litex-vexriscv | — | — | — |
 | atmega1281 | — | — | — |
@@ -137,6 +146,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
+| mpfs095t | — | — | — |
 | nrf51822 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |
 | nrf52833 | ✓ | ✓ | ✓ |
@@ -153,6 +163,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | pic24f08ka102 | — | — | — |
 | pic24f16ka101 | — | — | — |
 | pic24f16ka102 | — | — | — |
+| pic32mz2048efm144 | — | — | — |
+| r5f52618bgfp | — | — | — |
 | r7fa6m5bh | — | — | — |
 | r7fa8m1ah | — | — | — |
 | ra4m1 | — | — | — |
@@ -212,3 +224,4 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |
 | vegaboard-ri5cy | — | — | — |
+| xck26-rpu | — | — | — |

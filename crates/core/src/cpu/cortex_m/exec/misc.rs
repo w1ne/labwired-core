@@ -20,6 +20,56 @@ use crate::SimResult;
 use crate::SimulationError;
 
 impl CortexM {
+    /// Store-exclusive check against the local monitor (every width, every
+    /// acquire/release form): consume the reservation and report whether it
+    /// still covers `addr`/`width` with the value the load-exclusive saw.
+    /// No reservation (none taken, or cleared by exception entry) fails.
+    fn take_exclusive_reservation<B: Bus + ?Sized>(
+        &mut self,
+        bus: &mut B,
+        addr: u32,
+        width: AccessWidth,
+    ) -> SimResult<bool> {
+        Ok(match self.exclusive_subword.take() {
+            Some((reserved, reserved_width, value))
+                if reserved == addr && reserved_width == width =>
+            {
+                self.load(bus, addr, width)? == value
+            }
+            _ => false,
+        })
+    }
+
+    /// Execute a p4/p5 coprocessor instruction on the attached RP2350 DCP.
+    /// `None` = not a DCP instruction (or not modelled): the caller faults.
+    #[cold]
+    #[inline(never)]
+    fn exec_rp2350_dcp<B: Bus + ?Sized>(
+        &mut self,
+        bus: &mut B,
+        h1: u16,
+        h2: u16,
+    ) -> Option<PcAdvance> {
+        use super::super::rp2350_dcp::{decode, DcpOut};
+        let (inst, op, rt, rt2) = decode(h1, h2, |r| self.get_register(r))?;
+        match bus.rp2350_dcp_mut()?.inst[inst].exec(op)? {
+            DcpOut::None => {}
+            DcpOut::One(v) => {
+                if rt == 15 {
+                    // MRC to APSR_nzcv: flags from bits 31:28.
+                    self.xpsr = (self.xpsr & !0xF000_0000) | (v & 0xF000_0000);
+                } else {
+                    self.set_register(rt, v);
+                }
+            }
+            DcpOut::Two(lo, hi) => {
+                self.set_register(rt, lo);
+                self.set_register(rt2, hi);
+            }
+        }
+        Some(PcAdvance::Add4)
+    }
+
     #[inline(always)]
     pub(in crate::cpu::cortex_m) fn exec_unknown32<B: Bus + ?Sized>(
         &mut self,
@@ -27,6 +77,15 @@ impl CortexM {
         h1: u16,
         h2: u16,
     ) -> SimResult<PcAdvance> {
+        // RP2350 DCP: a coprocessor-space word naming p4/p5, on a bus that
+        // has one; otherwise it falls through to the UNDEFINED fault below.
+        // The body is out of line and cold (this function is inlined into the
+        // step dispatcher), and the state lives on the bus, not in CortexM.
+        if (h1 & 0xEC00) == 0xEC00 && (h2 >> 9) & 0x7 == 2 {
+            if let Some(adv) = self.exec_rp2350_dcp(bus, h1, h2) {
+                return Ok(adv);
+            }
+        }
         let mut __pc = PcAdvance::Keep;
         // Manual fallback for complex bit patterns not yet in Instruction enum.
         //
@@ -262,18 +321,25 @@ impl CortexM {
             let addr = self.get_register(rn).wrapping_add(imm8 * 4);
             let val = self.load(bus, addr, AccessWidth::Word)?;
             self.set_register(rt, val);
+            // Opens the local exclusive monitor (one per PE, shared by every
+            // load-exclusive form, acquire or not).
+            self.exclusive_subword = Some((addr, AccessWidth::Word, val));
             __pc = PcAdvance::Add4;
         } else if (h1 & 0xFFF0) == 0xE840 {
-            // STREX
+            // STREX: succeeds iff the reservation taken by LDREX / LDAEX is
+            // still intact (same address and width, value unchanged, no
+            // exception entry in between). Rd = 0 success, 1 failure.
             let rn = (h1 & 0xF) as u8;
             let rt = ((h2 >> 12) & 0xF) as u8;
             let rd = ((h2 >> 8) & 0xF) as u8;
             let imm8 = (h2 & 0xFF) as u32;
             let addr = self.get_register(rn).wrapping_add(imm8 * 4);
             let val = self.get_register(rt);
-            self.store(bus, addr, AccessWidth::Word, val)?;
-            // Rd = 0 → success.
-            self.set_register(rd, 0);
+            let succeeds = self.take_exclusive_reservation(bus, addr, AccessWidth::Word)?;
+            if succeeds {
+                self.store(bus, addr, AccessWidth::Word, val)?;
+            }
+            self.set_register(rd, if succeeds { 0 } else { 1 });
             __pc = PcAdvance::Add4;
         } else if (h1 & 0xFFF0) == 0xE8D0 && matches!(h2 & 0x0FFF, 0x0F4F | 0x0F5F) {
             // ARMv7-M LDREXB / LDREXH Rt, [Rn] (A7.7.53 / A7.7.54, T1):
@@ -313,14 +379,7 @@ impl CortexM {
                 AccessWidth::Half
             };
             let address = self.get_register(rn);
-            let reservation_matches = match self.exclusive_subword.take() {
-                Some((reserved, reserved_width, value))
-                    if reserved == address && reserved_width == width =>
-                {
-                    self.load(bus, address, width)? == value
-                }
-                _ => false,
-            };
+            let reservation_matches = self.take_exclusive_reservation(bus, address, width)?;
             let succeeds = if reservation_matches {
                 self.store(bus, address, width, self.get_register(rt))?;
                 true
@@ -335,15 +394,21 @@ impl CortexM {
             // LDAEXB/LDAEXH/LDAEX.
             //   h1 = 0xE8D0 | Rn, h2 = Rt<<12 | 0xF<<8 | sz<<4 | 0xF
             //   sz: 8=B, 9=H, A=word (acquire), C=EXB, D=EXH, E=EX
-            // Acquire ordering and the exclusive monitor are
-            // no-ops in this single-threaded sim (same rationale
-            // as LDREX above). Rust atomics on thumbv8m compile
-            // to these — embassy's executor run-queue lives on
-            // LDAEX/STLEX.
+            // Acquire ordering is a no-op in this single-threaded
+            // sim. Rust atomics on thumbv8m compile to these —
+            // embassy's executor run-queue lives on LDAEX/STLEX.
+            // LDAEXB/LDAEXH/LDAEX open the same local exclusive monitor as
+            // LDREXB/LDREXH/LDREX (Armv8-M ARM B9.2: one monitor per PE, set
+            // by every load-exclusive, acquire or not), so a following
+            // STREXB/STREXH or STLEXB/STLEXH sees the reservation.
+            // pico-sdk's RP2350 hw_claim_lock pairs LDAEXB with a plain
+            // STREXB; without the reservation that STREXB always
+            // reported failure and the claim loop spun forever.
             let rn = (h1 & 0xF) as u8;
             let rt = ((h2 >> 12) & 0xF) as u8;
             let addr = self.get_register(rn);
-            let width = match (h2 >> 4) & 0xF {
+            let sz = (h2 >> 4) & 0xF;
+            let width = match sz {
                 0x8 | 0xC => Some(AccessWidth::Byte),
                 0x9 | 0xD => Some(AccessWidth::Half),
                 0xA | 0xE => Some(AccessWidth::Word),
@@ -352,12 +417,16 @@ impl CortexM {
             if let Some(width) = width {
                 let val = self.load(bus, addr, width)?;
                 self.set_register(rt, val);
+                if matches!(sz, 0xC..=0xE) {
+                    self.exclusive_subword = Some((addr, width, val));
+                }
             }
             __pc = PcAdvance::Add4;
         } else if (h1 & 0xFFF0) == 0xE8C0 && (h2 & 0x0F00) == 0x0F00 {
             // Store-release family: STLB/STLH/STL ([3:0]=0xF, no
-            // status register) and STLEXB/STLEXH/STLEX ([3:0]=Rd,
-            // always-success monitor → Rd = 0).
+            // status register) and STLEXB/STLEXH/STLEX ([3:0]=Rd).
+            // STLEXB/STLEXH/STLEX check the reservation exactly like
+            // STREXB/STREXH/STREX above (it is one monitor).
             //   h1 = 0xE8C0 | Rn, h2 = Rt<<12 | 0xF<<8 | sz<<4 | Rd/0xF
             let rn = (h1 & 0xF) as u8;
             let rt = ((h2 >> 12) & 0xF) as u8;
@@ -370,12 +439,16 @@ impl CortexM {
                 0xA | 0xE => Some(AccessWidth::Word),
                 _ => None,
             };
-            if let Some(width) = width {
+            let succeeds = match (sz, width) {
+                (0xC..=0xE, Some(width)) => self.take_exclusive_reservation(bus, addr, width)?,
+                _ => true,
+            };
+            if let (true, Some(width)) = (succeeds, width) {
                 self.store(bus, addr, width, val)?;
             }
             if matches!(sz, 0xC..=0xE) {
                 let rd = (h2 & 0xF) as u8;
-                self.set_register(rd, 0); // success
+                self.set_register(rd, if succeeds { 0 } else { 1 });
             }
             __pc = PcAdvance::Add4;
         } else if (h1 & 0xFE00) == 0xE800 {

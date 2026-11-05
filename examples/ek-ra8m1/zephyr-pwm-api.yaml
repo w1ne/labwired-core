@@ -1,0 +1,42 @@
+# LabWired - EK-RA8M1 stock Zephyr pwm_api test (GPT7 PWM on P603)
+#
+# Unmodified upstream Zephyr v4.1.0 `tests/drivers/pwm/pwm_api` for board
+# `ek_ra8m1`. Rebuild: crates/firmware-ek-ra8m1-zephyr/build.sh
+#
+# The board's pwm7 (renesas,ra-pwm) is GPT7, its GTIOC7A on P603 (PmnPFS
+# PMR = 1, PSEL = RA_PSEL_GPT1). pwm_renesas_ra.c drives FSP r_gpt: each
+# pwm_set stops GPT7, R_GPT_PeriodSet / R_GPT_DutyCycleSet load GTPBR and
+# the GTCCRC buffer (0%/100% through GTUDDTYC.OADTY), and GTSTR restarts it.
+# The test sets 50%, 100% and 0% for one second each, first in PWM cycles
+# (64000 of the 120 MHz PCLKD, 533 us), then in ns (2 ms).
+#
+# The driver only writes registers, so the suite passes against a `stub`
+# GPT too. What the pad shows is the oracle: P603 must carry the waveform.
+# 50% of 64000 counts is 128000 bus cycles high and low (4 per count), 3751
+# edges in the second; 50% of 2 ms is 480000 / 480000, 1001 edges; with the
+# three reconfigurations that is 4754 edges, the 100% phases high and the
+# 0% phases low. The GPT stub, or a chip YAML without the GTIOC7A pad, gives
+# 0 edges and fails the run. The final registers are the 0% setting of the
+# 2 ms period: GTPR = 240000 - 1, OADTY = 0b10.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/r7fa8m1ah-zephyr-pwm-api.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+  max_cycles: 3000000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "Running TESTSUITE pwm_basic"
+      - " PASS - test_pwm_cycle"
+      - " PASS - test_pwm_nsec"
+      - "SUITE PASS - 100.00% [pwm_basic]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - gpio_edges:
+      pin: "port6:3"
+      min_edges: 4754
+  - memory_value: { address: 0x40322764, expected_value: 239999, size: 4 }
+  - memory_value: { address: 0x40322730, expected_value: 0x00020000, mask: 0x00030000, size: 4 }
+  - expected_stop_reason: max_cycles

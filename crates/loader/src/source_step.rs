@@ -343,7 +343,10 @@ impl SourceDebug {
         // DWARF numbers these files from 0 in register order: r0-r15,
         // x0-x31, the current window's a0-a15, AVR r0-r31.
         let reg_count: u16 = match family {
-            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
+            MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
             // W0-W15, PC (16), SR (17) — provisional until XC16 DWARF numbers
             // are verified.
@@ -353,6 +356,12 @@ impl SourceDebug {
             MachineFamily::Pic18 => 8,
             // W, STATUS, FSR, PCLATH, SP, PC — provisional, same caveat.
             MachineFamily::Pic16 => 6,
+            // R0-R15 (GCC's RX DWARF numbering).
+            MachineFamily::Rx => 16,
+            // $0-$31 (GCC's MIPS DWARF numbering).
+            MachineFamily::Mips => 32,
+            // X0-X30, SP (31).
+            MachineFamily::Aarch64 => 32,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -439,7 +448,7 @@ impl TargetMemory for BusMemory<'_> {
 /// unwind with CFI; Xtensa (register windows) and AVR show frame 0 only.
 fn abi(family: MachineFamily) -> Abi {
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => Abi {
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Abi {
             sp: 13,
             callee_saved: (4..=11).collect(),
             code_mask: !1,
@@ -499,6 +508,37 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Rx => Abi {
+            // R0 is the stack pointer. Frame 0 only until the RX CFI unwind
+            // has been checked against GCC output.
+            sp: 0,
+            callee_saved: (6..=13).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
+        MachineFamily::Mips => Abi {
+            // $29 is the stack pointer; s0-s7 and s8/fp are callee-saved
+            // (o32). Frame 0 only until the MIPS CFI unwind has been checked
+            // against GCC output.
+            sp: 29,
+            callee_saved: (16..=23).chain(30..=30).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
+        MachineFamily::Aarch64 => Abi {
+            // DWARF 31 is SP. Frame 0 only until the AArch64 CFI unwind has
+            // been checked against GCC output (registers read as 32 bits).
+            sp: 31,
+            callee_saved: (19..=29).collect(),
+            code_mask: !0,
+            register_size: 8,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -508,19 +548,26 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
     let cpu = target.debug_cpu();
     let mut regs = RegisterSet::default();
     let count: u8 = match family {
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
+        MachineFamily::CortexM
+        | MachineFamily::CortexA
+        | MachineFamily::CortexR
+        | MachineFamily::Xtensa => 16,
         MachineFamily::RiscV => 32,
         MachineFamily::Avr => 33,
         // W0-W15, PC (16), SR (17).
         MachineFamily::Pic24 => 18,
         MachineFamily::Pic18 => 8,
         MachineFamily::Pic16 => 6,
+        MachineFamily::Rx => 16,
+        MachineFamily::Mips => 32,
+        // X0-X30, SP.
+        MachineFamily::Aarch64 => 32,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
     }
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => {
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => {
             regs.set(15, Some(u64::from(cpu.get_pc())));
         }
         MachineFamily::RiscV => regs.set(0, Some(0)),
@@ -677,7 +724,7 @@ impl SourceDebug {
 /// The stack pointer's id for `get_register`.
 fn stack_register(family: MachineFamily) -> u8 {
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => 13,
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => 13,
         MachineFamily::RiscV => 2,
         // a1 of the current register window.
         MachineFamily::Xtensa => 1,
@@ -687,6 +734,9 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Pic24 => 15,
         MachineFamily::Pic18 => 6,
         MachineFamily::Pic16 => 4,
+        MachineFamily::Rx => 0,
+        MachineFamily::Mips => 29,
+        MachineFamily::Aarch64 => 31,
     }
 }
 
@@ -837,7 +887,7 @@ pub fn step_source_line(
     let sp_id = stack_register(family);
     // Cortex-M and RISC-V find a call by its return-address register.
     let ra_id = match family {
-        MachineFamily::CortexM | MachineFamily::CortexA => Some(14),
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Some(14),
         MachineFamily::RiscV => Some(1),
         _ => None,
     };

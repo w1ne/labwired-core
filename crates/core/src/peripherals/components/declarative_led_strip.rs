@@ -62,6 +62,10 @@ pub struct LedPixel {
     pub wire: [u8; 3],
     /// Global brightness, or 0 on a wire that has no such field.
     pub brightness: u8,
+    /// The fourth colour byte of an RGBW part (the SK6812RGBW clocks W after
+    /// its three colour bytes), or `None` on a three-colour strip. Kept out of `wire` so a
+    /// reader of an RGB strip sees exactly the three bytes it always did.
+    pub white: Option<u8>,
 }
 
 /// Convert a nanosecond span to sim cycles at `cpu_hz` (`ns * cpu_hz / 1e9`),
@@ -175,9 +179,10 @@ fn validate_spec(spec: &LedStripSpec) -> Result<()> {
                     t.high_threshold_ns
                 );
             }
-            if t.bits_per_pixel != 24 {
+            if t.bits_per_pixel != 24 && t.bits_per_pixel != 32 {
                 bail!(
-                    "timing.bits_per_pixel {} — this decoder shifts three colour bytes per LED",
+                    "timing.bits_per_pixel {} — this decoder shifts three (RGB) or four (RGBW) \
+                     colour bytes per LED",
                     t.bits_per_pixel
                 );
             }
@@ -395,7 +400,10 @@ impl GenericLedStrip {
 
     /// The artifact payload: colour bytes in WIRE order, LED after LED.
     fn flat(&self) -> Vec<u8> {
-        self.pixels().iter().flat_map(|p| p.wire).collect()
+        self.pixels()
+            .iter()
+            .flat_map(|p| p.wire.into_iter().chain(p.white))
+            .collect()
     }
 
     // ── the clocked wire ────────────────────────────────────────────────
@@ -426,7 +434,11 @@ impl GenericLedStrip {
                 chunk[f.colour_bytes[1] as usize],
                 chunk[f.colour_bytes[2] as usize],
             ];
-            out.push(LedPixel { wire, brightness });
+            out.push(LedPixel {
+                wire,
+                brightness,
+                white: None,
+            });
         }
         if !out.is_empty() {
             self.pixels = out;
@@ -470,15 +482,23 @@ impl GenericLedStrip {
                 s.shift = (s.shift << 1) | bit;
                 s.nbits += 1;
                 if s.nbits == bits {
+                    // An RGBW part clocks a fourth byte (W) after the three
+                    // colour bytes; the first three keep their RGB positions.
+                    let (rgb, white) = if bits == 32 {
+                        (s.shift >> 8, Some((s.shift & 0xFF) as u8))
+                    } else {
+                        (s.shift, None)
+                    };
                     let wire = [
-                        ((s.shift >> 16) & 0xFF) as u8,
-                        ((s.shift >> 8) & 0xFF) as u8,
-                        (s.shift & 0xFF) as u8,
+                        ((rgb >> 16) & 0xFF) as u8,
+                        ((rgb >> 8) & 0xFF) as u8,
+                        (rgb & 0xFF) as u8,
                     ];
                     if s.current.len() < self.num_pixels {
                         s.current.push(LedPixel {
                             wire,
                             brightness: 0,
+                            white,
                         });
                     }
                     s.shift = 0;
@@ -526,7 +546,7 @@ impl GenericLedStrip {
                 LedStripMetaFlag::PixelsDecoded => serde_json::json!(pixels.len()),
                 LedStripMetaFlag::LitPixels => serde_json::json!(pixels
                     .iter()
-                    .filter(|p| p.wire.iter().any(|&c| c != 0))
+                    .filter(|p| p.wire.iter().chain(p.white.iter()).any(|&c| c != 0))
                     .count()),
                 LedStripMetaFlag::Powered => serde_json::json!(self.powered),
                 LedStripMetaFlag::CsPin => serde_json::json!(self.cs_pin),

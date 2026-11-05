@@ -1,0 +1,13 @@
+# LabWired - EK-RA8M1 with a Bosch BME280 on IIC1 at 0x76, for the stock
+# Zephyr samples/sensor/bme280 run (zephyr-bme280.yaml). The BME280 sits at
+# its datasheet defaults: 25 C, 50 %RH, 1013.25 hPa.
+name: "ek-ra8m1-bme280"
+chip: "../../configs/chips/r7fa8m1ah.yaml"
+cpu_hz: 8_000_000
+external_devices:
+  - id: "bme"
+    type: "bme280"
+    connection: "iic1"
+    config:
+      i2c_address: 0x76
+board_io: []

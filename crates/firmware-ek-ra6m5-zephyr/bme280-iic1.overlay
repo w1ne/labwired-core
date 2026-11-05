@@ -1,0 +1,17 @@
+/*
+ * LabWired - a Bosch BME280 at 0x76 on IIC1 for the stock Zephyr
+ * samples/sensor/bme280 (the only change from the in-tree board: the
+ * sample ships overlays for boards with an `arduino_i2c` label, which
+ * ek_ra6m5 does not define).
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&iic1 {
+	status = "okay";
+
+	bme280@76 {
+		compatible = "bosch,bme280";
+		reg = <0x76>;
+	};
+};

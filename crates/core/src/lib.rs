@@ -63,8 +63,9 @@ pub use machine::{
     IdlePolicy,
 };
 pub use peripheral::{
-    DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome, MmioAccessClass,
-    Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX, DMA_SIGNAL_TX,
+    AnalogProbe, DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome,
+    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX,
+    DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;
@@ -85,6 +86,12 @@ pub enum Arch {
     Pic18,
     /// PIC16 classic mid-range 8-bit MCU (14-bit words, word-addressed PC).
     Pic16,
+    /// AArch64 (Armv8-A, Cortex-A53 class).
+    Aarch64,
+    /// Renesas RX (RXv3, RX261 class).
+    Rx,
+    /// MIPS32r2 (PIC32MZ EF, M5150 class).
+    Mips,
     Unknown,
 }
 

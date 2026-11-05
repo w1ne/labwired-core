@@ -135,6 +135,40 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LPUART bring-up in this harness; bytes are proven by the \
          vegaboard-ri5cy survival smoke",
     ),
+    // SK-AM62: this harness has no AArch64 bring-up (the A53 is not one of
+    // its CPU families); the MAIN_UART0 bytes are proven by the
+    // sk_am62_zephyr survival gate.
+    (
+        "am6234",
+        BusKind::Uart,
+        "no AArch64 core bring-up in this harness; bytes are proven by the \
+         sk_am62_zephyr survival gate",
+    ),
+    // PolarFire SoC Discovery Kit: this harness has no 16550 bring-up; the
+    // MMUART1 bytes are proven by the mpfs_disco_kit_zephyr survival gate.
+    // EK-RX261: this harness has no RX bring-up (the RX core is not one of
+    // its CPU families); the SCI6 bytes are proven by the ek_rx261_zephyr
+    // survival gate.
+    (
+        "r5f52618bgfp",
+        BusKind::Uart,
+        "no RX core bring-up in this harness; bytes are proven by the \
+         ek_rx261_zephyr survival gate",
+    ),
+    // Curiosity PIC32MZ EF 2.0: this harness has no MIPS bring-up; the UART2
+    // bytes are proven by the curiosity_pic32mz_nuttx survival gate.
+    (
+        "pic32mz2048efm144",
+        BusKind::Uart,
+        "no MIPS core bring-up in this harness; bytes are proven by the \
+         curiosity_pic32mz_nuttx survival gate",
+    ),
+    (
+        "mpfs095t",
+        BusKind::Uart,
+        "no 16550 MMUART bring-up in this harness; bytes are proven by the \
+         mpfs_disco_kit_zephyr survival gate",
+    ),
     // CC2538DK: no UART0 bring-up in this harness; bytes are proven by the
     // cc2538dk survival smoke.
     (

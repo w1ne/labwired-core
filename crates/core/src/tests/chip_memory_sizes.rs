@@ -245,10 +245,18 @@ fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     if chip.flash.size != 0 {
         return chip.flash.size % SECTOR == 0;
     }
-    chip.name == "rv1103"
-        && chip.arch == Arch::Arm
-        && chip.core.as_deref() == Some("cortex-a7")
-        && chip.flash.base == 0
+    // RV1103 boots from MicroSD; the XCK26 RPU runs from TCM/DDR the FSBL
+    // loads; the AM6234 A53s run from DDR that U-Boot (or here, the loader)
+    // fills. None has internal flash.
+    [
+        ("rv1103", "cortex-a7", Arch::Arm),
+        ("xck26-rpu", "cortex-r5f", Arch::Arm),
+        ("am6234", "cortex-a53", Arch::Aarch64),
+    ]
+    .iter()
+    .any(|(name, core, arch)| {
+        chip.name == *name && chip.core.as_deref() == Some(*core) && chip.arch == *arch
+    }) && chip.flash.base == 0
 }
 
 #[test]
@@ -274,7 +282,21 @@ fn non_kib_ram_exception_is_exactly_the_listed_pic_parts() {
 }
 
 #[test]
-fn zero_internal_flash_is_only_allowed_for_the_declared_rv1103_soc() {
+fn zero_internal_flash_is_only_allowed_for_the_declared_socs() {
+    let rpu = ChipDescriptor::from_file(chips_dir().join("xck26-rpu.yaml")).unwrap();
+    assert!(flash_geometry_is_valid(&rpu));
+    let am62 = ChipDescriptor::from_file(chips_dir().join("am6234.yaml")).unwrap();
+    assert!(flash_geometry_is_valid(&am62));
+    let mut am62_as_arm = am62.clone();
+    am62_as_arm.arch = Arch::Arm;
+    assert!(
+        !flash_geometry_is_valid(&am62_as_arm),
+        "the arch is part of the exemption"
+    );
+    let mut wrong_core = rpu.clone();
+    wrong_core.core = Some("cortex-a7".into());
+    assert!(!flash_geometry_is_valid(&wrong_core));
+
     let chip = ChipDescriptor::from_file(chips_dir().join("rv1103.yaml")).unwrap();
     assert_eq!(chip.flash.size, 0);
     assert_eq!(chip.flash.base, 0);

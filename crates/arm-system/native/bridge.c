@@ -263,9 +263,16 @@ int lw_call(uint32_t op, uint64_t a, uint64_t b, uint64_t *out,
       tlib_abort(
           "ARM translation cache is smaller than native code/search reserve");
     tlib_set_translation_cache_configuration(LW_CACHE_MIN, LW_CACHE_MAX);
-    if (tlib_init("cortex-a7"))
-      strcpy(error, "Cortex-A7 initialization failed");
+    if (a > 1)
+      tlib_abort("unknown ARM CPU model selector");
+    if (tlib_init(a == 1 ? "cortex-r5f" : "cortex-a7"))
+      strcpy(error, a == 1 ? "Cortex-R5F initialization failed"
+                           : "Cortex-A7 initialization failed");
     else {
+      /* tlib's PMSA default is zero regions (MPUIR.DREGION 0). The ZynqMP
+       * RPU's Cortex-R5F is configured with 16 (UG1085, RPU chapter). */
+      if (a == 1)
+        tlib_set_number_of_mpu_regions(16);
       if (tlib_atomic_memory_state_init((uintptr_t)&atomic_state, -1) != 0)
         tlib_abort("native atomic state initialization failed");
       tlib_set_block_finished_hook_present(1);

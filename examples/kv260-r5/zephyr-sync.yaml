@@ -1,0 +1,26 @@
+# LabWired - AMD Kria KV260 RPU stock Zephyr synchronization
+#
+# Unmodified upstream Zephyr v4.1.0 `samples/synchronization`. Two threads
+# hand a semaphore back and forth; each prints, busy-waits 100 ms on the TTC0
+# counter (k_busy_wait), then sleeps 500 ms on a TTC0 match interrupt through
+# the RPU GIC. The alternation needs timer IRQs, WFI idle and context switches
+# (with VFP state) to work. 100 ms of busy-wait is ~53 M instructions at the
+# R5F's 533 MHz, so ci runs this on a release CLI.
+# Rebuild: crates/firmware-kv260-r5-zephyr/build.sh
+# Needs a native CLI: --features qemu-arm-system,event-scheduler.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/kv260-r5-zephyr-sync.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 400000000
+  max_cycles: 2500000000
+  wall_time_ms: 300000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.1.0 ***"
+      - "thread_a: Hello World from cpu 0 on kv260_r5!"
+      - "thread_b: Hello World from cpu 0 on kv260_r5!"
+      - "thread_a: Hello World from cpu 0 on kv260_r5!"
+      - "thread_b: Hello World from cpu 0 on kv260_r5!"

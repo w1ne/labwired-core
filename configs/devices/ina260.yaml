@@ -1,0 +1,115 @@
+# Texas Instruments INA260 current / voltage / power monitor with an
+# integrated 2 mΩ shunt — declarative I²C register-pointer device. The
+# INA226's sibling (`ina226.yaml`) without the calibration step: the shunt is
+# inside the package, so current and power come out in fixed units.
+#
+# Datasheet: TI SBOS656C ("INA260 Precision Digital Current and Power Monitor
+# With Low-Drift, Precision Integrated Shunt", rev. C, December 2016):
+#   §1 Features: 2 mΩ integrated shunt, 15 A continuous, bus voltage 0 V to
+#     36 V, 16 programmable addresses.
+#   §8.5.1 "Calculating Returned Values", Table 1: fixed LSBs — Current 1.25 mA,
+#     Bus Voltage 1.25 mV, Power 10 mW. Negative current is two's complement;
+#     power is always positive.
+#   §8.6 "Register Maps", Table 4 "Register Set Summary":
+#     0x00 Configuration   R/W  POR 0x6127
+#     0x01 Current         R    int16, 1.25 mA / LSB
+#     0x02 Bus Voltage     R    1.25 mV / LSB, full scale 40.96 V (D15 always 0)
+#     0x03 Power           R    10 mW / LSB
+#     0x06 Mask/Enable     R/W  POR 0x0000
+#     0x07 Alert Limit     R/W  POR 0x0000
+#     0xFE Manufacturer ID R    0x5449 ("TI")
+#     0xFF Die ID          R    0x2270
+#   §8.5.3 "Communications Bus Overview" (write / read word timing diagrams):
+#     a 1-byte register pointer, then a 16-bit word MSB first.
+#
+# ── Write masks ───────────────────────────────────────────────────────────
+#   CONFIGURATION 0x0FFF (§8.6.1, Figure 30): AVG, VBUSCT, ISHCT, MODE are
+#     firmware's; D14:D12 are read-only 110. RST (D15) self-clears — it is not
+#     stored, and a write with it set runs the reset rule below.
+#   MASK_ENABLE 0xFC03 (§8.6.5, Figure 34): OCL UCL BOL BUL POL CNVR plus APOL
+#     and LEN are firmware's; D9:D5 are unused, AFF / CVRF / OVF are flags.
+#
+# ── Power is computed from the two registers, as §8.6.4 says ─────────────
+#   "The Power Register records power in Watts by multiplying the decimal
+#   values of the Current Register with the decimal value of the Bus Voltage
+#   Register." In counts: 1.25 mA × 1.25 mV / 10 mW = 1/6400, so
+#     POWER = |CURRENT| × BUS_VOLTAGE / 6400
+#   which reproduces Table 1 exactly (10000 × 9584 / 6400 = 14975 = 0x3A7F).
+#   It is a Tier-2 rule over `reported()`, re-evaluated at every START, so a
+#   read always sees the live stimulus. Division truncates; the datasheet gives
+#   the LSB, not the rounding.
+#
+# ── Stimulus ──────────────────────────────────────────────────────────────
+# `bus_voltage` (V) and `current` (A) through the internal shunt. Current
+# counts = I / 1.25 mA = I × 800; bus counts = V × 800, clamped to 0..32767.
+#
+# ── Conversion-ready ──────────────────────────────────────────────────────
+# CVRF (Mask/Enable bit 3) rises 2.2 ms after a Configuration write that leaves
+# a mode selected — the default 1.1 ms current + 1.1 ms bus conversion, AVG =
+# 1 — and clears when Mask/Enable is read (§8.6.5, CVRF description).
+#
+# ⚠️ NOT modelled, named rather than faked: averaging and the per-setting
+# conversion times (the data is always the live stimulus; the CVRF delay is the
+# default-setting one), the alert comparator and ALERT pin (AFF / OVF never
+# rise), power-down and triggered modes (data keeps tracking in every mode, and
+# a power-down write still arms CVRF), the power-on CVRF (it rises only after
+# firmware writes Configuration), and the shunt's thermal limits (the twin
+# reports any current up to the register's ±40.96 A full scale; silicon is
+# rated for 15 A continuous).
+#   ⚠️ CVRF polling: the shared data-ready engine re-arms the conversion delay
+#   when Mask/Enable is read while the part is in a continuous mode, so a
+#   master that polls Mask/Enable faster than the conversion time never sees
+#   CVRF set. Silicon keeps converting and raises CVRF on its own cadence.
+#   (`ina226.yaml` behaves the same way.) Poll after the conversion time.
+type: ina260
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x40
+    registers:
+      - { name: CONFIGURATION, addr: 0x00, width: 2, endian: be, access: rw, write_mask: 0x0FFF, reset: 0x6127 }
+      # 1.25 mA/LSB ⇒ 800 counts per amp, two's-complement.
+      - { name: CURRENT, addr: 0x01, width: 2, endian: be, access: r, signed: true, source: current, encode: { scale: 800.0 } }
+      # 1.25 mV/LSB ⇒ 800 counts per volt; D15 always 0.
+      - { name: BUS_VOLTAGE, addr: 0x02, width: 2, endian: be, access: r, source: bus_voltage, encode: { scale: 800.0, clamp_min: 0, clamp_max: 32767 } }
+      # Computed by the rule below from CURRENT and BUS_VOLTAGE.
+      - { name: POWER, addr: 0x03, width: 2, endian: be, access: r, reset: 0x0000 }
+      - { name: MASK_ENABLE, addr: 0x06, width: 2, endian: be, access: rw, write_mask: 0xFC03, reset: 0x0000 }
+      - { name: ALERT_LIMIT, addr: 0x07, width: 2, endian: be, access: rw, reset: 0x0000 }
+      - { name: MANUFACTURER_ID, addr: 0xFE, width: 2, endian: be, access: r, reset: 0x5449 }
+      - { name: DIE_ID, addr: 0xFF, width: 2, endian: be, access: r, reset: 0x2270 }
+    data_ready:
+      - name: conversion
+        start_register: CONFIGURATION
+        start_mask: 0x0007
+        ready_register: MASK_ENABLE
+        ready_mask: 0x0008
+        conversion_us: 2200
+        clear_on_read: [MASK_ENABLE]
+  rules:
+    # §8.6.4: Current × Bus Voltage in register counts, always positive.
+    - on: start
+      do:
+        - { write: { register: POWER, value: "(abs(reported(CURRENT)) * reported(BUS_VOLTAGE)) / 6400" } }
+    # RST (Configuration D15): "a system reset that is the same as power-on
+    # reset. Resets all registers to default values."
+    - on: { write: CONFIGURATION }
+      when: "written & 0x8000"
+      do:
+        - { write: { register: CONFIGURATION, value: "0x6127" } }
+        - { write: { register: MASK_ENABLE, value: "0" } }
+        - { write: { register: ALERT_LIMIT, value: "0" } }
+
+metadata:
+  label: "INA260 Power Monitor"
+  summary: "TI INA260 current / voltage / power monitor with an integrated 2 mΩ shunt over I²C (36 V, 15 A)."
+  detail: "Texas Instruments INA260 (default 0x40; 0x40–0x4F by A0/A1 strapping). Configuration powers up at 0x6127; Manufacturer ID (0xFE) reads 0x5449 and Die ID (0xFF) 0x2270. Current (1.25 mA/LSB, two's complement) and bus voltage (1.25 mV/LSB) follow the host's current and bus_voltage; Power (10 mW/LSB) is Current × Bus Voltage / 6400 in register counts, exactly as the datasheet's §8.6.4 says, always positive. CVRF rises 2.2 ms after a Configuration write. Averaging, the alert comparator and power-down are not modelled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x40 (A0 = A1 = GND); 0x40–0x4F by A0/A1 strapping."
+  inputs:
+    - { key: bus_voltage, label: "Bus voltage", unit: "V", min: 0.0, max: 36.0, default: 5.0 }
+    - { key: current, label: "Current (internal 2 mΩ shunt)", unit: "A", min: -15.0, max: 15.0, default: 1.0 }

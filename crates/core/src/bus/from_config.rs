@@ -27,6 +27,12 @@ fn embedded_region_image(env: &str) -> Option<&'static [u8]> {
         // = 0x2100 on the W25Q080 stage 2) — and the lookup branches into
         // flash and BusFaults (PC just past that entry, e.g. 0x2106).
         "LABWIRED_RP2040_BOOTROM" => Some(include_bytes!("../../roms/rp2040/bootrom.bin")),
+        // Clean-room RP2350 boot-ROM API window (roms/rp2350/rp2350_bootrom.S).
+        // pico-sdk reads `rom_table_lookup` as the halfword at 0x16 (datasheet
+        // 5.4.1, Table 453). Without this window the flash alias serves the
+        // image's vector table there: 0x1000, the upper half of a 0x1000_xxxx
+        // vector, and the lookup branches into flash offset 0x1000.
+        "LABWIRED_RP2350_BOOTROM" => Some(include_bytes!("../../roms/rp2350/rp2350_bootrom.bin")),
         // Clean-room CC2538 ROM (roms/cc2538/cc2538_rom.S): the SWRU333A
         // start-up sequence (CCA -> VTOR/SP/PC) and the utility API table at
         // 0x48 that Contiki-NG's startup calls to copy .data and zero .bss.
@@ -180,6 +186,14 @@ impl SystemBus {
     /// the model already holds — it never changes what the bus does.
     pub fn attach_debug_schemas(&mut self, chip: &ChipDescriptor, manifest: &SystemManifest) {
         self.debug_schemas = Self::load_debug_schemas(chip, manifest);
+    }
+
+    /// Copy the GPIO supply and input thresholds from the resolved chip.
+    /// Programmatic peripheral banks call this because they bypass from_config.
+    /// Missing values stay absent so voltage routes fail instead of guessing.
+    pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
+        self.io_voltage_v = chip.io_voltage_v;
+        self.gpio_input_thresholds = chip.gpio_input_thresholds;
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -424,6 +438,10 @@ impl SystemBus {
             reset_vector_offset: chip.reset_vector_offset,
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
+            rp2350_dcp: chip
+                .coprocessors
+                .contains(&labwired_config::CortexMCoprocessor::Rp2350Dcp)
+                .then(Box::default),
             ns_alias_offset: chip.ns_alias_offset,
             mem_aliases,
             pending_cpu_irqs: [0; 2],
@@ -516,8 +534,7 @@ impl SystemBus {
                 (adc.peripheral.clone(), adc.channel),
             );
         }
-        bus.io_voltage_v = chip.io_voltage_v;
-        bus.gpio_input_thresholds = chip.gpio_input_thresholds;
+        bus.attach_chip_io_levels(chip);
         bus.supply = crate::power::SupplySupervisor::new(chip.supply_monitor.clone());
 
         let merged_peripherals = merged_peripheral_configs(chip, manifest);
@@ -824,6 +841,24 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
+                    // Renesas SCI_B and classic SCI: `elc_event` is the
+                    // channel's RXI event (TXI/TEI follow); the events reach
+                    // the NVIC through the RA ICU. `clock_hz` is the rate the
+                    // guest believes its cycles run at and `baud` the line
+                    // rate, which time the TDRE/TEND edges. Without
+                    // `elc_event` the SCI is polled.
+                    // On a Renesas RX `rxi_vector` takes its place: the
+                    // RXI ICU vector (TXI/TEI follow), latched by the core's
+                    // ICU without an event link.
+                    let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+                    let sci_clock =
+                        get("clock_hz").unwrap_or(manifest.cpu_hz.unwrap_or(chip.cpu_hz));
+                    let sci_baud = get("baud").unwrap_or(115_200);
+                    if let Some(event) = get("elc_event") {
+                        uart = uart.set_sci_events(event as u32, sci_clock, sci_baud);
+                    } else if let Some(vector) = get("rxi_vector") {
+                        uart = uart.set_sci_vectors(vector as u32, sci_clock, sci_baud);
+                    }
                     if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
                         // Vendor-neutral YAML map. `tx_offset` is required;
                         // status/rx/ready/enable keys are optional. The status
@@ -1062,6 +1097,25 @@ impl SystemBus {
                     } else {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)
+                    };
+                    // RA4/RA6 PORT: 16-bit PCNTRn aliases with the halves
+                    // swapped (FSP R7FA6M5BH.h; see `RaPortGpio`).
+                    let port = if p_cfg
+                        .config
+                        .get("swapped_half_aliases")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        if layout != crate::peripherals::gpio::GpioRegisterLayout::RaPort {
+                            anyhow::bail!(
+                                "GPIO peripheral '{}': `swapped_half_aliases` applies to \
+                                 ra_port only",
+                                p_cfg.id
+                            );
+                        }
+                        port.with_ra_swapped_half_aliases()
+                    } else {
+                        port
                     };
                     // Optional `pad_control`: the id of the block that keeps
                     // this port's pulls (Kinetis PORTx, RA PFS, i.MX RT
@@ -1408,6 +1462,10 @@ impl SystemBus {
         bus.wire_stm32_timer_output_pads();
         // SAMD51 TC waveform outputs onto their PMUX-E pads (samd51_tc only).
         bus.wire_samd51_tc_output_pads();
+        // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
+        bus.wire_ra_gpt_output_pads();
+        // Board wires from an analog output (a DAC pin) to an ADC input.
+        bus.wire_analog_links();
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
         // name. Unlike the four above this is not a datasheet AF table — the
         // pad has no function register on this family, so the peripherals

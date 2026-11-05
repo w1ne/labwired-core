@@ -1,0 +1,20 @@
+# LabWired - EK-RX261 stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v4.3.0 `samples/hello_world` for board target
+# `ek_rx261`. Rebuild: crates/firmware-ek-rx261-zephyr/build.sh
+#
+# The RX core starts at the fixed reset vector (0xFFFFFFFC), the RDP clock
+# setup runs against `rx_sysc`/`rx_flash`, and the console is SCI6.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ek-rx261-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  # The image idles in WAIT after main() returns; idle time is not steps.
+  max_cycles: 64000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 ***"
+      - "Hello World! ek_rx261/r5f52618bgfp"
+  - expected_stop_reason: max_cycles

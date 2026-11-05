@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ATmega-style 8-bit GPIO port (PINx / DDRx / PORTx layout).
+//! 8-bit AVR GPIO port: classic ATmega PINx / DDRx / PORTx or AVRxt VPORT
+//! DIR / OUT / IN register ordering.
 //!
 //! Parking model so `--watch-gpio portb:5` can observe Arduino Nano
 //! `LED_BUILTIN` (PB5). The AVR interpreter owns the same registers in its
@@ -18,8 +19,17 @@ const OFF_PIN: u64 = 0;
 const OFF_DDR: u64 = 1;
 const OFF_PORT: u64 = 2;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AvrGpioRegisterLayout {
+    #[default]
+    Atmega,
+    AvrxtVport,
+}
+
 #[derive(Debug)]
 pub struct AvrGpioPort {
+    layout: AvrGpioRegisterLayout,
+    pin_count: u8,
     pin: u8,
     ddr: u8,
     port: u8,
@@ -45,7 +55,25 @@ impl Default for AvrGpioPort {
 
 impl AvrGpioPort {
     pub fn new() -> Self {
+        Self::with_layout(AvrGpioRegisterLayout::Atmega, 8)
+    }
+
+    /// Create an AVRxt VPORT block. VPORT exposes DIR, OUT and IN in that
+    /// order; writes to IN are ignored (unlike classic AVR PINx toggle-on-1).
+    pub fn new_avrxt_vport(pin_count: u8) -> Self {
+        Self::with_layout(AvrGpioRegisterLayout::AvrxtVport, pin_count)
+    }
+
+    /// Create a classic AVR GPIO block with fewer than eight bonded pins.
+    pub fn new_with_pin_count(pin_count: u8) -> Self {
+        Self::with_layout(AvrGpioRegisterLayout::Atmega, pin_count)
+    }
+
+    fn with_layout(layout: AvrGpioRegisterLayout, pin_count: u8) -> Self {
+        assert!((1..=8).contains(&pin_count), "AVR GPIO width must be 1..=8");
         Self {
+            layout,
+            pin_count,
             pin: 0,
             ddr: 0,
             port: 0,
@@ -53,6 +81,22 @@ impl AvrGpioPort {
             pud: false,
             watch: None,
             cells: Vec::new(),
+        }
+    }
+
+    #[inline]
+    fn input_register_offset(&self) -> u64 {
+        match self.layout {
+            AvrGpioRegisterLayout::Atmega => OFF_PIN,
+            AvrGpioRegisterLayout::AvrxtVport => OFF_PORT,
+        }
+    }
+
+    #[inline]
+    fn output_register_offset(&self) -> u64 {
+        match self.layout {
+            AvrGpioRegisterLayout::Atmega => OFF_PORT,
+            AvrGpioRegisterLayout::AvrxtVport => OFF_DDR,
         }
     }
 
@@ -104,7 +148,7 @@ impl AvrGpioPort {
 
 impl PinPort for AvrGpioPort {
     fn pin_count(&self) -> u8 {
-        8
+        self.pin_count
     }
 
     /// `DDRx` set: an output driving `PORTx`. Clear: an input, with the
@@ -112,7 +156,7 @@ impl PinPort for AvrGpioPort {
     /// clear (ATmega328P datasheet §14.2.1). The CPU owns `MCUCR` and hands
     /// PUD over through [`PinPort::set_pull_ups_disabled`].
     fn driver(&self, pin: u8) -> Option<PadDriver> {
-        if pin >= 8 {
+        if pin >= self.pin_count {
             return None;
         }
         let bit = 1u8 << pin;
@@ -145,7 +189,7 @@ impl PinPort for AvrGpioPort {
     /// there, exactly as the wiring would keep it. Releasing hands the pad
     /// back to its pull-up, or leaves a floating input at the last level.
     fn set_external(&mut self, pin: u8, ext: External) -> Option<InputChange> {
-        if pin >= 8 {
+        if pin >= self.pin_count {
             return None;
         }
         let bit = 1u8 << pin;
@@ -168,7 +212,7 @@ impl PinPort for AvrGpioPort {
     }
 
     fn input(&self, pin: u8) -> Option<bool> {
-        (pin < 8).then(|| self.pad_bits() & (1u8 << pin) != 0)
+        (pin < self.pin_count).then(|| self.pad_bits() & (1u8 << pin) != 0)
     }
 
     fn set_pull_ups_disabled(&mut self, disabled: bool) -> bool {
@@ -196,7 +240,7 @@ impl PinPort for AvrGpioPort {
 }
 
 impl Peripheral for AvrGpioPort {
-    /// PIN/DDR/PORT are three bytes moved only by `read`/`write`. There is no
+    /// The selected three-byte GPIO register block moves only by `read`/`write`. There is no
     /// `tick`/`tick_elapsed` override, so the walk calls the trait default,
     /// which returns `PeripheralTickResult::default()` — no IRQ, no DMA
     /// request, no mmio-write, no fired event, for every reachable state.
@@ -212,29 +256,42 @@ impl Peripheral for AvrGpioPort {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        let (direction, output, input) = match self.layout {
+            AvrGpioRegisterLayout::Atmega => (OFF_DDR, OFF_PORT, OFF_PIN),
+            AvrGpioRegisterLayout::AvrxtVport => (OFF_PIN, OFF_DDR, OFF_PORT),
+        };
         Ok(match offset {
-            // Outputs read back PORT, pulled-up inputs their pull, other
-            // inputs the outside level (see `pad_bits`).
-            OFF_PIN => self.pad_bits(),
-            OFF_DDR => self.ddr,
-            OFF_PORT => self.port,
+            // Outputs read back their latch; inputs read the outside/pull-up
+            // level. The field ordering is selected by the register layout.
+            a if a == input => self.pad_bits(),
+            a if a == direction => self.ddr,
+            a if a == output => self.port,
             _ => 0,
         })
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        match offset {
-            // Writing 1 to PIN toggles PORT (AVR toggle-on-write-1).
-            OFF_PIN => self.mutate_pads(|s| s.port ^= value),
-            OFF_DDR => self.mutate_pads(|s| s.ddr = value),
-            OFF_PORT => self.mutate_pads(|s| s.port = value),
-            _ => {}
+        match self.layout {
+            AvrGpioRegisterLayout::Atmega => match offset {
+                // Writing 1 to PIN toggles PORT (AVR toggle-on-write-1).
+                OFF_PIN => self.mutate_pads(|s| s.port ^= value),
+                OFF_DDR => self.mutate_pads(|s| s.ddr = value),
+                OFF_PORT => self.mutate_pads(|s| s.port = value),
+                _ => {}
+            },
+            AvrGpioRegisterLayout::AvrxtVport => match offset {
+                OFF_PIN => self.mutate_pads(|s| s.ddr = value),
+                OFF_DDR => self.mutate_pads(|s| s.port = value),
+                // VPORT.IN is read-only; it does not have PINx toggle
+                // semantics.
+                _ => {}
+            },
         }
         Ok(())
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
-        if pin >= 8 {
+        if pin >= self.pin_count {
             return None;
         }
         let bit = 1u8 << pin;
@@ -246,14 +303,14 @@ impl Peripheral for AvrGpioPort {
 
     fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
         Some(crate::peripherals::gpio::GpioPortOffsets {
-            output: OFF_PORT,
-            input: OFF_PIN,
+            output: self.output_register_offset(),
+            input: self.input_register_offset(),
         })
     }
 
     /// `DDRx` is the direction register: a set bit makes the pad an output.
     fn read_gpio_is_output(&self, pin: u8) -> Option<bool> {
-        (pin < 8).then(|| self.ddr & (1u8 << pin) != 0)
+        (pin < self.pin_count).then(|| self.ddr & (1u8 << pin) != 0)
     }
 
     /// A DDR-clear pad drives nothing, whatever `PORTx` holds.
@@ -289,7 +346,7 @@ impl Peripheral for AvrGpioPort {
         pin: u8,
         cell: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> bool {
-        if pin >= 8 {
+        if pin >= self.pin_count {
             return false;
         }
         cell.store(
@@ -470,5 +527,34 @@ mod tests {
         assert!(p.set_gpio_input(7, true), "PB7 is the last pin of the port");
         assert!(!p.set_gpio_input(8, true));
         assert_eq!(p.read_gpio_input(8), None);
+    }
+
+    #[test]
+    fn avrxt_vport_uses_dir_out_in_register_order_and_read_only_in() {
+        let mut p = AvrGpioPort::new_avrxt_vport(4);
+
+        p.write(0, 0b0001).unwrap(); // DIR
+        p.write(1, 0b0001).unwrap(); // OUT
+        assert_eq!(p.read(0).unwrap(), 0b0001);
+        assert_eq!(p.read(1).unwrap(), 0b0001);
+        assert_eq!(p.read(2).unwrap(), 0b0001);
+        assert_eq!(p.read_gpio_output(0), Some(true));
+        assert_eq!(p.gpio_port_offsets().unwrap().output, 1);
+        assert_eq!(p.gpio_port_offsets().unwrap().input, 2);
+
+        // VPORT.IN is read-only; writing it must not toggle the output latch.
+        p.write(2, 0b0001).unwrap();
+        assert_eq!(p.read(1).unwrap(), 0b0001);
+        assert_eq!(p.read_gpio_output(0), Some(true));
+    }
+
+    #[test]
+    fn avrxt_vport_refuses_unbonded_bits_from_pin_services() {
+        let mut p = AvrGpioPort::new_avrxt_vport(4);
+        assert_eq!(PinPort::pin_count(&p), 4);
+        assert!(p.set_gpio_input(3, true));
+        assert!(!p.set_gpio_input(4, true));
+        assert_eq!(p.read_gpio_input(4), None);
+        assert_eq!(p.read_gpio_is_output(4), None);
     }
 }

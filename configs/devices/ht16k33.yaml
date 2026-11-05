@@ -1,0 +1,88 @@
+# Holtek HT16K33 16×8 LED matrix / 7-segment controller with key scan
+# ("backpack" driver) — declarative I²C device. Datasheet: Holtek HT16K33
+# "RAM Mapping 16*8 LED Controller Driver with keyscan", Revision V1.10
+# (May 16, 2011).
+#
+# ── The wire ("Slave Addressing", p.26) ───────────────────────────────────
+# 7-bit address 1110 A2 A1 A0 → 0x70..0x77; "A2~A0 are set to 0 when
+# floating", so 0x70 is the default. There is no register pointer distinct
+# from the command: the FIRST byte after the address is a command, and the
+# four address-pointer commands are the only ones followed by data.
+#
+# ── Command Summary (p.30-31) ──────────────────────────────────────────────
+#   0000 A3..A0   Display data address pointer (R/W), 00h..0Fh. "after
+#                 reaching 0x0Fh, the pointer will reset to 0x00h".
+#   0010 xxxS     System setup (W): S = 1 oscillator on, 0 standby. Def 20h —
+#                 "At initial system power on, the System Oscillator is in the
+#                 stop state" (p.12).
+#   0100 0K2..K0  Key data address pointer (R), 40h..45h, wraps 45h → 40h.
+#   0110 0000     INT flag address pointer (R), 60h.
+#   1000 xB1B0D   Display setup (W): D display on/off, B1:B0 blink. Def 80h.
+#   1010 xx act row/int  ROW/INT set (W). Def A0h.
+#   1110 P3..P0   Dimming set (W): duty (P+1)/16. Def EFh (16/16).
+#
+# Display RAM (p.13 "Display Memory – RAM Structure"): 16 bytes; address 2n is COMn ROW7..0
+# and 2n+1 is COMn ROW15..8 — eight common lines, sixteen rows.
+#
+# ── How it is modelled ─────────────────────────────────────────────────────
+# A 256-cell `register_file` addressed by the command byte, auto-incrementing
+# on every data byte. The 16 display-RAM cells 00h..0Fh are written and read
+# back exactly as the R/W display pointer allows; the six key-RAM cells 40h..45h
+# and the INT flag at 60h read 0x00 (no key is ever pressed). The write-only
+# commands (20h, 80h, A0h, E0h groups) are a one-byte frame: the `frame` rules
+# below decode them into `osc_on`, `display_on`, `blink`, `row_int` and
+# `dimming`, which the inspector reads — there is no way to read them back on
+# silicon either.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * Pointer wrap: a display-RAM burst past 0Fh walks on into 10h instead of
+#     wrapping to 00h (and key RAM past 45h into 46h). Every Adafruit / Zephyr
+#     driver writes exactly 16 bytes from 00h, so neither wrap is reached.
+#   * Key scan: K-pins, key RAM content, the INT flag and the INT pin.
+#   * Standby gating: display RAM accepts writes with the oscillator stopped
+#     (silicon also keeps RAM in standby; it is the LED drive that stops).
+#   * The LED panel itself — no artifact is rendered; the RAM is the evidence.
+type: ht16k33
+
+behavior:
+  primitive: i2c_device
+  vars:
+    osc_on: 0
+    display_on: 0
+    blink: 0
+    row_int: 0
+    dimming: 15
+  frames: {}
+  rules:
+    # A one-byte write is a bare command. (A display write is longer, and its
+    # first byte is a pointer 00h..0Fh, which none of the guards below match.)
+    - on: frame
+      when: "frame_byte(0) & 0xF0 == 0x20"
+      do:
+        - { var: { name: osc_on, value: "frame_byte(0) & 0x01" } }
+    - on: frame
+      when: "frame_byte(0) & 0xF0 == 0x80"
+      do:
+        - { var: { name: display_on, value: "frame_byte(0) & 0x01" } }
+        - { var: { name: blink, value: "(frame_byte(0) >> 1) & 0x03" } }
+    - on: frame
+      when: "frame_byte(0) & 0xF0 == 0xA0"
+      do:
+        - { var: { name: row_int, value: "frame_byte(0) & 0x03" } }
+    - on: frame
+      when: "frame_byte(0) & 0xF0 == 0xE0"
+      do:
+        - { var: { name: dimming, value: "frame_byte(0) & 0x0F" } }
+  i2c:
+    default_address: 0x70
+    register_file:
+      size: 256
+      auto_increment: always
+
+metadata:
+  label: "Holtek HT16K33 LED backpack"
+  summary: "16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands)."
+  detail: "Holtek HT16K33 at 0x70 (0x70..0x77 by A2..A0). The first byte of each write is a command: 00h..0Fh point into the 16-byte display RAM (written and read back, auto-incrementing), 21h/20h start/stop the oscillator, 80h|B1B0|D sets display on and blink, E0h|P sets the 16-step dimming. Key RAM (40h..45h) and the INT flag (60h) read 0x00. Not modelled: key scan, INT pin, pointer wrap past 0Fh, the LED panel picture."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x70 (A2..A0 floating/low); 0x70..0x77." }

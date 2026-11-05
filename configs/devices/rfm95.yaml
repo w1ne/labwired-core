@@ -1,0 +1,143 @@
+# HopeRF RFM95W — SX1276-based LoRa module, as a declarative SPI register
+# SHELL. Datasheets: Semtech SX1276/77/78/79 rev. 4 (March 2015) — §4.3 "SPI
+# Interface", §6.1 Table 41 "Registers Summary" — and HopeRF RFM95/96/97/98(W)
+# V1, which reproduces the SX1276 register map.
+#
+# ⚠️ THERE IS NO RF AIR LINK. This is the `lora_sx1278.yaml` precedent, stated
+# the same way: the descriptor is a register file behind the SX127x SPI framing
+# and nothing else. No modulation, no packet engine, no FIFO, no DIO interrupt
+# pads, no RSSI. A driver that probes RegVersion and configures the radio sees
+# the bytes it wrote; a driver that transmits sees its own registers and never
+# a packet, and a driver that waits for TxDone on DIO0 waits forever. That gap
+# is reported rather than faked — a packet a model invents is worse than none.
+#
+# ── The wire (SX1276 §4.3) ──────────────────────────────────────────────────
+#
+# CS↓, then an address byte: "A wnr bit, which is 1 for write access and 0 for
+# read access. Then 7 bits of address, MSB first." Then the data byte. So
+# `rw_bit: 7` with `rw_read_high: false` (bit 7 SET means WRITE — the opposite
+# of the ADXL345 convention) and `addr_mask: 0x7F`.
+#
+# BURST access auto-increments the address "between each data byte", except
+# FIFO access at RegFifo (0x00), where the address is NOT incremented and each
+# byte pops / pushes the data FIFO. `auto_increment: false` here, as in the
+# SX1278 shell: one byte per CS frame is exact, and a burst past the first byte
+# reads 0xFF rather than walking the map (see NOT MODELLED).
+#
+# ── Reset values (Table 41, "Reset (POR)" column) ───────────────────────────
+#
+# The register file is seeded with the POR value of every address Table 41
+# gives one for. The part powers up in FSK/OOK mode, so 0x0D..0x3F carry their
+# FSK/OOK-mode reset values (where Table 41 lists a separate "Default (FSK)"
+# column, the POR value is used, not the Semtech-recommended default).
+# Highlights a driver touches:
+#
+#   0x01 RegOpMode   0x01   FSK/OOK mode, STANDBY
+#   0x06..0x08 RegFrf 0x6C 0x80 0x00  → 434 MHz
+#   0x09 RegPaConfig 0x4F   0x0A RegPaRamp 0x09   0x0B RegOcp 0x2B
+#   0x0C RegLna      0x20   0x40/0x41 RegDioMapping1/2 0x00
+#   0x42 RegVersion  0x12   READ-ONLY (see below)
+#   0x4B RegTcxo 0x09   0x4D RegPaDac 0x84   0x70 RegPll 0xD0
+#
+# RegVersion: SX1276 Table 41 gives 0x12, the value LoRa drivers check for an
+# SX1276/77/78/79. The HopeRF V1 sheet prints 0x11 ("Hope RF ID relating the
+# silicon revision"; bits 7-4 full revision, 3-0 metal mask) — an earlier
+# silicon revision. 0x12 is used because it is what Semtech documents for the
+# SX1276 and what RFM95W modules answer to the common drivers.
+#
+# ⚠️ NOT MODELLED:
+#   * The RF air link, the packet engine, the 256-byte FIFO (RegFifo at 0x00 is
+#     one byte of storage), DIO0..DIO5 and every IRQ flag moving on its own.
+#   * The FSK/OOK ⇄ LoRa register banking: setting RegOpMode.LongRangeMode does
+#     not swap 0x0D..0x3F to their LoRa-mode meanings or reset values (§6.4);
+#     those addresses keep whatever they held.
+#   * Mode transitions: RegOpMode stores what is written; nothing sequences
+#     SLEEP/STANDBY/TX/RX, and RegIrqFlags1 (0x3E, POR 0x80 ModeReady) is plain
+#     storage.
+#   * BURST auto-increment (§4.3): one byte per address frame is served.
+#   * RegRssiValue (0x11), RegTemp (0x3C) and RegFormerTemp (0x5B), which
+#     Table 41 gives no reset value for, read 0x00.
+#   * The internal test registers ("others", Table 41) are plain storage.
+type: rfm95
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 1
+      rw_bit: 7
+      rw_read_high: false
+      addr_mask: 0x7F
+      auto_increment: false
+    registers:
+      # Table 41: RegVersion 0x42 = 0x12. Read-only, so a stray burst cannot
+      # make the part deny being an SX127x.
+      - { name: RegVersion, addr: 0x42, width: 1, endian: be, access: r, reset: 0x12 }
+    # Every other address is one byte of storage, seeded with Table 41's POR
+    # values. Absent entries (0x00, 0x04, 0x08, 0x1A-0x1E, 0x20-0x23, 0x25,
+    # 0x33, 0x34, 0x36-0x38, 0x40, 0x41, 0x5D: POR 0x00; and the no-value
+    # registers listed above) are 0x00.
+    register_file:
+      size: 0x80
+      reset:
+        0x01: 0x01 # RegOpMode — FSK/OOK, STANDBY
+        0x02: 0x1A # RegBitrateMsb
+        0x03: 0x0B # RegBitrateLsb
+        0x05: 0x52 # RegFdevLsb
+        0x06: 0x6C # RegFrfMsb  ─┐
+        0x07: 0x80 # RegFrfMid   ├ 434 MHz
+        #   0x08: 0x00 RegFrfLsb ┘
+        0x09: 0x4F # RegPaConfig
+        0x0A: 0x09 # RegPaRamp
+        0x0B: 0x2B # RegOcp
+        0x0C: 0x20 # RegLna
+        0x0D: 0x08 # RegRxConfig      (FSK; Default 0x0E)
+        0x0E: 0x02 # RegRssiConfig
+        0x0F: 0x0A # RegRssiCollision
+        0x10: 0xFF # RegRssiThresh
+        0x12: 0x15 # RegRxBw
+        0x13: 0x0B # RegAfcBw
+        0x14: 0x28 # RegOokPeak
+        0x15: 0x0C # RegOokFix
+        0x16: 0x12 # RegOokAvg
+        0x17: 0x47 # Reserved17
+        0x18: 0x32 # Reserved18
+        0x19: 0x3E # Reserved19
+        0x1F: 0x40 # RegPreambleDetect (FSK; Default 0xAA)
+        0x24: 0x05 # RegOsc            (FSK; Default 0x07)
+        0x26: 0x03 # RegPreambleLsb
+        0x27: 0x93 # RegSyncConfig
+        0x28: 0x55 # RegSyncValue1     (FSK; Default 0x01)
+        0x29: 0x55 # RegSyncValue2
+        0x2A: 0x55 # RegSyncValue3
+        0x2B: 0x55 # RegSyncValue4
+        0x2C: 0x55 # RegSyncValue5
+        0x2D: 0x55 # RegSyncValue6
+        0x2E: 0x55 # RegSyncValue7
+        0x2F: 0x55 # RegSyncValue8
+        0x30: 0x90 # RegPacketConfig1
+        0x31: 0x40 # RegPacketConfig2
+        0x32: 0x40 # RegPayloadLength
+        0x35: 0x0F # RegFifoThresh     (FSK; Default 0x1F)
+        0x39: 0xF5 # RegTimer1Coef     (FSK; Default 0x12)
+        0x3A: 0x20 # RegTimer2Coef
+        0x3B: 0x82 # RegImageCal       (Default 0x02)
+        0x3D: 0x02 # RegLowBat
+        0x3E: 0x80 # RegIrqFlags1
+        0x3F: 0x40 # RegIrqFlags2
+        0x44: 0x2D # RegPllHop
+        0x4B: 0x09 # RegTcxo
+        0x4D: 0x84 # RegPaDac
+        0x61: 0x13 # RegAgcRef
+        0x62: 0x0E # RegAgcThresh1
+        0x63: 0x5B # RegAgcThresh2
+        0x64: 0xDB # RegAgcThresh3
+        0x70: 0xD0 # RegPll
+
+metadata:
+  label: "RFM95W LoRa module"
+  summary: "HopeRF RFM95W (Semtech SX1276) SPI LoRa register shell (no RF)."
+  detail: "HopeRF RFM95W, an SX1276 LoRa transceiver module, as an SPI register shell. Address byte bit 7 = 1 writes, 0 reads; bits 6:0 are the address. RegVersion (0x42) reads 0x12 and cannot be written; every other address is one byte of storage seeded with the SX1276 power-on value (RegOpMode 0x01, RegFrf 434 MHz, RegPaConfig 0x4F ...). NOT modelled: the RF air link, the packet engine and FIFO, DIO interrupt pins, FSK/LoRa register banking, mode sequencing and burst auto-increment."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "SPI NSS GPIO pin. Defaults to PA4." }

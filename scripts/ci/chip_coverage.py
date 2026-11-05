@@ -108,8 +108,29 @@ class CoverageError(RuntimeError):
     """The ledger and the gates disagree about what is proven."""
 
 
+class _ScriptLoader(yaml.SafeLoader):
+    """SafeLoader that also reads test scripts' local tags.
+
+    `uart_injections` triggers are written `!after_cycles { cycles: N }`; a
+    plain SafeLoader rejects the tag, which made every script that types on a
+    console look like it runs no chip at all. The tagged value is kept as its
+    untagged mapping/sequence/scalar: this gate only reads `inputs`.
+    """
+
+
+def _untagged(loader: yaml.SafeLoader, _suffix: str, node: yaml.Node):
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    return loader.construct_scalar(node)
+
+
+_ScriptLoader.add_multi_constructor("!", _untagged)
+
+
 def load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text()) or {}
+    return yaml.load(path.read_text(), Loader=_ScriptLoader) or {}
 
 
 def shipped_chips() -> list[str]:

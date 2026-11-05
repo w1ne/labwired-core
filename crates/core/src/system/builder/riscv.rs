@@ -138,8 +138,13 @@ fn build_program_image(
     }
     let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
-    let cpu = crate::system::riscv::configure_riscv(&mut bus);
-    let boxed: Box<dyn Cpu> = Box::new(cpu);
+    // A `core: rv64…` chip runs the 64-bit hart; everything below it (ESP ROM
+    // seeding, SP seed) is a no-op or harmless for it.
+    let boxed: Box<dyn Cpu> = if crate::cpu::riscv64::is_rv64_chip(chip) {
+        Box::new(crate::cpu::RiscV64::for_chip(chip))
+    } else {
+        Box::new(crate::system::riscv::configure_riscv(&mut bus))
+    };
     let mut machine = Machine::new(boxed, bus);
 
     machine

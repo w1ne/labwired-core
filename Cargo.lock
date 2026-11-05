@@ -2498,6 +2498,7 @@ dependencies = [
  "libm",
  "md-5",
  "memmap2 0.9.10",
+ "miniz_oxide",
  "nrf-softdevice-hle",
  "num-bigint",
  "p256",

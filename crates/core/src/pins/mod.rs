@@ -219,6 +219,17 @@ impl PortId {
         let n = letter.checked_sub(b'a')?;
         (n < 16).then_some(Self(n))
     }
+
+    /// A port id that numbers its ports with one hex digit after `prefix`:
+    /// Renesas RA `port0` = 0 … `port9` = 9, `porta` = 10, `portb` = 11.
+    pub fn from_hex_numbered_name(name: &str, prefix: &str) -> Option<Self> {
+        let lower = name.to_ascii_lowercase();
+        let suffix = lower.strip_prefix(prefix)?;
+        let &[digit] = suffix.as_bytes() else {
+            return None;
+        };
+        (digit as char).to_digit(16).map(|n| Self(n as u8))
+    }
 }
 
 /// The one interface between a chip's pads and the world. Implemented by
@@ -235,6 +246,13 @@ pub trait PinPort {
     /// groups are `porta`, `portb`.
     fn port_name_prefix(&self) -> &'static str {
         "gpio"
+    }
+
+    /// The [`PortId`] the chip-yaml id `name` gives this port, `None` when the
+    /// id does not spell one. Default: [`port_name_prefix`](Self::port_name_prefix)
+    /// plus one letter.
+    fn port_id(&self, name: &str) -> Option<PortId> {
+        PortId::from_prefixed_name(name, self.port_name_prefix())
     }
 
     /// The chip's own drive on `pin`, decoded from registers only, `None`
@@ -317,6 +335,24 @@ pub trait PinPort {
     /// register like a pull of its own. `false`: the port keeps its own
     /// pulls and ignored it.
     fn set_config_pull(&mut self, _pin: u8, _pull: Pull) -> bool {
+        false
+    }
+
+    /// Take the direction (`output`) and output level (`high`) a store into
+    /// the [`pad_control`](Self::pad_control) block wrote for `pin`, on parts
+    /// where that block shares the port's output flip-flops (Renesas RA
+    /// `PmnPFS` PDR/PODR; see [`PadControl::output_write`]). Bracketed like
+    /// [`set_config_pull`](Self::set_config_pull). `false`: ignored.
+    fn set_config_output(&mut self, _pin: u8, _output: bool, _high: bool) -> bool {
+        false
+    }
+
+    /// Take the peripheral function a [`pad_control`](Self::pad_control)
+    /// block selects for `pin`: `Some(PSEL)` while it hands the pad to a
+    /// peripheral (Renesas RA `PmnPFS.PMR` = 1), `None` while the port owns
+    /// it. Bracketed like [`set_config_pull`](Self::set_config_pull).
+    /// `false`: ignored.
+    fn set_config_function(&mut self, _pin: u8, _function: Option<u8>) -> bool {
         false
     }
 
