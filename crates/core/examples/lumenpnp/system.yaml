@@ -1,0 +1,105 @@
+name: lumenpnp-rev05-coupled-verification
+chip: stm32f407ve.yaml
+cpu_hz: 168000000
+debug_uart: usart1
+external_devices:
+  - id: vac_mux
+    type: pca9545a
+    connection: i2c1
+    config: {i2c_address: 112}
+  - id: vac1
+    type: xgzp6857d
+    connection: vac_mux
+    channel: 0
+  - id: vac2
+    type: xgzp6857d
+    connection: vac_mux
+    channel: 1
+  - id: X
+    type: tmc2226
+    connection: gpiob
+    config: {step_pin: PB15, dir_pin: PB14, en_pin: PD9, degrees_per_step: 0.225}
+  - id: Y1
+    type: tmc2226
+    connection: gpioe
+    config: {step_pin: PE15, dir_pin: PE14, en_pin: PB13, degrees_per_step: 0.225}
+  - id: Y2
+    type: tmc2226
+    connection: gpiod
+    config: {step_pin: PD6, dir_pin: PD7, en_pin: PA3, degrees_per_step: 0.225}
+  - id: Z
+    type: tmc2226
+    connection: gpioe
+    config: {step_pin: PE7, dir_pin: PB1, en_pin: PE9, degrees_per_step: 0.225}
+  - id: A
+    type: tmc2226
+    connection: gpioc
+    config: {step_pin: PC4, dir_pin: PA4, en_pin: PB0, degrees_per_step: 0.225}
+  - id: B
+    type: tmc2226
+    connection: gpioe
+    config: {step_pin: PE11, dir_pin: PE10, en_pin: PE13, degrees_per_step: 0.225}
+motor_models:
+  - kind: dc
+    id: pump_a
+    armature: circuit
+    resistance_ohm: 18.0
+    inductance_h: 0.020
+    torque_constant_nm_per_a: 0.025
+    back_emf_constant_v_per_rad_s: 0.025
+    rotor_inertia_kg_m2: 0.000002
+    viscous_friction_nm_per_rad_s: 0.00002
+    load_torque_nm: 0.0
+    encoder_cpr: 1
+    simulation_clock_hz: 168000000
+  - kind: dc
+    id: pump_b
+    armature: circuit
+    resistance_ohm: 18.0
+    inductance_h: 0.020
+    torque_constant_nm_per_a: 0.025
+    back_emf_constant_v_per_rad_s: 0.025
+    rotor_inertia_kg_m2: 0.000002
+    viscous_friction_nm_per_rad_s: 0.00002
+    load_torque_nm: 0.0
+    encoder_cpr: 1
+    simulation_clock_hz: 168000000
+cosim_models:
+  - id: drive
+    adapter: analog
+    step_ns: 100000
+    inputs:
+      pump_a: board.gpio.pb8
+      pump_b: board.gpio.pe5
+      emf_a: board.motor.pump_a.back_emf_v
+      emf_b: board.motor.pump_b.back_emf_v
+    outputs:
+      current_a: board.motor.pump_a.current_a
+      current_b: board.motor.pump_b.current_a
+      rail_a: board.motor.pump_a.supply_v
+      rail_b: board.motor.pump_b.supply_v
+    config:
+      vdd: 3.3
+      netlist_text: |
+        Vrail rail 0 dc 24
+        RarmA rail wa 18
+        LarmA wa ea 20m
+        VemfA ea drain_a dc 0
+        SfetA drain_a 0 pump_a ron=0.05 roff=1e12
+        DflyA drain_a rail DFLY
+        RarmB rail wb 18
+        LarmB wb eb 20m
+        VemfB eb drain_b dc 0
+        SfetB drain_b 0 pump_b ron=0.05 roff=1e12
+        DflyB drain_b rail DFLY
+        .model DFLY D (IS=2.52e-9 N=1.752 RS=0)
+      probes:
+        current_a: i(LarmA)
+        current_b: i(LarmB)
+        rail_a: v(rail)
+        rail_b: v(rail)
+        drain_a: v(drain_a)
+        drain_b: v(drain_b)
+      sources:
+        emf_a: VemfA
+        emf_b: VemfB

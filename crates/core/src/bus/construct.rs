@@ -77,6 +77,7 @@ impl SystemBus {
             pad_claim_links: Default::default(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
+            timer_clock_controllers: Vec::new(),
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
@@ -189,6 +190,7 @@ impl SystemBus {
             pad_claim_links: Default::default(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
+            timer_clock_controllers: Vec::new(),
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
@@ -406,6 +408,7 @@ impl SystemBus {
         // from.
         self.rebuild_peripheral_ranges();
         self.restore_legacy_walk_if_active();
+        self.refresh_all_timer_clocks();
     }
 
     /// Look up a registered ROM thunk by absolute PC.
@@ -1408,6 +1411,14 @@ impl SystemBus {
                     reg_offset,
                     bit: gate.bit,
                 });
+                if self.peripherals[controller_idx]
+                    .dev
+                    .timer_clock_divider(reg_offset)
+                    .is_some()
+                    && !self.timer_clock_controllers.contains(&controller_idx)
+                {
+                    self.timer_clock_controllers.push(controller_idx);
+                }
             }
             let gclk_id = p_cfg
                 .config
@@ -1439,6 +1450,7 @@ impl SystemBus {
                 gclk_idx,
             });
         }
+        self.refresh_all_timer_clocks();
         Ok(())
     }
 

@@ -3049,6 +3049,40 @@
       "inputs": []
     },
     {
+      "device_type": "xgzp6857d",
+      "label": "XGZP6857D pressure sensor",
+      "summary": "XGZP6857D200KPGPN33 gauge pressure and temperature over I²C.",
+      "detail": "Non-C V2.5 protocol at 0x6D. Signed 24-bit pressure with K=32 counts/Pa, signed 16-bit temperature with 256 counts/°C, 20 ms conversion timing, command busy status, single-shot and periodic acquisition.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "Fixed 7-bit factory address 0x6D for this sensor variant."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "pressure_pa",
+          "label": "Gauge pressure",
+          "unit": "Pa",
+          "min": -100000.0,
+          "max": 200000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temperature_c",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -20.0,
+          "max": 100.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
       "device_type": "mlx90640",
       "label": "MLX90640 Thermal",
       "summary": "Melexis MLX90640 32×24 far-IR thermal array over I2C.",
@@ -3127,8 +3161,8 @@
     {
       "device_type": "a4988",
       "label": "STEP/DIR stepper driver",
-      "summary": "A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle).",
-      "detail": "Counts rising STEP edges while EN is active (low); DIR selects direction. Type aliases drv8825, tmc2209, and nema17 map here (tmc2209 uses 1/16 microstep cal).",
+      "summary": "A4988/DRV8825/TMC2209/TMC2226 commanded position with input timing diagnostics.",
+      "detail": "Counts rising STEP edges while EN is active (low). DIR selects direction. Type aliases drv8825, tmc2209, tmc2226, and nema17 map here. The nema17 alias assumes an A4988 driver. The TMC2209 model retains its 1/16 microstep default, and TMC2226 uses its unstrapped 1/8 setting. Configurable step angle represents the board's selected microstep mode. Position is ideal commanded motion. STEP high/low, STEP period and DIR setup/hold diagnostics use each driver's datasheet limits and the declared simulation clock. Violations latch without discarding commanded edges. Snapshots expose timing status and model capabilities. Winding current, torque/load dynamics, lost steps, driver UART, power faults and thermal behavior are unmodeled.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
@@ -3146,6 +3180,21 @@
           "name": "en_pin",
           "ty": "str",
           "doc": "Optional EN pin."
+        },
+        {
+          "name": "degrees_per_step",
+          "ty": "float",
+          "doc": "Mechanical degrees per rising STEP edge, finite and positive."
+        },
+        {
+          "name": "simulation_clock_hz",
+          "ty": "int",
+          "doc": "Positive fixed frequency of GPIO timestamps. Defaults to the system cpu_hz. Timing is unconfigured when neither declares a clock."
+        },
+        {
+          "name": "driver_clock_hz",
+          "ty": "int",
+          "doc": "TMC2209/2226 clock, 4000000..=16000000 Hz, default nominal 12000000 Hz. STEP high/low uses tCLK + 20 ns. Clock tolerance is unmodeled."
         }
       ],
       "labs": [],

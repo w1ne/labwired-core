@@ -1,0 +1,283 @@
+{
+  "schema": "labwired.pick-place.geometry.v1",
+  "status": "kinematics_verified",
+  "units": "mm",
+  "axis_convention": "right-handed Z-up",
+  "source_file": "smt-pick-place.kcad.ts",
+  "reference": {
+    "architecture": "Opulo LumenPnP v4.2.0",
+    "commit": "64cf68d5b7980f095ef11913065e7f45a1e3e447",
+    "url": "https://github.com/opulo-inc/lumenpnp",
+    "adaptation": "Parametric verification model with reduced XY envelope and simplified purchased component solids"
+  },
+  "axes": {
+    "X": {
+      "min": 0,
+      "max": 400
+    },
+    "Y": {
+      "min": 0,
+      "max": 400
+    },
+    "Z": {
+      "min": 0,
+      "max": 50
+    },
+    "A": {
+      "min": -180,
+      "max": 180
+    },
+    "B": {
+      "min": -180,
+      "max": 180
+    }
+  },
+  "stage": {
+    "top_z": 158.4,
+    "bounds": [
+      [
+        -55,
+        -25,
+        156.8
+      ],
+      [
+        485,
+        455,
+        158.4
+      ]
+    ]
+  },
+  "board": {
+    "bounds": [
+      [
+        200,
+        200,
+        158.4
+      ],
+      [
+        320,
+        280,
+        160
+      ]
+    ],
+    "surface_z": 160
+  },
+  "nozzles": {
+    "A": {
+      "tip_formula": [
+        "X",
+        "Y",
+        "160+Z"
+      ],
+      "tip_radius": 0.3,
+      "bore_radius": 0.25,
+      "sealing_connector_local_mm": [
+        0,
+        0,
+        160
+      ],
+      "evaluated_part_bounds_mm": [
+        [
+          -4.2,
+          -4.2,
+          160
+        ],
+        [
+          4.2,
+          4.2,
+          247
+        ]
+      ],
+      "mesh_face_check": {
+        "inner_radius_range_mm": [
+          0.24957764322951687,
+          0.2504595775769016
+        ],
+        "outer_radius_range_mm": [
+          0.2995880504960103,
+          0.3003897468290154
+        ],
+        "quantization_tolerance_mm": 0.001,
+        "face_local_z_mm": 160.0
+      }
+    },
+    "B": {
+      "tip_formula": [
+        "X+48",
+        "Y",
+        "210-Z"
+      ],
+      "tip_radius": 0.3,
+      "bore_radius": 0.25,
+      "sealing_connector_local_mm": [
+        48,
+        0,
+        160
+      ],
+      "evaluated_part_bounds_mm": [
+        [
+          43.8,
+          -4.2,
+          160
+        ],
+        [
+          52.2,
+          4.2,
+          247
+        ]
+      ],
+      "mesh_face_check": {
+        "inner_radius_range_mm": [
+          0.24957764322951814,
+          0.25045957757690224
+        ],
+        "outer_radius_range_mm": [
+          0.2995880504960103,
+          0.30038974682901254
+        ],
+        "quantization_tolerance_mm": 0.001,
+        "face_local_z_mm": 160.0
+      }
+    }
+  },
+  "contact": {
+    "xy_tolerance": 0.3,
+    "z_tolerance": 0.15,
+    "safe_clearance": 25,
+    "component_top_z": 161.4
+  },
+  "tray": {
+    "surface_z": 160,
+    "pockets": [
+      {
+        "index": 0,
+        "center": [
+          50.0,
+          60.0,
+          160.7
+        ],
+        "size": [
+          5.0,
+          5.0,
+          1.4000000000000057
+        ],
+        "package": "QFN",
+        "populated": true,
+        "cad_part": "part-qfn",
+        "mass_kg": 6.3e-05,
+        "volume_mm3": 35.0
+      },
+      {
+        "index": 1,
+        "center": [
+          58,
+          60,
+          160.7
+        ],
+        "size": [
+          5,
+          4,
+          1.4
+        ],
+        "package": "SOIC8",
+        "populated": false,
+        "mass_kg": 5.0400000000127155e-05,
+        "volume_mm3": 28.00000000007064,
+        "reference_cad_part": "part-soic"
+      },
+      {
+        "index": 2,
+        "center": [
+          66.0,
+          60.0,
+          160.7
+        ],
+        "size": [
+          3.200000000000003,
+          1.6000000000000014,
+          1.4000000000000057
+        ],
+        "package": "chip",
+        "populated": true,
+        "cad_part": "part-chip",
+        "mass_kg": 1.2902399999988213e-05,
+        "volume_mm3": 7.167999999993451
+      },
+      {
+        "index": 3,
+        "center": [
+          74.0,
+          60.0,
+          160.7
+        ],
+        "size": [
+          5.0,
+          4.0,
+          1.4000000000000057
+        ],
+        "package": "SOIC8",
+        "populated": true,
+        "cad_part": "part-soic",
+        "mass_kg": 5.0400000000127155e-05,
+        "volume_mm3": 28.00000000007064
+      }
+    ]
+  },
+  "targets": [
+    {
+      "ref": "U1",
+      "center": [
+        230,
+        225,
+        160.7
+      ],
+      "rotation_deg": 0,
+      "source_pocket": 0
+    },
+    {
+      "ref": "U2",
+      "center": [
+        265,
+        225,
+        160.7
+      ],
+      "rotation_deg": 90,
+      "source_pocket": 3
+    },
+    {
+      "ref": "R1",
+      "center": [
+        290,
+        250,
+        160.7
+      ],
+      "rotation_deg": 45,
+      "source_pocket": 2
+    }
+  ],
+  "verification_scope": "Verified captured rigid kinematics, evaluated dimensions and sampled interference. Physical calibration, load capacity and runtime payload collision checks require separate evidence.",
+  "source_sha256": "39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9",
+  "kinematics": {
+    "head_separation_mm": 48.0,
+    "z_link_sum_mm": 50.0,
+    "board_surface_z": 160,
+    "package_density_kg_m3": 1800,
+    "linear_mm_per_revolution": 40.0,
+    "z_drive_degrees_per_mm": 9.0,
+    "verification": "kernel solved-mate transforms, seven calibration poses",
+    "max_calibration_error_mm": 2.842170943040401e-14
+  },
+  "verification": {
+    "evidence_file": "kernel-geometry-verification.json",
+    "evidence_sha256": "5447abaf9e402586883bb73afeaa8e53af939279e1718c75c60a3c9706386f19",
+    "evaluation_artifact_id": "/tmp/kernelcad-step-AYTFpp",
+    "source_revision": "sha256:39e3037323d4a5ba68cd268bc591a012445a259065be49ccd49ee7eacaeac7a9",
+    "kinematics_pass": true,
+    "sampled_interference_count": 0,
+    "design_loop_functional": true,
+    "design_loop_quality_ok": false,
+    "advisories": [
+      "assembly.connectivity.assumed-root"
+    ]
+  }
+}

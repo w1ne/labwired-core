@@ -388,6 +388,13 @@ impl LedcPads {
         vec![(target - self.anchor - 1, self.arm_seq)]
     }
 
+    /// Retire a stopped clock domain's wake. Restarting then arms a fresh
+    /// token even if the retired deadline still sits in the scheduler heap.
+    pub fn cancel_scheduled_events(&mut self) {
+        self.arm_seq = self.arm_seq.wrapping_add(1) & !WAVE_TOKEN_BIT;
+        self.armed_target = None;
+    }
+
     /// Serve a wake at `now`; returns the delay to the next one, if any.
     /// `None` from a stale token too (it must not re-arm).
     pub fn on_event(&mut self, token: u32, now: u64) -> (bool, Option<u64>) {

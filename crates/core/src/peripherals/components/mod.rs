@@ -66,6 +66,7 @@ pub mod mlx90640;
 pub(crate) mod mux_fixture;
 pub mod nau88l21;
 pub mod ov3660;
+pub mod pca9545a;
 pub mod pca9685;
 pub mod pn532;
 pub mod rc522;
@@ -90,6 +91,7 @@ pub mod veml7700;
 /// Byte-parity harness: the declarative VEML7700 vs the hand-written oracle.
 #[cfg(test)]
 mod veml7700_parity;
+pub mod xgzp6857d;
 pub mod ydlidar;
 
 pub use bg770a::QuectelBg770a;

@@ -85,8 +85,12 @@ use std::sync::Arc;
 ///   check can never fire (u32 wrapping_add), so the counter free-runs
 ///   mod 2^32 with no UIF — reproduced exactly.
 /// - **SMCR (external clock / encoder modes) is a pure register bank bit**:
-///   the walk ignores it and always counts the CPU clock, so scheduler mode
+///   the walk ignores it and counts the internal timer clock, so scheduler mode
 ///   is exactly as expressive — no configuration needs to stay on the walk.
+/// - **RCC prescaler transitions** apply at the MMIO boundary. F1/F4 APB
+///   timer clocks use the hardware x2 rule and preserve the timer's PSC/CNT
+///   state. The RCC divider phase restarts on a rate change. The silicon's
+///   1–16 AHB-cycle prescaler-switch latency is not modelled.
 ///
 /// ### Tick-cost normalization (B2/B3)
 ///
@@ -144,6 +148,14 @@ pub struct Timer {
     // Internal state
     /// Prescaler phase counter. `Cell` for the lazy `&self` advance.
     psc_cnt: Cell<u32>,
+    /// CPU cycles per timer-kernel tick, supplied by the RCC clock domain.
+    /// Zero (the derived Default) is interpreted as the historical /1 clock.
+    kernel_clock_divider: u32,
+    /// CPU cycles already consumed towards the next timer-kernel tick.
+    kernel_clock_phase: Cell<u32>,
+    /// Cycle when the bus stopped this clock domain. Pending input filters
+    /// retain their remaining duration until the domain resumes.
+    kernel_clock_paused_at: Option<u64>,
 
     /// Lazy-path anchor: the absolute published cycle the counter state was
     /// last advanced to. Owned exclusively by `advance_to` (scheduler mode);
@@ -182,6 +194,11 @@ pub struct Timer {
     /// port only ever reports real level changes).
     #[serde(skip)]
     ti_level: [bool; 4],
+    /// Latest raw level for each input that changed while its clock was
+    /// stopped. Resume starts a fresh filter only if this differs from the
+    /// last accepted level.
+    #[serde(skip)]
+    gated_input_levels: [Option<bool>; 4],
     /// Channel OUTPUT waveform (OC1..OC4) published onto the GPIO pads the
     /// bus routed to this timer. Inert until the bus asks for the wire
     /// ([`Timer::output_lines_arc`]).
@@ -283,7 +300,9 @@ pub struct TimerOutputSnapshot {
     /// this before the timer advances the interval. The timer model currently
     /// implements edge-aligned up-counting.
     pub counter_ticks: u32,
+    /// CPU cycles per CNT increment, including both RCC and TIMx_PSC.
     pub prescaler_divisor: u64,
+    /// CPU-cycle phase within that combined divider.
     pub prescaler_phase: u32,
     pub phase_revision: u64,
     pub counter_frozen: bool,
@@ -337,6 +356,9 @@ impl Timer {
             advanced,
             basic: false,
             psc_cnt: Cell::new(0),
+            kernel_clock_divider: 1,
+            kernel_clock_phase: Cell::new(0),
+            kernel_clock_paused_at: None,
             anchor: Cell::new(0),
             arm_seq: 0,
             phase_revision: 0,
@@ -345,6 +367,7 @@ impl Timer {
             ccer_np: false,
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
+            gated_input_levels: [None; 4],
             ic_pending: Vec::new(),
             wave: TimerOutputWave::default(),
         }
@@ -385,6 +408,25 @@ impl Timer {
     /// from the same bus assembly.
     pub fn force_legacy_walk(&mut self) {
         self.clock = None;
+    }
+
+    fn kernel_divider(&self) -> u64 {
+        u64::from(self.kernel_clock_divider.max(1))
+    }
+
+    fn clock_gated(&self) -> bool {
+        self.kernel_clock_paused_at.is_some()
+    }
+
+    fn cpu_cycles_to_kernel_ticks(&self, cycles: u64) -> u64 {
+        let divider = self.kernel_divider();
+        let remainder = cycles % divider + u64::from(self.kernel_clock_phase.get());
+        self.kernel_clock_phase.set((remainder % divider) as u32);
+        cycles / divider + remainder / divider
+    }
+
+    fn cpu_cycles_until_kernel_ticks(&self, ticks: u64) -> u64 {
+        ticks * self.kernel_divider() - u64::from(self.kernel_clock_phase.get())
     }
 
     /// Read-only PWM state derived from the timer's register-owned truth.
@@ -435,10 +477,11 @@ impl Timer {
             counter_enabled: (self.cr1 & 1) != 0,
             period_ticks: period,
             counter_ticks: self.cnt.get(),
-            prescaler_divisor: u64::from(self.psc) + 1,
-            prescaler_phase: self.psc_cnt.get(),
+            prescaler_divisor: (u64::from(self.psc) + 1) * self.kernel_divider(),
+            prescaler_phase: (u64::from(self.psc_cnt.get().min(self.psc)) * self.kernel_divider()
+                + u64::from(self.kernel_clock_phase.get())) as u32,
             phase_revision: self.phase_revision,
-            counter_frozen: self.counter_frozen(),
+            counter_frozen: self.counter_frozen() || self.clock_gated(),
             freeze_revision: self.freeze_revision.get(),
             clock_authoritative: self.scheduler_mode(),
         }
@@ -558,12 +601,21 @@ impl Timer {
         };
         // Phase: count index 0 is the cycle CNT last read 0 with an empty
         // prescaler, so the waveform lines up with the counter firmware reads.
-        let div = u64::from(self.psc) + 1;
-        let elapsed =
-            (u64::from(self.cnt.get()) % period) * div + u64::from(self.psc_cnt.get()).min(div - 1);
+        let psc_div = u64::from(self.psc) + 1;
+        let div = psc_div * self.kernel_divider();
+        let elapsed = (u64::from(self.cnt.get()) % period) * div
+            + u64::from(self.psc_cnt.get()).min(psc_div - 1) * self.kernel_divider()
+            + u64::from(self.kernel_clock_phase.get());
+        // A slower clock can put the extrapolated CNT=0 before cycle zero.
+        // Express the waveform in CPU-cycle counts and shift its compare
+        // point by that missing history, retaining the exact live phase.
+        let wave_cycles = wave_period * div;
+        let hpoint =
+            (hpoint * div + wave_cycles - elapsed.saturating_sub(now) % wave_cycles) % wave_cycles;
+        let duty = duty * div;
         let timer = LedcTimebase {
-            period: wave_period,
-            num: u128::from(div),
+            period: wave_cycles,
+            num: 1,
             den: 1,
             origin: now.saturating_sub(elapsed),
         };
@@ -577,11 +629,11 @@ impl Timer {
             // says which half of the double period this is.
             drive = LedcDrive::Pwm {
                 timer,
-                hpoint: (hpoint + period) % wave_period,
+                hpoint: (hpoint + period * div) % wave_cycles,
                 duty,
             };
         }
-        if (self.cr1 & 1) == 0 || self.counter_frozen() {
+        if (self.cr1 & 1) == 0 || self.counter_frozen() || self.clock_gated() {
             // A stopped counter holds its compare result.
             return (LedcDrive::Level(drive.level_at(now)), true);
         }
@@ -688,8 +740,8 @@ impl Timer {
     /// f_SAMPLING must agree before the filtered input moves. The filter of
     /// TIn is the one in channel n's own lane (TI1 → IC1F …), and only when
     /// that channel is in input mode — in output mode those bits are OCxM.
-    /// fDTS = fCK_INT / (1, 2, 4) from CR1.CKD. The model's kernel clock is
-    /// the engine cycle, so the answer is in engine cycles. The sample-phase
+    /// fDTS = fCK_INT / (1, 2, 4) from CR1.CKD. The RCC divider converts
+    /// the answer to engine cycles. The sample-phase
     /// jitter of real silicon (up to one sampling period) is not modelled;
     /// the capture lands N·period after the raw edge.
     fn filter_delay_cycles(&self, ti: u8) -> u64 {
@@ -721,7 +773,7 @@ impl Timer {
             14 => (dts * 32, 6),
             _ => (dts * 32, 8),
         };
-        div * n
+        div * n * self.kernel_divider()
     }
 
     /// Latch CNT into CCRx for input channel `ch` if CCxE is set and the
@@ -826,6 +878,11 @@ impl Timer {
     /// and applies every edge immediately.
     pub fn input_edge(&mut self, ti: u8, level: bool, at: u64) {
         if self.basic || ti >= 4 {
+            return;
+        }
+        if self.clock_gated() {
+            self.gated_input_levels[ti as usize] = Some(level);
+            self.ic_pending.retain(|edge| edge.ti != ti);
             return;
         }
         if !self.scheduler_mode() {
@@ -1026,12 +1083,12 @@ impl Timer {
             return;
         }
         self.anchor.set(now);
-        if self.counter_frozen() || (self.cr1 & 0x1) == 0 {
+        if self.counter_frozen() || (self.cr1 & 0x1) == 0 || self.clock_gated() {
             // Frozen (held IRQ level) or not enabled: the window elapses with
             // no counting — exactly the walk's early returns.
             return;
         }
-        let e = now - anchor;
+        let e = self.cpu_cycles_to_kernel_ticks(now - anchor);
         let k1 = self.ticks_to_first_increment();
         if e < k1 {
             // No increment in the window: only the prescaler phase advances.
@@ -1096,6 +1153,9 @@ impl Timer {
         // froze at increment `m` it stays 0 for the rest of the window,
         // otherwise the post-increment remainder ticks accumulate.
         let frozen = matches!(freeze_j, Some(j) if j <= n);
+        if frozen {
+            self.kernel_clock_phase.set(0);
+        }
         self.psc_cnt.set(if frozen {
             0
         } else {
@@ -1126,6 +1186,9 @@ impl Timer {
     /// `irq: true`; that made the scheduler fire one cycle after the walk and
     /// the `stm32_timer_walk_differential` compare gate went red.
     fn ticks_until_first_pend(&self) -> Option<u64> {
+        if self.clock_gated() {
+            return None;
+        }
         if self.irq_level_held() {
             // Already held: the walk pends on the very next tick.
             return Some(1);
@@ -1139,7 +1202,8 @@ impl Timer {
             .map(|p| p.accept.saturating_sub(anchor).max(1));
         let counter = self
             .first_enabled_event()
-            .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1));
+            .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1))
+            .map(|ticks| self.cpu_cycles_until_kernel_ticks(ticks));
         match (counter, filter) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
@@ -1391,6 +1455,12 @@ impl Timer {
         if self.scheduler_mode() {
             return crate::PeripheralTickResult::default();
         }
+        if self.clock_gated() {
+            return crate::PeripheralTickResult {
+                irq: self.irq_level_held(),
+                ..Default::default()
+            };
+        }
         // Keep the IRQ level high while any enabled status flag is latched:
         // UIF/UIE (bit 0) and the compare-match pairs CC1..4IF/CC1..4IE
         // (bits 1..4). Compare interrupts drive alarm-style time drivers
@@ -1410,6 +1480,13 @@ impl Timer {
             return crate::PeripheralTickResult {
                 irq: self.capture_irq_held(),
                 cycles: 0,
+                ..Default::default()
+            };
+        }
+
+        if self.cpu_cycles_to_kernel_ticks(1) == 0 {
+            return crate::PeripheralTickResult {
+                irq: self.capture_irq_held(),
                 ..Default::default()
             };
         }
@@ -1461,6 +1538,57 @@ impl Timer {
 }
 
 impl crate::Peripheral for Timer {
+    fn set_timer_clock(&mut self, divider: u32, enabled: bool) -> bool {
+        let divider = divider.max(1);
+        let old_divider = self.kernel_divider();
+        let was_enabled = !self.clock_gated();
+        if u64::from(divider) == old_divider && enabled == was_enabled {
+            return false;
+        }
+        let now = self.wave_now();
+        self.sync_to(now);
+        if u64::from(divider) != old_divider {
+            self.kernel_clock_divider = divider;
+            self.kernel_clock_phase.set(0);
+            // Filter deadlines are absolute CPU cycles. Preserve the remaining
+            // kernel ticks, relative to the pause boundary while gated.
+            let reference = self.kernel_clock_paused_at.unwrap_or(now);
+            for edge in &mut self.ic_pending {
+                let remaining_ticks = edge.accept.saturating_sub(reference).div_ceil(old_divider);
+                edge.accept = reference + remaining_ticks * u64::from(divider);
+            }
+        }
+        if enabled {
+            if let Some(paused_at) = self.kernel_clock_paused_at.take() {
+                for edge in &mut self.ic_pending {
+                    edge.accept += now.saturating_sub(paused_at);
+                }
+                let changed_inputs = std::mem::take(&mut self.gated_input_levels);
+                for (ti, level) in changed_inputs.into_iter().enumerate() {
+                    if let Some(level) = level {
+                        if level != self.ti_level[ti] {
+                            self.input_edge(ti as u8, level, now);
+                        }
+                    }
+                }
+            }
+        } else {
+            self.kernel_clock_paused_at.get_or_insert(now);
+        }
+        self.phase_revision = self.phase_revision.wrapping_add(1);
+        if was_enabled != enabled {
+            self.freeze_revision
+                .set(self.freeze_revision.get().wrapping_add(1));
+        }
+        if self.wave.wired {
+            self.redrive_outputs(now);
+            if !enabled {
+                self.wave.pads.cancel_scheduled_events();
+            }
+        }
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         // Scheduler mode: advance the lazy counter to the published "now"
         // first, so polled CNT/SR reads observe fresh time (batch-boundary
@@ -1536,7 +1664,9 @@ impl crate::Peripheral for Timer {
 
     fn sync_to(&mut self, now_cycle: u64) {
         if self.scheduler_mode() {
-            self.process_pending_edges(now_cycle);
+            if !self.clock_gated() {
+                self.process_pending_edges(now_cycle);
+            }
             self.advance_to(now_cycle);
             if self.wave.wired {
                 let now = self.wave_now();

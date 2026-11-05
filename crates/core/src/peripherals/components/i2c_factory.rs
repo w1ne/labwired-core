@@ -61,7 +61,7 @@ pub fn build_external_i2c_device(
 pub fn is_i2c_mux_type(type_str: &str) -> bool {
     matches!(
         type_str.to_ascii_lowercase().as_str(),
-        "tca9548a" | "pca9548a" | "tca9548"
+        "tca9548a" | "pca9548a" | "tca9548" | "pca9545a"
     )
 }
 
@@ -130,26 +130,26 @@ pub fn validate_i2c_mux_topology(
                 ext.id
             );
         }
-        let parent_is_mux = resolve_i2c_leaf(manifest, parent)?
-            .is_some_and(|device| is_mux_device(device.as_ref()));
-        if !parent_is_mux {
+        let parent_channels = resolve_i2c_leaf(manifest, parent)?
+            .and_then(|device| mux_channel_count(device.as_ref()));
+        let Some(parent_channels) = parent_channels else {
             anyhow::bail!(
                 "external device '{}' hangs off '{}', but '{}' is a '{}' — only an I²C bus \
-                 switch (tca9548a) can carry downstream devices",
+                 switch can carry downstream devices",
                 ext.id,
                 parent.id,
                 parent.id,
                 parent.r#type
             );
-        }
+        };
         let channel = ext.channel.unwrap_or(0);
-        if channel as usize >= crate::peripherals::components::tca9548a::TCA9548A_CHANNELS {
+        if channel as usize >= parent_channels {
             anyhow::bail!(
                 "external device '{}' asks for channel {} of switch '{}', which has channels 0..={}",
                 ext.id,
                 channel,
                 parent.id,
-                crate::peripherals::components::tca9548a::TCA9548A_CHANNELS - 1
+                parent_channels - 1
             );
         }
         if resolve_i2c_leaf(manifest, ext)?.is_none() {
@@ -239,21 +239,33 @@ pub fn build_i2c_tree(
         built.push((child.channel.unwrap_or(0), dev));
     }
     {
-        let mux = device
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<crate::peripherals::components::tca9548a::Tca9548a>())
-            .expect("checked above that this device is a Tca9548a");
-        for (channel, dev) in built {
-            mux.attach(channel, dev)?;
+        let mux = device.as_any_mut().expect("bus switch exposes its model");
+        if let Some(mux) = mux.downcast_mut::<super::tca9548a::Tca9548a>() {
+            for (channel, dev) in built {
+                mux.attach(channel, dev)?;
+            }
+        } else if let Some(mux) = mux.downcast_mut::<super::pca9545a::Pca9545a>() {
+            for (channel, dev) in built {
+                mux.attach(channel, dev)?;
+            }
         }
     }
     Ok(Some(with_supply(device, ext)))
 }
 
 fn is_mux_device(device: &dyn I2cDevice) -> bool {
-    device
-        .as_any()
-        .is_some_and(|a| a.is::<crate::peripherals::components::tca9548a::Tca9548a>())
+    mux_channel_count(device).is_some()
+}
+
+fn mux_channel_count(device: &dyn I2cDevice) -> Option<usize> {
+    let model = device.as_any()?;
+    if model.is::<super::tca9548a::Tca9548a>() {
+        Some(super::tca9548a::TCA9548A_CHANNELS)
+    } else if model.is::<super::pca9545a::Pca9545a>() {
+        Some(super::pca9545a::PCA9545A_CHANNELS)
+    } else {
+        None
+    }
 }
 
 /// Resolve a single leaf for BOTH topology preflight and actual construction.
@@ -408,6 +420,31 @@ fn build_i2c_device_named(
                 .unwrap_or(NAU88L21_ADDR_CSB_LOW as u64);
             let address = check_address(u8::try_from(address).ok()?).ok()?;
             Some(Box::new(Nau88l21::new(address)))
+        }
+        "xgzp6857d" => {
+            use super::xgzp6857d::{Xgzp6857d, XGZP6857D_ADDRESS};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(u64::from(XGZP6857D_ADDRESS));
+            if address != u64::from(XGZP6857D_ADDRESS) {
+                return None;
+            }
+            Some(Box::new(Xgzp6857d::new()))
+        }
+        "pca9545a" => {
+            use super::pca9545a::{Pca9545a, PCA9545A_BASE_ADDRESS};
+            let strap = |key: &str| config.get(key).and_then(|v| v.as_bool()).unwrap_or(false);
+            let strapped =
+                PCA9545A_BASE_ADDRESS | u8::from(strap("a0")) | (u8::from(strap("a1")) << 1);
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(u64::from(strapped));
+            if !(0x70..=0x73).contains(&address) {
+                return None;
+            }
+            Some(Box::new(Pca9545a::new(address as u8)))
         }
         // Declarative sensors are resolved above; these are the remaining
         // Rust-backed models with a standalone I²C constructor.

@@ -856,7 +856,8 @@ impl WasmSimulator {
     /// Returns servo states, STEP/DIR steppers, then configured motor-plant states.
     /// - hobby servos (`kind: "servo"`) export shaft `angle` in degrees
     /// - STEP/DIR steppers (`kind` = YAML type, e.g. `nema17` / `a4988`) export
-    ///   shaft `angle` in degrees plus signed `steps`
+    ///   commanded `angle` in degrees, signed `steps`, and `step_dir` model
+    ///   capabilities and timing diagnostics
     /// - `dc-motor` exports scalar `current_a`
     /// - `bldc-motor` exports DC-bus `current_a`, `phase_currents_a`, and
     ///   `commutation_sector`
@@ -906,12 +907,20 @@ impl WasmSimulator {
             let angle = stepper.angle_degrees_f64();
             let steps = stepper.steps();
             let active = stepper.is_enabled();
+            let step_dir = stepper.model_report(machine.bus.current_cycle);
+            let faults = if step_dir.timing.violations.is_empty() {
+                Vec::new()
+            } else {
+                vec!["step-dir-timing"]
+            };
             states.push(serde_json::json!({
                 "id": id,
                 "kind": kind,
                 "angle": angle,
                 "steps": steps,
                 "active": active,
+                "step_dir": step_dir,
+                "faults": faults,
             }));
         }
         // DC/BLDC only — steppers are emitted above (motor_snapshots also
@@ -1442,6 +1451,7 @@ mod motor_state_tests {
                 commutation_sector: None,
                 control_state: "forward".into(),
                 faults: vec!["stalled".into()],
+                step_dir: None,
             },
             MotorSnapshot {
                 id: "spindle".into(),
@@ -1458,6 +1468,7 @@ mod motor_state_tests {
                 commutation_sector: Some(4),
                 control_state: "sector:4".into(),
                 faults: vec!["open-phase-a".into()],
+                step_dir: None,
             },
         ]);
 

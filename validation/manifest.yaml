@@ -1763,7 +1763,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: a8bc9f9e1e2b2ae0f4d5f1b0b70583b45579a5c322ac85434a549c56466e621d
+    drift_ack_digest: 520f606c5f9bfd1206e8d6af60631ea0bb9bfa0cd1607b74fe87ec5cd9fd359c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2356,7 +2356,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-05 foundation review. Shared STM32 timer/RCC changes add
+    # F1/F4 APB rate propagation and gated timer phase/deadline handling.
+    # Offline clock, capture and walk-differential regressions cover the
+    # changed behavior. Live silicon re-capture remains pending.
+    drift_ack: 2026-11-05
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -3867,7 +3871,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8a2315e4e13ec78e139f548a1174bf72edf71654c00921622330bfa2a8fd7422
+    drift_ack_digest: db1709a9ff0d1458ba854741ab9d469d96b2d4ded2076e8b3792325158d324be
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4448,7 +4452,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-05 foundation review. Shared STM32 timer/RCC changes add
+    # F1/F4 APB rate propagation and gated timer phase/deadline handling.
+    # Offline clock, capture and walk-differential regressions cover the
+    # changed behavior. Live silicon re-capture remains pending.
+    drift_ack: 2026-11-05
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4922,7 +4930,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 839a91b752187ec110986a34e2e18a91d63ae0e98745c744da70f1d67b3599ca
+    drift_ack_digest: 097444734544fd042fb0611f6bf86a0967a7033231a5825a0e52a11bba68b5ee
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5436,7 +5444,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-05 foundation review. Shared STM32 timer/RCC changes add
+    # F1/F4 APB rate propagation and gated timer phase/deadline handling.
+    # Offline clock, capture and walk-differential regressions cover the
+    # changed behavior. Live silicon re-capture remains pending.
+    drift_ack: 2026-11-05
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5968,7 +5980,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 48e3dbe1b716f0fc30fed1d3b162c3df00eef4ed4f258a52aefca2038bdb2862
+    drift_ack_digest: f1be0787b818f8f963ce0c8ef211b07009d9e29545a2fc86696c3fb66dc6c87c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6552,7 +6564,11 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-05 foundation review. Shared STM32 timer/RCC changes add
+    # F1/F4 APB rate propagation and gated timer phase/deadline handling.
+    # Offline clock, capture and walk-differential regressions cover the
+    # changed behavior. Live silicon re-capture remains pending.
+    drift_ack: 2026-11-05
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7047,7 +7063,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 780a3148225acde1c39a01a78d59445ee12528618df1af9fb98006ec015e0527
+    drift_ack_digest: 49b4d73933b92110e81f92cb45cac996c20c5ff382616ccefecccd0ad5f35218
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7563,7 +7579,11 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-02
+    # 2026-11-05 foundation review. Shared STM32 timer/RCC changes add
+    # F1/F4 APB rate propagation and gated timer phase/deadline handling.
+    # Offline clock, capture and walk-differential regressions cover the
+    # changed behavior. Live silicon re-capture remains pending.
+    drift_ack: 2026-11-05
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
