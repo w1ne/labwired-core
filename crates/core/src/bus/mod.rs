@@ -41,6 +41,7 @@ mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
+mod ina219_circuit;
 mod observed_device;
 pub(crate) mod part_pack;
 mod pms;
@@ -65,6 +66,7 @@ pub use interrupt_fabric::{
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
+pub(crate) use ina219_circuit::CircuitIna219Lookup;
 pub use motors::{MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
@@ -762,6 +764,10 @@ pub struct SystemBus {
     motors: Vec<motors::MotorRuntime>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
+    /// Circuit-coupled INA219 breakouts: shunt current / bus voltage samples
+    /// from the analog island, averaged over the conversion window before
+    /// latching into SimInput. Empty when no `board.ina219.*` route binds.
+    ina219_senses: Vec<ina219_circuit::Ina219CircuitSense>,
     /// Analog stimulus sources (potentiometer, NTC thermistor). Unlike a bus
     /// slave these do not sit on I2C/SPI/UART - they drive one ADC channel's
     /// injected millivolt level. They are held here so the generic stimulus

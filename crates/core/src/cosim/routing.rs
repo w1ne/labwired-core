@@ -230,6 +230,13 @@ pub enum SignalPath {
     /// `board.motor.<id>.supply_v` — the supply rail feeding an
     /// `armature: circuit` DC motor's winding, as the netlist solved it.
     MotorSupply { motor: String },
+    /// `board.ina219.<id>.current_a` — shunt current the netlist solved for a
+    /// circuit-wired INA219 breakout (averaged over the conversion window
+    /// before the register encodings see it).
+    Ina219Current { id: String },
+    /// `board.ina219.<id>.bus_v` — bus voltage at VIN− for a circuit-wired
+    /// INA219, as the netlist solved it.
+    Ina219BusV { id: String },
 }
 
 impl SignalPath {
@@ -276,6 +283,13 @@ impl SignalPath {
             return (!motor.is_empty()).then(|| Self::MotorCurrent {
                 motor: motor.to_string(),
             });
+        }
+        if let Some(rest) = path.strip_prefix("board.ina219.") {
+            if let Some(id) = rest.strip_suffix(".bus_v") {
+                return (!id.is_empty()).then(|| Self::Ina219BusV { id: id.to_string() });
+            }
+            let id = rest.strip_suffix(".current_a")?;
+            return (!id.is_empty()).then(|| Self::Ina219Current { id: id.to_string() });
         }
         if let Some(rest) = path.strip_prefix("board.power.") {
             let rail = rest.strip_suffix("_volts")?;
@@ -327,6 +341,8 @@ impl SignalPath {
                 | Self::SupplyRail { .. }
                 | Self::MotorCurrent { .. }
                 | Self::MotorSupply { .. }
+                | Self::Ina219Current { .. }
+                | Self::Ina219BusV { .. }
         )
     }
 }
@@ -393,6 +409,8 @@ pub enum RoutingError {
     /// `board.motor.<id>.…` names a motor whose winding is not
     /// `armature: circuit`, so no netlist may drive or read it.
     NotCircuitMotor { path: String, motor: String },
+    /// `board.ina219.<id>.…` names no declared `ina219` external device.
+    UnknownIna219 { path: String, id: String },
     /// The store held a value of the wrong shape for this path.
     TypeMismatch {
         path: String,
@@ -509,6 +527,10 @@ impl std::fmt::Display for RoutingError {
                 "co-sim path '{path}': motor '{motor}' is bridge-driven; only an \
                  `armature: circuit` motor takes its winding current from a netlist"
             ),
+            Self::UnknownIna219 { path, id } => write!(
+                f,
+                "co-sim path '{path}': there is no ina219 external device '{id}'"
+            ),
             Self::TypeMismatch { path, value } => write!(
                 f,
                 "co-sim path '{path}': cannot route signal value {value:?} (expected a number \
@@ -558,6 +580,10 @@ enum WriteBinding {
     MotorCurrent { motor: usize },
     /// Index of an `armature: circuit` motor; its supply rail in volts.
     MotorSupply { motor: usize },
+    /// Id of a declared `ina219` external device; shunt current in amps.
+    Ina219Current { id: String },
+    /// Id of a declared `ina219` external device; bus voltage in volts.
+    Ina219BusV { id: String },
 }
 
 /// Routes manifest signal paths between a running machine and the co-sim
@@ -712,7 +738,9 @@ impl SignalRouter {
             | SignalPath::AdcChannel { .. }
             | SignalPath::SupplyRail { .. }
             | SignalPath::MotorCurrent { .. }
-            | SignalPath::MotorSupply { .. } => Err(RoutingError::NotReadable {
+            | SignalPath::MotorSupply { .. }
+            | SignalPath::Ina219Current { .. }
+            | SignalPath::Ina219BusV { .. } => Err(RoutingError::NotReadable {
                 path: path.to_string(),
             }),
         }
@@ -785,6 +813,12 @@ impl SignalRouter {
             }),
             SignalPath::MotorSupply { motor } => Ok(WriteBinding::MotorSupply {
                 motor: circuit_motor(bus, motor, path)?,
+            }),
+            SignalPath::Ina219Current { id } => Ok(WriteBinding::Ina219Current {
+                id: circuit_ina219(bus, id, path)?,
+            }),
+            SignalPath::Ina219BusV { id } => Ok(WriteBinding::Ina219BusV {
+                id: circuit_ina219(bus, id, path)?,
             }),
             SignalPath::GpioOutput { .. }
             | SignalPath::GpioDirection { .. }
@@ -865,7 +899,12 @@ impl SignalRouter {
     /// A pin path takes a boolean as the level, exactly as it always has, and
     /// a number of volts through the chip's [`InputThresholds`], keeping the
     /// pad's Schmitt state between calls.
-    pub fn apply(&mut self, bus: &mut SystemBus, signals: &CosimSignals) -> Vec<RoutingError> {
+    pub fn apply(
+        &mut self,
+        bus: &mut SystemBus,
+        signals: &CosimSignals,
+        time_ns: u64,
+    ) -> Vec<RoutingError> {
         let mut errors = Vec::new();
         for (path, binding) in &mut self.writes {
             let Some(value) = signals.get(path.as_str()) else {
@@ -956,8 +995,29 @@ impl SignalRouter {
                         });
                     }
                 }
+                WriteBinding::Ina219Current { id } => {
+                    let accepted = signal_as_f64(value)
+                        .is_some_and(|amps| bus.feed_ina219_current(id, amps));
+                    if !accepted {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
+                WriteBinding::Ina219BusV { id } => {
+                    let accepted = signal_as_f64(value)
+                        .is_some_and(|volts| bus.feed_ina219_bus_v(id, volts));
+                    if !accepted {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
             }
         }
+        bus.flush_ina219_circuit(time_ns);
         errors
     }
 }
@@ -975,6 +1035,19 @@ fn circuit_motor(bus: &SystemBus, motor: &str, path: &str) -> Result<usize, Rout
             motor: motor.to_string(),
         },
     })
+}
+
+/// Resolve `board.ina219.<id>.…` to a declared ina219 external-device id.
+fn circuit_ina219(bus: &SystemBus, id: &str, path: &str) -> Result<String, RoutingError> {
+    use crate::bus::CircuitIna219Lookup;
+    bus.circuit_ina219_id(id)
+        .map(|ok| ok.to_string())
+        .map_err(|why| match why {
+            CircuitIna219Lookup::Unknown => RoutingError::UnknownIna219 {
+                path: path.to_string(),
+                id: id.to_string(),
+            },
+        })
 }
 
 /// Refuse an ADC route the converter cannot take: a peripheral the bus does
@@ -1555,7 +1628,7 @@ impl CosimSession {
         let routed = self
             .runner
             .step_until_with_signals(time_ns, &mut self.signals)?;
-        let errors = self.router.apply(bus, &self.signals);
+        let errors = self.router.apply(bus, &self.signals, time_ns);
         // Land on the first boundary strictly after the time just reached, so
         // a long advance that crossed several periods does not replay them.
         self.next_boundary_ns = (time_ns / self.step_ns + 1).saturating_mul(self.step_ns);
@@ -1833,6 +1906,30 @@ mod tests {
             "board.motor..current_a",
             "board.motor..supply_v",
             "board.motor.M1.speed_rpm",
+        ] {
+            assert_eq!(SignalPath::parse(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn signal_path_parses_ina219_forms() {
+        let current = SignalPath::parse("board.ina219.sense.current_a").unwrap();
+        assert_eq!(
+            current,
+            SignalPath::Ina219Current {
+                id: "sense".into()
+            }
+        );
+        assert!(current.is_writable());
+        assert!(!current.is_readable());
+        let bus = SignalPath::parse("board.ina219.U1.bus_v").unwrap();
+        assert_eq!(bus, SignalPath::Ina219BusV { id: "U1".into() });
+        assert!(bus.is_writable());
+        for bad in [
+            "board.ina219.",
+            "board.ina219.U1",
+            "board.ina219..current_a",
+            "board.ina219.U1.power_w",
         ] {
             assert_eq!(SignalPath::parse(bad), None, "{bad}");
         }
