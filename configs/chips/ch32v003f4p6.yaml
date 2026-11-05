@@ -1,0 +1,89 @@
+# WCH CH32V003F4P6 in TSSOP-20.
+#
+# Geometry and maximum clock: WCH CH32V003DS0 datasheet and official
+# CH32V003 EVT headers. Peripheral bases/register layouts: WCH's
+# openwch/ch32v003/EVT/EXAM/SRC/Peripheral/inc/ch32v00x.h and
+# ch32v00x_rcc.h (GPIOA/C/D and RCC_TypeDef). The official GPIO_TypeDef has
+# CFGLR, one reserved word, INDR, OUTDR, BSHR, BCR, LCKR; profile `wch`
+# preserves that reserved word instead of inventing a CFGHR.
+#
+# Buyability screen (2026-11-05): LCSC C5187096 listed this exact order code
+# in stock. WCH's product page has no explicit lifecycle field; this descriptor
+# is not a lifecycle claim and is not included in the Proteus parity gate.
+# Sources:
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x.h
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x_rcc.h
+#   https://www.wch-ic.com/downloads/CH32V003DS0_PDF.html
+#   https://www.lcsc.com/product-detail/microcontrollers-mcu-mpu-soc_wch-jiangsu-qin-heng-ch32v003f4p6_C5187096.html
+
+name: "ch32v003f4p6"
+arch: "riscv"
+core: "rv32ec"
+registers_count: 16
+cpu_hz: 48_000_000
+
+# WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
+flash:
+  base: 0x08000000
+  size: "16KB"
+ram:
+  base: 0x20000000
+  size: "2KB"
+flash_boot_alias: true
+
+# CH32V003F4P6 bonds PA1/PA2, PC0..PC7 and PD0..PD7 (18 GPIOs).
+# PinLoc labels are the package pads' GPIO names, independent of TSSOP pin number.
+package: "TSSOP20"
+pin_count: 20
+gpio_pin_count: 18
+pins:
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PD0: { gpio: "gpiod", bit: 0 }
+  PD1: { gpio: "gpiod", bit: 1 }
+  PD2: { gpio: "gpiod", bit: 2 }
+  PD3: { gpio: "gpiod", bit: 3 }
+  PD4: { gpio: "gpiod", bit: 4 }
+  PD5: { gpio: "gpiod", bit: 5 }
+  PD6: { gpio: "gpiod", bit: 6 }
+  PD7: { gpio: "gpiod", bit: 7 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "wch"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 2 }
+    config:
+      profile: "wch"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 4 }
+    config:
+      profile: "wch"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40011400
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 5 }
+    config:
+      profile: "wch"

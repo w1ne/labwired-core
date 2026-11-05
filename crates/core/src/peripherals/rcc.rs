@@ -2749,6 +2749,12 @@ impl WchRcc {
     }
 }
 
+impl Default for WchRcc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RccModel for WchRcc {
     fn read_reg(&self, offset: u64) -> u32 {
         self.read_reg(offset)

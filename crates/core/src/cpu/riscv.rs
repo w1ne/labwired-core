@@ -2279,3 +2279,7 @@ mod tests;
 #[cfg(test)]
 #[path = "riscv_rv32e_tests.rs"]
 mod rv32e_tests;
+
+#[cfg(test)]
+#[path = "riscv_ch32v003_tests.rs"]
+mod ch32v003_tests;
