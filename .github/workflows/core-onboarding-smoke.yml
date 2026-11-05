@@ -46,6 +46,8 @@ on:
       - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-kendryte-k210-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
+      - "crates/firmware-ezr32hg320-smoke/**"
+      - "crates/firmware-ezr32-330-smoke/**"
       - "crates/firmware-efm32-stk-m3-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
@@ -289,6 +291,12 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/renode-onboarding/efm32hg350-smoke.yaml
             system: configs/systems/onboarding/efm32hg350.yaml
+          # EZR32HG320 exposes only its imported Cortex-M0+ memory and modeled USART0.
+          - id: ezr32hg320
+            crate: firmware-ezr32hg320-smoke
+            target: thumbv6m-none-eabi
+            script: examples/renode-onboarding/ezr32hg320-smoke.yaml
+            system: configs/systems/onboarding/ezr32hg320.yaml
           # The EFM32ZG222 import keeps only its declared memory and modeled
           # USART1 surface; other generated peripherals are not claimed.
           - id: efm32zg222
@@ -441,6 +449,17 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32wg995-smoke.yaml
             system: configs/systems/onboarding/efm32wg995.yaml
+          # EZR32LG330 and WG330 retain only imported memory and modeled UART0.
+          - id: ezr32lg330
+            crate: firmware-ezr32-330-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/ezr32lg330-smoke.yaml
+            system: configs/systems/onboarding/ezr32lg330.yaml
+          - id: ezr32wg330
+            crate: firmware-ezr32-330-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/ezr32wg330-smoke.yaml
+            system: configs/systems/onboarding/ezr32wg330.yaml
           # STK3600 and STK3700 are narrowed to their imported Cortex-M3 memory
           # windows and the modeled UART0 surface exercised by the shared smoke.
           - id: stk3600

@@ -1,5 +1,5 @@
-2026-11-05T02:01:18.274682Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery-kit.yaml
-2026-11-05T02:01:18.276204Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-05T02:21:52.181407Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery-kit.yaml
+2026-11-05T02:21:52.182928Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  3/3 checks · stm32f4_discovery-kit-smoke · 4000000 steps · 1.16s

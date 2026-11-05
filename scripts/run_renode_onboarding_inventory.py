@@ -155,6 +155,21 @@ SMOKE_MAPPINGS = {
         "target": "thumbv6m-none-eabi",
         "script": "examples/renode-onboarding/efm32hg350-smoke.yaml",
     },
+    "ezr32hg320": {
+        "crate": "firmware-ezr32hg320-smoke",
+        "target": "thumbv6m-none-eabi",
+        "script": "examples/renode-onboarding/ezr32hg320-smoke.yaml",
+    },
+    "ezr32lg330": {
+        "crate": "firmware-ezr32-330-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/ezr32lg330-smoke.yaml",
+    },
+    "ezr32wg330": {
+        "crate": "firmware-ezr32-330-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/ezr32wg330-smoke.yaml",
+    },
     "efm32zg222": {
         "crate": "firmware-efm32zg222-smoke",
         "target": "thumbv6m-none-eabi",

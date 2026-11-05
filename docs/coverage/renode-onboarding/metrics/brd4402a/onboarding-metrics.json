@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/brd4402a-smoke.yaml",
   "system": "configs/systems/onboarding/brd4402a.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T02:00:02Z",
-  "finished_at_utc": "2026-11-05T02:00:03Z",
+  "started_at_utc": "2026-11-05T02:20:34Z",
+  "finished_at_utc": "2026-11-05T02:20:34Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 824,
+  "elapsed_ms": 747,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.314,
-    "build_firmware": 0.181,
-    "run_smoke": 0.319
+    "build_cli": 0.283,
+    "build_firmware": 0.166,
+    "run_smoke": 0.286
   },
   "stages_ms": {
-    "build_cli": 314,
-    "build_firmware": 181,
-    "run_smoke": 319
+    "build_cli": 283,
+    "build_firmware": 166,
+    "run_smoke": 286
   }
 }
