@@ -772,6 +772,14 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/sam4s16c-smoke.yaml
             system: configs/systems/onboarding/sam4s16c.yaml
+          # SAM4S8B keeps only its exact flash/SRAM, modeled PMC and UART0
+          # execution path; generated stub and unexercised peripheral claims
+          # are omitted from this bounded profile.
+          - id: sam4s8b
+            crate: firmware-sam4s8b-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s8b-smoke.yaml
+            system: configs/systems/onboarding/sam4s8b.yaml
           # Narrowed SAM E70 import: only its existing PMC, PIOC, and USART1
           # models remain in the execution profile.
           - id: sam_e70

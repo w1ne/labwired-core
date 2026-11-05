@@ -1,0 +1,10 @@
+# ATSAM4S8B imported profile: bounded memory, PMC and UART0 smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s8b-smoke"
+  system: "../../configs/systems/onboarding/sam4s8b.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "SAM4S8B UART0 smoke"
+  - expected_stop_reason: max_steps
