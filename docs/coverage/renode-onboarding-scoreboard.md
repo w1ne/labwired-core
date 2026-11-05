@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `150`
-- booted: `150/245`
-- boot_and_smoke_passed: `150/245`
-- not_run: `95`
-- pass: `150`
+- run_attempted: `151`
+- booted: `151/245`
+- boot_and_smoke_passed: `151/245`
+- not_run: `94`
+- pass: `151`
 - fail: `0`
-- median_elapsed_ms: `1125`
-- median_elapsed_seconds: `1.125`
+- median_elapsed_ms: `1149`
+- median_elapsed_seconds: `1.149`
 - threshold_seconds: `3600`
-- threshold_met: `150/150`
+- threshold_met: `151/151`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -141,7 +141,7 @@
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | `n/a` | n/a | n/a |
 | `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `813` | `0.813` | `True` | `n/a` | n/a | n/a |
 | `nxp-frdm-imx8mplus` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `nxp-k6xf` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `nxp-k6xf` | `pass` | `True` | `yes` | `yes` | `8189` | `8.189` | `True` | `n/a` | n/a | n/a |
 | `nxp-mimx8ml` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `nxp-s32k388` | `pass` | `True` | `yes` | `yes` | `1435` | `1.435` | `True` | `n/a` | n/a | n/a |
 | `nxp-s32k388evb` | `pass` | `True` | `yes` | `yes` | `7818` | `7.818` | `True` | `n/a` | n/a | n/a |

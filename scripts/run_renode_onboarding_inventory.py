@@ -170,6 +170,10 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/nxp-s32k388evb-smoke.yaml",
     },
+    "nxp-k6xf": {
+        "prebuilt_firmware": "tests/fixtures/frdm-k64f-smoke.elf",
+        "script": "examples/renode-onboarding/nxp-k6xf-smoke.yaml",
+    },
     "s32k118": {
         "crate": "firmware-s32k118-smoke",
         "target": "thumbv6m-none-eabi",

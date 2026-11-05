@@ -1,0 +1,22 @@
+# FRDM-K64F Cortex-M4, UART0, and GPIO smoke against the narrowed imported
+# K6x profile. SIM, WDOG, and PORT writes are absorbed by explicitly declared
+# stubs and are not claimed as modeled behavior.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/frdm-k64f-smoke.elf"
+  system: "../../configs/systems/onboarding/nxp-k6xf.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "FRDM-K64F SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m4 uart=uart0"
+      - "led=red on pin=0"
+      - "led=red off pin=1"
+      - "led=green on pin=0"
+      - "led=green off pin=1"
+      - "led=blue on pin=0"
+      - "led=blue off pin=1"
+      - "hb=0 red=0 green=1 blue=1"
+      - "hb=1 red=0 green=1 blue=1"
+  - expected_stop_reason: max_steps

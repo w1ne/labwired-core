@@ -96,10 +96,12 @@ on:
       - "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
       - "examples/renode-onboarding/ramn-smoke.yaml"
       - "examples/renode-onboarding/ambiq-apollo4-smoke.yaml"
+      - "examples/renode-onboarding/nxp-k6xf-smoke.yaml"
       - "scripts/run_renode_onboarding_inventory.py"
       - "examples/renode-onboarding/fomu-smoke.yaml"
       - "scripts/onboarding_smoke.sh"
       - "tests/fixtures/mpfs-zephyr-hello.elf"
+      - "tests/fixtures/frdm-k64f-smoke.elf"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -218,6 +220,12 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/nxp-s32k388evb-smoke.yaml
             system: configs/systems/onboarding/nxp-s32k388evb.yaml
+          # Reuse the FRDM-K64F smoke image against the imported K6x system.
+          # SIM, WDOG, and PORT are explicit stubs; only CPU/UART/GPIO are claimed.
+          - id: nxp-k6xf
+            prebuilt_firmware: tests/fixtures/frdm-k64f-smoke.elf
+            script: examples/renode-onboarding/nxp-k6xf-smoke.yaml
+            system: configs/systems/onboarding/nxp-k6xf.yaml
           # S32K118 is bounded to Renode's Cortex-M0+ CPU, 256 KiB program
           # flash, and the 0x5800-byte upper SRAM window; no peripherals are
           # claimed by this instruction and memory smoke.
