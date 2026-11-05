@@ -95,6 +95,37 @@ tests, 15 event-scheduler tests, and the explicitly invoked real-ELF stream
 test. The component suite includes a genuine Machine scheduler path. The
 remaining broad PR checks run in CI; this is still a scoped draft extension.
 
+## Fresh verification of the observable lab
+
+The `*-recheck.json` reports are new executions against core source checkpoint
+[`06dfd2395224a66d7093aca674800b2850b751fe`](https://github.com/w1ne/labwired-core/commit/06dfd2395224a66d7093aca674800b2850b751fe).
+They use the same hash-verified final firmware images above and leave the
+earlier evidence unchanged. Both full COM3/COM2 runs again pass with the same
+208-reply tA ranges, zero reply byte gaps and zero internal timing violations.
+
+Each fresh run records 6,977 received reply characters with zero UART parity
+or framing errors, 211 validated reply checksums including startup, and 6,656
+verified process-data bytes. Every byte of all 208 PD32 replies is checked,
+including the eight application-cadence cases. The single intentional bad CKT
+still produces no reply; its DLL CRC/framing diagnostics are distinct from
+the zero UART decoding errors.
+
+The oracle also reads and checks the actual firmware setup after wake:
+USART1 on PA9/PA10 AF1, PA8 output, PB0/PB1 inputs with pull-ups, 8E1 framing,
+the selected COM BRR, TIM2 PSC63 and PLL64. The browser diagram lowering uses
+the same UART/pads, explicit 64 MHz operating profile, and TYPE2V32/1/OD1
+master configuration. The generated chip, board and kit metadata caches were
+verified byte-identical to the core files.
+
+Fresh local checks pass: 29 default-feature tests, 25 event-scheduler tests,
+and the explicitly invoked real-ELF one-action fixture. That fixture now also
+asserts the UI-facing phase is OPERATE and process data is valid. The additive
+browser state serializer passes `cargo check -p labwired-wasm` on the available
+host target. A wasm32 browser build and deployed execution are separate CI
+and release gates; no local wasm32 toolchain was available. The final-runtime
+GCC artifact was unavailable during this verification, so diagnostic Clang
+results are not substituted for GCC acceptance.
+
 ## Explicit limits
 
 Firmware DLL timing enforcement and the external oracle are separate. The
