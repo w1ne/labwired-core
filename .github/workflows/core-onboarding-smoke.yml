@@ -862,6 +862,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/opentitan-earlgrey-smoke.yaml
             system: configs/systems/onboarding/opentitan-earlgrey.yaml
+          # CW310 reuses Earl Grey's core and base memory/peripheral map. This
+          # direct-ELF smoke measures only the bounded RV32IMC + UART0 profile.
+          - id: opentitan-earlgrey-cw310
+            crate: firmware-opentitan-earlgrey-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/renode-onboarding/opentitan-earlgrey-cw310-smoke.yaml
+            system: configs/systems/onboarding/opentitan-earlgrey-cw310.yaml
           - id: litex_picorv32
             crate: firmware-litex-picorv32-smoke
             target: riscv32imc-unknown-none-elf

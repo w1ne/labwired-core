@@ -701,6 +701,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32imc-unknown-none-elf",
         "script": "examples/renode-onboarding/opentitan-earlgrey-smoke.yaml",
     },
+    "opentitan-earlgrey-cw310": {
+        "crate": "firmware-opentitan-earlgrey-smoke",
+        "target": "riscv32imc-unknown-none-elf",
+        "script": "examples/renode-onboarding/opentitan-earlgrey-cw310-smoke.yaml",
+    },
 }
 
 

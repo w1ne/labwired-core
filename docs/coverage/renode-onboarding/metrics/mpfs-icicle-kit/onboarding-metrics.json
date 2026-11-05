@@ -15,10 +15,10 @@
   "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",
   "system": "configs/systems/onboarding/mpfs-icicle-kit.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T09:38:05Z",
-  "finished_at_utc": "2026-11-05T09:38:06Z",
+  "started_at_utc": "2026-11-05T09:58:38Z",
+  "finished_at_utc": "2026-11-05T09:58:39Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 567,
+  "elapsed_ms": 590,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
@@ -27,12 +27,12 @@
   "stages_seconds": {
     "build_cli": 0.286,
     "build_firmware": null,
-    "run_smoke": 0.273
+    "run_smoke": 0.295
   },
   "stages_ms": {
     "build_cli": 286,
     "build_firmware": null,
-    "run_smoke": 273
+    "run_smoke": 295
   },
   "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf"
 }

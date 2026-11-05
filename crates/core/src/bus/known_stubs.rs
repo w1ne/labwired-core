@@ -538,24 +538,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/nxp-frdm-imx8mplus, onboarding/nxp-mimx8ml.",
     ),
     (
-        "opentitan_flashcontroller",
-        "OpenTitan flash controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/opentitan-earlgrey, onboarding/opentitan-earlgrey-cw310.",
-    ),
-    (
-        "opentitan_romcontroller",
-        "OpenTitan ROM controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/opentitan-earlgrey, onboarding/opentitan-earlgrey-cw310.",
-    ),
-    (
-        "opentitan_sramcontroller",
-        "OpenTitan SRAM controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/opentitan-earlgrey, onboarding/opentitan-earlgrey-cw310.",
-    ),
-    (
         "pac1934",
         "Microchip PAC1934 power monitor. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: \

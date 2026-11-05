@@ -1,5 +1,5 @@
-2026-11-05T09:37:28.377867Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32tg840.yaml
-2026-11-05T09:37:28.378482Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-05T09:58:02.036154Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32tg840.yaml
+2026-11-05T09:58:02.036816Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · efm32tg840-smoke · 100000 steps · 0.00s
