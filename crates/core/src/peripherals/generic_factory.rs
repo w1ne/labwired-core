@@ -115,6 +115,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c3_gdma",
     "esp32c3_gpio",
     "esp32c3_io_mux",
+    // ESP8684/C2 exposes only the register-compatible direct GPIO + IO_MUX
+    // subset used by the DevKitM-1 H4X onboard LED smoke.
+    "esp32c2_gpio",
+    "esp32c2_io_mux",
     "esp32c3_apb_saradc",
     "esp32c3_ledc",
     "esp32c3_rmt",

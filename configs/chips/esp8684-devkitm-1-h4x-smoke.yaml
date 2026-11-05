@@ -1,0 +1,34 @@
+# Narrow smoke profile for Espressif's ESP8684-DevKitM-1-H4X.
+# Only the three discrete onboard RGB LED GPIO channels are exposed.
+name: "esp8684-devkitm-1-h4x-smoke"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 120_000_000
+
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FCA0000
+  size: "256KB"
+
+pins:
+  GPIO0: { gpio: "gpio", bit: 0 }
+  GPIO1: { gpio: "gpio", bit: 1 }
+  GPIO8: { gpio: "gpio", bit: 8 }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32c2_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c2/gpio.yaml"
+
+  - id: "io_mux"
+    type: "esp32c2_io_mux"
+    base_address: 0x60009000
+    size: "256"
+    config:
+      debug_schema: "../peripherals/esp32c2/io_mux.yaml"

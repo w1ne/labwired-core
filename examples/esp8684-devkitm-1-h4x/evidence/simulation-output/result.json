@@ -1,0 +1,2892 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 250000,
+  "cycles": 500536,
+  "instructions": 250000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 250000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 250000
+    }
+  },
+  "limits": {
+    "max_steps": 250000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:0",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:1",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:8",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107297202,
+      1070464928,
+      1070204928,
+      0,
+      2684317695,
+      1107297014,
+      0,
+      256,
+      0,
+      0,
+      256,
+      1,
+      1610629160,
+      0,
+      4294938623,
+      1610649600,
+      128,
+      1070464944,
+      3,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107297212,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 250000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "7110b7af7424e94cc279a3a5d2c1e8a05cea51faac84f53e3112698eaf100367",
+  "config": {
+    "firmware": "examples/esp8684-devkitm-1-h4x/../../target/riscv32imc-unknown-none-elf/release/firmware-esp8684-devkitm1-h4x-smoke",
+    "system": "examples/esp8684-devkitm-1-h4x/../../configs/systems/esp8684-devkitm-1-h4x.yaml",
+    "script": "examples/esp8684-devkitm-1-h4x/onboarding-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [
+          {
+            "name": "OUT_W1TS",
+            "offset": 8,
+            "size": 32,
+            "value": 259,
+            "fields": [
+              {
+                "name": "GPIO_OUT_W1TS",
+                "bits": [
+                  20,
+                  0
+                ],
+                "value": 259
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TC",
+            "offset": 12,
+            "size": 32,
+            "value": 259,
+            "fields": [
+              {
+                "name": "GPIO_OUT_W1TC",
+                "bits": [
+                  20,
+                  0
+                ],
+                "value": 259
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE_W1TS",
+            "offset": 36,
+            "size": 32,
+            "value": 259,
+            "fields": [
+              {
+                "name": "GPIO_ENABLE_W1TS",
+                "bits": [
+                  20,
+                  0
+                ],
+                "value": 259
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC0_OUT_SEL_CFG",
+            "offset": 1364,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 128
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC1_OUT_SEL_CFG",
+            "offset": 1368,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 128
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_FUNC8_OUT_SEL_CFG",
+            "offset": 1396,
+            "size": 32,
+            "value": 128,
+            "fields": [
+              {
+                "name": "OUT_SEL",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 128
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "io_mux",
+        "kind": "declarative",
+        "base": 1610649600,
+        "registers": [
+          {
+            "name": "PIN_CTRL",
+            "offset": 0,
+            "size": 32,
+            "value": 2047,
+            "fields": [
+              {
+                "name": "CLK_OUT1",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 15
+              },
+              {
+                "name": "CLK_OUT2",
+                "bits": [
+                  7,
+                  4
+                ],
+                "value": 15
+              },
+              {
+                "name": "CLK_OUT3",
+                "bits": [
+                  11,
+                  8
+                ],
+                "value": 7
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO0",
+            "offset": 4,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO1",
+            "offset": 8,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO2",
+            "offset": 12,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO3",
+            "offset": 16,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO4",
+            "offset": 20,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO5",
+            "offset": 24,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO6",
+            "offset": 28,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO7",
+            "offset": 32,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO8",
+            "offset": 36,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO9",
+            "offset": 40,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO10",
+            "offset": 44,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO11",
+            "offset": 48,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO12",
+            "offset": 52,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO13",
+            "offset": 56,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO14",
+            "offset": 60,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO15",
+            "offset": 64,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO16",
+            "offset": 68,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO17",
+            "offset": 72,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO18",
+            "offset": 76,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO19",
+            "offset": 80,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO20",
+            "offset": 84,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO21",
+            "offset": 88,
+            "size": 32,
+            "value": 2816,
+            "fields": [
+              {
+                "name": "MCU_OE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLP_SEL",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPD",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_WPU",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "MCU_IE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPD",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "FUN_WPU",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_IE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "FUN_DRV",
+                "bits": [
+                  11,
+                  10
+                ],
+                "value": 2
+              },
+              {
+                "name": "MCU_SEL",
+                "bits": [
+                  14,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "FILTER_EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 252,
+            "size": 32,
+            "value": 33579088,
+            "fields": [
+              {
+                "name": "REG_DATE",
+                "bits": [
+                  27,
+                  0
+                ],
+                "value": 33579088
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 250000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 0,
+        "initial": 1,
+        "transitions": [
+          {
+            "cycle": 190,
+            "value": 0
+          },
+          {
+            "cycle": 1095,
+            "value": 1
+          },
+          {
+            "cycle": 2015,
+            "value": 0
+          },
+          {
+            "cycle": 2920,
+            "value": 1
+          },
+          {
+            "cycle": 3840,
+            "value": 0
+          },
+          {
+            "cycle": 4745,
+            "value": 1
+          },
+          {
+            "cycle": 5665,
+            "value": 0
+          },
+          {
+            "cycle": 6570,
+            "value": 1
+          },
+          {
+            "cycle": 7490,
+            "value": 0
+          },
+          {
+            "cycle": 8395,
+            "value": 1
+          },
+          {
+            "cycle": 9315,
+            "value": 0
+          },
+          {
+            "cycle": 10220,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 170,
+            "state": "1"
+          },
+          {
+            "cycle": 190,
+            "state": "0"
+          },
+          {
+            "cycle": 1095,
+            "state": "1"
+          },
+          {
+            "cycle": 2015,
+            "state": "0"
+          },
+          {
+            "cycle": 2920,
+            "state": "1"
+          },
+          {
+            "cycle": 3840,
+            "state": "0"
+          },
+          {
+            "cycle": 4745,
+            "state": "1"
+          },
+          {
+            "cycle": 5665,
+            "state": "0"
+          },
+          {
+            "cycle": 6570,
+            "state": "1"
+          },
+          {
+            "cycle": 7490,
+            "state": "0"
+          },
+          {
+            "cycle": 8395,
+            "state": "1"
+          },
+          {
+            "cycle": 9315,
+            "state": "0"
+          },
+          {
+            "cycle": 10220,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 12
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpio",
+        "pin": 1,
+        "initial": 1,
+        "transitions": [
+          {
+            "cycle": 11146,
+            "value": 0
+          },
+          {
+            "cycle": 12051,
+            "value": 1
+          },
+          {
+            "cycle": 12971,
+            "value": 0
+          },
+          {
+            "cycle": 13876,
+            "value": 1
+          },
+          {
+            "cycle": 14796,
+            "value": 0
+          },
+          {
+            "cycle": 15701,
+            "value": 1
+          },
+          {
+            "cycle": 16621,
+            "value": 0
+          },
+          {
+            "cycle": 17526,
+            "value": 1
+          },
+          {
+            "cycle": 18446,
+            "value": 0
+          },
+          {
+            "cycle": 19351,
+            "value": 1
+          },
+          {
+            "cycle": 20271,
+            "value": 0
+          },
+          {
+            "cycle": 21176,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 170,
+            "state": "1"
+          },
+          {
+            "cycle": 11146,
+            "state": "0"
+          },
+          {
+            "cycle": 12051,
+            "state": "1"
+          },
+          {
+            "cycle": 12971,
+            "state": "0"
+          },
+          {
+            "cycle": 13876,
+            "state": "1"
+          },
+          {
+            "cycle": 14796,
+            "state": "0"
+          },
+          {
+            "cycle": 15701,
+            "state": "1"
+          },
+          {
+            "cycle": 16621,
+            "state": "0"
+          },
+          {
+            "cycle": 17526,
+            "state": "1"
+          },
+          {
+            "cycle": 18446,
+            "state": "0"
+          },
+          {
+            "cycle": 19351,
+            "state": "1"
+          },
+          {
+            "cycle": 20271,
+            "state": "0"
+          },
+          {
+            "cycle": 21176,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 12
+      },
+      {
+        "ch": 2,
+        "channel": "CH2",
+        "peripheral": "gpio",
+        "pin": 8,
+        "initial": 1,
+        "transitions": [
+          {
+            "cycle": 22102,
+            "value": 0
+          },
+          {
+            "cycle": 23007,
+            "value": 1
+          },
+          {
+            "cycle": 23927,
+            "value": 0
+          },
+          {
+            "cycle": 24832,
+            "value": 1
+          },
+          {
+            "cycle": 25752,
+            "value": 0
+          },
+          {
+            "cycle": 26657,
+            "value": 1
+          },
+          {
+            "cycle": 27577,
+            "value": 0
+          },
+          {
+            "cycle": 28482,
+            "value": 1
+          },
+          {
+            "cycle": 29402,
+            "value": 0
+          },
+          {
+            "cycle": 30307,
+            "value": 1
+          },
+          {
+            "cycle": 31227,
+            "value": 0
+          },
+          {
+            "cycle": 32132,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 170,
+            "state": "1"
+          },
+          {
+            "cycle": 22102,
+            "state": "0"
+          },
+          {
+            "cycle": 23007,
+            "state": "1"
+          },
+          {
+            "cycle": 23927,
+            "state": "0"
+          },
+          {
+            "cycle": 24832,
+            "state": "1"
+          },
+          {
+            "cycle": 25752,
+            "state": "0"
+          },
+          {
+            "cycle": 26657,
+            "state": "1"
+          },
+          {
+            "cycle": 27577,
+            "state": "0"
+          },
+          {
+            "cycle": 28482,
+            "state": "1"
+          },
+          {
+            "cycle": 29402,
+            "state": "0"
+          },
+          {
+            "cycle": 30307,
+            "state": "1"
+          },
+          {
+            "cycle": 31227,
+            "state": "0"
+          },
+          {
+            "cycle": 32132,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 12
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpio",
+      "number": 1,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH2",
+      "peripheral": "gpio",
+      "number": 8,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1316,
+    "data_bytes": 0,
+    "bss_bytes": 8192,
+    "flash_used_bytes": 1316,
+    "ram_static_bytes": 8192,
+    "flash_total_bytes": 4194304,
+    "ram_total_bytes": 262144,
+    "flash_used_pct": 0.03,
+    "ram_static_pct": 3.13,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 500536,
+    "instructions": 250000,
+    "steps_executed": 250000,
+    "memory_reads": 65,
+    "memory_writes": 74,
+    "peripheral_accesses": 47,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1107297212,
+        "count": 859,
+        "symbol": "main"
+      },
+      {
+        "pc": 1107296974,
+        "count": 78,
+        "symbol": "firmware_esp8684_devkitm1_h4x_smoke::delay"
+      },
+      {
+        "pc": 1107296972,
+        "count": 39,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}

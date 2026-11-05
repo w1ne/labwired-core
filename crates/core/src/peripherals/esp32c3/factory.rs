@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Data-driven factory for ESP32-C3 peripheral models.
+//! Data-driven factory for ESP32-C3 peripheral models and register-compatible
+//! ESP32-C2 GPIO subsets.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -21,6 +22,12 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         )),
         "esp32c3_gpio" => Box::new(super::gpio::Esp32c3Gpio::new()),
         "esp32c3_io_mux" => Box::new(super::io_mux::Esp32c3IoMux::new()),
+        // ESP8684/C2 uses the same GPIO output register head and IO_MUX pad
+        // register offsets for the three direct GPIO outputs in its DevKitM-1
+        // H4X smoke. This alias intentionally does not claim C2 matrix
+        // numbering, interrupts, or the rest of the peripheral block.
+        "esp32c2_gpio" => Box::new(super::gpio::Esp32c3Gpio::new()),
+        "esp32c2_io_mux" => Box::new(super::io_mux::Esp32c3IoMux::new()),
         // RMT TX model (Arduino RGB_BUILTIN / rgbLedWrite). Instant TX_END +
         // LogicTap pulse on TX_START for matrix `led_watch: rmt:0`.
         "esp32c3_rmt" => Box::new(super::rmt::Esp32c3Rmt::new_default()),
@@ -69,6 +76,8 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c3_gdma",
     "esp32c3_gpio",
     "esp32c3_io_mux",
+    "esp32c2_gpio",
+    "esp32c2_io_mux",
     "esp32c3_rmt",
     "esp32c3_systimer",
     "esp32c3_uart",
