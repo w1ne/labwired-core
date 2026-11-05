@@ -49,7 +49,7 @@ TIM2 has no pin in this example. The prescaler is programmed directly.
 
 | Peripheral | Example | Limit |
 |------------|---------|-------|
-| RCC, G0 offsets | ✅ clocks GPIOA, TIM2, USART1 | HSI ready only; no PLL |
+| RCC, G0 offsets | ✅ clocks GPIOA, TIM2, USART1 | This smoke exercises HSI only; see the fixed PLL profile below |
 | GPIOA `stm32v2` | ✅ PA9 mode and AFRH | Other ports are declared, not exercised here |
 | USART1 | ✅ `OK` at 115200 8N1 | No RX, no COM2 byte exchange |
 | TIM2 | ✅ `PSC = 15` (1 MHz from 16 MHz) | Counter is not started |
@@ -58,16 +58,16 @@ TIM2 has no pin in this example. The prescaler is programmed directly.
 
 ## Exact IO-Link operating-point extension
 
-The original smoke above remains the16MHz UART-console prerequisite.
+The original smoke above remains the 16 MHz UART-console prerequisite.
 [`examples/iolink-g0b1re-tiol112`](../../examples/iolink-g0b1re-tiol112/README.md)
-adds USART2 at `0x40004400`, shared USART2/LPUART2 IRQ28, the complete144KiB
+adds USART2 at `0x40004400`, shared USART2/LPUART2 IRQ28, the complete 144 KiB
 SRAM address range, and a separate TIOL112 transceiver model. PWR CR1/SR2 and
-FLASH ACR are available for the64MHz clock-setup sequence; this does not
+FLASH ACR are available for the 64 MHz clock-setup sequence; this does not
 validate the other G0B1 flash/programming/power modes.
 
 `peripherals::stm32g0_clock::validate_timed_uart_clock` derives HSI/PLL,
-AHB/APB and TIM clocks from the actual RCC registers. It rejects a16MHz
-firmware image measured against a64MHz timebase, divided APB, alternate UART
+AHB/APB and TIM clocks from the actual RCC registers. It rejects a 16 MHz
+firmware image measured against a 64 MHz timebase, divided APB, alternate UART
 kernel clocks and non-reset USART PRESC. Simulation time remains a fixed
 operating-point assumption; oscillator startup, changing clock frequency,
 flash wait-state execution penalties and IAR instruction timing are unproven.

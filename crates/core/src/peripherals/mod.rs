@@ -51,8 +51,8 @@ pub mod generic_factory;
 pub mod gpdma;
 pub mod gpio;
 pub mod ieee802154_air;
-pub mod stm32u5_hash;
 pub mod stm32g0_clock;
+pub mod stm32u5_hash;
 pub mod stm32u5_pka;
 pub mod stm32u5_saes;
 // Historical timing oracle, including its former hook state; production uses GPIO schedules.

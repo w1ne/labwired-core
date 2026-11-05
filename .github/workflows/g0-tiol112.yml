@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'configs/chips/stm32g0b1re.yaml'
+      - 'configs/systems/nucleo-g0b1re.yaml'
       - 'crates/core/src/peripherals/components/tiol112.rs'
       - 'crates/core/src/peripherals/components/iolink_master.rs'
       - 'crates/core/src/peripherals/stm32g0_clock.rs'

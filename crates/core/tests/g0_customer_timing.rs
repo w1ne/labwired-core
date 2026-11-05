@@ -1,5 +1,5 @@
 //! Real Cortex-M0+ ELF through STM32G0B1RE IRQ UART -> TIOL112 -> timed master.
-//! Requires an external, source-pinned GCC ELF; never passes by skipping one.
+//! Requires an external, source/compiler-pinned ELF; never skips a missing one.
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
@@ -12,7 +12,79 @@ use labwired_core::peripherals::uart::Uart;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, Cpu, Machine};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::path::Path;
+use std::sync::OnceLock;
+
+#[derive(Debug)]
+struct DllProbe {
+    base: u64,
+    fields: std::collections::BTreeMap<String, (u64, u64)>,
+    proof: Value,
+}
+static DLL_PROBE: OnceLock<DllProbe> = OnceLock::new();
+
+fn setup_dll_probe(elf_bytes: &[u8]) {
+    let Ok(path) = std::env::var("IOLINKI_G0_DLL_LAYOUT") else {
+        return;
+    };
+    let layout: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let sha = format!("{:x}", Sha256::digest(elf_bytes));
+    assert_eq!(
+        layout["elf_sha256"].as_str().unwrap(),
+        sha,
+        "DLL layout belongs to another ELF"
+    );
+    let device = labwired_loader::resolve_symbol_in_elf(elf_bytes, "protocol_device")
+        .expect("DLL probe requires exported protocol_device");
+    let base = u64::from(device) + layout["offsets"]["offsetof_dll"].as_u64().unwrap();
+    let size = layout["offsets"]["sizeof_dll"].as_u64().unwrap();
+    assert!(
+        base >= 0x2000_0000 && base + size <= 0x2002_4000,
+        "DLL probe must stay in exact G0B1 SRAM"
+    );
+    let mut fields = std::collections::BTreeMap::new();
+    for (key, width) in layout["field_width_bytes"].as_object().unwrap() {
+        let offset = layout["offsets"][key].as_u64().unwrap();
+        let width = width.as_u64().unwrap();
+        assert!([1, 2, 4].contains(&width) && offset + width <= size);
+        fields.insert(key.clone(), (offset, width));
+    }
+    DLL_PROBE.set(DllProbe {
+        base, fields,
+        proof: json!({"elf_sha256":sha, "verification":layout["verification"], "offsets":layout["offsets"], "field_width_bytes":layout["field_width_bytes"]}),
+    }).unwrap();
+}
+
+fn dll_snapshot(machine: &Machine<CortexM>) -> Value {
+    let Some(probe) = DLL_PROBE.get() else {
+        return Value::Null;
+    };
+    let values: serde_json::Map<String, Value> = probe
+        .fields
+        .iter()
+        .map(|(key, (offset, width))| {
+            let raw = machine.bus.read_u32(probe.base + offset).unwrap();
+            let value = match width {
+                1 => raw & 0xff,
+                2 => raw & 0xffff,
+                _ => raw,
+            };
+            (key.clone(), json!(value))
+        })
+        .collect();
+    json!({"base_address":format!("0x{:08x}",probe.base), "values":values, "layout_proof":probe.proof})
+}
+
+fn save_auxiliary(suffix: &str, value: &Value) {
+    if let Ok(path) = std::env::var("IOLINKI_G0_REPORT") {
+        let path = format!("{path}.{suffix}.json");
+        if let Some(parent) = Path::new(&path).parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
+    }
+}
 
 fn checksum(frame: &[u8]) -> u8 {
     let x = frame.iter().fold(0x52, |x, b| x ^ b);
@@ -84,6 +156,7 @@ fn exchange_at(
     for (i, byte) in data.iter().enumerate() {
         master.transmit(start + i as u64 * char_cycles, u16::from(*byte), fmt);
     }
+    machine.timed_uart_sync(); // Same external-peer handoff as World's timed rounds.
     let last_start = start + (data.len() as u64 - 1) * char_cycles;
     let stop_end_ps = cycles_to_ps(last_start, hz) + fmt.frame_ps();
     let deadline = last_start + hz / 50; //20ms includes the longest expected reply
@@ -113,6 +186,18 @@ fn exchange_at(
                 break;
             }
         }
+    }
+    if response.len() != expected {
+        save_auxiliary(
+            "failure",
+            &json!({
+                "failure": "response_length", "request":data, "reply":response,
+                "expected_reply_bytes":expected, "cycle":machine.total_cycles,
+                "pc":format!("0x{:08x}",machine.cpu.get_pc()),
+                "dll":dll_snapshot(machine), "phy_clock_error":gate.clock_error(),
+                "phy_enable_not_ready":gate.enable_not_ready_count()
+            }),
+        );
     }
     assert_eq!(
         response.len(),
@@ -181,6 +266,7 @@ fn exchange_at(
         "byte_gap_max_ns": gaps.iter().max().map(|v| *v as f64 /1000.0),
         "byte_gap_max_tbit": gaps.iter().max().map(|v| *v as f64 /fmt.bit_ps as f64)
         ,"pre_en_pc_cycles": if profile_pc { json!(pre_en_pc_cycles) } else { Value::Null }
+        ,"firmware_dll_snapshot": dll_snapshot(machine)
     });
     // Preserve completed exchanges even if a later payload/cadence assertion
     // aborts before the final summary. JSONL is diagnostic evidence, not a pass.
@@ -215,6 +301,7 @@ fn invalid_ckt_is_silent(
     for (i, byte) in data.iter().enumerate() {
         master.transmit(start + i as u64 * char_cycles, u16::from(*byte), fmt);
     }
+    machine.timed_uart_sync();
     let deadline = start + data.len() as u64 * char_cycles + hz / 200;
     let mut unexpected = Vec::new();
     while machine.total_cycles < deadline {
@@ -253,10 +340,13 @@ fn real_g0_firmware_timed_cq_session() {
     if let Ok(path) = std::env::var("IOLINKI_G0_REPORT") {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{path}.transactions.jsonl"));
+        let _ = std::fs::remove_file(format!("{path}.failure.json"));
+        let _ = std::fs::remove_file(format!("{path}.startup-state.json"));
     }
     let elf = std::env::var("IOLINKI_G0_ELF")
         .expect("IOLINKI_G0_ELF is required; no missing-artifact pass");
     let elf_bytes = std::fs::read(&elf).unwrap();
+    setup_dll_probe(&elf_bytes);
     let hz: u64 = std::env::var("IOLINKI_G0_HZ")
         .unwrap_or("16000000".into())
         .parse()
@@ -322,6 +412,20 @@ fn real_g0_firmware_timed_cq_session() {
             else { "not inspected" },
         "external_cq_ta_and_gap_assertions": "always enabled, independent of DLL enforcement"
     });
+    let initial_dll = dll_snapshot(&machine);
+    if let Some(value) = initial_dll["values"]["dll.enforce_timing"].as_u64() {
+        if let Some(expected) = observed_enforcement.or(declared_enforcement) {
+            assert_eq!(
+                value != 0,
+                expected,
+                "actual DLL state differs from exported/declaration state"
+            );
+        }
+    }
+    save_auxiliary(
+        "startup-state",
+        &json!({"firmware_dll_timing_enforcement":firmware_timing, "dll":initial_dll}),
+    );
     validate_timed_uart_clock(&machine.bus, "usart1").unwrap();
     assert_eq!(
         machine.bus.read_u32(0x40000028).unwrap() as u64 + 1,
@@ -519,6 +623,8 @@ fn real_g0_firmware_timed_cq_session() {
         "profile": if full_profile { "type2v_pd32" } else { "reference_startup" },
         "firmware": elf, "cpu_hz": hz, "baud": baud,
         "firmware_dll_timing_enforcement": firmware_timing,
+        "firmware_dll_initial": initial_dll,
+        "firmware_dll_final": dll_snapshot(&machine),
         "transactions": records, "cyclic_count": cyclic_ta.len(),
         "benchmark_read_count": read_count, "benchmark_write_count": write_count,
         "negative_controls": negative_controls,
@@ -559,6 +665,11 @@ fn real_g0_firmware_timed_cq_session() {
                 gap <= 3.0,
                 "device byte gap {gap:.6} Tbit exceeds A.3.4 limit"
             );
+        }
+    }
+    if report["firmware_dll_timing_enforcement"]["enabled"] == json!(true) {
+        if let Some(errors) = report["firmware_dll_final"]["values"]["dll.timing_errors"].as_u64() {
+            assert_eq!(errors, 0, "firmware DLL timing monitor reported violations; inspect the preserved counter snapshot");
         }
     }
 }

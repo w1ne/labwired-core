@@ -42,7 +42,10 @@ fn initialize64(bus: &mut SystemBus) {
 
 fn service(bus: &mut SystemBus, cycle: u64) {
     bus.set_current_cycle(cycle);
-    bus.tick_peripherals_fully();
+    // These register-level component oracles have no CPU/Machine event loop.
+    // Use the existing peripheral-only boundary in either feature mode. The
+    // Machine test below separately verifies real scheduler dispatch.
+    bus.tick_peripherals_fully_forced();
 }
 
 fn phy(bus: &SystemBus) -> Tiol112 {
@@ -71,6 +74,11 @@ fn format() -> LineFormat {
 
 #[test]
 fn exact_g0b1_memory_irq_and_64mhz_clock_guard() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let board = SystemManifest::from_file(root.join("configs/systems/nucleo-g0b1re.yaml")).unwrap();
+    let chip = ChipDescriptor::from_file(root.join("configs/chips/stm32g0b1re.yaml")).unwrap();
+    let board_bus = SystemBus::from_config(&chip, &board).unwrap();
+    assert_eq!(board_bus.cpu_hz, 16_000_000, "board reset clock");
     let mut bus = bus("en: PA8", HZ).unwrap();
     assert!(
         validate_timed_uart_clock(&bus, "usart2").is_err(),
@@ -308,4 +316,53 @@ fn live_clock_guard_blocks_wrong_timebase_until_firmware_programs_pll() {
         1,
         "actualPLL64 setup opens the clock gate"
     );
+}
+
+#[test]
+fn machine_advance_services_tiol112_uart_and_enable_edges() {
+    use labwired_core::memory::ProgramImage;
+    use labwired_core::system::cortex_m::configure_cortex_m;
+    use labwired_core::{Arch, Machine};
+
+    let mut bus = bus("en: PA8", HZ).unwrap();
+    let net = TimedUartNet::new();
+    let (_, device, master) = net.add_link(("g0", "usart2", HZ), ("master", "uart", HZ), 0, 0, 1);
+    bus.attach_timed_uart_by_id("usart2", device).unwrap();
+    initialize64(&mut bus);
+    let (cpu, _) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+    let mut bytes = vec![0; 0x102];
+    bytes[..4].copy_from_slice(&0x2002_4000u32.to_le_bytes());
+    bytes[4..8].copy_from_slice(&0x0800_0101u32.to_le_bytes());
+    bytes[0x100..].copy_from_slice(&[0xfe, 0xe7]); // Thumb B .
+    let mut image = ProgramImage::new(0x0800_0101, Arch::Arm);
+    image.add_segment(0x0800_0000, bytes);
+    machine.load_firmware(&image).unwrap();
+    let advance = |machine: &mut Machine<_>, cycles: u64| {
+        let target = machine.total_cycles + cycles;
+        while machine.total_cycles < target {
+            machine.step().unwrap();
+        }
+    };
+    machine.bus.write_u32(GPIO + 0x18, 1 << 8).unwrap();
+    advance(&mut machine, 6 * 64);
+    machine.bus.write_u32(UART + 0x28, 0xa5).unwrap();
+    advance(&mut machine, 4000);
+    let gate = phy(&machine.bus);
+    assert_eq!(gate.tx_frame_count(), 1, "Machine must service UART events");
+    let (got, lost) = master.receive_due(machine.total_cycles, &format(), false);
+    assert_eq!(lost, 0);
+    assert_eq!(got.unwrap().value, 0xa5);
+    assert_eq!(machine.bus.read_u32(UART + 0x24).unwrap() & 0xff, 0xa5);
+    machine.bus.write_u32(GPIO + 0x18, 1 << 24).unwrap();
+    advance(&mut machine, 10 * 64);
+    master.transmit(machine.total_cycles + 64, 0x42, format());
+    // This standalone peer plays World’s role: World calls this after peers
+    // enqueue wire activity so an idle scheduled receiver gets a deadline.
+    machine.timed_uart_sync();
+    advance(&mut machine, 4000);
+    assert_eq!(machine.bus.read_u32(UART + 0x24).unwrap() & 0xff, 0x42);
+    assert!(gate.tx_frames()[0].truncated_ps.is_none());
 }

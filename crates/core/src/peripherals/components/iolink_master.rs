@@ -1663,7 +1663,9 @@ mod tests {
         // The invalid vector follows C1: Event and PD-status bits of CKS are
         // part of the checked message (only bits 0-5 are zeroed), so
         // CKS = 0x40 | ck6([0xA5, 0x40]) = 0x7A.
-        let od = decode_operate(&[0x10, 0x39], 0);
+        // This vector is an OD-only READ reply; the WRITE helper deliberately
+        // accepts no OD and now rejects any extra octet rather than guessing.
+        let od = decode_operate_with_od(&[0x10, 0x39], 0, 1);
         assert!(od.checksum_ok);
         assert!(od.pd_valid);
         assert!(od.pd.is_empty());

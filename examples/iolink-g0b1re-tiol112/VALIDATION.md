@@ -12,6 +12,14 @@ Its controlled-latency test is a measurement-oracle regression: it deliberately
 inserts 12 µs software delay and proves that first CQ start is measured rather
 than TC. It is not application execution evidence.
 
+The same suite loads the exact NUCLEO-G0B1RE board manifest and uses a real
+`Machine` to exercise UART transmit, local echo, EN release and idle receive
+in both legacy and event-scheduler builds. Register-only component checks use
+the explicit peripheral-only service boundary. The Machine test uses the same
+`timed_uart_sync` handoff as World's timed UART rounds after external peers
+enqueue wire activity; this verifies scheduler dispatch rather than treating
+a forced peripheral walk as a scheduler test.
+
 `modern_uart_timing` covers timed STM32 USART TC, RDR, PE/FE/ORE and interrupt
 behavior. `iolink_master_config` integration tests cover the functional master's selected
 M-sequence, explicit OD widths, current PDout and rejection of ignored config.
@@ -58,14 +66,34 @@ are represented by a hash of the raw report.
 
 | Run | Coverage | Result |
 |---|---|---|
+| `type2v-com3-zig-enforced.json` | 100 READ + 100 WRITE + 8 application-rate replies, internal monitor enabled | Timed C/Q model gate passed; 208 OPERATE replies, tA 28.004..41.301 µs, zero reply byte gaps and zero internal timing errors |
+| `type2v-com2-zig-enforced.json` | 100 READ + 100 WRITE + 8 application-rate replies, internal monitor enabled | Timed C/Q model gate passed; 208 OPERATE replies, tA 29.132..31.679 µs, zero reply byte gaps and zero internal timing errors |
+| `type2v-stream-event-scheduler.json` | Actual ELF with the interactive one-action UART master and event scheduler | Functional gate passed: current selectors 7/9, READ34/WRITE33; this stream test does not measure CQ tA |
 | `type2v-com3-zig-disabled.json` | 100 READ + 100 WRITE + 8 application-rate replies | Timed C/Q model gate passed; 208 OPERATE replies, tA 26.473..39.769 µs, zero reply byte gaps |
 | `type2v-com2-minimum-delay-failure.json` | 4 READ + 4 WRITE + 8 application-rate replies | Preserved failure: response starts too early for COM2; OPERATE tA 15.789..25.914 µs |
 | `reference16-gcc-startup.json` | Actual 16 MHz GCC reference startup, DPP and DeviceOperate | Timed UART/EXTI/PHY prerequisite passed; this is not the 64 MHz PD32 profile |
 
-The first two runs use the explicitly labeled Zig/Clang diagnostic runtime.
-Their internal DLL timing enforcement is disabled; the external CQ tA and gap
-gates are enabled. The COM2 failure is retained as a witness for the separate
-minimum-response-delay fix. These results do not establish silicon timing.
+The enabled COM3 and COM2 runs use companion source
+[`10e8196e2630c54474fbec16abbb301f515c7736`](https://github.com/w1ne/iolinki/commit/10e8196e2630c54474fbec16abbb301f515c7736)
+and distinct, hash-pinned Zig/Clang diagnostic ELFs. This source adds a board
+response floor anchored to the last receive IRQ, retains the separate 6 µs
+PHY enable guard, and applies the internal cycle monitor to valid OPERATE
+frame starts. The earlier disabled-monitor COM3 pass and COM2 minimum-delay
+failure remain separate, unchanged witnesses.
+
+The enabled runs verify the exported flag and the DLL's actual state through
+an ELF-hash-checked DWARF layout. Both finish with zero byte, cycle, completion,
+aggregate timing and timeout counters. The deliberate invalid CKT produces
+one CRC and one framing diagnostic with no reply. Each run also checks
+STARTUP/PREOPERATE tA, all 32 current-selector payload bytes, checksums, UART
+parity/framing, complete driver release, and eight exact 29.412 ms application
+start intervals. These results establish the stated digital model scenarios,
+not silicon timing or a GCC/newlib/IAR acceptance run.
+
+The local required gates at this checkpoint are 29 focused default-feature
+tests, 15 event-scheduler tests, and the explicitly invoked real-ELF stream
+test. The component suite includes a genuine Machine scheduler path. The
+remaining broad PR checks run in CI; this is still a scoped draft extension.
 
 ## Explicit limits
 
@@ -75,6 +103,9 @@ baseline profile inherits `IOLINK_TIMING_ENFORCE_DEFAULT=0`; setting the legacy
 ELF-resolved `rig_timing_enforced` flag when exported, or an explicit
 source-pinned `IOLINKI_G0_DLL_TIMING_ENFORCED=0|1` declaration for an older image.
 The external CQ tA and byte-gap assertions remain enabled in both cases.
+An optional ELF-hash-checked DWARF layout allows read-only snapshots of the
+actual DLL state and counters, including field widths that differ between
+compilers. Enabled images with this probe must finish with zero timing errors.
 An enabled firmware variant is a separate artifact and must pass its own
 receive-timestamp/timeout tests.
 

@@ -96,6 +96,8 @@ def main():
         "cpu_hz": report["cpu_hz"],
         "baud": report["baud"],
         "firmware_dll_timing_enforcement": report["firmware_dll_timing_enforcement"],
+        "firmware_dll_initial": report.get("firmware_dll_initial"),
+        "firmware_dll_final": report.get("firmware_dll_final"),
         "benchmark_read_count": report["benchmark_read_count"],
         "benchmark_write_count": report["benchmark_write_count"],
         "phase_results": groups,

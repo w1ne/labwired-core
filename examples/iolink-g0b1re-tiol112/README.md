@@ -30,6 +30,7 @@ COM3 runs use distinct ELF hashes and reports.
 ```bash
 cargo test -p labwired-core --test g0_tiol112 --test modern_uart_timing
 cargo test -p labwired-core --test iolink_master_config
+cargo test -p labwired-core --features event-scheduler --test g0_tiol112 --test modern_uart_timing
 ```
 
 ## Run the one-action functional fixture
@@ -54,7 +55,7 @@ both 34-byte READ and 33-byte WRITE replies. This stream fixture proves
 firmware/driver/protocol integration. Its byte interface does not establish CQ
 tA; the separate test below measures wire timing.
 
-## Run the actual customer profile
+## Run the actual TYPE2V profile
 
 Build `examples/stm32g0_tiol112` in the companion `w1ne/iolinki` source with
 `IOLINK_G0_SYSCLK_HZ=64000000 IOLINK_G0_PROTOCOL_PROFILE=1`. The example's
@@ -85,6 +86,19 @@ JSON, independently of reply duration. Every transaction checks the current
 selector, payload, checksum, parity, framing, driver release and unsupported
 firmware accesses. The report separates STARTUP/PREOPERATE/OPERATE timing and
 includes reply byte gaps. Set `IOLINKI_G0_CYCLES=4` for an initial short run.
+
+For an explicitly enabled firmware build, set
+`IOLINKI_G0_DLL_TIMING_ENFORCED=1`. The oracle resolves the exported
+`rig_timing_enforced` symbol and verifies its RAM value against this declaration.
+Optionally set `IOLINKI_G0_DLL_LAYOUT=/absolute/path/arm-eabi-layout.json`
+to read the DLL's actual enforcement state and diagnostic counters as well.
+The layout must be derived from that ELF's compiler-generated DWARF; it carries
+the exact ELF SHA256, each field's offset and width, and the DLL size. The oracle
+rejects a hash mismatch or a field outside G0B1 SRAM before reading memory.
+Do not reuse offsets across compilers. A zero timing-error count is required
+when this probe is supplied for an enabled build; deliberate invalid-CKT
+CRC/framing counts are reported separately. These reads never change firmware
+state or external C/Q timing bounds.
 
 The default PHY scenario uses 1.2 µs TX propagation, 0.3 µs RX propagation,
 and 4 µs enable/disable delays. The last two values are typical assumptions,
