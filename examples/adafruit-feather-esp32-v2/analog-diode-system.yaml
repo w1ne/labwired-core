@@ -1,0 +1,28 @@
+# Adafruit Feather ESP32 V2 with a diode load line driving the classic ESP32
+# SENS SAR ADC channel 6. This fixture uses the explicit ADC-channel route:
+# esp32.yaml does not yet declare GPIO-to-ADC pad mappings.
+name: "adafruit-feather-esp32-v2-analog-diode"
+chip: "../../configs/chips/esp32.yaml"
+cpu_hz: 240000000
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 13
+    signal: "output"
+    active_high: true
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "adc.sens_sar_adc.6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"

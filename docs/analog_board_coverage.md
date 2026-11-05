@@ -6,7 +6,7 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 
 | System profile | Strict analog coverage |
 | --- | --- |
-| `adafruit-feather-esp32-v2` | NO end-to-end analog coverage |
+| `adafruit-feather-esp32-v2` | [`cosim_esp32_analog_diode::feather_esp32_diode_netlist_reaches_sens_sar_channel_and_one_shot_result`](../crates/core/tests/cosim_esp32_analog_diode.rs) — explicit SENS SAR channel route |
 | `adxl345-sensor-lab` | NO end-to-end analog coverage |
 | `apollo4p-evb` | NO end-to-end analog coverage |
 | `arduino-mega-2560` | NO end-to-end analog coverage |
@@ -112,6 +112,7 @@ This inventory mirrors every `configs/systems/*.yaml` profile (103 at last updat
 
 ## Current covered board/device slices
 
+- **Adafruit Feather ESP32 V2 / diode load line:** generic MNA diode model → `adc.sens_sar_adc.6_volts` → classic ESP32 SENS SAR one-shot conversion. The classic ESP32 descriptor has no `analog_pins:` entries yet, so this slice exercises the supported explicit ADC-channel route without claiming a GPIO-to-ADC pad alias. Example manifest: [analog-diode-system.yaml](../examples/adafruit-feather-esp32-v2/analog-diode-system.yaml).
 - **Arduino Uno R3 / diode load line:** generic MNA diode model → PC0/ADC0 descriptor route → ATmega328P conversion. Example manifest: [analog-diode-system.yaml](../examples/arduino-uno-io/analog-diode-system.yaml).
 - **NUCLEO-F103RB / NTC divider:** generic Beta NTC netlist → PA0/ADC1 route → STM32F103 ADC conversion. Example manifest: [analog-ntc-system.yaml](../examples/nucleo-f103rb/analog-ntc-system.yaml).
 
