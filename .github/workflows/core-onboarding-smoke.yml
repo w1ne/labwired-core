@@ -858,6 +858,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/miv_rv32-smoke.yaml
             system: configs/systems/onboarding/miv_rv32.yaml
+          # The imported Mi-V fragment uses the same Renode RV32 CPU/memory
+          # map; only its modeled CoreUART is retained for this smoke.
+          - id: miv
+            crate: firmware-miv-rv32-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/miv-smoke.yaml
+            system: configs/systems/onboarding/miv.yaml
           # The imported miv-board profile uses Renode's documented RV32 Mi-V
           # memory map and only retains the CoreUART path exercised here.
           - id: miv-board

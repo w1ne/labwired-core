@@ -1,35 +1,19 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Bounded profile for the imported Mi-V fragment platform. Renode's
+# platforms/cpus/miv.repl supplies an RV32IMAF CPU, 256 KiB flash, and 64 MiB
+# DDR. This smoke claims only those memory windows and the existing CoreUART;
+# GPIO and timer peripherals from the generated import are omitted.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/miv.repl
 
-name: miv
-arch: arm
-flash:
-  base: 4096
-  size: 61440B
-ram:
-  base: 2147483648
-  size: 67108864B
+name: "miv"
+arch: "riscv"
+core: "rv32imaf_zicsr_zifencei"
+cpu_hz: 66_000_000
+
+flash: { base: 0x60000000, size: "256KiB" }
+ram: { base: 0x80000000, size: "64MiB" }
+flash_boot_alias: false
 peripherals:
-- id: uart
-  type: miv_coreuart
-  bus: sysbus
-  base_address: 1879052288
-- id: gpioInputs
-  type: miv_coregpio
-  bus: sysbus
-  base_address: 1879056384
-- id: gpioOutputs
-  type: miv_coregpio
-  bus: sysbus
-  base_address: 1879068672
-- id: timer0
-  type: miv_coretimer
-  bus: sysbus
-  base_address: 1879060480
-- id: timer1
-  type: miv_coretimer
-  bus: sysbus
-  base_address: 1879064576
+  - id: "uart"
+    type: "miv_coreuart"
+    base_address: 0x70001000
+    size: "24B"
