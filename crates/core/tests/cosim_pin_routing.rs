@@ -1093,6 +1093,114 @@ fn atmega1281_ntc_netlist_reaches_adc0_end_to_end() {
     assert_eq!(samples[1].2, 512, "25 °C puts the divider at half scale");
 }
 
+/// The ATmega2561 profile has an independently declared eight-channel ADC
+/// input window. Route a generic nonlinear diode load line to ADC0, then run
+/// the part's firmware-visible ADMUX/ADCSRA conversion. This covers a second
+/// device model on the AVR Mega ADC path, not only the NTC divider.
+#[test]
+fn atmega2561_diode_netlist_reaches_adc0_end_to_end() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::{Cpu, Machine, SimulationConfig};
+
+    let profile_path = root("configs/systems/atmega2561.yaml");
+    let profile = SystemManifest::from_file(&profile_path).expect("load ATmega2561 profile");
+    assert_eq!(profile.name, "atmega2561");
+    let analog_path = root("examples/atmega2561-io/analog-diode-system.yaml");
+    let analog = SystemManifest::from_file(&analog_path).expect("load diode netlist fixture");
+    let chip_path = profile_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ATmega2561 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build ATmega2561 bus");
+    let mut session = build_session(&bus, &analog.cosim_models);
+
+    let boundary = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(boundary, &mut bus)
+        .expect("solve and route the diode load line");
+    assert_eq!(steps.len(), 1, "one analog boundary is crossed");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let volts = match session.signals().get("adc.adc.0_volts") {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("the diode voltage did not reach ATmega2561 ADC0: {other:?}"),
+    };
+
+    const SUPPLY_V: f64 = 5.0;
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const DIODE_IS_A: f64 = 2.52e-9;
+    const DIODE_N: f64 = 1.752;
+    const DIODE_RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+    let current_at_junction_voltage =
+        |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = (low + high) / 2.0;
+    let expected_volts = junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS;
+    assert!(
+        (volts - expected_volts).abs() < 2e-5,
+        "the solved Shockley diode load line should be {expected_volts} V, got {volts} V"
+    );
+
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2561"), bus);
+    // Select AVcc and ADC0, then enable the ADC and start a conversion.
+    machine
+        .cpu
+        .load_words(0, &[0xE400, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A]);
+    let config = SimulationConfig::default();
+    for _ in 0..4 {
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &config)
+            .expect("execute the ATmega2561 ADC0 register sequence");
+    }
+
+    let routed_mv = (expected_volts * 1000.0).round() as u32;
+    let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+    let adc_count = u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl);
+    assert_eq!(
+        adc_count, expected_count,
+        "firmware ADC0 should convert the routed diode voltage"
+    );
+    assert_eq!(machine.cpu.admux & 0x0f, 0, "the firmware selects ADC0");
+    assert_eq!(
+        machine.cpu.adcsra & (1 << 6),
+        0,
+        "ADSC clears after conversion"
+    );
+    assert_ne!(
+        machine.cpu.adcsra & (1 << 4),
+        0,
+        "ADIF records conversion complete"
+    );
+    let undriven_adc1 = u16::from(
+        machine
+            .bus
+            .read_u8(0x0001_0203)
+            .expect("read ADC1 input high byte"),
+    ) << 8
+        | u16::from(
+            machine
+                .bus
+                .read_u8(0x0001_0202)
+                .expect("read ADC1 input low byte"),
+        );
+    assert_eq!(
+        undriven_adc1, 2500,
+        "the adjacent undriven ADC1 channel keeps its 2.5 V fallback"
+    );
+}
+
 /// The Arduino Nano uses the same ATmega328P silicon as the Uno, but its own
 /// system profile must still resolve the generic NTC netlist through PC0/A0
 /// and convert the resulting level with the CPU-owned ADC0 registers.

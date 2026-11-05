@@ -6,7 +6,7 @@ a board-specific test solves an analog device/netlist, routes the solved signal 
 profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
 traces without an ADC conversion, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 10 have end-to-end analog coverage; 93 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 11 have end-to-end analog coverage; 92 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -21,7 +21,7 @@ Current inventory: **103 profiles; 10 have end-to-end analog coverage; 93 have n
 | `arduino-zero` | **NO E2E analog coverage** |
 | `arty-litex-vexriscv` | **NO E2E analog coverage** |
 | `atmega1281` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`atmega1281_ntc_netlist_reaches_adc0_end_to_end` |
-| `atmega2561` | **NO E2E analog coverage** |
+| `atmega2561` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`atmega2561_diode_netlist_reaches_adc0_end_to_end` — diode load line through explicit ADC0 route and firmware-visible AVR ADC conversion |
 | `brd2709a` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end` |
 | `calliope-mini-v1` | **NO E2E analog coverage** |
 | `cc2538dk` | **NO E2E analog coverage** |
