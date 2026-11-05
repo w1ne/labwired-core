@@ -1,0 +1,10 @@
+# Cortex-M3 UART0 smoke against the narrowed imported STK3700 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32-stk-m3-smoke"
+  system: "../../configs/systems/onboarding/stk3700.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32 STK M3 UART0 smoke"
+  - expected_stop_reason: max_steps

@@ -1,5 +1,5 @@
-2026-11-05T01:04:36.254853Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/imxrt500.yaml
-2026-11-05T01:04:36.273091Z  INFO labwired_loader: ELF Entry Point: 0x8001801
+2026-11-05T01:22:03.677167Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/imxrt500.yaml
+2026-11-05T01:22:03.682741Z  INFO labwired_loader: ELF Entry Point: 0x8001801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  3/3 checks · imxrt500-smoke · 4000000 steps · 0.06s
+PASS  3/3 checks · imxrt500-smoke · 4000000 steps · 0.03s

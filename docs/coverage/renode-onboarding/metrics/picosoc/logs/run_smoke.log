@@ -1,4 +1,4 @@
-2026-11-05T01:05:08.210507Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/picosoc.yaml
-2026-11-05T01:05:08.220131Z  INFO labwired_loader: ELF Entry Point: 0x1000000
+2026-11-05T01:22:31.303773Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/picosoc.yaml
+2026-11-05T01:22:31.313287Z  INFO labwired_loader: ELF Entry Point: 0x1000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · picosoc-smoke · 100000 steps · 0.01s

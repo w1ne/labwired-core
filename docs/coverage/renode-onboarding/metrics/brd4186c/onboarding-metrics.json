@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/brd4186c-smoke.yaml",
   "system": "configs/systems/onboarding/brd4186c.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T01:04:08Z",
-  "finished_at_utc": "2026-11-05T01:04:09Z",
+  "started_at_utc": "2026-11-05T01:21:42Z",
+  "finished_at_utc": "2026-11-05T01:21:43Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 739,
+  "elapsed_ms": 714,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.282,
-    "build_firmware": 0.179,
-    "run_smoke": 0.267
+    "build_cli": 0.275,
+    "build_firmware": 0.164,
+    "run_smoke": 0.264
   },
   "stages_ms": {
-    "build_cli": 282,
-    "build_firmware": 179,
-    "run_smoke": 267
+    "build_cli": 275,
+    "build_firmware": 164,
+    "run_smoke": 264
   }
 }

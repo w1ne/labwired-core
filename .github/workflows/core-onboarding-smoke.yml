@@ -46,6 +46,7 @@ on:
       - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-kendryte-k210-smoke/**"
       - "crates/firmware-efm32wg995-smoke/**"
+      - "crates/firmware-efm32-stk-m3-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
@@ -440,6 +441,18 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/efm32wg995-smoke.yaml
             system: configs/systems/onboarding/efm32wg995.yaml
+          # STK3600 and STK3700 are narrowed to their imported Cortex-M3 memory
+          # windows and the modeled UART0 surface exercised by the shared smoke.
+          - id: stk3600
+            crate: firmware-efm32-stk-m3-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stk3600-smoke.yaml
+            system: configs/systems/onboarding/stk3600.yaml
+          - id: stk3700
+            crate: firmware-efm32-stk-m3-smoke
+            target: thumbv7m-none-eabi
+            script: examples/renode-onboarding/stk3700-smoke.yaml
+            system: configs/systems/onboarding/stk3700.yaml
           # The PG12 profile is limited to its Cortex-M4F memory and USART0 path.
           - id: efm32pg12
             crate: firmware-efm32pg12-smoke

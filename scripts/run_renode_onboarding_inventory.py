@@ -275,6 +275,16 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/efm32wg995-smoke.yaml",
     },
+    "stk3600": {
+        "crate": "firmware-efm32-stk-m3-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/stk3600-smoke.yaml",
+    },
+    "stk3700": {
+        "crate": "firmware-efm32-stk-m3-smoke",
+        "target": "thumbv7m-none-eabi",
+        "script": "examples/renode-onboarding/stk3700-smoke.yaml",
+    },
     "efm32pg12": {
         "crate": "firmware-efm32pg12-smoke",
         "target": "thumbv7em-none-eabi",
