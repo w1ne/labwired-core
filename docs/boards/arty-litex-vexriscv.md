@@ -4,6 +4,13 @@ The **Digilent Arty A7-35T** (Artix-7 XC7A35T) running a **LiteX VexRiscv** soft
 
 This is an **L1 (smoke)** target on the `litex-vexriscv` SoC family: boot, the UART byte path, the timer one-shot, and the LED/switch/button CSR path are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART, timer and CAS block are modelled; the SPI-flash controller, Ethernet MAC and MMCM are declared stubs. No bitstream capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
 
+The mixed-signal profile has an end-to-end GPIO input path: a generic Beta NTC
+divider and an unrelated Shockley diode load line are solved by the MNA adapter
+and routed through the CAS `PinPort` inputs for SW0 and BTN0. The configured
+3.3 V Schmitt thresholds are simulation assumptions; the profile has no mapped
+ADC and this coverage does not claim an XADC/ADC or silicon-level threshold
+model. See [`cosim_arty_litex_analog.rs`](../../crates/core/tests/cosim_arty_litex_analog.rs).
+
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
 
@@ -42,6 +49,7 @@ This is an **L1 (smoke)** target on the `litex-vexriscv` SoC family: boot, the U
 | LiteX UART | `0x6000_1800` | modelled — `rxtx` @ +0x00, `txfull` @ +0x04 |
 | LiteX timer | `0x6000_2800` | modelled — countdown + zero-event status/pending |
 | Control-and-Status (CAS) | `0x6000_6800` | modelled — `Leds` @0x00 (R/W), `Switches` @0x04, `ButtonsStatus` @0x08, `ButtonsPending` @0x0C (W1C), `ButtonsEnabled` @0x10 |
+| Mixed-signal GPIO inputs | CAS pins 32 / 64 | modelled — analog netlist voltages pass through declared Schmitt thresholds into SW0 / BTN0; no ADC is mapped |
 | LiteX SPI-flash controller | `0x6000_5000` | `type: stub` — answers zeros |
 | LiteX Ethernet MAC | `0x6000_7800` | `type: stub` |
 | LiteX MMCM | `0xE000_4800` | `type: stub` |

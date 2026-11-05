@@ -101,6 +101,7 @@ steps the model against the pins the firmware is actually driving:
 | `board.gpio_pad.<pad>` | machine → model | bool | The live level a logic probe clipped to `<pad>` sees: the GPIO latch for a plain output, the peripheral's wire for an alternate-function pad, the input register for an input. |
 | `board.gpio_driven.<pad>` | machine → model | bool | Whether the MCU's own output stage drives `<pad>`, through a GPIO output OR an alternate-function peripheral. False for an input, an analog pad, or a released open-drain line. |
 | `board.gpio_in.<pad>` | model → machine | bool or volts | An externally held level on an input pad (also readable). A number is volts, turned into a level with the chip's input thresholds. |
+| `board.gpio_in.<peripheral>.<pin>` | model → machine | bool or volts | An input on a pin-owning peripheral without GPIO register offsets. The peripheral name and physical pin number resolve through its `PinPort` interface. |
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
@@ -115,6 +116,12 @@ pad-addressed feature uses: a chip's declared `pins:` map first, then the
 standard STM32/Nordic parse, then the ATmega `port<letter>` windows, then the
 ESP32 forms. Case does not matter. Board aliases such as Arduino `D2` are not
 pad labels; the playground resolves them before a manifest is written.
+
+When an input belongs to a peripheral that owns pads but has no GPIO register
+offsets, use `board.gpio_in.<peripheral>.<pin>` instead. For example,
+`board.gpio_in.cas.32` drives pin 32 on the LiteX Control-and-Status block.
+The endpoint must resolve to a pin the peripheral reports as an input. Voltage
+values use the same chip-declared Schmitt thresholds as pad labels.
 
 `board.gpio_output.<pad>` reads the GPIO model's direction register through
 `Peripheral::read_gpio_is_output`, the same register truth the logic
@@ -202,7 +209,8 @@ plain signal-store keys routed between models, exactly as before.
 
 ### Volts on an input pad
 
-A number routed to `board.gpio_in.<pad>` is a voltage, and the pad is a
+A number routed to `board.gpio_in.<pad>` or
+`board.gpio_in.<peripheral>.<pin>` is a voltage, and the input is a
 Schmitt-trigger input: it reads high once the voltage is at or above VIH, low
 once it is at or below VIL, and between the two it keeps the level it read last.
 It starts low. A boolean keeps meaning the level itself, exactly as before.

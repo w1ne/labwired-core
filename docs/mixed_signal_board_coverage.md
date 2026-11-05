@@ -2,11 +2,12 @@
 
 This inventory tracks every system profile in `configs/systems/*.yaml` (including demos,
 fixtures, and multiple profiles for the same physical board). A profile is covered only when
-a board-specific test solves an analog device/netlist, routes the solved signal to that
-profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
-traces without an ADC conversion, and device-only unit tests do not count.
+a board-specific test solves an analog device/netlist, routes it to a modeled board endpoint,
+and asserts the result. Endpoints include an ADC conversion or a voltage-thresholded digital
+input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
+endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 17 have end-to-end analog coverage; 86 have no end-to-end analog coverage.** Each round selects the next uncovered profile; when its ADC was a stub, the round adds the model slice needed to route a generic device netlist through the board's ADC input. Profiles with an unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 18 have end-to-end analog coverage; 85 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -19,7 +20,7 @@ Current inventory: **103 profiles; 17 have end-to-end analog coverage; 86 have n
 | `arduino-uno-r4-minima` | [`cosim_ra4m1_analog.rs`](../crates/core/tests/cosim_ra4m1_analog.rs)::`uno_r4_minima_ntc_and_diode_netlists_reach_a0_a1_and_adc14` — generic Beta NTC and Shockley diode netlists resolve through A0/A1 pin mappings and convert on ADC14 at 12 and 14 bits |
 | `arduino-uno` | [`cosim_avr_analog_diode.rs`](../crates/core/tests/cosim_avr_analog_diode.rs)::`arduino_uno_diode_netlist_reaches_a0_and_firmware_adc0` |
 | `arduino-zero` | [`cosim_samd21_analog.rs`](../crates/core/tests/cosim_samd21_analog.rs)::`arduino_zero_ntc_and_diode_netlists_reach_distinct_samd21_adc_pads` — generic Beta NTC and unrelated Shockley diode netlists route through PA02/AIN0 and PB08/AIN2 into asserted 12/10/8-bit conversions; undriven AIN3 stays at zero |
-| `arty-litex-vexriscv` | **NO E2E analog coverage** |
+| `arty-litex-vexriscv` | [`cosim_arty_litex_analog.rs`](../crates/core/tests/cosim_arty_litex_analog.rs)::`arty_litex_ntc_and_diode_netlists_drive_cas_gpio_inputs_through_thresholds` — generic Beta NTC divider to SW0 and unrelated Shockley diode load line to BTN0; asserts solved voltages, CAS readbacks, and Schmitt hysteresis. This is GPIO threshold coverage; the profile has no mapped ADC. |
 | `atmega1281` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`atmega1281_ntc_netlist_reaches_adc0_end_to_end` |
 | `atmega2561` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`atmega2561_diode_netlist_reaches_adc0_end_to_end` — diode load line through explicit ADC0 route and firmware-visible AVR ADC conversion |
 | `brd2709a` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end` |

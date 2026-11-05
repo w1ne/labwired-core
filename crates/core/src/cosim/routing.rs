@@ -18,6 +18,7 @@
 //! outputs:
 //!   v_out: "board.analog.pa0_volts"   # model node voltage -> ADC channel
 //!   v_rx: "board.gpio_in.pd2"         # node voltage -> thresholded pin level
+//!   cas: "board.gpio_in.cas.32"       # node voltage -> pin-port peripheral input
 //! ```
 //!
 //! Paths outside the `board.` / `adc.` grammar are ordinary store paths and are
@@ -147,6 +148,7 @@ impl InputThresholds {
 /// | `board.gpio_pad.<pad>` | machine → model | `Bool` |
 /// | `board.gpio_driven.<pad>` | machine → model | `Bool` |
 /// | `board.gpio_in.<pad>` | model → machine (also readable) | `Bool`, or `F64` volts |
+/// | `board.gpio_in.<peripheral>.<pin>` | model → pin-port peripheral | `Bool`, or `F64` volts |
 /// | `board.analog.<pad>_volts` | model → machine | `F64` |
 /// | `adc.<peripheral>.<channel>_volts` | model → machine | `F64` |
 /// | `board.power.vdd_volts` | model → machine | `F64` |
@@ -556,6 +558,13 @@ enum WriteBinding {
     /// `level` is the pad's Schmitt state: what it read last, which a voltage
     /// between VIL and VIH keeps. Low until a model says otherwise.
     PadInput { addr: u64, bit: u8, level: bool },
+    /// Direct input on a peripheral that owns pads but has no GPIO register
+    /// offsets. The peripheral index and pin number use its `PinPort` seam.
+    PeripheralInput {
+        peripheral: usize,
+        pin: u8,
+        level: bool,
+    },
     /// An ADC channel seeded through `SystemBus::seed_adc_channel`, on the
     /// peripheral the manifest or the chip descriptor named.
     AdcChannel { connection: String, channel: u8 },
@@ -734,16 +743,27 @@ impl SignalRouter {
     ) -> Result<WriteBinding, RoutingError> {
         match parsed {
             SignalPath::GpioInput { pad } => {
-                let (addr, bit) = SystemBus::resolve_pin_idr(bus, pad).ok_or_else(|| {
-                    RoutingError::UnknownPad {
-                        path: path.to_string(),
-                        pad: pad.clone(),
-                    }
-                })?;
-                Ok(WriteBinding::PadInput {
-                    addr,
-                    bit,
-                    level: false,
+                if let Some((addr, bit)) = SystemBus::resolve_pin_idr(bus, pad) {
+                    return Ok(WriteBinding::PadInput {
+                        addr,
+                        bit,
+                        level: false,
+                    });
+                }
+                if let Some((peripheral, pin)) = resolve_peripheral_input_pin(bus, pad) {
+                    let level = bus.peripherals[peripheral]
+                        .dev
+                        .read_gpio_input(pin)
+                        .unwrap_or(false);
+                    return Ok(WriteBinding::PeripheralInput {
+                        peripheral,
+                        pin,
+                        level,
+                    });
+                }
+                Err(RoutingError::UnknownPad {
+                    path: path.to_string(),
+                    pad: pad.clone(),
                 })
             }
             SignalPath::AnalogPad { pad } => {
@@ -928,6 +948,45 @@ impl SignalRouter {
                         errors.push(RoutingError::DriveRejected { path: path.clone() });
                     }
                 }
+                WriteBinding::PeripheralInput {
+                    peripheral,
+                    pin,
+                    level,
+                } => {
+                    let next = match value {
+                        CosimSignalValue::F64(volts) => match self.thresholds {
+                            Some(Ok(thresholds)) => thresholds.next_level(*level, *volts),
+                            Some(Err(key)) => {
+                                errors.push(RoutingError::NoInputThresholds {
+                                    path: path.clone(),
+                                    key,
+                                });
+                                continue;
+                            }
+                            None => {
+                                errors.push(RoutingError::NoInputThresholds {
+                                    path: path.clone(),
+                                    key: "gpio_input_thresholds",
+                                });
+                                continue;
+                            }
+                        },
+                        other => match signal_as_bool(other) {
+                            Some(next) => next,
+                            None => {
+                                errors.push(RoutingError::TypeMismatch {
+                                    path: path.clone(),
+                                    value: value.clone(),
+                                });
+                                continue;
+                            }
+                        },
+                    };
+                    *level = next;
+                    if !bus.set_peripheral_gpio_input(*peripheral, *pin, next) {
+                        errors.push(RoutingError::DriveRejected { path: path.clone() });
+                    }
+                }
                 WriteBinding::AdcChannel {
                     connection,
                     channel,
@@ -1013,6 +1072,19 @@ fn circuit_motor(bus: &SystemBus, motor: &str, path: &str) -> Result<usize, Rout
             motor: motor.to_string(),
         },
     })
+}
+
+/// Resolve `peripheral.pin` to a concrete input on a peripheral that owns
+/// pads through [`crate::pins::PinPort`] but does not expose GPIO register
+/// offsets. This lets co-simulation drive board I/O blocks such as LiteX CAS
+/// through the same pin interface used by `board_io` contacts.
+fn resolve_peripheral_input_pin(bus: &SystemBus, endpoint: &str) -> Option<(usize, u8)> {
+    let (peripheral, pin) = endpoint.rsplit_once('.')?;
+    let pin: u8 = pin.parse().ok()?;
+    let index = bus.find_peripheral_index_by_name(peripheral)?;
+    let dev = bus.peripherals[index].dev.as_ref();
+    let port = dev.pins()?;
+    (pin < port.pin_count() && dev.read_gpio_is_output(pin) == Some(false)).then_some((index, pin))
 }
 
 /// Refuse an ADC route the converter cannot take: a peripheral the bus does
