@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 22 have end-to-end analog coverage; 81 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 23 have end-to-end analog coverage; 80 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -82,7 +82,7 @@ Current inventory: **103 profiles; 22 have end-to-end analog coverage; 81 have n
 | `nucleo-h563zi-demo` | **NO E2E analog coverage** |
 | `nucleo-l073rz` | **NO E2E analog coverage** |
 | `nucleo-l476rg` | [`cosim_nucleo_l476_analog.rs`](../crates/core/tests/cosim_nucleo_l476_analog.rs)::`nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds` — generic NTC divider and Shockley diode solve onto PA0/PA1; asserts solved voltages, GPIO input levels, and Schmitt hysteresis. This is GPIO threshold coverage, not ADC support. |
-| `nucleo-l552ze-q` | **NO E2E analog coverage** |
+| `nucleo-l552ze-q` | [`cosim_nucleo_l552_analog.rs`](../crates/core/tests/cosim_nucleo_l552_analog.rs)::`nucleo_l552ze_q_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists solve onto PA0/PA1; asserts voltages, GPIOA_IDR levels, and Schmitt hysteresis. This is GPIO threshold coverage; ADC1 remains a stub. |
 | `nucleo-u545re` | **NO E2E analog coverage** |
 | `nucleo-u575zi` | **NO E2E analog coverage** |
 | `nucleo-u5a5zj` | **NO E2E analog coverage** |

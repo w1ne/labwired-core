@@ -19,6 +19,18 @@ A bare-register smoke firmware (`crates/firmware-l552ze-smoke`) that:
 - prints a heartbeat on **LPUART1** at 115200 8N1 from the 4 MHz MSI reset
   clock.
 
+## Mixed-signal GPIO inputs
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) connects a
+generic Beta NTC divider and an unrelated Shockley diode load line to PA0 and
+PA1. The MNA solver produces the pin voltages, then the STM32L552 input
+thresholds determine the levels read from GPIOA_IDR. The integration test also
+checks Schmitt hysteresis at intermediate NTC temperatures.
+
+This proves generic external analog voltages can drive the board's modeled
+digital inputs. It does not prove ADC conversion: ADC1 remains a declared stub
+on this profile.
+
 ## Build and run
 
 ```bash
