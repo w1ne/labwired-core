@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/s32k118-smoke.yaml",
   "system": "configs/systems/onboarding/s32k118.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T00:52:17Z",
-  "finished_at_utc": "2026-11-05T00:52:18Z",
+  "started_at_utc": "2026-11-05T01:05:15Z",
+  "finished_at_utc": "2026-11-05T01:05:16Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 738,
+  "elapsed_ms": 737,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.277,
-    "build_firmware": 0.189,
-    "run_smoke": 0.261
+    "build_cli": 0.291,
+    "build_firmware": 0.161,
+    "run_smoke": 0.274
   },
   "stages_ms": {
-    "build_cli": 277,
-    "build_firmware": 189,
-    "run_smoke": 261
+    "build_cli": 291,
+    "build_firmware": 161,
+    "run_smoke": 274
   }
 }
