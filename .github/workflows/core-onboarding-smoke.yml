@@ -1169,6 +1169,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml
             system: configs/systems/onboarding/nxp-frdm-imx8mplus.yaml
+          # One Cortex-A53 PE and imported DDR only. The CPU-only fixture does
+          # not exercise the named GICv2 or the omitted timer/UART/RTC blocks.
+          - id: cortex-a53-gicv2
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a53-gicv2.yaml
 
     steps:
       - uses: actions/checkout@v4

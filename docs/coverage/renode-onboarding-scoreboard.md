@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `153`
-- booted: `153/245`
-- boot_and_smoke_passed: `153/245`
-- not_run: `92`
-- pass: `153`
+- run_attempted: `154`
+- booted: `154/245`
+- boot_and_smoke_passed: `154/245`
+- not_run: `91`
+- pass: `154`
 - fail: `0`
-- median_elapsed_ms: `1149`
-- median_elapsed_seconds: `1.149`
+- median_elapsed_ms: `1162`
+- median_elapsed_seconds: `1.162`
 - threshold_seconds: `3600`
-- threshold_met: `153/153`
+- threshold_met: `154/154`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -44,7 +44,7 @@
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `1421` | `1.421` | `True` | `n/a` | n/a | n/a |
 | `colibri-vf61` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | `n/a` | n/a | n/a |
-| `cortex-a53-gicv2` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `12566` | `12.566` | `True` | `n/a` | n/a | n/a |
 | `cortex-a53-gicv3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `cortex-a53-gicv3_smp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `cortex-a78` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
