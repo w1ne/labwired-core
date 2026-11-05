@@ -95,32 +95,40 @@ impl Tm1637Trace {
         // STOP: publish the transaction. A pending ACK (byte closed, ninth
         // clock never seen) is a framing error. A non-zero bit_count is the
         // normal STOP prelude and is not.
+        //
+        // Panel frames are recorded here (not mid-byte) so each completed
+        // GRID data write — including an identical re-paint — gets one
+        // timestamp. Countdown Acc ±50 ms timing needs that re-paint of the
+        // start value (brief prove check 7).
         if self.last_in_txn == 1 && in_txn == 0 {
             if self.last_expect_ack == 1 {
                 self.framing_errors = self.framing_errors.saturating_add(1);
             }
             if !self.txn_bytes.is_empty() {
                 let bytes = std::mem::take(&mut self.txn_bytes);
+                let is_data_write = bytes.first() == Some(&0xC0) && bytes.len() >= 5;
+                let is_disp_ctrl = bytes.len() == 1 && (bytes[0] & 0x80) == 0x80;
                 self.push_bus(t_us, bytes);
+                if is_data_write
+                    || is_disp_ctrl
+                    || grids != self.last_grids
+                    || display_on != self.last_display_on
+                    || bright != self.last_bright
+                {
+                    let text: String =
+                        grids.iter().map(|b| seven_seg_font::decode(*b)).collect();
+                    self.push_frame(json!({
+                        "t_us": t_us,
+                        "grids": grids.iter().copied().collect::<Vec<_>>(),
+                        "text": text,
+                        "display_on": display_on != 0,
+                        "brightness": bright,
+                    }));
+                    self.last_grids = grids;
+                    self.last_display_on = display_on;
+                    self.last_bright = bright;
+                }
             }
-        }
-
-        // Panel frame: GRID or display-control change.
-        if grids != self.last_grids
-            || display_on != self.last_display_on
-            || bright != self.last_bright
-        {
-            let text: String = grids.iter().map(|b| seven_seg_font::decode(*b)).collect();
-            self.push_frame(json!({
-                "t_us": t_us,
-                "grids": grids.iter().copied().collect::<Vec<_>>(),
-                "text": text,
-                "display_on": display_on != 0,
-                "brightness": bright,
-            }));
-            self.last_grids = grids;
-            self.last_display_on = display_on;
-            self.last_bright = bright;
         }
 
         self.last_in_txn = in_txn;
