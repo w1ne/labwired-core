@@ -11,6 +11,7 @@ MODEL_FILES = [
     "configs/chips/stm32g0b1re.yaml",
     "crates/core/src/network/timed_uart.rs",
     "crates/core/src/peripherals/components/tiol112.rs",
+    "crates/core/src/peripherals/components/iolink_master.rs",
     "crates/core/src/peripherals/stm32g0_clock.rs",
     "crates/core/src/peripherals/rcc.rs",
     "crates/core/src/peripherals/uart.rs",
@@ -95,11 +96,15 @@ def main():
         "raw_report_sha256": digest(args.report),
         "cpu_hz": report["cpu_hz"],
         "baud": report["baud"],
+        "observed_firmware_setup": report.get("observed_firmware_setup"),
         "firmware_dll_timing_enforcement": report["firmware_dll_timing_enforcement"],
         "firmware_dll_initial": report.get("firmware_dll_initial"),
         "firmware_dll_final": report.get("firmware_dll_final"),
         "benchmark_read_count": report["benchmark_read_count"],
         "benchmark_write_count": report["benchmark_write_count"],
+        "uart_receive_integrity": report.get("uart_receive_integrity"),
+        "checksum_validated_reply_count": report.get("checksum_validated_reply_count"),
+        "pd_payload_bytes_checked": report.get("pd_payload_bytes_checked"),
         "phase_results": groups,
         "actual_application_request_intervals_us": report[
             "actual_application_request_intervals_us"

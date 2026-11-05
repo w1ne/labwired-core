@@ -1,4 +1,4 @@
-# One-action functional UART fixture. For physical CQ timing use
+# One-action functional UART fixture. For modeled CQ waveform timing use
 # g0_customer_timing, which attaches a bit-timed master instead of this peer.
 name: iolink-g0b1re-tiol112-evaluation
 chip: ../../configs/chips/stm32g0b1re.yaml

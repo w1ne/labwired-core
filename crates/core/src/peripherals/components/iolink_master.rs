@@ -598,6 +598,22 @@ impl IolinkMaster {
         self.evaluation.as_ref().and_then(|e| e.error.as_deref())
     }
 
+    /// Read-only presentation state for the explicit evaluation profile.
+    /// Legacy peers return `None`; this never advances the protocol schedule.
+    pub fn evaluation_phase(&self) -> Option<&'static str> {
+        self.evaluation.as_ref().map(|e| match e.phase {
+            EvaluationPhase::Armed => "armed",
+            EvaluationPhase::Wake => "wake",
+            EvaluationPhase::MinCycle => "min_cycle",
+            EvaluationPhase::Capability => "capability",
+            EvaluationPhase::PdIn => "pd_in",
+            EvaluationPhase::PdOut => "pd_out",
+            EvaluationPhase::OperateCommand => "operate_command",
+            EvaluationPhase::Operate => "operate",
+            EvaluationPhase::Fault => "fault",
+        })
+    }
+
     fn evaluation_message(&mut self, message: &str) {
         self.log_line(&format!("MASTER {message}"));
         if self.evaluation_log.len() >= TRACE_CAP {

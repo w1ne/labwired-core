@@ -79,16 +79,19 @@ fn evaluation_frame(master: &mut IolinkMaster, length: usize, now: &mut u64) -> 
 }
 
 fn prepare_evaluation(master: &mut IolinkMaster, minimum: u8, now: &mut u64) -> Vec<u64> {
+    assert_eq!(master.evaluation_phase(), Some("armed"));
     master.set_input("start", 1.0).unwrap();
     master.set_input("start", 0.0).unwrap();
+    assert_eq!(master.evaluation_phase(), Some("wake"));
     let mut starts = Vec::new();
-    for (request, value) in [
-        ([0xA2, 0x00], minimum),
-        ([0xA3, 0x11], 0x09),
-        ([0xA5, 0x22], 0x9F),
-        ([0xA6, 0x12], 0x08),
+    for (request, value, phase) in [
+        ([0xA2, 0x00], minimum, "min_cycle"),
+        ([0xA3, 0x11], 0x09, "capability"),
+        ([0xA5, 0x22], 0x9F, "pd_in"),
+        ([0xA6, 0x12], 0x08, "pd_out"),
     ] {
         let (at, frame) = evaluation_frame(master, 2, now);
+        assert_eq!(master.evaluation_phase(), Some(phase));
         starts.push(at);
         assert_eq!(frame, request);
         feed(master, &[value, oracle_cks(&[value], 0)]);
@@ -96,6 +99,7 @@ fn prepare_evaluation(master: &mut IolinkMaster, minimum: u8, now: &mut u64) -> 
     let (at, frame) = evaluation_frame(master, 3, now);
     starts.push(at);
     assert_eq!(frame, [0x20, 0x06, 0x99]);
+    assert_eq!(master.evaluation_phase(), Some("operate_command"));
     feed(master, &[0x2D]);
     starts
 }
@@ -156,6 +160,7 @@ fn manifest_preserves_requested_profile_and_legacy_defaults() {
     )
     .unwrap();
     let master = attached_master(&mut bus);
+    assert_eq!(master.evaluation_phase(), None);
     master.set_process_data_output(&[3]).unwrap();
     assert_eq!(enter_operate(master), [0x00, 0xB5, 0x03, 0x00]);
     drain(master);
@@ -342,6 +347,7 @@ fn explicit_start_profile_waits_for_action_validates_dpp_and_alternates_read_wri
     for selector in 0..11u8 {
         let read = selector % 2 == 1;
         let (at, request) = evaluation_frame(master, if read { 3 } else { 4 }, &mut now);
+        assert_eq!(master.evaluation_phase(), Some("operate"));
         cyclic_starts.push(at);
         assert_eq!(request[0], if read { 0xF1 } else { 0x71 });
         assert_eq!(request[2], selector);
@@ -403,6 +409,7 @@ fn evaluation_fails_closed_on_wrong_capability_bad_checksum_or_no_response() {
             "fault {fault} must stop the profile"
         );
         assert_eq!(master.link_state, IolinkLinkState::Startup);
+        assert_eq!(master.evaluation_phase(), Some("fault"));
         assert!(!master.pd_valid);
         assert_eq!(master.poll(1_000_000), None);
     }
@@ -470,6 +477,11 @@ fn real_type2v_elf_runs_the_same_one_action_uart_fixture() {
             seen_9 |= selector == 9;
         }
         if seen_read && seen_write && seen_7 && seen_9 {
+            assert_eq!(master.evaluation_phase(), Some("operate"));
+            assert!(
+                master.pd_valid,
+                "the UI must receive a valid process-data state"
+            );
             println!("one-action fixture passed: actual ELF={elf}, selector7/9 current PD, TYPE_2_V read/write, blocks={block}, cycles={}", machine.total_cycles);
             return;
         }

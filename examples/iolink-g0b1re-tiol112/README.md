@@ -42,6 +42,12 @@ logical WAKE for 1 ms, reads the DPP, validates capability/PD sizes/minimum
 cycle, issues DeviceOperate and alternates READ/WRITE requests. It rejects the
 legacy global-default MinCycleTime 0x0A instead of concealing that mismatch.
 
+The master's read-only evaluation phase distinguishes armed, wake, each DPP
+read, DeviceOperate, OPERATE and fault. Its error text identifies the failed
+validation. The browser accessor exports these as optional
+`evaluation_phase` / `evaluation_error` fields; legacy peers return null.
+Full process-data bytes and raw requests/replies remain in the master trace.
+
 This same path is exercised against a real Cortex-M0+ ELF by:
 
 ```bash
@@ -86,6 +92,11 @@ JSON, independently of reply duration. Every transaction checks the current
 selector, payload, checksum, parity, framing, driver release and unsupported
 firmware accesses. The report separates STARTUP/PREOPERATE/OPERATE timing and
 includes reply byte gaps. Set `IOLINKI_G0_CYCLES=4` for an initial short run.
+The oracle reads the firmware's GPIO modes and AF1 selection, pull-ups,
+USART 8E1 registers, BRR, TIM2 prescaler and PLL configuration after wake.
+It records the number of received reply characters, parity/framing errors,
+validated checksums and checked process-data bytes. All 32 payload bytes are
+checked in both the benchmark and the eight application-cadence replies.
 
 For an explicitly enabled firmware build, set
 `IOLINKI_G0_DLL_TIMING_ENFORCED=1`. The oracle resolves the exported

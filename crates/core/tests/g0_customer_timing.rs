@@ -100,6 +100,21 @@ fn request(mut bytes: Vec<u8>) -> Vec<u8> {
     bytes[1] |= checksum(&bytes);
     bytes
 }
+fn assert_current_pd32(reply: &[u8], pd_offset: usize, selector: u8) {
+    assert_eq!(
+        reply[pd_offset], selector,
+        "current request selector must choose this reply"
+    );
+    for i in 1..32usize {
+        let offset = usize::from(selector) * 32 + i;
+        assert_eq!(
+            reply[i + pd_offset],
+            ((offset * 13) ^ (offset >> 3) ^ 0x5a) as u8,
+            "selector={selector} PDbyte={i}"
+        );
+    }
+    assert_eq!(reply.last().unwrap() & 0x40, 0, "PD valid");
+}
 fn step_to(machine: &mut Machine<CortexM>, cycle: u64) {
     while machine.total_cycles < cycle {
         machine.step().unwrap();
@@ -161,6 +176,8 @@ fn exchange_at(
     let stop_end_ps = cycles_to_ps(last_start, hz) + fmt.frame_ps();
     let deadline = last_start + hz / 50; //20ms includes the longest expected reply
     let mut response = Vec::new();
+    let mut parity_errors = 0u64;
+    let mut framing_errors = 0u64;
     let profile_pc = std::env::var_os("IOLINKI_G0_PROFILE_PC").is_some();
     let mut pre_en_pc_cycles = std::collections::BTreeMap::<String, u64>::new();
     while machine.total_cycles < deadline {
@@ -177,6 +194,19 @@ fn exchange_at(
         let (got, overrun) = master.receive_due(machine.total_cycles, &fmt, false);
         assert_eq!(overrun, 0, "virtual master overrun");
         if let Some(got) = got {
+            parity_errors += u64::from(got.parity_error);
+            framing_errors += u64::from(got.framing_error);
+            if got.parity_error || got.framing_error {
+                save_auxiliary(
+                    "failure",
+                    &json!({
+                        "failure":"reply_uart_integrity", "request":data,
+                        "received_prefix":response, "received_value":got.value,
+                        "parity_errors":parity_errors, "framing_errors":framing_errors,
+                        "cycle":machine.total_cycles, "dll":dll_snapshot(machine)
+                    }),
+                );
+            }
             assert!(
                 !got.framing_error && !got.parity_error,
                 "reply parity/framing error"
@@ -247,6 +277,10 @@ fn exchange_at(
     );
     let record = json!({
         "request": data, "reply": response,
+        "uart_receive_integrity": {
+            "received_reply_characters":response.len(),
+            "parity_errors":parity_errors, "framing_errors":framing_errors
+        },
         "master_request_start_cycle": start,
         "master_request_start_ps": cycles_to_ps(start, hz),
         "last_master_stop_end_ps": stop_end_ps,
@@ -448,6 +482,38 @@ fn real_g0_firmware_timed_cq_session() {
         0,
         "actual EXTI handler cleared WAKE"
     );
+    let gpioa_moder = machine.bus.read_u32(0x50000000).unwrap();
+    let gpioa_afrh = machine.bus.read_u32(0x50000024).unwrap();
+    let gpiob_moder = machine.bus.read_u32(0x50000400).unwrap();
+    let gpiob_pupdr = machine.bus.read_u32(0x5000040c).unwrap();
+    assert_eq!((gpioa_moder >> 16) & 3, 1, "PA8 EN is an output");
+    assert_eq!(
+        (gpioa_moder >> 18) & 15,
+        10,
+        "PA9/10 are alternate-function pins"
+    );
+    assert_eq!((gpioa_afrh >> 4) & 255, 0x11, "PA9/10 select USART1 AF1");
+    assert_eq!(gpiob_moder & 15, 0, "PB0 WAKE/PB1 NFAULT are inputs");
+    assert_eq!(gpiob_pupdr & 15, 5, "WAKE/NFAULT use pull-ups");
+    let uart_cr1 = machine.bus.read_u32(0x40013800).unwrap();
+    let uart_cr2 = machine.bus.read_u32(0x40013804).unwrap();
+    assert_eq!(
+        uart_cr1 & ((1 << 28) | (1 << 12) | (1 << 10) | (1 << 9)),
+        (1 << 12) | (1 << 10),
+        "USART1 has 8 data bits and even parity"
+    );
+    assert_eq!(uart_cr1 & 13, 13, "USART1 RX/TX are enabled");
+    assert_eq!((uart_cr2 >> 12) & 3, 0, "USART1 has one stop bit");
+    let observed_setup = json!({
+        "uart":"usart1", "tx":"PA9", "rx":"PA10", "en":"PA8", "wake":"PB0", "nfault":"PB1",
+        "gpioa_moder":gpioa_moder, "gpioa_afrh":gpioa_afrh,
+        "gpiob_moder":gpiob_moder, "gpiob_pupdr":gpiob_pupdr,
+        "uart_cr1":uart_cr1, "uart_cr2":uart_cr2,
+        "uart_brr":machine.bus.read_u32(0x4001380c).unwrap(),
+        "timer_prescaler":machine.bus.read_u32(0x40000028).unwrap(),
+        "rcc_pllcfgr":machine.bus.read_u32(0x4002100c).unwrap(),
+        "rcc_cfgr":machine.bus.read_u32(0x40021008).unwrap()
+    });
     let fmt = LineFormat {
         bit_ps: 1_000_000_000_000 / baud,
         data_bits: 8,
@@ -559,19 +625,8 @@ fn real_g0_firmware_timed_cq_session() {
                 read_count += 1;
             }
             let pd_offset = usize::from(!write);
-            assert_eq!(
-                reply[pd_offset], selector,
-                "current request selector must choose this reply"
-            );
-            for i in 1..32usize {
-                let offset = usize::from(selector) * 32 + i;
-                assert_eq!(
-                    reply[i + pd_offset],
-                    ((offset * 13) ^ (offset >> 3) ^ 0x5a) as u8,
-                    "selector={selector} PDbyte={i}"
-                );
-            }
-            assert_eq!(reply.last().unwrap() & 0x40, 0, "PD valid");
+            assert_current_pd32(&reply, pd_offset, selector);
+            timing["pd_payload_bytes_checked"] = json!(32);
             let ta = timing["ta_us"].as_f64().unwrap();
             cyclic_ta.push(ta);
             records.push(timing);
@@ -600,7 +655,8 @@ fn real_g0_firmware_timed_cq_session() {
                 34,
                 Some(target),
             );
-            assert_eq!(reply[1], selector);
+            assert_current_pd32(&reply, 1, selector);
+            timing["pd_payload_bytes_checked"] = json!(32);
             let actual_start = timing["master_request_start_cycle"].as_u64().unwrap();
             let interval = (actual_start - previous_start) as f64 * 1_000_000.0 / hz as f64;
             assert!((interval - 29_412.0).abs() <= 1_000_000.0 / hz as f64);
@@ -622,11 +678,19 @@ fn real_g0_firmware_timed_cq_session() {
     let report = json!({
         "profile": if full_profile { "type2v_pd32" } else { "reference_startup" },
         "firmware": elf, "cpu_hz": hz, "baud": baud,
+        "observed_firmware_setup": observed_setup,
         "firmware_dll_timing_enforcement": firmware_timing,
         "firmware_dll_initial": initial_dll,
         "firmware_dll_final": dll_snapshot(&machine),
         "transactions": records, "cyclic_count": cyclic_ta.len(),
         "benchmark_read_count": read_count, "benchmark_write_count": write_count,
+        "uart_receive_integrity": {
+            "received_reply_characters": records.iter().map(|r| r["uart_receive_integrity"]["received_reply_characters"].as_u64().unwrap()).sum::<u64>(),
+            "parity_errors": records.iter().map(|r| r["uart_receive_integrity"]["parity_errors"].as_u64().unwrap()).sum::<u64>(),
+            "framing_errors": records.iter().map(|r| r["uart_receive_integrity"]["framing_errors"].as_u64().unwrap()).sum::<u64>()
+        },
+        "checksum_validated_reply_count": records.len(),
+        "pd_payload_bytes_checked": records.iter().filter_map(|r| r["pd_payload_bytes_checked"].as_u64()).sum::<u64>(),
         "negative_controls": negative_controls,
         "startup_ta_us": records[0]["ta_us"],
         "preoperate_ta_us": [records[1]["ta_us"], records[2]["ta_us"]],
