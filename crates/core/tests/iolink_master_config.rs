@@ -41,7 +41,7 @@ fn evaluation_bus(com: &str) -> SystemBus {
 // Independent AnnexA parity-mask expression rather than calling the encoder.
 fn oracle_cks(bytes: &[u8], flags: u8) -> u8 {
     let fold = bytes.iter().fold(0x52 ^ flags, |sum, byte| sum ^ byte);
-    let parity = |mask| ((fold & mask) as u8).count_ones() as u8 & 1;
+    let parity = |mask: u8| (fold & mask).count_ones() as u8 & 1;
     flags
         | (parity(0xAA) << 5)
         | (parity(0x55) << 4)
