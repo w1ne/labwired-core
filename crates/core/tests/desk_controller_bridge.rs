@@ -12,7 +12,8 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::Avr;
 use labwired_core::peripherals::components::h_bridge_motor::HBridgeMotor;
-use labwired_core::{Bus, Machine};
+use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::{Bus, DebugControl, Machine};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -217,57 +218,70 @@ external_devices:
     )
     .unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    // A branch-to-self guest advances the production Machine boundary. With
+    // event-scheduler enabled, a bare bus tick does not drain the timer's
+    // scheduled output-wave events and would leave its AF pads frozen.
+    let spin_pc = 0x0800_0040;
+    bus.write_u16(spin_pc, 0xe7fe).unwrap(); // b .
+    let (mut cpu, _) = configure_cortex_m(&mut bus);
+    cpu.pc = spin_pc as u32;
+    cpu.sp = 0x2000_5000;
+    let mut machine = Machine::new(cpu, bus);
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
     // PA0/PA1: AF push-pull; PA2/PA3: GPIO push-pull. ODR deliberately
     // retains RPWM high, so a latch read would falsely drive continuously.
-    bus.write_u32(0x4001_0800, 0x4444_33bb).unwrap();
-    bus.write_u32(0x4001_080c, 0b1101).unwrap();
-    bus.write_u32(0x4000_0028, 0).unwrap(); // PSC
-    bus.write_u32(0x4000_002c, 99).unwrap(); // ARR
-    bus.write_u32(0x4000_0034, 25).unwrap(); // RPWM CCR1: 25%
-    bus.write_u32(0x4000_0038, 0).unwrap(); // LPWM CCR2: 0%
-    bus.write_u32(0x4000_0018, 0x6060).unwrap(); // PWM1 on CH1/CH2
-    bus.write_u32(0x4000_0020, 0x11).unwrap(); // CC1E + CC2E
-    bus.write_u32(0x4000_0000, 1).unwrap(); // CEN
+    machine.bus.write_u32(0x4001_0800, 0x4444_33bb).unwrap();
+    machine.bus.write_u32(0x4001_080c, 0b1101).unwrap();
+    machine.bus.write_u32(0x4000_0028, 0).unwrap(); // PSC
+    machine.bus.write_u32(0x4000_002c, 99).unwrap(); // ARR
+    machine.bus.write_u32(0x4000_0034, 25).unwrap(); // RPWM CCR1: 25%
+    machine.bus.write_u32(0x4000_0038, 0).unwrap(); // LPWM CCR2: 0%
+    machine.bus.write_u32(0x4000_0018, 0x6060).unwrap(); // PWM1 on CH1/CH2
+    machine.bus.write_u32(0x4000_0020, 0x11).unwrap(); // CC1E + CC2E
+    machine.bus.write_u32(0x4000_0000, 1).unwrap(); // CEN
 
     let (mut saw_drive, mut saw_brake, mut saw_high, mut saw_low) = (false, false, false, false);
     // No GPIO stores occur here: only the timer advances its AF waveform.
-    for cycle in 1..=4000 {
-        bus.set_current_cycle(cycle);
-        bus.tick_peripherals_fully();
+    for _ in 0..4000 {
+        machine.run(Some(1)).unwrap();
+        let bus = &machine.bus;
         let state = &bus.motor_snapshots()[0].control_state;
         saw_drive |= state == "forward";
         saw_brake |= state == "brake";
-        saw_high |= effort(&bus) == 1.0;
-        saw_low |= effort(&bus) == 0.0;
+        saw_high |= effort(bus) == 1.0;
+        saw_low |= effort(bus) == 0.0;
     }
     assert!(saw_drive && saw_brake, "the plant must see both PWM phases");
     assert!(
         saw_high && saw_low,
         "the observer must see autonomous AF edges"
     );
-    assert!(bus.motor_snapshots()[0].speed_rpm > 0.0);
+    assert!(machine.bus.motor_snapshots()[0].speed_rpm > 0.0);
 
-    bus.write_u32(0x4000_0034, 0).unwrap();
-    bus.write_u32(0x4000_0038, 75).unwrap(); // reverse on the other PWM input
+    machine.bus.write_u32(0x4000_0034, 0).unwrap();
+    machine.bus.write_u32(0x4000_0038, 75).unwrap(); // reverse on the other PWM input
     let mut saw_reverse = false;
-    for cycle in 4001..=8000 {
-        bus.set_current_cycle(cycle);
-        bus.tick_peripherals_fully();
-        saw_reverse |= bus.motor_snapshots()[0].control_state == "reverse" && effort(&bus) == -1.0;
+    for _ in 0..4000 {
+        machine.run(Some(1)).unwrap();
+        let bus = &machine.bus;
+        saw_reverse |= bus.motor_snapshots()[0].control_state == "reverse" && effort(bus) == -1.0;
     }
     assert!(saw_reverse, "LPWM must reach both the observer and plant");
 
-    bus.write_u32(0x4000_0020, 0).unwrap(); // disable both channel outputs
-    bus.write_u32(0x4000_0000, 0).unwrap();
-    bus.set_current_cycle(8001);
-    bus.tick_peripherals_fully();
-    assert_eq!(bus.read_u32(0x4001_080c).unwrap(), 0b1101);
-    assert_eq!(effort(&bus), 0.0, "a released AF pad cannot use stale ODR");
-    assert_eq!(bus.motor_snapshots()[0].control_state, "brake");
+    machine.bus.write_u32(0x4000_0020, 0).unwrap(); // disable both channel outputs
+    machine.bus.write_u32(0x4000_0000, 0).unwrap();
+    machine.run(Some(1)).unwrap();
+    assert_eq!(machine.bus.read_u32(0x4001_080c).unwrap(), 0b1101);
+    assert_eq!(
+        effort(&machine.bus),
+        0.0,
+        "a released AF pad cannot use stale ODR"
+    );
+    assert_eq!(machine.bus.motor_snapshots()[0].control_state, "brake");
 
     // A high enable latch also stops driving once its pin becomes an input.
-    bus.write_u32(0x4001_0800, 0x4444_34bb).unwrap();
-    bus.set_current_cycle(8002);
-    bus.tick_peripherals_fully();
-    assert_eq!(bus.motor_snapshots()[0].control_state, "coast");
+    machine.bus.write_u32(0x4001_0800, 0x4444_34bb).unwrap();
+    machine.run(Some(1)).unwrap();
+    assert_eq!(machine.bus.motor_snapshots()[0].control_state, "coast");
 }
