@@ -73,6 +73,7 @@ on:
       - "crates/firmware-mimxrt700-evk-smoke/**"
       - "crates/firmware-mimxrt798s-smoke/**"
       - "crates/firmware-mimxrt595-evk-smoke/**"
+      - "crates/firmware-litex-minerva-smoke/**"
       - "crates/firmware-murax-vexriscv-smoke/**"
       - "crates/firmware-picosoc-smoke/**"
       - "crates/firmware-cv32e40p-smoke/**"
@@ -839,6 +840,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/renode-onboarding/litex_picorv32-smoke.yaml
             system: configs/systems/onboarding/litex_picorv32.yaml
+          # Minerva is RV32I; this fixture exercises its base integer path,
+          # LiteX UART, and LiteX timer on the imported exact system.
+          - id: litex_minerva
+            crate: firmware-litex-minerva-smoke
+            target: riscv32i-unknown-none-elf
+            script: examples/renode-onboarding/litex_minerva-smoke.yaml
+            system: configs/systems/onboarding/litex_minerva.yaml
           - id: arty_litex_vexriscv
             crate: firmware-arty-litex-smoke
             target: riscv32im-unknown-none-elf
@@ -958,7 +966,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,thumbv8m.base-none-eabi,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv64imac-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,thumbv8m.base-none-eabi,riscv32i-unknown-none-elf,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv64imac-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/renesas-da14592-smoke.yaml",
   "system": "configs/systems/onboarding/renesas-da14592.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T04:38:57Z",
-  "finished_at_utc": "2026-11-05T04:38:58Z",
+  "started_at_utc": "2026-11-05T05:01:27Z",
+  "finished_at_utc": "2026-11-05T05:01:28Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 733,
+  "elapsed_ms": 742,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.289,
-    "build_firmware": 0.164,
-    "run_smoke": 0.27
+    "build_cli": 0.28,
+    "build_firmware": 0.166,
+    "run_smoke": 0.286
   },
   "stages_ms": {
-    "build_cli": 289,
-    "build_firmware": 164,
-    "run_smoke": 270
+    "build_cli": 280,
+    "build_firmware": 166,
+    "run_smoke": 286
   }
 }
