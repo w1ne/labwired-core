@@ -73,7 +73,8 @@ impl SystemBus {
         if self.circuit_ina219_id(id).is_err() {
             return None;
         }
-        self.ina219_senses.push(Ina219CircuitSense::new(id.to_string()));
+        self.ina219_senses
+            .push(Ina219CircuitSense::new(id.to_string()));
         self.ina219_senses.last_mut()
     }
 

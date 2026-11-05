@@ -35,13 +35,13 @@ pub(crate) mod external_devices;
 mod faults;
 mod from_config;
 pub use from_config::merged_peripheral_configs;
+mod ina219_circuit;
 pub mod interrupt_fabric;
 pub mod known_stubs;
 mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
-mod ina219_circuit;
 mod observed_device;
 pub(crate) mod part_pack;
 mod pms;
@@ -60,13 +60,13 @@ pub use observed_device::ObservedDevice;
 pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
+pub(crate) use ina219_circuit::CircuitIna219Lookup;
 pub use interrupt_fabric::{
     Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
     InterruptFabric,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
-pub(crate) use ina219_circuit::CircuitIna219Lookup;
 pub use motors::{MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {

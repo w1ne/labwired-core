@@ -996,8 +996,8 @@ impl SignalRouter {
                     }
                 }
                 WriteBinding::Ina219Current { id } => {
-                    let accepted = signal_as_f64(value)
-                        .is_some_and(|amps| bus.feed_ina219_current(id, amps));
+                    let accepted =
+                        signal_as_f64(value).is_some_and(|amps| bus.feed_ina219_current(id, amps));
                     if !accepted {
                         errors.push(RoutingError::TypeMismatch {
                             path: path.clone(),
@@ -1006,8 +1006,8 @@ impl SignalRouter {
                     }
                 }
                 WriteBinding::Ina219BusV { id } => {
-                    let accepted = signal_as_f64(value)
-                        .is_some_and(|volts| bus.feed_ina219_bus_v(id, volts));
+                    let accepted =
+                        signal_as_f64(value).is_some_and(|volts| bus.feed_ina219_bus_v(id, volts));
                     if !accepted {
                         errors.push(RoutingError::TypeMismatch {
                             path: path.clone(),
@@ -1914,12 +1914,7 @@ mod tests {
     #[test]
     fn signal_path_parses_ina219_forms() {
         let current = SignalPath::parse("board.ina219.sense.current_a").unwrap();
-        assert_eq!(
-            current,
-            SignalPath::Ina219Current {
-                id: "sense".into()
-            }
-        );
+        assert_eq!(current, SignalPath::Ina219Current { id: "sense".into() });
         assert!(current.is_writable());
         assert!(!current.is_readable());
         let bus = SignalPath::parse("board.ina219.U1.bus_v").unwrap();
