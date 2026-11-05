@@ -2732,8 +2732,7 @@ impl WchRcc {
     /// high end: Div16 = 0xB (field 11), Div32 = 0xC, Div64 = 0xD,
     /// Div128 = 0xE, Div256 = 0xF.
     pub fn hclk_hz(&self) -> u32 {
-        const HPRE_DIVISOR: [u32; 16] =
-            [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+        const HPRE_DIVISOR: [u32; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
         let hpre = ((self.cfgr0 >> 4) & 0xF) as usize;
         self.sysclk_hz() / HPRE_DIVISOR[hpre]
     }
