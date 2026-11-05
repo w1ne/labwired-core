@@ -238,8 +238,8 @@ def produce(source: Path, output: Path, variant: str) -> dict:
         ("objdump", ["objdump", "--version"]),
     ]:
         versions[name] = commands.run(name, argv, source).decode()
-    if not versions["rustc"].startswith("rustc 1.95.0 "):
-        raise ValueError("The declared Rust 1.95.0 compiler is required")
+    if not versions["rustc"].startswith("rustc 1.99.1 "):
+        raise ValueError("The declared Rust 1.99.1 compiler is required")
     commands.run("build", BUILD, source, timeout=1500)
     cli = source / "target/release/labwired"
     cli_sha = sha(cli)

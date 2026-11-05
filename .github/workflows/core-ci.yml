@@ -217,7 +217,7 @@ jobs:
       # lints nothing and compiles nothing, so it needs no cache either.
       - name: Install Rust (pinned — must match pr-gate)
         if: steps.gate.outputs.ok == 'true'
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt
 
@@ -269,7 +269,7 @@ jobs:
           git --no-pager diff --stat
 
           if [ "$tip_is_fixup" = true ]; then
-            echo "::error title=rustfmt is not converging::The tip commit is already a '${MARKER}' fixup and 'cargo fmt --all' still reports a diff. Pushing again would loop, so this run stops. Reproduce with the pinned 1.95.0 toolchain."
+            echo "::error title=rustfmt is not converging::The tip commit is already a '${MARKER}' fixup and 'cargo fmt --all' still reports a diff. Pushing again would loop, so this run stops. Reproduce with the pinned 1.99.1 toolchain."
             git --no-pager diff
             exit 1
           fi
@@ -281,7 +281,7 @@ jobs:
           # No '[skip ci]': the run this push triggers is what re-reports
           # pr-gate and release-runner-contract on the new head SHA.
           git commit -m "$MARKER" \
-            -m "Applied by the fmt-autofix job in .github/workflows/core-ci.yml with the pinned 1.95.0 toolchain. Formatting only — no other step wrote to the tree."
+            -m "Applied by the fmt-autofix job in .github/workflows/core-ci.yml with the pinned 1.99.1 toolchain. Formatting only — no other step wrote to the tree."
 
           # Never force. If the branch moved while this ran, the push is
           # rejected and that is FINE: the newer push has its own fmt-autofix
@@ -325,7 +325,7 @@ jobs:
 
       - name: Install Rust (pinned — must match pr-gate)
         if: steps.gate.outputs.ok != 'true'
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt
 
@@ -341,13 +341,13 @@ jobs:
             exit 0
           fi
 
-          echo "::error title=Unformatted code, and this run cannot fix it::This PR is not rustfmt-clean and the autofix could not be pushed (fork PR, or CI_FMT_PAT is unset). Run 'cargo fmt --all' with the pinned 1.95.0 toolchain and push. Merging as-is turns main red on core-integrity."
+          echo "::error title=Unformatted code, and this run cannot fix it::This PR is not rustfmt-clean and the autofix could not be pushed (fork PR, or CI_FMT_PAT is unset). Run 'cargo fmt --all' with the pinned 1.99.1 toolchain and push. Merging as-is turns main red on core-integrity."
           {
             echo "### Formatting: FAILED"
             echo
             # shellcheck disable=SC2016  # backticks here are Markdown code
             # spans for the step summary, not command substitution.
-            echo 'Run `cargo +1.95.0 fmt --all` and push. The autofix job could not do it for you on this run.'
+            echo 'Run `cargo +1.99.1 fmt --all` and push. The autofix job could not do it for you on this run.'
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
@@ -515,7 +515,7 @@ jobs:
         run: python3 scripts/ci/linker_script_single_source.py --check
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 
@@ -718,7 +718,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 
@@ -930,7 +930,7 @@ jobs:
   # nothing, so read the four things that compose it (rust-cache `src/config.ts`)
   # before touching either job:
   #   v0-rust | -<shared-key> | -<os>-<arch> | -<rust+env hash> | -<lockfile hash>
-  # i.e. `shared-key: core-pr-gate`, the same `dtolnay/rust-toolchain@1.95.0`
+  # i.e. `shared-key: core-pr-gate`, the same `dtolnay/rust-toolchain@1.99.1`
   # with the same components, the same runner image, the same `workspaces`.
   # Changing any of them in ONE of the two jobs silently un-warms pr-gate: the
   # only symptom is `No cache found.` in a log nobody reads.
@@ -987,7 +987,7 @@ jobs:
       # so that a future pin change to either job is an obvious mismatch in
       # review rather than a silent cache miss.
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 
@@ -1100,7 +1100,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: clippy
 
@@ -1290,7 +1290,7 @@ jobs:
 
       # No rustfmt/clippy components: this job lints nothing.
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       # NO CACHE STEP, ON PURPOSE — measured, not assumed. The first cut of this
       # job used `Swatinem/rust-cache@v2` with `shared-key: core-ci` +
@@ -1584,7 +1584,7 @@ jobs:
 
       - name: Install Rust
         if: steps.scope.outputs.run == 'true'
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: thumbv7m-none-eabi
 
@@ -1610,7 +1610,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -1708,7 +1708,7 @@ jobs:
       # rust-cache's key (which folds in components) matches core-integrity's
       # and the restore hits main's warm cache.
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 
@@ -1852,7 +1852,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 
@@ -1895,7 +1895,7 @@ jobs:
       # rather than gating a merge (this job is not a required context), and it
       # covers exactly the paths `fmt-autofix` cannot: fork PRs, a run with no
       # CI_FMT_PAT configured, and anything that reaches main outside the PR
-      # flow. If it ever goes red, run `cargo fmt --all` on 1.95.0.
+      # flow. If it ever goes red, run `cargo fmt --all` on 1.99.1.
       - name: Check Formatting
         run: cargo fmt --all -- --check
 
@@ -2138,7 +2138,7 @@ jobs:
       # unsmoked. Build the binary this commit would ship and stage it where
       # the COPY looks.
       #
-      # ⚠️ IN `rust:1.95-bullseye`, NOT ON THE RUNNER. core-release.yml builds
+      # ⚠️ IN `rust:1.99-bullseye`, NOT ON THE RUNNER. core-release.yml builds
       # both Linux targets in that container precisely so the shipped binaries
       # keep a GLIBC_2.31 floor. Building on the runner instead produced a
       # binary linked against the ubuntu-24.04 host glibc, and the image —
@@ -2158,7 +2158,7 @@ jobs:
             -v "$PWD":/src -w /src \
             -e CARGO_TERM_COLOR=never \
             -e CARGO_TARGET_DIR=/src/target-ci-runner-image \
-            rust:1.95-bullseye \
+            rust:1.99-bullseye \
             cargo build --release -p labwired-cli --bin labwired
           mkdir -p dist/amd64
           cp target-ci-runner-image/release/labwired dist/amd64/labwired
@@ -2232,7 +2232,7 @@ jobs:
         run: git fetch --no-tags --prune origin +refs/heads/main:refs/remotes/origin/main
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 

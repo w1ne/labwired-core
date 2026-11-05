@@ -18,7 +18,7 @@ jobs:
           ref: 2a991760339fe89f5272f923baf89dc18fd434d0
           path: owned-irq-source
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build source-bound owned IRQ guests
         run: |

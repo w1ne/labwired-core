@@ -25,7 +25,7 @@ jobs:
           ref: 592748e51e6b82238d9c1d6a69ffa4e74ccc4ce1
           path: owned-state-source
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
         if: steps.prior.outputs.reuse != 'true'
       - uses: Swatinem/rust-cache@v2
         if: steps.prior.outputs.reuse != 'true'

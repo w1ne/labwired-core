@@ -31,7 +31,7 @@ jobs:
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-iolinki-pio-6.1.19-espressif32-6.10.0-idf-5.4.0
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build actual native ESP-IDF customer firmware
         run: |

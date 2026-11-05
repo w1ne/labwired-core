@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      RUSTUP_TOOLCHAIN: 1.95.0
+      RUSTUP_TOOLCHAIN: 1.99.1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -100,7 +100,7 @@ jobs:
           ref: ${{ inputs.head }}
           path: perf-head
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: thumbv6m-none-eabi
       - uses: Swatinem/rust-cache@v2
@@ -228,7 +228,7 @@ jobs:
           [ "$actual" = "$EXPECTED_SOURCE_SHA" ]
           mkdir -p oracle-evidence
           printf '{"source_sha":"%s"}\n' "$actual" > oracle-evidence/source.json
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: thumbv7em-none-eabi,thumbv7m-none-eabi
       - uses: Swatinem/rust-cache@v2
@@ -311,7 +311,7 @@ jobs:
           echo "${{ matrix.side }} = $REF = $sha"
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

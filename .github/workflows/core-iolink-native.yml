@@ -68,7 +68,7 @@ jobs:
         run: git submodule update --init --depth 1 third_party/iolinki
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Install host C toolchain
         timeout-minutes: 10

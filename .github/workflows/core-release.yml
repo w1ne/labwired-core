@@ -35,12 +35,12 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             platform: linux-x86_64
-            container: rust:1.95-bullseye
+            container: rust:1.99-bullseye
             glibc_max: GLIBC_2.31
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux-aarch64
-            container: rust:1.95-bullseye
+            container: rust:1.99-bullseye
             glibc_max: GLIBC_2.31
           - target: x86_64-apple-darwin
             runner: macos-latest
@@ -62,7 +62,7 @@ jobs:
 
       - name: Install Rust
         if: matrix.container == ''
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: ${{ matrix.target }}
 
