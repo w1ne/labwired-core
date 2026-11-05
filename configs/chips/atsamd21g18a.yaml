@@ -244,6 +244,15 @@ peripherals:
     size: "64B"
     irq: 14
 
+  # ADC — external AIN0..AIN19, software-triggered single-ended conversions.
+  # The deterministic model uses PORT function B and supports 12/10/8-bit
+  # results against INT1V, INTVCC0 or INTVCC1.
+  - id: "adc"
+    type: "samd21_adc"
+    base_address: 0x42004000
+    size: "128B"
+    irq: 23
+
   # ── Cortex-M0+ core peripherals ────────────────────────────────────────────
   # No `debug_schema` on either: they are Arm core blocks in the PPB, which the
   # Microchip SVD does not describe, so there is no base to attach one to.
@@ -265,5 +274,29 @@ peripherals:
 #   USB 0x41005000 (the native-USB `Serial` on a Zero/Feather M0 — a board
 #   whose console is USB CDC cannot print here yet), EVSYS 0x42000400,
 #   TCC0-2 0x42002000..0x42002800, TC3-5 0x42002C00..0x42003400,
-#   ADC 0x42004000, AC 0x42004400, DAC 0x42004800, I2S 0x42005000,
+#   AC 0x42004400, DAC 0x42004800, I2S 0x42005000,
 #   PAC0/1/2, HMATRIX, MTB, and the PORT_IOBUS alias at 0x60000000.
+
+# ADC external input pad → ADC AIN mux. The analog route resolver refuses a
+# pad that is absent here rather than guessing an input channel.
+analog_pins:
+  PA02: { peripheral: "adc", channel: 0 }
+  PA03: { peripheral: "adc", channel: 1 }
+  PB08: { peripheral: "adc", channel: 2 }
+  PB09: { peripheral: "adc", channel: 3 }
+  PA04: { peripheral: "adc", channel: 4 }
+  PA05: { peripheral: "adc", channel: 5 }
+  PA06: { peripheral: "adc", channel: 6 }
+  PA07: { peripheral: "adc", channel: 7 }
+  PB00: { peripheral: "adc", channel: 8 }
+  PB01: { peripheral: "adc", channel: 9 }
+  PB02: { peripheral: "adc", channel: 10 }
+  PB03: { peripheral: "adc", channel: 11 }
+  PB04: { peripheral: "adc", channel: 12 }
+  PB05: { peripheral: "adc", channel: 13 }
+  PB06: { peripheral: "adc", channel: 14 }
+  PB07: { peripheral: "adc", channel: 15 }
+  PA08: { peripheral: "adc", channel: 16 }
+  PA09: { peripheral: "adc", channel: 17 }
+  PA10: { peripheral: "adc", channel: 18 }
+  PA11: { peripheral: "adc", channel: 19 }

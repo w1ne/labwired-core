@@ -6,7 +6,7 @@ a board-specific test solves an analog device/netlist, routes the solved signal 
 profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
 traces without an ADC conversion, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 16 have end-to-end analog coverage; 87 have no end-to-end analog coverage.** Each round selects the next uncovered profile; when its ADC was a stub, the round adds the model slice needed to route a generic device netlist through the board's ADC input. Profiles with an unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 17 have end-to-end analog coverage; 86 have no end-to-end analog coverage.** Each round selects the next uncovered profile; when its ADC was a stub, the round adds the model slice needed to route a generic device netlist through the board's ADC input. Profiles with an unmodeled ADC remain listed as uncovered.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -18,7 +18,7 @@ Current inventory: **103 profiles; 16 have end-to-end analog coverage; 87 have n
 | `arduino-nano` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`arduino_nano_ntc_netlist_reaches_pc0_adc0_end_to_end` |
 | `arduino-uno-r4-minima` | [`cosim_ra4m1_analog.rs`](../crates/core/tests/cosim_ra4m1_analog.rs)::`uno_r4_minima_ntc_and_diode_netlists_reach_a0_a1_and_adc14` — generic Beta NTC and Shockley diode netlists resolve through A0/A1 pin mappings and convert on ADC14 at 12 and 14 bits |
 | `arduino-uno` | [`cosim_avr_analog_diode.rs`](../crates/core/tests/cosim_avr_analog_diode.rs)::`arduino_uno_diode_netlist_reaches_a0_and_firmware_adc0` |
-| `arduino-zero` | **NO E2E analog coverage** |
+| `arduino-zero` | [`cosim_samd21_analog.rs`](../crates/core/tests/cosim_samd21_analog.rs)::`arduino_zero_ntc_and_diode_netlists_reach_distinct_samd21_adc_pads` — generic Beta NTC and unrelated Shockley diode netlists route through PA02/AIN0 and PB08/AIN2 into asserted 12/10/8-bit conversions; undriven AIN3 stays at zero |
 | `arty-litex-vexriscv` | **NO E2E analog coverage** |
 | `atmega1281` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`atmega1281_ntc_netlist_reaches_adc0_end_to_end` |
 | `atmega2561` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`atmega2561_diode_netlist_reaches_adc0_end_to_end` — diode load line through explicit ADC0 route and firmware-visible AVR ADC conversion |

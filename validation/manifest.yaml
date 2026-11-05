@@ -9461,16 +9461,19 @@ boards:
     doc: docs/boards/atsamd21g18a.md
     chip: configs/chips/atsamd21g18a.yaml
     tier: sim-validated
-    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated (PM is a register bank, so firmware that forgets APBCMASK works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, ADC and DMAC are unmodelled and their windows deliberately unmapped."
+    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash / 32K SRAM), Arduino Zero class. PORT and SERCOM USART have behavioral coverage; the ADC slice supports external AIN0..AIN19, function-B pad muxing, software single-ended 12/10/8-bit conversion, and INT1V/INTVCC0/INTVCC1. The existing bare-metal startup checks remain in examples/samd21-smoke/io-smoke.yaml. The mixed-signal integration test routes a Beta NTC to PA02/AIN0 and an unrelated Shockley diode to PB08/AIN2, asserts solved voltages and ADC result codes, and checks an unmuxed pad and undriven AIN3. SVD conformance reports zero justified deviations. NOT PROVEN: no SAM D21 silicon diff; the ADC does not model APBC/generic-clock gating, scan, averaging or correction; PM remains a register bank and GCLK synchronization remains instantaneous; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, DAC, AC, I2S and DMAC remain unmodelled."
     offline_tests:
       - "strict_onboarding::test_strict_board_onboarding (executes examples/samd21-smoke/io-smoke.yaml)"
       - "atsamd21_peripheral_estate::{the_estate_answers_at_its_own_addresses,the_sercom_instances_are_not_each_other,the_port_groups_are_not_each_other}"
       - "svd_conformance::chip_configs_match_their_svd"
+      - "cosim_samd21_analog::arduino_zero_ntc_and_diode_netlists_reach_distinct_samd21_adc_pads"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/sam/sercom_usart.rs
+      - crates/core/src/peripherals/sam/adc21.rs
+      - crates/core/src/peripherals/generic_factory.rs
       - configs/chips/atsamd21g18a.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
@@ -9486,7 +9489,6 @@ boards:
       - configs/peripherals/atsamd21g18a/gclk.yaml
       - configs/peripherals/atsamd21g18a/wdt.yaml
       - configs/peripherals/atsamd21g18a/nvmctrl.yaml
-
   - id: nrf54l15
     doc: docs/boards/nrf54l15.md
     chip: configs/chips/nrf54l15.yaml

@@ -179,6 +179,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_sercom_spi",
     "samd51_nvmctrl_manual_storage",
     "samd51_cmcc_control",
+    // SAMD21's external analog converter has its own register layout and pad mux.
+    "samd21_adc",
     // Opt-in SAMD51 board models (`build_samd51_board_model`): fixed
     // instance addresses, wired by the SAMD51 chip descriptors.
     "samd51_oscctrl",
@@ -856,6 +858,15 @@ pub fn try_build(
         }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "samd21_adc" => {
+            if p_cfg.base_address != 0x4200_4000 || p_cfg.irq != Some(23) {
+                anyhow::bail!("SAMD21 ADC requires base 0x42004000 and IRQ 23");
+            }
+            if !p_cfg.config.is_empty() {
+                anyhow::bail!("SAMD21 ADC admits no config overrides");
+            }
+            Box::new(crate::peripherals::sam::adc21::Samd21Adc::new())
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
         | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {

@@ -32,7 +32,7 @@ Every base address and IRQ number in the chip yaml is checked against it by
 | System yaml        | [`configs/systems/arduino-zero.yaml`](../../configs/systems/arduino-zero.yaml)              |
 | Reference firmware | [`crates/firmware-samd21-demo/`](../../crates/firmware-samd21-demo/) (bare-metal, no HAL)   |
 | Committed ELF      | `tests/fixtures/samd21-smoke.elf` — runs from a clone plus the CLI, no toolchain             |
-| Validation         | `examples/samd21-smoke/io-smoke.yaml` (7 checks) + `atsamd21_peripheral_estate` (4)          |
+| Validation         | `examples/samd21-smoke/io-smoke.yaml` (7 checks) + `atsamd21_peripheral_estate` (4) + [`cosim_samd21_analog.rs`](../../crates/core/tests/cosim_samd21_analog.rs) |
 | Tier               | **sim-validated** — real PORT/SERCOM models, green CI, **no silicon diff**                   |
 
 ## What is proven
@@ -59,6 +59,12 @@ reads of the PORT registers the firmware configured — `DIR` bit 17,
 text cannot fake. Non-vacuity was checked by flipping the expected PMUX nibble:
 the run fails with `expected 0x3, got 0x22` while every UART line still passes.
 
+The mixed-signal integration test routes a generic Beta NTC divider to PA02/AIN0
+and an unrelated Shockley diode load line to PB08/AIN2. It asserts both solved
+voltages, the routed ADC inputs, and the 12/10/8-bit result codes; neighboring
+AIN3 stays undriven. The pads must be muxed to ADC function B before their
+voltage is sampled.
+
 ## What is NOT proven
 
 Stated plainly, because a fidelity table that only lists successes is marketing:
@@ -67,10 +73,11 @@ Stated plainly, because a fidelity table that only lists successes is marketing:
   over SWD. Every ✅ below means *the model satisfies the firmware we have run*,
   not *the model matches silicon*. The board is `NOT_SHIPPED` in the coverage
   ratchet for exactly this reason.
-- **Nothing is clock-gated.** `PM` is a register bank, not a clock-gate
-  controller. A peripheral answers whether or not its `APBCMASK` bit is set, so
-  firmware that forgets to unmask a SERCOM works here and fails on hardware.
-  This is permissive, and it is recorded rather than quietly accepted.
+- **Clock gating is partial.** `PM` is a register bank, not a general
+  clock-gate controller. The ADC slice requires `CTRLA.ENABLE` but does not
+  model the ADC's APBC or generic-clock gates; other peripherals likewise
+  answer whether or not their `APBCMASK` bit is set. Firmware that forgets to
+  enable those clocks may work here and fail on hardware.
 - **`SYNCBUSY` always reads 0** and **`INTFLAG.DRE` is derived from
   `CTRLA.ENABLE`.** Synchronisation and transmission are instantaneous in this
   model. Those are *modelling* truths, not silicon ones: firmware that measures
@@ -93,7 +100,8 @@ Stated plainly, because a fidelity table that only lists successes is marketing:
 | SYSCTRL, GCLK, PM, WDT, NVMCTRL | ⚠️ declarative | Register banks; ready flags modelled, no clock tree |
 | EIC (`attachInterrupt`) | ❌ | Window unmapped — an access is reported, not absorbed |
 | USB | ❌ | A sketch whose console is `SerialUSB` prints nothing yet |
-| TCC0–2, TC3–5, ADC, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU | ❌ | Declared not modelled in the chip yaml |
+| ADC | ⚠️ behavioural slice | External AIN0..AIN19, function-B pad mux, software single-ended conversions, 12/10/8-bit results and INT1V/INTVCC0/INTVCC1 references; no scan, averaging, correction or clock gating |
+| TCC0–2, TC3–5, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU | ❌ | Declared not modelled in the chip yaml |
 
 ## Pins
 
@@ -114,6 +122,10 @@ pads out.
 | D1 / TX | PA10 | SERCOM0 PAD[2], PMUX C |
 | D0 / RX | PA11 | SERCOM0 PAD[3], PMUX C |
 
+The chip descriptor maps the external ADC pads to AIN0..AIN19. The analog
+example drives PA02/AIN0 and PB08/AIN2 by chip pad name; it does not infer
+Arduino header aliases.
+
 ## How to run
 
 ```bash
@@ -124,6 +136,9 @@ labwired run \
 
 # The full gate, including the PORT register assertions:
 labwired test --script examples/samd21-smoke/io-smoke.yaml
+
+# Mixed-signal ADC coverage with generic NTC and diode netlists:
+cargo test -p labwired-core --test cosim_samd21_analog -- --nocapture
 ```
 
 To rebuild the firmware, build **from the crate directory**, not the workspace

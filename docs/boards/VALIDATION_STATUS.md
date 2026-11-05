@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `521bc2559aecb7a6` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `8b2014cf9018180e` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `0e54a50212a2e872` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `b6c3b86ce9564d9c` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `8d5806a76f4d2231` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `1565ef9a66c9c483` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `c0470df1046a6117` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `9fb0870e2cf87399` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `98036d58b62d308c` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `1c70446741c9d60e` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `8cc54988f7ad506e` | no silicon capture |
 | `esp32` | ⚪ structural | — | `8f65fca834d8145a` | no silicon capture |
@@ -38,7 +38,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `859a282e4fc85b8f` | no silicon capture |
 | `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `c75df9e87a8fadd7` | no silicon capture |
 | `stm32f401cdu6` | 🔵 sim-validated (deep model, no HW diff) | — | `b73ea87e81aff1e2` | no silicon capture |
-| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `c30719289a38cd6f` | no silicon capture |
+| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `49e1e60d6c587443` | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `8e15ceb9199dcb95` | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `45ce9ce40fb45944` | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `7725c64137e622b7` | no silicon capture |
@@ -49,25 +49,25 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `a52ca3d6e2e9f454` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `ce18a3409645e33d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `662925e512a82f28` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `28b2cc6c2ac20c0f` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `880838d53bc26010` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `3caa4628885c8a9a` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `eae4a2c7f754acda` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `f3e1b37516218cbb` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `de9de4d1133cf1af` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `0ea6685f988ad89e` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `91f8a594f1445249` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `0efebd898394aa74` | no silicon capture |
-| `s32k388` | 🟡 smoke-manual | — | `1d3e8367165dae95` | no silicon capture |
-| `mimxrt595s` | 🟡 smoke-manual | — | `a693dbf3b89a8ba3` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `b2b9493176d12cc7` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `0e466a199b795c9c` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `95137f487819aad6` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `2233feb68d44eda6` | no silicon capture |
-| `mpfs095t` | 🟡 smoke-manual | — | `a9682b4433e06c8a` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `03c28c50d6cdf38d` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `a34887f5926120ea` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `25c4078e55e37537` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `c00c3f40c0699881` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `630776953153f843` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `93d2f857ed5d1d87` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `0a1d3ea5a6ffee63` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `e382efc11e41db91` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `b62e2a4fbb63235a` | no silicon capture |
+| `s32k388` | 🟡 smoke-manual | — | `49da4d9127d12980` | no silicon capture |
+| `mimxrt595s` | 🟡 smoke-manual | — | `3971417f9e69ef1e` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `281292e6c77058fc` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `c24ca4f26fcd8bd8` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `1a44e2c0d8931c3a` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `37acba4c0bed3587` | no silicon capture |
+| `mpfs095t` | 🟡 smoke-manual | — | `6b8ca1baf4e3482e` | no silicon capture |
 | `am6234` | 🟡 smoke-manual | — | `e6d1c84c83164ed8` | no silicon capture |
-| `r5f52618bgfp` | 🟡 smoke-manual | — | `c73915c3d8fcd0c1` | no silicon capture |
-| `pic32mz2048efm144` | 🟡 smoke-manual | — | `7335630dc08afd6f` | no silicon capture |
+| `r5f52618bgfp` | 🟡 smoke-manual | — | `7172ee1b03fabe19` | no silicon capture |
+| `pic32mz2048efm144` | 🟡 smoke-manual | — | `04445e0d81e3518a` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -330,11 +330,12 @@ The models column is a content digest over everything that board's `models` list
 ## `atsamd21g18a` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/atsamd21g18a.md`](atsamd21g18a.md)  ·  Chip: `configs/chips/atsamd21g18a.yaml`
-- Note: Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated (PM is a register bank, so firmware that forgets APBCMASK works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, ADC and DMAC are unmodelled and their windows deliberately unmapped.
+- Note: Microchip ATSAMD21G18A (Cortex-M0+, 256K flash / 32K SRAM), Arduino Zero class. PORT and SERCOM USART have behavioral coverage; the ADC slice supports external AIN0..AIN19, function-B pad muxing, software single-ended 12/10/8-bit conversion, and INT1V/INTVCC0/INTVCC1. The existing bare-metal startup checks remain in examples/samd21-smoke/io-smoke.yaml. The mixed-signal integration test routes a Beta NTC to PA02/AIN0 and an unrelated Shockley diode to PB08/AIN2, asserts solved voltages and ADC result codes, and checks an unmuxed pad and undriven AIN3. SVD conformance reports zero justified deviations. NOT PROVEN: no SAM D21 silicon diff; the ADC does not model APBC/generic-clock gating, scan, averaging or correction; PM remains a register bank and GCLK synchronization remains instantaneous; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, DAC, AC, I2S and DMAC remain unmodelled.
 - Silicon: none — not validated against real hardware.
   - offline (CI): strict_onboarding::test_strict_board_onboarding (executes examples/samd21-smoke/io-smoke.yaml)
   - offline (CI): atsamd21_peripheral_estate::{the_estate_answers_at_its_own_addresses,the_sercom_instances_are_not_each_other,the_port_groups_are_not_each_other}
   - offline (CI): svd_conformance::chip_configs_match_their_svd
+  - offline (CI): cosim_samd21_analog::arduino_zero_ntc_and_diode_netlists_reach_distinct_samd21_adc_pads
 - Drift status: **no silicon capture**
 
 ## `nrf54l15` — 🔵 sim-validated (deep model, no HW diff)
