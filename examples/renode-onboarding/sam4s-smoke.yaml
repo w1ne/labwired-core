@@ -1,0 +1,11 @@
+# Conservative SAM4S family profile: Cortex-M4, minimum family memory,
+# modeled PMC clock-ready read, and UART0 output.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke"
+  system: "../../configs/systems/onboarding/sam4s.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "SAM4S family UART0 smoke"
+  - expected_stop_reason: max_steps

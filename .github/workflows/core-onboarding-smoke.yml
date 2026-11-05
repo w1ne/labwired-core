@@ -54,6 +54,8 @@ on:
       - "crates/firmware-eos-s3-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
+      - "crates/firmware-sam4s-smoke/**"
+      - "examples/renode-onboarding/sam4s-smoke.yaml"
       - "crates/firmware-ek-ra8m1-smoke/**"
       - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
@@ -765,6 +767,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/sam4s_xplained-smoke.yaml
             system: configs/systems/onboarding/sam4s_xplained.yaml
+          # Generic SAM4S is bounded to the smallest-family memory windows,
+          # Cortex-M4, the modeled PMC status, and the UART0 smoke path.
+          - id: sam4s
+            crate: firmware-sam4s-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/sam4s-smoke.yaml
+            system: configs/systems/onboarding/sam4s.yaml
           # SAM4S16C retains only its bounded execution memory, modeled PMC,
           # and the UART0 path exercised by its exact-import smoke.
           - id: sam4s16c
