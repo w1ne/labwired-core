@@ -1,5 +1,5 @@
-2026-11-05T00:18:34.841042Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/max32652-evkit.yaml
-2026-11-05T00:18:34.843381Z  INFO labwired_loader: ELF Entry Point: 0x10000401
+2026-11-05T00:37:01.948644Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/max32652-evkit.yaml
+2026-11-05T00:37:01.950968Z  INFO labwired_loader: ELF Entry Point: 0x10000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 PASS  2/2 checks · max32652-evkit-smoke · 100000 steps · 0.00s

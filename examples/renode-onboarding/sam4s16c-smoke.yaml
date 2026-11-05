@@ -1,0 +1,10 @@
+# SAM4S16C imported profile: bounded memory, PMC and UART0 smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s16c-smoke"
+  system: "../../configs/systems/onboarding/sam4s16c.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "SAM4S16C UART0 smoke"
+  - expected_stop_reason: max_steps

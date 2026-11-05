@@ -460,6 +460,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
     },
+    "sam4s16c": {
+        "crate": "firmware-sam4s16c-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/sam4s16c-smoke.yaml",
+    },
     "sam_e70": {
         "crate": "firmware-sam-e70-renode-smoke",
         "target": "thumbv7em-none-eabi",
