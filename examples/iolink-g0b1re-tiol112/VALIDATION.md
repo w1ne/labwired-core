@@ -154,6 +154,13 @@ The full ISDU application service suite is separately exercised against the
 real stack in the companion protocol fixture; cyclic timing tests alone do
 not establish every ISDU segmentation/busy/retry behavior.
 
+The interactive master profile currently drives startup and cyclic process
+data; it does not issue ISDU services. The hosted generic `uart_frames` and
+`uart_frame_response` oracles decode 8N1 pad edges, so they do not validate
+this 8E1 C/Q link. Shared labs must label live byte-functional traces,
+recorded native C/Q measurements and the separate ISDU protocol proof by
+their actual execution path and source/artifact identity.
+
 The ISDU acknowledgment timer is 5000 ms from receipt of the completed
 request until the beginning of the device response. It is not a limit on the
 whole segmented response transfer. See IO-Link Interface and System

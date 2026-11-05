@@ -1,0 +1,28 @@
+# Allegro ACS712ELCTR-05B (5 A), typical transfer at 25 C.
+# Source: https://www.allegromicro.com/-/media/files/datasheets/acs712-datasheet.pdf
+# VOUT = VCC/2 + (185 mV/A at VCC=5 V) * IP. Both offset and
+# sensitivity are ratiometric. The stimulus is the signed conductor current,
+# not a direct ADC override; the ordinary ADC model performs conversion.
+# Bandwidth, noise, thermal drift and the high-current conductor are not modeled.
+type: acs712
+
+behavior:
+  primitive: analog_source
+  analog:
+    formula: "2500 + 185 * current"
+    ratiometric_ref_mv: 5000
+    encode: round
+
+metadata:
+  label: ACS712 Current Sensor (5 A)
+  summary: Ratiometric Hall current sensor, 185 mV/A and VCC/2 at zero current.
+  detail: >-
+    ACS712 5 A variant at typical 25 C sensitivity. Drive current in amperes
+    from -5 to +5; OUT follows VCC/2 + 0.185*current at a 5 V supply. Noise,
+    bandwidth, thermal drift and the current conductor are not modeled.
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel attached to OUT." }
+    - { name: supply_mv, ty: float, doc: "Sensor supply in millivolts (default 5000)." }
+    - { name: current, ty: float, doc: "Initial signed conductor current in amperes (default 0)." }
+  inputs:
+    - { key: current, label: Current, unit: A, min: -5, max: 5, default: 0 }

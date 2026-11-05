@@ -404,6 +404,7 @@ canonical `type:`; the table below is rendered from that file by
 | `max485` | UART | Half-duplex RS-485 transceiver between a UART and a shared A/B pair |
 | `neo6m-gps` | UART | GPS module streaming NMEA sentences over UART RX |
 | `sim800l` | UART | SIM800L UART AT command shell (no cellular RF) |
+| `tiol112` | UART | TI IO-Link digital transceiver: EN, inverted CQ, WAKE and NFAULT |
 | `xy-md02` | UART | SHT20 RS-485 temperature and humidity transmitter speaking Modbus RTU |
 | `ydlidar-scanner` | UART | Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud |
 | `ads1015` | I²C | 4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115 |
@@ -519,6 +520,7 @@ canonical `type:`; the table below is rendered from that file by
 | `keypad` | GPIO | 4×4 membrane keypad (row-drive / column-read) |
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
 | `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
+| `limit-switch` | GPIO | Mechanical end-stop with common, normally-open and normally-closed contacts |
 | `logic_level_shifter_4ch` | GPIO | BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB) |
 | `neopixel` | GPIO | Addressable RGB LED strip on one data pin (edge-timed bit stream) |
 | `pybadge_buttons` | GPIO | Eight active-low buttons through the board's SN74HC165 |
@@ -531,7 +533,9 @@ canonical `type:`; the table below is rendered from that file by
 | `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
 | `uln2803` | GPIO | Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay |
+| `acs712` | Analog | Ratiometric Hall current sensor, 185 mV/A and VCC/2 at zero current |
 | `gp2y0a21` | Analog | Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC) |
+| `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |

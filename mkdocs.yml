@@ -162,6 +162,9 @@ nav:
     - APA102: parts/apa102.md
     - Servo: parts/servo.md
     - Button: parts/button.md
+    - Limit switch: parts/limit-switch.md
+    - Analog joystick: parts/joystick.md
+    - ACS712 current sensor: parts/acs712.md
     - Buzzer: parts/buzzer.md
     - Seven-segment: parts/seven-segment.md
     - Multiplexed segment display: parts/segment-display-mux.md
