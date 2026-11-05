@@ -61,6 +61,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f103r4h | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r6h | **L0** | ✓ | 31 | — | — | — |
+| stm32f103r8 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103t4 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103t6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f401 | **L1** | ✓ | 24 | — | — | firmware_survival::test_stm32f401_blinky_survival |

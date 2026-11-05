@@ -555,6 +555,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // Medium-density x8 in LQFP64: same public engine as the C8 reference,
+        // different orderable geometry. No per-order-code silicon capture, so an
+        // honest L0 entry like the other exact F103 order codes.
+        name: "stm32f103r8",
+        yaml: "configs/chips/stm32f103r8.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f103t4",
         yaml: "configs/chips/stm32f103t4.yaml",
         reset_oracle: None,

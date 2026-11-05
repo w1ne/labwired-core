@@ -565,9 +565,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        "stm32f103r8",
         "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",
+        // STM32G431RB (demand-ordered onboarding; JetBrains State of Embedded
+        // 2025 "other STM32" 13%, the industrial/motor-control pick). A core
+        // chip descriptor, not a Playground board in bundled-configs.ts; its
+        // G4 behaviour is shared with stm32g474re. It has a TIER1 raw-register
+        // self-test but no bundled catalog board and no silicon differential.
+        // Promote when a NUCLEO-G431RB catalog board and a bench differential
+        // exist.
+        "stm32g431rb",
         "stm32f401cb",
         "stm32f401cc",
         "stm32f401cd",
