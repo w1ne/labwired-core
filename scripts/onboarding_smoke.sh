@@ -103,12 +103,10 @@ for required in TARGET_ID SYSTEM OUT_DIR; do
 done
 
 if [[ "${INVENTORY_ONLY}" != "true" ]]; then
-  for required in SCRIPT; do
-    if [[ -z "${!required}" ]]; then
-      echo "Missing required argument: ${required}" >&2
-      exit 2
-    fi
-  done
+  if [[ -z "${SCRIPT}" ]]; then
+    echo "Missing required argument: SCRIPT" >&2
+    exit 2
+  fi
   if [[ -z "${PREBUILT_FIRMWARE}" && ( -z "${CRATE}" || -z "${TARGET}" ) ]]; then
     echo "Smoke mode requires --crate and --target, or --prebuilt-firmware." >&2
     exit 2
