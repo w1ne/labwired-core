@@ -6,7 +6,7 @@ a board-specific test solves an analog device/netlist, routes the solved signal 
 profile's ADC input, and asserts the converter result. Generic chip bus tests, analog output
 traces without an ADC conversion, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 11 have end-to-end analog coverage; 92 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
+Current inventory: **103 profiles; 12 have end-to-end analog coverage; 91 have no end-to-end analog coverage.** Each round selects an uncovered profile with a modeled ADC and a resolvable board pin or explicit ADC-channel route; profiles with a stub or unmodeled ADC remain listed as uncovered.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -35,7 +35,7 @@ Current inventory: **103 profiles; 11 have end-to-end analog coverage; 92 have n
 | `ek-ra6m5` | **NO E2E analog coverage** |
 | `ek-ra8m1` | **NO E2E analog coverage** |
 | `ek-rx261` | **NO E2E analog coverage** |
-| `esp32-wroom-32` | **NO E2E analog coverage** |
+| `esp32-wroom-32` | [`cosim_esp32_analog_diode.rs`](../crates/core/tests/cosim_esp32_analog_diode.rs)::`esp32_wroom_32_ntc_netlist_reaches_sens_sar_channel_and_one_shot_result` — Beta NTC divider reaches the profile's SENS SAR ADC1 channel 6 and one-shot result |
 | `esp32-wroom-epaper` | **NO E2E analog coverage** |
 | `esp32c3-ble-pong` | **NO E2E analog coverage** |
 | `esp32c3-devkit` | **NO E2E analog coverage** |
