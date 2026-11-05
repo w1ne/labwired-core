@@ -1,8 +1,17 @@
-# Narrow board profile for the ESP32-S3-DevKitC-1-N16R8 UART0 smoke.
-# Espressif's N16R8 guide maps J3 TX/RX to U0TXD/GPIO43 and U0RXD/GPIO44.
-# Only UART0 is exercised. The USB-to-UART bridge, native USB, PSRAM, radio,
-# buttons and LEDs are not modeled or claimed by this smoke.
+# Narrow board profile for the ESP32-S3-DevKitC-1 v1.1 N16R8 smoke.
+# Espressif's v1.1 guide maps the onboard addressable RGB LED to GPIO38 and
+# J3 TX/RX to U0TXD/GPIO43 and U0RXD/GPIO44. The v1.0 LED is on GPIO48 and is
+# not covered by this revision-specific profile. The USB-to-UART bridge,
+# native USB, PSRAM, radio and buttons are outside this smoke.
 name: "esp32-s3-devkitc-1-n16r8"
 chip: "../chips/esp32s3-devkitc-1-n16r8-smoke.yaml"
+cpu_hz: 240000000
 debug_uart: "uart0"
-external_devices: []
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO38"
+      num_pixels: 1
+      cpu_hz: 240000000

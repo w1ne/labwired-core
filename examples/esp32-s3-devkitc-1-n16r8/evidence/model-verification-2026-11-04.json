@@ -1,0 +1,445 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"ok\":true,\"status\":\"model_verified\",\"proven\":true,\"gaps\":[{\"code\":\"approximation\",\"scope\":\"model\",\"detail\":\"no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated\",\"address\":\"0x0\",\"pc\":\"0x0\"}],\"unmodeled_faults\":[{\"access\":\"unpowered_rail_assumed\",\"pc\":\"0x0\",\"count\":1,\"note\":\"no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated\",\"address\":\"0x0\"}],\"verification\":\"serial contains \\\"ESP32_S3_DEVKITC1_N16R8_UART0_OK\\\". Model-verified deterministically.\",\"run_status\":\"pass\",\"stop_reason\":\"assertions_passed\",\"oracle_results\":[{\"kind\":\"serial\",\"passed\":true,\"detail\":\"serial contains \\\"ESP32_S3_DEVKITC1_N16R8_UART0_OK\\\"\"}],\"diagnosis\":{\"summary\":\"Ran and satisfied the UART acceptance assertions.\"},\"serial\":\"ESP-ROM:esp32s3-20210327\\r\\nESP-ROM:1\\r\\nesp32s3-20210327\\r\\nBuild:Mar 0x3fce2820,len:0x10cc\\r\\n27 2021\\r\\nrst:0xc (RTC_SW_CP0x403c8700,len:0xc2c\\r\\nU_RST),boot:0x8 (SPI_FAST_FL0x403cb700,len:0x30b0\\r\\nASH_BOOT)\\r\\nSPIWP:0entry 0x403c88b8\\r\\nxee\\r\\nmode:DIO, clock div:1\\r\\nload:0x3fce2820,len:0x10cc\\r\\nload:0x403c8700,len:0xc2c\\r\\nload:0x403cb700,len:0x30b0\\r\\nentry 0x403c88b8\\r\\nESP32_S3_DEVKITC1_N16R8_UART0_OK\\r\\n\",\"peripherals\":[{\"name\":\"iram\",\"kind\":\"native\",\"base\":1077346304,\"registers\":[],\"artifacts\":[]},{\"name\":\"dram\",\"kind\":\"native\",\"base\":1070104576,\"registers\":[],\"artifacts\":[]},{\"name\":\"rtc_slow\",\"kind\":\"native\",\"base\":1342177280,\"registers\":[],\"artifacts\":[]},{\"name\":\"rtc_fast\",\"kind\":\"native\",\"base\":1611653120,\"registers\":[],\"artifacts\":[]},{\"name\":\"flash_icache\",\"kind\":\"native\",\"base\":1107296256,\"registers\":[],\"artifacts\":[]},{\"name\":\"flash_dcache\",\"kind\":\"native\",\"base\":1006632960,\"registers\":[],\"artifacts\":[]},{\"name\":\"mmu_table\",\"kind\":\"native\",\"base\":1611419648,\"registers\":[],\"artifacts\":[]},{\"name\":\"rom\",\"kind\":\"native\",\"base\":1073741824,\"registers\":[],\"artifacts\":[]},{\"name\":\"drom\",\"kind\":\"native\",\"base\":1072693248,\"registers\":[],\"artifacts\":[]},{\"name\":\"intmatrix\",\"kind\":\"native\",\"base\":1611407360,\"registers\":[],\"artifacts\":[]},{\"name\":\"crosscore_ipi\",\"kind\":\"native\",\"base\":1611399216,\"registers\":[],\"artifacts\":[]},{\"name\":\"extmem\",\"kind\":\"native\",\"base\":1611415552,\"registers\":[],\"artifacts\":[]},{\"name\":\"spimem1\",\"kind\":\"native\",\"base\":1610620928,\"registers\":[],\"artifacts\":[]},{\"name\":\"system\",\"kind\":\"native\",\"base\":1611399168,\"registers\":[],\"artifacts\":[]},{\"name\":\"system_regs\",\"kind\":\"native\",\"base\":1611399168,\"registers\":[],\"artifacts\":[]},{\"name\":\"system_regs_hi\",\"kind\":\"native\",\"base\":1611399232,\"registers\":[],\"artifacts\":[]},{\"name\":\"rtc_cntl\",\"kind\":\"native\",\"base\":1610645504,\"registers\":[],\"artifacts\":[]},{\"name\":\"efuse\",\"kind\":\"native\",\"base\":1610641408,\"registers\":[],\"artifacts\":[]},{\"name\":\"low_mmio\",\"kind\":\"native\",\"base\":1610612736,\"registers\":[],\"artifacts\":[]},{\"name\":\"mmio_rest\",\"kind\":\"native\",\"base\":1610678272,\"registers\":[],\"artifacts\":[]},{\"name\":\"usb_serial_jtag\",\"kind\":\"native\",\"base\":1610842112,\"registers\":[],\"artifacts\":[]},{\"name\":\"wifi_mac\",\"kind\":\"native\",\"base\":1610821632,\"registers\":[],\"artifacts\":[]},{\"name\":\"systimer\",\"kind\":\"native\",\"base\":1610756096,\"registers\":[],\"artifacts\":[]},{\"name\":\"gpio\",\"kind\":\"native\",\"base\":1610629120,\"registers\":[],\"artifacts\":[]},{\"name\":\"io_mux\",\"kind\":\"native\",\"base\":1610649600,\"registers\":[],\"artifacts\":[]},{\"name\":\"sens_s3\",\"kind\":\"native\",\"base\":1610647552,\"registers\":[],\"artifacts\":[]},{\"name\":\"rtc_io\",\"kind\":\"native\",\"base\":1610646528,\"registers\":[],\"artifacts\":[]},{\"name\":\"rng\",\"kind\":\"native\",\"base\":1610829824,\"registers\":[],\"artifacts\":[]},{\"name\":\"sha\",\"kind\":\"native\",\"base\":1610854400,\"registers\":[],\"artifacts\":[]},{\"name\":\"pcnt\",\"kind\":\"native\",\"base\":1610706944,\"registers\":[],\"artifacts\":[]},{\"name\":\"ledc\",\"kind\":\"native\",\"base\":1610715136,\"registers\":[],\"artifacts\":[]},{\"name\":\"timg0_s3\",\"kind\":\"native\",\"base\":1610739712,\"registers\":[],\"artifacts\":[]},{\"name\":\"timg1_s3\",\"kind\":\"native\",\"base\":1610743808,\"registers\":[],\"artifacts\":[]},{\"name\":\"rmt_s3\",\"kind\":\"rmt\",\"base\":1610702848,\"registers\":[],\"artifacts\":[{\"kind\":\"rmt_tx\",\"id\":\"tx_start\",\"meta\":{\"count\":0}}]},{\"name\":\"spi2_s3\",\"kind\":\"native\",\"base\":1610760192,\"registers\":[],\"artifacts\":[]},{\"name\":\"spi3_s3\",\"kind\":\"native\",\"base\":1610764288,\"registers\":[],\"artifacts\":[]},{\"name\":\"sar_adc_s3\",\"kind\":\"native\",\"base\":1610874880,\"registers\":[],\"artifacts\":[]},{\"name\":\"gdma\",\"kind\":\"native\",\"base\":1610870784,\"registers\":[],\"artifacts\":[]},{\"name\":\"i2s0_s3\",\"kind\":\"native\",\"base\":1610674176,\"registers\":[],\"artifacts\":[]},{\"name\":\"i2s1_s3\",\"kind\":\"native\",\"base\":1610797056,\"registers\":[],\"artifacts\":[]},{\"name\":\"twai\",\"kind\":\"native\",\"base\":1610788864,\"registers\":[],\"artifacts\":[]},{\"name\":\"aes\",\"kind\":\"native\",\"base\":1610850304,\"registers\":[],\"artifacts\":[]},{\"name\":\"rsa\",\"kind\":\"native\",\"base\":1610858496,\"registers\":[],\"artifacts\":[]},{\"name\":\"hmac\",\"kind\":\"native\",\"base\":1610866688,\"registers\":[],\"artifacts\":[]},{\"name\":\"ds\",\"kind\":\"native\",\"base\":1610862592,\"registers\":[],\"artifacts\":[]},{\"name\":\"mcpwm0\",\"kind\":\"native\",\"base\":1610735616,\"registers\":[],\"artifacts\":[]},{\"name\":\"mcpwm1\",\"kind\":\"native\",\"base\":1610792960,\"registers\":[],\"artifacts\":[]},{\"name\":\"sdmmc\",\"kind\":\"native\",\"base\":1610776576,\"registers\":[],\"artifacts\":[]},{\"name\":\"lcd_cam\",\"kind\":\"native\",\"base\":1610878976,\"registers\":[],\"artifacts\":[]},{\"name\":\"usb_otg\",\"kind\":\"native\",\"base\":1611137024,\"registers\":[],\"artifacts\":[]},{\"name\":\"i2c1\",\"kind\":\"native\",\"base\":1610772480,\"registers\":[],\"artifacts\":[]},{\"name\":\"uart0_s3\",\"kind\":\"native\",\"base\":1610612736,\"registers\":[],\"artifacts\":[]},{\"name\":\"uart1_s3\",\"kind\":\"native\",\"base\":1610678272,\"registers\":[],\"artifacts\":[]},{\"name\":\"uart2_s3\",\"kind\":\"native\",\"base\":1610801152,\"registers\":[],\"artifacts\":[]},{\"name\":\"i2c0\",\"kind\":\"native\",\"base\":1610690560,\"registers\":[],\"artifacts\":[]}]}"
+    },
+    {
+      "type": "text",
+      "text": "summary: labwired_verify ok | prove=verified | next=labwired_lab,labwired_export"
+    }
+  ],
+  "structuredContent": {
+    "ok": true,
+    "status": "model_verified",
+    "proven": true,
+    "gaps": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
+        "address": "0x0",
+        "pc": "0x0"
+      }
+    ],
+    "unmodeled_faults": [
+      {
+        "access": "unpowered_rail_assumed",
+        "pc": "0x0",
+        "count": 1,
+        "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
+        "address": "0x0"
+      }
+    ],
+    "verification": "serial contains \"ESP32_S3_DEVKITC1_N16R8_UART0_OK\". Model-verified deterministically.",
+    "run_status": "pass",
+    "stop_reason": "assertions_passed",
+    "oracle_results": [
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"ESP32_S3_DEVKITC1_N16R8_UART0_OK\""
+      }
+    ],
+    "diagnosis": {
+      "summary": "Ran and satisfied the UART acceptance assertions."
+    },
+    "serial": "ESP-ROM:esp32s3-20210327\r\nESP-ROM:1\r\nesp32s3-20210327\r\nBuild:Mar 0x3fce2820,len:0x10cc\r\n27 2021\r\nrst:0xc (RTC_SW_CP0x403c8700,len:0xc2c\r\nU_RST),boot:0x8 (SPI_FAST_FL0x403cb700,len:0x30b0\r\nASH_BOOT)\r\nSPIWP:0entry 0x403c88b8\r\nxee\r\nmode:DIO, clock div:1\r\nload:0x3fce2820,len:0x10cc\r\nload:0x403c8700,len:0xc2c\r\nload:0x403cb700,len:0x30b0\r\nentry 0x403c88b8\r\nESP32_S3_DEVKITC1_N16R8_UART0_OK\r\n",
+    "peripherals": [
+      {
+        "name": "iram",
+        "kind": "native",
+        "base": 1077346304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dram",
+        "kind": "native",
+        "base": 1070104576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_slow",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_fast",
+        "kind": "native",
+        "base": 1611653120,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_icache",
+        "kind": "native",
+        "base": 1107296256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_dcache",
+        "kind": "native",
+        "base": 1006632960,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmu_table",
+        "kind": "native",
+        "base": 1611419648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rom",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "drom",
+        "kind": "native",
+        "base": 1072693248,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "intmatrix",
+        "kind": "native",
+        "base": 1611407360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "crosscore_ipi",
+        "kind": "native",
+        "base": 1611399216,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "extmem",
+        "kind": "native",
+        "base": 1611415552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spimem1",
+        "kind": "native",
+        "base": 1610620928,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "system",
+        "kind": "native",
+        "base": 1611399168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "system_regs",
+        "kind": "native",
+        "base": 1611399168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "system_regs_hi",
+        "kind": "native",
+        "base": 1611399232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_cntl",
+        "kind": "native",
+        "base": 1610645504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "efuse",
+        "kind": "native",
+        "base": 1610641408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "low_mmio",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmio_rest",
+        "kind": "native",
+        "base": 1610678272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usb_serial_jtag",
+        "kind": "native",
+        "base": 1610842112,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wifi_mac",
+        "kind": "native",
+        "base": 1610821632,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systimer",
+        "kind": "native",
+        "base": 1610756096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "io_mux",
+        "kind": "native",
+        "base": 1610649600,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sens_s3",
+        "kind": "native",
+        "base": 1610647552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_io",
+        "kind": "native",
+        "base": 1610646528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rng",
+        "kind": "native",
+        "base": 1610829824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sha",
+        "kind": "native",
+        "base": 1610854400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pcnt",
+        "kind": "native",
+        "base": 1610706944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ledc",
+        "kind": "native",
+        "base": 1610715136,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timg0_s3",
+        "kind": "native",
+        "base": 1610739712,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timg1_s3",
+        "kind": "native",
+        "base": 1610743808,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rmt_s3",
+        "kind": "rmt",
+        "base": 1610702848,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "rmt_tx",
+            "id": "tx_start",
+            "meta": {
+              "count": 0
+            }
+          }
+        ]
+      },
+      {
+        "name": "spi2_s3",
+        "kind": "native",
+        "base": 1610760192,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi3_s3",
+        "kind": "native",
+        "base": 1610764288,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sar_adc_s3",
+        "kind": "native",
+        "base": 1610874880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gdma",
+        "kind": "native",
+        "base": 1610870784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2s0_s3",
+        "kind": "native",
+        "base": 1610674176,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2s1_s3",
+        "kind": "native",
+        "base": 1610797056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twai",
+        "kind": "native",
+        "base": 1610788864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "aes",
+        "kind": "native",
+        "base": 1610850304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rsa",
+        "kind": "native",
+        "base": 1610858496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "hmac",
+        "kind": "native",
+        "base": 1610866688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ds",
+        "kind": "native",
+        "base": 1610862592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mcpwm0",
+        "kind": "native",
+        "base": 1610735616,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mcpwm1",
+        "kind": "native",
+        "base": 1610792960,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sdmmc",
+        "kind": "native",
+        "base": 1610776576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "lcd_cam",
+        "kind": "native",
+        "base": 1610878976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usb_otg",
+        "kind": "native",
+        "base": 1611137024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 1610772480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0_s3",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1_s3",
+        "kind": "native",
+        "base": 1610678272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart2_s3",
+        "kind": "native",
+        "base": 1610801152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1610690560,
+        "registers": [],
+        "artifacts": []
+      }
+    ]
+  },
+  "isError": false
+}

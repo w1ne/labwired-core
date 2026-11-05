@@ -1,24 +1,26 @@
 {
+  "checked_at_utc": "2026-11-05",
+  "tool": "labwired_pcb_labwired_verify",
   "board": "esp32-s3-devkitc-1-n16r8",
   "language": "arduino",
   "entryPath": "src/main.ino",
   "diagram": {
     "board": "esp32-s3-devkitc-1-n16r8",
+    "version": 1,
     "parts": [
-      {
-        "id": "mcu",
-        "type": "esp32-s3-devkitc-1-n16r8"
-      }
+      { "id": "mcu", "type": "esp32-s3-devkitc-1-n16r8" },
+      { "id": "rgb_led", "type": "neopixel" }
     ],
-    "wires": []
-  },
-  "oracle": {
-    "serial": [
-      {
-        "contains": "ESP32_S3_DEVKITC1_N16R8_UART0_OK"
-      }
+    "wires": [
+      { "from": { "part": "mcu", "pin": "GPIO38" }, "to": { "part": "rgb_led", "pin": "DIN" } },
+      { "from": { "part": "mcu", "pin": "3V3" }, "to": { "part": "rgb_led", "pin": "VCC" } },
+      { "from": { "part": "mcu", "pin": "GND" }, "to": { "part": "rgb_led", "pin": "GND" } }
     ]
   },
-  "source": "#include <Arduino.h>\n\nvoid setup() {\n  Serial0.begin(115200);\n  Serial0.println(\"ESP32_S3_DEVKITC1_N16R8_UART0_OK\");\n}\n\nvoid loop() {\n  delay(1000);\n}\n",
-  "max_steps": 10000000
+  "oracle": {
+    "serial": [{ "contains": "ESP32_S3_DEVKITC1_V11_N16R8_OK" }],
+    "gpio_edges": [{ "pin": "GPIO38", "min_edges": 48 }]
+  },
+  "max_steps": 40000000,
+  "source_file": "examples/esp32-s3-devkitc-1-n16r8/src/main.ino"
 }

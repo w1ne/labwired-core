@@ -1,6 +1,6 @@
-2026-11-04T14:49:17.112504Z  INFO labwired_loader: ELF Entry Point: 0x40378014
+2026-11-05T06:03:31.251395Z  INFO labwired_loader: ELF Entry Point: 0x40378024
 configure_xtensa_esp32s3: ESP32-S3 ROM harness (thunk code + 131072 B DROM)
 labwired-cli test: no partitions.bin beside examples/esp32-s3-devkitc-1-n16r8/../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-smoke — booting on identity XIP (bare-metal layout). An Arduino/ESP-IDF app needs its partition table (flash 0x8000) next to the ELF or it aborts in esp_partition ("No MD5 found in partition table") before printing anything.
-2026-11-04T14:49:17.119671Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded rom_spiflash_legacy_data -> chip@0x3fceff00 (chip_size=0x400000)
-labwired-cli test: ESP32-S3 fast-boot entry=0x40378014 (dual-core APP_CPU)
-PASS  2/2 checks · onboarding-smoke · 1000000 steps · 0.11s
+2026-11-05T06:03:31.335024Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded rom_spiflash_legacy_data -> chip@0x3fceff00 (chip_size=0x400000)
+labwired-cli test: ESP32-S3 fast-boot entry=0x40378024 (dual-core APP_CPU)
+PASS  4/4 checks · onboarding-smoke · 1000000 steps · 0.22s

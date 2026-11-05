@@ -18,9 +18,9 @@
       0,
       0,
       0,
-      0
+      1070464896
     ],
-    "pc": 1077379174,
+    "pc": 1077379262,
     "ps": 262144,
     "window_base": 0,
     "window_start": 1,
@@ -52,7 +52,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "985b80a58f778d21a42253834963e0a29b227692b7e8624c7d444caeef5bf14f",
+  "firmware_hash": "b96ff1ed713d5cc99777f8956e07e2c52510cac9aaec13306b731a1d91f29012",
   "config": {
     "firmware": "examples/esp32-s3-devkitc-1-n16r8/../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-smoke",
     "system": "examples/esp32-s3-devkitc-1-n16r8/../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml",

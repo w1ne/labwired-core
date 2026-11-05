@@ -1,18 +1,18 @@
-# Live lifecycle and availability check
+# Live status and availability check
 
-Checked 2026-11-04 UTC for the exact ESP32-S3-DevKitC-1-N16R8 variant.
+Checked 2026-11-05 UTC for the ESP32-S3-DevKitC-1-N16R8 board and v1.1 wiring.
 
 - Espressif's live [ESP32-S3 DevKit catalog](https://www.espressif.com/en/products/devkits/esp32-s3-series/esp32-s3-devkitc-1)
-  lists the exact N16R8 variant and links it to Mouser. The current
-  [Espressif board guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
-  identifies it as a 16 MB flash / 8 MB PSRAM variant; the guide marks the
-  older N8 and N8R2 variants EOL, but does not mark N16R8 EOL.
-- Schukat's live [exact-part listing](https://shop.schukat.com/de/en/EUR/Espressif-Systems/ESP32-S3-DEVKITC-1-N16R8/p/114985)
-  states **Life Cycle Status: Active**. It showed no units currently on hand
-  and a planned receipt of 2,000 units in week 46/2026.
+  lists **ESP32-S3-DevKitC-1-N16R8** and links it to Mouser. The listing does
+  not mark the N16R8 as NRND or EOL.
+- Espressif's current [ESP32-S3-DevKitC-1 v1.1 guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+  says both v1.0 and v1.1 remain available on the market and specifies GPIO38
+  for the v1.1 RGB LED (GPIO48 on v1.0).
 - Wavtron's live [N16R8 board listing](https://www.wavtron.in/products/esp32-s3-devkitc-n16r8-dev-board)
-  reported **In Stock**, **Add to Cart**, and ₹760 when checked. This is current
-  retailer evidence that the board can be purchased now.
+  showed **In Stock**, **Add to Cart**, and ₹760. It identifies the N16R8
+  board but does not state which PCB revision will ship.
 
-The exact variant is currently listed as Active and was available for retail
-purchase. No NRND or obsolete status was shown for N16R8.
+Demand rank: ESP32 family **#1** in the standing demand evidence (38% reported
+MCU use; 42% ESP32 kits). The board is currently cataloged by Espressif and
+buyable from a retailer; revision-specific stock is not distinguished by that
+retailer listing. The simulation profile is explicitly for v1.1.
