@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/beaglev-fire-smoke.yaml",
   "system": "configs/systems/onboarding/beaglev-fire.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T11:39:57Z",
-  "finished_at_utc": "2026-11-05T11:39:58Z",
+  "started_at_utc": "2026-11-05T11:55:50Z",
+  "finished_at_utc": "2026-11-05T11:55:50Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 570,
+  "elapsed_ms": 563,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.288,
+    "build_cli": 0.289,
     "build_firmware": null,
-    "run_smoke": 0.274
+    "run_smoke": 0.266
   },
   "stages_ms": {
-    "build_cli": 288,
+    "build_cli": 289,
     "build_firmware": null,
-    "run_smoke": 274
+    "run_smoke": 266
   },
   "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf"
 }

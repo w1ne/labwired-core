@@ -1,4 +1,4 @@
-2026-11-05T11:41:11.911946Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/opentitan-earlgrey.yaml
-2026-11-05T11:41:11.913375Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+2026-11-05T11:57:05.887103Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/opentitan-earlgrey.yaml
+2026-11-05T11:57:05.888558Z  INFO labwired_loader: ELF Entry Point: 0x20000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  3/3 checks · opentitan-earlgrey-smoke · 100000 steps · 0.02s
