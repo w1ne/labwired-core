@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `149`
-- booted: `149/245`
-- boot_and_smoke_passed: `149/245`
-- not_run: `96`
-- pass: `149`
+- run_attempted: `150`
+- booted: `150/245`
+- boot_and_smoke_passed: `150/245`
+- not_run: `95`
+- pass: `150`
 - fail: `0`
-- median_elapsed_ms: `1101`
-- median_elapsed_seconds: `1.101`
+- median_elapsed_ms: `1125`
+- median_elapsed_seconds: `1.125`
 - threshold_seconds: `3600`
-- threshold_met: `149/149`
+- threshold_met: `150/150`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -32,7 +32,7 @@
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `n/a` | n/a | n/a |
 | `beaglev-fire` | `pass` | `True` | `yes` | `yes` | `588` | `0.588` | `True` | `n/a` | n/a | n/a |
-| `beaglev_starlight` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `beaglev_starlight` | `pass` | `True` | `yes` | `yes` | `7993` | `7.993` | `True` | `n/a` | n/a | n/a |
 | `brd4116a` | `pass` | `True` | `yes` | `yes` | `1101` | `1.101` | `True` | `n/a` | n/a | n/a |
 | `brd4117a` | `pass` | `True` | `yes` | `yes` | `752` | `0.752` | `True` | `n/a` | n/a | n/a |
 | `brd4118a` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `n/a` | n/a | n/a |

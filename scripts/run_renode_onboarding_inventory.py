@@ -53,6 +53,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv64imac-unknown-none-elf",
         "script": "examples/renode-onboarding/starfive-jh7100-smoke.yaml",
     },
+    "beaglev_starlight": {
+        "crate": "firmware-starfive-jh7100-smoke",
+        "target": "riscv64imac-unknown-none-elf",
+        "script": "examples/renode-onboarding/beaglev_starlight-smoke.yaml",
+    },
     "ut32m0r500": {
         "crate": "firmware-ut32m0r500-smoke",
         "target": "thumbv6m-none-eabi",

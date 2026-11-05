@@ -1021,6 +1021,11 @@ jobs:
             target: riscv64imac-unknown-none-elf
             script: examples/renode-onboarding/starfive-jh7100-smoke.yaml
             system: configs/systems/onboarding/starfive-jh7100.yaml
+          - id: beaglev_starlight
+            crate: firmware-starfive-jh7100-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/beaglev_starlight-smoke.yaml
+            system: configs/systems/onboarding/beaglev_starlight.yaml
           # K210 is narrowed to one RV64IMAC hart, its mapped memory window,
           # and the model-backed SiFive UART; the second hart and K210-specific
           # peripherals are outside this smoke.
