@@ -800,11 +800,27 @@ def main() -> int:
         type=Path,
         default=REPO_ROOT / "docs" / "coverage" / "renode-onboarding-scoreboard.json",
     )
+    parser.add_argument(
+        "--only",
+        metavar="TARGET_ID",
+        help="measure one imported descriptor and preserve all other target metrics",
+    )
     args = parser.parse_args()
 
-    descriptors = sorted(DESCRIPTOR_ROOT.glob("*.yaml"))
-    if not descriptors:
+    all_descriptors = sorted(DESCRIPTOR_ROOT.glob("*.yaml"))
+    if not all_descriptors:
         parser.error(f"no imported descriptors found under {DESCRIPTOR_ROOT}")
+    descriptors = all_descriptors
+    if args.only is not None:
+        selected = [
+            descriptor for descriptor in all_descriptors if descriptor.stem == args.only
+        ]
+        if not selected:
+            parser.error(
+                f"unknown target ID {args.only!r}; expected one of the imported descriptors "
+                f"under {DESCRIPTOR_ROOT}"
+            )
+        descriptors = selected
 
     not_run_reason = (
         "No compatible firmware crate and smoke script are mapped for this imported "
@@ -904,8 +920,8 @@ def main() -> int:
         raise SystemExit(f"scoreboard generation failed: {result.returncode}")
     summary = json.loads(args.json_out.read_text(encoding="utf-8"))["summary"]
     print(
-        f"Recorded {len(descriptors)} imported descriptors; ran {attempted} configured "
-        f"smokes and preserved {preserved} existing measurements."
+        f"Selected {len(descriptors)} of {len(all_descriptors)} imported descriptors; "
+        f"ran {attempted} configured smokes and preserved {preserved} existing measurements."
     )
     print(
         f"Booted: {summary['booted']}/{summary['descriptors_present']}; "
