@@ -50,6 +50,21 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7m-none-eabi",
         "script": "examples/renode-onboarding/stm32w108-boot-smoke.yaml",
     },
+    "eos-s3": {
+        "crate": "firmware-eos-s3-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/eos-s3-smoke.yaml",
+    },
+    "eos-s3-qomu": {
+        "crate": "firmware-eos-s3-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/eos-s3-qomu-smoke.yaml",
+    },
+    "eos-s3-quickfeather": {
+        "crate": "firmware-eos-s3-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml",
+    },
     "renesas-r7fa6m5b": {
         "crate": "firmware-renesas-r7fa6m5b-boot-smoke",
         "target": "thumbv8m.main-none-eabi",

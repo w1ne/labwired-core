@@ -51,6 +51,7 @@ on:
       - "crates/firmware-efm32-stk-m3-smoke/**"
       - "crates/firmware-efm32pg12-smoke/**"
       - "crates/firmware-efm32pg1-smoke/**"
+      - "crates/firmware-eos-s3-smoke/**"
       - "crates/firmware-nucleo-wba52cg-demo/**"
       - "crates/firmware-imxrt1064-demo/**"
       - "crates/firmware-ek-ra8m1-smoke/**"
@@ -99,6 +100,23 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/renode-onboarding/stm32w108-boot-smoke.yaml
             system: configs/systems/onboarding/stm32w108.yaml
+          # EOS S3 smokes cover only the corrected M4 code/SRAM windows and
+          # the model-backed PL011; generated peripheral claims are omitted.
+          - id: eos-s3
+            crate: firmware-eos-s3-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/eos-s3-smoke.yaml
+            system: configs/systems/onboarding/eos-s3.yaml
+          - id: eos-s3-qomu
+            crate: firmware-eos-s3-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/eos-s3-qomu-smoke.yaml
+            system: configs/systems/onboarding/eos-s3-qomu.yaml
+          - id: eos-s3-quickfeather
+            crate: firmware-eos-s3-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml
+            system: configs/systems/onboarding/eos-s3-quickfeather.yaml
           # The imported RA6M5 descriptor had a stale code-flash base and
           # generated peripheral claims. This smoke checks M33 instruction
           # execution only on the corrected memory profile.

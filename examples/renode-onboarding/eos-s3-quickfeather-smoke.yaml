@@ -1,0 +1,10 @@
+# Core Cortex-M4F and PL011 smoke against the imported QuickFeather system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke"
+  system: "../../configs/systems/onboarding/eos-s3-quickfeather.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EOS S3 Cortex-M4F PL011 smoke"
+  - expected_stop_reason: max_steps
