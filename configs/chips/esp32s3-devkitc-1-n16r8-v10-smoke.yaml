@@ -1,5 +1,6 @@
-# ESP32-S3-DevKitC-1 v1.0 N16R8 narrow smoke: UART0 plus the GPIO48 RGB LED.
-# The v1.1 board's LED is on GPIO38; see its separate profile.
+# ESP32-S3-DevKitC-1 v1.0 N16R8 narrow smoke: UART0, the GPIO48 RGB LED, and
+# GPIO4 for the external LEDC-servo system. The v1.1 board's RGB LED is on
+# GPIO38; see its separate profile. GPIO4 is J1 pin 4 on both revisions.
 name: "esp32s3-devkitc-1-n16r8-v10-smoke"
 arch: "xtensa-lx7"
 cpu_hz: 240_000_000
@@ -12,6 +13,7 @@ ram:
   size: "512KB"
 
 pins:
+  GPIO4: { gpio: "gpio", bit: 4, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO9: { gpio: "gpio", bit: 9, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO43: { gpio: "gpio", bit: 43, functions: [{ type: uart, peripheral: uart0, role: tx }] }
