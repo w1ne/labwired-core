@@ -54,6 +54,13 @@ SDCC emits Intel HEX; `firmware/hex2elf.py` wraps it byte for byte in an
 (`arch_policy::image_arch_for_chip`). `crates/core/tests/pic16f1829_smoke.rs`
 and `ci/test.sh` both check that the ELF payload equals the HEX.
 
+The generic analog fixture `analog-ntc-diode-system.yaml` solves a Beta NTC
+divider and an unrelated Shockley diode, then routes each node to a separate
+threshold input. `crates/core/tests/cosim_pic16f1829_analog.rs` checks the
+voltage equations, input thresholds, and hysteresis. These are simulation-only
+co-simulation endpoints: PIC16 PORTA external pin sampling and ADC conversion
+are not modeled, so this is not a firmware-visible analog input path.
+
 ## Build and run
 
 ```bash
@@ -88,8 +95,9 @@ The build is deterministic: HEX
 A Curiosity 8-bit board (DM164137) with a PIC16F1829 in the 20-pin socket:
 LED D4 is on RA5, and the EUSART TX (RB7) is on the socket's expansion
 header. Connect it to a 3.3 V/5 V USB-serial adapter to see the console. The
-board's other parts (potentiometer, push button, mTouch pad, mikroBUS) are
-not modelled. The part is sold by distributors as `PIC16F1829-I/P` (PDIP-20),
+board's potentiometer, push button, mTouch pad, and mikroBUS are not modelled.
+The generic analog fixture endpoints do not claim those components or connect
+to firmware. The part is sold by distributors as `PIC16F1829-I/P` (PDIP-20),
 `-I/SO`, `-I/SS` and `-I/ML`.
 
 See [VALIDATION.md](VALIDATION.md) for the evidence and the scope limits.
