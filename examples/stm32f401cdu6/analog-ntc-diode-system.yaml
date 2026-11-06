@@ -1,7 +1,6 @@
-# Generic Beta NTC and Shockley diode netlists drive separate Black Pill
-# ADC1 inputs through the STM32F401CDU6 descriptor's PA1/PA4 routes. PA0
-# remains available for the board's user button.
-name: "stm32f401cdu6-blackpill-analog"
+# Shared generic Beta NTC and Shockley diode netlists for STM32F401CDU6
+# profiles. The netlists route through PA1/ADC1_IN1 and PA4/ADC1_IN4.
+name: "stm32f401cdu6-analog"
 chip: "../../configs/chips/stm32f401cdu6.yaml"
 external_devices: []
 board_io: []
