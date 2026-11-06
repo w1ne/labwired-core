@@ -1,4 +1,4 @@
-# Cortex-M3 USART2 and I2C1 NACK plus TMP102 read/write against the imported STM32F103 system.
+# Cortex-M3 USART2 and I2C1 NACK plus TMP102 register access against the imported STM32F103 system.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -13,5 +13,9 @@ assertions:
   - uart_contains: "TMP102_READ_OK"
   - uart_contains: "TMP102_CONFIG=0000FFF0"
   - uart_contains: "TMP102_CONFIG_WRITE_OK"
+  - uart_contains: "TMP102_TLOW=00003450"
+  - uart_contains: "TMP102_TLOW_WRITE_OK"
+  - uart_contains: "TMP102_THIGH=00006788"
+  - uart_contains: "TMP102_THIGH_WRITE_OK"
   - uart_contains: "DONE"
   - expected_stop_reason: max_steps

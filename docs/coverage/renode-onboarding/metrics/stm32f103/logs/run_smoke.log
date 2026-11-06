@@ -1,5 +1,5 @@
-2026-11-06T11:38:14.008695Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
-2026-11-06T11:38:14.082268Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+2026-11-06T12:00:57.061887Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-06T12:00:57.136409Z  INFO labwired_loader: ELF Entry Point: 0x8000009
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  9/9 checks · stm32f103-i2c-smoke · 50000000 steps · 0.02s
+PASS  13/13 checks · stm32f103-i2c-smoke · 50000000 steps · 0.04s

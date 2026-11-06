@@ -15,7 +15,7 @@ verified: false
 system: systems/onboarding/stm32f103.yaml
 validation:
   method: renode-onboarding-exact-import-smoke
-  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP plus TMP102 temperature read and configuration write-mask smoke; whole platform remains unverified
+  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP plus TMP102 temperature, configuration, and alert-threshold register smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
@@ -25,9 +25,10 @@ validation:
     i2c1_stop_idle: true
     tmp102_temperature_read: true
     tmp102_configuration_write_mask: true
+    tmp102_alert_threshold_write_masks: true
     whole_platform: false
     other_peripherals: false
-  timestamp_utc: '2026-11-06T11:38:14Z'
+  timestamp_utc: '2026-11-06T12:00:57Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f103/
 provenance:

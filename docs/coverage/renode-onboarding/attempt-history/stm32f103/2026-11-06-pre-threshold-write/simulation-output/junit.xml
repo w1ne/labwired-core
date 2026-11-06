@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.019118">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="1934195c1fd127c0910f9c2cc2936a9c41d2f642ff52e9a779f49b82f8a919d6"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.019118">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: I2C_NACK_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: I2C_IDLE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: TMP102=00001900" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: TMP102_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: TMP102_CONFIG=0000FFF0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: TMP102_CONFIG_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

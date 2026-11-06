@@ -72,6 +72,30 @@
     },
     {
       "assertion": {
+        "uart_contains": "TMP102_TLOW=00003450"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_TLOW_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_THIGH=00006788"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_THIGH_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "DONE"
       },
       "passed": true
@@ -90,7 +114,7 @@
       3221225472,
       3221225472,
       3221225472,
-      65520,
+      26504,
       1073759232,
       999999,
       536891376,
@@ -100,10 +124,10 @@
       0,
       999999,
       536891376,
-      134226435,
-      134225768
+      134230353,
+      134229584
     ],
-    "pc": 134225768,
+    "pc": 134229584,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -116,7 +140,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "1934195c1fd127c0910f9c2cc2936a9c41d2f642ff52e9a779f49b82f8a919d6",
+  "firmware_hash": "3ee3dcc684170589bb17b7720942e2d335f29f653d5f3fe9cba764008fb7d4ba",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -167,8 +191,8 @@
               "registers": {
                 "CONFIG": 65520,
                 "TEMP": 6528,
-                "T_HIGH": 20480,
-                "T_LOW": 19200
+                "T_HIGH": 26504,
+                "T_LOW": 13392
               },
               "supply_generation": null
             }
@@ -224,8 +248,8 @@
               "registers": {
                 "CONFIG": 65520,
                 "TEMP": 6528,
-                "T_HIGH": 20480,
-                "T_LOW": 19200
+                "T_HIGH": 26504,
+                "T_LOW": 13392
               },
               "supply_generation": null
             }
@@ -480,24 +504,48 @@
         "end_cycle": 10000
       },
       {
+        "text": "TMP102_TLOW=00003450",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_TLOW_WRITE_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_THIGH=00006788",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_THIGH_WRITE_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
         "text": "DONE",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 8735,
+    "text_bytes": 12652,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 8735,
+    "flash_used_bytes": 12652,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 13.33,
+    "flash_used_pct": 19.31,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -523,15 +571,20 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 2186,
-    "memory_writes": 144,
-    "peripheral_accesses": 1964,
+    "memory_reads": 2588,
+    "memory_writes": 156,
+    "peripheral_accesses": 3040,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134225768,
-        "count": 195312,
+        "pc": 134229584,
+        "count": 195273,
         "symbol": "firmware_f103_i2c_demo::main"
+      },
+      {
+        "pc": 134218432,
+        "count": 39,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
       }
     ]
   }

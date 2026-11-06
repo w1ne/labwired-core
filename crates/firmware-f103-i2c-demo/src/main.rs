@@ -1,7 +1,7 @@
 //! LabWired - STM32F103 I²C silicon-validation trace.
 //!
 //! Probes an absent I²C address, reads the TMP102 temperature, then writes and
-//! reads back its configuration register through I2C1. USART2 emits a
+//! reads back its configuration and alert threshold registers through I2C1. USART2 emits a
 //! human-readable register fingerprint at 115200/8N1. The onboarding system
 //! attaches the declarative TMP102 model at address 0x48; its reset temperature
 //! is 25 °C (0x1900). The absent address remains an intentional NACK check.
@@ -133,6 +133,34 @@ fn main() -> ! {
             }
         }
         None => putline(b"TMP102_CONFIG_WRITE_FAIL"),
+    }
+
+    // The TMP102 threshold registers are writable 16-bit words. D2:D0 are
+    // reserved and read as zero; D15:D3 retain the firmware's programmed
+    // alert limit. Distinct values also check byte order and register pointer
+    // selection on both sides of the I2C transaction.
+    match unsafe { write_tmp102_register(0x02, 0x3457).and_then(|()| read_tmp102_register(0x02)) } {
+        Some(raw) => {
+            print_reg(b"TMP102_TLOW=", raw as u32);
+            if raw == 0x3450 {
+                putline(b"TMP102_TLOW_WRITE_OK");
+            } else {
+                putline(b"TMP102_TLOW_WRITE_MISMATCH");
+            }
+        }
+        None => putline(b"TMP102_TLOW_WRITE_FAIL"),
+    }
+
+    match unsafe { write_tmp102_register(0x03, 0x678E).and_then(|()| read_tmp102_register(0x03)) } {
+        Some(raw) => {
+            print_reg(b"TMP102_THIGH=", raw as u32);
+            if raw == 0x6788 {
+                putline(b"TMP102_THIGH_WRITE_OK");
+            } else {
+                putline(b"TMP102_THIGH_WRITE_MISMATCH");
+            }
+        }
+        None => putline(b"TMP102_THIGH_WRITE_FAIL"),
     }
 
     putline(b"DONE");
