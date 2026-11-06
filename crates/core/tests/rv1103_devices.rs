@@ -164,8 +164,12 @@ fn uart_dlab_fifo_widths_interrupts_and_modem_loopback() {
 }
 #[test]
 fn default_bus_is_inert_and_fabric_clone_gets_distinct_identity() {
+    // A bus without the ARMv7 fabric still has its own code identity (native
+    // ARM cores require one), but it has no GIC pins.
     let b = SystemBus::new();
-    assert_eq!(b.arm_code_identity(), None);
+    let other = SystemBus::new();
+    assert!(b.arm_code_identity().is_some());
+    assert_ne!(b.arm_code_identity(), other.arm_code_identity());
     assert_eq!(b.arm_irq_fiq_levels(), None);
     let b = bus();
     let f = b.irq_fabric.clone();

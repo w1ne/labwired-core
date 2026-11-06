@@ -295,16 +295,16 @@ mod tests {
     }
 
     #[test]
-    fn a_short_write_does_not_land() {
-        // Only the pointer and one data byte. Silicon would take this as an
-        // MS-byte-only update; this model (like the declarative engine it is
-        // the oracle for) waits for the full word. Pinned so the shared
-        // approximation is visible rather than assumed. See `write`.
+    fn a_short_write_updates_only_the_ms_byte() {
+        // Only the pointer and one data byte, then a repeated START: the
+        // datasheet's "To update only the MS byte, terminate the communication
+        // by issuing a START or STOP". The MS byte lands through the write
+        // mask (R1:R0 stay 11, 0x60 -> 0x75); the LS byte keeps its 0xA0.
         let mut dev = Tmp102::new();
         dev.start();
         dev.write(0x01);
         dev.write(0x55);
-        assert_eq!(read_word(&mut dev, 0x01), (0x60, 0xA0));
+        assert_eq!(read_word(&mut dev, 0x01), (0x75, 0xA0));
     }
 
     #[test]

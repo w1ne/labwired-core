@@ -8589,8 +8589,12 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    # 2026-11-06: tmp102.rs unit test only. a_short_write_does_not_land still
+    # pinned the pre-MSB-update behavior and became
+    # a_short_write_updates_only_the_ms_byte (CONFIG 0x60A0 -> 0x75A0). No
+    # model code changes. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-06
-    drift_ack_digest: 9daf1c68c124e0336cd627677552e092233cac160ca1fae2d33ed55edca2faf9
+    drift_ack_digest: 391891014798a103671e02b6f8b4fd41a5c11714365a58dccd87e680699c6b6c
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

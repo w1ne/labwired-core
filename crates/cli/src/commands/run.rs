@@ -1980,7 +1980,11 @@ pub(crate) fn run_firmware_arm(
     match labwired_core::system::arch_policy::machine_family(&chip) {
         Ok(labwired_core::system::arch_policy::MachineFamily::CortexM) => {}
         Ok(_) => {
-            eprintln!("error: this --chip driver runs Cortex-M; native ARM cores use a system-aware command");
+            let core = match labwired_core::system::arch_policy::cortex_a_core(&chip) {
+                Ok(core) => core.name().to_string(),
+                Err(_) => chip.core.clone().unwrap_or_else(|| chip.name.clone()),
+            };
+            eprintln!("error: this --chip driver runs Cortex-M; {core} uses run --firmware <ELF> --system <manifest> on the native ARM engine");
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
         Err(error) => {
