@@ -901,6 +901,14 @@ jobs:
             system: configs/systems/onboarding/sam_e70.yaml
           # Imported RISC-V systems narrowed to modeled CPU, memory and
           # peripheral surfaces before these smokes run.
+          # CrossLink-NX EVN is limited to RV32IM direct-ELF execution and its
+          # imported ROM/SRAM windows; LiteX peripherals and reset are omitted.
+          - id: crosslink-nx-evn
+            crate: firmware-andes-ae350-n25-smoke
+            features: crosslink-nx-evn
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/crosslink-nx-evn-smoke.yaml
+            system: configs/systems/onboarding/crosslink-nx-evn.yaml
           - id: litex_vexriscv
             crate: firmware-litex-vexriscv-smoke
             target: riscv32im-unknown-none-elf

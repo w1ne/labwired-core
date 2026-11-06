@@ -3,7 +3,11 @@
 
 use core::panic::PanicInfo;
 
+#[cfg(not(feature = "crosslink-nx-evn"))]
 const RESULT: *mut u32 = 0x1000 as *mut u32;
+
+#[cfg(feature = "crosslink-nx-evn")]
+const RESULT: *mut u32 = 0x4000_1000 as *mut u32;
 
 #[link_section = ".text.entry"]
 #[no_mangle]

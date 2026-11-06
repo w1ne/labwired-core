@@ -10,6 +10,10 @@ authors = ["LabWired Team"]
 license = "MIT"
 build = "build.rs"
 
+[features]
+default = []
+crosslink-nx-evn = []
+
 [[bin]]
 name = "firmware-andes-ae350-n25-smoke"
 path = "src/main.rs"
