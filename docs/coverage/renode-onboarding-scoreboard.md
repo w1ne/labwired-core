@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `155`
-- booted: `155/245`
-- boot_and_smoke_passed: `155/245`
-- not_run: `90`
-- pass: `155`
+- run_attempted: `156`
+- booted: `156/245`
+- boot_and_smoke_passed: `156/245`
+- not_run: `89`
+- pass: `156`
 - fail: `0`
-- median_elapsed_ms: `1175`
-- median_elapsed_seconds: `1.175`
+- median_elapsed_ms: `1179`
+- median_elapsed_seconds: `1.179`
 - threshold_seconds: `3600`
-- threshold_met: `155/155`
+- threshold_met: `156/156`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -100,7 +100,7 @@
 | `litex_linux_vexriscv_sdcard` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_minerva` | `pass` | `True` | `yes` | `yes` | `1546` | `1.546` | `True` | `n/a` | n/a | n/a |
-| `litex_nexys_video_vexriscv_linux` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `litex_nexys_video_vexriscv_linux` | `pass` | `True` | `yes` | `yes` | `2269` | `2.269` | `True` | `n/a` | n/a | n/a |
 | `litex_picorv32` | `pass` | `True` | `yes` | `yes` | `2265` | `2.265` | `True` | `n/a` | n/a | n/a |
 | `litex_tock` | `pass` | `True` | `yes` | `yes` | `1077` | `1.077` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `2357` | `2.357` | `True` | `n/a` | n/a | n/a |

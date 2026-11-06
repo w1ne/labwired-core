@@ -892,6 +892,15 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_vexriscv-smoke.yaml
             system: configs/systems/onboarding/litex_vexriscv.yaml
+          # The imported Nexys Video Linux-capable VexRiscv platform is
+          # narrowed to the implemented bare-metal RV32IM, ROM/SRAM, UART and
+          # LiteX timer subset; this smoke does not boot Linux or use DDR.
+          - id: litex_nexys_video_vexriscv_linux
+            crate: firmware-litex-vexriscv-linux-smoke
+            features: nexys-video-sram
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_nexys_video_vexriscv_linux-smoke.yaml
+            system: configs/systems/onboarding/litex_nexys_video_vexriscv_linux.yaml
           # This Zephyr imported target shares the LiteX VexRiscv SoC. Its
           # smoke omits the unmodelled SPI window and covers UART plus timer.
           - id: litex_vexriscv_zephyr
