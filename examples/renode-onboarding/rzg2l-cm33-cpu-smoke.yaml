@@ -1,0 +1,10 @@
+# Direct-ELF integer execution on the imported RZ/G2L M33 code SRAM window.
+# This tests neither the A55 cluster nor RZ/G2L peripherals or boot flow.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/renesas_rz_g2l.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

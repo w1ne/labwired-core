@@ -1,0 +1,5 @@
+2026-11-06T01:00:45.048651Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas_rz_g2l.yaml
+2026-11-06T01:00:45.049223Z  INFO labwired_loader: ELF Entry Point: 0x10001
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  1/1 checks · rzg2l-cm33-cpu-smoke · 100000 steps · 0.01s

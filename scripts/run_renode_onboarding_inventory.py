@@ -69,6 +69,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
         "script": "examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml",
     },
+    "renesas_rz_g2l": {
+        "prebuilt_firmware": "tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml",
+    },
     "starfive-jh7100": {
         "crate": "firmware-starfive-jh7100-smoke",
         "target": "riscv64imac-unknown-none-elf",

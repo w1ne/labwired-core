@@ -1,34 +1,26 @@
-# Validation Report: renesas_rz_g2l
+# Renesas RZ/G2L imported profile
 
-**Architecture:** Dual ARM Cortex-A55 / Cortex-M33.
+The onboarding profile is narrowed to direct integer execution on the Cortex-M33
+and its 64 KiB non-secure code SRAM at `0x00010000` plus 64 KiB data SRAM at
+`0x20010000`. The upstream Renode platform defines both windows for `cpu_m33`;
+it separately models the Cortex-A55 cluster, another SRAM bank, aliases, and
+RZ/G2L peripherals. Those other parts are outside this profile and this result. See the
+[upstream Renode platform description](https://github.com/renode/renode/blob/master/platforms/cpus/renesas_rz_g2l.repl#L14-L80).
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The focused firmware sets MSP into the M33 data SRAM, exercises stack push/pop,
+then runs a small Thumb integer loop from the code SRAM for 100,000 instructions.
+It checks the bounded `max_steps` stop condition and does not access MMIO. The
+CLI's initial SP is outside the M33 RAM window, so the firmware sets MSP before
+using the stack. Startup also records unmapped vector reads at `0x0` and `0x4`;
+this direct-ELF run does not test reset-vector boot. This is local LabWired CLI
+smoke evidence for the M33 execution subset, not a hosted `labwired_verify`
+verdict, an A55 run, peripheral validation, boot flow, or hardware confirmation.
 
-```text
-[2m2026-10-18T14:40:21.395146Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:21.398256Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas_rz_g2l.yaml
-[2m2026-10-18T14:40:21.399008Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:21.399126Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:21.399148Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:21.399152Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:21.399756Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:21.399764Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:21.399769Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:21.399852Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:21.399869Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:21.399873Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:21.399877Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:21.399880Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:21.399884Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2747.34
-```
+The earlier generated import validation used the broad fallback memory map and
+faulted on a stack write at `0x2001ffe0`. Its complete report is preserved under
+[`attempt-history`](../coverage/renode-onboarding/attempt-history/renesas_rz_g2l/2026-10-18-generated-import-validation/onboarding-summary.md).
+It is not counted as a current onboarding run.
 
-
-## Hardware Coverage Report
-
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `timer0` | `0x0000000f` | `arm_generictimer` |
-| `timer1` | `0x0000000f` | `arm_generictimer` |
-
-**Total Peripherals:** 2
+Current evidence is under
+[`metrics/renesas_rz_g2l`](../coverage/renode-onboarding/metrics/renesas_rz_g2l/):
+build/run logs, simulator result, snapshot, and smoke assertion output.

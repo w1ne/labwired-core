@@ -15,6 +15,7 @@ on:
       - main
     paths:
       - "configs/chips/**"
+      - "configs/onboarding/renesas_rz_g2l.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
@@ -108,6 +109,11 @@ on:
       - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.ld"
       - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml"
       - "scripts/build_imx8mplus_a53_cpu_smoke.sh"
+      - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.S"
+      - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.ld"
+      - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml"
+      - "scripts/build_rzg2l_cm33_cpu_smoke.sh"
+      - "tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -1206,6 +1212,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/alif-e8-m55-cpu-smoke.elf
             script: examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml
             system: configs/systems/onboarding/alif_ae822fa0e5597bs0.yaml
+          # Only the imported M33 core and its code/data SRAM windows;
+          # excludes the A55 cluster, other memory aliases, and peripherals.
+          - id: renesas_rz_g2l
+            prebuilt_firmware: tests/fixtures/rzg2l-cm33-cpu-smoke.elf
+            script: examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml
+            system: configs/systems/onboarding/renesas_rz_g2l.yaml
 
     steps:
       - uses: actions/checkout@v4
