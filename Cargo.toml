@@ -150,6 +150,7 @@ members = [
     "crates/firmware-xiao-nrf54l15-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-stm32f103c6-gpio-smoke",
+    "crates/firmware-stm32f103r8-gpio-smoke",
     "crates/firmware-stm32f103c8-bluepill-smoke",
     "crates/firmware-nucleo-f207zg-smoke",
     "crates/firmware-arty-litex-smoke",

@@ -1,0 +1,12 @@
+# Exact STM32F103R8T6 bare-part smoke fixture.
+# PC13 sinks current through an external resistor and LED from 3.3 V.
+name: "stm32f103r8t6-gpio-smoke"
+chip: "../chips/stm32f103r8-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "external_led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

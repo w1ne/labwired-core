@@ -573,6 +573,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        // Exact medium-density R8 geometry shares the F103 engine; its GPIO
+        // smoke passes on a narrow profile, but this bare part has no catalog
+        // board or R8-specific silicon differential yet.
+        "stm32f103r8",
+        // The R8T6 smoke descriptor is a focused test fixture, not a catalog
+        // board or a claim that the full package profile has silicon parity.
+        "stm32f103r8-gpio-smoke",
         "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",

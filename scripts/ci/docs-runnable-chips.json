@@ -106,6 +106,10 @@
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
     },
+    "stm32f103r8": {
+      "how": "needs-build",
+      "why": "Exact R8 LQFP64 geometry slice on the shared medium-density STM32F103 engine; the R8T6 GPIO smoke is built from this source tree and does not claim an R8-specific silicon differential."
+    },
     "stm32f103r6h": {
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
@@ -761,6 +765,10 @@
     "stm32f103c6t6a-gpio-smoke": {
       "how": "needs-build",
       "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
+    "stm32f103r8t6-gpio-smoke": {
+      "how": "needs-build",
+      "why": "The focused R8T6 GPIO profile and firmware smoke are built from this source tree; they have not been verified with a published CLI release."
     },
     "stm32f103c8-bluepill-smoke": {
       "how": "needs-build",

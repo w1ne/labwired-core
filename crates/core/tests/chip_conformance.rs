@@ -549,6 +549,12 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        name: "stm32f103r8",
+        yaml: "configs/chips/stm32f103r8.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f103r6h",
         yaml: "configs/chips/stm32f103r6h.yaml",
         reset_oracle: None,

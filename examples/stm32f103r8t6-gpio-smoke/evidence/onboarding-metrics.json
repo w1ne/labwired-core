@@ -1,0 +1,28 @@
+{
+  "target_id": "stm32f103r8t6-gpio-smoke",
+  "status": "pass",
+  "crate": "firmware-stm32f103r8-gpio-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/stm32f103r8t6-gpio-smoke/io-smoke.yaml",
+  "system": "configs/systems/stm32f103r8t6-gpio-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T05:49:14Z",
+  "finished_at_utc": "2026-11-06T05:49:31Z",
+  "elapsed_seconds": 17,
+  "elapsed_ms": 16792,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 16.006,
+    "build_firmware": 0.456,
+    "run_smoke": 0.288
+  },
+  "stages_ms": {
+    "build_cli": 16006,
+    "build_firmware": 456,
+    "run_smoke": 288
+  }
+}

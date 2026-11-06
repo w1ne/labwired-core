@@ -427,6 +427,11 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/stm32f103c6t6a-gpio-smoke/io-smoke.yaml
             system: configs/systems/stm32f103c6t6a-gpio-smoke.yaml
+          - id: stm32f103r8t6-gpio-smoke
+            crate: firmware-stm32f103r8-gpio-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103r8t6-gpio-smoke/io-smoke.yaml
+            system: configs/systems/stm32f103r8t6-gpio-smoke.yaml
           - id: nucleo-f411re
             crate: firmware-nucleo-f411re-smoke
             target: thumbv7em-none-eabi

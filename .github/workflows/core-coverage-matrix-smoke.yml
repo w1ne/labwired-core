@@ -80,6 +80,13 @@ jobs:
             profile_dir: release
             script: examples/stm32f103c6t6a-gpio-smoke/io-smoke.yaml
             system: configs/systems/stm32f103c6t6a-gpio-smoke.yaml
+          - id: stm32f103r8t6-gpio-smoke
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103r8-gpio-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f103r8t6-gpio-smoke/io-smoke.yaml
+            system: configs/systems/stm32f103r8t6-gpio-smoke.yaml
           # NTC lab: its io-smoke asserts the ADC CONVERSION (boot reading =
           # divider midpoint, later reading rises after the 80 C stimulus). It
           # ran in no workflow, so the firmware's F2/F4 SWSTART (bit 30) on an

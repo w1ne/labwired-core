@@ -13,6 +13,8 @@
 //! Sources:
 //!   * ST DS5792 Rev 7 / DocID15060 — STM32F103x4/x6 low-density, Table 2,
 //!     Table 5 and ordering Table 58.
+//!   * ST DS5319 Rev 20 — STM32F103x8/xB medium-density, Tables 2, 5 and 36
+//!     plus ordering information.
 //!   * ST DS9716 Rev 11 — STM32F401xB/xC, Table 2 and section 8.
 //!   * ST DS10086 Rev 5 — STM32F401xD/xE, Table 2 and section 8.
 //!   * ST DS8626 Rev 12 — STM32F405xx/STM32F407xx, Table 2 and section 7.
@@ -62,6 +64,7 @@ const C4: &[&str] = &[
 ];
 const R4_LQFP: &[&str] = &["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"];
 const R4_TFBGA: &[&str] = &["H6", "H6TR", "H6A", "H6ATR", "H7", "H7TR", "H7A", "H7ATR"];
+const R8_LQFP: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const C48: &[&str] = &["U6", "U6TR", "U7", "U7TR", "Y6", "Y6TR", "Y7", "Y7TR"];
 const R64: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const V100: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
@@ -148,6 +151,20 @@ const VARIANTS: &[Variant] = &[
         modelled_analog: 16,
         variant: "x6",
         suffixes: R4_LQFP,
+    },
+    // ── STM32F103 medium-density R8 (DS5319 Tables 2/5/36) ───────────────
+    Variant {
+        name: "stm32f103r8",
+        family: Family::F103,
+        flash: 64 * 1024,
+        ram: 20 * 1024,
+        package: "LQFP64",
+        pin_count: 64,
+        gpio_pin_count: 51,
+        adc_channels: 16,
+        modelled_analog: 16,
+        variant: "x8",
+        suffixes: R8_LQFP,
     },
     Variant {
         name: "stm32f103r4h",
@@ -466,7 +483,7 @@ fn the_inventory_ids_are_public_builtins() {
         VARIANTS.len(),
         "inventory ids must be unique"
     );
-    assert_eq!(inventory.len(), 26, "unexpected inventory size");
+    assert_eq!(inventory.len(), 27, "unexpected inventory size");
     for name in &inventory {
         assert!(
             BUILTIN_CHIP_NAMES.contains(name),

@@ -1,6 +1,6 @@
 # STM32F103C6T6A bare-part GPIO smoke
 
-This is exact-part coverage for **STM32F103C6**, the rank 4 MCU family in the
+This is exact-part coverage for **STM32F103C6**, the rank 3 MCU family in the
 JetBrains State of Embedded survey (17%). This round fills the C6 smoke gap in
 the requested C8/C6/R8/R6/T4/T6 low-density and medium-density coverage; it is
 an additional variant within the already-modelled STM32F103 family.
