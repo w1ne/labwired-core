@@ -312,11 +312,12 @@ default fit leaves the HSE crystal unconnected, so the SDK falls back to the
 Interrupts now work too: a separate PFIC profile runs WCH's unmodified
 SYSTICK_Interrupt example, and an SDK-built smoke takes SysTick and software
 interrupts (PFIC enable, mask and pend). Nesting and interrupts from the
-other peripherals are not modeled yet. Three examples from
+other peripherals are not modeled yet. Four examples from
 [ch32fun](https://github.com/cnlohr/ch32fun), the community's own toolchain, also
 run unmodified: `blink` (four pins at exactly `Delay_Ms(250)`), `uartdemo`
-(`Count: N` on USART1) and `systick_irq`, whose 1 kHz ISR counts 500 ms per
-loop. `systick_irq` prints through ch32fun's default console, the WCH-LinkE
+(`Count: N` on USART1), `systick_irq`, whose 1 kHz ISR counts 500 ms per
+loop, and `adc_polled`, whose printed 10-bit codes (`511`, `255`, `1023`)
+follow a simulated potentiometer on PD4 as the test turns it. `systick_irq` prints through ch32fun's default console, the WCH-LinkE
 debug-printf channel over SWIO, which the simulator now models from the
 probe's side. The CH32V003EVT smoke path also exercises
 GPIO, USART1 transmit, and I2C1 with an SHT31 status read. The SHT31 path is a modeled transaction;

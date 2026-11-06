@@ -21,7 +21,7 @@ _start:
     lui   t1, 0x4
     addi  t1, t1, 0x30
     sw    t1, 0x18(t0)
-    addi  t1, zero, 2
+    lui   t1, 0x200            # I2C1EN, APB1PCENR bit 21
     sw    t1, 0x1c(t0)
 
     # PC1/SDA and PC2/SCL as 50 MHz alternate-function open-drain.

@@ -13,7 +13,7 @@
       0,
       0,
       0,
-      134218105,
+      134218107,
       16,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 134218078,
+    "pc": 134218080,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 500000,
-  "cycles": 1009080,
+  "cycles": 1009082,
   "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "1c77d33a8848f3c8e2de4f314f0b67d0fc0b9462c61a70f6432ce57dafa334cb",
+  "firmware_hash": "76a8ce9c041f1883fc7a7ef083d5aac22950b21b3967145044ec32b1da385547",
   "config": {
     "firmware": "examples/ch32v003-evt/../../tests/fixtures/ch32v003f4p6-sht31-smoke.elf",
     "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-sht31-smoke.yaml",

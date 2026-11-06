@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build three unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build four unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -9,6 +9,9 @@
 #   systick_irq.elf  examples/systick_irq: 1 kHz SysTick interrupt counting
 #                    milliseconds, printed through the WCH-LinkE debug
 #                    printf channel (ch32fun's default console).
+#   adc_polled.elf   examples/adc_polled: software-started 10-bit ADC
+#                    conversions of AIN7 (PD4) every 200 ms, printed as
+#                    "Count: N adc: X" over the debug printf channel.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -42,7 +45,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 "${prefix}gcc" -E -P -x c -DTARGET_MCU=CH32V003 -DMCU_PACKAGE=1 -DTARGET_MCU_LD=0 \
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
-for example in blink uartdemo systick_irq; do
+for example in blink uartdemo systick_irq adc_polled; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

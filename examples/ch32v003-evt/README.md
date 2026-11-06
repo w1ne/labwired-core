@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs three of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs four of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -162,8 +162,9 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `blink` | PD0, PD4, PD6 and PC0 toggle together; 7 edges each in 90 M cycles | edges every 12,000,006 to 12,000,009 cycles, i.e. `Delay_Ms(250)` at 48 MHz |
 | `uartdemo` | `Count: 0` .. `Count: 3` in order on USART1 (PD5), PD0 toggling | PD0 edges every 2,400,004 cycles (50 ms) |
 | `systick_irq` | debug-printf banner, `Milliseconds taken: 500` twice, DMDATA0 never timed out, PD0/PC0 edges | the 1 kHz SysTick ISR counts exactly 500 ms across two `Delay_Ms(250)` |
+| `adc_polled` | a potentiometer on PD4 (AIN7) is turned 50 % → 25 % → 100 %; the printed codes must be `511`, `511`, `255`, `255`, `1023` | `Count: 0 adc: 511` .. `Count: 4 adc: 1023`, one sample every 200 ms |
 
-This profile adds two things to the PFIC profile:
+This profile adds three things to the PFIC profile:
 
 - **GPIOA and GPIOC**, because `funGpioInitAll()` clocks all three ports and
   the examples drive PC0.
@@ -176,8 +177,17 @@ This profile adds two things to the PFIC profile:
   "debugger attached" sentinel at `0xE00000FC`. The printed text is the
   `terminal` log of the `debug_printf` peripheral, so a smoke checks it with
   `peripheral_log: { peripheral: debug_printf, log: terminal, contains: ... }`.
+- **ADC1** (`0x40012400`): the STM32F1 ADC block, which the CH32V003 copies
+  register for register (RSTCAL/CAL handshakes, SWSTART with EXTSEL = 111,
+  RSQR3, RDATAR), at the CH32V003's 10 bits. The `adc_polled` smoke uses the
+  system [`ch32v003evt-ch32fun-adc-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-adc-smoke.yaml),
+  which wires a `potentiometer` to AIN7, and turns it with test-script
+  `stimuli`. Its negative control
+  ([`evidence/ch32fun-adc-polled-smoke/negative-control/`](evidence/ch32fun-adc-polled-smoke/negative-control/))
+  puts the same image on the 12-bit STM32F1 ADC: it boots, calibrates and
+  prints `2047`, `1023`, `4095`, so every code check fails.
 
-The committed negative control
+The debug-printf negative control
 ([`evidence/ch32fun-systick-irq-smoke/negative-control/`](evidence/ch32fun-systick-irq-smoke/negative-control/))
 runs the same `systick_irq` image with that window as plain storage, which is
 a board with no probe attached. The GPIO checks still pass, but the firmware's
@@ -194,8 +204,13 @@ Read these results correctly:
   cycles on silicon. Line contents and order are exact; their timing is not.
 - Not modeled: input from the host over the debug channel (ch32fun's
   `handle_debug_input`), a detached probe as a configuration, and every
-  peripheral the other ch32fun examples need (ADC, TIM1/TIM2, EXTI, SPI, I2C
+  peripheral the other ch32fun examples need (TIM1/TIM2, EXTI, SPI, I2C
   through ch32fun, DMA, OPA, watchdogs, standby).
+- On ADC1: sample time (`SAMPTR`) does not change the conversion time, and
+  the injected group, scan sequences (only RSQR3's first channel converts),
+  external triggers, the analog watchdog, DMA, the internal V_REFINT/V_CAL
+  channels and calibration offsets are not modeled. Codes are ideal (no
+  offset, gain or noise error) against a 3.3 V reference.
 
 ## Copy-paste ch32fun blink
 
@@ -375,7 +390,7 @@ cargo run -q -p labwired-cli -- test \
 
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
-for t in blink uartdemo systick-irq; do
+for t in blink uartdemo systick-irq adc-polled; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t

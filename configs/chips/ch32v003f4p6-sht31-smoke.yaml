@@ -59,7 +59,7 @@ peripherals:
     type: i2c
     base_address: 0x40005400
     size: 1KB
-    clock: { reg: apb1pcenr, bit: 1 }
+    clock: { reg: apb1pcenr, bit: 21 }
     config:
       profile: stm32f1
       debug_schema: ../peripherals/stm32f103/i2c1.yaml

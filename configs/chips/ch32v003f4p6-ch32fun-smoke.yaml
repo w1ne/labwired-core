@@ -2,17 +2,24 @@
 # examples: the pfic-smoke profile (HSI/PLL handshake, FLASH_ACTLR, QingKe V2
 # SysTick and PFIC, USART1 TX on PD5) with GPIOA/GPIOC added, because
 # ch32fun's funGpioInitAll() clocks all three ports, and the WCH-LinkE debug
-# printf channel that ch32fun uses as its default console.
+# printf channel that ch32fun uses as its default console, and ADC1 (the
+# STM32F1 ADC block at 10 bits) for ch32fun's adc_polled.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
 #   0xE00000F4..0xE00000FF), ch32fun.c (SystemInit: HSI x2 PLL to 48 MHz,
 #   SysTick CTLR = 5 free-running at HCLK; _write/putchar debug printf)
 # - minichlink DefaultPollTerminal (the probe side of the debug printf)
-# - CH32V003 reference manual, RCC/GPIO/STK/PFIC chapters
+# - CH32V003 reference manual, RCC/GPIO/STK/PFIC/ADC chapters
+#
+# ADC1 models software-started single conversions of the regular channel in
+# RSQR3, the RSTCAL/CAL handshakes, EOC, and 10-bit codes against a 3.3 V
+# reference. Not modeled on it: sample time (SAMPTR), the injected group,
+# scan/discontinuous mode, external triggers, the analog watchdog, DMA, the
+# internal V_REFINT/V_CAL channels (IN8/IN9) and calibration offsets.
 #
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, ADC, TIM1/TIM2, EXTI, SPI, I2C, DMA, OPA, the
+# of the RISC-V debug module, TIM1/TIM2, EXTI, SPI, I2C, DMA, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -106,3 +113,11 @@ peripherals:
     config:
       profile: stm32f1
       pad_map: ch32v003
+
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: 1KB
+    clock: { reg: apb2enr, bit: 9 }
+    config:
+      profile: ch32v003

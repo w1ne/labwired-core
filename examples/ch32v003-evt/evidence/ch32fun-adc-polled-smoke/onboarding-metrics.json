@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003f4p6-ch32fun-adc-polled",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003-evt/ch32fun-adc-polled-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-ch32fun-adc-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T20:30:06Z",
+  "finished_at_utc": "2026-11-06T20:30:52Z",
+  "elapsed_seconds": 47,
+  "elapsed_ms": 46192,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.711,
+    "build_firmware": 3.016,
+    "run_smoke": 42.33
+  },
+  "stages_ms": {
+    "build_cli": 711,
+    "build_firmware": 3016,
+    "run_smoke": 42330
+  },
+  "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh"
+}
