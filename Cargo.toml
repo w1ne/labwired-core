@@ -38,6 +38,7 @@ members = [
     "crates/firmware-esp32c3-lcdkit-smoke",
     "crates/firmware-esp8684-devkitm1-h4x-smoke",
     "crates/firmware-esp32c6-demo",
+    "crates/firmware-esp32c6-devkitm1-n4-smoke",
     "crates/firmware-esp32c6-bme280-smoke",
     "crates/firmware-xiao-esp32c6-bme280-smoke",
     "crates/firmware-esp32c5-devkitc-smoke",
@@ -388,6 +389,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-esp32c6-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c6-devkitm1-n4-smoke]
 codegen-units = 1
 opt-level = "s"
 

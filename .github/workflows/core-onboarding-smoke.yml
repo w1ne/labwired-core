@@ -24,6 +24,7 @@ on:
       - "crates/firmware-f4-discovery-smoke/**"
       - "crates/firmware-stm32g0-demo/**"
       - "crates/firmware-esp32c6-demo/**"
+      - "crates/firmware-esp32c6-devkitm1-n4-smoke/**"
       - "crates/firmware-esp32c61-devkitc-smoke/**"
       - "crates/firmware-xiao-esp32c3-smoke/**"
       - "crates/firmware-esp32c3-lcdkit-smoke/**"
@@ -359,6 +360,11 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/esp32c6-devkitc/io-smoke.yaml
             system: configs/systems/esp32c6-devkitc.yaml
+          - id: esp32c6-devkitm1-n4
+            crate: firmware-esp32c6-devkitm1-n4-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c6-devkitm1-n4/onboarding-smoke.yaml
+            system: configs/systems/esp32c6-devkitm1-n4.yaml
           - id: esp32c5-devkitc
             crate: firmware-esp32c5-devkitc-smoke
             target: riscv32imc-unknown-none-elf
