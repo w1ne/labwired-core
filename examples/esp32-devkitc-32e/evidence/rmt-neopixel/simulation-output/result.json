@@ -24,18 +24,31 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "ESP32_DEVKITC32E_RMT_TX_END=1"
+        "uart_contains": "ESP32_DEVKITC32E_RMT_TX_END=0,1"
       },
       "passed": true
     },
     {
       "assertion": {
         "display_region": {
-          "id": "rgb_led",
+          "id": "rgb_led0",
           "x": 0,
           "y": 0,
           "min_ink": 1.0,
           "colour": "0xF800",
+          "min_colour_pixels": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "display_region": {
+          "id": "rgb_led1",
+          "x": 0,
+          "y": 0,
+          "min_ink": 1.0,
+          "colour": "0x07E0",
           "min_colour_pixels": 1
         }
       },
@@ -45,15 +58,15 @@
   "cpu_state": {
     "type": "xtensa_lx7",
     "registers": [
-      2148486697,
+      2148486733,
       1073469424,
       0,
       181,
       3007315967,
-      1061159296,
+      1061159292,
       0,
       181,
-      2148384646,
+      2148384682,
       1073469360,
       0,
       0,
@@ -68,7 +81,7 @@
     "window_start": 22008,
     "vecbase": 1074266112
   },
-  "firmware_hash": "ff797f0f48d51ac0a64045e17a143f06fca1a98ba89be952124c7c59ab327821",
+  "firmware_hash": "fdffadfc346e1bd8b07de26239b7efe909a1e4a0f8338cefb309f2139a10ee81",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_rmt/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml",
@@ -1933,7 +1946,7 @@
             "name": "ENABLE",
             "offset": 32,
             "size": 32,
-            "value": 8392576,
+            "value": 8654720,
             "fields": [],
             "access": "rw"
           },
@@ -3208,7 +3221,7 @@
     ],
     "devices": [
       {
-        "id": "rgb_led",
+        "id": "rgb_led0",
         "device_type": "neopixel",
         "declared": true,
         "attachment": {
@@ -3218,11 +3231,35 @@
         "artifacts": [
           {
             "kind": "framebuffer",
-            "id": "rgb_led",
+            "id": "rgb_led0",
             "meta": {
               "data_pin": 23,
               "format": "ws2812_grb",
               "generation": 15475485528314852384,
+              "h": 1,
+              "lit_pixels": 1,
+              "pixels_decoded": 1,
+              "w": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "rgb_led1",
+        "device_type": "neopixel",
+        "declared": true,
+        "attachment": {
+          "transport": "gpio",
+          "bus": "gpio"
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "rgb_led1",
+            "meta": {
+              "data_pin": 18,
+              "format": "ws2812_grb",
+              "generation": 17951639605070937758,
               "h": 1,
               "lit_pixels": 1,
               "pixels_decoded": 1,
@@ -3251,7 +3288,7 @@
         "end_cycle": 670000
       },
       {
-        "text": "ESP32_DEVKITC32E_RMT_TX_END=1",
+        "text": "ESP32_DEVKITC32E_RMT_TX_END=0,1",
         "cycle_lo": 680000,
         "cycle": 690000,
         "end_cycle": 700000
@@ -3261,10 +3298,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 221891,
+    "text_bytes": 221927,
     "data_bytes": 69913,
     "bss_bytes": 5308,
-    "flash_used_bytes": 291804,
+    "flash_used_bytes": 291840,
     "ram_static_bytes": 75221,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 196608,
@@ -3286,7 +3323,7 @@
     "steps_executed": 800000,
     "memory_reads": 0,
     "memory_writes": 0,
-    "peripheral_accesses": 414999,
+    "peripheral_accesses": 413284,
     "exceptions": 0,
     "pc_samples": [
       {

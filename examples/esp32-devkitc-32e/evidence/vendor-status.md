@@ -1,4 +1,4 @@
-# Live vendor lifecycle and availability — ESP32-DevKitC-32E + RMT pixel smoke
+# Live vendor lifecycle and availability — ESP32-DevKitC-32E + dual RMT pixels
 
 Checked 2026-11-06 against current Espressif documentation and distributor
 listings.
@@ -30,6 +30,10 @@ listings.
 - Adafruit's [BME280 I2C/SPI breakout, PID 2652](https://www.adafruit.com/product/2652)
   listed **$14.95**, **In stock**, and **Add to Cart**. The sensor is modeled
   at its standard I2C address `0x77`.
+- Worldsemi's [current WS2812 family catalog](https://www.world-semi.com/web/index.php?classid=302&id=299&lanstr=en&topclassid=16)
+  lists WS2812B, and LCSC's [WS2812B-B-V6 listing](https://www.lcsc.com/product-detail/C52941391.html)
+  reported **8,840 in stock** on 2026-11-06. The smoke uses two generic
+  one-pixel WS2812-compatible devices, one on each RMT output.
 
 - Espressif's [ESP32-WROOM technical-documents page](https://www.espressif.com/en/support/documents/technical-documents/esp32-wroom)
   lists the WROOM-32E/32UE datasheet v2.1 dated 2026-08-05. The current
@@ -39,8 +43,8 @@ listings.
 
 This round is an ESP32 rank-1 demand pick (38% measured MCU use) and targets
 the exact active and stocked DevKitC-32E SKU and its 4 MB/no-PSRAM WROOM-32E
-configuration. The attached WS2812 pixel is a generic external test fixture;
-this work does not claim an onboard LED. Listing statements are time-sensitive
+configuration. The two WS2812-compatible pixels are generic external test
+fixtures; this work does not claim an onboard LED. Listing statements are time-sensitive
 and establish purchase availability, not physical validation. The exact
 current vendor sources and distributor availability were checked 2026-11-06.
 
@@ -50,5 +54,6 @@ ESP-IDF headers: [`rmt_reg.h`](https://github.com/espressif/esp-idf/blob/master/
 [`rmt_struct.h`](https://github.com/espressif/esp-idf/blob/master/components/soc/esp32/register/soc/rmt_struct.h),
 [`gpio_sig_map.h`](https://github.com/espressif/esp-idf/blob/master/components/soc/esp32/include/soc/gpio_sig_map.h),
 and [`interrupts.h`](https://github.com/espressif/esp-idf/blob/master/components/soc/esp32/include/soc/interrupts.h).
-The local model's claim remains limited to channel 0 transmit behavior described
-in the board README.
+The local model's claim for this smoke covers independent channel 0 and 1
+transmit behavior described in the board README; it does not cover classic RMT
+receive mode or certify physical electrical timing.

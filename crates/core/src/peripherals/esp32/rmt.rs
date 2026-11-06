@@ -4,11 +4,11 @@
 
 //! ESP32-classic RMT transmit model.
 //!
-//! This model implements the classic ESP32 RMT control/status register offsets
-//! used by channel 0 TX, the interrupt registers, and the 2 KiB RMTMEM aperture.
-//! Channel 0 symbols are played onto the GPIO matrix with the configured
-//! divider timing, and TX_END is latched after the complete stream elapses.
-//! RX and channels 1–7 retain register storage but do not run a waveform engine.
+//! This model implements the classic ESP32 RMT control/status register offsets,
+//! interrupt registers, and 2 KiB RMTMEM aperture. Channels 0–7 can transmit
+//! independent symbol streams onto their GPIO-matrix outputs with configured
+//! divider timing; each channel latches TX_END after its stream elapses. RX
+//! retains register storage but does not run a waveform engine.
 
 use crate::bus::SystemBus;
 use crate::peripherals::esp32::gpio::{Esp32Gpio, RMT_SIG_OUT0};
@@ -20,7 +20,6 @@ const MEM_BASE: u64 = 0x800;
 const MEM_END: u64 = 0x1000;
 const CPU_HZ: u64 = 240_000_000;
 const APB_HZ: u64 = 80_000_000;
-const INT_TX_END_CH0: u32 = 1;
 
 #[derive(Debug)]
 struct TxPlayback {
@@ -47,7 +46,7 @@ pub struct Esp32Rmt {
     carrier_duty: [u32; CHANNELS],
     apb_conf: u32,
     date: u32,
-    playback: Option<TxPlayback>,
+    playback: [Option<TxPlayback>; CHANNELS],
     clock: Option<CycleClock>,
     last_bus_tick_cycle: Option<u64>,
 }
@@ -67,7 +66,7 @@ impl Esp32Rmt {
             carrier_duty: [0x0040_0040; CHANNELS],
             apb_conf: 0,
             date: 0x1602_2600,
-            playback: None,
+            playback: std::array::from_fn(|_| None),
             clock: None,
             last_bus_tick_cycle: None,
         }
@@ -105,25 +104,26 @@ impl Esp32Rmt {
         self.int_raw & self.int_ena
     }
 
-    fn tx_tick_cycles(&self) -> u64 {
-        // The board smoke selects REF_ALWAYS_ON (APB clock) and DIV_CNT=4.
-        // The chip's APB clock is 80 MHz while the LX6 runs at 240 MHz.
-        let divider = (self.conf0[0] & 0xff).max(1) as u64;
+    fn tx_tick_cycles(&self, channel: usize) -> u64 {
+        // The board smoke selects REF_ALWAYS_ON (APB clock). The chip's APB
+        // clock is 80 MHz while the LX6 runs at 240 MHz.
+        let divider = (self.conf0[channel] & 0xff).max(1) as u64;
         (CPU_HZ / APB_HZ).saturating_mul(divider)
     }
 
-    fn arm_tx0(&mut self) {
-        if self.playback.is_some() {
+    fn arm_tx(&mut self, channel: usize) {
+        if self.playback[channel].is_some() {
             return;
         }
         // Classic ESP32 RMT has 64 words per channel in RMTMEM. Stop at the
         // first zero-duration half-symbol; this is the hardware end marker.
-        let per_tick = self.tx_tick_cycles();
+        let per_tick = self.tx_tick_cycles(channel);
         let mut edges = Vec::new();
         let mut offset = 0u64;
         let mut level = false;
         let mut terminated = false;
-        for word in self.mem.iter().take(64).copied() {
+        let mem_start = channel * 64;
+        for word in self.mem[mem_start..mem_start + 64].iter().copied() {
             for (duration, next_level) in [
                 ((word & 0x7fff) as u64, word & (1 << 15) != 0),
                 (((word >> 16) & 0x7fff) as u64, word & (1 << 31) != 0),
@@ -143,7 +143,7 @@ impl Esp32Rmt {
             }
         }
         if terminated && offset != 0 {
-            self.playback = Some(TxPlayback {
+            self.playback[channel] = Some(TxPlayback {
                 edges,
                 next_edge: 0,
                 elapsed_cycles: 0,
@@ -155,7 +155,7 @@ impl Esp32Rmt {
         } else {
             // A stream without an end marker does not complete this modeled
             // non-continuous TX operation.
-            self.playback = None;
+            self.playback[channel] = None;
         }
     }
 
@@ -200,13 +200,13 @@ impl Esp32Rmt {
             return;
         }
         if let Some(i) = Self::channel_conf1(offset) {
-            let start = i == 0 && value & 1 != 0;
+            let start = value & 1 != 0;
             // Start and memory reset fields self-clear. The other writable
             // configuration bits retain their written values.
             self.conf1[i] = value & !((1 << 0) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 16));
             if start {
-                self.int_raw &= !INT_TX_END_CH0;
-                self.arm_tx0();
+                self.int_raw &= !(1 << i);
+                self.arm_tx(i);
             }
             return;
         }
@@ -273,7 +273,7 @@ impl Peripheral for Esp32Rmt {
     }
 
     fn needs_bus_tick(&self) -> bool {
-        self.playback.is_some()
+        self.playback.iter().any(Option::is_some)
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
@@ -285,47 +285,42 @@ impl Peripheral for Esp32Rmt {
         if let Some(now) = now {
             self.last_bus_tick_cycle = Some(now);
         }
-        let Some(playback) = self.playback.as_ref() else {
-            return;
-        };
-        if !playback.pads_resolved {
-            let pads = Self::with_gpio(bus, |gpio| gpio.pads_for_output_signal(RMT_SIG_OUT0))
-                .unwrap_or_default();
-            let playback = self.playback.as_mut().unwrap();
-            playback.pads_resolved = true;
-            playback.pads = pads;
-        }
+        let mut pin_events = Vec::new();
+        for channel in 0..CHANNELS {
+            let Some(playback) = self.playback[channel].as_mut() else {
+                continue;
+            };
+            if !playback.pads_resolved {
+                let signal = RMT_SIG_OUT0 + channel as u32;
+                playback.pads = Self::with_gpio(bus, |gpio| gpio.pads_for_output_signal(signal))
+                    .unwrap_or_default();
+                playback.pads_resolved = true;
+            }
 
-        let due_edges = {
-            let playback = self.playback.as_mut().unwrap();
             let last_cycle = playback.elapsed_cycles.saturating_add(elapsed - 1);
-            let mut due = Vec::new();
             while let Some(&(offset, level)) = playback.edges.get(playback.next_edge) {
                 if offset > last_cycle {
                     break;
                 }
-                due.push((playback.started_at.saturating_add(offset), level));
+                let cycle = playback.started_at.saturating_add(offset);
+                for &pin in &playback.pads {
+                    pin_events.push((pin, cycle, level));
+                }
                 playback.next_edge += 1;
             }
             playback.elapsed_cycles = playback.elapsed_cycles.saturating_add(elapsed);
-            due
-        };
-
-        let pads = self.playback.as_ref().unwrap().pads.clone();
-        if !pads.is_empty() && !due_edges.is_empty() {
+            if playback.elapsed_cycles >= playback.duration_cycles {
+                self.int_raw |= 1 << channel;
+                self.status[channel] = 0;
+                self.playback[channel] = None;
+            }
+        }
+        if !pin_events.is_empty() {
             Self::with_gpio(bus, |gpio| {
-                for (cycle, level) in due_edges {
-                    for &pin in &pads {
-                        gpio.drive_pad_output_at(pin, level, cycle);
-                    }
+                for (pin, cycle, level) in pin_events {
+                    gpio.drive_pad_output_at(pin, level, cycle);
                 }
             });
-        }
-        let playback = self.playback.as_ref().unwrap();
-        if playback.elapsed_cycles >= playback.duration_cycles {
-            self.int_raw |= INT_TX_END_CH0;
-            self.status[0] = 0;
-            self.playback = None;
         }
     }
 

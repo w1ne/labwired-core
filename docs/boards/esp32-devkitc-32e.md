@@ -12,16 +12,17 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
   at I2C0 address `0x77`, with SDA=GPIO21 (J3 pin 6) and SCL=GPIO22 (J3 pin 3).
   The breakout uses 3V3/GND from J2/J3.
 - Demand rank: ESP32 is rank 1 in the standing list (38% MCU use). This round
-  adds classic RMT channel 0 TX to an existing ESP32 board.
+  extends classic RMT TX on an existing ESP32 board to two concurrent channels.
 - The smoke asserts sensor ID `0x60` and temperature raw value `0x082DC0` over
   the local UART0 capture.
 
-The RMT smoke sends a red WS2812 frame from channel 0 through the GPIO matrix
-on GPIO23 and waits for the timed TX_END event. It attaches one generic
-WS2812-compatible pixel as an external device; this is a test fixture, not a
-built-in board LED. The classic RMT model implements the register window,
-RMTMEM, channel 0 transmit timing and TX_END. Receive mode and channels 1–7
-remain outside the modeled scope. Wi-Fi/Bluetooth, SPI, timers, flash boot
+The RMT smoke sends red and green WS2812 frames from channels 0 and 1 through
+the GPIO matrix on GPIO23 and GPIO18. It waits for both timed TX_END events and
+attaches two generic WS2812-compatible pixels as external devices; they are
+test fixtures, not built-in board LEDs. The classic RMT model implements the
+register window, RMTMEM, independent channels 0–7 transmit timing, GPIO-matrix
+outputs and per-channel TX_END. Receive mode remains outside the modeled scope.
+Wi-Fi/Bluetooth, SPI, timers, flash boot
 behavior, USB-to-UART hardware, pin-level UART waveforms, analog behavior, and
 the power LED also remain outside the profile. I2S0/1, UHCI0, PCNT, APB_CTRL
 and DPORT analog-AHB retain fallback windows.

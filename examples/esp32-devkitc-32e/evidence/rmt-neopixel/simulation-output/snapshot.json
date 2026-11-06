@@ -3,15 +3,15 @@
   "cpu": {
     "type": "xtensa_lx7",
     "registers": [
-      2148486697,
+      2148486733,
       1073469424,
       0,
       181,
       3007315967,
-      1061159296,
+      1061159292,
       0,
       181,
-      2148384646,
+      2148384682,
       1073469360,
       0,
       0,
@@ -46,7 +46,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "ff797f0f48d51ac0a64045e17a143f06fca1a98ba89be952124c7c59ab327821",
+  "firmware_hash": "fdffadfc346e1bd8b07de26239b7efe909a1e4a0f8338cefb309f2139a10ee81",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_rmt/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml",

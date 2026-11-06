@@ -1,8 +1,8 @@
 # ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, and RMT smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). This round adds a timed classic RMT transmit path to the already-modelled
-ESP32-DevKitC-32E; it is peripheral depth on the highest-demand family, not a
+use). This round extends classic ESP32 RMT to transmit independent streams on
+channels 0 and 1; it is peripheral depth on the highest-demand family, not a
 new MCU target.
 
 ## Board and modeled scope
@@ -18,7 +18,8 @@ resistor from GPIO23 to GND.
 | J3 pin 2 | GPIO23 | Base smoke toggles the output and requires at least 16 edges |
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
-| J3 pin 2 / GPIO23 | RMT channel 0 TX matrix output | RMT smoke sends red to one external WS2812 pixel and waits for TX_END |
+| GPIO23 header | RMT channel 0 TX matrix output | RMT smoke sends red to an external WS2812 pixel and waits for TX_END |
+| GPIO18 header | RMT channel 1 TX matrix output | RMT smoke sends green to a second pixel and waits for TX_END |
 
 The BME280 breakout uses the standard `0x77` address and is powered directly
 from board 3V3/GND. Firmware reads ID register `0xD0` (`0x60`) and the raw
@@ -26,11 +27,11 @@ temperature registers `0xFA..0xFC` (`0x082DC0` in the deterministic model).
 The breakout, rather than a built-in board component, is declared as an
 external device in the BME280 system manifest.
 
-The RMT model implements the channel 0 TX control/status offsets, RMTMEM symbol
-RAM, channel 0 transmit timing, GPIO-matrix output routing, and TX_END after the
-stream's reset interval. It does not model RX, channels 1–7 transmit behavior,
-or advancing APB FIFO pointers. The pixel is an
-external generic WS2812-compatible fixture, not an onboard DevKitC LED. The
+The RMT model implements per-channel TX control/status offsets, RMTMEM symbol
+RAM, independent TX timing for channels 0 and 1, GPIO-matrix output routing,
+and per-channel TX_END after the stream's reset interval. It does not model RX,
+channels 2–7 transmit behavior, or advancing APB FIFO pointers. The pixels are
+external generic WS2812-compatible fixtures, not onboard DevKitC LEDs. The
 UART0 controller is modeled. The board's USB-to-UART bridge and the pin-level
 UART TX/RX waveforms are not, so console capture does not prove USB serial
 behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers, flash
@@ -103,9 +104,10 @@ first split-command `END_DETECT` boundary in the current simulator, so the
 local smoke does not claim to verify that driver path.
 
 The RMT smoke firmware is [`firmware/src/rmt_smoke.cpp`](firmware/src/rmt_smoke.cpp).
-It writes one red GRB frame to RMTMEM, starts classic channel 0, and waits for
-the model's timed TX_END bit. The external pixel model decodes the GPIO23
-waveform and the smoke requires one red pixel.
+It writes separate red and green GRB frames into channel 0 and 1 RMTMEM regions,
+starts both channels, and waits for both timed TX_END bits. External pixel
+models independently decode GPIO23 and GPIO18, and the smoke requires both
+colors.
 
 ## Reproduce
 
