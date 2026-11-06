@@ -17,5 +17,7 @@ assertions:
   - uart_contains: "TMP102_TLOW_WRITE_OK"
   - uart_contains: "TMP102_THIGH=00006788"
   - uart_contains: "TMP102_THIGH_WRITE_OK"
+  - uart_contains: "TMP102_TLOW_SHORT=00002250"
+  - uart_contains: "TMP102_TLOW_SHORT_WRITE_OK"
   - uart_contains: "DONE"
   - expected_stop_reason: max_steps

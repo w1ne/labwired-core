@@ -1,8 +1,9 @@
 //! LabWired - STM32F103 I²C silicon-validation trace.
 //!
 //! Probes an absent I²C address, reads the TMP102 temperature, then writes and
-//! reads back its configuration and alert threshold registers through I2C1. USART2 emits a
-//! human-readable register fingerprint at 115200/8N1. The onboarding system
+//! reads back its configuration and alert threshold registers through I2C1,
+//! including a one-byte MSB update. USART2 emits a human-readable register
+//! fingerprint at 115200/8N1. The onboarding system
 //! attaches the declarative TMP102 model at address 0x48; its reset temperature
 //! is 25 °C (0x1900). The absent address remains an intentional NACK check.
 //! These exact sensor values are simulator assertions, not a claim about a
@@ -163,6 +164,18 @@ fn main() -> ! {
         None => putline(b"TMP102_THIGH_WRITE_FAIL"),
     }
 
+    match unsafe { write_tmp102_msb(0x02, 0x22).and_then(|()| read_tmp102_register(0x02)) } {
+        Some(raw) => {
+            print_reg(b"TMP102_TLOW_SHORT=", raw as u32);
+            if raw == 0x2250 {
+                putline(b"TMP102_TLOW_SHORT_WRITE_OK");
+            } else {
+                putline(b"TMP102_TLOW_SHORT_WRITE_MISMATCH");
+            }
+        }
+        None => putline(b"TMP102_TLOW_SHORT_WRITE_FAIL"),
+    }
+
     putline(b"DONE");
 
     loop {}
@@ -221,23 +234,7 @@ unsafe fn i2c1_init() {
 
 /// Write a 16-bit big-endian TMP102 register through the F1 I2C1 master.
 unsafe fn write_tmp102_register(pointer: u8, value: u16) -> Option<()> {
-    // Clear any prior address-failure flag; error flags are rc_w0.
-    write_volatile(I2C1_SR1 as *mut u32, !(1 << 10));
-
-    // Address the TMP102 for a register-pointer write.
-    rmw32(I2C1_CR1, 1 << 8); // START
-    if !wait_sr1(0x0001) {
-        return None;
-    }
-    write_volatile(I2C1_DR as *mut u32, 0x90); // 0x48 << 1 | W
-    if !wait_sr1(0x0002) {
-        return None;
-    }
-    clear_addr();
-    write_volatile(I2C1_DR as *mut u32, u32::from(pointer));
-    if !wait_sr1(0x0004) {
-        return None;
-    }
+    begin_tmp102_write(pointer)?;
     let [msb, lsb] = value.to_be_bytes();
     write_volatile(I2C1_DR as *mut u32, u32::from(msb));
     if !wait_sr1(0x0004) {
@@ -256,26 +253,27 @@ unsafe fn write_tmp102_register(pointer: u8, value: u16) -> Option<()> {
     None
 }
 
-/// Read a 16-bit big-endian TMP102 register using the F1 write-pointer /
-/// repeated-START / master-receive sequence.
-unsafe fn read_tmp102_register(pointer: u8) -> Option<u16> {
-    // Clear any prior address-failure flag; the STM32F1 status register is rc_w0.
-    write_volatile(I2C1_SR1 as *mut u32, !(1 << 10));
-
-    // Address the TMP102 for a register-pointer write.
-    rmw32(I2C1_CR1, 1 << 8); // START
-    if !wait_sr1(0x0001) {
-        return None;
-    }
-    write_volatile(I2C1_DR as *mut u32, 0x90); // 0x48 << 1 | W
-    if !wait_sr1(0x0002) {
-        return None;
-    }
-    clear_addr();
-    write_volatile(I2C1_DR as *mut u32, u32::from(pointer));
+/// Update only a TMP102 register's most-significant byte, then terminate with
+/// STOP so the device commits the documented single-byte update.
+unsafe fn write_tmp102_msb(pointer: u8, msb: u8) -> Option<()> {
+    begin_tmp102_write(pointer)?;
+    write_volatile(I2C1_DR as *mut u32, u32::from(msb));
     if !wait_sr1(0x0004) {
         return None;
     }
+    rmw32(I2C1_CR1, 1 << 9); // STOP
+    for _ in 0..16_000 {
+        if read_volatile(I2C1_SR2 as *const u32) & 0x0002 == 0 {
+            return Some(());
+        }
+    }
+    None
+}
+
+/// Read a 16-bit big-endian TMP102 register using the F1 write-pointer /
+/// repeated-START / master-receive sequence.
+unsafe fn read_tmp102_register(pointer: u8) -> Option<u16> {
+    begin_tmp102_write(pointer)?;
 
     // Repeated START, then address for a two-byte read. ACK is armed before
     // the address phase so the first temperature byte is accepted.
@@ -309,6 +307,26 @@ unsafe fn read_tmp102_register(pointer: u8) -> Option<u16> {
         }
     }
     None
+}
+
+/// Begin a TMP102 write-address transaction and select the register pointer.
+unsafe fn begin_tmp102_write(pointer: u8) -> Option<()> {
+    // Clear any prior address-failure flag; error flags are rc_w0.
+    write_volatile(I2C1_SR1 as *mut u32, !(1 << 10));
+    rmw32(I2C1_CR1, 1 << 8); // START
+    if !wait_sr1(0x0001) {
+        return None;
+    }
+    write_volatile(I2C1_DR as *mut u32, 0x90); // 0x48 << 1 | W
+    if !wait_sr1(0x0002) {
+        return None;
+    }
+    clear_addr();
+    write_volatile(I2C1_DR as *mut u32, u32::from(pointer));
+    if !wait_sr1(0x0004) {
+        return None;
+    }
+    Some(())
 }
 
 unsafe fn clear_addr() {

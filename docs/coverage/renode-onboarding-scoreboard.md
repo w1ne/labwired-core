@@ -221,7 +221,7 @@
 | `stm32f042` | `pass` | `True` | `yes` | `yes` | `1332` | `1.332` | `True` | `n/a` | n/a | n/a |
 | `stm32f072` | `pass` | `True` | `yes` | `yes` | `1410` | `1.41` | `True` | `n/a` | n/a | n/a |
 | `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `9087` | `9.087` | `True` | `n/a` | n/a | n/a |
-| `stm32f103` | `pass` | `True` | `yes` | `yes` | `1457` | `1.457` | `True` | `n/a` | n/a | n/a |
+| `stm32f103` | `pass` | `True` | `yes` | `yes` | `111859` | `111.859` | `True` | `n/a` | n/a | n/a |
 | `stm32f4` | `pass` | `True` | `yes` | `yes` | `2282` | `2.282` | `True` | `n/a` | n/a | n/a |
 | `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `1175` | `1.175` | `True` | `n/a` | n/a | n/a |
 | `stm32f412` | `pass` | `True` | `yes` | `yes` | `1343` | `1.343` | `True` | `n/a` | n/a | n/a |

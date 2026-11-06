@@ -10,7 +10,9 @@
 //! tree, and this device is byte-compatible with each:
 //!   * **register-pointer** (`registers:`) — the master writes a 1-byte pointer
 //!     then streams a fixed-width LE/BE word; rw registers accumulate + echo the
-//!     master's writes. This is the VEML7700 protocol
+//!     master's writes. An opt-in descriptor field handles parts that commit an
+//!     MSB-only update when a wider big-endian write ends after one data byte.
+//!     This is the VEML7700 protocol
 //!     ([`super::veml7700`]).
 //!   * **command** (`commands:`) — the master writes a 16-bit big-endian
 //!     command, then reads N words each followed by a CRC-8 byte. This is the
@@ -181,6 +183,9 @@ pub struct GenericI2cDevice {
     /// Page size a sequential WRITE wraps within, for a memory-like part. See
     /// [`labwired_config::I2cSpec::write_page`].
     write_page: Option<u16>,
+    /// Whether a terminated register write containing only the first data
+    /// byte updates the MSB of a wider big-endian word.
+    update_msb_on_short_write: bool,
     /// Register-pointer-mode self-driving update rules (e.g. TMP102 drift).
     updates: Vec<UpdateRule>,
     /// Pointerless wire shape (`pointer_bytes: 0`): the part has ONE register
@@ -372,6 +377,7 @@ impl GenericI2cDevice {
             reg_pointer_mask: spec.pointer_mask.unwrap_or(default_pointer_mask),
             pointer_width,
             write_page: spec.write_page,
+            update_msb_on_short_write: spec.update_msb_on_short_write,
             reg_pointerless: spec.pointer_bytes == 0,
             updates: spec.updates.clone(),
             reg_auto_increment: spec.auto_increment,
@@ -1500,6 +1506,62 @@ impl GenericI2cDevice {
         self.rules.as_ref()
     }
 
+    fn commit_register_write(&mut self, reg: &I2cRegister, written: u32) {
+        let name = reg.name.clone();
+        let prev = self.reg_values.get(&name).copied().unwrap_or(0);
+        let stored = if write_is_translated(reg) {
+            self.commit_translated_write(reg, written)
+        } else {
+            apply_write(reg, prev, written)
+        };
+        self.reg_values.insert(name.clone(), stored);
+        if !self.timers.is_empty() {
+            self.timers.start_on_write(&name, stored, self.elapsed_us);
+            self.refresh_field_driven_periods();
+        }
+        if !self.data_ready.is_empty() {
+            // Acknowledge first, then start: a part whose start and clear
+            // registers are the same would otherwise clear the conversion it
+            // just started.
+            self.clear_on_write(&name);
+            self.start_conversions(&name, stored);
+        }
+        self.raise_and_settle(
+            Event::Write {
+                register: name,
+                field: None,
+            },
+            i64::from(written),
+        );
+    }
+
+    fn commit_short_msb_write(&mut self) {
+        if !self.update_msb_on_short_write || self.command_mode || self.reg_pointerless {
+            return;
+        }
+        let pointer_bytes = usize::from(self.pointer_width);
+        if self.write_buf.len() != pointer_bytes + 1 {
+            return;
+        }
+        let Some(pointer) = self.pointer else { return };
+        let Some(reg) = self
+            .find_register(pointer)
+            .filter(|reg| reg.access == I2cAccess::Rw && reg.width > 1 && reg.endian == Endian::Be)
+            .cloned()
+        else {
+            return;
+        };
+        let shift = u32::from(reg.width - 1) * 8;
+        if shift >= u32::BITS {
+            return;
+        }
+        let byte_mask = 0xFFu32 << shift;
+        let mut partial_reg = reg.clone();
+        partial_reg.write_mask = Some(reg.write_mask.unwrap_or(u32::MAX) & byte_mask);
+        let written = u32::from(self.write_buf[pointer_bytes]) << shift;
+        self.commit_register_write(&partial_reg, written);
+    }
+
     /// The wire write itself, split out so the framing counter above can store
     /// the byte and then raise `frame` without holding a borrow.
     fn write_inner(&mut self, data: u8) {
@@ -1597,41 +1659,9 @@ impl GenericI2cDevice {
         {
             return;
         }
-        let (name, endian) = (reg.name.clone(), reg.endian);
         let reg = reg.clone();
-        let written = unpack(&self.write_buf[pointer_bytes..], endian);
-        // `write_mask` protects the bits silicon owns (a model-driven status
-        // flag, a hardwired bit): those keep their current value. Absent ⇒ the
-        // whole word is replaced, exactly as before the mask existed. What the
-        // masked bits then DO is `on_write` — a plain store unless the
-        // datasheet says write-1-to-clear / zero-to-clear / one-to-set.
-        let prev = self.reg_values.get(&name).copied().unwrap_or(0);
-        let stored = if write_is_translated(&reg) {
-            self.commit_translated_write(&reg, written)
-        } else {
-            apply_write(&reg, prev, written)
-        };
-        self.reg_values.insert(name.clone(), stored);
-        if !self.timers.is_empty() {
-            self.timers.start_on_write(&name, stored, self.elapsed_us);
-            self.refresh_field_driven_periods();
-        }
-        if !self.data_ready.is_empty() {
-            // Acknowledge first, then start: a part whose start and clear
-            // registers are the same would otherwise clear the conversion it
-            // just started. Ordering it this way makes "write 1 to clear, then
-            // write 1 to start" behave like the two operations it is.
-            self.clear_on_write(&name);
-            self.start_conversions(&name, stored);
-        }
-        // Tier 2 LAST, so a rule sees the post-side-effect register.
-        self.raise_and_settle(
-            Event::Write {
-                register: name,
-                field: None,
-            },
-            i64::from(written),
-        );
+        let written = unpack(&self.write_buf[pointer_bytes..], reg.endian);
+        self.commit_register_write(&reg, written);
     }
 }
 
@@ -1666,6 +1696,7 @@ impl I2cDevice for GenericI2cDevice {
         // (Re)START frames a new phase within the transaction: rewind the read
         // cursor and clear the register latch and the write accumulator. The
         // pointer (register mode) and any pending delayed response survive.
+        self.commit_short_msb_write();
         self.write_buf.clear();
         self.read_idx = 0;
         self.latched = false;
@@ -1688,6 +1719,7 @@ impl I2cDevice for GenericI2cDevice {
         // scd41). The read latch is the same kind of transaction state: the
         // next read, even with no new START, must sample the pointer again
         // rather than continue off the end of the word just clocked out.
+        self.commit_short_msb_write();
         self.write_buf.clear();
         self.latched = false;
         self.read_idx = 0;
@@ -2188,6 +2220,29 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
             "behavior.i2c declares more than one of registers / commands / register_file \
              (a device is exactly one shape)"
         ),
+    }
+    if spec.update_msb_on_short_write {
+        if !has_regs || has_cmds || has_file || spec.pointer_bytes == 0 {
+            bail!(
+                "behavior.i2c update_msb_on_short_write requires a pointer-addressed register map"
+            );
+        }
+        let wide_rw = spec
+            .registers
+            .iter()
+            .filter(|r| r.access == I2cAccess::Rw && r.width > 1)
+            .collect::<Vec<_>>();
+        if wide_rw.is_empty()
+            || wide_rw.iter().any(|r| {
+                r.endian != Endian::Be
+                    || r.calendar.is_some()
+                    || r.encode.as_ref().is_some_and(|encode| encode.bcd)
+            })
+        {
+            bail!(
+                "behavior.i2c update_msb_on_short_write requires writable, multi-byte big-endian storage registers"
+            );
+        }
     }
     // `observables` read the byte register file; `updates` drive a wide register.
     if !spec.observables.is_empty() && !has_file {

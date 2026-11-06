@@ -102,6 +102,25 @@ impl Tmp102 {
         };
         *slot = (*slot & !mask) | (word & mask);
     }
+
+    /// Commit one MSB-only update when a frame ends after its first data byte.
+    fn store_msb_byte(&mut self, msb: u8) {
+        let (slot, mask) = match self.pointer {
+            1 => (&mut self.config, CONFIG_WRITE_MASK & 0xFF00),
+            2 => (&mut self.t_low, LIMIT_WRITE_MASK & 0xFF00),
+            3 => (&mut self.t_high, LIMIT_WRITE_MASK & 0xFF00),
+            _ => return,
+        };
+        let word = u16::from(msb) << 8;
+        *slot = (*slot & !mask) | (word & mask);
+    }
+
+    fn commit_msb_only_update(&mut self) {
+        // Pointer byte plus exactly one data byte; a full word has count 3.
+        if self.writes_since_start == 2 {
+            self.store_msb_byte(self.pending_msb);
+        }
+    }
 }
 
 impl Default for Tmp102 {
@@ -123,12 +142,6 @@ impl I2cDevice for Tmp102 {
             // Operation": "Register bytes are sent with the most significant
             // byte first"). The word lands only once both bytes are in.
             //
-            // KNOWN GAP: the datasheet's "Data Transfer" note also allows a
-            // single-byte update ("To update only the MS byte, terminate the
-            // communication by issuing a START or STOP"). Neither this oracle
-            // nor the declarative engine implements a partial-width write, so
-            // an MS-byte-only update is absorbed by both. They agree; they are
-            // both approximating here.
             1 => self.pending_msb = data,
             2 => {
                 let word = (u16::from(self.pending_msb) << 8) | u16::from(data);
@@ -166,7 +179,13 @@ impl I2cDevice for Tmp102 {
     }
 
     fn start(&mut self) {
+        self.commit_msb_only_update();
         self.read_phase = 0;
+        self.writes_since_start = 0;
+    }
+
+    fn stop(&mut self) {
+        self.commit_msb_only_update();
         self.writes_since_start = 0;
     }
 }

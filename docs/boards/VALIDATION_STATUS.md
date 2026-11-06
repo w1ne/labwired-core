@@ -17,8 +17,8 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `d048302c796b6ba2` | ⚠ drift acked 2026-11-02, expires 2026-12-02 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `78960e78c1828b5e` | ⚠ drift acked 2026-11-02, expires 2026-12-02 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `37c8b28cb423baec` | ⚠ drift acked 2026-11-02, expires 2026-12-02 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `9bf67e33982a546e` | ⚠ drift acked 2026-10-29, expires 2026-11-28 (re-capture pending) |
-| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `d4c0fe8b1bc606db` | no silicon capture |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `e32da4c5304ff3e7` | ⚠ drift acked 2026-10-29, expires 2026-11-28 (re-capture pending) |
+| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `267ff1e5fd0f5452` | no silicon capture |
 | `stm32f401` | 🟡 smoke-manual | — | `ee4b137b948c48f8` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `fc11fdb3bcd7dd95` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `8f02168f89d0f96b` | no silicon capture |

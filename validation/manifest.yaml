@@ -8553,8 +8553,14 @@ boards:
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
+    # 2026-11-06: the external TMP102 parity oracle in esp32s3/tmp102.rs now
+    # commits a one-byte MSB update when STOP or repeated START ends the frame;
+    # configs/devices/tmp102.yaml carries the opt-in behavior. This is off-chip
+    # slave behavior, not the S3 I2C controller's register model. The 9-register
+    # reset-state anchor is unchanged. Local parity and STM32F103 exact-import
+    # smokes cover the modeled transaction; no S3 hardware recapture is claimed.
     drift_ack: 2026-10-29
-    drift_ack_digest: 9bf67e33982a546e9231f535016f4c705266f71a0c1faf768262bea62394b98b
+    drift_ack_digest: e32da4c5304ff3e721899663c87505e755ec29fba6f5ecd327f4fccfc2313bf6
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
