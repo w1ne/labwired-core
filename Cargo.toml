@@ -199,6 +199,7 @@ members = [
     "crates/firmware-pico2-demo",
     "crates/firmware-pico2-bme280-smoke",
     "crates/firmware-pico2-w-bme280-smoke",
+    "crates/firmware-rp2350-zero-ws2812-smoke",
     "crates/firmware-kw41z-demo",
     "crates/firmware-kw41z-lcd",
     "crates/firmware-rp2040-pio-onboarding",
@@ -602,6 +603,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-pico2-w-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2350-zero-ws2812-smoke]
 codegen-units = 1
 opt-level = "s"
 

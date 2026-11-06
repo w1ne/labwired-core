@@ -1,0 +1,28 @@
+{
+  "target_id": "rp2350-zero",
+  "status": "pass",
+  "crate": "firmware-rp2350-zero-ws2812-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/rp2350-zero/uart-smoke.yaml",
+  "system": "configs/systems/rp2350-zero.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T14:43:34Z",
+  "finished_at_utc": "2026-11-06T14:44:11Z",
+  "elapsed_seconds": 37,
+  "elapsed_ms": 36750,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 36.05,
+    "build_firmware": 0.188,
+    "run_smoke": 0.472
+  },
+  "stages_ms": {
+    "build_cli": 36050,
+    "build_firmware": 188,
+    "run_smoke": 472
+  }
+}

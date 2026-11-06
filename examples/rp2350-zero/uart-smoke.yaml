@@ -1,12 +1,20 @@
-# LabWired - Waveshare RP2350-Zero UART smoke
-# Firmware: firmware-rp2350-demo (bare-metal, RP2350 UART0 DR @ 0x40070000).
-# Proves the chip descriptor + this system YAML boot. Does not prove USB CDC.
+# LabWired - Waveshare RP2350-Zero UART + onboard WS2812 smoke
+# Firmware: bare-metal RP2350 UART0 and GP16 WS2812 waveform.
+# The twin console is UART0; USB CDC is outside this board profile.
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-zero-ws2812-smoke"
   system: "./system.yaml"
 limits:
-  max_steps: 200000
+  max_steps: 300000
+  stop_when_assertions_pass: true
 assertions:
   - uart_contains: "RP2350_SMOKE_OK"
-  - expected_stop_reason: max_steps
+  - gpio_edges:
+      pin: "sio:16"
+      min_edges: 48
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1
