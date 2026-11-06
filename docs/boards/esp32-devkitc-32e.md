@@ -21,7 +21,9 @@ the GPIO matrix on GPIO23 and GPIO18. It waits for both timed TX_END events and
 attaches two generic WS2812-compatible pixels as external devices; they are
 test fixtures, not built-in board LEDs. The classic RMT model implements the
 register window, RMTMEM, independent channels 0–7 transmit timing, GPIO-matrix
-outputs and per-channel TX_END. Receive mode remains outside the modeled scope.
+outputs and per-channel TX_END. This smoke exercises channels 0 and 1; channels
+2–7 use the same path but are not exercised here. Receive mode remains outside
+the modeled scope.
 Wi-Fi/Bluetooth, SPI, timers, flash boot
 behavior, USB-to-UART hardware, pin-level UART waveforms, analog behavior, and
 the power LED also remain outside the profile. I2S0/1, UHCI0, PCNT, APB_CTRL

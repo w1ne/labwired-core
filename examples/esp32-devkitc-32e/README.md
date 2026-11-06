@@ -30,7 +30,8 @@ external device in the BME280 system manifest.
 The RMT model implements per-channel TX control/status offsets, RMTMEM symbol
 RAM, independent TX timing for channels 0 and 1, GPIO-matrix output routing,
 and per-channel TX_END after the stream's reset interval. It does not model RX,
-channels 2–7 transmit behavior, or advancing APB FIFO pointers. The pixels are
+or advancing APB FIFO pointers. This smoke exercises channels 0 and 1; channels
+2–7 use the same transmit path but do not have a smoke here. The pixels are
 external generic WS2812-compatible fixtures, not onboard DevKitC LEDs. The
 UART0 controller is modeled. The board's USB-to-UART bridge and the pin-level
 UART TX/RX waveforms are not, so console capture does not prove USB serial

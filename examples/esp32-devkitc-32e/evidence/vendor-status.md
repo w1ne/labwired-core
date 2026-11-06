@@ -7,8 +7,8 @@ listings.
   identifies exact orderable part `ESP32-DevKitC-32E` as using the
   `ESP32-WROOM-32E` module, with 4 MB flash and no PSRAM. Its header table maps
   GPIO22 to J3 pin 3 and GPIO21 to J3 pin 6 and provides 3V3/GND on the headers.
-  The pin table also identifies GPIO23 on J3 pin 2, the external pixel data pin
-  used by this RMT smoke.
+  The pin table identifies GPIO23 on J3 pin 2 and includes GPIO18 on the header;
+  both are external pixel data pins used by this RMT smoke.
 - Mouser's [ESP32-DevKitC-32E listing](https://www.mouser.com/en/ProductDetail/Espressif-Systems/ESP32-DevKitC-32E?mgh=1&qs=GedFDFLaBXFpgD0kAZWDrQ%3D%3D)
   reported the exact board **in stock**, **can ship immediately**, at **$10.20**.
   Its search-result variants showed different inventory counts (972–1,351), so
