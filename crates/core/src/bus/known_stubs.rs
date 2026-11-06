@@ -70,7 +70,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "Cortex-M bit-band alias region. Bit-banding is modelled by the bus itself \
          (SystemBus::bit_band_enabled), so the imported peripheral entry is inert. \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/cc2538 (+33 more).",
+         answers reads with zeros. Used by: onboarding/cc2538.",
     ),
     (
         "button",
@@ -115,14 +115,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "TI CC2538 watchdog. Renode-imported onboarding descriptor; no model in this engine, \
          so the window answers reads with zeros. Used by: onboarding/cc2538, \
          onboarding/zolertia-firefly.",
-    ),
-    (
-        "dwt",
-        "Cortex-M Data Watchpoint and Trace unit. Owned by the CPU/debug model, not the bus. \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/atsamd51g19a, \
-         onboarding/eos-s3, onboarding/eos-s3-qomu, \
-         onboarding/eos-s3-quickfeather (+10 more).",
     ),
     (
         "efuse_stub",
@@ -318,12 +310,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "ESP32 / ESP32-S3 RTC_CNTL window. Explicitly authored as a placeholder (the `_stub` \
          suffix is the declaration); the Xtensa builder owns the real wiring. Used by: esp32, \
          esp32s3-zero.",
-    ),
-    (
-        "sam_tc",
-        "Microchip SAM timer/counter. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/sam4s, \
-         onboarding/sam4s_xplained, onboarding/sam4s16c, onboarding/sam4s8b.",
     ),
     (
         "scb",

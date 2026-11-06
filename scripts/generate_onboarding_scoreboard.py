@@ -11,7 +11,7 @@ from statistics import median
 
 try:
     import yaml
-except ImportError:  # pragma: no cover - the column is skipped without PyYAML
+except ImportError:  # pragma: no cover - main() refuses to run without PyYAML
     yaml = None
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -188,6 +188,10 @@ def main() -> int:
     parser.add_argument("--descriptor-root", type=Path)
     parser.add_argument("--soft-threshold-seconds", type=int, default=3600)
     args = parser.parse_args()
+    if yaml is None:
+        # Without PyYAML every target's zero-answering windows would be
+        # unmeasurable, and the scoreboard would quietly lose the column.
+        parser.error("PyYAML is required to resolve zero-answering windows")
 
     metrics = load_metrics(args.metrics_root)
     annotate_zero_answering_windows(metrics)

@@ -8,7 +8,7 @@
 - not_run: `21`
 - pass: `224`
 - fail: `0`
-- pass_loading_zero_answering_windows: `10/224`
+- pass_loading_zero_answering_windows: `9/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
@@ -172,7 +172,7 @@
 | `sam4s` | `pass` | `True` | `yes` | `yes` | `1373` | `1.373` | `True` | 0 | `n/a` | n/a | n/a |
 | `sam4s16c` | `pass` | `True` | `yes` | `yes` | `1263` | `1.263` | `True` | 0 | `n/a` | n/a | n/a |
 | `sam4s8b` | `pass` | `True` | `yes` | `yes` | `1183` | `1.183` | `True` | 0 | `n/a` | n/a | n/a |
-| `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `1435` | `1.435` | `True` | 16: `LED:led`, `Button:button`, `dwt:dwt`, `sram_bb:bitbanding`, `tc0_1_2:sam_tc`, `tc3_4_5:sam_tc`, `adc:stub`, `dacc:stub`, `eefc:stub`, `rstc:stub`, `wdt:stub`, `peripheral_bb:bitbanding`, `crc:stub`, `spi:stub`, `twi1:stub`, `twi0:stub` | `n/a` | n/a | n/a |
+| `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `116496` | `116.496` | `True` | 0 | `n/a` | n/a | n/a |
 | `sam_e70` | `pass` | `True` | `yes` | `yes` | `1378` | `1.378` | `True` | 0 | `n/a` | n/a | n/a |
 | `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `1355` | `1.355` | `True` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `1354` | `1.354` | `True` | 0 | `n/a` | n/a | n/a |
