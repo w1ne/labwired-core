@@ -1,0 +1,2 @@
+2026-11-06T05:32:48.894311Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/renesas_rz_t2m.yaml
+2026-11-06T05:32:48.930781Z  INFO labwired_loader: ELF Entry Point: 0x88000000

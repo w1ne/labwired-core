@@ -121,6 +121,11 @@ on:
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml"
       - "scripts/build_rzg2l_cm33_cpu_smoke.sh"
       - "tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
+      - "tests/fixtures/renesas-rz-t2m-cpu-smoke.S"
+      - "tests/fixtures/renesas-rz-t2m-cpu-smoke.ld"
+      - "tests/fixtures/renesas-rz-t2m-cpu-smoke.elf"
+      - "scripts/build_renesas_rz_t2m_cpu_smoke.sh"
+      - "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "crates/cli/**"
       - "crates/labwired-models-**"
@@ -211,6 +216,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml
             system: configs/systems/onboarding/renesas-r7fa8m1a.yaml
+          # RZ/T2M's imported Cortex-R52 is not supported. Keep the exact-system
+          # CPU-admission failure visible until a real R52 adapter exists.
+          - id: renesas_rz_t2m
+            prebuilt_firmware: tests/fixtures/renesas-rz-t2m-cpu-smoke.elf
+            script: examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml
+            system: configs/systems/onboarding/renesas_rz_t2m.yaml
+            expected_failure_signature: "chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter"
           # DA14592 is scoped to the primary M33 core, exact flash/SRAM map,
           # and model-backed DA UART0. The M0+ CMAC core and other peripherals
           # are not claimed by this smoke.
@@ -1313,8 +1325,11 @@ jobs:
             . -> target
 
       - name: Run onboarding smoke
+        env:
+          EXPECTED_FAILURE_SIGNATURE: ${{ matrix.expected_failure_signature }}
         run: |
           chmod +x scripts/onboarding_smoke.sh
+          set +e
           scripts/onboarding_smoke.sh \
             --target-id "${{ matrix.id }}" \
             --crate "${{ matrix.crate }}" \
@@ -1325,6 +1340,36 @@ jobs:
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600
+          smoke_status=$?
+          set -e
+          if [[ -n "${EXPECTED_FAILURE_SIGNATURE}" ]]; then
+            python3 - "out/onboarding-smoke/${{ matrix.id }}/onboarding-metrics.json" \
+              "${EXPECTED_FAILURE_SIGNATURE}" "${smoke_status}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          metrics = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          expected_signature = sys.argv[2]
+          smoke_status = int(sys.argv[3])
+          if (
+              smoke_status != 1
+              or metrics.get("status") != "fail"
+              or metrics.get("run_attempted") is not True
+              or metrics.get("booted") is not False
+              or metrics.get("smoke_passed") is not False
+              or metrics.get("failure_stage") != "run_smoke"
+              or metrics.get("first_error_signature") != expected_signature
+          ):
+              raise SystemExit(
+                  "expected the recorded unsupported Cortex-R52 config failure; "
+                  f"got exit={smoke_status}, metrics={metrics}"
+              )
+          print(f"Confirmed expected unsupported-core result: {expected_signature}")
+          PY
+          else
+            exit "${smoke_status}"
+          fi
 
       - name: Publish onboarding summary
         if: always()

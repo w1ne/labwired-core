@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `172`
+- run_attempted: `173`
 - booted: `170/245`
 - boot_and_smoke_passed: `170/245`
-- not_run: `73`
+- not_run: `72`
 - pass: `170`
-- fail: `2`
-- median_elapsed_ms: `1291`
-- median_elapsed_seconds: `1.291`
+- fail: `3`
+- median_elapsed_ms: `1295`
+- median_elapsed_seconds: `1.295`
 - threshold_seconds: `3600`
-- threshold_met: `172/172`
+- threshold_met: `173/173`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -163,7 +163,7 @@
 | `renesas-r7fa8m1a` | `pass` | `True` | `yes` | `yes` | `1267` | `1.267` | `True` | `n/a` | n/a | n/a |
 | `renesas-rz_t2m_rsk` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `renesas_rz_g2l` | `pass` | `True` | `yes` | `yes` | `7765` | `7.765` | `True` | `n/a` | n/a | n/a |
-| `renesas_rz_t2m` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `renesas_rz_t2m` | `fail` | `True` | `no` | `no` | `8386` | `8.386` | `True` | `run_smoke` | CPU model gap. Add a real adapter for this core before claiming boot support. | chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter |
 | `ri5cy` | `pass` | `True` | `yes` | `yes` | `1953` | `1.953` | `True` | `n/a` | n/a | n/a |
 | `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `1297` | `1.297` | `True` | `n/a` | n/a | n/a |
 | `riscv_virt` | `pass` | `True` | `yes` | `yes` | `1408` | `1.408` | `True` | `n/a` | n/a | n/a |

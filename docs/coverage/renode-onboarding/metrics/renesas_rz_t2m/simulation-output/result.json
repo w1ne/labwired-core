@@ -1,0 +1,32 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "config_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter",
+  "assertions": [],
+  "firmware_hash": "2527a81b47a7af917ce15ef4ee982287b2016df1cb46b2d1701b2bbd3a6dea5f",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/renesas-rz-t2m-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas_rz_t2m.yaml",
+    "script": "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml"
+  }
+}

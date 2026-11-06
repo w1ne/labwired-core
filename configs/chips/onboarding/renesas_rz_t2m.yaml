@@ -6,38 +6,13 @@
 
 name: renesas_rz_t2m
 arch: arm
+# This is a Cortex-R52 system. The engine has no Cortex-R52 adapter, so keep
+# the sourced memory map but do not advertise the imported SCI/timer windows.
+core: cortex-r52
 flash:
-  base: 2281701376
-  size: 67108864B
+  base: 0x88000000
+  size: 64MB
 ram:
-  base: 268435456
-  size: 1572864B
-peripherals:
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
-- id: sci0
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147487744
-- id: sci1
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147488768
-- id: sci2
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147489792
-- id: sci3
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147490816
-- id: sci4
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147491840
-- id: sci5
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2164264960
+  base: 0x10000000
+  size: 1536KB
+peripherals: []

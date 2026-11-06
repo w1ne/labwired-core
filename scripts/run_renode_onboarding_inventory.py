@@ -31,6 +31,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/cortex-r52-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml",
     },
+    "renesas_rz_t2m": {
+        "prebuilt_firmware": "tests/fixtures/renesas-rz-t2m-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml",
+    },
     "ambiq-apollo4": {
         "crate": "firmware-apollo4p-evb-smoke",
         "target": "thumbv7em-none-eabi",

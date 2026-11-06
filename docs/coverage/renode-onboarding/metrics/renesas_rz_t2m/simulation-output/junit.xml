@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="1" failures="0" errors="1" time="0.000000">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="ConfigError"/>
+    <property name="firmware_hash" value="2527a81b47a7af917ce15ef4ee982287b2016df1cb46b2d1701b2bbd3a6dea5f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000000">
+    <error message="config error">result_schema_version=1.0
+stop_reason=ConfigError
+message=chip &apos;renesas_rz_t2m&apos;: unsupported ARM real-time core &apos;cortex-r52&apos;; only cortex-r5f has a native adapter
+stop_reason_details.triggered_stop_condition=ConfigError
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=100000
+firmware_hash=2527a81b47a7af917ce15ef4ee982287b2016df1cb46b2d1701b2bbd3a6dea5f
+firmware=examples/renode-onboarding/../../tests/fixtures/renesas-rz-t2m-cpu-smoke.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/renesas_rz_t2m.yaml
+script=examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml
+</error>
+  </testcase>
+</testsuite>

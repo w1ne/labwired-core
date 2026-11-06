@@ -1,0 +1,10 @@
+# ARM-state integer loop linked at the imported RZ/T2M flash base. This probes
+# CPU admission only; the imported Cortex-R52 has no native engine adapter.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/renesas-rz-t2m-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/renesas_rz_t2m.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps
