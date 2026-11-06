@@ -8,7 +8,7 @@
 - not_run: `21`
 - pass: `224`
 - fail: `0`
-- pass_loading_zero_answering_windows: `12/224`
+- pass_loading_zero_answering_windows: `10/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
@@ -135,9 +135,9 @@
 | `murax_vexriscv` | `pass` | `True` | `yes` | `yes` | `1032` | `1.032` | `True` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `754` | `0.754` | `True` | 0 | `n/a` | n/a | n/a |
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `2733` | `2.733` | `True` | 0 | `n/a` | n/a | n/a |
-| `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `2156` | `2.156` | `True` | 1: `led0:led` | `n/a` | n/a | n/a |
+| `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `113847` | `113.847` | `True` | 0 | `n/a` | n/a | n/a |
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `10204` | `10.204` | `True` | 0 | `n/a` | n/a | n/a |
-| `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2301` | `2.301` | `True` | 1: `GreenLED:led` | `n/a` | n/a | n/a |
+| `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2349` | `2.349` | `True` | 0 | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | 0 | `n/a` | n/a | n/a |
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | 0 | `n/a` | n/a | n/a |
 | `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `813` | `0.813` | `True` | 0 | `n/a` | n/a | n/a |

@@ -106,13 +106,6 @@
         "artifacts": []
       },
       {
-        "name": "led0",
-        "kind": "native",
-        "base": 13,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,

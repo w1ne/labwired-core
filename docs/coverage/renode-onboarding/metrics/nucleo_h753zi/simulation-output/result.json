@@ -92,13 +92,6 @@
   "inspect": {
     "peripherals": [
       {
-        "name": "GreenLED",
-        "kind": "native",
-        "base": 0,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "rcc",
         "kind": "native",
         "base": 1476543488,

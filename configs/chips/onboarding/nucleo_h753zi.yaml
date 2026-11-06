@@ -16,10 +16,9 @@ ram:
   base: 0x20000000
   size: 128KiB
 peripherals:
-- id: GreenLED
-  type: led
-  bus: gpioPortB
-  base_address: 0
+# Renode's GreenLED is a GPIO pin connection (gpioPortB pin 0), not a bus
+# peripheral; imported here it became a 4 KiB zero window at sysbus 0x0.
+# Board LEDs are modelled through board_io, so it is not declared.
 - id: rcc
   type: rcc
   bus: sysbus

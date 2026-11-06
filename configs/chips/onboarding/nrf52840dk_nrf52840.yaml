@@ -21,7 +21,6 @@ peripherals:
   - id: gpio0
     type: nrf52840_gpio
     base_address: 0x50000000
-  - id: led0
-    type: led
-    bus: gpio0
-    base_address: 13
+  # Renode's led0 is a GPIO pin connection (gpio0 pin 13), not a bus
+  # peripheral; imported here it became a 4 KiB zero window at sysbus 0xD.
+  # Board LEDs are modelled through board_io, so it is not declared.
