@@ -1,4 +1,4 @@
-# Cortex-M3 USART2 and I2C1 no-slave NACK smoke against the imported STM32F103 system.
+# Cortex-M3 USART2 and I2C1 NACK plus TMP102 read against the imported STM32F103 system.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -9,5 +9,7 @@ assertions:
   - uart_contains: "F103 I2C"
   - uart_contains: "I2C_NACK_OK"
   - uart_contains: "I2C_IDLE_OK"
+  - uart_contains: "TMP102=00001900"
+  - uart_contains: "TMP102_READ_OK"
   - uart_contains: "DONE"
   - expected_stop_reason: max_steps

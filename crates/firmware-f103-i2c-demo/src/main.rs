@@ -1,16 +1,11 @@
 //! LabWired - STM32F103 I²C silicon-validation trace.
 //!
-//! Runs a no-slave I²C master transaction against I2C1 and emits a
-//! human-readable register fingerprint on USART2 at 115200/8N1.  The
-//! same firmware ELF runs:
-//!
-//! * In the LabWired simulator, against the modelled STM32F1 I²C
-//!   peripheral with `external_devices: []`.
-//! * On a Nucleo-F103RB attached via ST-Link/V2.1, with USART2 wired
-//!   to the onboard VCP exposed as `/dev/ttyACM1` on the host.
-//!
-//! Both runs must produce byte-for-byte identical traces.  Any
-//! divergence is a simulator bug or a chip-yaml mistake.
+//! Probes an absent I²C address, then reads the TMP102 temperature register
+//! through I2C1. USART2 emits a human-readable register fingerprint at
+//! 115200/8N1. The onboarding system attaches the declarative TMP102 model at
+//! address 0x48; its reset temperature is 25 °C (0x1900). The absent address
+//! remains an intentional NACK check. This fixture's exact sensor value is a
+//! simulator assertion, not a claim about a physical board's ambient reading.
 //!
 //! # STM32F103 register map (subset used here)
 //!
@@ -112,6 +107,18 @@ fn main() -> ! {
         putline(b"I2C_IDLE_MISSING");
     }
 
+    match unsafe { read_tmp102_temperature() } {
+        Some(raw) => {
+            print_reg(b"TMP102=", raw as u32);
+            if raw == 0x1900 {
+                putline(b"TMP102_READ_OK");
+            } else {
+                putline(b"TMP102_READ_MISMATCH");
+            }
+        }
+        None => putline(b"TMP102_READ_FAIL"),
+    }
+
     putline(b"DONE");
 
     loop {}
@@ -166,6 +173,68 @@ unsafe fn i2c1_init() {
     write_volatile(I2C1_OAR1 as *mut u32, 1 << 14);
     // PE.
     write_volatile(I2C1_CR1 as *mut u32, 1);
+}
+
+/// Read the TMP102's 16-bit big-endian temperature register using the F1
+/// write-pointer / repeated-START / master-receive sequence.
+unsafe fn read_tmp102_temperature() -> Option<u16> {
+    // The preceding intentional absent-device probe leaves SR1.AF set.
+    // Error flags are rc_w0: writing zero to AF clears it.
+    write_volatile(I2C1_SR1 as *mut u32, !(1 << 10));
+
+    // Address the TMP102 for a register-pointer write.
+    rmw32(I2C1_CR1, 1 << 8); // START
+    if !wait_sr1(0x0001) {
+        return None;
+    }
+    write_volatile(I2C1_DR as *mut u32, 0x90); // 0x48 << 1 | W
+    if !wait_sr1(0x0002) {
+        return None;
+    }
+    clear_addr();
+    write_volatile(I2C1_DR as *mut u32, 0x00); // temperature register pointer
+    if !wait_sr1(0x0004) {
+        return None;
+    }
+
+    // Repeated START, then address for a two-byte read. ACK is armed before
+    // the address phase so the first temperature byte is accepted.
+    rmw32(I2C1_CR1, 1 << 8);
+    if !wait_sr1(0x0001) {
+        return None;
+    }
+    rmw32(I2C1_CR1, 1 << 10); // ACK
+    write_volatile(I2C1_DR as *mut u32, 0x91); // 0x48 << 1 | R
+    if !wait_sr1(0x0002) {
+        return None;
+    }
+    clear_addr();
+
+    if !wait_sr1(1 << 6) {
+        return None;
+    }
+    let msb = read_volatile(I2C1_DR as *const u32) as u8;
+    // The second byte is the final byte of this read, so NACK it.
+    let cr1 = read_volatile(I2C1_CR1 as *const u32);
+    write_volatile(I2C1_CR1 as *mut u32, cr1 & !(1 << 10));
+    if !wait_sr1(1 << 6) {
+        return None;
+    }
+    let lsb = read_volatile(I2C1_DR as *const u32) as u8;
+
+    rmw32(I2C1_CR1, 1 << 9); // STOP
+    for _ in 0..16_000 {
+        if read_volatile(I2C1_SR2 as *const u32) & 0x0002 == 0 {
+            return Some(u16::from_be_bytes([msb, lsb]));
+        }
+    }
+    None
+}
+
+unsafe fn clear_addr() {
+    // STM32F1 clears ADDR only after the SR1-then-SR2 read sequence.
+    let _ = read_volatile(I2C1_SR1 as *const u32);
+    let _ = read_volatile(I2C1_SR2 as *const u32);
 }
 
 // ── State printer ─────────────────────────────────────────────────────────────

@@ -48,6 +48,18 @@
     },
     {
       "assertion": {
+        "uart_contains": "TMP102=00001900"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "DONE"
       },
       "passed": true
@@ -68,7 +80,7 @@
       1073759232,
       1073759232,
       999999,
-      1073763348,
+      25,
       536891376,
       0,
       0,
@@ -76,10 +88,10 @@
       0,
       999999,
       536891376,
-      61,
-      134221522
+      50,
+      134224172
     ],
-    "pc": 134221522,
+    "pc": 134224172,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -92,7 +104,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "9ede918b27120e3c9c50781a51c414e8e951f449ba28b598caf3bdf1069ec133",
+  "firmware_hash": "f2470f171558ab9a87bd24ac351acb5a4e7e0a765aabbcf06d77f8ecd917bb8f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -133,7 +145,23 @@
         "kind": "i2c",
         "base": 1073763328,
         "registers": [],
-        "artifacts": []
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x48",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 24736,
+                "TEMP": 6528,
+                "T_HIGH": 20480,
+                "T_LOW": 19200
+              },
+              "supply_generation": null
+            }
+          }
+        ]
       },
       {
         "name": "scb",
@@ -164,7 +192,35 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "tmp102",
+        "device_type": "tmp102",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 72
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "tmp102",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 24736,
+                "TEMP": 6528,
+                "T_HIGH": 20480,
+                "T_LOW": 19200
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
   },
   "fidelity": [
     {
@@ -388,6 +444,18 @@
         "end_cycle": 10000
       },
       {
+        "text": "TMP102=00001900",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102_READ_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "DONE",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -398,14 +466,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 4640,
+    "text_bytes": 7347,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 4640,
+    "flash_used_bytes": 7347,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 7.08,
+    "flash_used_pct": 11.21,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -431,13 +499,13 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 1167,
-    "memory_writes": 132,
-    "peripheral_accesses": 923,
+    "memory_reads": 1493,
+    "memory_writes": 136,
+    "peripheral_accesses": 1420,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134221522,
+        "pc": 134224172,
         "count": 195312,
         "symbol": "firmware_f103_i2c_demo::main"
       }
