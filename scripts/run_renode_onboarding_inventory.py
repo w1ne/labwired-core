@@ -103,6 +103,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml",
     },
+    "fsl_lx2160ardb": {
+        "prebuilt_firmware": "tests/fixtures/lx2160a-a72-uart-smoke.elf",
+        "script": "examples/renode-onboarding/fsl_lx2160ardb-a72-uart-smoke.yaml",
+    },
     "zynqmp": {
         "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
         "script": "examples/renode-onboarding/zynqmp-a53-uart-smoke.yaml",

@@ -1,0 +1,12 @@
+# AArch64 UART smoke against the imported fsl_lx2160ardb system: one
+# Cortex-A72 PE writes a banner to the PL011 console UART and spins.
+# No GIC, timer or clocks.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/lx2160a-a72-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/fsl_lx2160ardb.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "LX2160A A72 UART SMOKE"
+  - expected_stop_reason: max_steps

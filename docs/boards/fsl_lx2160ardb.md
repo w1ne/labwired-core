@@ -1,36 +1,33 @@
-# Validation Report: fsl_lx2160ardb
+# NXP Layerscape LX2160A-RDB imported profile (`fsl_lx2160ardb`)
 
-**Architecture:** ARMv8-A.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported Renode target is narrowed to one Cortex-A72 processing element on
+the AArch64 backend, the imported 2 GiB DDR window at `0x80000000`, and the
+PL011 console UART at `0x021C0000` (descriptor id `uart0`) using the generic
+UART engine with the PL011 register layout: polled TX through `UARTFR`/`UARTDR`.
+The other A72 cores, the generic timer, the second PL011 at `0x021D0000` and
+the Vybrid-style I2C controller from the import are omitted.
 
-```text
-[2m2026-10-18T14:39:56.150248Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:56.150577Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/fsl_lx2160ardb.yaml
-[2m2026-10-18T14:39:59.340766Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:59.340943Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:59.340991Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:59.341020Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:59.341661Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:59.341712Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:59.341744Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:59.348013Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 1435585.20
-[2m2026-10-18T14:39:59.360298Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:59.360385Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x454
-[2m2026-10-18T14:39:59.360415Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 20000
-[2m2026-10-18T14:39:59.360452Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20004
-[2m2026-10-18T14:39:59.360480Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1029029.96
-```
+An earlier report on this page described a 2026-10-18 run of a Thumb
+Cortex-M fixture against this descriptor. That run did not execute A72 code
+and is superseded.
 
+## Smoke evidence
 
-## Hardware Coverage Report
+The exact imported system ran the committed AArch64 fixture
+(`tests/fixtures/lx2160a-a72-uart-smoke.elf`, built by
+[`scripts/build_lx2160a_a72_uart_smoke.sh`](../../scripts/build_lx2160a_a72_uart_smoke.sh)).
+It sets `UARTCR.UARTEN|TXE`, polls `UARTFR.TXFF`, writes `LX2160A A72 UART
+SMOKE` to `UARTDR`, then spins in an integer loop. The smoke asserts the
+banner in the captured UART output and the bounded `max_steps` stop after
+100,000 instructions. With the UART removed from the descriptor the same
+fixture faults on its first UART access (`0x021C0030`, 0/2 checks), so the
+banner assertion depends on the model.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `timer` | `0x0000000f` | `arm_generictimer` |
-| `uart0` | `0x021c0000` | `pl011` |
-| `uart1` | `0x021d0000` | `pl011` |
-| `i2c0` | `0x02000000` | `vybridi2c` |
+This does not test interrupts, baud timing, RX, the GIC, timers, multicore
+boot, TF-A/U-Boot, Renode, or physical hardware.
 
-**Total Peripherals:** 4
+Evidence: `docs/coverage/renode-onboarding/metrics/fsl_lx2160ardb/` contains
+the per-target metric, JUnit result, simulator result, UART log, snapshot and
+run log.

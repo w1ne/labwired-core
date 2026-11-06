@@ -17,6 +17,7 @@ on:
       - "configs/chips/**"
       - "configs/onboarding/renesas_rz_g2l.yaml"
       - "configs/onboarding/cortex-a78.yaml"
+      - "configs/onboarding/fsl_lx2160ardb.yaml"
       - "configs/onboarding/zynqmp.yaml"
       - "configs/onboarding/zynqmp-zcu102-revA.yaml"
       - "configs/onboarding/zynqmp-zcu102-revB.yaml"
@@ -1482,6 +1483,13 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml
             system: configs/systems/onboarding/nxp-mimx8ml.yaml
+          # NXP LX2160A-RDB: one Cortex-A72 PE, DDR and the PL011 console
+          # UART (polled TX). The smoke asserts the UART banner; no GIC,
+          # timer, second UART or I2C is exercised or declared.
+          - id: fsl_lx2160ardb
+            prebuilt_firmware: tests/fixtures/lx2160a-a72-uart-smoke.elf
+            script: examples/renode-onboarding/fsl_lx2160ardb-a72-uart-smoke.yaml
+            system: configs/systems/onboarding/fsl_lx2160ardb.yaml
           # Zynq UltraScale+ MPSoC: one Cortex-A53 PE, low DDR and PS UART0
           # (Cadence, polled TX). The smoke asserts the UART banner; no GIC,
           # timer, RPU or other PS peripheral is exercised or declared.

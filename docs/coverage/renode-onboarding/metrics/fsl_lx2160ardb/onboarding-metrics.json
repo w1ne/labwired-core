@@ -1,33 +1,38 @@
 {
   "target_id": "fsl_lx2160ardb",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
   "crate": null,
   "target_triple": null,
-  "script": "",
+  "script": "examples/renode-onboarding/fsl_lx2160ardb-a72-uart-smoke.yaml",
   "system": "configs/systems/onboarding/fsl_lx2160ardb.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T17:54:59Z",
-  "finished_at_utc": "2026-11-06T17:54:59Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-06T18:52:32Z",
+  "finished_at_utc": "2026-11-06T18:53:52Z",
+  "elapsed_seconds": 80,
+  "elapsed_ms": 79412,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 79.092,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 0.31
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 79092,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 310
+  },
+  "prebuilt_firmware": "tests/fixtures/lx2160a-a72-uart-smoke.elf"
 }
