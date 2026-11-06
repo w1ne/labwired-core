@@ -29,9 +29,19 @@ assertions:
   - uart_contains: "BME280_SEEDED_ENVIRONMENT_OK"
   - uart_contains: "BME280_DYNAMIC_TEMP_RAW=0009A510"
   - uart_contains: "BME280_DYNAMIC_TEMPERATURE_OK"
+  - uart_contains: "BME280_DYNAMIC_HUM_RAW=0000837C"
+  - uart_contains: "BME280_DYNAMIC_HUMIDITY_OK"
+  - uart_contains: "BME280_DYNAMIC_PRESS_RAW=0005BE33"
+  - uart_contains: "BME280_DYNAMIC_PRESSURE_OK"
   - uart_contains: "DONE"
   - expected_stop_reason: max_steps
 stimuli:
   - target: { component: "bme280", channel: "temperature" }
     trigger: !after_cycles { cycles: 1000000 }
     value: 55.0
+  - target: { component: "bme280", channel: "humidity" }
+    trigger: !after_cycles { cycles: 2000000 }
+    value: 35.0
+  - target: { component: "bme280", channel: "pressure" }
+    trigger: !after_cycles { cycles: 3000000 }
+    value: 1012.5

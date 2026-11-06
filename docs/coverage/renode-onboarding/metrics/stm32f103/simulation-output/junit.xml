@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="26" failures="0" errors="0" time="0.399966">
+<testsuite name="labwired" tests="30" failures="0" errors="0" time="0.395670">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="ec8e73d77af214e749c909606f81f9dfa3e57eb845686c61392a548d868f87a8"/>
+    <property name="firmware_hash" value="8a9eb75346dbb7e15bb929bb11303aa3b2d4aea75310b3366c690978b3013d8c"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.399966">
+  <testcase classname="labwired" name="run" time="0.395670">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -53,8 +53,16 @@
   </testcase>
   <testcase classname="labwired" name="assertion 23: uart_contains: BME280_DYNAMIC_TEMPERATURE_OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 24: uart_contains: DONE" time="0.000000">
+  <testcase classname="labwired" name="assertion 24: uart_contains: BME280_DYNAMIC_HUM_RAW=0000837C" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 25: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 25: uart_contains: BME280_DYNAMIC_HUMIDITY_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 26: uart_contains: BME280_DYNAMIC_PRESS_RAW=0005BE33" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 27: uart_contains: BME280_DYNAMIC_PRESSURE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 28: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 29: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

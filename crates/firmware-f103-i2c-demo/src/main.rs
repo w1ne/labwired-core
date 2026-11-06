@@ -4,7 +4,8 @@
 //! reads back its configuration and alert threshold registers through I2C1,
 //! including a one-byte MSB update. It also reads the BME280 chip ID and a
 //! little-endian calibration word, then reads the BME280 pressure, temperature
-//! and humidity ADC registers. USART2 emits a human-readable register
+//! and humidity ADC registers, including scripted live changes to all three
+//! sensor inputs. USART2 emits a human-readable register
 //! fingerprint at 115200/8N1. The onboarding system attaches declarative TMP102
 //! and BME280 models at addresses 0x48 and 0x76; TMP102's reset temperature is
 //! 25 °C (0x1900). The absent address remains an intentional NACK check.
@@ -212,18 +213,9 @@ fn main() -> ! {
     // 16-bit word. The imported system seeds 40 °C / 80 %RH / 950 hPa; exact
     // raw-code comparisons check that placement config reaches all three
     // channels in the model.
-    let pressure = unsafe {
-        read_i2c_register(BME280_ADDRESS, 0xF7, 2).and_then(|bytes| {
-            read_i2c_byte(BME280_ADDRESS, 0xF9).map(|xlsb| {
-                (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
-            })
-        })
-    };
+    let pressure = unsafe { read_bme280_pressure_raw() };
     let temperature = unsafe { read_bme280_temperature_raw() };
-    let humidity = unsafe {
-        read_i2c_register(BME280_ADDRESS, 0xFD, 2)
-            .map(|bytes| (u32::from(bytes[0]) << 8) | u32::from(bytes[1]))
-    };
+    let humidity = unsafe { read_bme280_humidity_raw() };
 
     match (pressure, temperature, humidity) {
         (Some(pressure), Some(temperature), Some(humidity)) => {
@@ -259,6 +251,48 @@ fn main() -> ! {
         }
     } else {
         putline(b"BME280_DYNAMIC_TEMPERATURE_READ_FAIL");
+    }
+
+    // The script changes humidity after the live temperature sample. Poll the
+    // sensor registers until the changed raw humidity code reaches I2C1.
+    putline(b"BME280_WAITING_FOR_HUMIDITY_STIMULUS");
+    if let Some(initial_humidity) = humidity {
+        loop {
+            if let Some(current_humidity) = unsafe { read_bme280_humidity_raw() } {
+                if current_humidity != initial_humidity {
+                    print_reg(b"BME280_DYNAMIC_HUM_RAW=", current_humidity);
+                    if current_humidity == 33_660 {
+                        putline(b"BME280_DYNAMIC_HUMIDITY_OK");
+                    } else {
+                        putline(b"BME280_DYNAMIC_HUMIDITY_MISMATCH");
+                    }
+                    break;
+                }
+            }
+        }
+    } else {
+        putline(b"BME280_DYNAMIC_HUMIDITY_READ_FAIL");
+    }
+
+    // Pressure is then changed independently, proving its raw conversion is
+    // refreshed through the same imported-system I2C path.
+    putline(b"BME280_WAITING_FOR_PRESSURE_STIMULUS");
+    if let Some(initial_pressure) = pressure {
+        loop {
+            if let Some(current_pressure) = unsafe { read_bme280_pressure_raw() } {
+                if current_pressure != initial_pressure {
+                    print_reg(b"BME280_DYNAMIC_PRESS_RAW=", current_pressure);
+                    if current_pressure == 376_371 {
+                        putline(b"BME280_DYNAMIC_PRESSURE_OK");
+                    } else {
+                        putline(b"BME280_DYNAMIC_PRESSURE_MISMATCH");
+                    }
+                    break;
+                }
+            }
+        }
+    } else {
+        putline(b"BME280_DYNAMIC_PRESSURE_READ_FAIL");
     }
 
     putline(b"DONE");
@@ -437,6 +471,21 @@ unsafe fn read_bme280_temperature_raw() -> Option<u32> {
             (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
         })
     })
+}
+
+/// Read the BME280's left-aligned 20-bit pressure ADC value over I2C1.
+unsafe fn read_bme280_pressure_raw() -> Option<u32> {
+    read_i2c_register(BME280_ADDRESS, 0xF7, 2).and_then(|bytes| {
+        read_i2c_byte(BME280_ADDRESS, 0xF9).map(|xlsb| {
+            (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
+        })
+    })
+}
+
+/// Read the BME280's 16-bit humidity ADC value over I2C1.
+unsafe fn read_bme280_humidity_raw() -> Option<u32> {
+    read_i2c_register(BME280_ADDRESS, 0xFD, 2)
+        .map(|bytes| (u32::from(bytes[0]) << 8) | u32::from(bytes[1]))
 }
 
 /// Begin a write-address transaction and select a device register pointer.
