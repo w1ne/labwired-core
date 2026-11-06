@@ -18,11 +18,15 @@ DTCM at `0x2000_0000`. LD1 (PI1) is the user LED; the ST-LINK VCP is USART1.
 A soft-float bare-metal firmware un-gates RCC AHB1/APB2, writes `OK\n` on
 USART1 (the shared STM32 v2 peripheral IP), and toggles PI1 through BSRR. The
 F7 descriptor builds through `SystemBus::from_config` with the shared F7/F4
-peripheral set; the F7-specific RCC register layout is modelled.
+peripheral set; the F7-specific RCC register layout is modelled. ADC1 uses the
+shared F4-profile 12-bit SAR model at `0x40012000`, with PA0/ADC123_IN0 and
+PA1/ADC123_IN1 exposed through `analog_pins`. The mixed-signal integration test
+routes an NTC divider and an unrelated Shockley diode through those two channels.
 
 ## What is not proven
 
-No silicon diff and no executing-fidelity differential. LTDC, Ethernet,
+The ADC proof is simulation-model coverage only; it is not a silicon diff, board
+pinout validation, or executing-fidelity differential. LTDC, Ethernet,
 DMA2D, USB and QuadSPI are stub windows; the cache/MPU and F7-specific clock
 gaps documented in the chip yaml are unmodelled.
 

@@ -4,9 +4,13 @@
 
 1. STM32F746xx datasheet **DS10916** (memory map, peripheral bases):
    https://www.st.com/resource/en/datasheet/stm32f746ng.pdf
-2. STM32F75xxx and STM32F74xxx reference manual **RM0385** (RCC, GPIO, USART, IRQs):
+2. STM32F75xxx and STM32F74xxx reference manual **RM0385** (RCC, GPIO, USART, ADC, IRQs):
    https://www.st.com/resource/en/reference_manual/rm0385-stm32f75xxx-and-stm32f74xxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 3. CMSIS device header **stm32f746xx.h** (`USART1_IRQn = 37`, GPIOI / USART1 / RCC bases).
+
+ADC1 is mapped at `0x40012000`, gated by `RCC_APB2ENR.ADC1EN`, and PA0/PA1 map to
+ADC123_IN0/ADC123_IN1 per DS10916 and RM0385. The model exposes ADC1 only; ADC2/ADC3
+and the remaining external ADC pads are not claimed by this profile.
 
 ## Board Pinout / BSP
 
