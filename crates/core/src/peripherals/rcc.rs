@@ -2765,18 +2765,19 @@ impl RccModel for U3Rcc {
 }
 
 /// Narrow CH32V003 RCC: the HSI/PLL clock switch plus the clock gates used by
-/// the GPIO, USART, I2C and SysTick onboarding smokes.
+/// the GPIO, USART, I2C, TIM2 and SysTick onboarding smokes.
 ///
 /// AFIO, GPIOA, GPIOC, GPIOD, ADC1, USART1.
 const CH32V003_APB2PCENR_MODELED: u32 =
     (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 14);
-/// I2C1.
-const CH32V003_APB1PCENR_MODELED: u32 = 1 << 21;
+/// TIM2, I2C1.
+const CH32V003_APB1PCENR_MODELED: u32 = (1 << 0) | (1 << 21);
 
 /// The WCH reference manual places RCC_APB2PCENR at 0x4002_1018 (AFIO bit 0,
 /// GPIOA bit 2, GPIOC bit 4, GPIOD bit 5, ADC1 bit 9, USART1 bit 14) and
-/// RCC_APB1PCENR at 0x4002_101C (I2C1 bit 21; ch32fun's
-/// `RCC_APB1Periph_I2C1` is 0x0020_0000).
+/// RCC_APB1PCENR at 0x4002_101C (TIM2 bit 0, I2C1 bit 21; ch32fun's
+/// `RCC_APB1Periph_TIM2` is 0x0000_0001 and `RCC_APB1Periph_I2C1` is
+/// 0x0020_0000).
 /// Those gates reset low and keep only the modeled blocks.
 ///
 /// RCC_CTLR (0x00), RCC_CFGR0 (0x04) and RCC_INTR (0x08) carry the handshake
@@ -2880,7 +2881,7 @@ impl RccModel for Ch32v003Rcc {
             // no ready interrupt is ever raised, so the flags read 0.
             0x08 => self.intr = value & 0x0000_1D00,
             // Retain only AFIO, GPIOA, GPIOC, GPIOD, ADC1 and USART1 from
-            // APB2, plus I2C1 from APB1, the blocks present in the focused
+            // APB2, plus TIM2 and I2C1 from APB1, the blocks present in the focused
             // board profiles.
             0x18 => self.apb2pcenr = value & CH32V003_APB2PCENR_MODELED,
             0x1C => self.apb1pcenr = value & CH32V003_APB1PCENR_MODELED,
@@ -4454,10 +4455,11 @@ mod tests {
     }
 
     /// WCH's focused APB2PCENR/APB1PCENR gates include AFIO, GPIOA, GPIOC,
-    /// GPIOD, ADC1, USART1, and I2C1 (APB1 bit 21, not bit 1). The narrow
+    /// GPIOD, ADC1, USART1, TIM2 (APB1 bit 0) and I2C1 (APB1 bit 21, not
+    /// bit 1). The narrow
     /// profile must not inherit unrelated STM32F1 gates.
     #[test]
-    fn ch32v003_models_only_the_smoked_gpio_adc_usart_and_i2c_clock_gates() {
+    fn ch32v003_models_only_the_smoked_gpio_adc_usart_tim2_and_i2c_clock_gates() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Ch32v003);
         assert_eq!(
             "ch32v003".parse::<RccRegisterLayout>().unwrap(),
@@ -4475,7 +4477,7 @@ mod tests {
             rcc.read_u32(0x18).unwrap(),
             (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 9) | (1 << 14)
         );
-        assert_eq!(rcc.read_u32(0x1C).unwrap(), 1 << 21);
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), (1 << 0) | (1 << 21));
     }
 
     /// WCH `SystemInit` + `SetSysClockTo_48MHZ_HSI` (openwch/ch32v003 EVT):

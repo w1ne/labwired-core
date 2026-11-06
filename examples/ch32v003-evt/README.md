@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs five of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs six of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -164,8 +164,9 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `systick_irq` | debug-printf banner, `Milliseconds taken: 500` twice, DMDATA0 never timed out, PD0/PC0 edges | the 1 kHz SysTick ISR counts exactly 500 ms across two `Delay_Ms(250)` |
 | `adc_polled` | a potentiometer on PD4 (AIN7) is turned 50 % → 25 % → 100 %; the printed codes must be `511`, `511`, `255`, `255`, `1023` | `Count: 0 adc: 511` .. `Count: 4 adc: 1023`, one sample every 200 ms |
 | `i2c_oled` | a 128x32 SSD1306 at 0x3C on I2C1 (PC1/PC2); after the half-lit "buffer fill with binary" frame, mode 1 must leave exactly the two diagonals `(x, x/4)` and `(x, 31 - x/4)` lit: 256 of 4096 pixels, corners, centre crossing and two empty bands checked | 12/12; every packet completes with no `ssd1306_i2c_error` timeout |
+| `tim2_pwm` | TIM2 PWM on CH1 (PD4), CH2 (PD3) and CH4 (PD7), with an LED on each; debug-printf banner and the TIM2 setup left behind (ATRLR, CEN/ARPE, CHCTLR1/2, CCER). [`check-tim2-pwm.py`](check-tim2-pwm.py) decodes the waveform of a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim2-pwm-smoke/pwm-check.log) | 11,546 whole 256-cycle periods (187.5 kHz); CH1 low for `count`/256 and CH2 low, CH4 high for `(count + 128) & 255`/256, through CH2's 255 → 0 wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
 
-This profile adds three things to the PFIC profile:
+This profile adds these to the PFIC profile:
 
 - **GPIOA and GPIOC**, because `funGpioInitAll()` clocks all three ports and
   the examples drive PC0.
@@ -198,6 +199,23 @@ This profile adds three things to the PFIC profile:
   and the panel stayed blank. A 16-bit store to the data register now sends
   one byte. ch32fun declares `DATAR` as `uint16_t`, and the old byte-sliced
   store sent every byte twice, which drew the diagonals at half slope.
+- **TIM2** (`0x40000000`): the engine's STM32F1 general-purpose timer,
+  whose CTLR1/CHCTLRx/CCER/PSC/ATRLR/CHxCVR layout and PWM modes the
+  CH32V003 shares, counting at HCLK. Two changes made `tim2_pwm` drive its
+  pins. The CH32V003 RCC model kept only I2C1 in `APB1PCENR`, so the TIM2
+  clock enable was dropped and the timer never ran; it now keeps TIM2EN
+  (bit 0) too. The F1 timer pad router only knew the STM32F103's pads
+  (TIM2 on PA0..PA3); it now picks the CH32V003 reset mapping (T2CH1..4 on
+  PD4, PD3, PC0, PD7) when the RCC profile is `ch32v003`. The test
+  [`crates/core/tests/ch32v003_tim2_pads.rs`](../../crates/core/tests/ch32v003_tim2_pads.rs)
+  pins the routes and fails if the F103 table is used. The smoke uses
+  [`ch32v003evt-ch32fun-tim2-pwm-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-tim2-pwm-smoke.yaml).
+  CH4 comes out active high while CH1/CH2 are active low. That is the
+  example, not the model: it sets polarity with `TIM_CCxP & TIM2_DEFAULT`,
+  and `TIM_CC4P & 0xff` is 0, so silicon does the same. At each duty step,
+  CH2/CH4 can take the new count one period after CH1, because the loop
+  stores CH1CVR before the other two and the compare registers are
+  preloaded. The waveform check allows exactly that one period.
 
 The debug-printf negative control
 ([`evidence/ch32fun-systick-irq-smoke/negative-control/`](evidence/ch32fun-systick-irq-smoke/negative-control/))
@@ -216,7 +234,7 @@ Read these results correctly:
   cycles on silicon. Line contents and order are exact; their timing is not.
 - Not modeled: input from the host over the debug channel (ch32fun's
   `handle_debug_input`), a detached probe as a configuration, and every
-  peripheral the other ch32fun examples need (TIM1/TIM2, EXTI, SPI, DMA,
+  peripheral the other ch32fun examples need (TIM1, EXTI, SPI, DMA,
   OPA, watchdogs, standby).
 - On I2C1: bus timing (`CKCFGR` is stored, and transfers complete
   immediately), the `RCC_APB1PRSTR` peripheral reset, the AFIO remaps,
@@ -229,6 +247,13 @@ Read these results correctly:
   external triggers, the analog watchdog, DMA, the internal V_REFINT/V_CAL
   channels and calibration offsets are not modeled. Codes are ideal (no
   offset, gain or noise error) against a 3.3 V reference.
+- On TIM2: the AFIO `PCFR1` TIM2 remaps (stored only, so a remapped
+  output stays on its reset pad), the `RCC_APB1PRSTR` reset, PD7's NRST
+  option byte (the pad is treated as GPIO, as after `minichlink -d`),
+  encoder and slave modes, DMA and TIM2 interrupts are not modeled. The
+  logic capture keeps the newest ~21,800 edges per pad, so the decoded
+  window is `count` 121 to 134 of the 0 to 255 ramp (about 60 ms, including
+  CH2's wrap through 0). Earlier steps only reach the edge-count checks.
 
 ## Copy-paste ch32fun blink
 
@@ -408,11 +433,17 @@ cargo run -q -p labwired-cli -- test \
 
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
-for t in blink uartdemo systick-irq adc-polled i2c-oled; do
+for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t
 done
+# tim2_pwm's waveform: capture the three pads, then decode them.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/ch32fun-tim2-pwm-smoke.yaml \
+  --output-dir /tmp/ch32v003-tim2-pwm \
+  --watch-gpio gpiod:4 --watch-gpio gpiod:3 --watch-gpio gpiod:7
+python3 examples/ch32v003-evt/check-tim2-pwm.py /tmp/ch32v003-tim2-pwm/result.json
 ```
 
 The committed SysTick and SDK-example runs are in

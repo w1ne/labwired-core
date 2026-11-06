@@ -1,0 +1,34 @@
+# ch32fun examples/tim2_pwm, unmodified (build-ch32fun-examples.sh). TIM2 at
+# HCLK (48 MHz), PSC 0, ATRLR 255: a 256-cycle PWM period on CH1 (PD4), CH2
+# (PD3) and CH4 (PD7), with the duty stepping one count every Delay_Ms(5).
+# 37,000,000 cycles reach count ~131, past CH2's 255 -> 0 wrap at count 128.
+#
+# This smoke checks the boot, the example's console output and the TIM2 setup
+# it leaves behind. The waveform itself (period, duty ramp, the 180-degree
+# CH2/CH4 offset, CH4's active-high polarity) is decoded by check-tim2-pwm.py
+# from a run with
+#   --watch-gpio gpiod:4 --watch-gpio gpiod:3 --watch-gpio gpiod:7
+# committed as evidence/ch32fun-tim2-pwm-smoke/pwm-capture.json.gz, with the
+# decoder's output in pwm-check.log. gpio_edges assertions are left out on
+# purpose: they arm the same capture, which fills its ~21,800-edge ring per
+# pad and makes this result.json 10 MB.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/tim2_pwm.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-tim2-pwm-smoke.yaml"
+limits:
+  max_cycles: 37000000
+  max_steps: 60000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "tim2_pwm example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing tim2...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "looping..." }
+  # TIM2 as the example leaves it: ATRLR 255, CEN|ARPE, PWM mode 1 with
+  # preload on CH1/CH2 (CHCTLR1 0x6868) and CH4 (CHCTLR2 0x6800), and
+  # CCER = CC1E|CC1P|CC2E|CC2P|CC4E (CC4P stays clear: TIM_CC4P & 0xff = 0).
+  - memory_value: { address: 0x4000002C, size: 16, expected_value: 255 }
+  - memory_value: { address: 0x40000000, size: 16, mask: 0x0081, expected_value: 0x0081 }
+  - memory_value: { address: 0x40000018, size: 16, expected_value: 0x6868 }
+  - memory_value: { address: 0x4000001C, size: 16, expected_value: 0x6800 }
+  - memory_value: { address: 0x40000020, size: 16, expected_value: 0x1033 }

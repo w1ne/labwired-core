@@ -1781,7 +1781,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 38d4a6c4b72e448215fe5410b1b2c7372002d66f9e966425a600fbdfd99b2e50
+    drift_ack_digest: b2a680e53de01c68a9710fb4518b45445b3fe39fe861ae887727f89dd6815a96
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2375,6 +2375,12 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-06
+    # 2026-11-06 (ch32fun tim2_pwm): attach.rs picks a CH32V003 TIM2 pad
+    # table (PD4/PD3/PC0/PD7) only when the RCC profile is `ch32v003`; every
+    # other chip keeps the F1 table. rcc.rs widens only the CH32V003
+    # APB1PCENR mask (TIM2EN). STM32 timer pads, RCC gates and traces are
+    # unchanged; the stm32f1_timer_outputs lib tests pass. ACK, NOT A SILICON
+    # CAPTURE.
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and
@@ -3913,7 +3919,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 284dfe3337843773dc36e0b7c7c8ff4aa62a375fd54584dc2645a6266668854b
+    drift_ack_digest: 3b3542e2890c449e712b7d20aca9f688b30906a1e64728340d40fb70916594e6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4495,6 +4501,12 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-06
+    # 2026-11-06 (ch32fun tim2_pwm): attach.rs picks a CH32V003 TIM2 pad
+    # table (PD4/PD3/PC0/PD7) only when the RCC profile is `ch32v003`; every
+    # other chip keeps the F1 table. rcc.rs widens only the CH32V003
+    # APB1PCENR mask (TIM2EN). STM32 timer pads, RCC gates and traces are
+    # unchanged; the stm32f1_timer_outputs lib tests pass. ACK, NOT A SILICON
+    # CAPTURE.
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and
@@ -4991,7 +5003,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 8729b32b62401ff2f0c46e60bf284717204947b1cf97ef258aa49892f7474701
+    drift_ack_digest: cacd8d08c6e253ce594d441111b1b6d537c1da1583f2134e6111d238b00ea1cd
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5506,6 +5518,12 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-06
+    # 2026-11-06 (ch32fun tim2_pwm): attach.rs picks a CH32V003 TIM2 pad
+    # table (PD4/PD3/PC0/PD7) only when the RCC profile is `ch32v003`; every
+    # other chip keeps the F1 table. rcc.rs widens only the CH32V003
+    # APB1PCENR mask (TIM2EN). STM32 timer pads, RCC gates and traces are
+    # unchanged; the stm32f1_timer_outputs lib tests pass. ACK, NOT A SILICON
+    # CAPTURE.
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and
@@ -6060,7 +6078,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2da98cd12fa909c8e90915c9488a830d23a65a86bcdea7b444463ae1078492e1
+    drift_ack_digest: 1682aa8baeee763260f70503a22331bf6fd6e93b33e2585bd9f733dcf7514648
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6645,6 +6663,12 @@ boards:
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
     drift_ack: 2026-11-06
+    # 2026-11-06 (ch32fun tim2_pwm): attach.rs picks a CH32V003 TIM2 pad
+    # table (PD4/PD3/PC0/PD7) only when the RCC profile is `ch32v003`; every
+    # other chip keeps the F1 table. rcc.rs widens only the CH32V003
+    # APB1PCENR mask (TIM2EN). STM32 timer pads, RCC gates and traces are
+    # unchanged; the stm32f1_timer_outputs lib tests pass. ACK, NOT A SILICON
+    # CAPTURE.
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and
@@ -7162,7 +7186,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 7c27a31be8014139cd75e10164ddd8f35c173cd6f8fd8742dd3ee35d02be15c3
+    drift_ack_digest: 559cf575aa7095d0b5450ae07e87023274e38aa3175f1b96c6093b0ea50f18ea
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7679,6 +7703,12 @@ boards:
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-06
+    # 2026-11-06 (ch32fun tim2_pwm): attach.rs picks a CH32V003 TIM2 pad
+    # table (PD4/PD3/PC0/PD7) only when the RCC profile is `ch32v003`; every
+    # other chip keeps the F1 table. rcc.rs widens only the CH32V003
+    # APB1PCENR mask (TIM2EN). STM32 timer pads, RCC gates and traces are
+    # unchanged; the stm32f1_timer_outputs lib tests pass. ACK, NOT A SILICON
+    # CAPTURE.
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and

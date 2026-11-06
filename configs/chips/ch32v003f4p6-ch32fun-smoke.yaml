@@ -4,7 +4,9 @@
 # ch32fun's funGpioInitAll() clocks all three ports, and the WCH-LinkE debug
 # printf channel that ch32fun uses as its default console, ADC1 (the
 # STM32F1 ADC block at 10 bits) for ch32fun's adc_polled, and I2C1 on its
-# default pins (PC1 SDA, PC2 SCL) for ch32fun's i2c_oled.
+# default pins (PC1 SDA, PC2 SCL) for ch32fun's i2c_oled, and TIM2 with its
+# channel outputs on the reset-mapped pads (PD4/PD3/PC0/PD7) for ch32fun's
+# tim2_pwm.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -27,8 +29,17 @@
 # AFIO I2C1 remaps, slave mode, PEC, SMBus, the error/event interrupts and
 # DMA.
 #
+# TIM2 reuses the engine's STM32F1 general-purpose timer (same CTLR1/
+# CHCTLRx/CCER/CNT/PSC/ATRLR/CHxCVR offsets and PWM mode 1/2 as ch32fun's
+# ch32v003hw.h), counting at HCLK (APB1 is undivided after SystemInit). The
+# channel outputs drive their default pads while CCxE is set and the pad is
+# in alternate-function output mode. Not modeled on TIM2: the AFIO PCFR1
+# TIM2 remaps (PCFR1 is storage only, so a remapped pad does not move), the
+# RCC_APB1PRSTR reset (dropped, as for I2C1), PD7's NRST option byte (the
+# pad is treated as GPIO), encoder/slave modes, DMA and TIM2 interrupts.
+#
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, TIM1/TIM2, EXTI, SPI, DMA, OPA, the
+# of the RISC-V debug module, TIM1, EXTI, SPI, DMA, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -46,13 +57,15 @@ ram:
   size: 2KB
 
 pins:
-  PC0: { gpio: gpioc, bit: 0 }
+  PC0: { gpio: gpioc, bit: 0, functions: [{ type: timer, peripheral: tim2, channel: 3 }] }
   PC1: { gpio: gpioc, bit: 1, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
   PC2: { gpio: gpioc, bit: 2, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
   PD0: { gpio: gpiod, bit: 0 }
-  PD4: { gpio: gpiod, bit: 4 }
+  PD3: { gpio: gpiod, bit: 3, functions: [{ type: timer, peripheral: tim2, channel: 2 }] }
+  PD4: { gpio: gpiod, bit: 4, functions: [{ type: timer, peripheral: tim2, channel: 1 }] }
   PD5: { gpio: gpiod, bit: 5 }
   PD6: { gpio: gpiod, bit: 6 }
+  PD7: { gpio: gpiod, bit: 7, functions: [{ type: timer, peripheral: tim2, channel: 4 }] }
 
 peripherals:
   - id: rcc
@@ -140,3 +153,9 @@ peripherals:
     clock: { reg: apb1pcenr, bit: 21 }
     config:
       profile: stm32f1
+
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    clock: { reg: apb1pcenr, bit: 0 }

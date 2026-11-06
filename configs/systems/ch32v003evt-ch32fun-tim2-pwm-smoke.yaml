@@ -1,0 +1,14 @@
+# WCH CH32V003 evaluation board running ch32fun's tim2_pwm, unmodified, with
+# an LED on each TIM2 output the example enables (PD4 = T2CH1, PD3 = T2CH2,
+# PD7 = T2CH4) and a WCH-LinkE on SWIO for the debug-printf console. PD7 is
+# also NRST; the example expects the NRST option byte cleared (`minichlink
+# -d`), which this profile takes as given. The LEDs are test connections,
+# not factory-installed parts. CH1/CH2 are active low (LED to 3.3 V), CH4
+# active high (LED to GND), matching the polarity the example programs.
+name: ch32v003evt-ch32fun-tim2-pwm-smoke
+chip: ../chips/ch32v003f4p6-ch32fun-smoke.yaml
+external_devices: []
+board_io:
+  - { id: external_led_pd4, kind: led, peripheral: gpiod, pin: 4, signal: output, active_high: false }
+  - { id: external_led_pd3, kind: led, peripheral: gpiod, pin: 3, signal: output, active_high: false }
+  - { id: external_led_pd7, kind: led, peripheral: gpiod, pin: 7, signal: output, active_high: true }

@@ -2334,11 +2334,7 @@ impl SystemBus {
             ("i2c1", 'c', 1, LINE_SDA, "I2C1_SDA"),
         ];
 
-        let ch32v003 = self
-            .find_peripheral_index_by_name("rcc")
-            .and_then(|idx| self.peripherals[idx].dev.as_any())
-            .and_then(|any| any.downcast_ref::<crate::peripherals::rcc::Rcc>())
-            .is_some_and(crate::peripherals::rcc::Rcc::is_ch32v003);
+        let ch32v003 = self.rcc_is_ch32v003();
 
         // Modern controller on an STM32G0 (`pad_map: stm32g0`): STM32G071
         // DS12232 port A/B alternate-function tables, AF6 column. The L4
@@ -2815,6 +2811,16 @@ impl SystemBus {
         self.timer_capture_wired = wired;
     }
 
+    /// Whether the chip's RCC is the narrow WCH CH32V003 profile. Its I²C1
+    /// and TIM2 reuse the F1 register blocks on different default pads, so
+    /// the F1 pad routers pick a CH32V003 table from this.
+    fn rcc_is_ch32v003(&self) -> bool {
+        self.find_peripheral_index_by_name("rcc")
+            .and_then(|idx| self.peripherals[idx].dev.as_any())
+            .and_then(|any| any.downcast_ref::<crate::peripherals::rcc::Rcc>())
+            .is_some_and(crate::peripherals::rcc::Rcc::is_ch32v003)
+    }
+
     /// Route each STM32F1 timer's channel OUTPUTS (OC1..OC4) onto the GPIO
     /// pads that carry them, so a pad configured as an alternate-function
     /// output reads — and the logic analyzer records — the PWM / output-compare
@@ -2855,8 +2861,21 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
+        // WCH CH32V003RM, TIM2 remap table, PCFR1.TIM2_RM = 00 (reset):
+        // T2CH1ETR PD4, T2CH2 PD3, T2CH3 PC0, T2CH4 PD7 (ch32fun's
+        // examples/tim2_pwm lists the same pads). The register block is the F1
+        // general-purpose timer; only the pads differ, so the table is picked
+        // from the chip's RCC profile like the CH32V003 I²C1 pads.
+        const CH32V003: &[(&str, char, u8, usize, &str)] = &[
+            ("tim2", 'd', 4, 0, "TIM2_CH1"),
+            ("tim2", 'd', 3, 1, "TIM2_CH2"),
+            ("tim2", 'c', 0, 2, "TIM2_CH3"),
+            ("tim2", 'd', 7, 3, "TIM2_CH4"),
+        ];
+        let ch32v003 = self.rcc_is_ch32v003();
+        let table = if ch32v003 { CH32V003 } else { F1 };
         use crate::peripherals::timer::TimerInputStage;
-        for &(tim, port, pin, ch, func) in F1 {
+        for &(tim, port, pin, ch, func) in table {
             let Some(t_idx) = self
                 .find_peripheral_index_by_name(tim)
                 .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
