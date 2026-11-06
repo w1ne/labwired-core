@@ -1,0 +1,13 @@
+# ATmega328PB Xplained Mini: send through its mEDBG CDC UART and blink D200/PB5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega328pb-xplained-mini.elf"
+  system: "../../configs/systems/atmega328pb-xplained-mini.yaml"
+limits:
+  max_steps: 250000
+assertions:
+  - uart_contains: "XPLAINED_MINI_OK"
+  - gpio_edges:
+      pin: "portb:5"
+      min_edges: 16
+  - expected_stop_reason: max_steps

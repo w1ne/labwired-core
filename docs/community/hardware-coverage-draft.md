@@ -17,16 +17,17 @@ and RP2040 12%. It reports kit use of ESP32-based boards at 42%, Arduino at
 37%, and STM32 Nucleo/Discovery at 23%. Those are survey shares, not market
 share estimates. RP2350 has no separate row in that survey.
 
-This review draft includes a focused ESP32-P4X Function EV board profile, its
-GPIO8 smoke, and both ESP32-S3-DevKitC-1 N16R8 PCB revisions. It remains
-unpublished pending Andrii's approval.
+This review draft covers ESP32, an active ATmega328PB sibling board, STM32F103,
+other STM32, and RP2040, with local smoke evidence and a copy-paste example for
+each entry. ATmega328P is excluded from new-design recommendations because it is
+NRND. The page remains unpublished pending Andrii's approval.
 
 ## Demand-ranked coverage
 
 | Survey position | Representative board | What the local smoke exercises | Availability receipt |
 | --- | --- | --- | --- |
 | **#1 ESP32, 38%** | [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md) | P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives one non-black GPIO48 pixel | [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md) |
-| **#2 ATmega328, 30%** | No current recommendation | The existing Uno R3 notes identify ATmega328P as NRND; we do not recommend buying it for a new design. | [Legacy note](../../examples/arduino-uno-blinky/README.md) |
+| **#2 ATmega328 family, 30%** | [ATmega328PB Xplained Mini](../../examples/atmega328pb-xplained-mini/README.md) (active sibling; the survey does not separate PB) | USART0 CDC transcript and the board's D200/PB5 LED transitions. ATmega328P remains excluded because it is NRND. | [Live MCU status and board stock, checked 2026-11-06](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md) | USART3 output on the ST-LINK virtual COM route | [ST status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md) |
 | **#5 RP2040, 12%** | [Raspberry Pi Pico](../../examples/pico/README.md) | UART0, GP25 LED edges, and a non-zero internal temperature ADC result | [Raspberry Pi status and availability, checked 2026-11-06](../../examples/pico/evidence/vendor-status.md) |
@@ -118,15 +119,36 @@ hosted LED verification. See the
 [revision status receipt](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md),
 and [local evidence](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/).
 
-### #2 — ATmega328: legacy status
+### #2 — ATmega328 family: active ATmega328PB sibling
 
-ATmega328 is a high survey result, but Microchip's live [ATmega328P product
-page](https://www.microchip.com/en-us/product/ATmega328P) reported **Not
-Recommended for new designs** when checked in real Chrome on 2026-11-06. This
-page therefore gives no new-design purchase or firmware recommendation for
-it. The active Arduino board example below uses a different MCU. The
-repository's [Uno R3 note](../../examples/arduino-uno-blinky/README.md) also
-records the lifecycle restriction.
+The survey reports ATmega328 at 30%, but does not separate the P and PB variants.
+Microchip's live [ATmega328P product page](https://www.microchip.com/en-us/product/ATmega328P)
+reported **Not Recommended for new designs** when checked in real Chrome on
+2026-11-06, so this page does not recommend new ATmega328P designs. Microchip's
+live [ATmega328PB page](https://www.microchip.com/en-us/product/ATmega328PB)
+reported **In Production**; its [Xplained Mini kit](https://www.microchip.com/en-us/development-tool/ATMEGA328PB-XMINI)
+was listed Active and in stock by DigiKey. This is a secondary active sibling
+for family continuity, not a new demand rank. See the [availability receipt](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md).
+
+Use an AVR-GCC setup for `atmega328pb`; the user's onboard LED is D200 on PB5:
+
+```c
+#include <stdint.h>
+
+#define DDRB  (*(volatile uint8_t *)0x24)
+#define PORTB (*(volatile uint8_t *)0x25)
+
+int main(void) {
+    DDRB |= (1u << 5);
+    for (;;) {
+        PORTB ^= (1u << 5);
+        for (volatile uint16_t i = 0; i < 50000; ++i) {}
+    }
+}
+```
+
+The repository smoke asserts both the USART0 marker and PB5 transitions in the
+focused profile. The mEDBG microcontroller and USB implementation are not simulated.
 
 ### #3 — STM32F103: NUCLEO-F103RB
 
