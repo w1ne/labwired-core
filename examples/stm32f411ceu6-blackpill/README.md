@@ -23,6 +23,11 @@ PA1/PA4 ADC aliases and checks ADC1 one-shot conversion results. This proves
 the modeled chip path; the Black Pill connector pinout and silicon behavior
 remain unverified.
 
+[`analog-mosfet-switch.yaml`](analog-mosfet-switch.yaml) adds a generic level-1
+NMOS load line on PA0/ADC1_IN0. Its co-simulation test checks the independently
+calculated drain voltage across gate bias points, the firmware-visible ADC1
+conversion, and isolation from the NTC and diode channels.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this

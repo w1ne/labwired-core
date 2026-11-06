@@ -96,6 +96,41 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
     (millivolts * 4095 / 3300).min(4095) as u16
 }
 
+/// Independent level-1 NMOS load-line reference for the board-routed test.
+fn mosfet_drain_voltage(gate_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+
+    let overdrive = gate_v - VTO;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 #[test]
 fn stm32f411ceu6_blackpill_ntc_and_diode_netlists_reach_pa1_pa4_adc1_end_to_end() {
     let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
@@ -201,4 +236,113 @@ fn stm32f411ceu6_blackpill_ntc_and_diode_netlists_reach_pa1_pa4_adc1_end_to_end(
         "ADC counts track the solved temperature-dependent voltage: {ntc_samples:?}"
     );
     assert_eq!(ntc_samples[1].1, 2047, "the 25 °C divider is half scale");
+}
+
+#[test]
+fn stm32f411ceu6_blackpill_mosfet_load_line_reaches_pa0_adc1_end_to_end() {
+    let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F411CEU6 Black Pill profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load the existing generic NTC and diode netlists");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-mosfet-switch.yaml",
+    ))
+    .expect("load the generic low-side MOSFET netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F411CEU6 descriptor");
+    assert_eq!(chip.analog_pins["PA0"].channel, 0);
+    assert_eq!(chip.analog_pins["PA1"].channel, 1);
+    assert_eq!(chip.analog_pins["PA4"].channel, 4);
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Black Pill bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and MOSFET netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all three unrelated devices must resolve through PA0/PA1/PA4 to ADC1"
+    );
+    for channel in [0, 1, 2, 3, 4, 5] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the independent generic NTC temperature");
+    let mut cycles = 0;
+    let mut drain_samples = Vec::new();
+    for gate_v in [0.0_f64, 0.8, 1.0, 2.0, 3.3] {
+        session
+            .set_signal_number("ui.mosfet.gate_v", gate_v)
+            .expect("set generic MOSFET gate voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, diode, and MOSFET netlists");
+        assert_eq!(steps.len(), 3, "all three unrelated netlists solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let drain_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let expected_drain_v = mosfet_drain_voltage(gate_v);
+        assert!(
+            (drain_v - expected_drain_v).abs() < 5e-5,
+            "level-1 NMOS load line at Vgs={gate_v} V should be {expected_drain_v} V, got {drain_v} V"
+        );
+        let expected_count = expected_adc_count(drain_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, 0),
+            expected_count,
+            "solved MOSFET drain voltage seeds ADC1 channel 0"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, 0),
+            u32::from(expected_count),
+            "firmware-visible ADC1 channel 0 conversion follows the MOSFET load line"
+        );
+
+        assert!(
+            (signal_voltage(&session, "board.analog.pa1_volts") - expected_ntc_v).abs() < 1e-9,
+            "the independent NTC divider remains on PA1/ADC1 channel 1"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa4_volts") - expected_diode_v).abs() < 2e-5,
+            "the independent Shockley diode remains on PA4/ADC1 channel 4"
+        );
+        assert_eq!(
+            adc_channel_count(&mut bus, 1),
+            expected_adc_count(expected_ntc_v)
+        );
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            expected_adc_count(expected_diode_v)
+        );
+        assert_eq!(
+            [2, 3, 5].map(|channel| adc_channel_count(&mut bus, channel)),
+            [0xFFFF; 3],
+            "unrouted neighboring ADC1 inputs remain isolated"
+        );
+        drain_samples.push((gate_v, drain_v));
+    }
+
+    assert_eq!(
+        drain_samples[0].1, drain_samples[2].1,
+        "Vgs below threshold leaves the drain at the supply"
+    );
+    assert!(
+        drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
+        "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
+    );
 }
