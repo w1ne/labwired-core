@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `5459e1b76d821fac` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `8b2014cf9018180e` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `b49f439a4c6a3afa` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `34f06c4069e36417` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `dbc662da90f682fa` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `bf9307b5b24ebe59` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `836048cdf56fc38a` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `6138400b7b3e0ae5` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `15e6cd773d87f576` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `c3bae3be8dd29c20` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `10ee1d2678e785aa` | no silicon capture |
 | `esp32` | ⚪ structural | — | `13876bdf8c7d0233` | no silicon capture |
@@ -49,25 +49,25 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `8ba0034a647d7553` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `1953cfada1ecc13d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `78b2bf78a0f471b9` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `0da40d2f1fbfa0fe` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `c776c950e3437dad` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `f05f3dd5a42455bf` | no silicon capture |
-| `cc2538sf53` | 🟡 smoke-manual | — | `42ee819e6295bb7c` | no silicon capture |
-| `amap42kp` | 🟡 smoke-manual | — | `598a095dce3fc5d4` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `b464831f4bbec50b` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `b66c2bd8aa5d92ec` | no silicon capture |
-| `same70q21b` | 🟡 smoke-manual | — | `2c62f119f71673dc` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `28dfc10f21f518cf` | no silicon capture |
-| `s32k388` | 🟡 smoke-manual | — | `7c1dd105708d6989` | no silicon capture |
-| `mimxrt595s` | 🟡 smoke-manual | — | `b1b0143ce5aaa759` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `eca057934891e768` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `882a78c9c564d561` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `38cfc90b609291f0` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `4a7188f85849a9e4` | no silicon capture |
-| `mpfs095t` | 🟡 smoke-manual | — | `85ff205d82e5933c` | no silicon capture |
-| `am6234` | 🟡 smoke-manual | — | `36d6d2c7248f200c` | no silicon capture |
-| `r5f52618bgfp` | 🟡 smoke-manual | — | `cc29384de9836075` | no silicon capture |
-| `pic32mz2048efm144` | 🟡 smoke-manual | — | `da9db1f9d989d49b` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `12dcda054109b941` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `19a4e9a737203abf` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `37fddf9cbb0d7b45` | no silicon capture |
+| `cc2538sf53` | 🟡 smoke-manual | — | `ed86a83e14706e56` | no silicon capture |
+| `amap42kp` | 🟡 smoke-manual | — | `1e1f2e52d8b869ae` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `df9eee652a1c3610` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `d9e6f43f29225feb` | no silicon capture |
+| `same70q21b` | 🟡 smoke-manual | — | `f82fe995fdb0ab63` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `0dc4fe360e8b5c20` | no silicon capture |
+| `s32k388` | 🟡 smoke-manual | — | `03b68a445c20567b` | no silicon capture |
+| `mimxrt595s` | 🟡 smoke-manual | — | `5152c4815a1ddc00` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `445a97d48ab09f14` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `0facd3d0a79081e1` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `186db05550a965a1` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `95b3cc4c7105151d` | no silicon capture |
+| `mpfs095t` | 🟡 smoke-manual | — | `2e2a6ad4fe5963b5` | no silicon capture |
+| `am6234` | 🟡 smoke-manual | — | `6abd849eb1b7a357` | no silicon capture |
+| `r5f52618bgfp` | 🟡 smoke-manual | — | `70a064b637888bba` | no silicon capture |
+| `pic32mz2048efm144` | 🟡 smoke-manual | — | `a79cf442c2e6965f` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 

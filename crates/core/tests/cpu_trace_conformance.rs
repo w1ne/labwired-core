@@ -555,7 +555,7 @@ fn every_cpu_core_is_covered_by_this_file() {
                     {
                         continue;
                     }
-                    if name == "CortexA7System" && !cfg!(feature = "qemu-arm-system") {
+                    if name == "ArmSystem" && !cfg!(feature = "qemu-arm-system") {
                         continue;
                     }
                     found.push(name.to_string());
