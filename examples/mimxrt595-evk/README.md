@@ -10,6 +10,13 @@ secure address map: `zephyr-hello.yaml` and `zephyr-sync.yaml`, fixtures
 rebuilt by `crates/firmware-mimxrt595-evk-zephyr/build.sh`. See
 `VALIDATION.md` for what that exercises and what it does not.
 
+`analog-ntc-diode-system.yaml` is a generic co-simulation fixture: a Beta NTC
+divider drives SW2/P0_10 and a separate Shockley diode load line drives
+SW1/P0_25 through the modeled GPIO input path. The integration test asserts
+the solved node voltages and LPC GPIO `PIN[0]` state. Its voltage thresholds
+are test-only assumptions, not MIMXRT595 silicon values; this does not add ADC
+support.
+
 ## What the firmware does
 
 1. Carries a FlexSPI configuration block header (tag `FCFB`, version 1.4.0)
@@ -75,6 +82,7 @@ that touches configs/ or examples/.
 | `system.yaml` | Board manifest (same as `configs/systems/mimxrt595-evk.yaml`) |
 | `io-smoke.yaml` | Ordered UART assertions over 4,000,000 steps |
 | `ci/build.sh`, `ci/test.sh` | Board gate build and proof |
+| `analog-ntc-diode-system.yaml` | Generic MNA models routed to the two modeled switch GPIO inputs |
 | `VALIDATION.md` | Claims, evidence and non-claims |
 | `REQUIRED_DOCS.md` | Sources |
 | `EXTERNAL_COMPONENTS.md` | Board parts not modelled |
