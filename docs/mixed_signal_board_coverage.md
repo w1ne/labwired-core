@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 90 have end-to-end analog coverage; 13 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 91 have end-to-end analog coverage; 12 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -101,7 +101,7 @@ Current inventory: **103 profiles; 90 have end-to-end analog coverage; 13 have n
 | `sam-e70-xplained` | [`cosim_same70_analog.rs`](../crates/core/tests/cosim_same70_analog.rs)::`sam_e70_xplained_ntc_and_diode_netlists_reach_ext1_pio_inputs` — generic Beta NTC and unrelated Shockley diode netlists solve onto EXT1 ADC(+)/PC31 and ADC(-)/PA19; PIO PDSR values, threshold crossings, and NTC hysteresis are asserted. Thresholds are simulation assumptions; AFEC conversion remains unmapped. |
 | `sam4s-xplained` | [`cosim_sam4s_analog.rs`](../crates/core/tests/cosim_sam4s_analog.rs)::`sam4s_xplained_ntc_and_diode_netlists_reach_ext1_pio_inputs` — generic Beta NTC and unrelated Shockley diode netlists solve onto EXT1 PA17/AD[0] and PA18/AD[1]; PIO PDSR, threshold crossings, and NTC hysteresis are asserted. Thresholds are simulation assumptions; ADC conversion remains unmapped. |
 | `seeed-xiao-nrf52840-sense` | [`cosim_seeed_xiao_nrf52840_analog.rs`](../crates/core/tests/cosim_seeed_xiao_nrf52840_analog.rs)::`seeed_xiao_nrf52840_ntc_and_diode_netlists_reach_distinct_saadc_channels` — generic Beta NTC and unrelated Shockley diode netlists solve to explicit SAADC channels 0/1; asserts solved voltages, temperature response, 12-bit EasyDMA results, channel isolation, undriven channel 2, and retained XIAO RGB LED wiring. Physical pad-to-AIN aliases are not claimed |
-| `simctl-selftest` | **NO E2E analog coverage** |
+| `simctl-selftest` | [`cosim_simctl_selftest_analog.rs`](../crates/core/tests/cosim_simctl_selftest_analog.rs)::`simctl_selftest_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach the Cortex-M3 fixture's PA0/PA1 GPIO inputs; solved voltages, GPIO levels, and NTC hysteresis are asserted while retaining the simctl peripheral. Thresholds are CI fixture assumptions, not silicon data. |
 | `sk-am62` | [`cosim_sk_am62_analog.rs`](../crates/core/tests/cosim_sk_am62_analog.rs)::`sk_am62_ntc_and_diode_netlists_reach_simulated_input_thresholds` — generic Beta NTC and unrelated Shockley diode solve to separate simulation-only input endpoints; asserts solved voltages, threshold crossings, and NTC hysteresis. AM6234 GPIO registers, physical pads, ADC conversion, and silicon thresholds are not modelled |
 | `smart-ring` | **NO E2E analog coverage** |
 | `stm32f072b-disco` | **NO E2E analog coverage** |
