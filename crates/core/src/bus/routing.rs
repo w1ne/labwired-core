@@ -260,6 +260,28 @@ impl SystemBus {
                 let idx = bus.find_peripheral_index_by_name(gpio_name)?;
                 let base = bus.peripherals[idx].base;
                 let dev = bus.peripherals[idx].dev.as_ref();
+                // The ESP32-S3 GPIO model has separate IN/IN1 registers, but
+                // does not implement the generic GpioPort offset trait. Its
+                // board-specific pin map is still authoritative, so resolve
+                // those entries directly instead of failing before the
+                // ESP32-family fallback below can see the GPIO label.
+                if dev
+                    .as_any()
+                    .and_then(|a| {
+                        a.downcast_ref::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                    })
+                    .is_some()
+                {
+                    if *bit > 48 {
+                        return None;
+                    }
+                    let (offset, input_bit) = if *bit >= 32 {
+                        (0x40, *bit - 32)
+                    } else {
+                        (0x3C, *bit)
+                    };
+                    return Some((base + offset, input_bit));
+                }
                 if let Some(idr_off) = dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
@@ -289,12 +311,16 @@ impl SystemBus {
         if let Some((idx, bit, offsets)) = Self::resolve_avr_port_pin(bus, pin) {
             return Some((bus.peripherals[idx].base + offsets.input, bit));
         }
-        // ESP32 / ESP32-C3: "GPIO5", "gpio5", "IO5", or bare "5" → gpio peripheral IN reg.
-        if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
-            let idx = bus.find_peripheral_index_by_name("gpio")?;
-            let is_esp32 = bus.peripherals[idx]
-                .dev
-                .as_any()
+        // ESP32-family labels → the matching GPIO input bank.
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            let any = bus.peripherals[idx].dev.as_any();
+            let is_s3 = any
+                .map(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                        .is_some()
+                })
+                .unwrap_or(false);
+            let is_classic_or_c3 = any
                 .map(|a| {
                     a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
                         .is_some()
@@ -302,21 +328,31 @@ impl SystemBus {
                             .is_some()
                 })
                 .unwrap_or(false);
-            if is_esp32 {
+            let bit = if is_s3 {
+                Self::parse_esp32s3_gpio_pin(pin)
+            } else if is_classic_or_c3 {
+                Self::parse_esp32_gpio_pin(pin)
+            } else {
+                None
+            };
+            if let Some(bit) = bit {
                 // TRM: GPIO_IN_REG at base+0x3C on classic ESP32; C3 uses the same
-                // Esp32c3Gpio path — prefer the peripheral's idr_offset when present.
+                // offset. The S3 has a second bank, GPIO_IN1 at base+0x40.
                 if let Some(idr_off) = bus.peripherals[idx]
                     .dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                    .filter(|_| !is_s3)
                     .map(|g| g.idr_offset())
                 {
                     return Some((bus.peripherals[idx].base + idr_off, bit));
                 }
-                // Esp32c3Gpio is not GpioPort — use known IN register offset (0x3C / matches ODR+delta style).
-                // Esp32c3 GPIO_IN_REG is at 0x3C from GPIO base (TRM); OUT is 0x04.
-                const GPIO_IN_REG_OFFSET: u64 = 0x3C;
-                return Some((bus.peripherals[idx].base + GPIO_IN_REG_OFFSET, bit));
+                let (offset, input_bit) = if is_s3 && bit >= 32 {
+                    (0x40, bit - 32)
+                } else {
+                    (0x3C, bit)
+                };
+                return Some((bus.peripherals[idx].base + offset, input_bit));
             }
         }
         None

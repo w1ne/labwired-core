@@ -1,7 +1,7 @@
 # Narrow Heltec WiFi LoRa 32 V4.3 profile for the ESP32-S3R2 model.
-# Only GPIO35 and its onboard white status LED are exercised. The onboard OLED,
-# SX1262 radio, PSRAM, GNSS header, battery circuit, USB, Wi-Fi and BLE are not
-# claimed by this smoke profile.
+# This profile exercises the GPIO35 status LED and the SX1262 command interface
+# over GP-SPI3. RF, OLED, PSRAM, GNSS, battery circuit, USB, Wi-Fi and BLE are
+# outside its scope.
 name: "esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke"
 arch: "xtensa-lx7"
 cpu_hz: 240_000_000
@@ -14,6 +14,12 @@ ram:
   size: "512KB"
 
 pins:
+  GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: spi, peripheral: spi3, role: nss }] }
+  GPIO9: { gpio: "gpio", bit: 9, functions: [{ type: spi, peripheral: spi3, role: sck }] }
+  GPIO10: { gpio: "gpio", bit: 10, functions: [{ type: spi, peripheral: spi3, role: mosi }] }
+  GPIO11: { gpio: "gpio", bit: 11, functions: [{ type: spi, peripheral: spi3, role: miso }] }
+  GPIO13: { gpio: "gpio", bit: 13, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO14: { gpio: "gpio", bit: 14, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO35: { gpio: "gpio", bit: 35, functions: [{ type: gpio, peripheral: gpio }] }
 
 peripherals:
@@ -21,3 +27,14 @@ peripherals:
     type: "esp32s3_gpio"
     base_address: 0x60004000
     size: "2KB"
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+  - id: "spi3"
+    type: "esp32s3_spi"
+    base_address: 0x60025000
+    size: "4KB"
+    irq: 22

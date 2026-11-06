@@ -1,9 +1,17 @@
 # Heltec WiFi LoRa 32 V4.3 with ESP32-S3R2.
-# This is a narrow board slice: only the onboard white LED on GPIO35 is modelled.
+# The model covers the onboard white LED and SX1262 SPI command interface.
 name: "heltec-wifi-lora-32-v4-s3r2"
 chip: "../chips/esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke.yaml"
 cpu_hz: 240_000_000
-external_devices: []
+debug_uart: "uart0"
+external_devices:
+  - id: "lora"
+    type: "sx1262"
+    connection: "spi3_s3"
+    config:
+      cs_pin: "GPIO8"
+      busy_pin: "GPIO13"
+      dio1_pin: "GPIO14"
 board_io:
   - id: "status_led"
     kind: "led"

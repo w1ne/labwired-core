@@ -6,10 +6,17 @@ demand family; it is not a new chip. Heltec's current product listing reports
 the selected S3R2/OLED V4.3 variant in stock at $19.90; see
 [`evidence/vendor-status.md`](evidence/vendor-status.md).
 
-This narrow profile boots ESP32-S3 firmware and toggles the board's onboard white
-status LED on GPIO35. The LED's GPIO model is checked by the committed local
-smoke. The profile does not claim the SSD1315 OLED, SX1262 LoRa radio, PSRAM,
-GNSS connector, battery or charger, USB, Wi-Fi, or BLE.
+This profile boots ESP32-S3 firmware, toggles the board's onboard white status
+LED on GPIO35, and attaches the SX1262 model to GP-SPI3. A second smoke checks
+LoRa packet-type configuration and the model's TxDone IRQ on DIO1/GPIO14. This
+is board-peripheral coverage in ESP32's rank #1 demand family, not a new MCU
+pick. Current vendor status and hardware sources are recorded in
+[`evidence/vendor-status.md`](evidence/vendor-status.md).
+
+The profile does not claim the SSD1315 OLED, RF transmission or reception,
+antenna/FEM behavior, PSRAM, GNSS connector, battery or charger, USB, Wi-Fi, or
+BLE. The SX1262 twin models its SPI command interface and an immediate TxDone
+event, not an over-the-air radio link.
 
 ## Copy-paste Arduino example
 
@@ -49,3 +56,18 @@ RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 The smoke asserts repeated GPIO35 transitions. It does not test the physical
 board or any of the omitted components. See
 [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).
+
+## Run the SX1262 command smoke
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id heltec-wifi-lora-32-v4-s3r2-sx1262 \
+  --firmware-build-script examples/heltec-wifi-lora-32-v4-s3r2/ci/build-radio-firmware.sh \
+  --script examples/heltec-wifi-lora-32-v4-s3r2/radio-onboarding-smoke.yaml \
+  --system configs/systems/heltec-wifi-lora-32-v4-s3r2.yaml \
+  --out-dir examples/heltec-wifi-lora-32-v4-s3r2/evidence/sx1262
+```
+
+This checks `SetPacketType(LoRa)` / `GetPacketType` and the model's `TxDone`
+IRQ on DIO1. It does not transmit a packet or verify RF behavior. The run log
+and result are committed under `evidence/sx1262/`.

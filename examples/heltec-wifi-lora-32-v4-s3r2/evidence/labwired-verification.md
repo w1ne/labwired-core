@@ -10,3 +10,7 @@ Checked 2026-11-06 UTC with `labwired_verify`.
 The exact Heltec V4 S3R2 configuration separately passes the repository's
 `scripts/onboarding_smoke.sh` check. Its committed run log asserts at least
 eight GPIO35 edges: [`logs/run_smoke.log`](logs/run_smoke.log).
+
+The SX1262 radio smoke is a separate repository-local run, not covered by this
+hosted oracle result. The hosted component catalog returned no `sx1262` entry
+when checked on 2026-11-06, so no hosted radio model-verification claim is made.
