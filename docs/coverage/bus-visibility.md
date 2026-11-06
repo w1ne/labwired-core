@@ -32,6 +32,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+* **atmega328pb**
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+  * UART: USART1 emits bytes in the CPU smoke, but this edge gate has no AVR UART waveform bring-up
 * **atsamd21**
   * UART: Nano 33 IoT twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **atsamd51**
@@ -117,6 +121,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atmega2560 | — | — | — |
 | atmega2561 | — | — | — |
 | atmega328p | — | — | — |
+| atmega328pb | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21e15a | — | — | — |
 | atsamd21e16a | — | — | — |

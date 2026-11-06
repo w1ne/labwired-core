@@ -11,6 +11,10 @@ firmware, would satisfy every synthetic case here and gate nothing.
 from __future__ import annotations
 
 import sys
+import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -306,6 +310,84 @@ def test_cargo_args_are_one_package_per_line(tmp_path, capsys):
     root = make_repo(tmp_path, TRIO, default_members=DEFAULTS, workflow=WASM_STEP)
     assert scope.main(["--cargo-args", "--root", str(root)]) == 0
     assert capsys.readouterr().out.splitlines() == ["--package=host-crate"]
+
+
+def test_host_cargo_args_include_defaults_and_browser_package(tmp_path, capsys):
+    root = make_repo(tmp_path, TRIO, default_members=DEFAULTS, workflow=WASM_STEP)
+    assert scope.main(["--host-cargo-args", "--root", str(root)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "--package=default-member", "--package=host-crate", "--package=labwired-wasm"
+    ]
+
+
+def test_host_cargo_args_fail_closed_for_unknown_target(tmp_path, capsys):
+    crate = {"name": "odd", "cargo_target": "x86_64-unknown-linux-musl"}
+    root = make_repo(tmp_path, {"crates/a": crate})
+    assert scope.main(["--host-cargo-args", "--root", str(root)]) == 1
+    assert capsys.readouterr().out == ""
+
+
+def test_host_cargo_args_refuse_an_empty_host_set(tmp_path, capsys):
+    root = make_repo(tmp_path, {"crates/a": NOSTD})
+    assert scope.main(["--host-cargo-args", "--root", str(root)]) == 1
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("classification", ["valid", "unknown", "empty"])
+def test_pre_commit_uses_full_host_scope_and_propagates_failure(tmp_path, classification):
+    crates = dict(TRIO)
+    if classification == "unknown":
+        crates["crates/unknown"] = {
+            "name": "unknown", "cargo_target": "x86_64-unknown-linux-musl"
+        }
+    root = make_repo(tmp_path, crates, default_members=DEFAULTS, workflow=WASM_STEP)
+    scripts = root / "scripts"
+    (scripts / "ci").mkdir(parents=True)
+    shutil.copy(scope.REPO_ROOT / "scripts/pre-commit.sh", scripts / "pre-commit.sh")
+    shutil.copy(Path(scope.__file__), scripts / "ci/host_clippy_scope.py")
+    if classification == "empty":
+        # Even an erroneous successful classifier returning no packages must
+        # not fall through to cargo's narrower default-members behavior.
+        (scripts / "ci/host_clippy_scope.py").write_text("raise SystemExit(0)\n")
+    # Record the commands around the real classifier without compiling a
+    # synthetic workspace. A bad scope must abort before any host cargo check.
+    recorder = (
+        f"#!{sys.executable}\nimport json, os, sys\n"
+        "with open(os.environ['COMMAND_LOG'], 'a') as log:\n"
+        "    log.write(json.dumps([os.path.basename(sys.argv[0]), *sys.argv[1:]]) + '\\n')\n"
+    )
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    for name in ["cargo", "git"]:
+        path = bin_dir / name
+        path.write_text(recorder)
+        path.chmod(0o755)
+    (scripts / "generate_validation_status.py").write_text(recorder)
+    # The hook's optional PyYAML presence probe should also exercise the status
+    # commands on test hosts where PyYAML itself is not installed.
+    (root / "yaml.py").write_text("")
+    log = root / "commands.jsonl"
+    env = dict(os.environ, PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+               COMMAND_LOG=str(log), PYTHONPATH=str(root))
+    result = subprocess.run(["bash", str(scripts / "pre-commit.sh")], cwd=root,
+                            env=env, capture_output=True, text=True)
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert calls[:2] == [["cargo", "fmt", "--all", "--", "--check"],
+                         ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]]
+    if classification != "valid":
+        assert result.returncode != 0
+        expected_error = "cannot classify" if classification == "unknown" else "Host scope is empty"
+        assert expected_error in result.stderr
+        assert len(calls) == 2
+    else:
+        assert result.returncode == 0, result.stderr
+        assert calls[2:] == [
+            ["cargo", "check", "--package=default-member", "--package=host-crate",
+             "--package=labwired-wasm"],
+            ["generate_validation_status.py"],
+            ["generate_validation_status.py", "--drift"],
+            ["git", "add", "docs/boards/VALIDATION_STATUS.md"],
+        ]
 
 
 # ── the live tree ─────────────────────────────────────────────────────────────

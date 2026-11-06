@@ -661,6 +661,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "atmega328pb",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "atmega2560",
     "reg_match": 0
   },

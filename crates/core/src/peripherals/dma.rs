@@ -49,6 +49,16 @@ const CCR_TEIE: u32 = 1 << 3;
 /// The scheduler token of the controller's arbiter event.
 const ARBITER_TOKEN: u32 = 0;
 
+/// Successful bus transactions, independent of firmware's driver counters.
+#[derive(Debug, Default, serde::Serialize)]
+struct DmaObservation {
+    completed_items: u64,
+    completed_bytes: u64,
+    transfer_errors: u64,
+    last_source: u64,
+    last_destination: u64,
+}
+
 /// STM32 DMA1 controller — 7 channels, F1/F4/L4 compatible.
 ///
 /// L4 adds the CSELR register at offset 0xA8: a 32-bit field with 4 bits
@@ -174,11 +184,56 @@ pub struct Dma1 {
     /// walk path.
     #[serde(skip)]
     clock: Option<CycleClock>,
+    /// Opt-in G0 DMA1 semantics. Other families retain their existing model.
+    #[serde(skip)]
+    g0_channel_irqs: Option<[u32; 7]>,
+    /// G0 count/flags commit only after the bus reports a successful copy.
+    #[serde(skip)]
+    g0_pending: Option<usize>,
+    observations: [DmaObservation; 7],
 }
 
 impl Dma1 {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// RM0444 DMA1: circular reload, level requests and channel IRQ groups.
+    /// DMA2 is a separate controller and is not implied by this profile.
+    pub fn new_stm32g0() -> Self {
+        Self {
+            g0_channel_irqs: Some([9, 10, 10, 11, 11, 11, 11]),
+            ..Self::default()
+        }
+    }
+
+    /// Observed successful MMIO/memory copies, indexed by channel 1..7.
+    pub fn transfer_observation(&self) -> serde_json::Value {
+        serde_json::json!({"profile": if self.g0_channel_irqs.is_some() {"stm32g0"} else {"legacy"}, "channels": self.observations})
+    }
+
+    fn g0_irq_levels(&self) -> Vec<(u32, bool)> {
+        let Some(irqs) = self.g0_channel_irqs else {
+            return Vec::new();
+        };
+        let mut levels: Vec<(u32, bool)> = Vec::new();
+        for (i, irq) in irqs.iter().copied().enumerate() {
+            let flags = (self.isr >> (4 * i)) & 0xe;
+            let level = flags & self.channels[i].ccr & 0xe != 0;
+            if let Some((_, current)) = levels.iter_mut().find(|(line, _)| *line == irq) {
+                *current |= level;
+            } else {
+                levels.push((irq, level));
+            }
+        }
+        levels
+    }
+
+    fn g0_pending_irqs(&self) -> Vec<u32> {
+        self.g0_irq_levels()
+            .into_iter()
+            .filter_map(|(irq, high)| high.then_some(irq))
+            .collect()
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -209,7 +264,7 @@ impl Dma1 {
     /// The controller has a slot to run: a channel with work, or an
     /// interrupt to deliver.
     fn has_work(&self) -> bool {
-        self.irq_deferred || self.arbiter_winner().is_some()
+        self.irq_deferred || self.arbiter_winner().is_some() || !self.g0_pending_irqs().is_empty()
     }
 
     /// One arbitration slot: the winning channel moves one element. The ONE
@@ -228,11 +283,12 @@ impl Dma1 {
     fn tick_channels_once(&mut self) -> PeripheralTickResult {
         let (req, irq) = self.run_slot();
         PeripheralTickResult {
-            irq,
+            irq: irq && self.g0_channel_irqs.is_none(),
             // B4 tick-cost normalization: charge zero in every state so the
             // walk-on reference and scheduler path agree cycle-for-cycle.
             cycles: 0,
             dma_requests: req.map(|r| vec![r]),
+            explicit_irqs: self.g0_channel_irqs.map(|_| self.g0_pending_irqs()),
             ..Default::default()
         }
     }
@@ -285,7 +341,21 @@ impl Dma1 {
             0x00 => {} // ISR is read-only; ignore writes (and avoid underflow)
             0x04 => {
                 // IFCR: Write 1 to clear corresponding ISR bits
-                self.isr &= !value;
+                if self.g0_channel_irqs.is_some() {
+                    for i in 0..7 {
+                        let clear = (value >> (4 * i)) & 0xf;
+                        let mut flags = (self.isr >> (4 * i)) & 0xf;
+                        flags = if clear & 1 != 0 {
+                            0
+                        } else {
+                            flags & !clear & 0xe
+                        };
+                        flags |= u32::from(flags & 0xe != 0);
+                        self.isr = (self.isr & !(0xf << (4 * i))) | (flags << (4 * i));
+                    }
+                } else {
+                    self.isr &= !value;
+                }
             }
             0xA8 => {
                 // CSELR: only the low 28 bits are valid (4 bits × 7 channels).
@@ -302,8 +372,20 @@ impl Dma1 {
                             // 0 (silicon-confirmed on F103). The reserved PSIZE/
                             // MSIZE=0b11 encoding clamps on silicon — a value
                             // detail beyond this flat mask.
+                            let value =
+                                if self.g0_channel_irqs.is_some() && old_en && value & 1 != 0 {
+                                    // Configuration fields are locked while EN=1;
+                                    // interrupt enables remain writable.
+                                    (self.channels[chan_idx].ccr & !0xf) | (value & 0xf)
+                                } else {
+                                    value
+                                };
                             self.channels[chan_idx].ccr = value & 0x0000_7FFF;
                             let new_en = (value & 1) != 0;
+                            if self.g0_channel_irqs.is_some() && !new_en {
+                                self.channels[chan_idx].active = false;
+                                self.channels[chan_idx].requests = 0;
+                            }
                             if !old_en && new_en {
                                 let chan = &mut self.channels[chan_idx];
                                 // Only a memory-to-memory channel starts on
@@ -315,8 +397,14 @@ impl Dma1 {
                                 chan.cpar_ptr = chan.cpar;
                                 chan.cmar_ptr = chan.cmar;
                                 chan.cndtr_initial = chan.cndtr;
+                                if self.g0_channel_irqs.is_some() {
+                                    chan.requests = 0;
+                                }
                             }
                         }
+                        0x04 | 0x08 | 0x0c
+                            if self.g0_channel_irqs.is_some()
+                                && self.channels[chan_idx].ccr & 1 != 0 => {}
                         0x04 => self.channels[chan_idx].cndtr = value & 0xFFFF,
                         0x08 => self.channels[chan_idx].cpar = value,
                         0x0C => self.channels[chan_idx].cmar = value,
@@ -386,6 +474,14 @@ impl Dma1 {
             }),
             remaining: (mem2mem == 0).then(|| chan.cndtr - 1),
         };
+
+        if self.g0_channel_irqs.is_some() {
+            // The count, pointers and flags become visible only after this
+            // real bus copy succeeds. A bus error cannot look like DMA TC.
+            self.g0_pending = Some(i);
+            chan.active = false;
+            return (Some(request), false);
+        }
 
         chan.cndtr -= 1;
         if (chan.ccr & (1 << 7)) != 0 {
@@ -498,7 +594,11 @@ impl Peripheral for Dma1 {
                 // Channel is enabled: latch the request for the arbiter. In
                 // scheduler mode the bus follows this with
                 // `collect_scheduled_events`, which arms the arbiter event.
-                chan.requests = chan.requests.saturating_add(1);
+                chan.requests = if self.g0_channel_irqs.is_some() {
+                    1
+                } else {
+                    chan.requests.saturating_add(1)
+                };
                 chan.active = true;
             }
         }
@@ -582,7 +682,8 @@ impl Peripheral for Dma1 {
         let reschedule = self.has_work();
         self.arbiter_live = reschedule;
         crate::sched::EventResult {
-            raise_own_irq: irq,
+            raise_own_irq: irq && self.g0_channel_irqs.is_none(),
+            explicit_irqs: self.g0_pending_irqs(),
             reschedule_delay: reschedule.then_some(1),
             dma_requests: req.into_iter().collect(),
             ..Default::default()
@@ -595,6 +696,8 @@ impl Peripheral for Dma1 {
         let Some(i) = self.last_served else {
             return;
         };
+        self.g0_pending = None;
+        self.observations[i].transfer_errors += 1;
         let chan = &mut self.channels[i];
         chan.ccr &= !1;
         chan.active = false;
@@ -602,6 +705,68 @@ impl Peripheral for Dma1 {
         let teie = chan.ccr & CCR_TEIE != 0;
         self.isr |= (1 << (i * 4 + 3)) | (1 << (i * 4));
         self.irq_deferred |= teie;
+    }
+
+    fn dma_transfer_complete(&mut self, item: &DmaRequest) -> bool {
+        let Some(i) = self.g0_pending.take() else {
+            return false;
+        };
+        let chan = &mut self.channels[i];
+        let obs = &mut self.observations[i];
+        obs.completed_items += 1;
+        obs.completed_bytes += u64::from(item.transform.map_or(1, |t| t.dst_width));
+        obs.last_source = item.src_addr;
+        obs.last_destination = item.addr;
+        chan.cndtr -= 1;
+        let psize = 1u32 << ((chan.ccr >> 8) & 3).min(2);
+        let msize = 1u32 << ((chan.ccr >> 10) & 3).min(2);
+        if chan.ccr & (1 << 6) != 0 {
+            chan.cpar_ptr = chan.cpar_ptr.wrapping_add(psize);
+        }
+        if chan.ccr & (1 << 7) != 0 {
+            chan.cmar_ptr = chan.cmar_ptr.wrapping_add(msize);
+        }
+        chan.requests = 0;
+        chan.active = chan.ccr & (1 << 14) != 0;
+        if chan.cndtr_initial >= 2 && chan.cndtr == chan.cndtr_initial / 2 {
+            self.isr |= 5 << (i * 4); // HTIF + GIF, once per circular lap.
+        }
+        if chan.cndtr == 0 {
+            self.isr |= 3 << (i * 4); // TCIF + GIF.
+            if chan.ccr & (1 << 5) != 0 && chan.ccr & (1 << 14) == 0 {
+                chan.cndtr = chan.cndtr_initial;
+                chan.cpar_ptr = chan.cpar;
+                chan.cmar_ptr = chan.cmar;
+            } else {
+                chan.active = false;
+            }
+        }
+        self.irq_deferred |= !self.g0_pending_irqs().is_empty();
+        true
+    }
+
+    fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        for (irq, high) in self.g0_irq_levels() {
+            report(irq, high);
+        }
+    }
+
+    fn requires_clocked_tick(&self) -> bool {
+        self.g0_channel_irqs.is_some()
+    }
+
+    fn on_node_reset(&mut self) {
+        if self.g0_channel_irqs.is_some() {
+            self.isr = 0;
+            self.ifcr = 0;
+            self.cselr = 0;
+            self.channels = Default::default();
+            self.irq_deferred = false;
+            self.last_served = None;
+            self.arbiter_live = false;
+            self.g0_pending = None;
+            self.observations = Default::default();
+        }
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -616,7 +781,11 @@ impl Peripheral for Dma1 {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+        let mut value = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
+        if self.g0_channel_irqs.is_some() {
+            value["profile"] = serde_json::json!("stm32g0");
+        }
+        value
     }
 }
 

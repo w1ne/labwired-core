@@ -892,6 +892,17 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks"),
     },
+    // Exact ATmega328PB-AU CPU model with PB-only USART1 register routing.
+    // The firmware gate asserts USART1 output and PB5 high; no silicon capture
+    // or package-pad map exists yet, so this is L1 behavior evidence only.
+    ChipConf {
+        name: "atmega328pb",
+        yaml: "configs/chips/atmega328pb.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5",
+        ),
+    },
     // Behavior: Arduino-core Mega 2560 sketch (LED pins on ports E/G/F/B/H,
     // A8/A9 via MUX5, millis, Serial). No silicon capture → below L2.
     ChipConf {

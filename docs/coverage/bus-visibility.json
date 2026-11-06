@@ -29,6 +29,10 @@
   },
   {
     "buses": [],
+    "name": "atmega328pb"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {

@@ -511,6 +511,9 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // ATmega328PB has a CPU-level USART1/PB5 smoke but no catalog board,
+        // package-pad map, or executing-fidelity differential yet.
+        "atmega328pb",
         // ATmega2560 (Arduino Mega 2560) on the 328P AVR model. Has a chip
         // descriptor, a system manifest, a gated sim-validate example with an
         // io-smoke and the avr_mega2560_io integration tests. It is not a
