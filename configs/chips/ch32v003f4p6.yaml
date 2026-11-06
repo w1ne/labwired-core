@@ -19,7 +19,6 @@
 name: "ch32v003f4p6"
 arch: "riscv"
 core: "rv32ec"
-registers_count: 16
 cpu_hz: 48_000_000
 
 # WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
@@ -35,7 +34,6 @@ flash_boot_alias: true
 # PinLoc labels are the package pads' GPIO names, independent of TSSOP pin number.
 package: "TSSOP20"
 pin_count: 20
-gpio_pin_count: 18
 pins:
   PA1: { gpio: "gpioa", bit: 1 }
   PA2: { gpio: "gpioa", bit: 2 }

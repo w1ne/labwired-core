@@ -88,9 +88,8 @@ pub enum RccRegisterLayout {
     /// and poll bit22; U5 (RM0456) has no such field, so the two must not
     /// share a layout.
     Stm32Wba,
-    /// WCH CH32V003 RCC register layout. Its descriptor mapping is deferred;
-    /// the register model offsets are provisional because CH32V003RM could
-    /// not be checked through the available cited-fact source in this slice.
+    /// WCH CH32V003 RCC register layout. Offsets and control bits are checked
+    /// against WCH's `ch32v00x.h` (see [`WchRcc`]).
     Wch,
     /// STM32G0 family (RM0444 §5). Its own map: CR/ICSCR/CFGR/PLLCFGR at
     /// 0x00–0x0C with 3-bit SW/SWS fields in CFGR (SW[2:0] bits 0–2,
@@ -2596,10 +2595,24 @@ impl RccModel for G0Rcc {
 
 // ── WCH CH32V003 ────────────────────────────────────────────────────────────
 
-/// WCH's CH32V003 clock tree. The offsets and bit positions in this model are
-/// provisional until they can be checked against CH32V003RM. The oscillator
-/// rates and basic source-switch contract below follow the values explicitly
-/// provided in the task brief; they are model inputs, not silicon validation.
+/// WCH's CH32V003 clock tree.
+///
+/// Verified against WCH's standard peripheral library, openwch/ch32v003 at
+/// b35b1e54a95f (2026-10-19):
+/// - `EVT/EXAM/SRC/Peripheral/inc/ch32v00x.h` (sha256
+///   3462556b6040bfbc09139931d0da732822a4876d30b1ea015aad7d8f267a2bf3):
+///   `RCC_BASE` = 0x4002_1000; `RCC_TypeDef` gives CTLR 0x00, CFGR0 0x04,
+///   AHBPCENR 0x14, APB2PCENR 0x18, APB1PCENR 0x1C; CTLR HSION bit 0, HSIRDY
+///   bit 1, HSEON bit 16, HSERDY bit 17, PLLON bit 24, PLLRDY bit 25; CFGR0
+///   SW[1:0], SWS[3:2], HPRE[7:4], PLLSRC bit 16; `HSI_VALUE` 24 MHz.
+/// - `EVT/EXAM/SRC/Peripheral/src/ch32v00x_rcc.c` (sha256
+///   5d0ae70b301aa9dd88cacbcd4007f7c2c37d327afac7c5b4928c4c91e9c5ae12):
+///   the PLL input is HSI×2 or HSE×2 (`RCC_PLLSource_HSI_MUL2` /
+///   `RCC_PLLSource_HSE_MUL2`).
+///
+/// Not verified from those sources: `LSI_HZ` (128 kHz) and the 4–25 MHz HSE
+/// range accepted by [`WchRcc::set_hse_frequency`]. This is a register model,
+/// not silicon validation.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WchRcc {
     ctlr: u32,
@@ -2616,7 +2629,7 @@ impl WchRcc {
     pub const LSI_HZ: u32 = 128_000;
     pub const PLL_MULTIPLIER: u32 = 2;
 
-    // These offsets and control bits are provisional pending RM verification.
+    // Offsets and control bits: ch32v00x.h `RCC_TypeDef` / `RCC_*` defines.
     const CTLR: u64 = 0x00;
     const CFGR0: u64 = 0x04;
     const AHBPCENR: u64 = 0x14;
@@ -2644,8 +2657,8 @@ impl WchRcc {
         this
     }
 
-    /// Set the fitted HSE frequency. The task brief gives the supported range
-    /// as 4–25 MHz; values outside that range are rejected.
+    /// Set the fitted HSE frequency. Values outside 4–25 MHz are rejected; that
+    /// range is not verified against WCH sources.
     pub fn set_hse_frequency(&mut self, hz: u32) -> bool {
         if !(4_000_000..=25_000_000).contains(&hz) {
             return false;

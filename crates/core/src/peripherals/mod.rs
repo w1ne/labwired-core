@@ -90,7 +90,6 @@ pub mod nvic;
 pub mod pad_claims;
 pub mod pad_lines;
 pub mod pad_routing;
-pub mod pfic;
 pub mod pic24_gpio;
 pub mod pic32_timer;
 pub mod pic32_uart;

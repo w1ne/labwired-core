@@ -1781,7 +1781,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 240d8573df1e0f21d18ad2a3c9c4c1b24f5f4730e373c11375e7614a1b08195c
+    drift_ack_digest: 65fb88305dd8bcb87e01276e856c20442637351102e5db4ae561d9414aa57000
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2401,6 +2401,11 @@ boards:
     # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
     # (the test that would catch a pin_count regression). ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -3957,7 +3962,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: b140c55a023dc4e6d6961c01a0c9cb7a7ba0bd79925d8cee397f53e22f4fe87d
+    drift_ack_digest: 2875b433b69e01720a7115568c8b204f8ab16e7347addb67b925deb88c7e610b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4565,6 +4570,11 @@ boards:
     # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
     # (the test that would catch a pin_count regression). ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -5057,7 +5067,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 1d77eb0df7e36dc37dd4a6a4de2512739cf808344af969273d3d87dcae8b157b
+    drift_ack_digest: 0b38234f04de52933b375461b932cd201903c2c3e30154fee613e294c4c1640a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5598,6 +5608,11 @@ boards:
     # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
     # (the test that would catch a pin_count regression). ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6148,7 +6163,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 5b4657cb981efbb2125d17eef71e97d40e63de209d026695e8818a51d40846db
+    drift_ack_digest: 723a6a5766c5c7101f5c9747e356d25bb235e884d85cf08933534302d8588741
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6759,6 +6774,11 @@ boards:
     # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
     # (the test that would catch a pin_count regression). ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -7272,7 +7292,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: cdbbea16e9532999b9172ef607fbc0d4775718b298a5a61940a6a9b30d499487
+    drift_ack_digest: c54a792d3eaf35f28f53a51d5ebc005d1df53e528143b9c89eb08ad78c7d76f1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7815,6 +7835,11 @@ boards:
     # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
     # (the test that would catch a pin_count regression). ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (feat/ch32v003-rv32e-profile, review fixes): re-acked.
+    #   peripherals/mod.rs drops `pub mod pfic;` (the standalone PFIC model was
+    #     never mapped by any descriptor, so nothing reached it); rcc.rs
+    #     changes doc comments on the WCH layout only. No executable line
+    #     touched. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
     drift_ack: 2026-11-06
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`

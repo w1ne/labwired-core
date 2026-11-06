@@ -820,7 +820,7 @@ fn every_shipped_descriptor_is_ratcheted() {
         // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
         // catalog board, no silicon oracle (no CH32V003 has been diffed over
         // SDI) and no executing-fidelity differential of its own. The slice
-        // models RCC, PFIC and GPIO A/C/D only — USART/I2C/SPI/ADC are not
+        // models RCC and GPIO A/C/D only (no PFIC) — USART/I2C/SPI/ADC are not
         // modelled, so there is no bus to diff yet. Promote when the catalog
         // board, a bus model and a differential all exist.
         "ch32v003f4p6",

@@ -11,6 +11,13 @@ Build the ELF with a RISC-V GCC that supports `-march=rv32e -mabi=ilp32e`:
 ./examples/ch32v003f4p6/build.sh
 ```
 
+The committed `tests/fixtures/ch32v003f4p6-blink.elf` was built with
+`riscv32-esp-elf-gcc` 14.2.0 (crosstool-NG `esp-14.2.0_20260121`, as recorded
+in the ELF's `.comment` section). Its sha256 is
+`67196d739f228401711ced1702295e3129f6df7136f1c2244cc051e14dfba329`. A
+different GCC may produce different bytes; the smoke checks behaviour, not the
+hash.
+
 Run the committed firmware against the local CH32V003 model:
 
 ```sh
