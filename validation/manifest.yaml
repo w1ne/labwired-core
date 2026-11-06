@@ -10151,8 +10151,9 @@ boards:
     # 2026-10-30: Renesas EK-RA6M5 (R7FA6M5BH, Cortex-M33; 2 MiB code flash
     # at 0x0, 512 KiB SRAM at 0x20000000). First RA6M5 part. Reuses the RA4M1
     # models at the RA6M5 bases: PORT0-B (ra_port), PmnPFS/PWPR (ra_pfs),
-    # SYSTEM (id ra_sysc, now the full ra6_sysc register file, see below)
-    # and SCI0 on the sci layout. MSTP, ICU,
+    # SYSTEM (id ra_sysc, now the full ra6_sysc register file, see below),
+    # SCI0 on the sci layout, and the SVD-derived MSTP register file (readback
+    # only; it does not gate modules). ICU,
     # DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS/USBHS, IIC, CANFD, AGT, ETHERC,
     # SPI, GPT, ADC12 and FACI are declared stubs; SCI1-9 and the remaining
     # blocks are not mapped.
@@ -10187,6 +10188,7 @@ boards:
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra6m5_sci_icu (SCI0 RXI/TXI/TEI through ICU IELSR0-2, SSR_FIFO)"
+      - "examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml (MSTP reset/write readback)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10212,11 +10214,13 @@ boards:
       - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/ra_iic.rs
       - configs/systems/ek-ra6m5.yaml
+      - configs/peripherals/r7fa6m5bh/mstp.yaml
   - id: r7fa8m1ah
     # 2026-10-30: Renesas EK-RA8M1 (R7FA8M1AH, Cortex-M85; 2 MiB code flash
     # at 0x02000000, 896 KiB SRAM at 0x22000000). First RA8 part. New: the
     # SCI_B UART layout (sci_b), the RA8 PFS with PWPR/PWPRS moved (ra8_pfs)
-    # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP, ICU,
+    # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP is an
+    # SVD-derived register file (readback only; it does not gate modules). ICU,
     # DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT,
     # ADC12, ETHERC, SPI and CANFD are declared stubs; SCI0-8 and the remaining
     # blocks are not mapped. Helium/MVE and TrustZone are not modelled.
@@ -10249,6 +10253,7 @@ boards:
       - "firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)"
       - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)"
+      - "examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml (MSTP reset/write readback)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10274,6 +10279,7 @@ boards:
       - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/ra_iic.rs
       - configs/systems/ek-ra8m1.yaml
+      - configs/peripherals/r7fa8m1ah/mstp.yaml
 
   - id: same70q21b
     # 2026-10-30: Microchip SAM E70 Xplained (ATSAME70Q21B, Cortex-M7; 2 MiB

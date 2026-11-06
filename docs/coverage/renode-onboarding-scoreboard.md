@@ -153,7 +153,7 @@
 | `quark-c1000` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 4: `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `quark_c1000-cc2520` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 8: `led:led`, `button:button`, `radio:cc2520`, `lm74:ti_lm74`, `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `ramn` | `pass` | `True` | `yes` | `yes` | `1208` | `1.208` | `True` | 0 | `n/a` | n/a | n/a |
-| `renesas-ck_ra6m5` | `pass` | `True` | `yes` | `yes` | `1426` | `1.426` | `True` | 0 | `n/a` | n/a | n/a |
+| `renesas-ck_ra6m5` | `pass` | `True` | `yes` | `yes` | `1637` | `1.637` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-da14592` | `pass` | `True` | `yes` | `yes` | `1360` | `1.36` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-ek_ra2e1` | `pass` | `True` | `yes` | `yes` | `1325` | `1.325` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-ek_ra8m1` | `pass` | `True` | `yes` | `yes` | `120815` | `120.815` | `True` | 0 | `n/a` | n/a | n/a |

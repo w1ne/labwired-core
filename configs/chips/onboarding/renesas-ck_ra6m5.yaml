@@ -6,7 +6,8 @@
 
 # Deliberately narrow Renode onboarding profile. RA6M5 core and memory facts
 # are sourced from Renesas RA6M5 Group datasheet R01DS0366EJ0150 and the
-# repository's modeled RA6M5 profile. This descriptor claims no peripherals.
+# repository's modeled RA6M5 profile. R_MSTP provides SVD-derived register
+# readback only; it does not gate modules.
 name: renesas-ck_ra6m5
 arch: arm
 core: cortex-m33
@@ -16,4 +17,10 @@ flash:
 ram:
   base: 0x20000000
   size: 512KiB
-peripherals: []
+peripherals:
+  - id: mstp
+    type: declarative
+    base_address: 0x40084000
+    size: 64B
+    config:
+      path: ../../peripherals/r7fa6m5bh/mstp.yaml
