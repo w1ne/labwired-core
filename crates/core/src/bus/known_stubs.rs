@@ -53,12 +53,6 @@
 /// `fixtures/` and `configs/ci/`.
 pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
-        "armsysctl",
-        "ARM Versatile/VExpress system controller. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
         "arraymemory",
         "Renode ArrayMemory window (a raw memory array declared as a peripheral). \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
@@ -141,12 +135,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          the window answers reads with zeros. Used by: onboarding/mpc5567.",
     ),
     (
-        "emulatorcontroller",
-        "Renode emulator control peripheral (host-side escape hatch, not silicon). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
         "esamemorycontroller",
         "ESA/Gaisler memory controller. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: onboarding/leon3.",
@@ -207,12 +195,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "intmatrix_stub",
         "Classic-ESP32 DPORT/interrupt-matrix window. Modelled in Rust and installed by the \
          Xtensa builder; the YAML entry names the window. Used by: esp32.",
-    ),
-    (
-        "isp1761",
-        "NXP ISP1761 USB host/peripheral controller. Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/versatile, onboarding/vexpress.",
     ),
     (
         "led",
@@ -305,18 +287,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          ordering. Used by: rp2040, rp2350, stm32f401, stm32f405, stm32f407 (+8 more).",
     ),
     (
-        "pl050",
-        "ARM PrimeCell PL050 PS/2 interface. Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
-        "pl110",
-        "ARM PrimeCell PL110 colour LCD controller. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
         "pythonperipheral",
         "Renode PythonPeripheral: a register window whose behaviour lives in an embedded \
          Python snippet the .repl carried. There is nothing to port — the imported descriptor \
@@ -362,11 +332,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          stm32l073, stm32l476.",
     ),
     (
-        "smc91x",
-        "SMSC LAN91C Ethernet controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/versatile.",
-    ),
-    (
         "stub",
         "The explicit, author-declared 'this window decodes as zeros' type. This is the \
          supported escape hatch a chip YAML uses to say the omission is deliberate — the \
@@ -389,24 +354,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "usb_serial_jtag",
         "ESP32-S3 USB-Serial-JTAG window. The S3 console path is wired by the Xtensa builder; \
          this YAML entry carries only a debug_schema. Used by: esp32s3-zero.",
-    ),
-    (
-        "usbhub",
-        "USB hub. Renode-imported onboarding descriptor; no model in this engine, so the \
-         window answers reads with zeros. Used by: onboarding/a20, onboarding/colibri-vf61, \
-         onboarding/tegra2, onboarding/tegra3, onboarding/versatile (+1 more).",
-    ),
-    (
-        "usbkeyboard",
-        "USB HID keyboard. Renode-imported onboarding descriptor; no model in this engine, so \
-         the window answers reads with zeros. Used by: onboarding/tegra2, onboarding/tegra3, \
-         onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
-        "usbmouse",
-        "USB HID mouse. Renode-imported onboarding descriptor; no model in this engine, so \
-         the window answers reads with zeros. Used by: onboarding/colibri-vf61, \
-         onboarding/tegra2, onboarding/tegra3, onboarding/versatile, onboarding/vexpress.",
     ),
 ];
 

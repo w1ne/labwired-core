@@ -1,5 +1,5 @@
 name: versatile
-description: 'versatile (root platform, ARM Versatile). Architecture: ARMv7-A.'
+description: 'Imported Arm Versatile/PB (ARM926EJ-S, ARMv5TEJ). The measured subset runs one ARM926EJ-S from a 64 KiB SDRAM aperture at 0x00000000 and exercises polled TX on UART0 (PL011). The VIC/SIC, timers, system controller, Thumb execution and other peripherals are not modeled.'
 family: ARM Versatile
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"

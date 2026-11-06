@@ -174,6 +174,29 @@ fn wait_instructions_are_refused_until_idle_scheduling_is_connected() {
 }
 
 #[test]
+fn arm926_cp15_wait_and_thumb_are_refused_without_execution() {
+    use labwired_core::system::arch_policy::CortexACore;
+    // mcr p15, 0, r0, c7, c0, 4 (ARMv5 wait for interrupt)
+    let mut cpu = CortexA7::with_core(CortexACore::Arm926).expect("native ARM926EJ-S");
+    let mut bus = TestBus::program(&[0xee070f90]);
+    cpu.set_pc(ENTRY);
+    assert!(matches!(
+        step(&mut cpu, &mut bus),
+        Err(SimulationError::NotImplemented(_))
+    ));
+    assert_eq!(cpu.get_pc(), ENTRY);
+
+    let mut cpu = CortexA7::with_core(CortexACore::Arm926).expect("native ARM926EJ-S");
+    let mut bus = TestBus::program(&[0x2001_2001]); // movs r0, #1 (Thumb)
+    cpu.set_pc(ENTRY | 1);
+    assert!(matches!(
+        step(&mut cpu, &mut bus),
+        Err(SimulationError::NotImplemented(_))
+    ));
+    assert_eq!(cpu.get_register(0), 0);
+}
+
+#[test]
 fn mmio_load_store_preserves_word_width_and_exactly_once_side_effects() {
     let mut cpu = cpu();
     let mut bus = TestBus::program(&[0xe5810000, 0xe5912000, 0xe5913000]); // str/ldr/ldr
@@ -367,7 +390,11 @@ fn shared_builder_and_world_node_choose_the_embedded_core() {
 #[test]
 fn each_declared_core_reports_its_own_midr_part_number_across_reset() {
     use labwired_core::system::arch_policy::CortexACore;
-    for (core, part) in [(CortexACore::A7, 0xc07), (CortexACore::A9, 0xc09)] {
+    for (core, part) in [
+        (CortexACore::A7, 0xc07),
+        (CortexACore::A9, 0xc09),
+        (CortexACore::Arm926, 0x926),
+    ] {
         let mut cpu = CortexA7::with_core(core).expect("native Cortex-A core");
         let mut bus = TestBus::program(&[0xee100f10]); // mrc p15, 0, r0, c0, c0, 0 (MIDR)
         for _ in 0..2 {

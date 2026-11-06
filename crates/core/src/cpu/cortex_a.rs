@@ -72,6 +72,7 @@ impl CortexA7 {
         let model = match core {
             CortexACore::A7 => ArmCpuModel::CORTEX_A7,
             CortexACore::A9 => ArmCpuModel::CORTEX_A9,
+            CortexACore::Arm926 => ArmCpuModel::Model_926,
         };
         let mut engine = Unicorn::new(Arch::ARM, Mode::ARM).map_err(native_error)?;
         engine
@@ -266,6 +267,16 @@ impl Cpu for CortexA7 {
             return Err(SimulationError::MemoryViolation(u64::from(pc)));
         }
         let thumb = self.get_register(16) & THUMB != 0;
+        // ARMv5 Thumb has no 32-bit encodings; the engine pairs a BL prefix
+        // with its suffix only when both are on one translation page. The
+        // per-step fetch below cannot reproduce that, so refuse rather than
+        // guess an instruction size.
+        if thumb && self.core == CortexACore::Arm926 {
+            return Err(SimulationError::NotImplemented(format!(
+                "{} Thumb single stepping",
+                self.core.name()
+            )));
+        }
         let low = bus.read_u16(u64::from(pc))?;
         let size = if thumb && !matches!(low >> 11, 0b11101..=0b11111) {
             2
@@ -291,6 +302,11 @@ impl Cpu for CortexA7 {
         }
         if (thumb && matches!(low, 0xbf20 | 0xbf30))
             || (!thumb && matches!(opcode & 0x0fffffff, 0x0320f002 | 0x0320f003))
+            // ARMv5 wait-for-interrupt is the CP15 operation
+            // MCR p15, 0, Rd, c7, c0, 4.
+            || (!thumb
+                && self.core == CortexACore::Arm926
+                && opcode & 0x0fff0fff == 0x0e070f90)
         {
             return Err(SimulationError::NotImplemented(format!(
                 "{} WFE/WFI event scheduling",
@@ -302,6 +318,7 @@ impl Cpu for CortexA7 {
         }
 
         {
+            let core_name = self.core.name();
             let handle = self.engine().get_handle();
             // SAFETY: handle is owned by self.engine and remains alive for
             // this entire scope. The wrapper is non-owning. No callback or
@@ -386,11 +403,11 @@ impl Cpu for CortexA7 {
             scoped.hooks.push(memory_hook);
             let exception_hook = scoped
                 .uc
-                .add_intr_hook(|uc, cause| {
+                .add_intr_hook(move |uc, cause| {
                     stop_with_error(
                         uc,
                         SimulationError::NotImplemented(format!(
-                            "Cortex-A7 architectural exception {cause}"
+                            "{core_name} architectural exception {cause}"
                         )),
                     );
                 })

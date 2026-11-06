@@ -239,6 +239,14 @@ jobs:
             cli_profile: native-system
             script: examples/renode-onboarding/mars_zx3-a9-uart-smoke.yaml
             system: configs/systems/onboarding/mars_zx3.yaml
+          # One ARM926EJ-S, a bounded SDRAM aperture and one polled PL011 TX;
+          # VIC/SIC, timers, Thumb execution and other peripherals are not modeled.
+          - id: versatile
+            prebuilt_firmware: tests/fixtures/versatile-arm926-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/versatile-arm926-uart-smoke.yaml
+            system: configs/systems/onboarding/versatile.yaml
           # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
           # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
           - id: vexpress

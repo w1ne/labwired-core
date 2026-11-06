@@ -190,6 +190,7 @@ fn each_cortex_a_core_selects_its_own_model() {
     for (core, want) in [
         ("cortex-a7", CortexACore::A7),
         ("Cortex-A9", CortexACore::A9),
+        ("arm926ej-s", CortexACore::Arm926),
     ] {
         chip.core = Some(core.into());
         assert_eq!(
@@ -199,7 +200,13 @@ fn each_cortex_a_core_selects_its_own_model() {
         );
         assert_eq!(cortex_a_core(&chip).unwrap(), want, "{core}");
     }
-    for unsupported in ["cortex-a5", "cortex-a8", "cortex-a15", "cortex-m4"] {
+    for unsupported in [
+        "cortex-a5",
+        "cortex-a8",
+        "cortex-a15",
+        "cortex-m4",
+        "arm920t",
+    ] {
         chip.core = Some(unsupported.into());
         assert!(cortex_a_core(&chip).is_err(), "{unsupported}");
     }
@@ -232,7 +239,7 @@ fn a_named_non_cortex_m_arm_core_never_routes_to_cortex_m() {
     }
     for unsupported in [
         "arm920t",
-        "arm926ej-s",
+        "arm946e-s",
         "arm1176jzf-s",
         "cortex-a15",
         "sparc-v8",
@@ -361,7 +368,6 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
         "xtensa-sample-controller",
         "litex_common",
         "at91rm9200",
-        "versatile",
     ] {
         assert!(
             machine_family(&load(name)).is_err(),
@@ -371,6 +377,12 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
     assert_eq!(
         machine_family(&load("a20")).unwrap(),
         MachineFamily::CortexA
+    );
+    let versatile = load("versatile");
+    assert_eq!(machine_family(&versatile).unwrap(), MachineFamily::CortexA);
+    assert_eq!(
+        crate::system::arch_policy::cortex_a_core(&versatile).unwrap(),
+        crate::system::arch_policy::CortexACore::Arm926
     );
     for name in [
         "vexpress",

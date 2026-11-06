@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `220`
-- booted: `218/245`
-- boot_and_smoke_passed: `218/245`
-- not_run: `25`
-- pass: `218`
+- run_attempted: `221`
+- booted: `219/245`
+- boot_and_smoke_passed: `219/245`
+- not_run: `24`
+- pass: `219`
 - fail: `2`
-- median_elapsed_ms: `1251`
-- median_elapsed_seconds: `1.251`
+- median_elapsed_ms: `1263`
+- median_elapsed_seconds: `1.263`
 - threshold_seconds: `3600`
-- threshold_met: `220/220`
+- threshold_met: `221/221`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -249,7 +249,7 @@
 | `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `1004` | `1.004` | `True` | `n/a` | n/a | n/a |
 | `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1404` | `1.404` | `True` | `n/a` | n/a | n/a |
 | `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `757` | `0.757` | `True` | `n/a` | n/a | n/a |
-| `versatile` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | arm926ej-s has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `versatile` | `pass` | `True` | `yes` | `yes` | `154313` | `154.313` | `True` | `n/a` | n/a | n/a |
 | `vexpress` | `pass` | `True` | `yes` | `yes` | `1062` | `1.062` | `True` | `n/a` | n/a | n/a |
 | `vybrid` | `pass` | `True` | `yes` | `yes` | `7594` | `7.594` | `True` | `n/a` | n/a | n/a |
 | `x86` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (x86) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |

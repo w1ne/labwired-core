@@ -47,13 +47,15 @@ pub enum MachineFamily {
     Mips,
 }
 
-/// The ARMv7-A core a [`MachineFamily::CortexA`] chip names. Each variant is a
-/// distinct CPU model in the native engine (ID registers, feature set); one is
-/// never substituted for the other.
+/// The AArch32 application-class core a [`MachineFamily::CortexA`] chip names.
+/// Each variant is a distinct CPU model in the native engine (ID registers,
+/// feature set); one is never substituted for the other. The family also runs
+/// the ARMv5TEJ ARM926EJ-S, which uses the same bare-metal adapter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CortexACore {
     A7,
     A9,
+    Arm926,
 }
 
 impl CortexACore {
@@ -61,6 +63,7 @@ impl CortexACore {
         match self {
             Self::A7 => "Cortex-A7",
             Self::A9 => "Cortex-A9",
+            Self::Arm926 => "ARM926EJ-S",
         }
     }
 }
@@ -69,11 +72,12 @@ fn cortex_a_core_named(core: &str) -> Option<CortexACore> {
     match core {
         "cortex-a7" => Some(CortexACore::A7),
         "cortex-a9" => Some(CortexACore::A9),
+        "arm926ej-s" => Some(CortexACore::Arm926),
         _ => None,
     }
 }
 
-/// The Cortex-A core this chip declares, or an error if it is not a
+/// The application core this chip declares, or an error if it is not a
 /// [`MachineFamily::CortexA`] chip.
 pub fn cortex_a_core(chip: &ChipDescriptor) -> anyhow::Result<CortexACore> {
     if chip.arch == Arch::Arm {
@@ -86,7 +90,7 @@ pub fn cortex_a_core(chip: &ChipDescriptor) -> anyhow::Result<CortexACore> {
         }
     }
     anyhow::bail!(
-        "chip '{}' does not declare a supported Cortex-A core",
+        "chip '{}' does not declare a supported Cortex-A or ARM926EJ-S core",
         chip.name
     )
 }
@@ -117,7 +121,7 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
                 chip.name
             ),
             // Only an absent core or a Cortex-M core is a Cortex-M. Any other
-            // named core (ARM9, ARM11, ...) is refused, not run as a Cortex-M.
+            // named core (ARM920T, ARM11, ...) is refused, not run as a Cortex-M.
             None => Ok(MachineFamily::CortexM),
             Some(core) if core.starts_with("cortex-m") => Ok(MachineFamily::CortexM),
             Some(core) => anyhow::bail!(

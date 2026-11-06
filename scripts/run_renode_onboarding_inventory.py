@@ -33,6 +33,12 @@ SMOKE_MAPPINGS = {
         "cli_features": "qemu-arm",
         "cli_profile": "native-system",
     },
+    "versatile": {
+        "prebuilt_firmware": "tests/fixtures/versatile-arm926-uart-smoke.elf",
+        "script": "examples/renode-onboarding/versatile-arm926-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
     "vexpress": {
         "prebuilt_firmware": "tests/fixtures/vexpress-a9-uart-smoke.elf",
         "script": "examples/renode-onboarding/vexpress-a9-uart-smoke.yaml",
@@ -1151,7 +1157,6 @@ NOT_RUN_HINTS["litex_common"] = "Measure the concrete LiteX platforms that inclu
 # ARM application/classic cores with no native adapter: machine_family refuses them.
 NO_ADAPTER_CORE_TARGETS = {
     "at91rm9200": "arm920t",
-    "versatile": "arm926ej-s",
 }
 NOT_RUN_REASONS.update(
     {
@@ -1162,7 +1167,8 @@ NOT_RUN_REASONS.update(
 )
 NOT_RUN_HINTS.update(
     {
-        target: "Add a real adapter for this core (tlib has the model) before adding a smoke."
+        target: "Add a real adapter for this core before adding a smoke; neither the pinned "
+        "tlib nor the embedded Unicorn engine has an ARM920T model."
         for target in NO_ADAPTER_CORE_TARGETS
     }
 )
