@@ -50,6 +50,18 @@ cargo run -q -p labwired-cli -- test \
   --no-uart-stdout
 ```
 
+## Analog GPIO example
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes a generic
+Beta NTC divider and Shockley diode netlist into the modeled PA0/PA1 GPIO inputs.
+This verifies voltage solving and GPIO threshold routing; the threshold ratios
+are test assumptions, and the current ADC model has no external input path. Run
+the end-to-end proof from `core/` with:
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_g071rb_analog
+```
+
 ## Board pinout (UM2505 / Zephyr `nucleo_g071rb` DTS)
 
 | Signal      | Pin  | Alt-fn | Wired to                              |
@@ -69,8 +81,10 @@ cargo run -q -p labwired-cli -- test \
 2. `uart-smoke.yaml` — deterministic CLI smoke assertion (task artifact).
 3. `io-smoke.yaml` — same assertion in the strict-onboarding gate's
    conventional filename (the gate builds the firmware itself).
-4. `REQUIRED_DOCS.md` — source-grounding references (RM0444, DS12232, UM2505).
-5. `EXTERNAL_COMPONENTS.md` — external component declaration.
-6. `VALIDATION.md` — reproducible validation/audit commands and evidence.
-7. `KNOWN_LIMITATIONS.md` — L2-required Not modelled / Partially modelled /
+4. `analog-ntc-diode-system.yaml` — generic MNA device netlists routed to
+   modeled GPIO inputs; the fixture uses test-only threshold assumptions.
+5. `REQUIRED_DOCS.md` — source-grounding references (RM0444, DS12232, UM2505).
+6. `EXTERNAL_COMPONENTS.md` — external component declaration.
+7. `VALIDATION.md` — reproducible validation/audit commands and evidence.
+8. `KNOWN_LIMITATIONS.md` — L2-required Not modelled / Partially modelled /
    Proven at L3 boundary.
