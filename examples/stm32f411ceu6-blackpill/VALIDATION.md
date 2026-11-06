@@ -35,6 +35,10 @@ range and the descriptor validator rejects overlapping regions. The schema's
 single-IRQ field also means TIM1/TIM9/TIM10/TIM11 are modelled for register
 access and ticking without claiming full shared-IRQ fidelity.
 
+The mixed-signal test in section 7 proves the descriptor-routed PA1/PA4 ADC1
+path using generic NTC and diode netlists. It is a simulator result; no physical
+F411 or Black Pill connector pinout was validated.
+
 ## Explicitly UNVERIFIED — do not treat these as facts
 
 ### DBGMCU IDCODE
@@ -133,3 +137,15 @@ Pass criteria: JSON reports `status: "finished"` and the VCD exists.
 - An executing-fidelity test (walk-vs-scheduler differential or a silicon
   exec-oracle) — the missing class that keeps this chip in `NOT_SHIPPED` in
   `board_coverage_ratchet.rs`.
+
+## 7) Mixed-signal ADC routing
+
+```bash
+cargo test -p labwired-core --test cosim_stm32f411ceu6_analog -- --nocapture
+```
+
+Pass criteria: the generic Beta NTC divider and unrelated Shockley diode solve
+to independently calculated voltages, route through PA1/PA4 to ADC1 channels
+1/4, and produce matching firmware-visible 12-bit one-shot results. Neighboring
+unrouted channels remain undriven. This test does not validate physical board
+connectors or silicon behavior.
