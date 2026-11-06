@@ -339,7 +339,7 @@
       "how": "example",
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
-      "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
+      "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
     },
     "atmega328pb": {
       "how": "needs-build",
