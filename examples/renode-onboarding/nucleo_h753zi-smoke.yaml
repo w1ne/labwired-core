@@ -1,6 +1,6 @@
 # Cortex-M7 smoke against the exact imported NUCLEO-H753ZI profile.
-# This exercises the bounded H7 RCC/GPIOB/GPIOD/USART3 model surface and the
-# imported GreenLED attachment on GPIOB pin 0.
+# This exercises the bounded H7 RCC/GPIOB/GPIOD/USART3 model surface. The
+# GPIOB.0 edge assertion does not assert a rendered LED state.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke"

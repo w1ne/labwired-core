@@ -136,7 +136,7 @@
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `2733` | `2.733` | `True` | `n/a` | n/a | n/a |
 | `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `2156` | `2.156` | `True` | `n/a` | n/a | n/a |
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `10204` | `10.204` | `True` | `n/a` | n/a | n/a |
-| `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2391` | `2.391` | `True` | `n/a` | n/a | n/a |
+| `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2301` | `2.301` | `True` | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `n/a` | n/a | n/a |
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | `n/a` | n/a | n/a |
 | `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `813` | `0.813` | `True` | `n/a` | n/a | n/a |
