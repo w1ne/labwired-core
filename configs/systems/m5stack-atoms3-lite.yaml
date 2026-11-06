@@ -1,0 +1,14 @@
+# M5Stack AtomS3-Lite (SKU C124): onboard WS2812C-2020 RGB LED on GPIO35.
+# Only the GPIO data path to that LED is included; other board functions are
+# outside this profile.
+name: "m5stack-atoms3-lite"
+chip: "../chips/esp32s3-atoms3-lite-smoke.yaml"
+cpu_hz: 240000000
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO35"
+      num_pixels: 1
+      cpu_hz: 240000000

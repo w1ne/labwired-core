@@ -21,6 +21,8 @@ The shared ESP32-S3 chip yamls are:
   descriptor for the Arduino Nano ESP32 GPIO46 LED smoke.
 - `configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml` — narrow Nano profile
   for I²C0 on the documented A4/GPIO11 and A5/GPIO12 pins.
+- `configs/chips/esp32s3-atoms3-lite-smoke.yaml` — narrow M5Stack AtomS3-Lite
+  profile with the onboard GPIO35 RGB LED.
 
 ## Status at a glance
 
@@ -29,9 +31,9 @@ The shared ESP32-S3 chip yamls are:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0-only profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 smokes](../../examples/esp32-s3-devkitc-1-n16r8/) · [Arduino Nano ESP32 GPIO smoke](../../examples/arduino-nano-esp32/) · [Arduino Nano ESP32 BME280 smoke](../../examples/arduino-nano-esp32-bme280/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0-only profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/chips/esp32s3-atoms3-lite-smoke.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 smokes](../../examples/esp32-s3-devkitc-1-n16r8/) · [Arduino Nano ESP32 GPIO smoke](../../examples/arduino-nano-esp32/) · [Arduino Nano ESP32 BME280 smoke](../../examples/arduino-nano-esp32-bme280/) · [M5Stack AtomS3-Lite GPIO LED smoke](../../examples/m5stack-atoms3-lite/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
 | Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; hosted DevKitC UART0 oracle evidence in the example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 

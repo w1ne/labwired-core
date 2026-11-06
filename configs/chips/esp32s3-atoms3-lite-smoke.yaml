@@ -1,0 +1,30 @@
+# Narrow ESP32-S3FN8 profile for M5Stack AtomS3-Lite SKU C124.
+# The board smoke uses GPIO35 to drive the built-in WS2812C-2020.
+# Exposed connector pins are mapped as GPIO only.
+name: "esp32s3-atoms3-lite-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240000000
+
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  GPIO1: { gpio: "gpio", bit: 1 }
+  GPIO2: { gpio: "gpio", bit: 2 }
+  GPIO5: { gpio: "gpio", bit: 5 }
+  GPIO6: { gpio: "gpio", bit: 6 }
+  GPIO7: { gpio: "gpio", bit: 7 }
+  GPIO8: { gpio: "gpio", bit: 8 }
+  GPIO35: { gpio: "gpio", bit: 35 }
+  GPIO38: { gpio: "gpio", bit: 38 }
+  GPIO39: { gpio: "gpio", bit: 39 }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "4KB"
