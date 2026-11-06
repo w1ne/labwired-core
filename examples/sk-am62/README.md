@@ -26,6 +26,12 @@ examples/sk-am62/ci/test.sh
 
 Rebuild the fixtures (byte-identical): `crates/firmware-sk-am62-zephyr/build.sh`.
 
+The generic mixed-signal fixture [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml)
+routes a Beta NTC divider and a Shockley diode through two simulation-only input endpoints.
+`cosim_sk_am62_analog.rs` asserts their solved voltages and thresholded levels, including NTC
+hysteresis. These endpoints do not model AM6234 GPIO registers, physical pad routing, ADC
+conversion, or silicon threshold specifications.
+
 Not modelled yet: A53 cores 1-3 (SMP), the M4F and R5F, UART interrupts (the
-console is polled), GPIO/LEDs, the boot flow (TF-A, U-Boot), stage 2 and
+console is polled), GPIO registers/LEDs, the boot flow (TF-A, U-Boot), stage 2 and
 16/64 KB granules. See `VALIDATION.md`.

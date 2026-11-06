@@ -38,6 +38,12 @@ ram: { base: 0x80000000, size: "64MiB" }
 flash_boot_alias: false
 memory_regions:
   - { name: "oc_sram", base: 0x70000000, size: "64KiB" }
+# Generic analog co-simulation endpoints only. The 3.3 V rail and 0.3/0.7
+# thresholds are test assumptions for these inputs, not AM6234 pad electrical
+# specifications; neither the MAIN GPIO registers nor physical pad routes are
+# modelled here.
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
 # IRQs are GIC INTIDs (32 + SPI).
 peripherals:
   - id: "main_uart0"
@@ -99,3 +105,8 @@ peripherals:
     type: "stub"
     base_address: 0x29000000
     size: "512B"
+  - id: "cosim_inputs"
+    type: "input_pin_bank"
+    base_address: 0xF0000000
+    size: "4KiB"
+    config: { pin_count: 2 }
