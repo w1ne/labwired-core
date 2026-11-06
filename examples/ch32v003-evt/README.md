@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs four of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs five of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -163,6 +163,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `uartdemo` | `Count: 0` .. `Count: 3` in order on USART1 (PD5), PD0 toggling | PD0 edges every 2,400,004 cycles (50 ms) |
 | `systick_irq` | debug-printf banner, `Milliseconds taken: 500` twice, DMDATA0 never timed out, PD0/PC0 edges | the 1 kHz SysTick ISR counts exactly 500 ms across two `Delay_Ms(250)` |
 | `adc_polled` | a potentiometer on PD4 (AIN7) is turned 50 % → 25 % → 100 %; the printed codes must be `511`, `511`, `255`, `255`, `1023` | `Count: 0 adc: 511` .. `Count: 4 adc: 1023`, one sample every 200 ms |
+| `i2c_oled` | a 128x32 SSD1306 at 0x3C on I2C1 (PC1/PC2); after the half-lit "buffer fill with binary" frame, mode 1 must leave exactly the two diagonals `(x, x/4)` and `(x, 31 - x/4)` lit: 256 of 4096 pixels, corners, centre crossing and two empty bands checked | 12/12; every packet completes with no `ssd1306_i2c_error` timeout |
 
 This profile adds three things to the PFIC profile:
 
@@ -186,6 +187,17 @@ This profile adds three things to the PFIC profile:
   ([`evidence/ch32fun-adc-polled-smoke/negative-control/`](evidence/ch32fun-adc-polled-smoke/negative-control/))
   puts the same image on the 12-bit STM32F1 ADC: it boots, calibrates and
   prints `2047`, `1023`, `4095`, so every code check fails.
+- **I2C1** (`0x40005400`, PC1 SDA, PC2 SCL): the engine's STM32F1-shaped
+  I2C master, which the CH32V003 matches register for register. The
+  `i2c_oled` smoke uses the system
+  [`ch32v003evt-ch32fun-i2c-oled-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-i2c-oled-smoke.yaml),
+  which hangs a 128x32 SSD1306 module on the bus. Getting it to draw took two
+  fixes to that shared model, both pinned by unit tests in `i2c_tests.rs`.
+  START now sets SR2.MSL and SR2.BUSY along with SR1.SB (RM0008 §26.3.3).
+  Without that, ch32fun's driver timed out waiting for the master-mode event
+  and the panel stayed blank. A 16-bit store to the data register now sends
+  one byte. ch32fun declares `DATAR` as `uint16_t`, and the old byte-sliced
+  store sent every byte twice, which drew the diagonals at half slope.
 
 The debug-printf negative control
 ([`evidence/ch32fun-systick-irq-smoke/negative-control/`](evidence/ch32fun-systick-irq-smoke/negative-control/))
@@ -204,8 +216,14 @@ Read these results correctly:
   cycles on silicon. Line contents and order are exact; their timing is not.
 - Not modeled: input from the host over the debug channel (ch32fun's
   `handle_debug_input`), a detached probe as a configuration, and every
-  peripheral the other ch32fun examples need (TIM1/TIM2, EXTI, SPI, I2C
-  through ch32fun, DMA, OPA, watchdogs, standby).
+  peripheral the other ch32fun examples need (TIM1/TIM2, EXTI, SPI, DMA,
+  OPA, watchdogs, standby).
+- On I2C1: bus timing (`CKCFGR` is stored, and transfers complete
+  immediately), the `RCC_APB1PRSTR` peripheral reset, the AFIO remaps,
+  slave mode, PEC/SMBus, the I2C interrupts and DMA are not modeled. The
+  `i2c_oled` run stops in mode 1, about 2.2 s in; modes 2 to 8 (lines,
+  circles, image, text) take another 14 s of simulated time and are not
+  checked.
 - On ADC1: sample time (`SAMPTR`) does not change the conversion time, and
   the injected group, scan sequences (only RSQR3's first channel converts),
   external triggers, the analog watchdog, DMA, the internal V_REFINT/V_CAL
@@ -390,7 +408,7 @@ cargo run -q -p labwired-cli -- test \
 
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
-for t in blink uartdemo systick-irq adc-polled; do
+for t in blink uartdemo systick-irq adc-polled i2c-oled; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build four unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build five unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -12,6 +12,9 @@
 #   adc_polled.elf   examples/adc_polled: software-started 10-bit ADC
 #                    conversions of AIN7 (PD4) every 200 ms, printed as
 #                    "Count: N adc: X" over the debug printf channel.
+#   i2c_oled.elf     examples/i2c_oled: polled I2C1 master (PC1 SDA, PC2
+#                    SCL, 1 MHz fast-mode setting) driving a 128x32 SSD1306
+#                    at 0x3C through eight test patterns, 2 s apart.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -21,7 +24,10 @@
 #
 # Toolchain: riscv64-unknown-elf-gcc 13.2 with newlib headers (Ubuntu
 # gcc-riscv64-unknown-elf). Override the tool prefix with RISCV_PREFIX
-# (default /usr) and the newlib include directory with NEWLIB.
+# (default /usr) and the newlib include directory with NEWLIB. The unpacked
+# picolibc deb's include directory works too and gives the same bytes:
+#   RISCV_PREFIX=~/tools/riscv64-deb/root/usr \
+#   NEWLIB=~/tools/riscv64-deb/root/usr/lib/picolibc/riscv64-unknown-elf/include
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -45,7 +51,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 "${prefix}gcc" -E -P -x c -DTARGET_MCU=CH32V003 -DMCU_PACKAGE=1 -DTARGET_MCU_LD=0 \
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
-for example in blink uartdemo systick_irq adc_polled; do
+for example in blink uartdemo systick_irq adc_polled i2c_oled; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

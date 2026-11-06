@@ -2,8 +2,9 @@
 # examples: the pfic-smoke profile (HSI/PLL handshake, FLASH_ACTLR, QingKe V2
 # SysTick and PFIC, USART1 TX on PD5) with GPIOA/GPIOC added, because
 # ch32fun's funGpioInitAll() clocks all three ports, and the WCH-LinkE debug
-# printf channel that ch32fun uses as its default console, and ADC1 (the
-# STM32F1 ADC block at 10 bits) for ch32fun's adc_polled.
+# printf channel that ch32fun uses as its default console, ADC1 (the
+# STM32F1 ADC block at 10 bits) for ch32fun's adc_polled, and I2C1 on its
+# default pins (PC1 SDA, PC2 SCL) for ch32fun's i2c_oled.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -18,8 +19,16 @@
 # scan/discontinuous mode, external triggers, the analog watchdog, DMA, the
 # internal V_REFINT/V_CAL channels (IN8/IN9) and calibration offsets.
 #
+# I2C1 reuses the engine's STM32F1-shaped master event/register subset (same
+# CTLR1/CTLR2/OADDR1/DATAR/STAR1/STAR2/CKCFGR offsets and SB/ADDR/TXE/BTF/
+# BUSY/MSL/TRA flags as ch32fun's ch32v003hw.h). CKCFGR is stored, not
+# turned into bus timing. Not modeled on it: the RCC_APB1PRSTR peripheral
+# reset (writes are dropped, so a reset does not clear I2C1 state), the
+# AFIO I2C1 remaps, slave mode, PEC, SMBus, the error/event interrupts and
+# DMA.
+#
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, TIM1/TIM2, EXTI, SPI, I2C, DMA, OPA, the
+# of the RISC-V debug module, TIM1/TIM2, EXTI, SPI, DMA, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -38,6 +47,8 @@ ram:
 
 pins:
   PC0: { gpio: gpioc, bit: 0 }
+  PC1: { gpio: gpioc, bit: 1, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
+  PC2: { gpio: gpioc, bit: 2, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
   PD0: { gpio: gpiod, bit: 0 }
   PD4: { gpio: gpiod, bit: 4 }
   PD5: { gpio: gpiod, bit: 5 }
@@ -121,3 +132,11 @@ peripherals:
     clock: { reg: apb2enr, bit: 9 }
     config:
       profile: ch32v003
+
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    clock: { reg: apb1pcenr, bit: 21 }
+    config:
+      profile: stm32f1

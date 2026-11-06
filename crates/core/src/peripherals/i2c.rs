@@ -749,6 +749,11 @@ impl F1I2c {
                 match self.state {
                     I2cState::StartPending => {
                         self.sr1 = 0x0001; // Only SB set
+                                           // The START condition also makes the interface a
+                                           // busy master (RM0008 §26.3.3: SB, BUSY and MSL set
+                                           // together). StdPeriph's I2C_EVENT_MASTER_MODE_SELECT
+                                           // and ch32fun's ssd1306_i2c_chk_evt wait for all three.
+                        self.sr2 |= 0x0003; // MSL | BUSY
                         self.cr1 &= !0x0100; // auto-clear START request
                         self.state = I2cState::Idle;
                     }
@@ -2693,6 +2698,22 @@ impl crate::Peripheral for I2c {
             // one. Byte-slicing CMD would apply START and STOP as separate
             // commands.
             Self::Efr32s2(i) => i.write_word(offset & !3, value),
+        }
+        Ok(())
+    }
+
+    /// Atomic halfword writes for the F1 layout, whose registers are 16 bits
+    /// wide. WCH's headers (ch32fun `ch32v003hw.h`) declare DATAR as a
+    /// `uint16_t`, so `I2C1->DATAR = b` is one `sh`. The byte-sliced default
+    /// would run the DR write path once per byte lane and put every data
+    /// byte on the bus twice.
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        match self {
+            Self::Stm32F1(i) if offset & 3 == 0 => i.write_reg(offset, value),
+            _ => {
+                self.write(offset, (value & 0xFF) as u8)?;
+                self.write(offset + 1, (value >> 8) as u8)?;
+            }
         }
         Ok(())
     }
