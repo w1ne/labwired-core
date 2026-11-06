@@ -1694,11 +1694,8 @@ jobs:
             . -> target
 
       - name: Run onboarding smoke
-        env:
-          EXPECTED_FAILURE_SIGNATURE: ${{ matrix.expected_failure_signature }}
         run: |
           chmod +x scripts/onboarding_smoke.sh
-          set +e
           scripts/onboarding_smoke.sh \
             --target-id "${{ matrix.id }}" \
             --crate "${{ matrix.crate }}" \
@@ -1711,36 +1708,6 @@ jobs:
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600
-          smoke_status=$?
-          set -e
-          if [[ -n "${EXPECTED_FAILURE_SIGNATURE}" ]]; then
-            python3 - "out/onboarding-smoke/${{ matrix.id }}/onboarding-metrics.json" \
-              "${EXPECTED_FAILURE_SIGNATURE}" "${smoke_status}" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          metrics = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          expected_signature = sys.argv[2]
-          smoke_status = int(sys.argv[3])
-          if (
-              smoke_status != 1
-              or metrics.get("status") != "fail"
-              or metrics.get("run_attempted") is not True
-              or metrics.get("booted") is not False
-              or metrics.get("smoke_passed") is not False
-              or metrics.get("failure_stage") != "run_smoke"
-              or metrics.get("first_error_signature") != expected_signature
-          ):
-              raise SystemExit(
-                  "expected the recorded unsupported Cortex-R52 config failure; "
-                  f"got exit={smoke_status}, metrics={metrics}"
-              )
-          print(f"Confirmed expected unsupported-core result: {expected_signature}")
-          PY
-          else
-            exit "${smoke_status}"
-          fi
 
       - name: Publish onboarding summary
         if: always()
