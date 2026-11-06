@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 54 have end-to-end analog coverage; 49 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 55 have end-to-end analog coverage; 48 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -61,7 +61,7 @@ Current inventory: **103 profiles; 54 have end-to-end analog coverage; 49 have n
 | `labwired-demo-board` | [`cosim_labwired_demo_analog.rs`](../crates/core/tests/cosim_labwired_demo_analog.rs)::`labwired_demo_board_ntc_and_diode_reach_pa0_pa1_adc1_end_to_end` — the generic Beta NTC divider and unrelated Shockley diode solve independently, route through PA0/PA1 to ADC1 channels 0/1, and produce asserted firmware-visible ADC1 data-register results; the profile's TMP102 remains present |
 | `litex-vexriscv` | [`cosim_litex_vexriscv_analog.rs`](../crates/core/tests/cosim_litex_vexriscv_analog.rs)::`litex_vexriscv_ntc_and_diode_netlists_reach_simulated_input_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach two simulation-only input endpoints; asserts independently solved voltages and Schmitt-threshold levels. This does not model LiteX gateware inputs, physical pads, or ADC conversion. |
 | `luckfox-pico-mini-a` | [`cosim_luckfox_pico_mini_a_analog.rs`](../crates/core/tests/cosim_luckfox_pico_mini_a_analog.rs)::`luckfox_pico_mini_a_ntc_and_diode_netlists_reach_simulated_input_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve onto separate simulation-only input endpoints and assert solved voltages plus threshold/hysteresis states. This does not model RV1103 GPIO, pinmux, physical pads, or SARADC conversion. |
-| `mb1355c` | **NO E2E analog coverage** |
+| `mb1355c` | [`cosim_mb1355c_analog.rs`](../crates/core/tests/cosim_mb1355c_analog.rs)::`mb1355c_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach STM32WB55 PA0/PA1; solved voltages, GPIOA IDR threshold crossings, and Schmitt hysteresis are asserted. The ADC is register-only with no external conversion engine. |
 | `metro-m4` | **NO E2E analog coverage** |
 | `microbit-v1` | **NO E2E analog coverage** |
 | `microbit-v2` | **NO E2E analog coverage** |

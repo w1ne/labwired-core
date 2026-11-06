@@ -7,6 +7,15 @@ core: "cortex-m4"
 # STM32WB55 application core maximum, 64 MHz.
 cpu_hz: 64_000_000
 
+# GPIO supply and digital input thresholds used by analog co-simulation.
+# DS11929 Rev 17 §6.3.17 Table 72, general I/O at 1.62 V < VDD < 3.6 V:
+# VIL max = 0.3·VDD and VIH min = 0.7·VDD. The board profile uses nominal
+# 3.3 V VDDIO; this records the input limits for firmware-visible GPIO levels.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
   size: "512KB"
