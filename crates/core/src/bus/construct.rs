@@ -5,6 +5,17 @@
 //! SystemBus construction, peripheral install, UART/IO-Link sinks, bit-band/atomic helpers.
 
 use super::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_NATIVE_CODE_IDENTITY: AtomicU64 = AtomicU64::new(1);
+
+pub(super) fn next_native_code_identity() -> u64 {
+    NEXT_NATIVE_CODE_IDENTITY
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .expect("native code identity space exhausted")
+}
 
 impl SystemBus {
     pub fn new() -> Self {
@@ -65,6 +76,7 @@ impl SystemBus {
             // A bare test bus has no chip descriptor; the historical default
             // profile is the ESP32-C3's (the engine's `RiscV::new` default).
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+            native_code_identity: next_native_code_identity(),
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -178,6 +190,7 @@ impl SystemBus {
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+            native_code_identity: next_native_code_identity(),
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,

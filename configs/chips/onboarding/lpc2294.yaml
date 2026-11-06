@@ -4,8 +4,9 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Imported LPC2294 inventory, narrowed to the engine's generic UART model.
-# ARM7TDMI-S, CAN controllers and the LPC timer have no engine model.
+# Bounded ARM7TDMI CPU smoke profile for the imported LPC2294 descriptor.
+# It currently claims only bare-metal integer execution; LPC2294 UART, CAN,
+# timer and ADC behavior are omitted until they have exact models and smokes.
 name: lpc2294
 arch: arm
 core: arm7tdmi-s
@@ -15,12 +16,4 @@ flash:
 ram:
   base: 536870912
   size: 65536B
-peripherals:
-- id: uart0
-  type: ns16550
-  bus: sysbus
-  base_address: 3758145536
-- id: uart1
-  type: ns16550
-  bus: sysbus
-  base_address: 3758161920
+peripherals: []

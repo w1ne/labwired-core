@@ -3,11 +3,11 @@
 - descriptors_present: `245`
 - targets_total: `245`
 - run_attempted: `176`
-- booted: `173/245`
-- boot_and_smoke_passed: `173/245`
+- booted: `174/245`
+- boot_and_smoke_passed: `174/245`
 - not_run: `69`
-- pass: `173`
-- fail: `3`
+- pass: `174`
+- fail: `2`
 - median_elapsed_ms: `1305`
 - median_elapsed_seconds: `1.305`
 - threshold_seconds: `3600`
@@ -112,7 +112,7 @@
 | `litex_vexriscv_verilated_liteuart` | `pass` | `True` | `yes` | `yes` | `2364` | `2.364` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_zephyr` | `pass` | `True` | `yes` | `yes` | `1993` | `1.993` | `True` | `n/a` | n/a | n/a |
 | `litex_zephyr_vexriscv_i2s` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `n/a` | n/a | n/a |
-| `lpc2294` | `fail` | `True` | `no` | `no` | `113500` | `113.5` | `True` | `run_smoke` | CPU model gap. Add a real ARM7 adapter before claiming boot support. | chip 'lpc2294': unsupported ARM classic core 'arm7tdmi-s'; no native adapter is available |
+| `lpc2294` | `pass` | `True` | `yes` | `yes` | `153595` | `153.595` | `True` | `n/a` | n/a | n/a |
 | `mars_zx3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `max32652` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `n/a` | n/a | n/a |
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1040` | `1.04` | `True` | `n/a` | n/a | n/a |

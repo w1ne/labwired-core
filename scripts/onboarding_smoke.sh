@@ -4,6 +4,8 @@ set -euo pipefail
 TARGET_ID=""
 CRATE=""
 CRATE_FEATURES=""
+CLI_FEATURES=""
+CLI_PROFILE=""
 TARGET=""
 SCRIPT=""
 SYSTEM=""
@@ -23,6 +25,8 @@ Smoke mode options:
   --crate NAME --target TRIPLE --script PATH
   --prebuilt-firmware PATH --script PATH
   --features NAME[,NAME...]
+  --cli-features NAME[,NAME...]
+  --cli-profile PROFILE
   --profile release|debug
   --threshold-seconds N
 
@@ -64,6 +68,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --features)
       CRATE_FEATURES="$2"
+      shift 2
+      ;;
+    --cli-features)
+      CLI_FEATURES="$2"
+      shift 2
+      ;;
+    --cli-profile)
+      CLI_PROFILE="$2"
       shift 2
       ;;
     --target)
@@ -303,6 +315,16 @@ firmware_build_args=(cargo build -p "${CRATE}")
 if [[ -n "${CRATE_FEATURES}" ]]; then
   firmware_build_args+=(--features "${CRATE_FEATURES}")
 fi
+cli_build_args=(cargo build -p labwired-cli)
+cli_run_args=(cargo run -q -p labwired-cli)
+if [[ -n "${CLI_PROFILE}" ]]; then
+  cli_build_args+=(--profile "${CLI_PROFILE}")
+  cli_run_args+=(--profile "${CLI_PROFILE}")
+fi
+if [[ -n "${CLI_FEATURES}" ]]; then
+  cli_build_args+=(--features "${CLI_FEATURES}")
+  cli_run_args+=(--features "${CLI_FEATURES}")
+fi
 
 # No RUSTFLAGS here. A firmware crate passes its own linker script from its
 # build.rs, so `cargo build -p <crate> --target <t>` links on its own.
@@ -319,11 +341,11 @@ if [[ "${INVENTORY_ONLY}" == "true" ]]; then
   failure_stage="not_configured"
   first_error_signature="${NOT_RUN_REASON}"
   failure_hint="${NOT_RUN_HINT:-Add a compatible firmware build and smoke script before claiming a boot result.}"
-elif ! run_stage build_cli cargo build -p labwired-cli; then
+elif ! run_stage build_cli "${cli_build_args[@]}"; then
   :
 elif [[ -n "${PREBUILT_FIRMWARE}" ]]; then
   run_attempted="true"
-  if ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+  if ! run_stage run_smoke "${cli_run_args[@]}" -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
     :
   fi
 elif [[ "${PROFILE}" == "release" ]]; then
@@ -331,7 +353,7 @@ elif [[ "${PROFILE}" == "release" ]]; then
     :
   else
     run_attempted="true"
-    if ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+    if ! run_stage run_smoke "${cli_run_args[@]}" -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
       :
     fi
   fi
@@ -340,7 +362,7 @@ else
     :
   else
     run_attempted="true"
-    if ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+    if ! run_stage run_smoke "${cli_run_args[@]}" -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
       :
     fi
   fi

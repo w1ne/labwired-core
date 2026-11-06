@@ -412,6 +412,7 @@ impl SystemBus {
         }
 
         let mut bus = Self {
+            native_code_identity: crate::bus::construct::next_native_code_identity(),
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(flash_size as usize, chip.flash.base),
             memory_policy: crate::bus::memory_policy::MemoryPolicyState::for_chip(chip),

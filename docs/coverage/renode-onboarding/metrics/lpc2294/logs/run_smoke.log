@@ -1,2 +1,5 @@
-2026-11-06T04:47:36.519935Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/lpc2294.yaml
-2026-11-06T04:47:36.520807Z  INFO labwired_loader: ELF Entry Point: 0x8000000
+2026-11-06T08:04:13.988299Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/lpc2294.yaml
+2026-11-06T08:04:14.000104Z  INFO labwired_loader: ELF Entry Point: 0x8000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  1/1 checks · lpc2294-arm7-cpu-smoke · 100000 steps · 0.02s

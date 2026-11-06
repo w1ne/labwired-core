@@ -1980,7 +1980,7 @@ pub(crate) fn run_firmware_arm(
     match labwired_core::system::arch_policy::machine_family(&chip) {
         Ok(labwired_core::system::arch_policy::MachineFamily::CortexM) => {}
         Ok(_) => {
-            eprintln!("error: this --chip driver runs Cortex-M; Cortex-A7 uses run --firmware <ELF> --system <manifest> with native --features qemu-arm");
+            eprintln!("error: this --chip driver runs Cortex-M; native ARM cores use a system-aware command");
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
         Err(error) => {

@@ -529,6 +529,9 @@ impl WasmSimulator {
             MachineFamily::CortexR => return Err(JsValue::from_str(
                 "Cortex-R5F requires the native qemu-arm-system backend; browser execution is unavailable",
             )),
+            MachineFamily::Arm7Tdmi => return Err(JsValue::from_str(
+                "ARM7TDMI requires the native qemu-arm-system backend; browser execution is unavailable",
+            )),
             MachineFamily::CortexM => {
                 Self::new_from_config_arm(&chip, &manifest, firmware, blob_map)
             }

@@ -1,5 +1,6 @@
-# ARMv4T integer loop against the exact imported LPC2294 system. This checks
-# CPU admission only; it does not exercise the UART windows or board I/O.
+# ARMv4T integer loop against the bounded imported LPC2294 CPU profile. This
+# checks instruction execution only; no LPC2294 peripherals or board I/O are
+# asserted.
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf"

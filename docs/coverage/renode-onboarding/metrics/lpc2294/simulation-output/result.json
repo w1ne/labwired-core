@@ -1,14 +1,20 @@
 {
   "result_schema_version": "1.0",
-  "status": "error",
-  "steps_executed": 0,
-  "cycles": 0,
-  "instructions": 0,
-  "stop_reason": "config_error",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
   "stop_reason_details": {
-    "triggered_stop_condition": "config_error",
-    "triggered_limit": null,
-    "observed": null
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
   },
   "limits": {
     "max_steps": 100000,
@@ -21,12 +27,90 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "message": "chip 'lpc2294': unsupported ARM classic core 'arm7tdmi-s'; no native adapter is available",
-  "assertions": [],
+  "assertions": [
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm7_tdmi",
+    "registers": [
+      50000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      134217736
+    ],
+    "pc": 134217736,
+    "cpsr": 1073742291
+  },
   "firmware_hash": "c293168be6ecac987b9ba2083516ce06a76835ebf4a6dbd4d3978371c2864a8e",
   "config": {
     "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
     "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 12,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 12,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 65536,
+    "flash_used_pct": 0.02,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "stack_ram_region_unknown",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 4,
+    "memory_writes": 0,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134217736,
+        "count": 390
+      }
+    ]
   }
 }

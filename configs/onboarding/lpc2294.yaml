@@ -9,16 +9,17 @@ verified: false
 system: systems/onboarding/lpc2294.yaml
 validation:
   method: renode-onboarding-inventory
-  reason: unsupported-arm7-core
+  reason: arm7-cpu-smoke-only
   checks:
     system_manifest: true
     chip_descriptor: true
-    cpu_core_supported: false
-    booted: false
-    simulation: false
-  timestamp_utc: '2026-11-06T04:47:36Z'
+    cpu_core_supported: true
+    booted: true
+    simulation: true
+    smoke_passed: true
+  timestamp_utc: '2026-11-06T08:04:14Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/lpc2294/
+  artifacts_url: https://github.com/w1ne/labwired-core/tree/main/docs/coverage/renode-onboarding/metrics/lpc2294/
 provenance:
   generated_by: scripts/onboard_hw_targets.py
   parse_fallbacks:

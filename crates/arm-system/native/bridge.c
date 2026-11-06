@@ -263,11 +263,12 @@ int lw_call(uint32_t op, uint64_t a, uint64_t b, uint64_t *out,
       tlib_abort(
           "ARM translation cache is smaller than native code/search reserve");
     tlib_set_translation_cache_configuration(LW_CACHE_MIN, LW_CACHE_MAX);
-    if (a > 1)
+    if (a > 2)
       tlib_abort("unknown ARM CPU model selector");
-    if (tlib_init(a == 1 ? "cortex-r5f" : "cortex-a7"))
-      strcpy(error, a == 1 ? "Cortex-R5F initialization failed"
-                           : "Cortex-A7 initialization failed");
+    const char *model = a == 1 ? "cortex-r5f" : a == 2 ? "arm7tdmi" : "cortex-a7";
+    if (tlib_init(model)) {
+      snprintf(error, sizeof(error), "ARM CPU model '%s' initialization failed", model);
+    }
     else {
       /* tlib's PMSA default is zero regions (MPUIR.DREGION 0). The ZynqMP
        * RPU's Cortex-R5F is configured with 16 (UG1085, RPU chapter). */

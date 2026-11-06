@@ -34,6 +34,8 @@ pub enum MachineFamily {
     CortexA,
     /// ARMv7-R real-time profile (Cortex-R5F) on the native system backend.
     CortexR,
+    /// ARMv4T ARM7TDMI integer core on the native system backend.
+    Arm7Tdmi,
     RiscV,
     Xtensa,
     Avr,
@@ -55,8 +57,11 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Arm => match chip.core.as_deref().map(|core| core.trim().to_ascii_lowercase()) {
             Some(core) if core == "cortex-a7" => Ok(MachineFamily::CortexA),
             Some(core) if core == "cortex-r5f" => Ok(MachineFamily::CortexR),
+            Some(core) if core == "arm7tdmi" || core == "arm7tdmi-s" => {
+                Ok(MachineFamily::Arm7Tdmi)
+            }
             Some(core) if core.starts_with("arm7") => anyhow::bail!(
-                "chip '{}': unsupported ARM classic core '{core}'; no native adapter is available",
+                "chip '{}': unsupported ARM classic core '{core}'; only ARM7TDMI has a native adapter",
                 chip.name
             ),
             Some(core) if core.starts_with("cortex-r") => anyhow::bail!(

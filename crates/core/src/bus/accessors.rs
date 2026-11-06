@@ -586,7 +586,12 @@ impl crate::Bus for SystemBus {
     }
 
     fn arm_code_identity(&self) -> Option<u64> {
-        self.irq_fabric.armv7.as_ref().map(|f| f.code_identity())
+        Some(
+            self.irq_fabric
+                .armv7
+                .as_ref()
+                .map_or(self.native_code_identity, |fabric| fabric.code_identity()),
+        )
     }
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
         self.irq_fabric.armv7.as_ref().map(|f| {

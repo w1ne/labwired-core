@@ -451,6 +451,9 @@ pub struct SystemBus {
     /// browser, debugger, tests — therefore gets the chip's own profile
     /// instead of a hardcoded one.
     pub riscv_profile: crate::cpu::RiscVCoreProfile,
+    /// Stable allocation-unique identity for native instruction translators
+    /// that execute directly against this bus without an ARMv7 fabric.
+    pub(crate) native_code_identity: u64,
     /// Enable Cortex-M peripheral/SRAM bit-band alias translation.
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.

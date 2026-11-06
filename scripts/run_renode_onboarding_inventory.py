@@ -18,6 +18,8 @@ SMOKE_MAPPINGS = {
     "lpc2294": {
         "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
         "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml",
+        "cli_features": "qemu-arm-system",
+        "cli_profile": "native-system",
     },
     "cortex_a53_console": {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
@@ -1033,6 +1035,10 @@ def main() -> int:
                 command.extend(["--crate", mapping["crate"], "--target", mapping["target"]])
             if mapping.get("features"):
                 command.extend(["--features", mapping["features"]])
+            if mapping.get("cli_features"):
+                command.extend(["--cli-features", mapping["cli_features"]])
+            if mapping.get("cli_profile"):
+                command.extend(["--cli-profile", mapping["cli_profile"]])
             attempted += 1
 
         result = subprocess.run(
