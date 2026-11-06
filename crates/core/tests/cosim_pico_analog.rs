@@ -73,6 +73,41 @@ fn expected_adc_code(volts: f64) -> u16 {
     ((millivolts * 4096 / 3300).min(4095)) as u16
 }
 
+/// Independent level-1 NMOS load-line reference for the board-routed test.
+fn mosfet_drain_voltage(gate_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+
+    let overdrive = gate_v - VTO;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 fn generic_analog_devices_reach_adc_profile(
     system_name: &str,
     adc_base: u64,
@@ -213,5 +248,94 @@ fn rp2350_zero_ntc_and_diode_netlists_reach_gp26_gp27_adc_inputs() {
         RP2350_ADC_BASE,
         "board.analog.gp26_volts",
         "board.analog.gp27_volts",
+    );
+}
+
+#[test]
+fn pico_mosfet_load_line_reaches_adc0_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/pico.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Pico system profile");
+    let mut analog = SystemManifest::from_file(root("examples/pico/analog-ntc-diode-system.yaml"))
+        .expect("load the generic NTC and Shockley diode netlists");
+    analog.cosim_models[0]
+        .outputs
+        .insert("v_sense".to_string(), "adc.adc.1_volts".to_string());
+    analog.cosim_models[1]
+        .outputs
+        .insert("v_diode".to_string(), "adc.adc.2_volts".to_string());
+    let mosfet = SystemManifest::from_file(root("examples/pico/analog-mosfet-switch.yaml"))
+        .expect("load the generic low-side MOSFET netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RP2040 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Pico system bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries NTC, diode, and MOSFET netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "three unrelated devices must resolve to ADC channels 0/1/2"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set NTC temperature");
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut drain_samples = Vec::new();
+    for gate_v in [0.0_f64, 0.8, 1.0, 2.0, 3.3] {
+        session
+            .set_signal_number("ui.mosfet.gate_v", gate_v)
+            .expect("set MOSFET gate voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all three netlists");
+        assert_eq!(steps.len(), 3, "all three unrelated netlists solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected ADC routing errors: {errors:?}"
+        );
+
+        let drain_v = signal_voltage(&session, "adc.adc.0_volts");
+        let expected_drain_v = mosfet_drain_voltage(gate_v);
+        assert!(
+            (drain_v - expected_drain_v).abs() < 5e-5,
+            "level-1 NMOS load line at Vgs={gate_v} V should be {expected_drain_v} V, got {drain_v} V"
+        );
+        assert_eq!(
+            convert_channel(&mut bus, RP2040_ADC_BASE, 0),
+            expected_adc_code(drain_v),
+            "firmware-visible ADC0 result follows the solved MOSFET drain voltage"
+        );
+
+        let ntc_v = signal_voltage(&session, "adc.adc.1_volts");
+        let diode_v = signal_voltage(&session, "adc.adc.2_volts");
+        assert!((ntc_v - expected_ntc_v).abs() < 1e-9);
+        assert!((diode_v - expected_diode_v).abs() < 2e-5);
+        assert_eq!(
+            convert_channel(&mut bus, RP2040_ADC_BASE, 1),
+            expected_adc_code(ntc_v)
+        );
+        assert_eq!(
+            convert_channel(&mut bus, RP2040_ADC_BASE, 2),
+            expected_adc_code(diode_v)
+        );
+        assert_eq!(
+            convert_channel(&mut bus, RP2040_ADC_BASE, 3),
+            0,
+            "undriven ADC3 remains at ground"
+        );
+        drain_samples.push((gate_v, drain_v));
+    }
+
+    assert_eq!(drain_samples[0].1, drain_samples[2].1);
+    assert!(
+        drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
+        "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
     );
 }
