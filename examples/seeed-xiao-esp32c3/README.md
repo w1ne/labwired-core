@@ -48,3 +48,6 @@ The smoke directly loads a bare-metal ELF. It does not claim boot-ROM,
 Arduino-framework, wireless, USB, UART, I2C, SPI, ADC, or timer behavior. This
 is simulator evidence, not physical-board testing; see
 [`VALIDATION.md`](VALIDATION.md) and the committed `evidence/` logs.
+
+For an I2C sensor design on the same board, see the
+[XIAO ESP32-C3 + BME280 example](../seeed-xiao-esp32c3-bme280/README.md).

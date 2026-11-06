@@ -10,6 +10,13 @@ build = "build.rs"
 riscv-rt = "0.12"
 panic-halt = "0.2"
 
+[features]
+default = []
+# Build the same register-level sensor smoke for Seeed's XIAO ESP32-C3, whose
+# standard I2C header is D4/D5 = GPIO6/GPIO7. The default profile remains the
+# ESP32-C3-DevKitM-1-N4X route on GPIO4/GPIO5.
+xiao = []
+
 [[bin]]
 name = "firmware-esp32c3-bme280-smoke"
 path = "src/main.rs"

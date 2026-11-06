@@ -2,12 +2,12 @@
 #![no_main]
 #![allow(clippy::empty_loop)]
 
-//! Read a real BME280 register over the ESP32-C3-DevKitM-1-N4X I2C0 path.
+//! Read real BME280 registers over an ESP32-C3 I2C0 path.
 //!
-//! The breakout's SDA/SCL route is GPIO4/GPIO5, matching the board's J3 header.
-//! Firmware configures the GPIO matrix, runs an address-write/repeated-start
-//! transaction, and prints the returned chip ID and temperature ADC sample on
-//! UART0. The local smoke checks both decoded values.
+//! The default profile routes GPIO4/GPIO5 on the DevKitM-1-N4X; `--features
+//! xiao` routes the XIAO's standard D4/D5 header at GPIO6/GPIO7. Firmware
+//! configures the GPIO matrix, runs an address-write/repeated-start transaction,
+//! and prints the returned chip ID and temperature ADC sample on UART0.
 
 use panic_halt as _;
 use riscv_rt::entry;
@@ -20,7 +20,13 @@ const GPIO_ENABLE_W1TS: *mut u32 = (GPIO + 0x24) as *mut u32;
 const GPIO_OUT_SEL: usize = GPIO + 0x554;
 const GPIO_IN_SEL: usize = GPIO + 0x154;
 
+#[cfg(feature = "xiao")]
+const SDA_PIN: u32 = 6;
+#[cfg(not(feature = "xiao"))]
 const SDA_PIN: u32 = 4;
+#[cfg(feature = "xiao")]
+const SCL_PIN: u32 = 7;
+#[cfg(not(feature = "xiao"))]
 const SCL_PIN: u32 = 5;
 const I2C0_SCL_SIGNAL: u32 = 53;
 const I2C0_SDA_SIGNAL: u32 = 54;
