@@ -1285,3 +1285,38 @@ cosim_models:
         "{error}"
     );
 }
+
+#[test]
+fn ui_controlled_resistance_updates_the_analog_trace() {
+    let mut sim = build(
+        r#"
+name: wasm-controlled-resistor
+chip: stm32f401
+external_devices: []
+cosim_models:
+  - id: circuit
+    adapter: analog
+    step_ns: 100000
+    inputs: { resistance: ui.resistor.ohms }
+    config:
+      netlist_text: |
+        V1 in 0 dc 5
+        Rfixed in out 1k
+        Rvar out 0 1k
+      probes: { voltage: "v(out)" }
+      sources: { resistance: Rvar }
+"#,
+    );
+    assert_eq!(
+        sim.cosim.as_ref().unwrap().signals()["ui.resistor.ohms"],
+        CosimSignalValue::F64(1000.0)
+    );
+    step_until(&mut sim, CYCLES_PER_MS, 20_000);
+    let first = f64::from(sim.analog_trace_batch(0).samples.last().unwrap().values[0]);
+    assert!((first - 2.5).abs() < 0.01, "{first}");
+    sim.set_cosim_signal_number("ui.resistor.ohms", 9000.0)
+        .expect("input is routed");
+    step_until(&mut sim, CYCLES_PER_MS * 2, 20_000);
+    let second = f64::from(sim.analog_trace_batch(0).samples.last().unwrap().values[0]);
+    assert!((second - 4.5).abs() < 0.01, "{second}");
+}

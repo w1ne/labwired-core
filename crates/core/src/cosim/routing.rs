@@ -91,7 +91,7 @@ pub const ADC_VREF_VOLTS: f64 = 3.3;
 
 /// Prefix of the signal paths set from outside the engine:
 /// `ui.<partId>.<field>`, written by a canvas part or a test stimulus through
-/// [`CosimSession::set_signal`]. Every one a model reads starts at 0 / false.
+/// [`CosimSession::set_signal`]. Inputs default to 0 / false unless the adapter specifies an initial value.
 pub const UI_SIGNAL_PREFIX: &str = "ui.";
 
 /// A digital pad's input thresholds in volts: the chip descriptor's
@@ -1448,15 +1448,17 @@ impl CosimSession {
             .filter(|step| *step > 0)
             .min()
             .unwrap_or(1);
-        // Every `ui.` path a model reads exists from the first step, at 0 /
-        // false, so a circuit sees "released" before anyone has touched it
-        // rather than whatever DC value its netlist happened to write.
+        // Every `ui.` path exists from the first step. A model may provide a
+        // physical initial value; otherwise the default is 0 / false.
         let mut signals = CosimSignals::new();
         for path in runner.input_paths() {
             if path.starts_with(UI_SIGNAL_PREFIX) {
-                let initial = match runner.input_kind(path) {
-                    Some(CosimInputKind::Bool) => CosimSignalValue::Bool(false),
-                    Some(CosimInputKind::Number) | None => CosimSignalValue::F64(0.0),
+                let initial = match runner.input_initial_value(path)? {
+                    Some(value) => value,
+                    None => match runner.input_kind(path) {
+                        Some(CosimInputKind::Bool) => CosimSignalValue::Bool(false),
+                        Some(CosimInputKind::Number) | None => CosimSignalValue::F64(0.0),
+                    },
                 };
                 signals.insert(path.to_string(), initial);
             }
