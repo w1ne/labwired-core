@@ -1,0 +1,10 @@
+# AArch64 integer smoke against the imported NXP i.MX 8M Plus fragment.
+# It runs on one Cortex-A53 PE from the imported DDR window and performs no MMIO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/nxp-mimx8ml.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

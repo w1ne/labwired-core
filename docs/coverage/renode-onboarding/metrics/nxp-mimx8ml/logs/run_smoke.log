@@ -1,0 +1,5 @@
+2026-11-06T02:37:24.611728Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nxp-mimx8ml.yaml
+2026-11-06T02:37:24.612319Z  INFO labwired_loader: ELF Entry Point: 0x40080000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  1/1 checks · nxp-mimx8ml-a53-cpu-smoke · 100000 steps · 0.00s
