@@ -1206,6 +1206,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml
             system: configs/systems/onboarding/cortex-a53-gicv2.yaml
+          # One Cortex-A53 PE and DDR only. The CPU-only fixture does not
+          # exercise the named GICv3 or the omitted timer/UART/RTC blocks.
+          - id: cortex-a53-gicv3
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv3-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a53-gicv3.yaml
           # One Cortex-M55-HP and local ITCM/DTCM only. The integer smoke does
           # not claim Helium, other cores, peripherals, or the boot flow.
           - id: alif_ae822fa0e5597bs0
