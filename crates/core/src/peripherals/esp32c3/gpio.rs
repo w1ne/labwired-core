@@ -1175,6 +1175,17 @@ impl PinPort for Esp32c3Gpio {
 }
 
 impl Peripheral for Esp32c3Gpio {
+    /// GPIO0..25 all occupy the low-bank GPIO_OUT/ GPIO_IN register bits on
+    /// ESP32-C3. Publishing those latch offsets lets chip pin maps resolve a
+    /// pad to its output register (for example, a display's GPIO-driven D/C
+    /// line) without pretending the matrix-routed signals are GPIO outputs.
+    fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
+        Some(crate::peripherals::gpio::GpioPortOffsets {
+            output: OUT,
+            input: IN,
+        })
+    }
+
     /// Classify the input-data register (`IN`, 0x3C) and the boot-strap latch
     /// (`STRAP`) as pure freerunning samples: reading them observes pad levels
     /// without mutating any peripheral or world state. This lets the idle

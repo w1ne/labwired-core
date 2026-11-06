@@ -26,6 +26,7 @@ on:
       - "crates/firmware-esp32c6-demo/**"
       - "crates/firmware-esp32c61-devkitc-smoke/**"
       - "crates/firmware-xiao-esp32c3-smoke/**"
+      - "crates/firmware-esp32c3-lcdkit-smoke/**"
       - "crates/firmware-nucleo-f070rb-smoke/**"
       - "crates/firmware-nucleo-f072rb-smoke/**"
       - "crates/firmware-nucleo-f091rc-smoke/**"
@@ -366,6 +367,11 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/seeed-xiao-esp32c3/onboarding-smoke.yaml
             system: configs/systems/seeed-xiao-esp32c3.yaml
+          - id: esp32c3-lcdkit
+            crate: firmware-esp32c3-lcdkit-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c3-lcdkit/onboarding-smoke.yaml
+            system: configs/systems/esp32c3-lcdkit.yaml
           - id: arduino-uno-r4-minima
             crate: firmware-ra4m1-demo
             target: thumbv7em-none-eabi

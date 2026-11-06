@@ -599,8 +599,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `n` (an STM32/nRF/SAM/EFR32/Kinetis `GpioPort`, an ATmega `PORTx`).
     ///
     /// `None` for everything else, including a GPIO block that banks its pads
-    /// across several registers (the ESP32 family's single `gpio` block, whose
-    /// pads 32 and up sit in a second output register as bank-relative bits).
+    /// across several registers (most ESP32-family chips have one `gpio` block
+    /// whose pads 32 and up sit in a second output register as bank-relative
+    /// bits; ESP32-C3 is the exception because all 26 pads fit in the low bank).
     /// Pin resolution and co-simulation ask this instead of downcasting to each
     /// port model they know about.
     fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {

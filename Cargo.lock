@@ -1295,6 +1295,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-esp32c3-lcdkit-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-esp32c5-devkitc-smoke"
 version = "0.1.0"
 dependencies = [
