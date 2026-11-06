@@ -34,6 +34,13 @@ SDCC emits Intel HEX; `firmware/hex2elf.py` wraps it byte for byte in an
 `crates/core/tests/pic18f4520_smoke.rs` and `ci/test.sh` both check that the
 ELF payload equals the HEX.
 
+The generic `analog-ntc-diode-system.yaml` fixture solves a Beta NTC divider and
+an unrelated Shockley diode, then routes each node to a separate threshold input.
+`crates/core/tests/cosim_pic18f4520_analog.rs` checks the voltage equations,
+input thresholds and hysteresis. These are simulation-only co-simulation
+endpoints: PIC18 PORTA/PORTE external sampling and ADC conversion are not
+modeled, so this is not a firmware-visible analog input path.
+
 ## Build and run
 
 ```bash
