@@ -104,6 +104,7 @@ pub fn try_build(
                 crate::peripherals::spi::SpiRegisterLayout::Nrf54lSpim,
             ))
         }
+        "nrf54l_saadc" => Box::new(crate::peripherals::nrf54l::saadc::Nrf54lSaadc::new()),
         "nrf54l_clock" => Box::new(crate::peripherals::nrf54l::clock::Nrf54lClock::new()),
         _ => return None,
     };

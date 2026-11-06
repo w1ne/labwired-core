@@ -251,6 +251,16 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf54l15/global_temp_s.yaml"
 
+  # GLOBAL_SAADC_S from the nRF54L15 application-core SVD. The nRF54L PSELP,
+  # gain and reference encodings differ from nRF52, so use the family model.
+  - id: "saadc"
+    type: "nrf54l_saadc"
+    base_address: 0x500D5000
+    size: "4KB"
+    irq: 213
+    config:
+      debug_schema: "../peripherals/nrf54l15/global_saadc_s.yaml"
+
   # ── EGU ────────────────────────────────────────────────────────────────
   - id: "egu10"
     type: "nrf52840_egu"

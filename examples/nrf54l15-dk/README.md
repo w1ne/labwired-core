@@ -85,3 +85,6 @@ src/main.c        LED + UARTE banner
 - `firmware_survival::test_nrf54l15_lights_dk_led0` — boots this ELF, asserts
   DIR and OUT **at the pin**, because the banner alone does not catch a GPIO
   base-address error
+- `crates/core/tests/cosim_nrf54l15_dk_analog.rs` — routes generic NTC and diode
+  netlists through the `analog-ntc-diode-system.yaml` fixture to separate SAADC
+  channels and checks the voltage and EasyDMA result at each temperature

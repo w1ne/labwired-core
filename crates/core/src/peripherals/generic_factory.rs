@@ -335,6 +335,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // Further nRF54L factory arms.
     "nrf54l_clock",
     "nrf54l_grtc",
+    "nrf54l_saadc",
     "efr32s2_busalloc",
     "efr32s2_cmu",
     "efr32s2_gpio_head",

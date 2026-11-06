@@ -9497,9 +9497,10 @@ boards:
     doc: docs/boards/nrf54l15.md
     chip: configs/chips/nrf54l15.yaml
     tier: sim-validated
-    note: "RRAM-based (NVM at 0x0, 1524 KB; 256 KB SRAM, initial SP at 0x2004_0000) rather than flash. Boots a bare smoke fixture and UNMODIFIED upstream Zephyr hello_world through the real nrfx/Zephyr boot path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, nRF54L-generation UARTE DMA.TX) — firmware_survival::nrf54l15_smoke/nrf54l15_zephyr. No nRF54L15 silicon diff — no bench board."
+    note: "RRAM-based (NVM at 0x0, 1524 KB; 256 KB SRAM, initial SP at 0x2004_0000) rather than flash. Boots a bare smoke fixture and UNMODIFIED upstream Zephyr hello_world through the real nrfx/Zephyr boot path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, nRF54L-generation UARTE DMA.TX) — firmware_survival::nrf54l15_smoke/nrf54l15_zephyr. The single-ended SAADC model covers its nRF54L PSELP, gain, 0.9 V reference, and 12-bit EasyDMA conversion path. No nRF54L15 silicon diff — no bench board."
     offline_tests:
       - "firmware_survival::nrf54l15_smoke / nrf54l15_zephyr"
+      - "cosim_nrf54l15_dk_analog::nrf54l15_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9514,9 +9515,13 @@ boards:
       - crates/core/src/peripherals/nrf52/temp.rs
       - crates/core/src/peripherals/nrf52/timer.rs
       - crates/core/src/peripherals/nrf54l/clock.rs
+      - crates/core/src/peripherals/nrf54l/factory.rs
       - crates/core/src/peripherals/nrf54l/grtc.rs
+      - crates/core/src/peripherals/nrf54l/mod.rs
+      - crates/core/src/peripherals/nrf54l/saadc.rs
       - crates/core/src/peripherals/nrf54l/twim.rs
       - crates/core/src/peripherals/nrf54l/uarte.rs
+      - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
 
