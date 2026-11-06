@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 78 have end-to-end analog coverage; 25 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 79 have end-to-end analog coverage; 24 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -90,7 +90,7 @@ Current inventory: **103 profiles; 78 have end-to-end analog coverage; 25 have n
 | `nucleo_g474re` | [`cosim_nucleo_g474re_analog.rs`](../crates/core/tests/cosim_nucleo_g474re_analog.rs)::`nucleo_g474re_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists reach PA0/PA1 and assert solved voltages, GPIOA_IDR levels, and Schmitt hysteresis. Thresholds are test assumptions; this is GPIO threshold coverage, not ADC support. |
 | `nucleo_wba52cg` | [`cosim_nucleo_wba52cg_analog.rs`](../crates/core/tests/cosim_nucleo_wba52cg_analog.rs)::`nucleo_wba52cg_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists solve onto PA0/PA1 and are asserted through GPIOA_IDR threshold crossings and hysteresis. Thresholds are test assumptions; ADC4 remains undeclared in the current chip model. |
 | `pic16f1829-curiosity` | [`cosim_pic16f1829_analog.rs`](../crates/core/tests/cosim_pic16f1829_analog.rs)::`pic16f1829_curiosity_ntc_and_diode_netlists_reach_threshold_inputs` — generic Beta NTC and unrelated Shockley diode solve to separate simulation-only input endpoints; asserts voltages, threshold levels, and NTC hysteresis. PIC16 PORTA external pin sampling and ADC conversion remain unmodeled, so endpoints are not firmware-visible. |
-| `pic16f877a-demo` | **NO E2E analog coverage** |
+| `pic16f877a-demo` | [`cosim_pic16f877a_analog.rs`](../crates/core/tests/cosim_pic16f877a_analog.rs)::`pic16f877a_ntc_and_diode_netlists_reach_threshold_inputs` — generic Beta NTC and unrelated Shockley diode solve to separate simulation-only input endpoints; asserts solved voltages, threshold levels, and NTC hysteresis. PIC16 PORTA/PORTE external sampling and ADC conversion remain unmodeled, so endpoints are not firmware-visible. |
 | `pic18f4520-demo` | **NO E2E analog coverage** |
 | `pico-selftest` | **NO E2E analog coverage** |
 | `pico` | **NO E2E analog coverage** |
