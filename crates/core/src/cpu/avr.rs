@@ -34,10 +34,11 @@ pub const FLASH_SIZE: usize = 32 * 1024;
 pub const RAMEND: u16 = 0x08FF;
 pub const SRAM_START: u16 = 0x0100;
 
-/// The AVR parts this interpreter runs. The ATmega1281 and ATmega2560 family
-/// cores share mega peripheral behavior, with per-device flash and PC geometry.
-/// The ATmega2560 (Arduino Mega) has 256 KB flash and a 3-byte PC; the
-/// ATmega1281 has 128 KB flash and a 2-byte PC. Both have 8 KB SRAM at 0x0200.
+/// The AVR parts this interpreter runs. The imported ATmega1280 profile is
+/// routed through ATmega1281 geometry for CPU-only execution: both descriptors
+/// specify 128 KB flash and 8 KB SRAM at 0x0200. This alias does not assert
+/// ATmega1280 peripheral behavior. The ATmega2560 (Arduino Mega) has 256 KB
+/// flash and a 3-byte PC; ATmega1281 has 128 KB flash and a 2-byte PC.
 /// EIND for EIJMP/EICALL is available on the ATmega2560/2561 model, while
 /// RAMPZ for ELPM is shared. The mega peripheral map includes ports A..L
 /// (H..L in extended I/O at 0x100..0x10B), a 16-channel ADC (ADCSRB.MUX5
@@ -162,7 +163,7 @@ impl AvrModel {
             AvrModel::Attiny13
         } else if n.contains("1284") {
             AvrModel::Atmega1284p
-        } else if n.contains("1281") {
+        } else if n.contains("1280") || n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
