@@ -8,8 +8,8 @@
 - not_run: `63`
 - pass: `180`
 - fail: `2`
-- median_elapsed_ms: `1326`
-- median_elapsed_seconds: `1.326`
+- median_elapsed_ms: `1319`
+- median_elapsed_seconds: `1.319`
 - threshold_seconds: `3600`
 - threshold_met: `182/182`
 
@@ -221,7 +221,7 @@
 | `stm32f042` | `pass` | `True` | `yes` | `yes` | `1332` | `1.332` | `True` | `n/a` | n/a | n/a |
 | `stm32f072` | `pass` | `True` | `yes` | `yes` | `1410` | `1.41` | `True` | `n/a` | n/a | n/a |
 | `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `9087` | `9.087` | `True` | `n/a` | n/a | n/a |
-| `stm32f103` | `pass` | `True` | `yes` | `yes` | `14366` | `14.366` | `True` | `n/a` | n/a | n/a |
+| `stm32f103` | `pass` | `True` | `yes` | `yes` | `1026` | `1.026` | `True` | `n/a` | n/a | n/a |
 | `stm32f4` | `pass` | `True` | `yes` | `yes` | `2282` | `2.282` | `True` | `n/a` | n/a | n/a |
 | `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `1175` | `1.175` | `True` | `n/a` | n/a | n/a |
 | `stm32f412` | `pass` | `True` | `yes` | `yes` | `1343` | `1.343` | `True` | `n/a` | n/a | n/a |

@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073809408,
-      32,
-      2097152,
-      7750,
-      0,
-      0,
-      0,
+      10,
+      3221225472,
+      3221225472,
+      1073759232,
+      1073759232,
+      999999,
+      1073763348,
       536891376,
       0,
       0,
       0,
       0,
-      4294947296,
+      999999,
       536891376,
-      134219291,
-      134219212
+      61,
+      134221522
     ],
-    "pc": 134219212,
-    "xpsr": 553648128,
+    "pc": 134221522,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 200000,
-  "cycles": 200000,
-  "instructions": 200000,
+  "steps_executed": 50000000,
+  "cycles": 50000000,
+  "instructions": 50000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 50000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 50000000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 50000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,10 +59,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "b902db3b51f14802baff0a7d57ab57df05ac20d79eacea8148eba612d5e50e86",
+  "firmware_hash": "9ede918b27120e3c9c50781a51c414e8e951f449ba28b598caf3bdf1069ec133",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
-    "script": "examples/renode-onboarding/stm32f103-smoke.yaml"
+    "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml"
   }
 }

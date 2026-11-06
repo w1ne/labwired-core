@@ -14,16 +14,17 @@ verified: false
 system: systems/onboarding/stm32f103.yaml
 validation:
   method: renode-onboarding-exact-import-smoke
-  reason: bounded Cortex-M3, USART2 and GPIOA smoke; whole platform remains unverified
+  reason: bounded Cortex-M3, USART2, GPIOA and I2C1 no-slave NACK smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     cortex_m3_smoke: true
     usart2_tx: true
-    gpioa_pa5_edges: true
+    i2c1_no_slave_nack: true
+    i2c1_stop_idle: true
     whole_platform: false
     other_peripherals: false
-  timestamp_utc: '2026-11-06T05:02:52Z'
+  timestamp_utc: '2026-11-06T11:10:59Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f103/
 provenance:

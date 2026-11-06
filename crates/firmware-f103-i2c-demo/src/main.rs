@@ -89,6 +89,12 @@ fn main() -> ! {
         }
     }
     print_state(b"ADDR");
+    let addr_sr1 = unsafe { read_volatile(I2C1_SR1 as *const u32) };
+    if addr_sr1 & 0x0400 != 0 {
+        putline(b"I2C_NACK_OK");
+    } else {
+        putline(b"I2C_NACK_MISSING");
+    }
 
     // Generate STOP and wait for the bus to settle.
     unsafe { rmw32(I2C1_CR1, 1 << 9) }; // CR1.STOP
@@ -99,6 +105,12 @@ fn main() -> ! {
         }
     }
     print_state(b"STOP");
+    let stop_sr2 = unsafe { read_volatile(I2C1_SR2 as *const u32) };
+    if stop_sr2 & 0x0002 == 0 {
+        putline(b"I2C_IDLE_OK");
+    } else {
+        putline(b"I2C_IDLE_MISSING");
+    }
 
     putline(b"DONE");
 

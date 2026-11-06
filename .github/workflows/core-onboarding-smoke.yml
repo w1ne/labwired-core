@@ -414,9 +414,9 @@ jobs:
             script: examples/renode-onboarding/stm32f072b_discovery-smoke.yaml
             system: configs/systems/onboarding/stm32f072b_discovery.yaml
           - id: stm32f103
-            crate: firmware-nucleo-f103rb-smoke
+            crate: firmware-f103-i2c-demo
             target: thumbv7m-none-eabi
-            script: examples/renode-onboarding/stm32f103-smoke.yaml
+            script: examples/renode-onboarding/stm32f103-i2c-smoke.yaml
             system: configs/systems/onboarding/stm32f103.yaml
           # The EFM32G210 import is narrowed to its Cortex-M3, memory, and
           # model-backed USART0 path exercised by this firmware.

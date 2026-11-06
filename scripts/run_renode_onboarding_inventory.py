@@ -599,9 +599,9 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml",
     },
     "stm32f103": {
-        "crate": "firmware-nucleo-f103rb-smoke",
+        "crate": "firmware-f103-i2c-demo",
         "target": "thumbv7m-none-eabi",
-        "script": "examples/renode-onboarding/stm32f103-smoke.yaml",
+        "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
     },
     "stm32f042": {
         "crate": "firmware-stm32f042-smoke",
