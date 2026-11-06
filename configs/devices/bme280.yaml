@@ -106,6 +106,9 @@ metadata:
   category: i2c
   config_keys:
     - { name: i2c_address, ty: int, doc: '7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.' }
+    - { name: temperature, ty: float, doc: 'Starting ambient temperature in °C; defaults to 25.' }
+    - { name: humidity, ty: float, doc: 'Starting relative humidity in %RH; defaults to 50.' }
+    - { name: pressure, ty: float, doc: 'Starting pressure in hPa; defaults to 1013.25.' }
   inputs:
     - { key: temperature, label: Temperature, unit: '°C', min: -40, max: 85, default: 25 }
     - { key: humidity, label: Humidity, unit: '%RH', min: 0, max: 100, default: 50 }

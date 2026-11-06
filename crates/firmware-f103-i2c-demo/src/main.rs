@@ -207,10 +207,11 @@ fn main() -> ! {
         None => putline(b"BME280_CALIBRATION_READ_FAIL"),
     }
 
-    // Read the BME280's live measurement window as a driver does. The three
-    // Pressure and temperature are 20-bit values split across three bytes;
-    // humidity is a 16-bit word. The model's default inputs map to broad,
-    // deterministic raw-code ranges for 25 °C / 1013.25 hPa / 50 %RH.
+    // Read the BME280's measurement window as a driver does. Pressure and
+    // temperature are 20-bit values split across three bytes; humidity is a
+    // 16-bit word. The imported system seeds 40 °C / 80 %RH / 950 hPa; exact
+    // raw-code comparisons check that placement config reaches all three
+    // channels in the model.
     let pressure = unsafe {
         read_i2c_register(BME280_ADDRESS, 0xF7, 2).and_then(|bytes| {
             read_i2c_byte(BME280_ADDRESS, 0xF9).map(|xlsb| {
@@ -235,13 +236,10 @@ fn main() -> ! {
             print_reg(b"BME280_PRESS_RAW=", pressure);
             print_reg(b"BME280_TEMP_RAW=", temperature);
             print_reg(b"BME280_HUM_RAW=", humidity);
-            if (200_000..500_000).contains(&pressure)
-                && (500_000..600_000).contains(&temperature)
-                && (10_000..50_000).contains(&humidity)
-            {
-                putline(b"BME280_RAW_READ_OK");
+            if pressure == 362_559 && temperature == 583_952 && humidity == 34_111 {
+                putline(b"BME280_SEEDED_ENVIRONMENT_OK");
             } else {
-                putline(b"BME280_RAW_RANGE_MISMATCH");
+                putline(b"BME280_SEEDED_ENVIRONMENT_MISMATCH");
             }
         }
         _ => putline(b"BME280_RAW_READ_FAIL"),

@@ -17,3 +17,6 @@ external_devices:
     connection: i2c1
     config:
       i2c_address: 0x76
+      temperature: 40.0
+      humidity: 80.0
+      pressure: 950.0

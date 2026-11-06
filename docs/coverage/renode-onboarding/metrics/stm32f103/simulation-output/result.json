@@ -132,25 +132,25 @@
     },
     {
       "assertion": {
-        "uart_contains": "BME280_PRESS_RAW="
+        "uart_contains": "BME280_PRESS_RAW=0005883F"
       },
       "passed": true
     },
     {
       "assertion": {
-        "uart_contains": "BME280_TEMP_RAW="
+        "uart_contains": "BME280_TEMP_RAW=0008E910"
       },
       "passed": true
     },
     {
       "assertion": {
-        "uart_contains": "BME280_HUM_RAW="
+        "uart_contains": "BME280_HUM_RAW=0000853F"
       },
       "passed": true
     },
     {
       "assertion": {
-        "uart_contains": "BME280_RAW_READ_OK"
+        "uart_contains": "BME280_SEEDED_ENVIRONMENT_OK"
       },
       "passed": true
     },
@@ -172,22 +172,22 @@
     "registers": [
       10,
       3221225472,
+      75,
+      3,
       3221225472,
-      3221225472,
-      28995,
       999999,
       1073759232,
       536891376,
-      309724,
-      4419841,
-      536000,
+      362559,
+      4162817,
+      583952,
       1,
       999999,
       536891376,
-      134235735,
-      134233814
+      134235021,
+      134233784
     ],
-    "pc": 134233814,
+    "pc": 134233784,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -200,7 +200,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "d36e612f110cdecd9f11d348af458d5f9a1b4b96fab83aeb961c7bc8fb0bac6e",
+  "firmware_hash": "5731cd7efd4647524926a33126f20b231a2fa4c04f7ad4c38baeba1a2038483b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -262,9 +262,9 @@
             "id": "i2c@0x76",
             "meta": {
               "inputs": {
-                "humidity": 50.0,
-                "pressure": 1013.25,
-                "temperature": 25.0
+                "humidity": 80.0,
+                "pressure": 950.0,
+                "temperature": 40.0
               },
               "powered": true,
               "registers": {
@@ -291,10 +291,10 @@
                 "DIG_T1": 28528,
                 "DIG_T2": 26435,
                 "DIG_T3": 64536,
-                "HUM": 28995,
-                "PRESS": 4955584,
+                "HUM": 34111,
+                "PRESS": 5800944,
                 "STATUS": 0,
-                "TEMP": 8576000
+                "TEMP": 9343232
               },
               "supply_generation": null
             }
@@ -373,9 +373,9 @@
             "id": "bme280",
             "meta": {
               "inputs": {
-                "humidity": 50.0,
-                "pressure": 1013.25,
-                "temperature": 25.0
+                "humidity": 80.0,
+                "pressure": 950.0,
+                "temperature": 40.0
               },
               "powered": true,
               "registers": {
@@ -402,10 +402,10 @@
                 "DIG_T1": 28528,
                 "DIG_T2": 26435,
                 "DIG_T3": 64536,
-                "HUM": 28995,
-                "PRESS": 4955584,
+                "HUM": 34111,
+                "PRESS": 5800944,
                 "STATUS": 0,
-                "TEMP": 8576000
+                "TEMP": 9343232
               },
               "supply_generation": null
             }
@@ -720,25 +720,25 @@
         "end_cycle": 20000
       },
       {
-        "text": "BME280_PRESS_RAW=0004B9DC",
+        "text": "BME280_PRESS_RAW=0005883F",
         "cycle_lo": 20000,
         "cycle": 30000,
         "end_cycle": 30000
       },
       {
-        "text": "BME280_TEMP_RAW=00082DC0",
+        "text": "BME280_TEMP_RAW=0008E910",
         "cycle_lo": 20000,
         "cycle": 30000,
         "end_cycle": 30000
       },
       {
-        "text": "BME280_HUM_RAW=00007143",
+        "text": "BME280_HUM_RAW=0000853F",
         "cycle_lo": 20000,
         "cycle": 30000,
         "end_cycle": 30000
       },
       {
-        "text": "BME280_RAW_READ_OK",
+        "text": "BME280_SEEDED_ENVIRONMENT_OK",
         "cycle_lo": 20000,
         "cycle": 30000,
         "end_cycle": 30000
@@ -754,14 +754,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 18032,
+    "text_bytes": 17355,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 18032,
+    "flash_used_bytes": 17355,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 27.51,
+    "flash_used_pct": 26.48,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -787,13 +787,13 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 4442,
+    "memory_reads": 3803,
     "memory_writes": 196,
-    "peripheral_accesses": 6376,
+    "peripheral_accesses": 6396,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134233814,
+        "pc": 134233784,
         "count": 195234,
         "symbol": "firmware_f103_i2c_demo::main"
       },
