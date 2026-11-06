@@ -472,6 +472,7 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)
   - offline (CI): ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)
   - offline (CI): ra6m5_sci_icu (SCI0 RXI/TXI/TEI through ICU IELSR0-2, SSR_FIFO)
+  - offline (CI): examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml (MSTP reset/write readback)
 - Drift status: **no silicon capture**
 
 ## `r7fa8m1ah` — 🟡 smoke-manual
@@ -482,6 +483,7 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)
   - offline (CI): ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)
   - offline (CI): ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)
+  - offline (CI): examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml (MSTP reset/write readback)
 - Drift status: **no silicon capture**
 
 ## `same70q21b` — 🟡 smoke-manual

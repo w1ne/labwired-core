@@ -102,6 +102,13 @@ on:
       - "crates/firmware-sam4s-smoke/**"
       - "examples/renode-onboarding/sam4s-smoke.yaml"
       - "crates/firmware-ek-ra8m1-smoke/**"
+      - "crates/firmware-ek-ra6m5-smoke/**"
+      - "configs/peripherals/r7fa6m5bh/**"
+      - "configs/peripherals/r7fa8m1ah/**"
+      - "configs/systems/ek-ra6m5.yaml"
+      - "configs/systems/ek-ra8m1.yaml"
+      - "examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml"
+      - "examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml"
       - "crates/firmware-stm32w108-boot-smoke/**"
       - "crates/firmware-renesas-r7fa6m5b-boot-smoke/**"
       - "crates/firmware-renesas-ek-ra2e1-smoke/**"
@@ -502,6 +509,19 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml
             system: configs/systems/onboarding/renesas-ek_ra8m1.yaml
+          # Tier-1 EK-RA8M1 / EK-RA6M5 systems: SVD-derived R_MSTP register
+          # readback (reset values plus a stored MSTPB clear). Module-stop
+          # gating itself is not modelled.
+          - id: r7fa8m1ah-tier1
+            crate: firmware-ek-ra8m1-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml
+            system: configs/systems/ek-ra8m1.yaml
+          - id: r7fa6m5bh-tier1
+            crate: firmware-ek-ra6m5-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml
+            system: configs/systems/ek-ra6m5.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
