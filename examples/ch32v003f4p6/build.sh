@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-example_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH= cd -- "$example_dir/../.." && pwd)
+example_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH='' cd -- "$example_dir/../.." && pwd)
 output="$repo_root/tests/fixtures/ch32v003f4p6-blink.elf"
 
 if [ -n "${RISCV_CC:-}" ]; then
