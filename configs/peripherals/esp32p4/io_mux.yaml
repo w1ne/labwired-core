@@ -1,0 +1,13 @@
+peripheral: IO_MUX (GPIO8 slice)
+version: 0.1.0
+registers:
+  - id: IO_MUX_GPIO8
+    address_offset: 0x24
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x1800
+    fields:
+      - name: FUN_DRV
+        bit_range: [10, 11]
+      - name: MCU_SEL
+        bit_range: [12, 14]

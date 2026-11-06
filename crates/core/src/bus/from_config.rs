@@ -611,6 +611,7 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c5::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32p4::factory::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -1416,6 +1417,9 @@ impl SystemBus {
         // ESP32-C5: share GPIO6/GPIO10/GPIO27 IO_MUX function-select words
         // with GPIO so sensor matrix routing and the onboard LED honor MCU_SEL.
         bus.wire_esp32c5_pad_controls();
+        // ESP32-P4: share the GPIO8 IO_MUX word so the GPIO pad follows the
+        // firmware-selected GPIO function on the P4X Function EV profile.
+        bus.wire_esp32p4_pad_controls();
         // Same for the ESP32-S3. (The S3's IO_MUX is registered by the coded
         // `configure_xtensa_esp32s3` path rather than the chip yaml, which
         // wires it there too; this keeps the declarative path honest if the

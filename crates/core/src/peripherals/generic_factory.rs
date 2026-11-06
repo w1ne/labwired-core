@@ -147,6 +147,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_pcr",
     "esp32c5_gpio",
     "esp32c5_io_mux",
+    "esp32p4_gpio",
     // H2's narrowly reused GPIO output model is built by the Espressif family
     // factory. Keep its name canonical so the generic `gpio` fallback cannot
     // replace it with a register-layout placeholder before that factory runs.

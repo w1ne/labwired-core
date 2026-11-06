@@ -1374,6 +1374,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-esp32p4x-function-ev-board-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-esp8684-devkitm1-h4x-smoke"
 version = "0.1.0"
 dependencies = [

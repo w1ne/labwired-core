@@ -1318,6 +1318,39 @@ impl SystemBus {
         }
     }
 
+    /// Share the P4 GPIO8 IO_MUX function-select word with its focused GPIO model.
+    pub(crate) fn wire_esp32p4_pad_controls(&mut self) {
+        use crate::peripherals::esp32p4::gpio::Esp32p4Gpio;
+        use crate::peripherals::esp32p4::io_mux::Esp32p4IoMux;
+
+        let io_mux_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32p4IoMux>()));
+        let gpio_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32p4Gpio>()));
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let control = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32p4IoMux>())
+            .map(Esp32p4IoMux::gpio8_pad_control);
+        if let (Some(control), Some(gpio)) = (
+            control,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32p4Gpio>()),
+        ) {
+            gpio.set_io_mux_gpio8(control);
+        }
+    }
+
     /// Does this bus have either peripheral the pad brackets exist for?
     ///
     /// The brackets run at the MMIO write choke, and before this they cost four

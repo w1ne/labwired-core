@@ -17,19 +17,49 @@ and RP2040 12%. It reports kit use of ESP32-based boards at 42%, Arduino at
 37%, and STM32 Nucleo/Discovery at 23%. Those are survey shares, not market
 share estimates. RP2350 has no separate row in that survey.
 
-The existing coverage is broad. This round adds no new hardware: it prepares a
-reviewable community index and makes the existing scope and evidence easier to
-find.
+This review draft now includes a focused ESP32-P4X Function EV board profile
+and its GPIO8 smoke. It remains unpublished pending Andrii's approval.
 
 ## Demand-ranked coverage
 
 | Survey position | Representative board | What the local smoke exercises | Availability receipt |
 | --- | --- | --- | --- |
-| **#1 ESP32, 38%** | [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md) | GPIO10 waveform decoded as a red WS2812 pixel | [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md) |
+| **#1 ESP32, 38%** | [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md) | P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel | [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md) |
 | **#2 ATmega328, 30%** | No current recommendation | The existing Uno R3 notes identify ATmega328P as NRND; we do not recommend buying it for a new design. | [Legacy note](../../examples/arduino-uno-blinky/README.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md) | USART3 output on the ST-LINK virtual COM route | [ST status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md) |
 | **#5 RP2040, 12%** | [Raspberry Pi Pico](../../examples/pico/README.md) | UART0, GP25 LED edges, and a non-zero internal temperature ADC result | [Raspberry Pi status and availability, checked 2026-11-06](../../examples/pico/evidence/vendor-status.md) |
+
+### #1 — ESP32: Espressif ESP32-P4X Function EV Board
+
+Set the project target to `esp32p4` in ESP-IDF. GPIO8 is at J1 pin 5; attach an
+LED in series with a current-limiting resistor from GPIO8 to GND, or use a
+logic analyzer to observe the pin:
+
+```c
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+void app_main(void) {
+    gpio_reset_pin(GPIO_NUM_8);
+    gpio_set_direction(GPIO_NUM_8, GPIO_MODE_OUTPUT);
+    for (;;) {
+        gpio_set_level(GPIO_NUM_8, 1);
+        vTaskDelay(pdMS_TO_TICKS(500));
+        gpio_set_level(GPIO_NUM_8, 0);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+```
+
+The local profile directly loads a bare-metal RISC-V image and asserts GPIO8
+edges. It covers one HP execution context and GPIO8's output and IO_MUX path;
+it does not claim the second HP core, LP core, ESP32-C6 module, ROM boot, flash
+controller, USB, Ethernet, audio, camera, display, or other pads. See the
+[focused quickstart](../../examples/esp32p4x-function-ev-board/README.md),
+[availability receipt](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md),
+and [committed local evidence](../../examples/esp32p4x-function-ev-board/evidence/).
 
 ### #1 — ESP32: Waveshare ESP32-C3-Zero
 

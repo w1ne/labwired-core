@@ -1,0 +1,12 @@
+# ESP32-P4X Function EV board smoke: direct GPIO8 output at J1 pin 5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-esp32p4x-function-ev-board-smoke"
+  system: "../../configs/systems/esp32p4x-function-ev-board.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 32
+  - expected_stop_reason: max_steps
