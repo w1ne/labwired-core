@@ -1,38 +1,21 @@
-# Validation Report: cortex-a53-gicv3_smp
+# Cortex-A53 GICv3 SMP imported profile
 
-**Architecture:** ARMv8-A (AArch64).
+## Measured scope
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported four-core profile is narrowed to one AArch64 Cortex-A53 processing
+element and the 2 GiB DDR window at `0x40000000`. The profile omits multicore
+execution, GICv3, generic timers, PL011 UART, and PL031 RTC. Its whole-platform
+descriptor remains unverified.
 
-```text
-[2m2026-10-18T14:39:52.497579Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:52.498884Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/cortex-a53-gicv3_smp.yaml
-[2m2026-10-18T14:39:52.657769Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:52.657853Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:52.657861Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:52.657866Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:52.658537Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:52.658552Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:52.658558Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:52.658643Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:52.658661Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:52.658665Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:52.658669Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:52.658673Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:52.658677Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2480.06
-```
+## Smoke evidence
 
+The exact imported system ran the committed AArch64 integer-loop ELF for
+100,000 instructions and passed its `max_steps` assertion. It recorded zero
+peripheral accesses. This is local LabWired CLI evidence for the bounded
+single-PE CPU-and-DDR profile. It is not a hosted `labwired_verify` verdict,
+Renode execution, reset-vector boot, SMP/GIC/peripheral validation, or hardware
+confirmation.
 
-## Hardware Coverage Report
-
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `timer1` | `0x0000000f` | `arm_generictimer` |
-| `timer2` | `0x0000000f` | `arm_generictimer` |
-| `timer3` | `0x0000000f` | `arm_generictimer` |
-| `timer` | `0x0000000f` | `arm_generictimer` |
-| `uart0` | `0x09000000` | `pl011` |
-| `rtc` | `0x09010000` | `pl031` |
-
-**Total Peripherals:** 6
+Evidence is under
+`docs/coverage/renode-onboarding/metrics/cortex-a53-gicv3_smp/`, including the
+metric, JUnit assertion, simulator result, snapshot, and run log.

@@ -64,6 +64,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-a53-gicv3-cpu-smoke.yaml",
     },
+    "cortex-a53-gicv3_smp": {
+        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-a53-gicv3_smp-cpu-smoke.yaml",
+    },
     "colibri-vf61": {
         "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
         "script": "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml",

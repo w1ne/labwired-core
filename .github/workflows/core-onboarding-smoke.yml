@@ -1218,6 +1218,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/cortex-a53-gicv3-cpu-smoke.yaml
             system: configs/systems/onboarding/cortex-a53-gicv3.yaml
+          # The imported SMP descriptor is narrowed to one A53 PE and DDR;
+          # multicore, GICv3, timer, UART, and RTC behavior are omitted.
+          - id: cortex-a53-gicv3_smp
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv3_smp-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a53-gicv3_smp.yaml
           # Cortex-M4 execution in the imported VF61 profile; A5 and devices
           # are outside this direct-ELF OCRAM smoke.
           - id: colibri-vf61
