@@ -1,0 +1,10 @@
+# CPU-only Cortex-M4 smoke against the exact imported Colibri VF61 system.
+# The Thumb integer loop performs no MMIO.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
+  system: "../../configs/systems/onboarding/colibri-vf61.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

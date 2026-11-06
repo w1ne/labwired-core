@@ -1,21 +1,26 @@
 name: colibri-vf61
-description: 'Toradex Colibri VF61 Computer on Module featuring NXP Vybrid SoC. Architecture:
-  ARM Cortex-A5 / Cortex-M4.'
+description: >-
+  Toradex Colibri VF61 with NXP Vybrid. This measured profile covers one
+  Cortex-M4 integer subset using on-chip OCRAM; Cortex-A5, peripherals, and
+  reset-vector boot are not covered.
 url: https://www.toradex.com/computer-on-modules/colibri-arm-family/nxp-freescale-vybrid-vf6xx
 family: Toradex Colibri
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/colibri-vf61.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-focused-smoke
+  reason: cortex-m4-ocram-only; whole_platform_not_verified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:39:51.896521+00:00'
+    cortex_m4_integer_smoke: true
+    whole_platform: false
+    cortex_a5: false
+    peripherals: false
+    reset_vector_boot: false
+  timestamp_utc: '2026-11-06T01:41:01+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/colibri-vf61.md
 provenance:

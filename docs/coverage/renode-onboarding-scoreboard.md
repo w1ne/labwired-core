@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `160`
-- booted: `160/245`
-- boot_and_smoke_passed: `160/245`
-- not_run: `85`
-- pass: `160`
+- run_attempted: `161`
+- booted: `161/245`
+- boot_and_smoke_passed: `161/245`
+- not_run: `84`
+- pass: `161`
 - fail: `0`
-- median_elapsed_ms: `1223`
-- median_elapsed_seconds: `1.223`
+- median_elapsed_ms: `1239`
+- median_elapsed_seconds: `1.239`
 - threshold_seconds: `3600`
-- threshold_met: `160/160`
+- threshold_met: `161/161`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -42,7 +42,7 @@
 | `brd4186c` | `pass` | `True` | `yes` | `yes` | `1007` | `1.007` | `True` | `n/a` | n/a | n/a |
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `985` | `0.985` | `True` | `n/a` | n/a | n/a |
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `1421` | `1.421` | `True` | `n/a` | n/a | n/a |
-| `colibri-vf61` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `7802` | `7.802` | `True` | `n/a` | n/a | n/a |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | `n/a` | n/a | n/a |
 | `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `12566` | `12.566` | `True` | `n/a` | n/a | n/a |
 | `cortex-a53-gicv3` | `pass` | `True` | `yes` | `yes` | `10155` | `10.155` | `True` | `n/a` | n/a | n/a |
