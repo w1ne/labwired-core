@@ -187,6 +187,10 @@ on:
       - "crates/firmware-nano-rp2040-connect-smoke/**"
       - "crates/firmware-pico2-demo/**"
       - "crates/firmware-pico2-bme280-smoke/**"
+      - "crates/firmware-pico2-w-bme280-smoke/**"
+      - "configs/chips/rp2350-pico2-w-bme280-smoke.yaml"
+      - "configs/systems/raspberry-pi-pico-2-w-bme280.yaml"
+      - "examples/raspberry-pi-pico-2-w-bme280/**"
       - "configs/chips/rp2040-pico-w-bme280-smoke.yaml"
       - "configs/systems/raspberry-pi-pico-w-bme280.yaml"
       - "examples/raspberry-pi-pico-w-bme280/**"
@@ -718,6 +722,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/pico2-bme280/onboarding-smoke.yaml
             system: configs/systems/pico2-bme280.yaml
+          - id: raspberry-pi-pico-2-w-bme280
+            crate: firmware-pico2-w-bme280-smoke
+            firmware_build_dir: crates/firmware-pico2-w-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/raspberry-pi-pico-2-w-bme280/onboarding-smoke.yaml
+            system: configs/systems/raspberry-pi-pico-2-w-bme280.yaml
           - id: raspberry-pi-pico-2-w
             crate: firmware-pico2-w-smoke
             firmware_build_dir: crates/firmware-pico2-w-smoke

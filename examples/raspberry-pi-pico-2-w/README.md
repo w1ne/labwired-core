@@ -21,6 +21,10 @@ The committed `evidence/` directory contains the build and smoke logs. The live
 vendor availability and product-status record is in
 [`evidence/vendor-status.md`](evidence/vendor-status.md).
 
+The board's separate [BME280 I²C profile](../raspberry-pi-pico-2-w-bme280/README.md)
+adds an external sensor on GP4/GP5 and keeps the CYW43439 radio and its LED out
+of scope.
+
 ## Scope
 
 The profile claims only the RP2350 GP0 header GPIO path. It omits the
