@@ -303,8 +303,14 @@ int main(void) {
 }
 ```
 
-The CH32V003EVT smoke path boots firmware and exercises GPIO, USART1 transmit,
-and I2C1 with an SHT31 status read. The SHT31 path is a modeled transaction;
+WCH's own GPIO_Toggle example, the source of the snippet above, now runs
+unmodified in the CH32V003EVT profile. The local run prints
+`SystemClk:24000000`, `ChipID:00000000`, and `GPIO Toggle TEST`, then toggles
+PD0 every `Delay_Ms(250)` through the modeled QingKe SysTick. The board's
+default fit leaves the HSE crystal unconnected, so the SDK falls back to the
+24 MHz HSI. The chip ID reads zero because the factory word is not modeled.
+Interrupts (PFIC) are not modeled. The CH32V003EVT smoke path also exercises
+GPIO, USART1 transmit, and I2C1 with an SHT31 status read. The SHT31 path is a modeled transaction;
 CRC, sensor conversion behavior, and physical parity are not claimed. WCH does
 not publish a formal lifecycle label on its product page; the receipt records
 current reseller stock for the MCU and evaluation board instead. See the

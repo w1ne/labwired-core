@@ -1,0 +1,347 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 32000000,
+  "cycles": 64027220,
+  "instructions": 32000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 32000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 32000000
+    }
+  },
+  "limits": {
+    "max_steps": 32000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "SystemClk:24000000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "GPIO Toggle TEST"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:0",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1246,
+      536872936,
+      536872984,
+      0,
+      1,
+      3,
+      40,
+      3758157824,
+      0,
+      750000,
+      0,
+      768000,
+      1,
+      0,
+      3758157824,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1268,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 660,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 31999999,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "bcbf55bbb96fa34ddc161b8169f469222226e0ff68b41f98948fcc7db22a92a2",
+  "config": {
+    "firmware": "examples/ch32v003-evt/../../target/wch-sdk/ch32v003f4p6-wch-sdk-gpio-toggle.elf",
+    "system": "examples/ch32v003-evt/../../configs/systems/ch32v003evt-systick-smoke.yaml",
+    "script": "examples/ch32v003-evt/sdk-gpio-toggle-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "afio",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "stk",
+        "kind": "native",
+        "base": 3758157824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 32000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiod",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 6089119,
+            "value": 1
+          },
+          {
+            "cycle": 12089209,
+            "value": 0
+          },
+          {
+            "cycle": 18089298,
+            "value": 1
+          },
+          {
+            "cycle": 24089388,
+            "value": 0
+          },
+          {
+            "cycle": 30089477,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 89025,
+            "state": "0"
+          },
+          {
+            "cycle": 6089119,
+            "state": "1"
+          },
+          {
+            "cycle": 12089209,
+            "state": "0"
+          },
+          {
+            "cycle": 18089298,
+            "state": "1"
+          },
+          {
+            "cycle": 24089388,
+            "state": "0"
+          },
+          {
+            "cycle": 30089477,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 5
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiod",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SystemClk:24000000",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      },
+      {
+        "text": "ChipID:00000000",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      },
+      {
+        "text": "GPIO Toggle TEST",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4668,
+    "data_bytes": 24,
+    "bss_bytes": 264,
+    "flash_used_bytes": 4692,
+    "ram_static_bytes": 288,
+    "flash_total_bytes": 16384,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 28.64,
+    "ram_static_pct": 14.06,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 64027220,
+    "instructions": 32000000,
+    "steps_executed": 32000000,
+    "memory_reads": 32025391,
+    "memory_writes": 16964,
+    "peripheral_accesses": 10645227,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1266,
+        "count": 41563
+      },
+      {
+        "pc": 1268,
+        "count": 41563
+      },
+      {
+        "pc": 1264,
+        "count": 41562
+      },
+      {
+        "pc": 916,
+        "count": 312
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "stk",
+      "offset": 4,
+      "accesses": 636818
+    }
+  }
+}

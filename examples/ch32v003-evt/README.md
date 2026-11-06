@@ -2,8 +2,10 @@
 
 **Demand rank:** Tier C strategic vendor bet, not a measured MCU rank in the
 JetBrains survey. The measured ranks remain ESP32 (38%), ATmega328 (30%),
-STM32F103 (17%), other STM32 (13%), and RP2040 (12%). This round extends the
-first WCH/QingKe profile from GPIO/USART1 coverage to I2C1 with an SHT31 sensor.
+STM32F103 (17%), other STM32 (13%), and RP2040 (12%). The latest round makes
+WCH's own SDK example run unmodified: it adds the HSI-PLL clock handshake, the
+QingKe V2 SysTick that every `Delay_Ms` needs, and the QingKe INTSYSCR CSR that
+WCH's startup code writes.
 
 ## What these profiles run
 
@@ -39,6 +41,61 @@ and GND. The [WCH-CH32V003EVT board reference](https://www.olimex.com/Products/R
 documents the board's LED-row pins; `external_led_pd0` is the explicit test
 connection, not a factory-installed PD0 LED. For USART, connect PD5 to a
 USB-UART adapter's RX input and share ground. The example uses 115200 8N1.
+
+### Clock bring-up, SysTick delays, and the unmodified WCH SDK example
+
+Earlier profiles timed their LED with a busy loop, so the GPIO example below
+(which calls `Delay_Ms`) was not actually exercised: the QingKe SysTick did not
+exist in the engine, and firmware that touched it faulted at `0xE000F004`. The
+`ch32v003f4p6-systick-smoke` profile adds:
+
+- **QingKe V2 SysTick (STK) at 0xE000F000**: CTLR/SR/CNT/CMP per WCH's
+  `core_riscv.h`. It counts up at HCLK/8 or HCLK, latches CNTIF on CMP, and
+  honors STRE auto-reload. Both community delay idioms work: the WCH SDK's
+  `Delay_Us`/`Delay_Ms` (CMP + poll CNTIF) and ch32v003fun's `DelaySysTick`
+  (free-running CNT).
+- **RCC clock handshake**: HSION→HSIRDY, PLLON→PLLRDY, and SW→SWS once the
+  selected source is ready. That is what `SystemInit` and
+  `SetSysClockTo_48MHZ_HSI` poll.
+- **QingKe V2 core profile** (`core: qingke-v2a`): RV32EC plus the vendor
+  INTSYSCR CSR (0x804) that `startup_ch32v00x.S` writes before `SystemInit`.
+- FLASH_ACTLR wait states, and AFIO PCFR1 storage (the SDK's HSE attempt sets
+  it).
+
+Two smokes use it:
+
+1. `systick-smoke.yaml` runs a register-level replica of WCH's
+   `SetSysClockTo_48MHZ_HSI`, then times one `Delay_Us(100)` and one
+   ch32v003fun `DelaySysTick(4800)`. Each prints its OK marker only when its
+   poll loop waited a bounded, non-zero time. PD0 then toggles every
+   `Delay_Us(100)`, and the committed run shows edges every 4,821 cycles
+   (4,800 cycles of delay plus loop overhead).
+2. `sdk-gpio-toggle-smoke.yaml` runs **WCH's unmodified GPIO_Toggle example**
+   (openwch/ch32v003 at `4e1b743`, built by `build-sdk-gpio-toggle.sh`). It
+   prints `SystemClk:24000000`, `ChipID:00000000`, and `GPIO Toggle TEST`.
+   PD0 then toggles every 6,000,090 cycles, which is `Delay_Ms(250)` at
+   24 MHz plus 90 cycles of loop.
+
+Three results to read correctly:
+
+- **24 MHz, not 48 MHz.** The example's default `SystemInit` tries the 24 MHz
+  HSE first. The EVT schematic marks the crystal links R4/R5 `NC(0R)`, so on
+  the default fit the HSE never starts and the SDK's timeout falls back to the
+  HSI. The model never reports HSERDY, so it takes the same path. A board with
+  R4/R5 fitted would run at 48 MHz, and this profile does not model that.
+- **ChipID 00000000** is deliberate. The factory chip-ID word is not modeled,
+  and the system-area window reads zero rather than a plausible fake.
+- **Not modeled:** the PFIC, so no SysTick or other interrupt is delivered
+  (STIE, SWIE and INTSYSCR are accepted and ignored); the HSE; clock dividers
+  as an execution-speed change; and remap side effects of AFIO PCFR1. The
+  descriptor's `cpu_hz` is 48 MHz, the replica's PLL target. The SDK example's
+  24 MHz shows up only in its own `SystemCoreClock` and delay arithmetic.
+
+The SDK carries no open-source license; its headers restrict use to WCH
+microcontrollers. Its sources and the built ELF are therefore not committed:
+the build script fetches the pinned commit into a cache and writes the image
+under `target/`. The one local addition, `picolibc_stdout.c`, routes picolibc's
+`printf` to the SDK's own `_write()`.
 
 ## Copy-paste GPIO example
 
@@ -154,10 +211,24 @@ examples/ch32v003-evt/build-sht31-firmware.sh
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/i2c-smoke.yaml \
   --output-dir /tmp/ch32v003-sht31-smoke
+
+examples/ch32v003-evt/build-systick-firmware.sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/systick-smoke.yaml \
+  --output-dir /tmp/ch32v003-systick-smoke
+
+# Needs riscv64-unknown-elf-gcc + picolibc; set RISCV_PREFIX if not under /usr.
+examples/ch32v003-evt/build-sdk-gpio-toggle.sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/sdk-gpio-toggle-smoke.yaml \
+  --output-dir /tmp/ch32v003-sdk-gpio-toggle
 ```
 
-The committed I2C run evidence is in [`evidence/sht31-smoke/`](evidence/sht31-smoke/);
-the earlier GPIO and USART receipts are alongside it. The fixtures are
+The committed SysTick and SDK-example runs are in
+[`evidence/systick-smoke/`](evidence/systick-smoke/) and
+[`evidence/sdk-gpio-toggle-smoke/`](evidence/sdk-gpio-toggle-smoke/). The I2C run
+is in [`evidence/sht31-smoke/`](evidence/sht31-smoke/), and the earlier GPIO and
+USART receipts are alongside it. The committed fixtures are
 handwritten assembly without calls or an ABI-dependent stack frame because the
 upstream Rust toolchain warns that its RV32E ABI support is incomplete. These
 are deterministic local engine runs, not physical-board captures or hosted

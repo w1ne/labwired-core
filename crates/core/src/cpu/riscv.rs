@@ -36,6 +36,13 @@ pub enum RiscVCoreProfile {
     /// instructions that name x16..x31 trap as illegal instead of using the
     /// simulator's wider backing register array.
     StandardRv32E,
+    /// WCH QingKe V2 (CH32V00x): the RV32EC profile plus the vendor
+    /// interrupt-system CSR INTSYSCR (0x804) that WCH's startup code and
+    /// `ch32v003fun` write before `main`. Its HWSTKEN/INESTEN bits configure
+    /// hardware context stacking and nesting on interrupt entry; the PFIC is
+    /// not modeled and no interrupt is delivered, so the CSR is read-as-zero,
+    /// write-ignored here.
+    QingkeV2,
 }
 
 impl RiscVCoreProfile {
@@ -54,6 +61,9 @@ impl RiscVCoreProfile {
             return Self::Esp32C3;
         }
         match chip.core.as_deref() {
+            Some(core) if core.trim().to_ascii_lowercase().starts_with("qingke-v2") => {
+                Self::QingkeV2
+            }
             Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32e") => {
                 Self::StandardRv32E
             }
@@ -65,7 +75,15 @@ impl RiscVCoreProfile {
     }
 
     fn has_standard_rv32_counters(self) -> bool {
-        matches!(self, Self::StandardRv32 | Self::StandardRv32E)
+        matches!(
+            self,
+            Self::StandardRv32 | Self::StandardRv32E | Self::QingkeV2
+        )
+    }
+
+    /// RV32E register file: only x0..x15 exist.
+    fn is_rv32e(self) -> bool {
+        matches!(self, Self::StandardRv32E | Self::QingkeV2)
     }
 }
 
@@ -824,6 +842,8 @@ impl RiscV {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
             0xC80 if self.core_profile.has_standard_rv32_counters() => (self.mtime >> 32) as u32,
+            // QingKe INTSYSCR: see `RiscVCoreProfile::QingkeV2`.
+            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => 0,
             _ => return None,
         })
     }
@@ -852,6 +872,7 @@ impl RiscV {
             // See read_csr: accept PMA cfg/addr writes as no-ops.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => {}
             _ => return false,
         }
         true
@@ -1247,9 +1268,7 @@ impl Cpu for RiscV {
         // QingKe V2A is RV32EC: the standard register file ends at x15.
         // The CPU uses a 32-entry backing array for shared RV32 code, so
         // enforce the architectural limit at the instruction boundary.
-        if self.core_profile == RiscVCoreProfile::StandardRv32E
-            && rv32e_uses_reserved_register(opcode, inst_len)
-        {
+        if self.core_profile.is_rv32e() && rv32e_uses_reserved_register(opcode, inst_len) {
             self.mtval = opcode;
             self.handle_trap(2, self.pc);
             return Ok(());
@@ -1916,7 +1935,7 @@ impl Cpu for RiscV {
         {
             self.jit_enabled = config.riscv_jit_enabled;
             if self.jit_enabled
-                && self.core_profile != RiscVCoreProfile::StandardRv32E
+                && !self.core_profile.is_rv32e()
                 && max_count > 1
                 && !self.triggers.armed()
                 && self.jit_gate_allows(bus, observers)

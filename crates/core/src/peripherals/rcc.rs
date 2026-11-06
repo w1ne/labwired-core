@@ -130,8 +130,8 @@ pub enum RccRegisterLayout {
     /// RCC_AHB2ENR1@0x8C bit 0 (GPIOAEN) is modeled for the NUCLEO-U3C5ZI-Q
     /// GPIO smoke; the U3 clock tree and other RCC registers are out of scope.
     Stm32U3,
-    /// WCH CH32V003 onboarding subset. RCC_APB2PCENR at offset 0x18 models
-    /// only the GPIOD and USART1 clock gates used by the current smokes.
+    /// WCH CH32V003 onboarding subset: the CTLR/CFGR0 HSI and PLL switch
+    /// handshake, plus the APB2PCENR/APB1PCENR gates used by the smokes.
     Ch32v003,
 }
 
@@ -2764,22 +2764,82 @@ impl RccModel for U3Rcc {
     }
 }
 
-/// Narrow CH32V003 clock gates used by the GPIO, USART, and I2C onboarding smokes.
+/// Narrow CH32V003 RCC: the HSI/PLL clock switch plus the clock gates used by
+/// the GPIO, USART, I2C and SysTick onboarding smokes.
 ///
-/// The WCH reference manual places RCC_APB2PCENR at 0x4002_1018 (GPIOD bit 5,
-/// GPIOC bit 4, USART1 bit 14) and RCC_APB1PCENR at 0x4002_101C (I2C1 bit 1).
-/// This profile models those reset-low gates only; oscillator selection, PLLs,
-/// reset controls, and all other RCC gates remain outside the descriptor's
-/// claim.
-#[derive(Debug, Default, serde::Serialize)]
+/// The WCH reference manual places RCC_APB2PCENR at 0x4002_1018 (AFIO bit 0,
+/// GPIOD bit 5, GPIOC bit 4, USART1 bit 14) and RCC_APB1PCENR at 0x4002_101C (I2C1 bit 1).
+/// Those gates reset low and keep only the modeled blocks.
+///
+/// RCC_CTLR (0x00), RCC_CFGR0 (0x04) and RCC_INTR (0x08) carry the handshake
+/// that WCH's `SystemInit`/`SetSysClockTo_48MHZ_HSI` and `ch32v003fun`'s
+/// `SystemInit` poll: HSION→HSIRDY, PLLON→PLLRDY when the PLL source (PLLSRC
+/// bit 16: 0 = HSI, 1 = HSE) is ready, and SW→SWS once the selected source is
+/// ready. The HSI is on at reset (HSION|HSIRDY, HSITRIM = 0x10). HSICAL reads
+/// 0 (a per-device factory value). The HSE is not modeled: HSEON never yields
+/// HSERDY, so firmware that selects the HSE waits forever rather than running
+/// on a clock the board profile does not declare. The CFGR0 dividers, MCO and
+/// the clock security system are storage only; the core keeps running at the
+/// descriptor's `cpu_hz`.
+#[derive(Debug, serde::Serialize)]
 pub struct Ch32v003Rcc {
+    ctlr: u32,
+    cfgr0: u32,
+    intr: u32,
     apb2pcenr: u32,
     apb1pcenr: u32,
+}
+
+impl Default for Ch32v003Rcc {
+    fn default() -> Self {
+        Self {
+            ctlr: Self::ctlr_ready(0x0000_0081),
+            cfgr0: 0,
+            intr: 0,
+            apb2pcenr: 0,
+            apb1pcenr: 0,
+        }
+    }
+}
+
+impl Ch32v003Rcc {
+    const HSION: u32 = 1 << 0;
+    const HSIRDY: u32 = 1 << 1;
+    const PLLON: u32 = 1 << 24;
+    const PLLRDY: u32 = 1 << 25;
+    const PLLSRC_HSE: u32 = 1 << 16;
+    /// HSION, HSITRIM[7:3], HSEON, HSEBYP, CSSON, PLLON.
+    const CTLR_WRITABLE: u32 = 0x010D_00F9;
+
+    /// Derive the read-only ready flags from the enables. The PLL locks only
+    /// on a running source; with the HSE unmodeled that means HSI.
+    fn ctlr_ready_with_src(ctlr: u32, pll_from_hse: bool) -> u32 {
+        let mut ctlr = ctlr & Self::CTLR_WRITABLE;
+        if ctlr & Self::HSION != 0 {
+            ctlr |= Self::HSIRDY;
+        }
+        let src_ready = !pll_from_hse && ctlr & Self::HSIRDY != 0;
+        if ctlr & Self::PLLON != 0 && src_ready {
+            ctlr |= Self::PLLRDY;
+        }
+        ctlr
+    }
+
+    fn ctlr_ready(ctlr: u32) -> u32 {
+        Self::ctlr_ready_with_src(ctlr, false)
+    }
+
+    fn refresh_ready(&mut self) {
+        self.ctlr = Self::ctlr_ready_with_src(self.ctlr, self.cfgr0 & Self::PLLSRC_HSE != 0);
+    }
 }
 
 impl RccModel for Ch32v003Rcc {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
+            0x00 => self.ctlr,
+            0x04 => self.cfgr0,
+            0x08 => self.intr,
             0x18 => self.apb2pcenr,
             0x1C => self.apb1pcenr,
             _ => {
@@ -2791,9 +2851,29 @@ impl RccModel for Ch32v003Rcc {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            // Retain only GPIOC, GPIOD, and USART1 from APB2, plus I2C1 from
-            // APB1, the blocks present in the focused board profiles.
-            0x18 => self.apb2pcenr = value & ((1 << 4) | (1 << 5) | (1 << 14)),
+            0x00 => {
+                self.ctlr = value;
+                self.refresh_ready();
+            }
+            // SW[1:0]: 00 HSI, 01 HSE, 10 PLL. SWS[3:2] follows only once the
+            // selected source's ready flag is set in CTLR.
+            0x04 => {
+                self.cfgr0 = cfgr_with_gated_sws(
+                    value,
+                    self.ctlr,
+                    self.cfgr0,
+                    [Some(1), Some(17), Some(25), None],
+                );
+                // A PLLSRC change can drop or restore PLLRDY.
+                self.refresh_ready();
+            }
+            // Only the ready-interrupt enables (LSI/HSI/HSE/PLL: bits 8, 10,
+            // 11, 12) persist. The flag-clear bits [23:16] are write-only, and
+            // no ready interrupt is ever raised, so the flags read 0.
+            0x08 => self.intr = value & 0x0000_1D00,
+            // Retain only AFIO, GPIOC, GPIOD, and USART1 from APB2, plus I2C1
+            // from APB1, the blocks present in the focused board profiles.
+            0x18 => self.apb2pcenr = value & ((1 << 0) | (1 << 4) | (1 << 5) | (1 << 14)),
             0x1C => self.apb1pcenr = value & (1 << 1),
             _ => crate::census_reg!("rcc:Ch32v003Rcc", offset, "write"),
         }
@@ -4364,9 +4444,8 @@ mod tests {
         assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "must not alias U5 AHB2ENR");
     }
 
-    /// WCH's focused APB2PCENR/APB1PCENR gates include GPIOC, GPIOD, USART1,
-    /// and I2C1. The narrow profile must not inherit STM32F1 oscillator reset
-    /// behavior or unrelated gates.
+    /// WCH's focused APB2PCENR/APB1PCENR gates include AFIO, GPIOC, GPIOD,
+    /// USART1, and I2C1. The narrow profile must not inherit unrelated STM32F1 gates.
     #[test]
     fn ch32v003_models_only_the_smoked_gpio_usart_and_i2c_clock_gates() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Ch32v003);
@@ -4382,8 +4461,57 @@ mod tests {
 
         rcc.write_u32(0x18, u32::MAX).unwrap();
         rcc.write_u32(0x1C, u32::MAX).unwrap();
-        assert_eq!(rcc.read_u32(0x18).unwrap(), (1 << 4) | (1 << 5) | (1 << 14));
+        assert_eq!(
+            rcc.read_u32(0x18).unwrap(),
+            (1 << 0) | (1 << 4) | (1 << 5) | (1 << 14)
+        );
         assert_eq!(rcc.read_u32(0x1C).unwrap(), 1 << 1);
+    }
+
+    /// WCH `SystemInit` + `SetSysClockTo_48MHZ_HSI` (openwch/ch32v003 EVT):
+    /// PLLSRC = HSI×2, PLLON, wait PLLRDY, SW = PLL, wait SWS = PLL. SWS must
+    /// not follow SW before the PLL locks, and the unmodeled HSE never locks.
+    #[test]
+    fn ch32v003_wch_sdk_48mhz_hsi_pll_handshake() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Ch32v003);
+        assert_eq!(
+            rcc.read_u32(0x00).unwrap(),
+            0x83,
+            "HSION|HSIRDY, HSITRIM 0x10"
+        );
+        assert_eq!(rcc.read_u32(0x04).unwrap(), 0);
+
+        // SystemInit's reset-to-HSI sequence.
+        let ctlr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, ctlr | 1).unwrap();
+        let cfgr0 = rcc.read_u32(0x04).unwrap();
+        rcc.write_u32(0x04, cfgr0 & 0xFCFF_0000).unwrap();
+        let ctlr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, ctlr & 0xFEF6_FFFF).unwrap();
+        rcc.write_u32(0x08, 0x009F_0000).unwrap();
+        assert_eq!(rcc.read_u32(0x08).unwrap(), 0, "clear bits are write-only");
+
+        // Selecting the PLL before it runs leaves SWS on HSI.
+        rcc.write_u32(0x04, 0b10).unwrap();
+        assert_eq!(rcc.read_u32(0x04).unwrap() & 0xC, 0);
+        rcc.write_u32(0x04, 0).unwrap();
+
+        let ctlr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, ctlr | (1 << 24)).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 25), 0, "PLLRDY");
+        let cfgr0 = rcc.read_u32(0x04).unwrap();
+        rcc.write_u32(0x04, (cfgr0 & !3) | 0b10).unwrap();
+        assert_eq!(rcc.read_u32(0x04).unwrap() & 0xC, 0x8, "SWS = PLL");
+
+        // PLLSRC = HSE: the PLL loses its (unmodeled) source.
+        let cfgr0 = rcc.read_u32(0x04).unwrap();
+        rcc.write_u32(0x04, cfgr0 | (1 << 16)).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 25), 0);
+        // HSEON never reports HSERDY, so SW = HSE never switches.
+        rcc.write_u32(0x00, 0x83 | (1 << 16)).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
+        rcc.write_u32(0x04, 0b01).unwrap();
+        assert_ne!(rcc.read_u32(0x04).unwrap() & 0xC, 0x4);
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.144157">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="f864ba3875fcff274de94aa657d300f66f47ece88f0d30d74b020baa86682e3e"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.144157">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: CH32V003_PLL48_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: CH32V003_SDK_DELAY_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: CH32V003_CH32FUN_DELAY_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpiod:0 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -412,6 +412,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // WCH QingKe V2 STK (CH32V003 SysTick at 0xE000F000). Listed so the fuzzy
+    // fallbacks never coerce it onto the Cortex-M `systick` map, whose
+    // CSR/RVR/CVR layout and down-counting semantics differ.
+    "qingke_v2_systick",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
@@ -1783,6 +1787,8 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // WCH QingKe V2 STK: 32-bit up-counter CTLR/SR/CNT/CMP (CH32V003).
+        "qingke_v2_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV2Systick::new()),
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config

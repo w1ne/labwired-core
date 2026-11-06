@@ -47,3 +47,25 @@ smoke.
   lists CH32V003F4P and I2C master support since core version 1.0.2. Its
   [variant pin map](https://github.com/openwch/arduino_core_ch32/blob/main/variants/CH32V00x/CH32V003F4/PeripheralPins.c)
   maps SDA to PC1 and SCL to PC2 by default.
+
+## CH32V003EVT clock bring-up and SysTick path
+
+Rechecked live on 2026-11-06 UTC for the SysTick and WCH SDK smokes.
+
+- WCH's [CH32V003 product page](https://www.wch-ic.com/products/CH32V003.html),
+  read through a real Chrome session because plain HTTP clients get a
+  JavaScript shell, still lists the family. It describes the QingKe RISC-V2A
+  core with "Up to 48MHz system main frequency" and links CH32V003DS0.PDF and
+  CH32V003RM.PDF. No Active/NRND/Obsolete label appears on the page, so no
+  formal lifecycle class is claimed.
+- OLIMEX's live [WCH-CH32V003EVT listing](https://www.olimex.com/Products/RISC-V/WCH-CH32V003EVT/)
+  showed price 3.95 EUR, "In Stock", and "Add to basket".
+- Register facts come from WCH's own SDK at openwch/ch32v003 commit
+  `4e1b7437ada5d3ae8831a6f4b811a6320e4e23c7`: `core_riscv.h` (SysTick_Type at
+  0xE000F000), `system_ch32v00x.c` (SystemInit, SetSysClockTo_48MHZ_HSI,
+  SetSysClockTo_48MHz_HSE), `debug.c` (Delay_Init/Delay_Us/Delay_Ms), and
+  `startup_ch32v00x.S` (`csrw 0x804`). The ch32v003fun delay idiom is from
+  cnlohr/ch32v003fun `ch32fun.c` (`DelaySysTick`).
+- The EVT schematic in the same SDK (`EVT/PUB/CH32V00xSCH.pdf`) shows a 24 MHz
+  Y1 whose links R4/R5 are marked `NC(0R)`. That is why the unmodified example
+  runs from the HSI at 24 MHz on the default board fit.

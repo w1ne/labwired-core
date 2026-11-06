@@ -558,6 +558,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // physical-silicon differential. Promote only after both exist.
         "ch32v003f4p6-gpio-smoke",
         "ch32v003f4p6-usart-smoke",
+        // The SysTick profile adds the HSI-PLL handshake, QingKe STK and the
+        // INTSYSCR CSR, and runs WCH's unmodified GPIO_Toggle example, but
+        // still has no catalog board or physical-silicon differential.
+        "ch32v003f4p6-systick-smoke",
         // CH32V203C8T6 on the WeAct BluePill-Plus-CH32 has a PB2 LED and
         // USART1 TX smoke on reused STM32F1-shaped models, but no Playground
         // catalog board or physical-silicon differential.
