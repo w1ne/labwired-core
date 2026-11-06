@@ -903,6 +903,25 @@ MSP430_TARGETS = (
 NOT_RUN_REASONS = {target: MSP430_NOT_RUN_REASON for target in MSP430_TARGETS}
 NOT_RUN_HINTS = {target: MSP430_NOT_RUN_HINT for target in MSP430_TARGETS}
 
+CORTEX_R52_NOT_RUN_REASON = (
+    "Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted."
+)
+CORTEX_R52_NOT_RUN_HINT = (
+    "Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; "
+    "do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub."
+)
+CORTEX_R52_UNMAPPED_TARGETS = (
+    "cortex-r52_smp",
+    "cortex-r52_smp_4",
+    "renesas-rz_t2m_rsk",
+)
+NOT_RUN_REASONS.update(
+    {target: CORTEX_R52_NOT_RUN_REASON for target in CORTEX_R52_UNMAPPED_TARGETS}
+)
+NOT_RUN_HINTS.update(
+    {target: CORTEX_R52_NOT_RUN_HINT for target in CORTEX_R52_UNMAPPED_TARGETS}
+)
+
 
 def imported_system(descriptor: Path) -> str:
     for line in descriptor.read_text(encoding="utf-8").splitlines():

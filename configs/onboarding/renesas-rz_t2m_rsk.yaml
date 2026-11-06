@@ -1,22 +1,22 @@
 name: renesas-rz_t2m_rsk
-description: 'Renesas Starter Kit+ for RZ/T2M Industrial Microprocessor. Architecture:
-  Dual ARM Cortex-R52.'
+description: 'Renesas Starter Kit+ for RZ/T2M with dual Cortex-R52 CPUs. CPU execution and peripherals are not modeled; inventory-only.'
 family: Renesas RZ/T2M
 url: https://www.renesas.com/products/microcontrollers-microprocessors/rz-mpus/renesas-starter-kit-rzt2m
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/renesas-rz_t2m_rsk.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-inventory
+  reason: unsupported-cortex-r52-core
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:21.349662+00:00'
+    cpu_core_supported: false
+    booted: false
+    simulation: false
+  timestamp_utc: '2026-11-06T08:24:18Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/renesas-rz_t2m_rsk.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/renesas-rz_t2m_rsk/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

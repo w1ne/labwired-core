@@ -49,8 +49,8 @@
 | `cortex-a53-gicv3_smp` | `pass` | `True` | `yes` | `yes` | `8231` | `8.231` | `True` | `n/a` | n/a | n/a |
 | `cortex-a78` | `pass` | `True` | `yes` | `yes` | `7642` | `7.642` | `True` | `n/a` | n/a | n/a |
 | `cortex-r52` | `fail` | `True` | `no` | `no` | `665` | `0.665` | `True` | `run_smoke` | CPU model gap. Add a real adapter for this core before claiming boot support. | chip 'cortex-r52': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter |
-| `cortex-r52_smp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `cortex-r52_smp_4` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `cortex-r52_smp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub. | Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted. |
+| `cortex-r52_smp_4` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub. | Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted. |
 | `cortex_a53_console` | `pass` | `True` | `yes` | `yes` | `7996` | `7.996` | `True` | `n/a` | n/a | n/a |
 | `cortex_a53_virtio` | `pass` | `True` | `yes` | `yes` | `7589` | `7.589` | `True` | `n/a` | n/a | n/a |
 | `crosslink-nx-evn` | `pass` | `True` | `yes` | `yes` | `8533` | `8.533` | `True` | `n/a` | n/a | n/a |
@@ -161,7 +161,7 @@
 | `renesas-r7fa4m1a` | `pass` | `True` | `yes` | `yes` | `942` | `0.942` | `True` | `n/a` | n/a | n/a |
 | `renesas-r7fa6m5b` | `pass` | `True` | `yes` | `yes` | `1295` | `1.295` | `True` | `n/a` | n/a | n/a |
 | `renesas-r7fa8m1a` | `pass` | `True` | `yes` | `yes` | `1267` | `1.267` | `True` | `n/a` | n/a | n/a |
-| `renesas-rz_t2m_rsk` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `renesas-rz_t2m_rsk` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub. | Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted. |
 | `renesas_rz_g2l` | `pass` | `True` | `yes` | `yes` | `7765` | `7.765` | `True` | `n/a` | n/a | n/a |
 | `renesas_rz_t2m` | `fail` | `True` | `no` | `no` | `8386` | `8.386` | `True` | `run_smoke` | CPU model gap. Add a real adapter for this core before claiming boot support. | chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter |
 | `ri5cy` | `pass` | `True` | `yes` | `yes` | `1953` | `1.953` | `True` | `n/a` | n/a | n/a |

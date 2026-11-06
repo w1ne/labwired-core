@@ -6,38 +6,13 @@
 
 name: renesas-rz_t2m_rsk
 arch: arm
+core: cortex-r52
+# Imported memory windows retained for catalog context. The engine has no
+# Cortex-R52 CPU model, so this profile makes no executable or peripheral claim.
 flash:
   base: 2281701376
   size: 67108864B
 ram:
   base: 268435456
   size: 1572864B
-peripherals:
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
-- id: sci0
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147487744
-- id: sci1
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147488768
-- id: sci2
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147489792
-- id: sci3
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147490816
-- id: sci4
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147491840
-- id: sci5
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2164264960
+peripherals: []
