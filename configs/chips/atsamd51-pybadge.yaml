@@ -108,6 +108,17 @@ pins:
   PB29: { gpio: portb, bit: 29 }
   PB30: { gpio: portb, bit: 30 }
   PB31: { gpio: portb, bit: 31 }
+# PyBadge Feather analog header, from Microsoft uf2-samdx1
+# boards/arcade_pybadge/board_config.h CF2: A0=PA02, A1=PA05, A2=PB08,
+# A3=PB09, A4=PA04, A5=PA06. ADC0 AIN channel numbers are the SAMD51 pad
+# assignments documented in DS60001507 and used by the shared ADC model.
+analog_pins:
+  PA02: { peripheral: "adc0", channel: 0 }   # A0 / ADC0 AIN0
+  PA05: { peripheral: "adc0", channel: 5 }   # A1 / ADC0 AIN5
+  PB08: { peripheral: "adc0", channel: 2 }   # A2 / ADC0 AIN2
+  PB09: { peripheral: "adc0", channel: 3 }   # A3 / ADC0 AIN3
+  PA04: { peripheral: "adc0", channel: 4 }   # A4 / ADC0 AIN4
+  PA06: { peripheral: "adc0", channel: 6 }   # A5 / ADC0 AIN6
 peripherals:
   # Display bus only: ST7735 and DMAC integration/qualification remain owed.
   # CMSIS SERCOM4: APBDMASK bit 0, GCLK core channel 34.
