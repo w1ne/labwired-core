@@ -1,0 +1,10 @@
+# CPU and SRAM smoke for the imported ATmega48 profile.
+# No peripheral accesses or board I/O are asserted.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega48-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega48.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

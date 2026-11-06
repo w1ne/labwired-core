@@ -1,33 +1,38 @@
 {
   "target_id": "simavr-atmega48",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
-  "crate": "",
-  "target_triple": "",
-  "script": "",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-atmega48-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-atmega48.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T02:30:08Z",
-  "finished_at_utc": "2026-11-03T02:30:08Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-06T17:13:11Z",
+  "finished_at_utc": "2026-11-06T17:13:12Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 595,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 0.291,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 0.294
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 291,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 294
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/atmega48-cpu-smoke.elf"
 }

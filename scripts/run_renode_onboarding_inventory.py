@@ -403,6 +403,34 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/attiny85-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-attiny85-smoke.yaml",
     },
+    "simavr-atmega8": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega8-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega8-smoke.yaml",
+    },
+    "simavr-atmega48": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega48-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega48-smoke.yaml",
+    },
+    "simavr-atmega88": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega88-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega88-smoke.yaml",
+    },
+    "simavr-atmega32": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega32-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega32-smoke.yaml",
+    },
+    "simavr-atmega164": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega164-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega164-smoke.yaml",
+    },
+    "simavr-atmega324": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega324-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega324-smoke.yaml",
+    },
+    "simavr-atmega644": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega644-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega644-smoke.yaml",
+    },
     "simavr-atmega16": {
         "prebuilt_firmware": "tests/fixtures/avr/atmega16-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega16-smoke.yaml",

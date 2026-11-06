@@ -33,6 +33,13 @@ on:
       - "configs/onboarding/simavr-attiny25.yaml"
       - "configs/onboarding/simavr-attiny45.yaml"
       - "configs/onboarding/simavr-attiny85.yaml"
+      - "configs/onboarding/simavr-atmega8.yaml"
+      - "configs/onboarding/simavr-atmega48.yaml"
+      - "configs/onboarding/simavr-atmega88.yaml"
+      - "configs/onboarding/simavr-atmega32.yaml"
+      - "configs/onboarding/simavr-atmega164.yaml"
+      - "configs/onboarding/simavr-atmega324.yaml"
+      - "configs/onboarding/simavr-atmega644.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
@@ -817,6 +824,34 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/attiny85-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-attiny85-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny85.yaml
+          - id: simavr-atmega8
+            prebuilt_firmware: tests/fixtures/avr/atmega8-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega8-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega8.yaml
+          - id: simavr-atmega48
+            prebuilt_firmware: tests/fixtures/avr/atmega48-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega48-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega48.yaml
+          - id: simavr-atmega88
+            prebuilt_firmware: tests/fixtures/avr/atmega88-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega88-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega88.yaml
+          - id: simavr-atmega32
+            prebuilt_firmware: tests/fixtures/avr/atmega32-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega32-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega32.yaml
+          - id: simavr-atmega164
+            prebuilt_firmware: tests/fixtures/avr/atmega164-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega164-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega164.yaml
+          - id: simavr-atmega324
+            prebuilt_firmware: tests/fixtures/avr/atmega324-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega324-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega324.yaml
+          - id: simavr-atmega644
+            prebuilt_firmware: tests/fixtures/avr/atmega644-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega644-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega644.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima

@@ -1,0 +1,157 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 185703,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      202,
+      55,
+      2,
+      1,
+      255,
+      4,
+      0,
+      0
+    ],
+    "pc": 98,
+    "sp": 1277,
+    "sreg": 0
+  },
+  "firmware_hash": "179c15513435077c83f152e2c4c5d255c1f8a1763fd87ec35a88bd89f9068d15",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega88-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega88.yaml",
+    "script": "examples/renode-onboarding/simavr-atmega88-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 120,
+    "data_bytes": 0,
+    "bss_bytes": 2,
+    "flash_used_bytes": 120,
+    "ram_static_bytes": 2,
+    "flash_total_bytes": 8192,
+    "ram_total_bytes": 1024,
+    "flash_used_pct": 1.46,
+    "ram_static_pct": 0.2,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 185703,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 0,
+    "memory_writes": 28570,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 94,
+        "count": 78
+      },
+      {
+        "pc": 98,
+        "count": 78
+      },
+      {
+        "pc": 108,
+        "count": 78
+      },
+      {
+        "pc": 102,
+        "count": 39
+      },
+      {
+        "pc": 104,
+        "count": 39
+      },
+      {
+        "pc": 112,
+        "count": 39
+      },
+      {
+        "pc": 114,
+        "count": 39
+      }
+    ]
+  }
+}
