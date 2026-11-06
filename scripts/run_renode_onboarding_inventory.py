@@ -15,6 +15,10 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "cortex_a53_console": {
+        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml",
+    },
     "cortex-r52": {
         "prebuilt_firmware": "tests/fixtures/cortex-r52-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml",
