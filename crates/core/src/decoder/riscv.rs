@@ -99,6 +99,97 @@ pub enum Instruction {
     Unknown(u32),
 }
 
+impl Instruction {
+    /// Whether this decoded instruction is in the standard RV32EC profile.
+    ///
+    /// RV32E has the same integer instruction encodings as RV32I, but only
+    /// x0..x15 exist. The standard C extension is also supported; M and A
+    /// instructions are rejected even though the general decoder understands
+    /// them for other cores.
+    pub(crate) const fn is_rv32ec_instruction(self) -> bool {
+        use Instruction::*;
+
+        const fn reg(n: u8) -> bool {
+            n < 16
+        }
+
+        match self {
+            Lui { rd, .. }
+            | Auipc { rd, .. }
+            | Jal { rd, .. }
+            | CAddi { rd, .. }
+            | CLi { rd, .. }
+            | CSli { rd, .. }
+            | CLwsp { rd, .. } => reg(rd),
+            Jalr { rd, rs1, .. }
+            | CLw { rd, rs1, .. }
+            | Addi { rd, rs1, .. }
+            | Slti { rd, rs1, .. }
+            | Sltiu { rd, rs1, .. }
+            | Xori { rd, rs1, .. }
+            | Ori { rd, rs1, .. }
+            | Andi { rd, rs1, .. }
+            | Slli { rd, rs1, .. }
+            | Srli { rd, rs1, .. }
+            | Srai { rd, rs1, .. } => reg(rd) && reg(rs1),
+            Beq { rs1, rs2, .. }
+            | Bne { rs1, rs2, .. }
+            | Blt { rs1, rs2, .. }
+            | Bge { rs1, rs2, .. }
+            | Bltu { rs1, rs2, .. }
+            | Bgeu { rs1, rs2, .. }
+            | Sb { rs1, rs2, .. }
+            | Sh { rs1, rs2, .. }
+            | Sw { rs1, rs2, .. }
+            | CSw { rs1, rs2, .. } => reg(rs1) && reg(rs2),
+            Add { rd, rs1, rs2 }
+            | Sub { rd, rs1, rs2 }
+            | Sll { rd, rs1, rs2 }
+            | Slt { rd, rs1, rs2 }
+            | Sltu { rd, rs1, rs2 }
+            | Xor { rd, rs1, rs2 }
+            | Srl { rd, rs1, rs2 }
+            | Sra { rd, rs1, rs2 }
+            | Or { rd, rs1, rs2 }
+            | And { rd, rs1, rs2 } => reg(rd) && reg(rs1) && reg(rs2),
+            Lb { rd, rs1, .. }
+            | Lh { rd, rs1, .. }
+            | Lw { rd, rs1, .. }
+            | Lbu { rd, rs1, .. }
+            | Lhu { rd, rs1, .. } => reg(rd) && reg(rs1),
+            Csrrw { rd, rs1, .. } | Csrrs { rd, rs1, .. } | Csrrc { rd, rs1, .. } => {
+                reg(rd) && reg(rs1)
+            }
+            Csrrwi { rd, .. } | Csrrsi { rd, .. } | Csrrci { rd, .. } => reg(rd),
+            CMv { rd, rs2 } => reg(rd) && reg(rs2),
+            CAddi4spn { rd, .. } => reg(rd),
+            CJr { rs1 } | CJalr { rs1 } | CBeqz { rs1, .. } | CBnez { rs1, .. } => reg(rs1),
+            CSwsp { rs2, .. } => reg(rs2),
+            CAddi16sp { .. } | CJ { .. } | Fence | Ecall | Ebreak | Mret | Wfi => true,
+            Mul { .. }
+            | Mulh { .. }
+            | Mulhsu { .. }
+            | Mulhu { .. }
+            | Div { .. }
+            | Divu { .. }
+            | Rem { .. }
+            | Remu { .. }
+            | LrW { .. }
+            | ScW { .. }
+            | AmoSwapW { .. }
+            | AmoAddW { .. }
+            | AmoXorW { .. }
+            | AmoOrW { .. }
+            | AmoAndW { .. }
+            | AmoMinW { .. }
+            | AmoMaxW { .. }
+            | AmoMinuW { .. }
+            | AmoMaxuW { .. } => false,
+            Unknown(_) => false,
+        }
+    }
+}
+
 pub fn decode_rv32(inst: u32) -> Instruction {
     if (inst & 0x3) != 0x3 {
         return decode_rv32c((inst & 0xFFFF) as u16);
