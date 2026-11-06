@@ -1413,17 +1413,17 @@ impl SystemBus {
         // function-select word with GPIO so a wrong MCU_SEL disconnects the
         // attached WS2812B model from the output pad.
         bus.wire_esp32c61_pad_controls();
-        // ESP32-C5: share GPIO27's IO_MUX function-select word with GPIO so a
-        // wrong MCU_SEL disconnects the DevKitC's onboard RGB LED.
+        // ESP32-C5: share GPIO6/GPIO10/GPIO27 IO_MUX function-select words
+        // with GPIO so sensor matrix routing and the onboard LED honor MCU_SEL.
         bus.wire_esp32c5_pad_controls();
         // Same for the ESP32-S3. (The S3's IO_MUX is registered by the coded
         // `configure_xtensa_esp32s3` path rather than the chip yaml, which
         // wires it there too; this keeps the declarative path honest if the
         // peripheral is ever declared.)
         bus.wire_esp32s3_pad_controls();
-        // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
-        // the C3 GPIO model so matrix-routed pads carry the real waveform.
-        // No-op for every other chip.
+        // ESP32-C3/C5/C6: share the I²C0 bit engine's live SDA/SCL line levels
+        // with the chip's GPIO model so matrix-routed pads carry the real
+        // waveform. No-op when the controller/GPIO pair is absent.
         bus.wire_esp32c3_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX

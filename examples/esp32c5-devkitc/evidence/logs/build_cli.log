@@ -18,4 +18,4 @@ workspace: /home/andrii/worktrees/labwired-core/hw-onboarding/Cargo.toml
    Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/gdbstub)
    Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/labwired-fuzz)
    Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/hw-onboarding/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 20.19s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 27.13s

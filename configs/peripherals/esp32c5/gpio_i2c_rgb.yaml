@@ -1,0 +1,104 @@
+peripheral: GPIO (GPIO6/GPIO10 I2C and GPIO27 RGB slice)
+version: 0.2.0
+registers:
+  - id: GPIO_OUT
+    address_offset: 0x04
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: GPIO_OUT_W1TS
+    address_offset: 0x08
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_OUT_W1TC
+    address_offset: 0x0C
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_ENABLE
+    address_offset: 0x34
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+  - id: GPIO_ENABLE_W1TS
+    address_offset: 0x38
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_ENABLE_W1TC
+    address_offset: 0x3C
+    size: 32
+    access: WRITE_ONLY
+    reset_value: 0
+  - id: GPIO_IN
+    address_offset: 0x64
+    size: 32
+    access: READ_ONLY
+    reset_value: 0
+  - id: GPIO_FUNC6_OUT_SEL_CFG
+    address_offset: 0xAEC
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x100
+    fields:
+      - name: OUT_SEL
+        bit_range: [0, 8]
+      - name: OUT_INV_SEL
+        bit_range: [9, 9]
+      - name: OE_SEL
+        bit_range: [10, 10]
+      - name: OE_INV_SEL
+        bit_range: [11, 11]
+  - id: GPIO_FUNC10_OUT_SEL_CFG
+    address_offset: 0xAFC
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x100
+    fields:
+      - name: OUT_SEL
+        bit_range: [0, 8]
+      - name: OUT_INV_SEL
+        bit_range: [9, 9]
+      - name: OE_SEL
+        bit_range: [10, 10]
+      - name: OE_INV_SEL
+        bit_range: [11, 11]
+  - id: GPIO_FUNC27_OUT_SEL_CFG
+    address_offset: 0xB40
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x100
+    fields:
+      - name: OUT_SEL
+        bit_range: [0, 8]
+      - name: OUT_INV_SEL
+        bit_range: [9, 9]
+      - name: OE_SEL
+        bit_range: [10, 10]
+      - name: OE_INV_SEL
+        bit_range: [11, 11]
+  - id: GPIO_FUNC46_IN_SEL_CFG
+    address_offset: 0x38C
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x60
+    fields:
+      - name: IN_SEL
+        bit_range: [0, 6]
+      - name: IN_INV_SEL
+        bit_range: [7, 7]
+      - name: SIG_IN_SEL
+        bit_range: [8, 8]
+  - id: GPIO_FUNC47_IN_SEL_CFG
+    address_offset: 0x390
+    size: 32
+    access: READ_WRITE
+    reset_value: 0x60
+    fields:
+      - name: IN_SEL
+        bit_range: [0, 6]
+      - name: IN_INV_SEL
+        bit_range: [7, 7]
+      - name: SIG_IN_SEL
+        bit_range: [8, 8]

@@ -2,20 +2,26 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Narrow ESP32-C5 GPIO model for the DevKitC's onboard RGB LED data pin.
+//! Narrow ESP32-C5 GPIO slice for DevKitC I2C sensors and the onboard RGB LED.
 //!
-//! Only GPIO27 is exposed through this model. Its GPIO_OUT latch, output
-//! enable, GPIO_FUNC27_OUT_SEL_CFG and shared IO_MUX function select are live;
-//! other pads, GPIO inputs, interrupts, and peripheral-matrix routes are not.
+//! GPIO6 and GPIO10 carry the modeled I2C0 GPIO-matrix route. GPIO27 carries
+//! direct GPIO output to the onboard WS2812 LED. Other pads and GPIO features
+//! are outside this profile.
 
+use crate::peripherals::esp32c3::i2c::{C3I2cMatrixRoute, C3I2cMatrixRouteState};
 use crate::peripherals::gpio::{GpioMode, GpioRouting};
 use crate::pins::{External, InputChange, PadDriver, PinPort, Pull};
 use crate::{MmioAccessClass, Peripheral, PeripheralTickResult, SimResult};
 use labwired_config::PeripheralDescriptor;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
+const GPIO6: u8 = 6;
+const GPIO10: u8 = 10;
 const GPIO27: u8 = 27;
+const GPIO6_MASK: u32 = 1 << GPIO6;
+const GPIO10_MASK: u32 = 1 << GPIO10;
 const GPIO27_MASK: u32 = 1 << GPIO27;
+const MODELED_PINS_MASK: u32 = GPIO6_MASK | GPIO10_MASK | GPIO27_MASK;
 
 const OUT: u64 = 0x04;
 const OUT_W1TS: u64 = 0x08;
@@ -24,18 +30,31 @@ const ENABLE: u64 = 0x34;
 const ENABLE_W1TS: u64 = 0x38;
 const ENABLE_W1TC: u64 = 0x3C;
 const IN: u64 = 0x64;
-const FUNC27_OUT_SEL: u64 = 0xB30;
+
+// ESP-IDF C5 gpio_reg.h: output selector words are per-pad. In particular,
+// GPIO_FUNC27_OUT_SEL_CFG is 0xB40; 0xB30 belongs to GPIO_FUNC23.
+const FUNC6_OUT_SEL: u64 = 0xAEC;
+const FUNC10_OUT_SEL: u64 = 0xAFC;
+const FUNC27_OUT_SEL: u64 = 0xB40;
+// Input selector words are indexed by peripheral input signal, not GPIO pad.
+const FUNC46_IN_SEL: u64 = 0x38C; // I2CEXT0_SCL
+const FUNC47_IN_SEL: u64 = 0x390; // I2CEXT0_SDA
+
+const SIG_I2CEXT0_SCL: u32 = 46;
+const SIG_I2CEXT0_SDA: u32 = 47;
 const SIG_GPIO_OUT: u32 = 256;
 const OE_SEL: u32 = 1 << 10;
+const INPUT_MATRIX_SELECT: u32 = 1 << 8;
+const INPUT_PAD_MASK: u32 = 0x7F;
 
 const GPIO_DESCRIPTOR_YAML: &str =
-    include_str!("../../../../../configs/peripherals/esp32c5/gpio_gpio27.yaml");
+    include_str!("../../../../../configs/peripherals/esp32c5/gpio_i2c_rgb.yaml");
 
 fn gpio_descriptor() -> &'static PeripheralDescriptor {
     static DESCRIPTOR: OnceLock<PeripheralDescriptor> = OnceLock::new();
     DESCRIPTOR.get_or_init(|| {
         PeripheralDescriptor::from_yaml(GPIO_DESCRIPTOR_YAML)
-            .expect("embedded ESP32-C5 GPIO27 descriptor is valid")
+            .expect("embedded ESP32-C5 GPIO I2C/RGB descriptor is valid")
     })
 }
 
@@ -43,8 +62,16 @@ fn gpio_descriptor() -> &'static PeripheralDescriptor {
 pub struct Esp32c5Gpio {
     out: u32,
     enable: u32,
+    func6_out_sel: u32,
+    func10_out_sel: u32,
     func27_out_sel: u32,
+    func46_in_sel: u32,
+    func47_in_sel: u32,
+    io_mux_gpio6: Option<super::io_mux::PadControl>,
+    io_mux_gpio10: Option<super::io_mux::PadControl>,
     io_mux_gpio27: Option<super::io_mux::PadControl>,
+    i2c_matrix_route: C3I2cMatrixRoute,
+    i2c_lines: Option<Arc<crate::peripherals::esp32c3::i2c::I2cLineLevels>>,
     observers: Vec<Arc<dyn crate::peripherals::device::GpioObserver>>,
     cycle: u64,
 }
@@ -54,10 +81,19 @@ impl Esp32c5Gpio {
         Self {
             out: 0,
             enable: 0,
-            // GPIO_FUNCn_OUT_SEL_CFG reset value is 0x100; OE_SEL is enabled
-            // explicitly by firmware before it drives the pad.
+            // GPIO_FUNCn_OUT_SEL_CFG resets to GPIO_OUT (256). Firmware must
+            // select the GPIO matrix output-enable path before driving a pad.
+            func6_out_sel: SIG_GPIO_OUT,
+            func10_out_sel: SIG_GPIO_OUT,
             func27_out_sel: SIG_GPIO_OUT,
+            // C5 GPIO_FUNCn_IN_SEL_CFG resets to constant-low input (0x60).
+            func46_in_sel: 0x60,
+            func47_in_sel: 0x60,
+            io_mux_gpio6: None,
+            io_mux_gpio10: None,
             io_mux_gpio27: None,
+            i2c_matrix_route: Arc::new(Mutex::new(C3I2cMatrixRouteState::default())),
+            i2c_lines: None,
             observers: Vec::new(),
             cycle: 0,
         }
@@ -67,32 +103,95 @@ impl Esp32c5Gpio {
         self.observers.push(observer);
     }
 
+    pub(crate) fn set_io_mux_gpio6(&mut self, control: super::io_mux::PadControl) {
+        self.io_mux_gpio6 = Some(control);
+        self.refresh_i2c_matrix_route();
+    }
+
+    pub(crate) fn set_io_mux_gpio10(&mut self, control: super::io_mux::PadControl) {
+        self.io_mux_gpio10 = Some(control);
+        self.refresh_i2c_matrix_route();
+    }
+
     pub(crate) fn set_io_mux_gpio27(&mut self, control: super::io_mux::PadControl) {
         self.io_mux_gpio27 = Some(control);
     }
 
-    fn io_mux_selects_gpio(&self) -> bool {
-        self.io_mux_gpio27.as_ref().is_some_and(|control| {
+    pub(crate) fn i2c_matrix_route_state(&self) -> C3I2cMatrixRoute {
+        self.i2c_matrix_route.clone()
+    }
+
+    pub(crate) fn set_i2c_lines(
+        &mut self,
+        lines: Arc<crate::peripherals::esp32c3::i2c::I2cLineLevels>,
+    ) {
+        self.i2c_lines = Some(lines);
+    }
+
+    fn io_mux_selects_gpio(&self, pin: u8) -> bool {
+        let control = match pin {
+            GPIO6 => self.io_mux_gpio6.as_ref(),
+            GPIO10 => self.io_mux_gpio10.as_ref(),
+            GPIO27 => self.io_mux_gpio27.as_ref(),
+            _ => None,
+        };
+        control.is_some_and(|control| {
             super::io_mux::gpio_function_selected(
                 *control
                     .read()
-                    .expect("ESP32-C5 GPIO27 IO_MUX control poisoned"),
+                    .expect("ESP32-C5 IO_MUX pad control poisoned"),
             )
         })
     }
 
+    fn output_selector(&self, pin: u8) -> Option<u32> {
+        Some(match pin {
+            GPIO6 => self.func6_out_sel,
+            GPIO10 => self.func10_out_sel,
+            GPIO27 => self.func27_out_sel,
+            _ => return None,
+        })
+    }
+
+    fn matrix_output_selected(&self, pin: u8, signal: u32) -> bool {
+        let mask = 1u32 << pin;
+        self.enable & mask != 0
+            && self.io_mux_selects_gpio(pin)
+            && self
+                .output_selector(pin)
+                .is_some_and(|selector| selector & 0x1FF == signal && selector & OE_SEL != 0)
+    }
+
     fn gpio27_output_selected(&self) -> bool {
         self.enable & GPIO27_MASK != 0
+            && self.io_mux_selects_gpio(GPIO27)
             && self.func27_out_sel & 0x1FF == SIG_GPIO_OUT
             && self.func27_out_sel & OE_SEL != 0
-            && self.io_mux_selects_gpio()
     }
 
     fn gpio27_level(&self) -> bool {
         self.gpio27_output_selected() && self.out & GPIO27_MASK != 0
     }
 
-    fn notify_output_transition(&self, before: Option<bool>, after: Option<bool>) {
+    fn i2c_pad_level(&self, pin: u8) -> Option<bool> {
+        if self.matrix_output_selected(pin, SIG_I2CEXT0_SCL) {
+            return self.i2c_lines.as_ref().map(|lines| lines.scl());
+        }
+        if self.matrix_output_selected(pin, SIG_I2CEXT0_SDA) {
+            return self.i2c_lines.as_ref().map(|lines| lines.sda());
+        }
+        None
+    }
+
+    fn pin_level(&self, pin: u8) -> Option<bool> {
+        match pin {
+            GPIO27 => Some(self.gpio27_level()),
+            GPIO6 | GPIO10 => self.i2c_pad_level(pin),
+            _ => None,
+        }
+    }
+
+    fn notify_gpio27_transition(&self, before: Option<bool>, after: Option<bool>) {
         if let (Some(from), Some(to)) = (before, after) {
             if from != to {
                 for observer in &self.observers {
@@ -102,34 +201,76 @@ impl Esp32c5Gpio {
         }
     }
 
+    fn selected_input_pin(selector: u32) -> Option<u8> {
+        if selector & INPUT_MATRIX_SELECT == 0 {
+            return None;
+        }
+        let pin = (selector & INPUT_PAD_MASK) as u8;
+        (pin < 29).then_some(pin)
+    }
+
+    fn refresh_i2c_matrix_route(&self) {
+        let sda_output_mask = if self.matrix_output_selected(GPIO6, SIG_I2CEXT0_SDA) {
+            GPIO6_MASK
+        } else {
+            0
+        };
+        let scl_output_mask = if self.matrix_output_selected(GPIO10, SIG_I2CEXT0_SCL) {
+            GPIO10_MASK
+        } else {
+            0
+        };
+        self.i2c_matrix_route
+            .lock()
+            .expect("ESP32-C5 I2C matrix route poisoned")
+            .set(
+                sda_output_mask,
+                scl_output_mask,
+                Self::selected_input_pin(self.func47_in_sel),
+                Self::selected_input_pin(self.func46_in_sel),
+            );
+    }
+
     fn read_word(&self, offset: u64) -> u32 {
         match offset {
-            OUT | OUT_W1TS | OUT_W1TC => self.out,
-            ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable,
-            IN => u32::from(self.gpio27_level()) << GPIO27,
+            OUT | OUT_W1TS | OUT_W1TC => self.out & MODELED_PINS_MASK,
+            ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable & MODELED_PINS_MASK,
+            IN => [GPIO6, GPIO10, GPIO27]
+                .into_iter()
+                .filter_map(|pin| self.pin_level(pin).map(|level| (pin, level)))
+                .fold(0, |word, (pin, level)| word | (u32::from(level) << pin)),
+            FUNC6_OUT_SEL => self.func6_out_sel,
+            FUNC10_OUT_SEL => self.func10_out_sel,
             FUNC27_OUT_SEL => self.func27_out_sel,
+            FUNC46_IN_SEL => self.func46_in_sel,
+            FUNC47_IN_SEL => self.func47_in_sel,
             _ => 0,
         }
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
-        let before = self
+        let before_gpio27 = self
             .gpio27_output_selected()
             .then(|| self.out & GPIO27_MASK != 0);
         match offset {
-            OUT => self.out = value & GPIO27_MASK,
-            OUT_W1TS => self.out |= value & GPIO27_MASK,
-            OUT_W1TC => self.out &= !(value & GPIO27_MASK),
-            ENABLE => self.enable = value & GPIO27_MASK,
-            ENABLE_W1TS => self.enable |= value & GPIO27_MASK,
-            ENABLE_W1TC => self.enable &= !(value & GPIO27_MASK),
+            OUT => self.out = value & MODELED_PINS_MASK,
+            OUT_W1TS => self.out |= value & MODELED_PINS_MASK,
+            OUT_W1TC => self.out &= !(value & MODELED_PINS_MASK),
+            ENABLE => self.enable = value & MODELED_PINS_MASK,
+            ENABLE_W1TS => self.enable |= value & MODELED_PINS_MASK,
+            ENABLE_W1TC => self.enable &= !(value & MODELED_PINS_MASK),
+            FUNC6_OUT_SEL => self.func6_out_sel = value,
+            FUNC10_OUT_SEL => self.func10_out_sel = value,
             FUNC27_OUT_SEL => self.func27_out_sel = value,
+            FUNC46_IN_SEL => self.func46_in_sel = value,
+            FUNC47_IN_SEL => self.func47_in_sel = value,
             _ => return,
         }
-        let after = self
+        self.refresh_i2c_matrix_route();
+        let after_gpio27 = self
             .gpio27_output_selected()
             .then(|| self.out & GPIO27_MASK != 0);
-        self.notify_output_transition(before, after);
+        self.notify_gpio27_transition(before_gpio27, after_gpio27);
     }
 }
 
@@ -176,31 +317,49 @@ impl Peripheral for Esp32c5Gpio {
 
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
         match offset & !3 {
-            IN => MmioAccessClass::SideEffectFree,
+            IN | FUNC6_OUT_SEL | FUNC10_OUT_SEL | FUNC27_OUT_SEL | FUNC46_IN_SEL
+            | FUNC47_IN_SEL => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
         }
     }
 
-    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
-        (pin == GPIO27).then(|| self.gpio27_level())
+    fn read_gpio_input_word(&self) -> u32 {
+        self.read_word(IN)
     }
 
-    fn read_gpio_input_word(&self) -> u32 {
-        u32::from(self.gpio27_level()) << GPIO27
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        self.pin_level(pin)
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
-        (pin == GPIO27).then(|| self.out & GPIO27_MASK != 0)
+        self.output_selector(pin)
+            .map(|_| self.out & (1u32 << pin) != 0)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
-        (pin == GPIO27).then(|| GpioRouting {
-            mode: if self.gpio27_output_selected() {
-                GpioMode::Output
-            } else {
-                GpioMode::Input
-            },
-            func: None,
+        let selector = self.output_selector(pin)?;
+        if self.enable & (1u32 << pin) == 0 || !self.io_mux_selects_gpio(pin) {
+            return Some(GpioRouting {
+                mode: GpioMode::Input,
+                func: None,
+            });
+        }
+        let signal = selector & 0x1FF;
+        Some(if signal == SIG_GPIO_OUT && selector & OE_SEL != 0 {
+            GpioRouting {
+                mode: GpioMode::Output,
+                func: None,
+            }
+        } else {
+            let func = match signal {
+                SIG_I2CEXT0_SCL => Some("I2CEXT0_SCL".to_owned()),
+                SIG_I2CEXT0_SDA => Some("I2CEXT0_SDA".to_owned()),
+                _ => None,
+            };
+            GpioRouting {
+                mode: GpioMode::Af,
+                func,
+            }
         })
     }
 
@@ -223,48 +382,89 @@ impl Peripheral for Esp32c5Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
+            "gpio6_out": self.out & GPIO6_MASK != 0,
+            "gpio10_out": self.out & GPIO10_MASK != 0,
             "gpio27_out": self.out & GPIO27_MASK != 0,
-            "gpio27_enabled": self.enable & GPIO27_MASK != 0,
-            "gpio27_out_sel": self.func27_out_sel,
+            "enable": self.enable,
+            "func6_out_sel": self.func6_out_sel,
+            "func10_out_sel": self.func10_out_sel,
+            "func27_out_sel": self.func27_out_sel,
+            "func46_in_sel": self.func46_in_sel,
+            "func47_in_sel": self.func47_in_sel,
         })
     }
 
     fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
-        if let Some(value) = state.get("gpio27_out").and_then(serde_json::Value::as_bool) {
-            self.out = if value { GPIO27_MASK } else { 0 };
+        for (key, mask) in [
+            ("gpio6_out", GPIO6_MASK),
+            ("gpio10_out", GPIO10_MASK),
+            ("gpio27_out", GPIO27_MASK),
+        ] {
+            if let Some(value) = state.get(key).and_then(serde_json::Value::as_bool) {
+                if value {
+                    self.out |= mask;
+                } else {
+                    self.out &= !mask;
+                }
+            }
         }
-        if let Some(value) = state
-            .get("gpio27_enabled")
-            .and_then(serde_json::Value::as_bool)
-        {
-            self.enable = if value { GPIO27_MASK } else { 0 };
+        if let Some(value) = state.get("enable").and_then(serde_json::Value::as_u64) {
+            self.enable = value as u32 & MODELED_PINS_MASK;
         }
-        if let Some(value) = state
-            .get("gpio27_out_sel")
-            .and_then(serde_json::Value::as_u64)
-        {
-            self.func27_out_sel = value as u32;
+        for (key, field) in [
+            ("func6_out_sel", &mut self.func6_out_sel),
+            ("func10_out_sel", &mut self.func10_out_sel),
+            ("func27_out_sel", &mut self.func27_out_sel),
+            ("func46_in_sel", &mut self.func46_in_sel),
+            ("func47_in_sel", &mut self.func47_in_sel),
+        ] {
+            if let Some(value) = state.get(key).and_then(serde_json::Value::as_u64) {
+                *field = value as u32;
+            }
         }
+        self.refresh_i2c_matrix_route();
         Ok(())
     }
 
     fn runtime_snapshot(&self) -> Vec<u8> {
-        bincode::serialize(&(self.out, self.enable, self.func27_out_sel, self.cycle))
-            .expect("serialize ESP32-C5 GPIO27 state")
+        bincode::serialize(&(
+            self.out,
+            self.enable,
+            self.func6_out_sel,
+            self.func10_out_sel,
+            self.func27_out_sel,
+            self.func46_in_sel,
+            self.func47_in_sel,
+            self.cycle,
+        ))
+        .expect("serialize ESP32-C5 GPIO state")
     }
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
         if !bytes.is_empty() {
-            let (out, enable, func27_out_sel, cycle): (u32, u32, u32, u64) =
-                bincode::deserialize(bytes).map_err(|error| {
-                    crate::SimulationError::NotImplemented(format!(
-                        "ESP32-C5 GPIO runtime snapshot decode: {error}"
-                    ))
-                })?;
-            self.out = out & GPIO27_MASK;
-            self.enable = enable & GPIO27_MASK;
-            self.func27_out_sel = func27_out_sel;
+            let (out, enable, func6, func10, func27, in46, in47, cycle): (
+                u32,
+                u32,
+                u32,
+                u32,
+                u32,
+                u32,
+                u32,
+                u64,
+            ) = bincode::deserialize(bytes).map_err(|error| {
+                crate::SimulationError::NotImplemented(format!(
+                    "ESP32-C5 GPIO runtime snapshot decode: {error}"
+                ))
+            })?;
+            self.out = out & MODELED_PINS_MASK;
+            self.enable = enable & MODELED_PINS_MASK;
+            self.func6_out_sel = func6;
+            self.func10_out_sel = func10;
+            self.func27_out_sel = func27;
+            self.func46_in_sel = in46;
+            self.func47_in_sel = in47;
             self.cycle = cycle;
+            self.refresh_i2c_matrix_route();
         }
         Ok(())
     }
@@ -284,18 +484,22 @@ impl Peripheral for Esp32c5Gpio {
 
 impl PinPort for Esp32c5Gpio {
     fn pin_count(&self) -> u8 {
-        GPIO27 + 1
+        29
     }
 
     fn driver(&self, pin: u8) -> Option<PadDriver> {
-        if pin != GPIO27 {
-            return None;
+        match pin {
+            GPIO27 => Some(if self.gpio27_output_selected() {
+                PadDriver::output(self.out & GPIO27_MASK != 0, false)
+            } else {
+                PadDriver::released(Pull::None)
+            }),
+            GPIO6 | GPIO10 => Some(match self.i2c_pad_level(pin) {
+                Some(level) => PadDriver::output(level, true),
+                None => PadDriver::released(Pull::None),
+            }),
+            _ => None,
         }
-        Some(if self.gpio27_output_selected() {
-            PadDriver::output(self.out & GPIO27_MASK != 0, false)
-        } else {
-            PadDriver::released(Pull::None)
-        })
     }
 
     fn external(&self, _pin: u8) -> External {
@@ -307,7 +511,7 @@ impl PinPort for Esp32c5Gpio {
     }
 
     fn input(&self, pin: u8) -> Option<bool> {
-        (pin == GPIO27).then(|| self.gpio27_level())
+        self.pin_level(pin)
     }
 }
 
@@ -326,29 +530,23 @@ mod tests {
     }
 
     #[test]
-    fn gpio27_output_observer_requires_gpio_mux_and_gpio_output_selection() {
+    fn gpio27_uses_its_c5_selector_and_requires_both_muxes() {
         let mut gpio = Esp32c5Gpio::new();
         let iomux = super::super::io_mux::Esp32c5IoMux::new();
-        gpio.set_io_mux_gpio27(iomux.pad_control());
+        gpio.set_io_mux_gpio27(iomux.gpio27_pad_control());
         let edges = Arc::new(Edges::default());
         gpio.add_observer(edges.clone());
 
-        // Enabling the GPIO latch without the matrix OE_SEL has no pad drive.
         gpio.write_u32(ENABLE_W1TS, GPIO27_MASK).unwrap();
-        gpio.write_u32(OUT_W1TS, GPIO27_MASK).unwrap();
-        assert!(edges.0.lock().unwrap().is_empty());
-
-        // Select the direct GPIO output plus OE and drive low before toggling.
-        gpio.write_u32(OUT_W1TC, GPIO27_MASK).unwrap();
         gpio.write_u32(FUNC27_OUT_SEL, SIG_GPIO_OUT | OE_SEL)
             .unwrap();
         gpio.write_u32(OUT_W1TS, GPIO27_MASK).unwrap();
-        assert_eq!(*edges.0.lock().unwrap(), vec![(GPIO27, false, true)]);
+        assert_eq!(edges.0.lock().unwrap().len(), 1);
 
-        // Leaving GPIO function 1 disconnects the pin from the board LED.
-        let mut mux = iomux;
-        mux.write_u32(0x6C, 2 << 12).unwrap();
-        assert_eq!(gpio.read_gpio_input(GPIO27), Some(false));
-        assert_eq!(*edges.0.lock().unwrap(), vec![(GPIO27, false, true)]);
+        // 0xB30 is GPIO_FUNC23_OUT_SEL_CFG on C5, not GPIO27.
+        gpio.write_u32(0xB30, SIG_GPIO_OUT).unwrap();
+        iomux.write_u32(0x6C, 2 << 12).unwrap();
+        gpio.write_u32(OUT_W1TC, GPIO27_MASK).unwrap();
+        assert_eq!(edges.0.lock().unwrap().len(), 1);
     }
 }

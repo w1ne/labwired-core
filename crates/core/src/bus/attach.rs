@@ -106,33 +106,47 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
-    /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
-    /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// Wire the shared ESP32-C3/C5/C6 I²C0 bit engine to its GPIO matrix. GPIO
+    /// exposes the live SDA/SCL levels, while I²C checks the configured input
+    /// and output routes before a physically routed slave can acknowledge.
+    /// No-op unless a supported I²C controller and matching GPIO model exist.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+        use crate::peripherals::esp32c5::gpio::Esp32c5Gpio;
         let i2c_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
                 .map(|a| a.is::<Esp32c3I2c>())
                 .unwrap_or(false)
         });
-        let gpio_idx = self.peripherals.iter().position(|p| {
+        let c3_gpio_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
                 .map(|a| a.is::<Esp32c3Gpio>())
                 .unwrap_or(false)
         });
-        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+        let c5_gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32c5Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, c3_gpio_idx.or(c5_gpio_idx)) else {
             return;
         };
         let matrix_route = self.peripherals[gpio_idx]
             .dev
             .as_any()
             .and_then(|a| a.downcast_ref::<Esp32c3Gpio>())
-            .map(|g| g.i2c_matrix_route_state());
+            .map(|g| g.i2c_matrix_route_state())
+            .or_else(|| {
+                self.peripherals[gpio_idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<Esp32c5Gpio>())
+                    .map(|g| g.i2c_matrix_route_state())
+            });
         let lines = self.peripherals[i2c_idx]
             .dev
             .as_any_mut()
@@ -143,14 +157,20 @@ impl SystemBus {
                     c.line_levels_arc()
                 })
             });
-        if let (Some(lines), Some(gpio)) = (
-            lines,
-            self.peripherals[gpio_idx]
+        if let Some(lines) = lines {
+            if let Some(gpio) = self.peripherals[gpio_idx]
                 .dev
                 .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
-        ) {
-            gpio.set_i2c_lines(lines);
+                .and_then(|a| a.downcast_mut::<Esp32c3Gpio>())
+            {
+                gpio.set_i2c_lines(lines);
+            } else if let Some(gpio) = self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32c5Gpio>())
+            {
+                gpio.set_i2c_lines(lines);
+            }
         }
     }
 
@@ -1256,8 +1276,8 @@ impl SystemBus {
         }
     }
 
-    /// Share the C5 GPIO27 IO_MUX function-select word with the narrow GPIO
-    /// model so changing MCU_SEL disconnects the DevKitC RGB LED pad.
+    /// Share the C5 GPIO6/GPIO10/GPIO27 IO_MUX function-select words with the
+    /// narrow GPIO model so matrix routing and the onboard LED honor MCU_SEL.
     pub(crate) fn wire_esp32c5_pad_controls(&mut self) {
         use crate::peripherals::esp32c5::gpio::Esp32c5Gpio;
         use crate::peripherals::esp32c5::io_mux::Esp32c5IoMux;
@@ -1274,19 +1294,27 @@ impl SystemBus {
             return;
         };
 
-        let control = self.peripherals[io_mux_idx]
+        let controls = self.peripherals[io_mux_idx]
             .dev
             .as_any()
             .and_then(|any| any.downcast_ref::<Esp32c5IoMux>())
-            .map(Esp32c5IoMux::pad_control);
-        if let (Some(control), Some(gpio)) = (
-            control,
+            .map(|mux| {
+                (
+                    mux.gpio6_pad_control(),
+                    mux.gpio10_pad_control(),
+                    mux.gpio27_pad_control(),
+                )
+            });
+        if let (Some((gpio6, gpio10, gpio27)), Some(gpio)) = (
+            controls,
             self.peripherals[gpio_idx]
                 .dev
                 .as_any_mut()
                 .and_then(|any| any.downcast_mut::<Esp32c5Gpio>()),
         ) {
-            gpio.set_io_mux_gpio27(control);
+            gpio.set_io_mux_gpio6(gpio6);
+            gpio.set_io_mux_gpio10(gpio10);
+            gpio.set_io_mux_gpio27(gpio27);
         }
     }
 

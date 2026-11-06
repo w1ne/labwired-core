@@ -1,12 +1,16 @@
-# ESP32-C5-DevKitC-1 v1.2 smoke: exercise UART0 through its TX FIFO.
+# ESP32-C5-DevKitC-1 v1.2 smoke: UART0, BME280 over I2C0, and RGB LED GPIO.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c5-devkitc-smoke"
   system: "../../configs/systems/esp32c5-devkitc.yaml"
 limits:
-  max_steps: 1000000
+  # UART0 shifts 58 result bytes at its configured 115200 baud; leave enough
+  # simulated time for the final BME280 temperature line to drain.
+  max_steps: 1500000
 assertions:
   - uart_contains: "ESP32_C5_UART0_OK"
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "BME280_TEMP_RAW=0x082DC0"
   - gpio_edges:
       pin: "gpio:27"
       min_edges: 48

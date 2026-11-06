@@ -1,5 +1,5 @@
-# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART/RGB LED smoke.
-# The board slice exposes on-chip memories, UART0 and GPIO27 direct output.
+# ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1 v1.2 UART, GPIO/I2C and
+# onboard RGB LED smoke. Only GPIO6, GPIO10 and GPIO27 are exposed.
 name: "esp32c5"
 arch: "riscv"
 core: "rv32imac"
@@ -24,7 +24,9 @@ memory_regions:
     size: "16KB"
 
 pins:
-  # This board profile exposes GPIO27, routed to the onboard RGB LED.
+  GPIO6: { gpio: "gpio", bit: 6 }
+  GPIO10: { gpio: "gpio", bit: 10 }
+  # The onboard RGB LED data pad.
   GPIO27: { gpio: "gpio", bit: 27 }
 
 peripherals:
@@ -35,7 +37,7 @@ peripherals:
   - id: "pcr"
     type: "esp32c5_pcr"
     base_address: 0x60096000
-    size: "8"
+    size: "40"
   - id: "uart0"
     type: "esp32c5_uart"
     irq: 47
@@ -44,18 +46,28 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_SCLK_CONF", bit: 22 }
     config:
       echo_stdout: true
-  # DevKitC's addressable RGB LED uses GPIO27. The model covers the direct
-  # GPIO output registers and this pad's GPIO_FUNC output selector only.
+  # The narrow C5 GPIO model covers GPIO6/10 I2C matrix routing and GPIO27's
+  # direct output path to the onboard addressable RGB LED.
   - id: "gpio"
     type: "esp32c5_gpio"
     base_address: 0x60091000
-    size: "2868"
+    size: "2888"
     config:
-      debug_schema: "../peripherals/esp32c5/gpio_gpio27.yaml"
-  # Only GPIO27's function-select word is modelled in this board profile.
+      debug_schema: "../peripherals/esp32c5/gpio_i2c_rgb.yaml"
+  # IO_MUX functions for the two sensor pads and the RGB LED data pad.
   - id: "io_mux"
     type: "esp32c5_io_mux"
     base_address: 0x60090000
     size: "112"
     config:
-      debug_schema: "../peripherals/esp32c5/io_mux_gpio27.yaml"
+      debug_schema: "../peripherals/esp32c5/io_mux_i2c_rgb.yaml"
+  # C5 I2C0 uses the same command/register layout as the C3/C6 model. The C5
+  # TRM/ESP-IDF map places it at 0x60004000 and uses source 11.
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    irq: 11
+    base_address: 0x60004000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "I2C0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/i2c0.yaml"

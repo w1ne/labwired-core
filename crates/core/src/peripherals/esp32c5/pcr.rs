@@ -2,17 +2,18 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Narrow ESP32-C5 PCR slice for UART0 clock configuration.
+//! Narrow ESP32-C5 PCR slice for UART0 and I2C0 clock configuration.
 //!
-//! Only UART0_CONF and UART0_SCLK_CONF are exposed. The function clock source
-//! is stored as register state; the UART profile models the selected PLL_F80M
-//! source at a fixed 80 MHz and enforces the SCLK enable bit as its bus gate.
-//! Other PCR registers and dynamic clock-tree behavior are outside this slice.
+//! UART0_CONF, UART0_SCLK_CONF and I2C0_CONF are exposed. The function clock
+//! source is stored as register state; the UART profile models the selected
+//! PLL_F80M source at a fixed 80 MHz and both peripherals enforce their clock
+//! enable gates. Dynamic clock-tree behavior is outside this slice.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 const UART0_CONF: u64 = 0x00;
 const UART0_SCLK_CONF: u64 = 0x04;
+const I2C0_CONF: u64 = 0x20;
 const UART0_CONF_RESET: u32 = 0x0000_0005; // CLK_EN + READY
 const UART0_SCLK_CONF_RESET: u32 = 0x0040_0000; // SCLK_EN, XTAL selected
 const UART0_READY: u32 = 1 << 2;
@@ -21,6 +22,7 @@ const UART0_READY: u32 = 1 << 2;
 pub struct Esp32c5Pcr {
     uart0_conf: u32,
     uart0_sclk_conf: u32,
+    i2c0_conf: u32,
 }
 
 impl Default for Esp32c5Pcr {
@@ -34,6 +36,7 @@ impl Esp32c5Pcr {
         Self {
             uart0_conf: UART0_CONF_RESET & !UART0_READY,
             uart0_sclk_conf: UART0_SCLK_CONF_RESET,
+            i2c0_conf: 0,
         }
     }
 
@@ -41,6 +44,7 @@ impl Esp32c5Pcr {
         match offset & !3 {
             UART0_CONF => self.uart0_conf | UART0_READY,
             UART0_SCLK_CONF => self.uart0_sclk_conf,
+            I2C0_CONF => self.i2c0_conf,
             _ => 0,
         }
     }
@@ -50,6 +54,7 @@ impl Esp32c5Pcr {
         match name.to_ascii_uppercase().as_str() {
             "UART0_CONF" => Some(UART0_CONF),
             "UART0_SCLK_CONF" => Some(UART0_SCLK_CONF),
+            "I2C0_CONF" => Some(I2C0_CONF),
             _ => None,
         }
     }
@@ -74,6 +79,10 @@ impl Peripheral for Esp32c5Pcr {
                 self.uart0_sclk_conf &= !(0xff << byte);
                 self.uart0_sclk_conf |= u32::from(value) << byte;
             }
+            I2C0_CONF => {
+                self.i2c0_conf &= !(0xff << byte);
+                self.i2c0_conf |= u32::from(value) << byte;
+            }
             _ => {}
         }
         Ok(())
@@ -87,6 +96,7 @@ impl Peripheral for Esp32c5Pcr {
         match offset & !3 {
             UART0_CONF => self.uart0_conf = value & !UART0_READY,
             UART0_SCLK_CONF => self.uart0_sclk_conf = value,
+            I2C0_CONF => self.i2c0_conf = value,
             _ => {}
         }
         Ok(())

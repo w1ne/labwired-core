@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.515605">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.827789">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="068393c08bb87061d078fb1e68cc74c983afc15a2efdaa4870f82fd1aaaaf111"/>
+    <property name="firmware_hash" value="827929a538226e353201e98d1bbe1b38be6dc03498deb7a4fa93e469c4dd3ba4"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.515605">
+  <testcase classname="labwired" name="run" time="0.827789">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_C5_UART0_OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:27 &gt;= 48 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: BME280_ID=0x60" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: display_region: rgb_led (0,0) *x* ink 1.00..=1.00 colour 0xF800 min_colour_pixels=1" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: uart_contains: BME280_TEMP_RAW=0x082DC0" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpio:27 &gt;= 48 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: display_region: rgb_led (0,0) *x* ink 1.00..=1.00 colour 0xF800 min_colour_pixels=1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
