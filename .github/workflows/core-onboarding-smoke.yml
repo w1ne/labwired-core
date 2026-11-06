@@ -184,6 +184,7 @@ on:
       - "crates/firmware-xiao-rp2040-smoke/**"
       - "crates/firmware-nano-rp2040-connect-smoke/**"
       - "crates/firmware-pico2-demo/**"
+      - "crates/firmware-pico2-bme280-smoke/**"
       - "crates/firmware-pico2-w-smoke/**"
       - "crates/firmware-xiao-rp2350-smoke/**"
       - "crates/firmware-adafruit-feather-rp2350-smoke/**"
@@ -701,6 +702,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/pico2/io-smoke.yaml
             system: configs/systems/pico2.yaml
+          - id: pico2-bme280
+            crate: firmware-pico2-bme280-smoke
+            firmware_build_dir: crates/firmware-pico2-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/pico2-bme280/onboarding-smoke.yaml
+            system: configs/systems/pico2-bme280.yaml
           - id: raspberry-pi-pico-2-w
             crate: firmware-pico2-w-smoke
             firmware_build_dir: crates/firmware-pico2-w-smoke

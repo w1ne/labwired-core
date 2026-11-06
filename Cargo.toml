@@ -190,6 +190,7 @@ members = [
     "crates/firmware-feather-nrf52840-express-smoke",
     "crates/firmware-rp2350-demo",
     "crates/firmware-pico2-demo",
+    "crates/firmware-pico2-bme280-smoke",
     "crates/firmware-kw41z-demo",
     "crates/firmware-kw41z-lcd",
     "crates/firmware-rp2040-pio-onboarding",
@@ -569,6 +570,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-pico2-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico2-bme280-smoke]
 codegen-units = 1
 opt-level = "s"
 
