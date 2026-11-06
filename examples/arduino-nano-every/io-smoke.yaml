@@ -1,0 +1,12 @@
+# Arduino Nano Every smoke: toggle LED_BUILTIN (D13 / PE2) through VPORT E.
+schema_version: "1.2"
+inputs:
+  firmware: firmware/.pio/build/nano_every/firmware.elf
+  system: ../../configs/systems/arduino-nano-every.yaml
+limits:
+  max_steps: 50000
+assertions:
+  - gpio_edges:
+      pin: "porte:2"
+      min_edges: 8
+  - expected_stop_reason: max_steps

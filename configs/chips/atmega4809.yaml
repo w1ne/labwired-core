@@ -1,0 +1,27 @@
+name: "atmega4809"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+# Arduino Nano Every uses the 16 MHz clock selected by the Arduino megaAVR
+# board package. The MCU itself is rated up to 20 MHz.
+cpu_hz: 16000000
+io_voltage_v: 5.0
+
+flash:
+  base: 0x00000000
+  size: "48KB"
+ram:
+  # ATmega4808/4809 data-space map, SRAM section: 0x2800..=0x3FFF (6 KB).
+  base: 0x00002800
+  size: "6KB"
+peripherals:
+  # Narrowly model the VPORT-E block used by Arduino Nano Every D13 (PE2).
+  # The regular PORT-E block and other peripherals are outside this onboarding
+  # smoke and are deliberately not declared as working models.
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x00010010
+    size: "3"
+    config:
+      layout: "avrxt_vport"
+      pin_count: 4

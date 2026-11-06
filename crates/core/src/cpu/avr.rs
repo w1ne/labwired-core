@@ -45,10 +45,11 @@ pub const SRAM_START: u16 = 0x0100;
 /// TWI sit at the same data addresses as on the 328P, so they are shared; their
 /// vector numbers are remapped on entry ([`mega2560_vector`]).
 ///
-/// The tinyAVR 0-series uses an AVRxt data map: the register file is separate,
-/// I/O occupies data addresses 0x0000..=0x0FFF, and SRAM begins at a device-
-/// specific address below 0x4000. Its common instruction execution is shared,
-/// but its peripherals and interrupt controller are not yet modelled.
+/// The ATmega4809 and tinyAVR 0-series use an AVRxt data map: I/O occupies data
+/// addresses 0x0000..=0x0FFF and SRAM begins at a device-specific address.
+/// Their common instruction execution is shared, but peripherals beyond
+/// explicitly configured GPIO windows and their interrupt controllers are not
+/// yet modelled.
 ///
 /// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
 /// 328P's; the registers are stored only), output-compare pads (PWM
@@ -60,6 +61,9 @@ pub enum AvrModel {
     Atmega328p,
     /// ATmega328PB shares the 328P core geometry and adds a second USART.
     Atmega328pb,
+    /// ATmega4809 (Arduino Nano Every): AVRxt data map, 48 KB flash and
+    /// 6 KB SRAM at 0x2800..=0x3FFF.
+    Atmega4809,
     Atmega1281,
     Atmega2560,
     Attiny202,
@@ -160,6 +164,8 @@ impl AvrModel {
             AvrModel::Atmega2560
         } else if n.contains("328pb") {
             AvrModel::Atmega328pb
+        } else if n.contains("4809") {
+            AvrModel::Atmega4809
         } else {
             AvrModel::Atmega328p
         }
@@ -167,6 +173,7 @@ impl AvrModel {
     pub fn flash_size(self) -> usize {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
+            AvrModel::Atmega4809 => 48 * 1024,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
@@ -187,6 +194,7 @@ impl AvrModel {
     pub fn sram_start(self) -> u16 {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
+            AvrModel::Atmega4809 => 0x2800,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
@@ -212,7 +220,8 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
-            AvrModel::Attiny202
+            AvrModel::Atmega4809
+            | AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -239,7 +248,8 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
-            AvrModel::Attiny202
+            AvrModel::Atmega4809
+            | AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -287,7 +297,8 @@ impl AvrModel {
     pub fn uses_avrxt_data_map(self) -> bool {
         matches!(
             self,
-            AvrModel::Attiny202
+            AvrModel::Atmega4809
+                | AvrModel::Attiny202
                 | AvrModel::Attiny204
                 | AvrModel::Attiny402
                 | AvrModel::Attiny404
@@ -751,6 +762,7 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega4809 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -786,6 +798,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Atmega4809 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
