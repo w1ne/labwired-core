@@ -32,8 +32,9 @@ Two ways to run firmware on it:
 ## Not modelled / not claimed
 
 The 5x5 LED matrix (charlieplexed), the accelerometer and magnetometer,
-LPCOMP, QDEC and the SPI/TWI slaves. The nRF51 ADC now has a bounded
-SVD-derived channel model, but this profile has no end-to-end analog proof or
-physical analog-pad aliases, and no silicon ADC validation is claimed. Bus
-visibility has no nRF51 legacy UART/TWI bring-up (see
+LPCOMP, QDEC and the SPI/TWI slaves. The mixed-signal test drives the bounded
+nRF51 ADC model with a generic Beta NTC and an unrelated Shockley diode through
+explicit ADC channel routes, and asserts their solved voltages and 10-bit
+results. Physical analog-pad aliases and silicon ADC validation are not
+claimed. Bus visibility has no nRF51 legacy UART/TWI bring-up (see
 [bus visibility](../coverage/bus-visibility.md)).
