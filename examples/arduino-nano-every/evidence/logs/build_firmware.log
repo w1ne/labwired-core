@@ -1,0 +1,55 @@
+Processing nano_every (platform: platformio/atmelmegaavr@1.10.0; board: nano_every; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/atmelmegaavr/nano_every.html
+PLATFORM: Atmel megaAVR (1.10.0) > Arduino Nano Every
+HARDWARE: ATMEGA4809 16MHz, 6KB RAM, 47.50KB Flash
+PACKAGES:
+ - framework-arduino-megaavr @ 1.8.8
+ - tool-avrdude-megaavr @ 1.60300.191015 (6.3.0)
+ - toolchain-atmelavr @ 1.70300.191015 (7.3.0)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 4 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio/build/nano_every/FrameworkArduinoVariant/variant.c.o
+Compiling .pio/build/nano_every/src/main.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/CDC.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/NANO_compat.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/Tone.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/UART.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/UART0.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/UART1.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/UART2.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/UART3.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/UNO_compat.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/USBCore.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/WInterrupts.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/WMath.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/abi.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/api/Common.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/api/IPAddress.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/api/PluggableUSB.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/api/Print.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/api/Stream.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/api/String.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/hooks.c.o
+Compiling .pio/build/nano_every/FrameworkArduino/main.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/new.cpp.o
+Compiling .pio/build/nano_every/FrameworkArduino/wiring.c.o
+Compiling .pio/build/nano_every/FrameworkArduino/wiring_analog.c.o
+Compiling .pio/build/nano_every/FrameworkArduino/wiring_digital.c.o
+Compiling .pio/build/nano_every/FrameworkArduino/wiring_pulse.S.o
+Compiling .pio/build/nano_every/FrameworkArduino/wiring_pulse.c.o
+Compiling .pio/build/nano_every/FrameworkArduino/wiring_shift.c.o
+Archiving .pio/build/nano_every/libFrameworkArduino.a
+Indexing .pio/build/nano_every/libFrameworkArduino.a
+Linking .pio/build/nano_every/firmware.elf
+Checking size .pio/build/nano_every/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   0.4% (used 22 bytes from 6144 bytes)
+Flash: [          ]   1.7% (used 826 bytes from 48640 bytes)
+Building .pio/build/nano_every/firmware.hex
+========================= [SUCCESS] Took 0.69 seconds =========================
