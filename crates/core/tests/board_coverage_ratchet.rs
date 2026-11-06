@@ -814,6 +814,16 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board. Same bar as the maker-five above:
         // promote when the catalog lands AND a differential exists.
         "esp32c6",
+        // First WCH part (CH32V003F4P6, QingKe RV32EC). L1: chip descriptor +
+        // system manifest + example with an io-smoke executed by the coverage
+        // matrix, a committed compiled-RV32E fixture and a chip-conformance
+        // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
+        // catalog board, no silicon oracle (no CH32V003 has been diffed over
+        // SDI) and no executing-fidelity differential of its own. The slice
+        // models RCC, PFIC and GPIO A/C/D only — USART/I2C/SPI/ADC are not
+        // modelled, so there is no bus to diff yet. Promote when the catalog
+        // board, a bus model and a differential all exist.
+        "ch32v003f4p6",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {
