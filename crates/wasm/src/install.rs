@@ -131,8 +131,13 @@ impl WasmSimulator {
             }
         }
 
-        // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.
-        if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
+        // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk and
+        // the hybrid window preserve key. IDF 5 dual-core names it
+        // `pxCurrentTCBs`; see `install_arduino_esp32_profile` in core.
+        if let Some(&addr) = symbol_addrs
+            .get("pxCurrentTCBs")
+            .or_else(|| symbol_addrs.get("pxCurrentTCB"))
+        {
             rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(addr)));
         }
 
