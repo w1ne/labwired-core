@@ -324,6 +324,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/arduino-mega-2560-io.elf",
         "script": "examples/renode-onboarding/simavr-atmega2560-smoke.yaml",
     },
+    "simavr-atmega32u4": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega32u4-gpio-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega32u4-smoke.yaml",
+    },
     "efm32g210": {
         "crate": "firmware-efm32g210-smoke",
         "target": "thumbv7m-none-eabi",

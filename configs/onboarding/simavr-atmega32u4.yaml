@@ -5,12 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: simavr-atmega32u4
-description: 'atmega32u4 (Atmel AVR). Declared from the simavr core-model - metadata-only T3 entry, not
-  runnable. Memory geometry: flash 32KB @ 0x0, ram 2560B @ 0x100.'
+description: 'ATmega32U4 AVR profile narrowed to 32 KiB flash, 2.5 KiB SRAM, and GPIO port C for a bounded CPU/GPIO smoke. Other peripherals and pins are outside the measured scope.'
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-atmega32u4.yaml
 provenance:

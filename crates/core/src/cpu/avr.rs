@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! AVR8 CPU (ATmega328P-class) — Harvard flash + byte data space.
+//! AVR8 CPU — Harvard flash + byte data space.
 //!
 //! Public PC is a **byte** address (ELF/DWARF). Fetch uses word index
 //! `pc_byte / 2`. Data space is separate from program flash.
@@ -60,6 +60,9 @@ pub enum AvrModel {
     Atmega328p,
     Atmega1281,
     Atmega2560,
+    /// ATmega32U4 geometry, with the common AVR8 execution path. Its USB,
+    /// interrupt-vector, and non-GPIO peripheral behavior are not modeled.
+    Atmega32u4,
     Attiny202,
     Attiny204,
     Attiny402,
@@ -155,6 +158,8 @@ impl AvrModel {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
+        } else if n.contains("32u4") || n.contains("32u 4") {
+            AvrModel::Atmega32u4
         } else {
             AvrModel::Atmega328p
         }
@@ -164,6 +169,7 @@ impl AvrModel {
             AvrModel::Atmega328p => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
+            AvrModel::Atmega32u4 => 32 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 4 * 1024,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
@@ -183,6 +189,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
+            AvrModel::Atmega32u4 => 0x0100,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 0x3E00,
@@ -207,6 +214,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
+            AvrModel::Atmega32u4 => 0x0AFF,
             AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
@@ -232,7 +240,7 @@ impl AvrModel {
     /// at 0x1_002F..0x1_0034, where the 328P keeps its 8-channel window).
     pub fn adc_input_base(self) -> u64 {
         match self {
-            AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
+            AvrModel::Atmega328p | AvrModel::Atmega32u4 => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Attiny202
             | AvrModel::Attiny204
@@ -736,7 +744,9 @@ impl Avr {
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
+            AvrModel::Atmega328p | AvrModel::Atmega32u4 => {
+                matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
@@ -767,7 +777,9 @@ impl Avr {
     #[inline]
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega328p | AvrModel::Atmega32u4 => {
+                (AVR_PINB..=AVR_PIND + 2).contains(&addr)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }

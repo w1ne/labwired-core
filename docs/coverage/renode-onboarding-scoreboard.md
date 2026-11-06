@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `174`
-- booted: `171/245`
-- boot_and_smoke_passed: `171/245`
-- not_run: `71`
-- pass: `171`
+- run_attempted: `175`
+- booted: `172/245`
+- boot_and_smoke_passed: `172/245`
+- not_run: `70`
+- pass: `172`
 - fail: `3`
-- median_elapsed_ms: `1300`
-- median_elapsed_seconds: `1.3`
+- median_elapsed_ms: `1303`
+- median_elapsed_seconds: `1.303`
 - threshold_seconds: `3600`
-- threshold_met: `174/174`
+- threshold_met: `175/175`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -193,7 +193,7 @@
 | `simavr-atmega324` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `simavr-atmega328` | `pass` | `True` | `yes` | `yes` | `14574` | `14.574` | `True` | `n/a` | n/a | n/a |
 | `simavr-atmega328pb` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-atmega32u4` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `simavr-atmega32u4` | `pass` | `True` | `yes` | `yes` | `92061` | `92.061` | `True` | `n/a` | n/a | n/a |
 | `simavr-atmega48` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `simavr-atmega644` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `simavr-atmega64m1` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
