@@ -29,3 +29,6 @@ The committed `evidence/` directory contains the firmware build log and the
 local deterministic engine smoke output. This is not physical-board testing.
 Vendor availability and lifecycle sources are recorded in
 [`vendor-status.md`](vendor-status.md).
+
+The separate [BME280 profile](../seeed-xiao-esp32c6-bme280/README.md) covers
+the board's documented D4/D5 I2C0 path.
