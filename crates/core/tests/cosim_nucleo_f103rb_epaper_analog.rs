@@ -99,123 +99,15 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
     (millivolts * 4095 / 3300).min(4095) as u16
 }
 
-#[test]
-fn nucleo_f103rb_epaper_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
-    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
-    let mut profile =
-        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
-    assert_eq!(profile.name, "nucleo-f103rb-epaper");
-    assert!(profile.board_io.is_empty());
-    assert_eq!(profile.external_devices.len(), 1);
-    assert_eq!(profile.external_devices[0].id, "epaper");
-    assert_eq!(profile.external_devices[0].r#type, "ssd1680_tricolor_290");
-    assert_eq!(profile.external_devices[0].connection, "spi1");
-    assert_eq!(
-        profile.external_devices[0].config["cs_pin"].as_str(),
-        Some("PA4"),
-        "the analog overlay must retain the panel's chip-select wiring"
-    );
-
-    let analog = SystemManifest::from_file(root(
-        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
-    ))
-    .expect("load generic NTC divider and diode netlists");
-    profile.cosim_models = analog.cosim_models;
-    let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103RB descriptor");
-    assert_eq!(chip.analog_pins["PA0"].channel, 0);
-    assert_eq!(chip.analog_pins["PA1"].channel, 1);
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F103RB e-paper bus");
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
-        .expect("build analog co-simulation")
-        .expect("fixture carries both analog devices");
-    assert_eq!(
-        session.binding_errors(),
-        &[] as &[RoutingError],
-        "the generic netlists must resolve through PA0/PA1 to ADC1 channels 0/1"
-    );
-    for channel in [0, 1, 2] {
-        assert_eq!(
-            adc_channel_count(&mut bus, channel),
-            0xFFFF,
-            "ADC1 channel {channel} begins without an analog source"
-        );
-    }
-
-    let expected_diode_v = diode_load_line_voltage();
-    let mut cycles = 0;
-    let mut ntc_samples = Vec::new();
-    for temperature_c in [-10.0_f64, 25.0, 80.0] {
-        session
-            .set_signal_number("ui.ntc.temperature_c", temperature_c)
-            .expect("set generic NTC temperature");
-        cycles += session.cycles_until_boundary(cycles);
-        let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
-            .expect("solve and route both analog netlists");
-        assert_eq!(steps.len(), 2, "both netlists cross the 1 us boundary");
-        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
-
-        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
-        let expected_ntc_v = 3.3 * 10_000.0 / (ntc_resistance_ohms(temperature_c) + 10_000.0);
-        assert!(
-            (ntc_v - expected_ntc_v).abs() < 1e-9,
-            "at {temperature_c} °C the Beta divider should be {expected_ntc_v} V, got {ntc_v} V"
-        );
-        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
-        assert!(
-            (diode_v - expected_diode_v).abs() < 2e-5,
-            "the Shockley diode load line should be {expected_diode_v} V, got {diode_v} V"
-        );
-
-        for (channel, volts) in [(0, ntc_v), (1, diode_v)] {
-            let expected_count = expected_adc_count(volts);
-            assert_eq!(
-                adc_channel_count(&mut bus, channel),
-                expected_count,
-                "the solved voltage must seed ADC1 channel {channel}"
-            );
-            assert_eq!(
-                stm32f103_adc_convert(&mut bus, channel),
-                u32::from(expected_count),
-                "firmware-visible ADC1 channel {channel} conversion must report the solved voltage"
-            );
-        }
-        assert_eq!(
-            adc_channel_count(&mut bus, 2),
-            0xFFFF,
-            "the neighboring ADC1 channel remains undriven"
-        );
-        ntc_samples.push((ntc_v, adc_channel_count(&mut bus, 0)));
-    }
-
-    assert!(
-        ntc_samples[2].0 > ntc_samples[1].0 && ntc_samples[1].0 > ntc_samples[0].0,
-        "the divider voltage rises with temperature: {ntc_samples:?}"
-    );
-    assert!(
-        ntc_samples[2].1 > ntc_samples[1].1 && ntc_samples[1].1 > ntc_samples[0].1,
-        "ADC counts track the solved temperature-dependent voltage: {ntc_samples:?}"
-    );
-    assert_eq!(
-        ntc_samples[1].1, 2047,
-        "the 25 °C NTC divider is half scale"
-    );
-}
-
-/// The same unrelated analog devices and F1 ADC route must work on the bare
-/// STM32F103C8 profile, which has no board-attached devices to supply a route.
-#[test]
-fn stm32f103_bare_ntc_and_diode_netlists_reach_adc1_end_to_end() {
-    let system_path = root("configs/systems/stm32f103-bare.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load bare STM32F103");
-    assert_eq!(profile.name, "stm32f103-bare");
-    assert!(profile.external_devices.is_empty());
-    assert!(profile.board_io.is_empty());
-
-    // Reuse the generic Beta NTC and Shockley diode netlists already exercised
-    // on the NUCLEO-F103RB. The destination is resolved from this profile's
-    // own chip descriptor, not from the fixture's board identity.
+/// Reuse the generic Beta NTC divider and unrelated Shockley diode netlists on
+/// each STM32F103 profile, resolving through that profile's own chip routes.
+fn assert_stm32f103_generic_analog_profile(
+    mut profile: SystemManifest,
+    system_path: &Path,
+    expected_profile_name: &str,
+    required_peripherals: &[&str],
+) {
+    assert_eq!(profile.name, expected_profile_name);
     let analog = SystemManifest::from_file(root(
         "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
     ))
@@ -223,10 +115,16 @@ fn stm32f103_bare_ntc_and_diode_netlists_reach_adc1_end_to_end() {
     profile.cosim_models = analog.cosim_models;
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103C8 descriptor");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
     assert_eq!(chip.analog_pins["PA0"].channel, 0);
     assert_eq!(chip.analog_pins["PA1"].channel, 1);
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build bare STM32F103 bus");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build STM32F103 bus");
+    for peripheral in required_peripherals {
+        assert!(
+            bus.find_peripheral_index_by_name(peripheral).is_some(),
+            "the profile-specific {peripheral} peripheral remains attached"
+        );
+    }
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
         .expect("profile carries both generic devices");
@@ -301,5 +199,62 @@ fn stm32f103_bare_ntc_and_diode_netlists_reach_adc1_end_to_end() {
     assert_eq!(
         ntc_samples[1].1, 2047,
         "the 25 °C NTC divider is half scale"
+    );
+}
+
+#[test]
+fn nucleo_f103rb_epaper_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
+    assert_eq!(profile.name, "nucleo-f103rb-epaper");
+    assert!(profile.board_io.is_empty());
+    assert_eq!(profile.external_devices.len(), 1);
+    assert_eq!(profile.external_devices[0].id, "epaper");
+    assert_eq!(profile.external_devices[0].r#type, "ssd1680_tricolor_290");
+    assert_eq!(profile.external_devices[0].connection, "spi1");
+    assert_eq!(
+        profile.external_devices[0].config["cs_pin"].as_str(),
+        Some("PA4"),
+        "the analog overlay must retain the panel's chip-select wiring"
+    );
+    assert_stm32f103_generic_analog_profile(profile, &system_path, "nucleo-f103rb-epaper", &[]);
+}
+
+/// The same unrelated analog devices and F1 ADC route must work on the bare
+/// STM32F103C8 profile, which has no board-attached devices to supply a route.
+#[test]
+fn stm32f103_bare_ntc_and_diode_netlists_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/stm32f103-bare.yaml");
+    let profile = SystemManifest::from_file(&system_path).expect("load bare STM32F103");
+    assert!(profile.external_devices.is_empty());
+    assert!(profile.board_io.is_empty());
+    assert_stm32f103_generic_analog_profile(profile, &system_path, "stm32f103-bare", &[]);
+}
+
+/// The integrated-test system extends the common STM32F103 chip with DMA1 and
+/// a DMA-wired UART1. Its profile must retain those peripherals while using the
+/// same descriptor-driven analog routing as the bare F103 target.
+#[test]
+fn stm32f103_integrated_test_ntc_and_diode_netlists_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/stm32f103-integrated-test.yaml");
+    let profile =
+        SystemManifest::from_file(&system_path).expect("load integrated STM32F103 test profile");
+    assert_eq!(profile.external_devices.len(), 0);
+    assert_eq!(profile.board_io.len(), 0);
+    assert_eq!(
+        profile
+            .peripherals
+            .iter()
+            .map(|peripheral| peripheral.id.as_str())
+            .collect::<Vec<_>>(),
+        ["dma1", "uart1"],
+        "the integrated-test profile keeps its DMA and UART additions"
+    );
+    assert_stm32f103_generic_analog_profile(
+        profile,
+        &system_path,
+        "stm32f103-integrated-test",
+        &["dma1", "uart1"],
     );
 }

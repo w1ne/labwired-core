@@ -1,11 +1,11 @@
 # LabWired - Integrated STM32 Test System
 name: "stm32f103-integrated-test"
-#chip: ../chips/stm32f103.yaml
+chip: "../chips/stm32f103.yaml"
 peripherals:
   - id: dma1
     type: dma
     base_address: 0x40020000
-    size: "1k"
+    size: "1KB"
 
   - id: uart1
     type: uart
