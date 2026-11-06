@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 85 have end-to-end analog coverage; 18 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 86 have end-to-end analog coverage; 17 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -97,7 +97,7 @@ Current inventory: **103 profiles; 85 have end-to-end analog coverage; 18 have n
 | `pybadge` | [`cosim_pybadge_analog.rs`](../crates/core/tests/cosim_pybadge_analog.rs)::`pybadge_ntc_and_diode_netlists_reach_adc0_a0_and_a2` — the reusable Beta NTC and Shockley diode netlists resolve through PyBadge A0/PA02 and A2/PB08 into ADC0 AIN0/AIN2; solved voltages, PMUX gating, 12-bit conversion results, temperature response, channel isolation, and the descriptor's six Feather pad-to-channel mappings are asserted |
 | `rp2040-pico` | [`cosim_pico_analog.rs`](../crates/core/tests/cosim_pico_analog.rs)::`rp2040_pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end` — the generic Beta NTC and unrelated Shockley diode reuse the Pico netlists and are solved onto independent ADC0/ADC1 input channels; asserted 12-bit conversions, temperature response, diode-channel isolation, and undriven ADC2 confirm the `rp2040-pico` system profile |
 | `rp2350-zero` | [`cosim_pico_analog.rs`](../crates/core/tests/cosim_pico_analog.rs)::`rp2350_zero_ntc_and_diode_netlists_reach_gp26_gp27_adc_inputs` — the reusable Beta NTC and Shockley diode netlists route through the RP2350A pad map (GP26/AIN0 and GP27/AIN1) into the ADC at its RP2350 base; solves, 12-bit conversions, temperature response, isolation, undriven AIN2, and GP26–GP29 channel assignments are asserted |
-| `s32k388-evb` | **NO E2E analog coverage** |
+| `s32k388-evb` | [`cosim_s32k388_analog.rs`](../crates/core/tests/cosim_s32k388_analog.rs)::`s32k388_evb_ntc_and_diode_netlists_reach_pta11_pta17_siul2_inputs` — generic Beta NTC and unrelated Shockley diode solve onto the EVB's ADC_POT0/PTA11 and ADC_POT1/PTA17 SIUL2 inputs; GPDI reads, threshold crossings, and NTC hysteresis are asserted. Thresholds are simulation assumptions; the S32K388 ADC/BCTU remains unmapped. |
 | `sam-e70-xplained` | **NO E2E analog coverage** |
 | `sam4s-xplained` | **NO E2E analog coverage** |
 | `seeed-xiao-nrf52840-sense` | **NO E2E analog coverage** |

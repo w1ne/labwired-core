@@ -750,6 +750,17 @@ impl SignalRouter {
                         level: false,
                     });
                 }
+                if let Some((peripheral, pin)) = resolve_chip_mapped_input_pin(bus, pad) {
+                    let level = bus.peripherals[peripheral]
+                        .dev
+                        .read_gpio_input(pin)
+                        .unwrap_or(false);
+                    return Ok(WriteBinding::PeripheralInput {
+                        peripheral,
+                        pin,
+                        level,
+                    });
+                }
                 if let Some((peripheral, pin)) = resolve_peripheral_input_pin(bus, pad) {
                     let level = bus.peripherals[peripheral]
                         .dev
@@ -1085,6 +1096,21 @@ fn resolve_peripheral_input_pin(bus: &SystemBus, endpoint: &str) -> Option<(usiz
     let dev = bus.peripherals[index].dev.as_ref();
     let port = dev.pins()?;
     (pin < port.pin_count() && dev.read_gpio_is_output(pin) == Some(false)).then_some((index, pin))
+}
+
+/// Resolve a chip-declared pad to an input on its `PinPort` owner when that
+/// peripheral does not publish a conventional IDR address/bit pair. The
+/// explicit peripheral path (`board.gpio_in.<peripheral>.<pin>`) uses the
+/// adjacent helper below; this keeps the pad-name form working for mapped
+/// devices such as SIUL2, whose GPIO register layout does not have one bit per
+/// pad in a single input register.
+fn resolve_chip_mapped_input_pin(bus: &SystemBus, pad: &str) -> Option<(usize, u8)> {
+    let (peripheral, pin) = bus.pin_map.get(&pad.to_ascii_uppercase())?;
+    let index = bus.find_peripheral_index_by_name(peripheral)?;
+    let dev = bus.peripherals[index].dev.as_ref();
+    let port = dev.pins()?;
+    (*pin < port.pin_count() && dev.read_gpio_is_output(*pin) == Some(false))
+        .then_some((index, *pin))
 }
 
 /// Refuse an ADC route the converter cannot take: a peripheral the bus does

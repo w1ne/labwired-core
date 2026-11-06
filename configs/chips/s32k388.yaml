@@ -76,11 +76,14 @@ flash_boot_alias: false
 reset_vector_offset: 0x1000
 
 pins:
-  # Board-relevant pads (MSCR index = 32 * port + pin). PTF23 is the
-  # S32K388EVB-Q289 green LED (NXP "Start Developing With S32K388EVB-Q289");
-  # the other LED pads and SW10 (PTA1) are from the Renode nxp-s32k388evb.repl
-  # cross-check only, not from the board's hardware manual.
+  # Board-relevant pads (MSCR index = 32 * port + pin). PTA11 / PTA17 are
+  # ADC_POT0 / ADC_POT1 on the S32K3X8EVB-Q289 hardware manual (the ADC/BCTU
+  # itself is not mapped here). PTF23 is the S32K388EVB-Q289 green LED (NXP
+  # "Start Developing With S32K388EVB-Q289"); the other LED pads and SW10
+  # (PTA1) are from the Renode nxp-s32k388evb.repl cross-check only.
   PTA1: { gpio: "siul2", bit: 1 }
+  PTA11: { gpio: "siul2", bit: 11 }
+  PTA17: { gpio: "siul2", bit: 17 }
   PTF17: { gpio: "siul2", bit: 177 }
   PTF18: { gpio: "siul2", bit: 178 }
   PTF19: { gpio: "siul2", bit: 179 }
