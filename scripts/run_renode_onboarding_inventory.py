@@ -103,6 +103,26 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml",
     },
+    "zynqmp": {
+        "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zynqmp-a53-uart-smoke.yaml",
+    },
+    "zynqmp-zcu102-revA": {
+        "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zynqmp-zcu102-revA-a53-uart-smoke.yaml",
+    },
+    "zynqmp-zcu102-revB": {
+        "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zynqmp-zcu102-revB-a53-uart-smoke.yaml",
+    },
+    "zynqmp-zcu104": {
+        "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zynqmp-zcu104-a53-uart-smoke.yaml",
+    },
+    "zynqmp-zcu106-vcu": {
+        "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zynqmp-zcu106-vcu-a53-uart-smoke.yaml",
+    },
     "cortex-a53-gicv2": {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml",

@@ -53,12 +53,6 @@
 /// `fixtures/` and `configs/ci/`.
 pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
-        "allegro_e310",
-        "Allegro E310 power/clock companion on the ZynqMP ZCU106 VCU board. Renode-imported \
-         onboarding descriptor; no model in this engine, so the window answers reads with \
-         zeros. Used by: onboarding/zynqmp-zcu106-vcu.",
-    ),
-    (
         "armsnoopcontrolunit",
         "ARM Snoop Control Unit (MPCore SCU). Renode-imported onboarding descriptor; no model \
          in this engine, so the window answers reads with zeros. Used by: \
@@ -113,12 +107,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/zynq-7000.",
     ),
     (
-        "cc1200",
-        "TI CC1200 sub-GHz transceiver. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/zolertia-firefly.",
-    ),
-    (
         "cc2520",
         "TI CC2520 802.15.4 radio. Renode-imported onboarding descriptor; no model in this \
          engine, so the window answers reads with zeros. Used by: \
@@ -153,13 +141,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "TI CC2538 watchdog. Renode-imported onboarding descriptor; no model in this engine, \
          so the window answers reads with zeros. Used by: onboarding/cc2538, \
          onboarding/zolertia-firefly.",
-    ),
-    (
-        "cosimulatedcfu",
-        "Renode co-simulated custom function unit (needs an external Verilator process \
-         LabWired does not run). Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/litex_vexriscv_verilated_cfu.",
     ),
     (
         "dwt",
@@ -351,14 +332,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          ordering. Used by: rp2040, rp2350, stm32f401, stm32f405, stm32f407 (+8 more).",
     ),
     (
-        "pca9548",
-        "NXP PCA9548 I2C switch. LabWired models bus switches as external devices \
-         (validate_i2c_mux_topology), not as an MCU peripheral. Renode-imported onboarding \
-         descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/zynqmp-zcu102-revA, onboarding/zynqmp-zcu102-revB, \
-         onboarding/zynqmp-zcu104.",
-    ),
-    (
         "pl031",
         "ARM PrimeCell PL031 RTC. Renode-imported onboarding descriptor; no model in this \
          engine, so the window answers reads with zeros. Used by: \
@@ -451,13 +424,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "system_stub",
         "ESP32 / ESP32-S3 SYSTEM (and classic I2S/PCNT/RMT/UHCI) windows, authored as \
          explicit placeholders so the address decodes. Used by: esp32, esp32s3, esp32s3-zero.",
-    ),
-    (
-        "tca6416",
-        "TI TCA6416 I2C GPIO expander. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/zynqmp-zcu102-revA, onboarding/zynqmp-zcu102-revB, \
-         onboarding/zynqmp-zcu104.",
     ),
     (
         "tegradisplay",

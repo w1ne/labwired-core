@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `207`
-- booted: `205/245`
-- boot_and_smoke_passed: `205/245`
-- not_run: `38`
-- pass: `205`
+- run_attempted: `212`
+- booted: `210/245`
+- boot_and_smoke_passed: `210/245`
+- not_run: `33`
+- pass: `210`
 - fail: `2`
-- median_elapsed_ms: `1263`
-- median_elapsed_seconds: `1.263`
+- median_elapsed_ms: `1223`
+- median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
-- threshold_met: `207/207`
+- threshold_met: `212/212`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -257,8 +257,8 @@
 | `zedboard` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
 | `zolertia-firefly` | `pass` | `True` | `yes` | `yes` | `1036` | `1.036` | `True` | `n/a` | n/a | n/a |
 | `zynq-7000` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
-| `zynqmp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted. |
-| `zynqmp-zcu102-revA` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted. |
-| `zynqmp-zcu102-revB` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted. |
-| `zynqmp-zcu104` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted. |
-| `zynqmp-zcu106-vcu` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted. |
+| `zynqmp` | `pass` | `True` | `yes` | `yes` | `246519` | `246.519` | `True` | `n/a` | n/a | n/a |
+| `zynqmp-zcu102-revA` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `n/a` | n/a | n/a |
+| `zynqmp-zcu102-revB` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `n/a` | n/a | n/a |
+| `zynqmp-zcu104` | `pass` | `True` | `yes` | `yes` | `595` | `0.595` | `True` | `n/a` | n/a | n/a |
+| `zynqmp-zcu106-vcu` | `pass` | `True` | `yes` | `yes` | `575` | `0.575` | `True` | `n/a` | n/a | n/a |

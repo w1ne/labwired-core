@@ -17,6 +17,11 @@ on:
       - "configs/chips/**"
       - "configs/onboarding/renesas_rz_g2l.yaml"
       - "configs/onboarding/cortex-a78.yaml"
+      - "configs/onboarding/zynqmp.yaml"
+      - "configs/onboarding/zynqmp-zcu102-revA.yaml"
+      - "configs/onboarding/zynqmp-zcu102-revB.yaml"
+      - "configs/onboarding/zynqmp-zcu104.yaml"
+      - "configs/onboarding/zynqmp-zcu106-vcu.yaml"
       - "configs/onboarding/simavr-atmega1280.yaml"
       - "configs/onboarding/simavr-atmega128.yaml"
       - "configs/onboarding/simavr-atmega1281.yaml"
@@ -1477,6 +1482,29 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/nxp-mimx8ml-a53-cpu-smoke.yaml
             system: configs/systems/onboarding/nxp-mimx8ml.yaml
+          # Zynq UltraScale+ MPSoC: one Cortex-A53 PE, low DDR and PS UART0
+          # (Cadence, polled TX). The smoke asserts the UART banner; no GIC,
+          # timer, RPU or other PS peripheral is exercised or declared.
+          - id: zynqmp
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp.yaml
+          - id: zynqmp-zcu102-revA
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu102-revA-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu102-revA.yaml
+          - id: zynqmp-zcu102-revB
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu102-revB-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu102-revB.yaml
+          - id: zynqmp-zcu104
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu104-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu104.yaml
+          - id: zynqmp-zcu106-vcu
+            prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
+            script: examples/renode-onboarding/zynqmp-zcu106-vcu-a53-uart-smoke.yaml
+            system: configs/systems/onboarding/zynqmp-zcu106-vcu.yaml
           # One Cortex-A53 PE and imported DDR only. The CPU-only fixture does
           # not exercise the named GICv2 or the omitted timer/UART/RTC blocks.
           - id: cortex-a53-gicv2
