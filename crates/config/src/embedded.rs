@@ -232,6 +232,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/ina219.yaml"),
     ),
     (
+        &["max17048"],
+        include_str!("../../../configs/devices/max17048.yaml"),
+    ),
+    (
         &["ads1115"],
         include_str!("../../../configs/devices/ads1115.yaml"),
     ),

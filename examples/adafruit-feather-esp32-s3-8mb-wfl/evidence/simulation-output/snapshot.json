@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070464960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464960,
+      2151089245,
+      1070464912,
+      1077347512,
+      1070464962,
+      0,
+      0,
+      0,
+      1070464912
+    ],
+    "pc": 1077347421,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 3000000,
+  "cycles": 3000000,
+  "instructions": 3000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 3000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 3000000
+    }
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "64d4ac8cb2cb6a9555087b781761915f3c0e1e32aa1b69b7847b46a5a2c6f783",
+  "config": {
+    "firmware": "examples/adafruit-feather-esp32-s3-8mb-wfl/../../target/xtensa-esp32s3-none-elf/release/firmware-adafruit-feather-esp32-s3-8mb-wfl-smoke",
+    "system": "examples/adafruit-feather-esp32-s3-8mb-wfl/../../configs/systems/adafruit-feather-esp32-s3-8mb-wfl.yaml",
+    "script": "examples/adafruit-feather-esp32-s3-8mb-wfl/onboarding-smoke.yaml"
+  }
+}

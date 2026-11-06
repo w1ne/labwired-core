@@ -1,0 +1,33 @@
+# MAX17048 Li-ion/Li-polymer fuel gauge — deterministic register snapshot.
+# Datasheet: MAX17048/MAX17049, VCELL (0x02) and SOC (0x04).
+type: max17048
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x36
+    auto_increment: true
+    unmapped_byte: 0
+    registers:
+      # VCELL is a 16-bit big-endian word at 78.125 uV per bit.
+      - { name: VCELL, addr: 0x02, width: 2, endian: be, access: r, source: battery_voltage, encode: { scale: 12800.0 } }
+      # SOC is a 16-bit big-endian word at 1/256 percent per bit.
+      - { name: SOC, addr: 0x04, width: 2, endian: be, access: r, source: state_of_charge, encode: { scale: 256.0 } }
+
+metadata:
+  label: "MAX17048 Fuel Gauge"
+  summary: "Li-ion/Li-polymer cell voltage and state-of-charge registers over I2C."
+  detail: >-
+    Deterministic register snapshot at the MAX17048's 7-bit address 0x36.
+    VCELL and SOC are stimulus-driven, big-endian register words and support
+    the pointer-write / repeated-start / auto-increment read used by common
+    drivers. This model does not implement ModelGauge's nonlinear estimation,
+    reset and sleep state, alerts, timing, or voltage-history behavior. It is
+    intended for firmware wiring and register-read tests, not battery-life
+    prediction.
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x36." }
+  inputs:
+    - { key: battery_voltage, label: "Battery voltage", unit: "V", min: 2.5, max: 5.0, default: 3.85 }
+    - { key: state_of_charge, label: "State of charge", unit: "%", min: 0.0, max: 100.0, default: 72.5 }

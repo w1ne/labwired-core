@@ -1,0 +1,15 @@
+# Adafruit ESP32-S3 Feather, 8 MB flash / no PSRAM / w.FL SKU (#5885).
+# Narrow profile: onboard MAX17048 reads through I2C0 and UART0 firmware output.
+name: "adafruit-feather-esp32-s3-8mb-wfl"
+chip: "../chips/esp32s3-feather-8mb.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "max17048"
+    type: "max17048"
+    connection: "i2c0"
+    route:
+      sda: "GPIO3"
+      scl: "GPIO4"
+    config:
+      i2c_address: 0x36
