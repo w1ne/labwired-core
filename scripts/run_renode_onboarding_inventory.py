@@ -68,6 +68,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
         "script": "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml",
     },
+    "vybrid": {
+        "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
+        "script": "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml",
+    },
     "arvsom": {
         "crate": "firmware-arvsom-rv64-cpu-smoke",
         "target": "riscv64imac-unknown-none-elf",

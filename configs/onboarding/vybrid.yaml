@@ -1,21 +1,25 @@
 name: vybrid
-description: 'NXP (Freescale) Vybrid highly integrated mixed-signal asymmetric multi-core
-  SoC (ARM Cortex-A5 / Cortex-M4). Architecture: ARMv7-A / ARMv7-M.'
+description: >-
+  NXP Vybrid imported profile measured for one Cortex-M4 integer subset using
+  on-chip OCRAM. Cortex-A5, peripherals, aliases, and reset-vector boot are not
+  covered.
 family: NXP Vybrid
 url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/vybrid-controller-solutions:VYBRID
-code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
-  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+verified: false
 system: systems/onboarding/vybrid.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-focused-smoke
+  reason: cortex-m4-ocram-only; whole_platform_not_verified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:38.289671+00:00'
+    cortex_m4_integer_smoke: true
+    whole_platform: false
+    cortex_a5: false
+    peripherals: false
+    reset_vector_boot: false
+  timestamp_utc: '2026-11-06T01:55:35+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/vybrid.md
 provenance:

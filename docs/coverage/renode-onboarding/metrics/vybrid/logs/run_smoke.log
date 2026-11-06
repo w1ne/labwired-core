@@ -1,0 +1,5 @@
+2026-11-06T01:55:35.748481Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/vybrid.yaml
+2026-11-06T01:55:35.748996Z  INFO labwired_loader: ELF Entry Point: 0x3f000001
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  1/1 checks · vybrid-cortex-m4-smoke · 100000 steps · 0.00s

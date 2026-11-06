@@ -113,6 +113,7 @@ on:
       - "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml"
       - "scripts/build_colibri_vf61_cortex_m4_smoke.sh"
       - "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
+      - "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml"
       - "scripts/build_imx8mplus_a53_cpu_smoke.sh"
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.S"
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.ld"
@@ -1223,6 +1224,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
             script: examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml
             system: configs/systems/onboarding/colibri-vf61.yaml
+          # The imported Vybrid M4 and OCRAM only; A5, devices and reset boot
+          # are outside the shared direct-ELF integer smoke.
+          - id: vybrid
+            prebuilt_firmware: tests/fixtures/colibri-vf61-cortex-m4-smoke.elf
+            script: examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml
+            system: configs/systems/onboarding/vybrid.yaml
           # One Cortex-M55-HP and local ITCM/DTCM only. The integer smoke does
           # not claim Helium, other cores, peripherals, or the boot flow.
           - id: alif_ae822fa0e5597bs0
