@@ -64,7 +64,7 @@
 //! calculations, so drift or an incorrect equation fails a test.
 
 use super::netlist::BjtModel;
-use super::netlist::{JfetModel, MosChannelChargeModel, Mosfet};
+use super::netlist::{JfetModel, MosChannelChargeModel, MosModel, Mosfet};
 
 /// Temperature every device parameter is evaluated at, in kelvin.
 ///
@@ -130,18 +130,38 @@ pub fn diode_depletion_parameters_at_temperature(
         return (cjo, vj);
     }
 
-    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
-    let vt = thermal_voltage_at_temperature(temperature_kelvin);
-    let eg_nominal = 1.16 - 7.02e-4 * nominal_kelvin * nominal_kelvin / (nominal_kelvin + 1108.0);
-    let eg =
-        1.16 - 7.02e-4 * temperature_kelvin * temperature_kelvin / (temperature_kelvin + 1108.0);
-    let ratio = temperature_kelvin / nominal_kelvin;
-    let vj_at_temperature = vj * ratio - vt * (3.0 * ln(ratio) + eg_nominal / nominal_vt - eg / vt);
+    let vj_at_temperature =
+        silicon_junction_potential_at_temperature(vj, nominal_kelvin, temperature_kelvin);
     let cjo_at_temperature = cjo
         * (1.0
             + m * (4.0e-4 * (temperature_kelvin - nominal_kelvin) - vj_at_temperature / vj + 1.0));
 
     (cjo_at_temperature, vj_at_temperature)
+}
+
+/// Silicon energy gap at an absolute temperature, eV, from the Varshni fit
+/// ngspice uses for its junction-potential and level-1 MOSFET laws.
+pub fn silicon_energy_gap_ev(temperature_kelvin: f64) -> f64 {
+    1.16 - 7.02e-4 * temperature_kelvin * temperature_kelvin / (temperature_kelvin + 1108.0)
+}
+
+/// A silicon built-in potential (`VJ`, `PB` or MOSFET `PHI`) measured at
+/// `nominal_kelvin`, moved to `temperature_kelvin` by ngspice's law:
+/// `P(T) = P·T/Tn − Vt(T)·(3·ln(T/Tn) + Eg(Tn)/Vt(Tn) − Eg(T)/Vt(T))`.
+pub fn silicon_junction_potential_at_temperature(
+    potential: f64,
+    nominal_kelvin: f64,
+    temperature_kelvin: f64,
+) -> f64 {
+    if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+        return potential;
+    }
+    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let eg_nominal = silicon_energy_gap_ev(nominal_kelvin);
+    let eg = silicon_energy_gap_ev(temperature_kelvin);
+    let ratio = temperature_kelvin / nominal_kelvin;
+    potential * ratio - vt * (3.0 * ln(ratio) + eg_nominal / nominal_vt - eg / vt)
 }
 
 /// Conductance added across every pn junction, siemens.
@@ -315,6 +335,77 @@ pub fn jfet_parameters_at_temperature(
     );
     adjusted.cgs = cgs;
     adjusted.cgd = cgd;
+    adjusted.pb = pb;
+    adjusted
+}
+
+/// SPICE level-1 MOSFET parameters adjusted for an explicit instance
+/// temperature, following ngspice's `mos1temp` laws:
+///
+/// - `KP` scales by `(T/TNOM)^-1.5` (mobility);
+/// - `PHI` and `PB` follow [`silicon_junction_potential_at_temperature`];
+/// - `VTO` moves with the bandgap and the surface potential,
+///   `VTO(T) = VTO + type·γ·(√PHI(T) − √PHI) + type·½(PHI(T) − PHI)
+///   + ½(Eg(TNOM) − Eg(T))`, in card (signed) coordinates;
+/// - bulk-junction `IS` scales by `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))` —
+///   level 1 has no `XTI`, and its junctions use emission coefficient 1;
+/// - `CBD`/`CBS`/`CJ` (grading `MJ`) and `CJSW` (grading `MJSW`) follow the
+///   same depletion law as the diode.
+///
+/// `RD`/`RS`/`RSH`, `LAMBDA`, `GAMMA` and the overlap capacitances have no
+/// level-1 temperature law. `None`, or `TEMP == TNOM`, returns the card as
+/// written.
+pub fn mos_parameters_at_temperature(
+    model: MosModel,
+    temperature_celsius: Option<f64>,
+) -> MosModel {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return model;
+    };
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    if nominal_kelvin.to_bits() == temperature_kelvin.to_bits() {
+        return model;
+    }
+
+    let ratio = temperature_kelvin / nominal_kelvin;
+    let vt = thermal_voltage_at_temperature(temperature_kelvin);
+    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
+    let eg = silicon_energy_gap_ev(temperature_kelvin);
+    let eg_nominal = silicon_energy_gap_ev(nominal_kelvin);
+    let sign = model.polarity.sign();
+
+    let mut adjusted = model;
+    adjusted.kp = model.kp / (ratio * libm::sqrt(ratio));
+    adjusted.phi =
+        silicon_junction_potential_at_temperature(model.phi, nominal_kelvin, temperature_kelvin);
+    adjusted.vto = model.vto
+        + sign * model.gamma * (libm::sqrt(adjusted.phi) - libm::sqrt(model.phi))
+        + sign * 0.5 * (adjusted.phi - model.phi)
+        + 0.5 * (eg_nominal - eg);
+    adjusted.is = model.is * exp_clamped(eg_nominal / nominal_vt - eg / vt);
+
+    let bottom = |capacitance: f64| {
+        diode_depletion_parameters_at_temperature(
+            capacitance,
+            model.pb,
+            model.mj,
+            nominal_kelvin,
+            temperature_kelvin,
+        )
+    };
+    let (cbd, pb) = bottom(model.cbd);
+    adjusted.cbd = cbd;
+    adjusted.cbs = bottom(model.cbs).0;
+    adjusted.cj = bottom(model.cj).0;
+    adjusted.cjsw = diode_depletion_parameters_at_temperature(
+        model.cjsw,
+        model.pb,
+        model.mjsw,
+        nominal_kelvin,
+        temperature_kelvin,
+    )
+    .0;
     adjusted.pb = pb;
     adjusted
 }
@@ -1441,13 +1532,13 @@ pub fn mos_ward_dutton_channel_charge(
     vbd: f64,
     vbs: f64,
 ) -> MosChannelChargeOp {
-    if mosfet.model.channel_charge_model != MosChannelChargeModel::WardDutton {
+    if mosfet.operating_model.channel_charge_model != MosChannelChargeModel::WardDutton {
         return MosChannelChargeOp {
             q: [0.0; 4],
             dq_dv: [[0.0; 3]; 4],
         };
     }
-    let Some(tox) = mosfet.model.tox else {
+    let Some(tox) = mosfet.operating_model.tox else {
         return MosChannelChargeOp {
             q: [0.0; 4],
             dq_dv: [[0.0; 3]; 4],
@@ -1457,7 +1548,7 @@ pub fn mos_ward_dutton_channel_charge(
     let vgs = Dual3::variable(vgs, 0);
     let vds = Dual3::variable(vds, 1);
     let vbs = Dual3::variable(vbs, 2);
-    let sign = mosfet.model.polarity.sign();
+    let sign = mosfet.operating_model.polarity.sign();
     let reversed = vds.value < 0.0;
     let (vgs_eff, vds_eff, vbs_eff) = if reversed {
         (
@@ -1474,7 +1565,7 @@ pub fn mos_ward_dutton_channel_charge(
         (vgs, vds, vbs)
     };
 
-    let model = mosfet.model;
+    let model = mosfet.operating_model;
     let threshold = if model.gamma == 0.0 {
         Dual3::constant(sign * model.vto)
     } else {

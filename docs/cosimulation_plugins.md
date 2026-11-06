@@ -572,8 +572,15 @@ use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
 use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
 `TEMP` is supplied. The same `TEMP` scales JFET gate-junction `IS` by `EG`/`XTI`
 (defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD` by the diode depletion law
-at grading 0.5, and evaluates the gate diodes at that `kT/q`. MOSFET temperature
-laws are not modeled. These are external instance temperatures; self-heating
+at grading 0.5, and evaluates the gate diodes at that `kT/q`. A level-1 MOSFET
+instance `TEMP` (card `TNOM`, default 27 °C) follows ngspice's `mos1temp` laws:
+`KP` scales by `(T/TNOM)^-1.5`, `PHI` and `PB` follow the silicon potential law,
+`VTO` moves by `type·γ·(√PHI(T) − √PHI) + type·½(PHI(T) − PHI) + ½(Eg(TNOM) − Eg(T))`,
+bulk-junction `IS` scales by `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))`, the bulk
+depletion capacitances (`CBD`/`CBS`/`CJ` with `MJ`, `CJSW` with `MJSW`) follow
+the diode depletion law, and the bulk diodes use `kT/q` at `TEMP`. `LAMBDA`,
+`GAMMA`, `RD`/`RS`/`RSH` and the overlap capacitances have no level-1
+temperature law. These are external instance temperatures; self-heating
 is not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the
 deck is specifically checking an in-core temperature law.

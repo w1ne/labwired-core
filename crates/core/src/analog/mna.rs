@@ -124,13 +124,13 @@ fn mos_channel_capacitance_halves(
     vbd: f64,
     vbs: f64,
 ) -> [f64; 3] {
-    if mosfet.model.channel_charge_model != MosChannelChargeModel::Meyer {
+    if mosfet.operating_model.channel_charge_model != MosChannelChargeModel::Meyer {
         return [0.0; 3];
     }
-    let Some(tox) = mosfet.model.tox else {
+    let Some(tox) = mosfet.operating_model.tox else {
         return [0.0; 3];
     };
-    let sign = mosfet.model.polarity.sign();
+    let sign = mosfet.operating_model.polarity.sign();
     let reversed = vds < 0.0;
     let (vgs_eff, vds_eff, vbs_eff) = if reversed {
         (vgs - vds, -vds, vbd)
@@ -142,9 +142,9 @@ fn mos_channel_capacitance_halves(
         vgs_eff,
         vds_eff,
         vbs_eff,
-        sign * mosfet.model.vto,
-        mosfet.model.gamma,
-        mosfet.model.phi,
+        sign * mosfet.operating_model.vto,
+        mosfet.operating_model.gamma,
+        mosfet.operating_model.phi,
         cox,
     );
     if reversed {
@@ -929,7 +929,7 @@ impl Solver {
         }
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
-            let sign = mosfet.model.polarity.sign();
+            let sign = mosfet.operating_model.polarity.sign();
             let voltages = [
                 sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
                 sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
@@ -951,7 +951,7 @@ impl Solver {
                 core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
             self.mos_overlap_i[index] = [0.0; 3];
 
-            let sign = mosfet.model.polarity.sign();
+            let sign = mosfet.operating_model.polarity.sign();
             let channel_caps = mos_channel_capacitance_halves(
                 mosfet,
                 sign * voltages[0],
@@ -965,7 +965,7 @@ impl Solver {
             self.mos_channel_i[index] = [0.0; 3];
             self.mos_channel_cap_half[index] = channel_caps;
 
-            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+            if mosfet.operating_model.channel_charge_model == MosChannelChargeModel::WardDutton {
                 let vgs = sign * node_diff(&self.node_v, mosfet.g, mosfet.junction_s);
                 let vds = sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s);
                 let vbd = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d);
@@ -1347,7 +1347,7 @@ impl Solver {
                 self.mos_channel_cap_half[index][junction] = channel_caps[junction];
             }
 
-            if mosfet.model.channel_charge_model == MosChannelChargeModel::WardDutton {
+            if mosfet.operating_model.channel_charge_model == MosChannelChargeModel::WardDutton {
                 let charge = device::mos_ward_dutton_channel_charge(
                     mosfet,
                     self.mos_vgs[index],
@@ -1977,7 +1977,7 @@ impl Solver {
 
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
-            let sign = mosfet.model.polarity.sign();
+            let sign = mosfet.operating_model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.junction_s);
             let raw_ds = sign * node_diff(nodes, mosfet.junction_d, mosfet.junction_s);
@@ -2009,7 +2009,8 @@ impl Solver {
             };
 
             let eff_ds = device::vds_limit(eff_ds_new, eff_ds_old);
-            let eff_gs = device::fet_limit(eff_gs_new, eff_gs_old, sign * mosfet.model.vto);
+            let eff_gs =
+                device::fet_limit(eff_gs_new, eff_gs_old, sign * mosfet.operating_model.vto);
             let (gs, ds) = if reversed_now {
                 (eff_gs - eff_ds, -eff_ds)
             } else {
@@ -2019,8 +2020,9 @@ impl Solver {
             self.mos_vgs[index] = gs;
             self.mos_vds[index] = ds;
 
-            let vte = device::THERMAL_VOLTAGE;
-            let critical = device::pn_critical_voltage(mosfet.model.is, 1.0);
+            let vte = mosfet.thermal_voltage();
+            let critical =
+                device::pn_critical_voltage_at_thermal_voltage(mosfet.operating_model.is, 1.0, vte);
             let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, critical);
             let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, critical);
             self.limiter_clamped |= bd != raw_bd || bs != raw_bs;
@@ -2315,8 +2317,8 @@ impl Solver {
         }
 
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
-            let sign = mosfet.model.polarity.sign();
-            let model = mosfet.model;
+            let sign = mosfet.operating_model.polarity.sign();
+            let model = mosfet.operating_model;
             let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
 
             // Below Vto the channel is off, so GMIN connects drain to source.
@@ -2492,7 +2494,12 @@ impl Solver {
             // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
             // the bulk is the anode and drain/source are the cathodes; the
             // polarity sign reverses that orientation for PMOS.
-            let bd = device::diode_op(self.mos_vbd[index], model.is, 1.0);
+            let bd = device::diode_op_at_thermal_voltage(
+                self.mos_vbd[index],
+                model.is,
+                1.0,
+                mosfet.thermal_voltage(),
+            );
             let bd_terms = [(
                 bd.gd,
                 mosfet.bulk,
@@ -2509,7 +2516,12 @@ impl Solver {
                 &negate(&bd_terms),
             );
 
-            let bs = device::diode_op(self.mos_vbs[index], model.is, 1.0);
+            let bs = device::diode_op_at_thermal_voltage(
+                self.mos_vbs[index],
+                model.is,
+                1.0,
+                mosfet.thermal_voltage(),
+            );
             let bs_terms = [(
                 bs.gd,
                 mosfet.bulk,

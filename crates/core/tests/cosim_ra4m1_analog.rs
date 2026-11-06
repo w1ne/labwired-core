@@ -51,6 +51,47 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent diode-connected level-1 NMOS root: the bias resistor feeds a
+/// saturated device whose `VTO`, `KP` and `PHI` follow ngspice's `mos1temp`
+/// laws at the instance temperature (source and bulk grounded).
+fn mosfet_thermometer_voltage(bias_v: f64, temperature_c: f64) -> f64 {
+    const BIAS_OHMS: f64 = 1e6;
+    const VTO: f64 = 0.7;
+    const KP: f64 = 50e-6;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.65;
+    const W_OVER_L: f64 = 10.0;
+    const TNOM_K: f64 = 25.0 + 273.15;
+    const GMIN: f64 = 1e-12;
+    let thermal_v = |kelvin: f64| 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    let bandgap = |kelvin: f64| 1.16 - 7.02e-4 * kelvin * kelvin / (kelvin + 1108.0);
+    let kelvin = temperature_c + 273.15;
+    let ratio = kelvin / TNOM_K;
+    let vt = thermal_v(kelvin);
+    let phi_t = PHI * ratio
+        - vt * (3.0 * ratio.ln() + bandgap(TNOM_K) / thermal_v(TNOM_K) - bandgap(kelvin) / vt);
+    let vto_t = VTO
+        + GAMMA * (phi_t.sqrt() - PHI.sqrt())
+        + 0.5 * (phi_t - PHI)
+        + 0.5 * (bandgap(TNOM_K) - bandgap(kelvin));
+    let beta_t = KP / ratio.powf(1.5) * W_OVER_L;
+    let residual = |gate_v: f64| {
+        let overdrive = (gate_v - vto_t).max(0.0);
+        // GMIN drain-source plus the reverse bulk-drain junction's GMIN.
+        (bias_v - gate_v) / BIAS_OHMS - 0.5 * beta_t * overdrive * overdrive - 2.0 * GMIN * gate_v
+    };
+    let (mut low, mut high) = (0.0, bias_v);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 fn signal_number(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(value)) => *value,
@@ -63,10 +104,28 @@ fn scan_adc14<C: Cpu>(
     session: &mut CosimSession,
     adcer: u16,
 ) -> [u16; 3] {
+    run_adc14_scan(machine, session, adcer, SCAN_CHANNELS);
+    [
+        machine.bus.read_u16(ADDR0).expect("read AN000 result"),
+        machine
+            .bus
+            .read_u16(ADDR0 + 2)
+            .expect("read undriven AN001 result"),
+        machine.bus.read_u16(ADDR0 + 18).expect("read AN009 result"),
+    ]
+}
+
+/// Run one firmware-visible ADC14 group-A software scan over `channels`.
+fn run_adc14_scan<C: Cpu>(
+    machine: &mut Machine<C>,
+    session: &mut CosimSession,
+    adcer: u16,
+    channels: u16,
+) {
     machine
         .bus
-        .write_u16(ADANSA0, SCAN_CHANNELS)
-        .expect("select A1/AN000, neighboring AN001 and A0/AN009");
+        .write_u16(ADANSA0, channels)
+        .expect("select the ADC14 scan channels");
     machine
         .bus
         .write_u16(ADCER, adcer)
@@ -92,15 +151,6 @@ fn scan_adc14<C: Cpu>(
         );
     }
     assert!(completed, "ADC14 group-A scan did not complete");
-
-    [
-        machine.bus.read_u16(ADDR0).expect("read AN000 result"),
-        machine
-            .bus
-            .read_u16(ADDR0 + 2)
-            .expect("read undriven AN001 result"),
-        machine.bus.read_u16(ADDR0 + 18).expect("read AN009 result"),
-    ]
 }
 
 #[test]
@@ -204,4 +254,133 @@ fn uno_r4_minima_ntc_and_diode_netlists_reach_a0_a1_and_adc14() {
         "the 14-bit ADC result follows the temperature-dependent voltage: {samples:?}"
     );
     assert_eq!(samples[3].2, 8191, "25 °C yields half scale at 14 bits");
+}
+
+#[test]
+fn uno_r4_minima_heated_mosfet_thermometer_reaches_a2_a3_adc14_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/arduino-uno-r4-minima.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Uno R4 profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/arduino-uno-r4-minima/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load generic NTC and diode netlists");
+    let thermometer = SystemManifest::from_file(root(
+        "examples/arduino-uno-r4-minima/analog-mosfet-thermometer.yaml",
+    ))
+    .expect("load the generic NMOS threshold thermometer netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(thermometer.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RA4M1 descriptor");
+    for (pad, channel) in [("P014", 9), ("P000", 0), ("P001", 1), ("P002", 2)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Uno R4 bus");
+    let (cpu, _) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    const IDLE: u32 = 0x2000_2000;
+    machine
+        .bus
+        .write_u16(u64::from(IDLE), 0xE7FE)
+        .expect("place a branch-to-self instruction in RAM");
+    machine.cpu.set_pc(IDLE);
+    machine.cpu.set_sp(0x2000_7F00);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
+        .expect("build analog co-simulation")
+        .expect("profile contains analog netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "A0..A3 must resolve through descriptor-backed ADC14 analog pins"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the independent NTC temperature");
+
+    for bias_v in [2.5_f64, 5.0] {
+        session
+            .set_signal_number("ui.mos_thermo.bias_v", bias_v)
+            .expect("drive the shared NMOS bias");
+        let mut reached_boundary = false;
+        for _ in 0..256 {
+            let advance = session
+                .advance(&mut machine, AdvanceRequest::single())
+                .expect("advance the board and analog models in lockstep");
+            assert!(
+                advance.new_routing_errors.is_empty(),
+                "unexpected route errors: {:?}",
+                advance.new_routing_errors
+            );
+            if !advance.routed.is_empty() {
+                reached_boundary = true;
+                break;
+            }
+        }
+        assert!(
+            reached_boundary,
+            "analog models did not reach their boundary"
+        );
+
+        let reference_v = signal_number(&session, "board.analog.p001_volts");
+        let heated_v = signal_number(&session, "board.analog.p002_volts");
+        for (label, measured, temperature_c) in
+            [("TNOM", reference_v, 25.0), ("85 C", heated_v, 85.0)]
+        {
+            let expected = mosfet_thermometer_voltage(bias_v, temperature_c);
+            assert!(
+                (measured - expected).abs() < 2e-5,
+                "{label} NMOS at {bias_v} V bias should sit at {expected} V, got {measured} V"
+            );
+        }
+        // VTO(T) falls ~1.5 mV/K, partly offset by KP(T): a missing law
+        // either collapses the drop or flips its sign.
+        let drop = reference_v - heated_v;
+        assert!(
+            (0.04..0.12).contains(&drop),
+            "the heated NMOS must read lower at {bias_v} V bias, got {drop} V"
+        );
+
+        let ntc_v = signal_number(&session, "board.analog.p014_volts");
+        let diode_v = signal_number(&session, "board.analog.p000_volts");
+        assert!(
+            (ntc_v - 2.5).abs() < 1e-9,
+            "the 25 C NTC divider sits at half supply"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated diode load line is unaffected"
+        );
+
+        for (adcer, full_scale) in [(0, 4095_u32), (3 << 1, 16383)] {
+            run_adc14_scan(
+                &mut machine,
+                &mut session,
+                adcer,
+                (1 << 0) | (1 << 1) | (1 << 2) | (1 << 9),
+            );
+            let code =
+                |volts: f64| ((volts * 1000.0 + 0.5).floor() as u32 * full_scale / 5000) as u16;
+            for (offset, channel, volts) in [
+                (0, "AN000", diode_v),
+                (2, "AN001", reference_v),
+                (4, "AN002", heated_v),
+                (18, "AN009", ntc_v),
+            ] {
+                assert_eq!(
+                    machine
+                        .bus
+                        .read_u16(ADDR0 + offset)
+                        .expect("read ADC14 result"),
+                    code(volts),
+                    "firmware-visible {channel} result must report its solved voltage"
+                );
+            }
+            assert!(
+                u32::from(code(reference_v)) > u32::from(code(heated_v)) + 30,
+                "firmware must resolve the temperature difference in ADC14 counts"
+            );
+        }
+    }
 }

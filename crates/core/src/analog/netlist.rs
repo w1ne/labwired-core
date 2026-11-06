@@ -1493,6 +1493,9 @@ pub struct MosModel {
     /// Intrinsic channel charge formulation. `WardDutton` is an engine
     /// extension selected by `CHARGEMOD=WARD_DUTTON`; `Meyer` is the default.
     pub channel_charge_model: MosChannelChargeModel,
+    /// Parameter measurement temperature `TNOM`, in Celsius. Only used when
+    /// an instance supplies `TEMP`.
+    pub tnom_celsius: f64,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -1601,6 +1604,7 @@ impl MosModel {
             cgbo: 0.0,
             tox: None,
             channel_charge_model: MosChannelChargeModel::Meyer,
+            tnom_celsius: 27.0,
         }
     }
 }
@@ -2094,7 +2098,7 @@ pub struct Bjt {
     pub temperature_celsius: Option<f64>,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
@@ -2116,9 +2120,16 @@ pub struct Mosfet {
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, as written on the card.
     pub model: MosModel,
-    /// `KP·W/L`, A/V² — the transconductance the solver actually stamps.
+    /// `KP`, `VTO`, `PHI`, bulk-junction `IS`/`PB` and junction capacitances
+    /// adjusted for this instance's explicit `TEMP`; what the solver stamps.
+    pub operating_model: MosModel,
+    /// Explicit instance temperature, in Celsius. `None` preserves the
+    /// historical fixed-300 K behaviour.
+    pub temperature_celsius: Option<f64>,
+    /// `KP·W/L` at the instance temperature, A/V² — the transconductance the
+    /// solver actually stamps.
     pub beta: f64,
     /// Instance channel width `W`, metres.
     pub w: f64,
@@ -2139,6 +2150,15 @@ pub struct Mosfet {
 }
 
 impl Mosfet {
+    /// Thermal voltage of the bulk junctions: `kT/q` at the explicit instance
+    /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
+    pub fn thermal_voltage(&self) -> f64 {
+        self.temperature_celsius
+            .map_or(super::device::THERMAL_VOLTAGE, |celsius| {
+                super::device::thermal_voltage_at_temperature(celsius + 273.15)
+            })
+    }
+
     /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
     pub fn overlap_capacitances(&self) -> [f64; 3] {
         [
@@ -2151,7 +2171,7 @@ impl Mosfet {
     /// Zero-bias bottom and sidewall capacitances for the selected bulk
     /// junction, in that order.
     pub fn bulk_junction_capacitances(&self, drain: bool) -> [f64; 2] {
-        let model = self.model;
+        let model = self.operating_model;
         if drain {
             [
                 if model.cbd_given {
@@ -2178,7 +2198,7 @@ impl Mosfet {
     /// otherwise the bulk-source junction is used. Explicit `CBD`/`CBS`
     /// overrides only the bottom-area term; sidewall charge remains additive.
     pub fn bulk_junction_charge(&self, voltage: f64, drain: bool) -> (f64, f64) {
-        let model = self.model;
+        let model = self.operating_model;
         let [bottom, sidewall] = self.bulk_junction_capacitances(drain);
         let (bottom_charge, bottom_capacitance) =
             super::device::junction_depletion_charge(voltage, bottom, model.pb, model.mj, model.fc);
@@ -2898,7 +2918,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     'Q' => (3, "Q<name> nc nb ne <model>"),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]",
                     ),
                     _ => (3, "J<name> nd ng ns <model>"),
                 };
@@ -2928,9 +2948,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "as" if letter == 'M' => as_ = Some(ctx.value(value, "as")?),
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
-                        "temp" if matches!(letter, 'D' | 'Q' | 'J') => {
-                            temperature_celsius = Some(ctx.value(value, "temp")?)
-                        }
+                        "temp" => temperature_celsius = Some(ctx.value(value, "temp")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -3875,6 +3893,42 @@ fn bind_models(
                         "MOSFET `CHARGEMOD=WARD_DUTTON` needs `TOX` to define oxide charge",
                     ));
                 }
+                if !model.tnom_celsius.is_finite() || model.tnom_celsius <= -273.15 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET model needs a finite TNOM above absolute zero (-273.15 °C)",
+                    ));
+                }
+                if device.temperature_celsius.is_some() && model.phi <= 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET instance with TEMP needs PHI > 0 for the surface-potential law",
+                    ));
+                }
+                let operating_model =
+                    super::device::mos_parameters_at_temperature(model, device.temperature_celsius);
+                if !operating_model.vto.is_finite()
+                    || !operating_model.kp.is_finite()
+                    || operating_model.kp <= 0.0
+                    || !(operating_model.kp * w / l).is_finite()
+                    || !operating_model.is.is_finite()
+                    || operating_model.is <= 0.0
+                    || !operating_model.phi.is_finite()
+                    || (device.temperature_celsius.is_some() && operating_model.phi <= 0.0)
+                    || !operating_model.pb.is_finite()
+                    || operating_model.pb <= 0.0
+                    || [
+                        operating_model.cbd,
+                        operating_model.cbs,
+                        operating_model.cj,
+                        operating_model.cjsw,
+                    ]
+                    .into_iter()
+                    .any(|capacitance| !capacitance.is_finite() || capacitance < 0.0)
+                {
+                    return Err(ctx.parse_err(
+                        "temperature-adjusted MOSFET parameters must be finite with KP, IS, PB > 0, \
+                         PHI > 0 and junction capacitances >= 0",
+                    ));
+                }
                 let junction_node = |circuit: &mut Circuit,
                                      terminal: NodeRef,
                                      resistance: f64,
@@ -3930,7 +3984,9 @@ fn bind_models(
                     bulk: device.nodes[3],
                     model_name: device.model_name,
                     model,
-                    beta: model.kp * w / l,
+                    operating_model,
+                    temperature_celsius: device.temperature_celsius,
+                    beta: operating_model.kp * w / l,
                     w,
                     l,
                     ad,
@@ -4427,6 +4483,7 @@ fn parse_model(
             (ModelCard::Mos(model), "CGDO") => model.cgdo = value,
             (ModelCard::Mos(model), "CGBO") => model.cgbo = value,
             (ModelCard::Mos(model), "TOX") => model.tox = Some(value),
+            (ModelCard::Mos(model), "TNOM") => model.tnom_celsius = value,
             // A level this engine cannot honour is the one parameter worth
             // refusing: silently solving a BSIM card with Shichman-Hodges
             // would be wrong by orders of magnitude, not by a capacitance.
@@ -4998,6 +5055,7 @@ fn lower_comparator(
                 cgbo: 0.0,
                 tox: None,
                 channel_charge_model: MosChannelChargeModel::Meyer,
+                tnom_celsius: 27.0,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
@@ -5009,6 +5067,8 @@ fn lower_comparator(
                 bulk: vee,
                 model_name: "comparator-output".to_string(),
                 model: mos,
+                operating_model: mos,
+                temperature_celsius: None,
                 beta: kp,
                 w: 1.0,
                 l: 1.0,

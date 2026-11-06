@@ -42,3 +42,4 @@ Expected result:
 4. `EXTERNAL_COMPONENTS.md`: external component declaration.
 5. `VALIDATION.md`: reproducible validation/audit commands.
 6. `analog-ntc-diode-system.yaml`: generic NTC and diode device netlists routed to A0/A1.
+7. `analog-mosfet-thermometer.yaml`: matched diode-connected level-1 NMOS threshold thermometers at 25 °C and 85 °C routed to A2/A3 (AN001/AN002).

@@ -6725,6 +6725,305 @@ mod analog {
         }
     }
 
+    /// ngspice's level-1 silicon laws, written out independently of the
+    /// engine: the Varshni bandgap and the built-in potential moved from
+    /// `TNOM` to `T` (used for `PHI` and `PB`).
+    fn spice_silicon_potential(potential: f64, nominal_kelvin: f64, kelvin: f64) -> f64 {
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let (vt_n, vt) = (
+            kelvin_thermal_voltage(nominal_kelvin),
+            kelvin_thermal_voltage(kelvin),
+        );
+        let ratio = kelvin / nominal_kelvin;
+        potential * ratio
+            - vt * (3.0 * ratio.ln() + bandgap(nominal_kelvin) / vt_n - bandgap(kelvin) / vt)
+    }
+
+    /// An explicit MOSFET instance `TEMP` moves the level-1 channel by
+    /// ngspice's `mos1temp` laws: `KP` falls as `(T/TNOM)^-1.5`, `PHI` follows
+    /// the silicon potential law and `VTO` moves with the bandgap and the
+    /// surface potential, including the `GAMMA·√PHI` body term. A saturated,
+    /// back-biased device is solved for NMOS and PMOS and compared against
+    /// the hand-written square law. `TEMP == TNOM` and no `TEMP` reproduce
+    /// the card.
+    #[test]
+    fn mosfet_channel_follows_level1_temperature_laws_at_instance_temperature() {
+        let (vto, kp, gamma, phi, lambda, tnom): (f64, f64, f64, f64, f64, f64) =
+            (0.8, 50e-6, 0.5, 0.65, 0.02, 27.0);
+        let (w, l) = (20e-6, 2e-6);
+        let (vgs, vds, vbs): (f64, f64, f64) = (2.5, 3.0, -1.0);
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let nominal_kelvin = tnom + 273.15;
+        // Card-sign VTO and NMOS-coordinate drain current at `kelvin`.
+        let drain_current = |sign: f64, kelvin: f64| {
+            let ratio = kelvin / nominal_kelvin;
+            let kp_t = kp / ratio.powf(1.5);
+            let phi_t = spice_silicon_potential(phi, nominal_kelvin, kelvin);
+            let card_vto = sign * vto;
+            let card_vto_t = card_vto
+                + sign * gamma * (phi_t.sqrt() - phi.sqrt())
+                + sign * 0.5 * (phi_t - phi)
+                + 0.5 * (bandgap(nominal_kelvin) - bandgap(kelvin));
+            let threshold = sign * card_vto_t + gamma * ((phi_t - vbs).sqrt() - phi_t.sqrt());
+            let vgst = vgs - threshold;
+            assert!(vgst > 0.0 && vgst < vds, "reference must stay saturated");
+            let channel = 0.5 * kp_t * w / l * vgst * vgst * (1.0 + lambda * vds);
+            // GMIN drain-source and the reverse bulk-drain GMIN term; IS is
+            // tiny enough that its leakage is far below the tolerance.
+            let vbd = vbs - vds;
+            (
+                card_vto_t,
+                channel + device::GMIN * vds - device::GMIN * vbd,
+            )
+        };
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let netlist = |temp: Option<f64>| {
+                let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nVb b 0 dc {}\n\
+                     M1 d g 0 b MMOD W={w} L={l}{temp}\n.model MMOD {kind}(VTO={} KP={kp} \
+                     GAMMA={gamma} PHI={phi} LAMBDA={lambda} IS=1e-30 TNOM={tnom})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vbs,
+                    sign * vto
+                )
+            };
+
+            let nominal = build(&netlist(Some(tnom)));
+            assert_eq!(nominal.circuit().mosfets[0].operating_model.vto, sign * vto);
+            assert_eq!(nominal.circuit().mosfets[0].operating_model.kp, kp);
+            let nominal_current = sign * source_current(&nominal, "Vd");
+            let (_, nominal_expected) = drain_current(sign, nominal_kelvin);
+            assert!(
+                relative(nominal_current, nominal_expected) < 1e-6,
+                "{kind}: TEMP=TNOM expected {nominal_expected} A, got {nominal_current} A"
+            );
+            let fixed = sign * source_current(&build(&netlist(None)), "Vd");
+            assert!(
+                relative(fixed, nominal_expected) < 1e-6,
+                "{kind}: no TEMP keeps the card, expected {nominal_expected} A, got {fixed} A"
+            );
+
+            for temperature in [-40.0, 85.0, 125.0] {
+                let kelvin = temperature + 273.15;
+                let hot = build(&netlist(Some(temperature)));
+                let operating = hot.circuit().mosfets[0].operating_model;
+                let (expected_vto, expected) = drain_current(sign, kelvin);
+                assert!(
+                    (operating.vto - expected_vto).abs() < 1e-12,
+                    "{kind} at {temperature} C: VTO(T) {expected_vto} V, got {} V",
+                    operating.vto
+                );
+                assert!(
+                    relative(operating.kp, kp / (kelvin / nominal_kelvin).powf(1.5)) < 1e-12,
+                    "{kind} at {temperature} C: KP(T)"
+                );
+                let measured = sign * source_current(&hot, "Vd");
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} at {temperature} C: expected drain current {expected} A, got \
+                     {measured} A"
+                );
+                // A missing law cannot hide in the tolerance: the solved
+                // current moves by several percent either way.
+                assert!(
+                    relative(measured, nominal_current) > 0.05,
+                    "{kind} at {temperature} C must move the channel decisively: {measured} A \
+                     vs {nominal_current} A"
+                );
+            }
+        }
+    }
+
+    /// The level-1 bulk junctions heat with the instance: `IS` scales by
+    /// `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))` (level 1 has no `XTI`) and the
+    /// diode exponent uses `kT/q` at `TEMP`. Both bulk junctions are forward
+    /// biased with the channel off and the bulk current is compared against a
+    /// hand-written Shockley law for NMOS and PMOS.
+    #[test]
+    fn mosfet_bulk_junction_leakage_follows_bandgap_law_at_instance_temperature() {
+        let (is, tnom, forward): (f64, f64, f64) = (1e-14, 27.0, 0.5);
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let nominal_kelvin = tnom + 273.15;
+        let saturation = |kelvin: f64| {
+            is * (bandgap(nominal_kelvin) / kelvin_thermal_voltage(nominal_kelvin)
+                - bandgap(kelvin) / kelvin_thermal_voltage(kelvin))
+            .exp()
+        };
+        let bulk_current = |is_t: f64, kelvin: f64| {
+            let vt = kelvin_thermal_voltage(kelvin);
+            2.0 * (is_t * ((forward / vt).exp() - 1.0) + device::GMIN * forward)
+        };
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            let netlist = |temp: Option<f64>| {
+                let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "Vb b 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                     M1 d 0 s b MMOD{temp}\n.model MMOD {kind}(VTO={} KP=20u IS={is} \
+                     TNOM={tnom})\n",
+                    sign * forward,
+                    sign * 1.0
+                )
+            };
+
+            let nominal = sign * source_current(&build(&netlist(Some(tnom))), "Vb");
+            let nominal_expected = bulk_current(is, nominal_kelvin);
+            assert!(
+                relative(nominal, nominal_expected) < 1e-6,
+                "{kind}: TEMP=TNOM expected {nominal_expected} A, got {nominal} A"
+            );
+            let fixed = sign * source_current(&build(&netlist(None)), "Vb");
+            let fixed_expected = bulk_current(is, device::TEMPERATURE_K);
+            assert!(
+                relative(fixed, fixed_expected) < 1e-6,
+                "{kind}: no TEMP expected {fixed_expected} A, got {fixed} A"
+            );
+
+            for temperature in [-20.0, 85.0, 125.0] {
+                let kelvin = temperature + 273.15;
+                let hot = build(&netlist(Some(temperature)));
+                let expected_is = saturation(kelvin);
+                let adjusted_is = hot.circuit().mosfets[0].operating_model.is;
+                assert!(
+                    relative(adjusted_is, expected_is) < 1e-12,
+                    "{kind} at {temperature} C: IS(T) {expected_is} A, got {adjusted_is} A"
+                );
+                let expected = bulk_current(expected_is, kelvin);
+                let measured = sign * source_current(&hot, "Vb");
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} at {temperature} C: expected bulk current {expected} A, got \
+                     {measured} A"
+                );
+                let ratio = measured / nominal;
+                assert!(
+                    !(0.1..=10.0).contains(&ratio),
+                    "{kind} at {temperature} C must move bulk leakage decisively, ratio {ratio}"
+                );
+            }
+        }
+    }
+
+    /// Instance `TEMP` moves the bulk-junction `PB` and every zero-bias
+    /// depletion capacitance (`CBD`, or `CJ·AD` with `MJ` and `CJSW·PD` with
+    /// `MJSW`) by the silicon depletion law. A reverse-bias drain step through
+    /// a resistor must follow a card that states the hand-computed
+    /// `PB(T)`/`C(T)` directly, and differ from the unheated card.
+    #[test]
+    fn mosfet_bulk_depletion_capacitance_follows_instance_temperature() {
+        let (tnom, temperature, pb, mj, mjsw): (f64, f64, f64, f64, f64) =
+            (27.0, 125.0, 0.8, 0.5, 0.33);
+        let (nominal_kelvin, kelvin) = (tnom + 273.15, temperature + 273.15);
+        let pb_t = spice_silicon_potential(pb, nominal_kelvin, kelvin);
+        let scale =
+            |grading: f64| 1.0 + grading * (4e-4 * (kelvin - nominal_kelvin) - pb_t / pb + 1.0);
+        assert!(
+            pb_t < pb - 0.1 && scale(mj) > 1.05 && scale(mjsw) > 1.03,
+            "a 98 K rise must lower PB and raise the depletion capacitance"
+        );
+        let (cbd, cj, cjsw, ad, pd) = (10e-9, 2e-3, 2e-9, 4e-6, 2.0);
+
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            // (label, card parameters at TNOM, the same card at T, instance)
+            let variants = [
+                (
+                    "CBD",
+                    format!("CBD={cbd} PB={pb} MJ={mj}"),
+                    format!("CBD={} PB={pb_t} MJ={mj}", cbd * scale(mj)),
+                    String::new(),
+                ),
+                (
+                    "CJ/CJSW",
+                    format!("CJ={cj} CJSW={cjsw} PB={pb} MJ={mj} MJSW={mjsw}"),
+                    format!(
+                        "CJ={} CJSW={} PB={pb_t} MJ={mj} MJSW={mjsw}",
+                        cj * scale(mj),
+                        cjsw * scale(mjsw)
+                    ),
+                    format!(" AD={ad} PD={pd}"),
+                ),
+            ];
+            for (label, card, card_t, instance) in variants {
+                let deck = |card: &str, temp: Option<f64>| {
+                    let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                    format!(
+                        "V1 in 0 dc 0\nR1 in x 1k\nM1 x 0 0 0 MMOD{instance}{temp}\n\
+                         .model MMOD {kind}(VTO={} KP=20u IS=1e-30 TNOM={tnom} FC=0.5 {card})\n",
+                        sign * 1.0
+                    )
+                };
+                let heated = deck(&card, Some(temperature));
+                let explicit = deck(&card_t, None);
+                let unheated = deck(&card, None);
+
+                let heated_mosfet = parse_netlist(&heated)
+                    .expect("heated MOSFET parses")
+                    .mosfets[0]
+                    .clone();
+                let explicit_mosfet = parse_netlist(&explicit)
+                    .expect("explicit MOSFET parses")
+                    .mosfets[0]
+                    .clone();
+                assert!(
+                    (heated_mosfet.operating_model.pb - pb_t).abs() < 1e-12,
+                    "{kind} {label}: PB(T)"
+                );
+                let heated_caps = heated_mosfet.bulk_junction_capacitances(true);
+                let explicit_caps = explicit_mosfet.bulk_junction_capacitances(true);
+                for (heated_c, explicit_c) in heated_caps.into_iter().zip(explicit_caps) {
+                    assert!(
+                        heated_c == explicit_c || relative(heated_c, explicit_c) < 1e-12,
+                        "{kind} {label}: zero-bias capacitances {heated_caps:?} vs {explicit_caps:?}"
+                    );
+                }
+
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let run = |netlist: &str| {
+                        let circuit = parse_netlist(netlist).expect("MOSFET step deck parses");
+                        let mut solver =
+                            Solver::new(circuit, integration).expect("MOSFET step solver builds");
+                        let drain = solver.circuit().node("x").expect("drain node");
+                        let source = solver.voltage_source_index("V1").expect("input source");
+                        solver.set_voltage_source(source, sign * 3.0);
+                        (0..6)
+                            .map(|_| {
+                                solver.advance(2e-6).expect("drain step solves");
+                                sign * solver.node_voltage(drain)
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let heated_trace = run(&heated);
+                    let explicit_trace = run(&explicit);
+                    let unheated_trace = run(&unheated);
+                    let mut largest_shift: f64 = 0.0;
+                    for step in 0..heated_trace.len() {
+                        assert!(
+                            heated_trace[step] > 0.0 && heated_trace[step] < 3.0,
+                            "{kind} {label} {integration:?}: the drain must still be charging"
+                        );
+                        assert!(
+                            (heated_trace[step] - explicit_trace[step]).abs() < 1e-9,
+                            "{kind} {label} {integration:?} step {step}: TEMP gives {} V, \
+                             explicit PB(T)/C(T) give {} V",
+                            heated_trace[step],
+                            explicit_trace[step]
+                        );
+                        largest_shift =
+                            largest_shift.max((heated_trace[step] - unheated_trace[step]).abs());
+                    }
+                    assert!(
+                        largest_shift > 0.02,
+                        "{kind} {label} {integration:?}: heating must slow the drain charge, \
+                         shift {largest_shift} V"
+                    );
+                }
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Newton iteration itself
     // -----------------------------------------------------------------------
