@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "ch32v003f4p6": {
+      "how": "needs-build",
+      "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
