@@ -901,6 +901,14 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/litex_nexys_video_vexriscv_linux-smoke.yaml
             system: configs/systems/onboarding/litex_nexys_video_vexriscv_linux.yaml
+          # The SD-card Linux platform is narrowed to its sourced RV32IMA CPU,
+          # 256 MiB DDR, and modeled LiteX UART; this is not a Linux/SD-card boot.
+          - id: litex_linux_vexriscv_sdcard
+            crate: firmware-litex-vexriscv-linux-smoke
+            features: sdcard-ddr-profile
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/litex_linux_vexriscv_sdcard-smoke.yaml
+            system: configs/systems/onboarding/litex_linux_vexriscv_sdcard.yaml
           # This Zephyr imported target shares the LiteX VexRiscv SoC. Its
           # smoke omits the unmodelled SPI window and covers UART plus timer.
           - id: litex_vexriscv_zephyr

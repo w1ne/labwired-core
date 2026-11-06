@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `156`
-- booted: `156/245`
-- boot_and_smoke_passed: `156/245`
-- not_run: `89`
-- pass: `156`
+- run_attempted: `157`
+- booted: `157/245`
+- boot_and_smoke_passed: `157/245`
+- not_run: `88`
+- pass: `157`
 - fail: `0`
-- median_elapsed_ms: `1179`
-- median_elapsed_seconds: `1.179`
+- median_elapsed_ms: `1183`
+- median_elapsed_seconds: `1.183`
 - threshold_seconds: `3600`
-- threshold_met: `156/156`
+- threshold_met: `157/157`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -97,7 +97,7 @@
 | `leon3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_common` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_ibex` | `pass` | `True` | `yes` | `yes` | `1518` | `1.518` | `True` | `n/a` | n/a | n/a |
-| `litex_linux_vexriscv_sdcard` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `litex_linux_vexriscv_sdcard` | `pass` | `True` | `yes` | `yes` | `1760` | `1.76` | `True` | `n/a` | n/a | n/a |
 | `litex_microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `litex_minerva` | `pass` | `True` | `yes` | `yes` | `1546` | `1.546` | `True` | `n/a` | n/a | n/a |
 | `litex_nexys_video_vexriscv_linux` | `pass` | `True` | `yes` | `yes` | `2269` | `2.269` | `True` | `n/a` | n/a | n/a |

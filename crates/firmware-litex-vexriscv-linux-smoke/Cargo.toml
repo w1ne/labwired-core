@@ -11,6 +11,7 @@ license = "MIT"
 
 [features]
 nexys-video-sram = []
+sdcard-ddr-profile = []
 
 [dependencies]
 riscv-rt = "0.12"

@@ -9,7 +9,9 @@ use std::path::PathBuf;
 
 fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let memory_map = if env::var_os("CARGO_FEATURE_NEXYS_VIDEO_SRAM").is_some() {
+    let memory_map = if env::var_os("CARGO_FEATURE_SDCARD_DDR_PROFILE").is_some() {
+        include_bytes!("memory-sdcard-ddr.x").as_slice()
+    } else if env::var_os("CARGO_FEATURE_NEXYS_VIDEO_SRAM").is_some() {
         include_bytes!("memory-nexys-video.x").as_slice()
     } else {
         include_bytes!("memory.x").as_slice()
@@ -23,4 +25,5 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tlink.x");
     println!("cargo:rerun-if-changed=memory.x");
     println!("cargo:rerun-if-changed=memory-nexys-video.x");
+    println!("cargo:rerun-if-changed=memory-sdcard-ddr.x");
 }

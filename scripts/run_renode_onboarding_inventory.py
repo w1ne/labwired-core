@@ -90,6 +90,12 @@ SMOKE_MAPPINGS = {
         "features": "nexys-video-sram",
         "script": "examples/renode-onboarding/litex_nexys_video_vexriscv_linux-smoke.yaml",
     },
+    "litex_linux_vexriscv_sdcard": {
+        "crate": "firmware-litex-vexriscv-linux-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "features": "sdcard-ddr-profile",
+        "script": "examples/renode-onboarding/litex_linux_vexriscv_sdcard-smoke.yaml",
+    },
     "litex_vexriscv_tftp": {
         "crate": "firmware-litex-vexriscv-tftp-smoke",
         "target": "riscv32im-unknown-none-elf",
