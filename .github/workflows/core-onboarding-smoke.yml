@@ -16,6 +16,7 @@ on:
     paths:
       - "configs/chips/**"
       - "configs/onboarding/renesas_rz_g2l.yaml"
+      - "configs/onboarding/cortex-a78.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
@@ -1224,6 +1225,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/cortex-a53-gicv3_smp-cpu-smoke.yaml
             system: configs/systems/onboarding/cortex-a53-gicv3_smp.yaml
+          # A bounded AArch64 integer smoke against the Cortex-A78 import.
+          # A78-specific features, boot firmware, and peripherals are omitted.
+          - id: cortex-a78
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex-a78-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex-a78.yaml
           # Cortex-M4 execution in the imported VF61 profile; A5 and devices
           # are outside this direct-ELF OCRAM smoke.
           - id: colibri-vf61
