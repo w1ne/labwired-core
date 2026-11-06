@@ -1,0 +1,23 @@
+# Narrow Heltec WiFi LoRa 32 V4.3 profile for the ESP32-S3R2 model.
+# Only GPIO35 and its onboard white status LED are exercised. The onboard OLED,
+# SX1262 radio, PSRAM, GNSS header, battery circuit, USB, Wi-Fi and BLE are not
+# claimed by this smoke profile.
+name: "esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "16384KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  GPIO35: { gpio: "gpio", bit: 35, functions: [{ type: gpio, peripheral: gpio }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"
