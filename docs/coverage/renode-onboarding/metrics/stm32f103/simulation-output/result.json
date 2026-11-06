@@ -156,6 +156,18 @@
     },
     {
       "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMP_RAW=0009A510"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMPERATURE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "DONE"
       },
       "passed": true
@@ -174,20 +186,20 @@
       3221225472,
       75,
       3,
+      0,
       3221225472,
-      999999,
       1073759232,
       536891376,
-      362559,
-      4162817,
+      4080,
+      632080,
       583952,
-      1,
+      999999,
       999999,
       536891376,
-      134235021,
-      134233784
+      134235428,
+      134234226
     ],
-    "pc": 134233784,
+    "pc": 134234226,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -200,7 +212,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "5731cd7efd4647524926a33126f20b231a2fa4c04f7ad4c38baeba1a2038483b",
+  "firmware_hash": "ec8e73d77af214e749c909606f81f9dfa3e57eb845686c61392a548d868f87a8",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -264,7 +276,7 @@
               "inputs": {
                 "humidity": 80.0,
                 "pressure": 950.0,
-                "temperature": 40.0
+                "temperature": 55.0
               },
               "powered": true,
               "registers": {
@@ -291,10 +303,10 @@
                 "DIG_T1": 28528,
                 "DIG_T2": 26435,
                 "DIG_T3": 64536,
-                "HUM": 34111,
-                "PRESS": 5800944,
+                "HUM": 33660,
+                "PRESS": 6021936,
                 "STATUS": 0,
-                "TEMP": 9343232
+                "TEMP": 10113280
               },
               "supply_generation": null
             }
@@ -375,7 +387,7 @@
               "inputs": {
                 "humidity": 80.0,
                 "pressure": 950.0,
-                "temperature": 40.0
+                "temperature": 55.0
               },
               "powered": true,
               "registers": {
@@ -402,10 +414,10 @@
                 "DIG_T1": 28528,
                 "DIG_T2": 26435,
                 "DIG_T3": 64536,
-                "HUM": 34111,
-                "PRESS": 5800944,
+                "HUM": 33660,
+                "PRESS": 6021936,
                 "STATUS": 0,
-                "TEMP": 9343232
+                "TEMP": 10113280
               },
               "supply_generation": null
             }
@@ -744,24 +756,56 @@
         "end_cycle": 30000
       },
       {
-        "text": "DONE",
+        "text": "BME280_WAITING_FOR_TEMPERATURE_STIMULUS",
         "cycle_lo": 20000,
         "cycle": 30000,
         "end_cycle": 30000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMP_RAW=0009A510",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMPERATURE_OK",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "DONE",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
       }
     ],
     "dropped_lines": 0
   },
+  "stimuli": [
+    {
+      "channel": "temperature",
+      "component": "bme280",
+      "value": 55.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000000
+    }
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 17355,
+    "text_bytes": 17800,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 17355,
+    "flash_used_bytes": 17800,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 26.48,
+    "flash_used_pct": 27.16,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -787,25 +831,90 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 3803,
-    "memory_writes": 196,
-    "peripheral_accesses": 6396,
+    "memory_reads": 6180,
+    "memory_writes": 1864,
+    "peripheral_accesses": 282410,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134233784,
-        "count": 195234,
+        "pc": 134234226,
+        "count": 191406,
         "symbol": "firmware_f103_i2c_demo::main"
       },
       {
         "pc": 134218630,
-        "count": 39,
+        "count": 273,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134218636,
-        "count": 39,
+        "pc": 134218538,
+        "count": 235,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218652,
+        "count": 235,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218710,
+        "count": 235,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218550,
+        "count": 234,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218640,
+        "count": 234,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134218520,
+        "count": 195,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134218698,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134218722,
+        "count": 195,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218658,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134218526,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134218542,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134218636,
+        "count": 156,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218664,
+        "count": 156,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134218688,
+        "count": 156,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
     ]
   }

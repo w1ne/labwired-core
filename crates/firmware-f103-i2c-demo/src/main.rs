@@ -219,13 +219,7 @@ fn main() -> ! {
             })
         })
     };
-    let temperature = unsafe {
-        read_i2c_register(BME280_ADDRESS, 0xFA, 2).and_then(|bytes| {
-            read_i2c_byte(BME280_ADDRESS, 0xFC).map(|xlsb| {
-                (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
-            })
-        })
-    };
+    let temperature = unsafe { read_bme280_temperature_raw() };
     let humidity = unsafe {
         read_i2c_register(BME280_ADDRESS, 0xFD, 2)
             .map(|bytes| (u32::from(bytes[0]) << 8) | u32::from(bytes[1]))
@@ -243,6 +237,28 @@ fn main() -> ! {
             }
         }
         _ => putline(b"BME280_RAW_READ_FAIL"),
+    }
+
+    // The test script changes the live temperature input after the seeded
+    // sample has been read. Poll the real register path until that changed
+    // input becomes visible; the smoke then checks the exact raw ADC code.
+    putline(b"BME280_WAITING_FOR_TEMPERATURE_STIMULUS");
+    if let Some(initial_temperature) = temperature {
+        loop {
+            if let Some(current_temperature) = unsafe { read_bme280_temperature_raw() } {
+                if current_temperature != initial_temperature {
+                    print_reg(b"BME280_DYNAMIC_TEMP_RAW=", current_temperature);
+                    if current_temperature == 632_080 {
+                        putline(b"BME280_DYNAMIC_TEMPERATURE_OK");
+                    } else {
+                        putline(b"BME280_DYNAMIC_TEMPERATURE_MISMATCH");
+                    }
+                    break;
+                }
+            }
+        }
+    } else {
+        putline(b"BME280_DYNAMIC_TEMPERATURE_READ_FAIL");
     }
 
     putline(b"DONE");
@@ -412,6 +428,15 @@ unsafe fn read_i2c_register(address: u8, pointer: u8, length: u8) -> Option<[u8;
 /// Read one byte from an I2C register using the STM32F1 final-byte NACK path.
 unsafe fn read_i2c_byte(address: u8, pointer: u8) -> Option<u8> {
     read_i2c_register(address, pointer, 1).map(|bytes| bytes[0])
+}
+
+/// Read the BME280's left-aligned 20-bit temperature ADC value over I²C1.
+unsafe fn read_bme280_temperature_raw() -> Option<u32> {
+    read_i2c_register(BME280_ADDRESS, 0xFA, 2).and_then(|bytes| {
+        read_i2c_byte(BME280_ADDRESS, 0xFC).map(|xlsb| {
+            (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
+        })
+    })
 }
 
 /// Begin a write-address transaction and select a device register pointer.

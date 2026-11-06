@@ -1,5 +1,5 @@
 # Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 measurements against the imported STM32F103 system.
-schema_version: "1.0"
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
   system: "../../configs/systems/onboarding/stm32f103.yaml"
@@ -27,5 +27,11 @@ assertions:
   - uart_contains: "BME280_TEMP_RAW=0008E910"
   - uart_contains: "BME280_HUM_RAW=0000853F"
   - uart_contains: "BME280_SEEDED_ENVIRONMENT_OK"
+  - uart_contains: "BME280_DYNAMIC_TEMP_RAW=0009A510"
+  - uart_contains: "BME280_DYNAMIC_TEMPERATURE_OK"
   - uart_contains: "DONE"
   - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "bme280", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000000 }
+    value: 55.0
