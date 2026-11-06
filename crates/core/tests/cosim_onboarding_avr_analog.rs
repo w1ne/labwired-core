@@ -16,7 +16,9 @@
 //!
 //! The classic ATmega8/16/32 run on their own I/O-space cores (ADMUX 0x27,
 //! no ADCSRB); there the test also checks the internal 2.56 V reference and
-//! the part's bandgap input. Every result is read back with LDS ADCL/ADCH.
+//! the part's bandgap input. The ATmega164/324/644/1284P run on the port-A
+//! cores (ADC0..7 on PA0..PA7); there it checks the internal 1.1 V and 2.56 V
+//! references and the MUX 0x1E bandgap. Every result is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -43,12 +45,16 @@ use std::path::{Path, PathBuf};
 const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega1280", AvrModel::Atmega1281, "pf0", "pk7"),
     ("simavr-atmega1281", AvrModel::Atmega1281, "pf0", "pf7"),
+    ("simavr-atmega1284p", AvrModel::Atmega1284, "pa0", "pa7"),
     ("simavr-atmega16", AvrModel::Atmega16, "pa0", "pa7"),
+    ("simavr-atmega164", AvrModel::Atmega164, "pa0", "pa7"),
     ("simavr-atmega168", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega2560", AvrModel::Atmega2560, "pf0", "pk7"),
     ("simavr-atmega32", AvrModel::Atmega32, "pa0", "pa7"),
+    ("simavr-atmega324", AvrModel::Atmega324, "pa0", "pa7"),
     ("simavr-atmega328", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega48", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-atmega644", AvrModel::Atmega644, "pa0", "pa7"),
     ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
     ("simavr-atmega88", AvrModel::Atmega328p, "pc0", "pc5"),
 ];
@@ -58,25 +64,18 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
 const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-at90usb162", "no ADC"),
     ("simavr-atmega128", "ADMUX at 0x27, the 328P core's DDRC"),
-    (
-        "simavr-atmega1284p",
-        "ADC on port A at 0x20, not a 328P-core port",
-    ),
     ("simavr-atmega128rfa1", "mega map, but no 128RFA1 core"),
     ("simavr-atmega128rfr2", "mega map, but no 128RFR2 core"),
-    ("simavr-atmega164", "ADC on port A at 0x20"),
     ("simavr-atmega169p", "LCD-controller part, no 169P core"),
     (
         "simavr-atmega16m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
     ),
-    ("simavr-atmega324", "ADC on port A at 0x20"),
     (
         "simavr-atmega328pb",
         "no avr-libc header to check PE2/PE3 against",
     ),
     ("simavr-atmega32u4", "ADC2/ADC3 do not exist, MUX5 differs"),
-    ("simavr-atmega644", "ADC on port A at 0x20"),
     (
         "simavr-atmega64m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
@@ -171,15 +170,15 @@ fn convert(chip: &ChipDescriptor, bus: &mut SystemBus, channel: u8) -> u16 {
 fn convert_mux(chip: &ChipDescriptor, bus: &mut SystemBus, refs: u8, mux: u8) -> u16 {
     let mut cpu = Avr::for_chip_name(&chip.name);
     let (adcsrb, admux, adcsra, adcl) = adc_registers(cpu.model);
+    // Only the megas split the mux across ADCSRB.MUX5 and ADMUX MUX4:0 the
+    // test drives as MUX2:0; the other cores take the whole code in ADMUX.
+    let mega = matches!(cpu.model, AvrModel::Atmega1281 | AvrModel::Atmega2560);
     let mut words = Vec::new();
     if let Some(adcsrb) = adcsrb {
-        words.push(ldi(16, if mux >= 8 { 1 << 3 } else { 0 }));
+        words.push(ldi(16, if mega && mux >= 8 { 1 << 3 } else { 0 }));
         words.extend(sts(adcsrb, 16));
     }
-    words.push(ldi(
-        16,
-        refs | if adcsrb.is_some() { mux & 0x07 } else { mux },
-    ));
+    words.push(ldi(16, refs | if mega { mux & 0x07 } else { mux }));
     words.extend(sts(admux, 16));
     words.push(ldi(16, 0xC0));
     words.extend(sts(adcsra, 16));
@@ -335,6 +334,31 @@ fn assert_avr_converts_generic_analog(
         "{board}: idle ADC{idle} is not written by either route"
     );
 
+    if core.is_xx4() {
+        // REFS = 10 is the internal 1.1 V and 11 the internal 2.56 V; MUX 0x1E
+        // is the 1.1 V bandgap (not the 328P's 0x0E, a differential code here).
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x80, diode_channel),
+            (mv * 1024 / 1100).min(1023) as u16,
+            "{board}: the diode converts against the internal 1.1 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 2560) as u16,
+            "{board}: the diode converts against the internal 2.56 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x1E),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x1E converts the 1.1 V bandgap"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x0E),
+            0,
+            "{board}: MUX 0x0E is a differential code, not the bandgap"
+        );
+    }
     if core.is_classic() {
         // REFS = 11 is the classic parts' internal 2.56 V, not the 328P's 1.1 V.
         let mv = (expected_diode_v * 1000.0).round() as u32;

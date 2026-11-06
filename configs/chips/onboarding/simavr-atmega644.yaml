@@ -13,7 +13,49 @@ flash:
 ram:
   base: 256
   size: 4KB
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iom644.h: every
+# ATmega328P register at the 328P's address, plus PINA/DDRA/PORTA at 0x20..0x22.
+# LabWired's Atmega644 core (AvrModel::Atmega644) owns them, with ADCL/ADCH
+# 0x78/0x79, ADCSRA 0x7A, ADCSRB 0x7B and ADMUX 0x7C (MUX4:0, 0x1E the 1.1 V
+# bandgap). Each port is mirrored at 0x1_0000 + PINx and the ADC input side
+# (millivolts per channel, two bytes each) sits at 0x1_0030, as on the 328P.
+# ADC0..7 are PA0..PA7. VIL 0.3 VCC / VIH 0.6 VCC are the datasheet DC input
+# limits.
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+peripherals:
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x00010020
+    size: "3"
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010030
+    size: "16"
+    config:
+      channels: 8
+analog_pins:
+  PA0: { peripheral: adc, channel: 0 }
+  PA1: { peripheral: adc, channel: 1 }
+  PA2: { peripheral: adc, channel: 2 }
+  PA3: { peripheral: adc, channel: 3 }
+  PA4: { peripheral: adc, channel: 4 }
+  PA5: { peripheral: adc, channel: 5 }
+  PA6: { peripheral: adc, channel: 6 }
+  PA7: { peripheral: adc, channel: 7 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

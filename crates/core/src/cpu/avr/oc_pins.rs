@@ -129,8 +129,9 @@ impl Avr {
     #[inline]
     pub(super) fn sync_oc_pins(&mut self, bus: &mut dyn Bus) {
         // The ATmega2560's OC pads are on other pins (PB4..PB7, PE3..5, PG5,
-        // PH3..6, PL3..5); its pads follow `PORTx` (see `AvrModel`).
-        if self.model == super::AvrModel::Atmega2560 {
+        // PH3..6, PL3..5), and so are the port-A parts' (PB3/PB4, PD4..PD7);
+        // their pads follow `PORTx` (see `AvrModel`).
+        if self.model == super::AvrModel::Atmega2560 || self.model.is_xx4() {
             return;
         }
         if (self.tccr0a | self.t1.tccra | self.tccr2a) & 0xF0 == 0 && self.oc_mask == [0, 0] {

@@ -60,6 +60,18 @@ pub const SRAM_START: u16 = 0x0100;
 /// and on port A on the 16/32. Only that map, the ADC and the ports are
 /// modelled on these cores; their timers, USART, SPI and TWI registers are
 /// stored only, and no interrupt is taken (the vector tables are not modelled).
+///
+/// The ATmega164/324/644/1284 (avr-libc `iomxx4.h`, `iom164p.h`, `iom324p.h`,
+/// `iom644.h`, `iom1284p.h`) have every ATmega328P register at the 328P's
+/// address, plus port A (PINA/DDRA/PORTA at 0x20..0x22), PCMSK3, USART1 and
+/// PRR0. So the 328P peripheral handlers are shared, as on the mega. Their ADC
+/// is ADC0..7 on PA0..PA7 with MUX4:0 (0x1E the 1.1 V bandgap, 0x1F GND,
+/// 0x08..0x1D differential/gain codes, read 0) and REFS = 10 / 11 select the
+/// internal 1.1 V / 2.56 V. INT2 and PCINT3 sit early in their vector table,
+/// so vectors are remapped on entry ([`xx4_vector`]). Not modelled: INTn/PCINT
+/// (PCINT0..7 are port A here, not port B; the registers are stored only),
+/// output-compare pads (OC0A/OC0B are PB3/PB4, OC1A/OC1B PD5/PD4, OC2A/OC2B
+/// PD7/PD6; the pads follow `PORTx`), USART1 (stored only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -69,6 +81,10 @@ pub enum AvrModel {
     Atmega8,
     Atmega16,
     Atmega32,
+    Atmega164,
+    Atmega324,
+    Atmega644,
+    Atmega1284,
 }
 
 impl AvrModel {
@@ -78,7 +94,9 @@ impl AvrModel {
     /// atmega2560/atmega2561/mega2560 select the 256 KB three-byte-PC mega
     /// core. atmega8/atmega16/atmega32 (and their `a` variants) select the
     /// classic I/O-space cores; the part name must match exactly, because
-    /// atmega88, atmega168, atmega16m1 and atmega328 are other maps. Other
+    /// atmega88, atmega168, atmega16m1 and atmega328 are other maps. The
+    /// ATmega164/324/644/1284 (with their `a`/`p`/`pa` variants) select the
+    /// port-A cores, again by exact name (atmega644rfr2 is another map). Other
     /// names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
@@ -87,6 +105,16 @@ impl AvrModel {
             "atmega8" | "atmega8a" => return AvrModel::Atmega8,
             "atmega16" | "atmega16a" => return AvrModel::Atmega16,
             "atmega32" | "atmega32a" => return AvrModel::Atmega32,
+            "atmega164" | "atmega164a" | "atmega164p" | "atmega164pa" => {
+                return AvrModel::Atmega164
+            }
+            "atmega324" | "atmega324a" | "atmega324p" | "atmega324pa" => {
+                return AvrModel::Atmega324
+            }
+            "atmega644" | "atmega644a" | "atmega644p" | "atmega644pa" => {
+                return AvrModel::Atmega644
+            }
+            "atmega1284" | "atmega1284p" => return AvrModel::Atmega1284,
             _ => {}
         }
         if n.contains("1280") || n.contains("1281") {
@@ -105,11 +133,19 @@ impl AvrModel {
             AvrModel::Atmega8 => 8 * 1024,
             AvrModel::Atmega16 => 16 * 1024,
             AvrModel::Atmega32 => 32 * 1024,
+            AvrModel::Atmega164 => 16 * 1024,
+            AvrModel::Atmega324 => 32 * 1024,
+            AvrModel::Atmega644 => 64 * 1024,
+            AvrModel::Atmega1284 => 128 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
         match self {
-            AvrModel::Atmega328p => SRAM_START,
+            AvrModel::Atmega328p
+            | AvrModel::Atmega164
+            | AvrModel::Atmega324
+            | AvrModel::Atmega644
+            | AvrModel::Atmega1284 => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Atmega8 | AvrModel::Atmega16 | AvrModel::Atmega32 => 0x0060,
         }
@@ -120,6 +156,10 @@ impl AvrModel {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             AvrModel::Atmega8 | AvrModel::Atmega16 => 0x045F,
             AvrModel::Atmega32 => 0x085F,
+            AvrModel::Atmega164 => 0x04FF,
+            AvrModel::Atmega324 => 0x08FF,
+            AvrModel::Atmega644 => 0x10FF,
+            AvrModel::Atmega1284 => 0x40FF,
         }
     }
     /// The classic ATmega8/16/32 I/O-space map (see [`AvrModel`]).
@@ -129,12 +169,23 @@ impl AvrModel {
             AvrModel::Atmega8 | AvrModel::Atmega16 | AvrModel::Atmega32
         )
     }
+    /// The ATmega164/324/644/1284 port-A map (see [`AvrModel`]).
+    pub fn is_xx4(self) -> bool {
+        matches!(
+            self,
+            AvrModel::Atmega164 | AvrModel::Atmega324 | AvrModel::Atmega644 | AvrModel::Atmega1284
+        )
+    }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
     /// The 2560's 16 channels move it past the port mirrors (PINF..PING sit
     /// at 0x1_002F..0x1_0034, where the 328P keeps its 8-channel window).
     pub fn adc_input_base(self) -> u64 {
         match self {
-            AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
+            AvrModel::Atmega328p
+            | AvrModel::Atmega164
+            | AvrModel::Atmega324
+            | AvrModel::Atmega644
+            | AvrModel::Atmega1284 => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Atmega8 | AvrModel::Atmega16 | AvrModel::Atmega32 => {
                 AVR_CLASSIC_ADC_INPUT_BASE
@@ -172,6 +223,21 @@ pub fn mega2560_vector(vec328: u32) -> u32 {
         24 => 29,              // ANALOG COMP
         25 => 40,              // TWI
         26 => 58,              // SPM READY
+        v => v,
+    }
+}
+/// ATmega164/324/644/1284 vector number (1-based, avr-libc `_VECTOR(n)` + 1)
+/// for a vector this core numbers the ATmega328P way. INT2 (4) and PCINT3 (8)
+/// push PCINT0..2 up one slot and WDT..USART0 TX up two; ADC and EE READY
+/// move past ANALOG COMP, which keeps its slot.
+pub fn xx4_vector(vec328: u32) -> u32 {
+    match vec328 {
+        2 | 3 => vec328,       // INT0, INT1
+        4..=6 => vec328 + 1,   // PCINT0..2 -> 5..7
+        7..=21 => vec328 + 2,  // WDT 9 .. TIMER0 OVF 19, SPI 20, USART0 RX/UDRE/TX 21..23
+        22 | 23 => vec328 + 3, // ADC 25, EE READY 26
+        24 => 24,              // ANALOG COMP
+        25 | 26 => vec328 + 2, // TWI 27, SPM READY 28
         v => v,
     }
 }
@@ -337,6 +403,8 @@ pub const ADDR_MCUCR: u16 = 0x0055;
 pub const MCUCR_PUD: u8 = 1 << 4;
 /// `PINB` data-space address; `DDRB`/`PORTB` follow it.
 pub const AVR_PINB: u16 = 0x0023;
+/// `PINA` data-space address on the ATmega164/324/644/1284 (DDRA/PORTA follow).
+pub const AVR_PINA: u16 = 0x0020;
 /// `PINC` data-space address; `DDRC`/`PORTC` follow it.
 pub const AVR_PINC: u16 = 0x0026;
 /// `PIND` data-space address; `DDRD`/`PORTD` follow it.
@@ -354,7 +422,7 @@ pub const CLASSIC_PIN_ADDRS: [u16; 4] = [0x30, 0x33, 0x36, 0x39];
 const CLASSIC_SFIOR: u16 = 0x0050;
 const CLASSIC_SFIOR_PUD: u8 = 1 << 2;
 /// Internal references on the classic parts (ATmega8 datasheet §23, ATmega16/32
-/// §21): REFS = 11 is 2.56 V; the bandgap mux input is 1.30 V on the ATmega8 and
+/// §21): REFS = 11 is 2.56 V (also on the ATmega164/324/644/1284); the bandgap mux input is 1.30 V on the ATmega8 and
 /// 1.22 V on the 16/32.
 const CLASSIC_INTERNAL_REF_MV: u32 = 2560;
 const MEGA8_BANDGAP_MV: u32 = 1300;
@@ -585,11 +653,24 @@ impl Avr {
         matches!(self.model, AvrModel::Atmega1281 | AvrModel::Atmega2560)
     }
 
+    /// INT0/INT1 and PCINT0..2 wired to the 328P's pins. The mega and the
+    /// port-A parts route PCINT elsewhere, so their registers are stored only.
+    #[inline]
+    fn has_328p_ext_int(&self) -> bool {
+        !self.is_mega() && !self.model.is_xx4()
+    }
+
     /// `PINx` of a port this model has.
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
+            AvrModel::Atmega164
+            | AvrModel::Atmega324
+            | AvrModel::Atmega644
+            | AvrModel::Atmega1284 => {
+                matches!(addr, AVR_PINA | AVR_PINB | AVR_PINC | AVR_PIND)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Atmega8 => CLASSIC_PIN_ADDRS[..3].contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => CLASSIC_PIN_ADDRS.contains(&addr),
@@ -601,6 +682,10 @@ impl Avr {
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega164
+            | AvrModel::Atmega324
+            | AvrModel::Atmega644
+            | AvrModel::Atmega1284 => (AVR_PINA..=AVR_PIND + 2).contains(&addr),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
@@ -795,7 +880,7 @@ impl Avr {
             | ext_int::ADDR_PCICR
             | ext_int::ADDR_EICRA
             | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2
-                if !self.is_mega() || addr == ext_int::ADDR_SMCR =>
+                if self.has_328p_ext_int() || addr == ext_int::ADDR_SMCR =>
             {
                 Ok(self.ext_read(addr).unwrap_or_default())
             }
@@ -1043,7 +1128,7 @@ impl Avr {
             | ext_int::ADDR_PCICR
             | ext_int::ADDR_EICRA
             | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2
-                if !self.is_mega() || addr == ext_int::ADDR_SMCR =>
+                if self.has_328p_ext_int() || addr == ext_int::ADDR_SMCR =>
             {
                 self.ext_write(addr, value, bus);
                 Ok(())
@@ -1197,6 +1282,31 @@ impl Avr {
         Ok((input_mv, reference_mv))
     }
 
+    /// ATmega164/324/644/1284 ADMUX: the input millivolts and the reference.
+    ///
+    /// MUX4:0: 0..7 are ADC0..7 (PA0..PA7), 0x1E the 1.1 V bandgap, 0x1F GND;
+    /// the differential/gain codes 0x08..0x1D are not modelled and read 0.
+    /// REFS = 10 is the internal 1.1 V and 11 the internal 2.56 V; 00 (AREF)
+    /// is taken as 5 V AVcc, as on the 328P, because AREF is not a modelled pin.
+    fn xx4_adc_input(&self, bus: &dyn Bus) -> SimResult<(u32, u32)> {
+        let input_mv = match self.admux & 0x1F {
+            ch @ 0..=7 => {
+                let base = self.model.adc_input_base() + u64::from(ch) * 2;
+                let lo = bus.read_u8(base)?;
+                let hi = bus.read_u8(base + 1)?;
+                u32::from(u16::from_le_bytes([lo, hi]))
+            }
+            0x1E => AVR_BANDGAP_MV,
+            _ => 0,
+        };
+        let reference_mv = match self.admux >> 6 {
+            0b10 => AVR_BANDGAP_MV,
+            0b11 => CLASSIC_INTERNAL_REF_MV,
+            _ => AVR_AVCC_MV,
+        };
+        Ok((input_mv, reference_mv))
+    }
+
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
@@ -1211,6 +1321,10 @@ impl Avr {
     fn adc_convert(&self, bus: &dyn Bus) -> SimResult<u16> {
         if self.model.is_classic() {
             let (input_mv, reference_mv) = self.classic_adc_input(bus)?;
+            return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
+        }
+        if self.model.is_xx4() {
+            let (input_mv, reference_mv) = self.xx4_adc_input(bus)?;
             return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
         }
         let channel: Option<u8> = if self.is_mega() {
@@ -1706,6 +1820,8 @@ impl Avr {
         self.push_pc(bus)?;
         let slot = if self.is_mega() {
             mega2560_vector(vec)
+        } else if self.model.is_xx4() {
+            xx4_vector(vec)
         } else {
             vec
         };
@@ -3343,6 +3459,135 @@ mod tests {
             .unwrap();
         cpu.data_write(CLASSIC_SFIOR, 0, &mut bus).unwrap();
         assert_eq!(bus.pud, [true, false]);
+    }
+
+    // ---- ATmega164/324/644/1284 (AvrModel::is_xx4) ----
+
+    #[test]
+    fn port_a_cores_need_the_exact_part_name() {
+        for (name, model) in [
+            ("simavr-atmega164", AvrModel::Atmega164),
+            ("atmega164pa", AvrModel::Atmega164),
+            ("simavr-atmega324", AvrModel::Atmega324),
+            ("atmega324p", AvrModel::Atmega324),
+            ("simavr-atmega644", AvrModel::Atmega644),
+            ("atmega644a", AvrModel::Atmega644),
+            ("simavr-atmega1284p", AvrModel::Atmega1284),
+            ("atmega1284", AvrModel::Atmega1284),
+            // RF parts with the same digits are another map.
+            ("atmega644rfr2", AvrModel::Atmega328p),
+            ("atmega1284rfr2", AvrModel::Atmega328p),
+        ] {
+            assert_eq!(AvrModel::from_chip_name(name), model, "{name}");
+            assert_eq!(model.is_xx4(), model != AvrModel::Atmega328p, "{name}");
+        }
+    }
+
+    #[test]
+    fn port_a_map_keeps_328p_sram_start_and_mirrors_port_a() {
+        // RAMEND and FLASHEND + 1 per avr-libc iom164.h/iom324p.h/iom644.h/iom1284p.h.
+        for (model, ramend, flash) in [
+            (AvrModel::Atmega164, 0x04FF, 16 * 1024),
+            (AvrModel::Atmega324, 0x08FF, 32 * 1024),
+            (AvrModel::Atmega644, 0x10FF, 64 * 1024),
+            (AvrModel::Atmega1284, 0x40FF, 128 * 1024),
+        ] {
+            let mut cpu = Avr::new_model(model);
+            let mut bus = MockBus::new();
+            assert_eq!(cpu.sp, ramend, "{model:?}: SP resets to RAMEND");
+            assert_eq!(cpu.flash.len(), flash);
+            assert!(!model.three_byte_pc(), "{model:?}: 2-byte PC up to 128 KB");
+            // 0x100 is SRAM, not the mega's extended I/O.
+            cpu.data_write(0x100, 0x5A, &mut bus).unwrap();
+            assert_eq!(cpu.sram[0], 0x5A);
+            // DDRA (0x21) and PORTA (0x22) mirror to the bus-side port.
+            cpu.data_write(0x21, 0x0F, &mut bus).unwrap();
+            cpu.data_write(0x22, 0x05, &mut bus).unwrap();
+            assert_eq!(bus.mem[&(AVR_IO_MIRROR_BASE + 0x21)], 0x0F);
+            assert_eq!(bus.mem[&(AVR_IO_MIRROR_BASE + 0x22)], 0x05);
+            // PINA: driven bits from PORTA, input bits from the outside level.
+            bus.mem.insert(AVR_IO_MIRROR_BASE + 0x20, 0xF0);
+            assert_eq!(cpu.data_read(0x20, &bus).unwrap(), 0xF5);
+            assert!(
+                cpu.data_read(ramend + 1, &bus).is_err(),
+                "{model:?}: past RAMEND"
+            );
+        }
+        // The 328P has no port A: 0x22 is stored, not mirrored as a port.
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Atmega328p);
+        cpu.data_write(0x22, 0x81, &mut bus).unwrap();
+        assert!(!bus.mem.contains_key(&(AVR_IO_MIRROR_BASE + 0x22)));
+    }
+
+    #[test]
+    fn port_a_adc_mux_and_references_follow_the_xx4_admux() {
+        let mut cpu = Avr::new_model(AvrModel::Atmega644);
+        let mut bus = MockBus::new();
+        // ADC7 (PA7) holds 2000 mV in the 0x1_0030 window.
+        let base = AVR_ADC_INPUT_BASE + 7 * 2;
+        bus.mem.insert(base, (2000u16 & 0xFF) as u8);
+        bus.mem.insert(base + 1, (2000u16 >> 8) as u8);
+        let convert = |cpu: &mut Avr, bus: &mut MockBus, admux: u8| {
+            cpu.data_write(0x7C, admux, bus).unwrap();
+            cpu.data_write(0x7A, 0xC0, bus).unwrap();
+            u16::from(cpu.data_read(0x79, bus).unwrap()) << 8
+                | u16::from(cpu.data_read(0x78, bus).unwrap())
+        };
+        // REFS = 01 AVcc, 10 internal 1.1 V (clamps), 11 internal 2.56 V.
+        assert_eq!(
+            convert(&mut cpu, &mut bus, 0x47),
+            (2000 * 1024 / 5000) as u16
+        );
+        assert_eq!(convert(&mut cpu, &mut bus, 0x87), 1023);
+        assert_eq!(
+            convert(&mut cpu, &mut bus, 0xC7),
+            (2000 * 1024 / 2560) as u16
+        );
+        // MUX 0x1E is the 1.1 V bandgap, 0x1F GND; 0x0F (the 328P's GND) is a
+        // differential code here and 0x0E (the 328P's bandgap) is too.
+        assert_eq!(
+            convert(&mut cpu, &mut bus, 0x5E),
+            (1100 * 1024 / 5000) as u16
+        );
+        for mux in [0x1F, 0x0E, 0x0F, 0x09] {
+            assert_eq!(convert(&mut cpu, &mut bus, 0x40 | mux), 0, "MUX {mux:#04x}");
+        }
+    }
+
+    #[test]
+    fn port_a_vectors_follow_the_xx4_table() {
+        // (328P-numbered vector, avr-libc iomxx4.h `_VECTOR(n)` + 1).
+        for (vec328, slot) in [
+            (2, 2),                 // INT0
+            (3, 3),                 // INT1
+            (4, 5),                 // PCINT0
+            (6, 7),                 // PCINT2
+            (7, 9),                 // WDT
+            (VEC_TIMER2_COMPA, 10), // TIMER2_COMPA
+            (VEC_TIMER0_OVF, 19),   // TIMER0_OVF
+            (VEC_USART_RX, 21),     // USART0_RX
+            (21, 23),               // USART0_TX
+            (22, 25),               // ADC
+            (23, 26),               // EE_READY
+            (24, 24),               // ANALOG_COMP
+            (VEC_TWI, 27),          // TWI
+            (26, 28),               // SPM_READY
+        ] {
+            assert_eq!(xx4_vector(vec328), slot, "328P vector {vec328}");
+        }
+        // A pending Timer0 overflow enters TIMER0_OVF_vect at word 18 * 2.
+        for (model, entry) in [
+            (AvrModel::Atmega1284, 18 * 4),
+            (AvrModel::Atmega328p, 16 * 4),
+        ] {
+            let mut cpu = Avr::new_model(model);
+            let mut bus = MockBus::new();
+            cpu.pending_irq = 1 << VEC_TIMER0_OVF;
+            cpu.sreg = 0x80;
+            step_n(&mut cpu, &mut bus, 1);
+            assert_eq!(cpu.pc, entry, "{model:?}");
+        }
     }
 
     #[test]
