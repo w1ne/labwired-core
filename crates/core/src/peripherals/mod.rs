@@ -148,6 +148,7 @@ pub mod uart_waveform;
 pub mod usb_otg;
 pub mod virtual_ble;
 pub mod wave_plan;
+pub mod wch_debug_printf;
 pub mod wwdg;
 
 /// Record one CAN/CAN-FD frame into the machine's ONE bus trace.

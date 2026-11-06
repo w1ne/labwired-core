@@ -566,6 +566,9 @@ fn every_shipped_descriptor_is_ratcheted() {
         // software interrupts) and runs WCH's unmodified SYSTICK_Interrupt
         // example; same gap: no catalog board or silicon differential.
         "ch32v003f4p6-pfic-smoke",
+        // The ch32fun profile adds GPIOA/C and the WCH-LinkE debug-printf
+        // channel and runs three unmodified ch32fun examples; same gap.
+        "ch32v003f4p6-ch32fun-smoke",
         // Development-board smoke profiles and chip descriptors added by the
         // new-hardware onboarding lane. Their evidence is the lane's local
         // board smokes; none has a Playground catalog board or a

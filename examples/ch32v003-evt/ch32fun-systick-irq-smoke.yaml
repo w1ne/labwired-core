@@ -1,0 +1,22 @@
+# ch32fun examples/systick_irq, unmodified. A 1 kHz SysTick interrupt counts
+# systick_millis; the loop times Delay_Ms(250) twice against the free-running
+# counter and prints the ISR's count through the debug-printf channel. 500 ms
+# means the ISR fired once per millisecond across both delays. DMDATA0 bits
+# 7:6 read 0 at the end: the probe took every request and ch32fun's
+# debug-printf timeout (which ORs 0xC0 into DMDATA0) never fired.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/systick_irq.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-smoke.yaml"
+limits:
+  max_cycles: 80000000
+  max_steps: 100000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "systick_irq example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing systick...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Beginning Loop..." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Milliseconds taken:\t500", min_count: 2 }
+  - memory_value: { address: 0xE00000F4, mask: 0xC0, expected_value: 0 }
+  - gpio_edges: { pin: "gpiod:0", min_edges: 4 }
+  - gpio_edges: { pin: "gpioc:0", min_edges: 4 }

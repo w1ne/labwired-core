@@ -424,6 +424,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // WCH QingKe V2 PFIC (CH32V003 interrupt controller at 0xE000E000). Its
     // banks sit at NVIC offsets but number interrupts from 0, not 16.
     "qingke_pfic",
+    // WCH-LinkE debug printf channel (DMDATA0/1 at 0xE00000F4), the default
+    // ch32fun console. Listed so no fuzzy fallback claims it.
+    "wch_debug_printf",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
@@ -1799,6 +1802,8 @@ pub fn try_build(
         "qingke_v2_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV2Systick::new()),
         // WCH QingKe V2 PFIC; `configure_riscv` shares its state with the core.
         "qingke_pfic" => Box::new(crate::peripherals::qingke_pfic::QingkePfic::new()),
+        // WCH-LinkE debug printf channel, probe attached (`minichlink -T`).
+        "wch_debug_printf" => Box::new(crate::peripherals::wch_debug_printf::WchDebugPrintf::new()),
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config

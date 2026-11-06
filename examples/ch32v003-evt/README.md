@@ -148,6 +148,97 @@ profiles. QingKe V2 silicon pushes the HPE frame onto the stack. Here the frame
 is held inside the core, so registers come back exactly but the stack memory
 is not written.
 
+### ch32fun: the community toolchain, unmodified
+
+[ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
+most hobbyist CH32V003 code is written against. The
+`ch32v003f4p6-ch32fun-smoke` profile runs three of its examples unmodified,
+built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
+`TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
+the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
+
+| Example | What the smoke checks | Committed run |
+| --- | --- | --- |
+| `blink` | PD0, PD4, PD6 and PC0 toggle together; 7 edges each in 90 M cycles | edges every 12,000,006 to 12,000,009 cycles, i.e. `Delay_Ms(250)` at 48 MHz |
+| `uartdemo` | `Count: 0` .. `Count: 3` in order on USART1 (PD5), PD0 toggling | PD0 edges every 2,400,004 cycles (50 ms) |
+| `systick_irq` | debug-printf banner, `Milliseconds taken: 500` twice, DMDATA0 never timed out, PD0/PC0 edges | the 1 kHz SysTick ISR counts exactly 500 ms across two `Delay_Ms(250)` |
+
+This profile adds two things to the PFIC profile:
+
+- **GPIOA and GPIOC**, because `funGpioInitAll()` clocks all three ports and
+  the examples drive PC0.
+- **The WCH-LinkE debug-printf channel** (`wch_debug_printf` at
+  `0xE00000F4`). ch32fun's default `printf` does not use a UART: it hands up
+  to 7 characters at a time to the probe through the debug-module registers
+  DMDATA0/DMDATA1 over the single SWIO wire, and `minichlink -T` prints them.
+  The model plays the probe's part: it takes each request when the firmware
+  raises DMDATA0 bit 7, acknowledges by writing 0, and reads 0 on the
+  "debugger attached" sentinel at `0xE00000FC`. The printed text is the
+  `terminal` log of the `debug_printf` peripheral, so a smoke checks it with
+  `peripheral_log: { peripheral: debug_printf, log: terminal, contains: ... }`.
+
+The committed negative control
+([`evidence/ch32fun-systick-irq-smoke/negative-control/`](evidence/ch32fun-systick-irq-smoke/negative-control/))
+runs the same `systick_irq` image with that window as plain storage, which is
+a board with no probe attached. The GPIO checks still pass, but the firmware's
+`printf` waits for an acknowledgement that never comes, times out and ORs
+`0xC0` into DMDATA0, so the DMDATA0 check fails.
+
+Read these results correctly:
+
+- The modeled probe acknowledges on the same store, so the firmware never
+  waits for it. A real WCH-LinkE polls over USB, which makes `printf` slower
+  on silicon; the text is the same.
+- USART1 transmit is not paced at the baud rate. Each `Count: N` line costs
+  about 600 cycles here, where 9 characters at 115200 baud take about 37,500
+  cycles on silicon. Line contents and order are exact; their timing is not.
+- Not modeled: input from the host over the debug channel (ch32fun's
+  `handle_debug_input`), a detached probe as a configuration, and every
+  peripheral the other ch32fun examples need (ADC, TIM1/TIM2, EXTI, SPI, I2C
+  through ch32fun, DMA, OPA, watchdogs, standby).
+
+## Copy-paste ch32fun blink
+
+ch32fun's own [`examples/blink`](https://github.com/cnlohr/ch32fun/blob/master/examples/blink/blink.c),
+unchanged (MIT). Put it in `examples/blink/` of a ch32fun checkout and run
+`make`; the simulator runs the same ELF.
+
+```c
+#include "ch32fun.h"
+#include <stdio.h>
+
+#define PIN_1 PD0
+#define PIN_K PD4
+#define PIN_BOB PD6
+#define PIN_KEVIN PC0
+
+int main()
+{
+	SystemInit();
+
+	funGpioInitAll();
+
+	funPinMode( PIN_1,     GPIO_Speed_10MHz | GPIO_CNF_OUT_PP );
+	funPinMode( PIN_K,     GPIO_Speed_10MHz | GPIO_CNF_OUT_PP );
+	funPinMode( PIN_BOB,   GPIO_Speed_10MHz | GPIO_CNF_OUT_PP );
+	funPinMode( PIN_KEVIN, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP );
+
+	while(1)
+	{
+		funDigitalWrite( PIN_1,     FUN_HIGH );
+		funDigitalWrite( PIN_K,     FUN_HIGH );
+		funDigitalWrite( PIN_BOB,   FUN_HIGH );
+		funDigitalWrite( PIN_KEVIN, FUN_HIGH );
+		Delay_Ms( 250 );
+		funDigitalWrite( PIN_1,     FUN_LOW );
+		funDigitalWrite( PIN_K,     FUN_LOW );
+		funDigitalWrite( PIN_BOB,   FUN_LOW );
+		funDigitalWrite( PIN_KEVIN, FUN_LOW );
+		Delay_Ms( 250 );
+	}
+}
+```
+
 ## Copy-paste GPIO example
 
 This follows WCH's official [GPIO_Toggle sample](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/GPIO/GPIO_Toggle/User/main.c).
@@ -281,6 +372,14 @@ cargo run -q -p labwired-cli -- test \
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/sdk-systick-interrupt-smoke.yaml \
   --output-dir /tmp/ch32v003-sdk-systick-interrupt
+
+# ch32fun ELFs are committed; this rebuilds them byte-identically.
+examples/ch32v003-evt/build-ch32fun-examples.sh
+for t in blink uartdemo systick-irq; do
+  cargo run -q -p labwired-cli -- test \
+    --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
+    --output-dir /tmp/ch32v003-ch32fun-$t
+done
 ```
 
 The committed SysTick and SDK-example runs are in

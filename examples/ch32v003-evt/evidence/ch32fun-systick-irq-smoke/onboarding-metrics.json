@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003f4p6-ch32fun-systick-irq",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003-evt/ch32fun-systick-irq-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-ch32fun-smoke.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T19:51:25Z",
+  "finished_at_utc": "2026-11-06T19:52:16Z",
+  "elapsed_seconds": 52,
+  "elapsed_ms": 51743,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.312,
+    "build_firmware": 0.97,
+    "run_smoke": 50.42
+  },
+  "stages_ms": {
+    "build_cli": 312,
+    "build_firmware": 970,
+    "run_smoke": 50420
+  },
+  "firmware_build_script": "examples/ch32v003-evt/build-ch32fun-examples.sh"
+}
