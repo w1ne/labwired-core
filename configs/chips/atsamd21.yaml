@@ -6,8 +6,9 @@
 #
 # SIM-DERIVED SAMD21G18A descriptor for Arduino Nano 33 IoT bring-up.
 # Not silicon-verified. NINA (WiFi), ATECC608A, and IMU (LSM6DS3) are
-# intentionally omitted / stubbed — only the MCU core, PORT, PM/GCLK,
-# SERCOM5 UART (Serial1), SysTick, and a USB stub window are modelled here.
+# intentionally omitted / stubbed — the MCU core, PORT, PM/GCLK, SERCOM5 UART
+# (Serial1), SysTick, the external-input ADC slice, and a USB stub window are
+# modelled here.
 # Pin labels follow ArduinoCore-samd variants/nano_33_iot/variant.cpp.
 
 name: "atsamd21"
@@ -69,3 +70,33 @@ peripherals:
     type: "stub"
     base_address: 0x41005000
     size: "1KB"
+  # External AIN0..AIN19, software-triggered single-ended conversions.
+  - id: "adc"
+    type: "samd21_adc"
+    base_address: 0x42004000
+    size: "128B"
+    irq: 23
+
+# Physical SAM D21 function-B pad routes. These names identify MCU pads; the
+# board-level analog co-simulation endpoints intentionally use the same pads.
+analog_pins:
+  PA02: { peripheral: "adc", channel: 0 }
+  PA03: { peripheral: "adc", channel: 1 }
+  PB08: { peripheral: "adc", channel: 2 }
+  PB09: { peripheral: "adc", channel: 3 }
+  PA04: { peripheral: "adc", channel: 4 }
+  PA05: { peripheral: "adc", channel: 5 }
+  PA06: { peripheral: "adc", channel: 6 }
+  PA07: { peripheral: "adc", channel: 7 }
+  PB00: { peripheral: "adc", channel: 8 }
+  PB01: { peripheral: "adc", channel: 9 }
+  PB02: { peripheral: "adc", channel: 10 }
+  PB03: { peripheral: "adc", channel: 11 }
+  PB04: { peripheral: "adc", channel: 12 }
+  PB05: { peripheral: "adc", channel: 13 }
+  PB06: { peripheral: "adc", channel: 14 }
+  PB07: { peripheral: "adc", channel: 15 }
+  PA08: { peripheral: "adc", channel: 16 }
+  PA09: { peripheral: "adc", channel: 17 }
+  PA10: { peripheral: "adc", channel: 18 }
+  PA11: { peripheral: "adc", channel: 19 }
