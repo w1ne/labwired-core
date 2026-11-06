@@ -236,7 +236,7 @@ fn no_elf_rom_boot_chip(
 /// The ELF arm only ever used `firmware_bytes` for symbol/diagnostic context;
 /// here `execute_test_loop` gets an empty slice and those diagnostics degrade
 /// gracefully, exactly as on the C3 ELF-less path.
-fn esp32s3_rom_boot_flash_size(system: &labwired_config::ResolvedSystem) -> u32 {
+fn esp32s3_declared_flash_size(system: &labwired_config::ResolvedSystem) -> u32 {
     system
         .chip()
         .ok()
@@ -305,7 +305,7 @@ fn run_s3_rom_boot_no_elf(
         // has the resolved chip descriptor, so use its physical capacity just
         // like `labwired run` and the Wasm constructor do. Falling back to the
         // 4 MiB default makes the ROM reject every N8/N16 image before app_main.
-        flash_size: esp32s3_rom_boot_flash_size(system),
+        flash_size: esp32s3_declared_flash_size(system),
         // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
         // YAML is the one home for it, and it is what the SYSTIMER divides the
         // CPU cycle stream by to keep `esp_timer` time.
@@ -1383,7 +1383,21 @@ pub(crate) fn run_test(
                     if factory_layout {
                         std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
                     }
-                    let opts = Esp32s3Opts::default();
+                    // The fast-boot S3 bank must match the selected board's
+                    // flash capacity. The generic 4 MiB default truncates
+                    // Cardputer-Adv (8 MiB) and larger S3 modules.
+                    let opts = resolved_system
+                        .as_ref()
+                        .map(|system| {
+                            let mut opts = system
+                                .chip()
+                                .ok()
+                                .map(|chip| Esp32s3Opts::for_chip(&chip))
+                                .unwrap_or_default();
+                            opts.flash_size = esp32s3_declared_flash_size(system);
+                            opts
+                        })
+                        .unwrap_or_default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
@@ -1527,7 +1541,7 @@ pub(crate) fn run_test(
                     // aborts. Seed the descriptor with the configured flash size.
                     labwired_core::boot::esp32s3::seed_esp32s3_rom_flashchip(
                         &mut bus,
-                        4 * 1024 * 1024,
+                        opts.flash_size,
                     );
                     // Arduino dual-core: `system_early_init` calls
                     // `ets_set_appcpu_boot_addr(call_start_cpu1)` then spins on
@@ -3009,9 +3023,9 @@ mod esp32s3_rom_boot_tests {
     fn elf_less_s3_uses_the_descriptor_flash_capacity() {
         let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
             .expect("built-in ESP32-S3 descriptor");
-        assert_eq!(esp32s3_rom_boot_flash_size(&system), 16 * 1024 * 1024);
+        assert_eq!(esp32s3_declared_flash_size(&system), 16 * 1024 * 1024);
         assert_ne!(
-            esp32s3_rom_boot_flash_size(&system),
+            esp32s3_declared_flash_size(&system),
             labwired_core::system::xtensa::Esp32s3Opts::default().flash_size,
             "the hosted ELF-less path must not collapse every S3 module to 4 MiB",
         );
