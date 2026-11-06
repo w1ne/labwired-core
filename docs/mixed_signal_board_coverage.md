@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). Of the 245 imported profiles in `configs/systems/onboarding/`, 12 are covered through every ADC instance they declare, 8 declare an ADC LabWired cannot yet convert from a routed input, and 225 declare no modelled ADC (see [Onboarding profiles](#onboarding-profiles)). Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). Of the 245 imported profiles in `configs/systems/onboarding/`, 117 are covered end to end through a GPIO input (12 of them also through every ADC instance they declare), and 128 declare neither a GPIO input nor a convertible ADC (see [Onboarding profiles](#onboarding-profiles)). Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -137,3 +137,16 @@ The 245 imported profiles in `configs/systems/onboarding/*.yaml` are inventoried
 | No modelled ADC | 225 profiles: ADC absent or a `stub` |
 
 The F7 and H7 onboarding descriptors used to declare their Renode ADC types with no `profile`, so the shared `adc` model fell back to the STM32F1 register map. They now name `stm32f4` (RM0410 §15) and `stm32h7` (RM0433 §25). The test fails if a profile moves between the first two rows, if the instance count changes, or if the no-ADC count changes. The 8 non-convertible profiles need a `CHSELR` layout and a routed-input L4 engine in `peripherals/adc.rs`. Every STM32 silicon-validated board watches that file, so the change needs a drift ack.
+
+### GPIO inputs
+
+[`cosim_onboarding_gpio_analog.rs`](../crates/core/tests/cosim_onboarding_gpio_analog.rs)::`every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels` covers every onboarding profile whose bus models a GPIO input. The port is the first peripheral the built bus reports as a GPIO input. The same Beta NTC divider and Shockley diode are routed to `board.gpio_in.<port>.0` / `.1` and their solved voltages are checked against independent references. The NTC pin has to follow a -10 → 25 → 80 → 25 → -10 °C sweep with Schmitt hysteresis, and the diode pin has to stay below VIL. Both levels are read back through `Peripheral::read_gpio_input` and through a firmware load from the port's input register. Thresholds are 0.3/0.7 × 3.3 V simulation assumptions, because no import records any. This is GPIO threshold coverage, not ADC support.
+
+| Status | Profiles |
+|---|---|
+| Covered, firmware load from the silicon input register | 15: `stm32f103` (IDR @0x08); `stm32f401cdu6-blackpill` (IDR @0x10, `stm32v2`); `imxrt1064`, `mimxrt1064_evk` (PSR @0x08); `nrf52840`, `nrf52840dk_nrf52840`, `arduino_nano_33_ble` (IN @0x510); `sam4s`, `sam4s16c`, `sam4s8b`, `sam4s_xplained` (PIO_PDSR @0x3C); the four Mi-V profiles (CoreGPIO InputRegister @0x90, after firmware sets `CONFIG_X.INREG`) |
+| Covered, firmware load from the placeholder IDR @0x08 | 96 profiles whose imported GPIO type (`stm32_gpioport`, `efmgpioport`, `npcx_gpio`, `xilinxgpiops`, `gaisler_gpio`, and 18 more listed in the test) has no dedicated model and runs on the STM32F1 placeholder map. The level is firmware-visible, but not at that IP's silicon register |
+| Covered, register load does not see the level | 6: `nucleo_wba52cg`, `ramn`, `stm32l552`, `stm32wba52` (Cortex-M33 GPIO at 0x4202_xxxx is answered as the M3/M4 bit-band alias); `nxp-frdm-imx8mplus`, `nxp-mimx8ml` (the GPIO1 window reads all ones, not diagnosed) |
+| No analog endpoint | 128 profiles that declare no GPIO input and no convertible ADC |
+
+The nRF52840-DK and Nano 33 BLE descriptors based GPIO0/GPIO1 at OUT (0x5000_0500 / 0x5000_0800) with no `reg_offset`. That put IN at 0x5000_0A10, inside the next port's window. They now declare `reg_offset: 0x500`, the same fix as `configs/chips/nrf52833.yaml`. The test fails if any count changes, if an unclassified GPIO type appears, or if a listed register gap starts tracking.
