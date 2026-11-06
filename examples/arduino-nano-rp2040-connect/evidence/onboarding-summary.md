@@ -1,8 +1,8 @@
 # Onboarding Smoke: arduino-nano-rp2040-connect
 
 - status: `pass`
-- elapsed_seconds: `17`
-- elapsed_ms: `16082`
+- elapsed_seconds: `2`
+- elapsed_ms: `1501`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

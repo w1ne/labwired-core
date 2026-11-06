@@ -1,12 +1,14 @@
-# Arduino Nano RP2040 Connect: toggle the exposed header TX / GP0 pin.
+# Arduino Nano RP2040 Connect: toggle header TX / GP0, then read the onboard
+# LSM6DSOX accelerometer over I2C0 on GP12/GP13 and report the measured values.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-nano-rp2040-connect-smoke"
   system: "../../configs/systems/arduino-nano-rp2040-connect.yaml"
 limits:
-  max_steps: 200000
+  max_steps: 2000000
 assertions:
   - gpio_edges:
       pin: "sio:0"
       min_edges: 8
+  - uart_contains: "NANO_RP2040_LSM6DSOX_ID=0x6C XYZ=1000,-2000,4000 PASS"
   - expected_stop_reason: max_steps

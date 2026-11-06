@@ -1,14 +1,15 @@
 # Known limitations
 
-This onboarding profile covers only the Arduino Nano RP2040 Connect's header
-TX pin, which Arduino's pinout maps to RP2040 GP0. Firmware selects SIO in
-IO_BANK0 and toggles the output through SIO; the local smoke asserts at least
-eight transitions on `sio:0`.
+This onboarding profile covers the Arduino Nano RP2040 Connect's header TX
+(RP2040 GP0) and the onboard ST LSM6DSOX accelerometer on I2C0 (GP12/GP13,
+Arduino A4/A5). The local smoke checks GP0 edges, sensor identity, the
+accelerometer control register, data-ready and one XYZ sample.
 
-The NINA-W102 Wi-Fi/Bluetooth module, LSM6DSOX IMU, MP34DT06JTR microphone,
-RGB LED, and ATECC608A are not modeled. The profile does not claim their bus,
-radio, sensor, audio, or cryptographic behavior. USB and the RP2040 boot ROM
-are also outside the smoke.
+The LSM6DSOX model is a partial accelerometer model. Gyroscope, temperature,
+FIFO, embedded functions, interrupts, SPI/I3C, electrical behavior, and ODR
+timings beyond the tested 416 Hz path are not modeled. The NINA-W102
+Wi-Fi/Bluetooth module, MP34DT06JTR microphone, RGB LED, and ATECC608A are also
+not modeled. USB and the RP2040 boot ROM are outside the smoke.
 
 The memory map records the board's 16 MiB flash and 264 KiB SRAM, but the
 firmware runner loads the image directly after the reserved 256-byte

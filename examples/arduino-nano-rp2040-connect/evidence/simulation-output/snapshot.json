@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      0,
-      26,
-      5,
-      0,
-      17,
+      54,
+      1073954816,
+      268436841,
+      10,
       1,
-      0,
-      537141224,
-      0,
-      0,
-      0,
+      1,
+      4294967295,
+      537141232,
       0,
       0,
-      537141216,
-      268436035,
-      268436052
+      0,
+      0,
+      0,
+      537141200,
+      268436561,
+      268436556
     ],
-    "pc": 268436052,
-    "xpsr": 553648128,
+    "pc": 268436556,
+    "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 200000,
-  "cycles": 200000,
-  "instructions": 200000,
+  "steps_executed": 2000000,
+  "cycles": 2000000,
+  "instructions": 2000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 2000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 2000000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 2000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9c5c3fca470ced025551df6a163e7dc2be8e250523545b0c1309a66c046e0e4e",
+  "firmware_hash": "fc96c2e74e6a49f6d9bad505e8d28e4b373e27ee375e264dc6f318630af6f5bc",
   "config": {
     "firmware": "examples/arduino-nano-rp2040-connect/../../target/thumbv6m-none-eabi/release/firmware-nano-rp2040-connect-smoke",
     "system": "examples/arduino-nano-rp2040-connect/../../configs/systems/arduino-nano-rp2040-connect.yaml",

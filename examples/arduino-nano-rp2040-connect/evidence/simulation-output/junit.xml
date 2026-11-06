@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.005394">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.288570">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="9c5c3fca470ced025551df6a163e7dc2be8e250523545b0c1309a66c046e0e4e"/>
+    <property name="firmware_hash" value="fc96c2e74e6a49f6d9bad505e8d28e4b373e27ee375e264dc6f318630af6f5bc"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.005394">
+  <testcase classname="labwired" name="run" time="0.288570">
   </testcase>
   <testcase classname="labwired" name="assertion 1: gpio_edges: sio:0 &gt;= 8 edges" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: NANO_RP2040_LSM6DSOX_ID=0x6C XYZ=1000,-2000,4000 PASS" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

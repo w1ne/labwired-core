@@ -1,8 +1,10 @@
 # Arduino Nano RP2040 Connect (RP2040)
 
-This profile covers the exposed header TX pin, RP2040 GP0, through IO_BANK0
-and SIO. The smoke firmware toggles GP0 and the local simulator asserts at
-least eight output edges.
+This profile covers two real paths on the ABX00052: the exposed header TX pin
+(RP2040 GP0), and the onboard ST LSM6DSOX accelerometer. The firmware toggles
+GP0 through SIO, then reads the IMU's identity, configures its accelerometer,
+waits for data-ready and checks XYZ samples over I2C0 on GP12/GP13 (Arduino
+A4/A5).
 
 ## Run
 
@@ -17,13 +19,14 @@ scripts/onboarding_smoke.sh \
 ```
 
 The committed `evidence/` directory contains the firmware build and local
-simulator smoke logs. The live board availability check is in
+simulator smoke logs. Live board and sensor status are in
 [`evidence/vendor-status.md`](evidence/vendor-status.md); hosted verifier
 results and their limits are recorded in
 [`evidence/labwired-verification.md`](evidence/labwired-verification.md).
 
 ## Scope
 
-Only header TX / GP0 is modeled. Wi-Fi and Bluetooth, the onboard IMU and
-microphone, RGB LED, USB, and QSPI storage are outside this profile; see
+The LSM6DSOX accelerometer slice and GP0 SIO/UART path are modeled. Wi-Fi and
+Bluetooth, microphone, crypto device, RGB LED, USB, and QSPI storage are outside
+this profile; see
 [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).

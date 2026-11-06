@@ -13,7 +13,11 @@ the main loop. This is a failed hosted fallback check, not a pass for this
 board or the committed Rust image. The hosted C toolchain returned
 `LANGUAGE_NOT_SUPPORTED` for this board.
 
-The board-specific evidence is the committed local CLI onboarding smoke. It
-loads `configs/chips/rp2040-nano-rp2040-connect-smoke.yaml` and passes both
-assertions, including eight observed edges on `sio:0`; this is not reported as
-a hosted `model_verified` result or physical hardware confirmation.
+The 2026-11-03 hosted attempts above predate the IMU addition and do not verify
+the LSM6DSOX path. For the 2026-11-06 board update, no hosted verifier verdict
+was obtained. The current board-specific evidence is the committed local CLI
+onboarding smoke, which loads
+`configs/chips/rp2040-nano-rp2040-connect-smoke.yaml` and passes three checks:
+at least eight GP0 edges, the LSM6DSOX ID/configuration/data-ready/XYZ marker,
+and the expected max-step stop. This is not reported as a hosted
+`model_verified` result or physical hardware confirmation.
