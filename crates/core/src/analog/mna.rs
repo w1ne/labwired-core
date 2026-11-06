@@ -978,7 +978,7 @@ impl Solver {
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
-            let model = jfet.model;
+            let model = jfet.operating_model;
             let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.junction_s);
             let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.junction_d);
             self.jfet_q[index] = [
@@ -1237,7 +1237,7 @@ impl Solver {
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
-            let model = jfet.model;
+            let model = jfet.operating_model;
             let nodes = &self.solution[..self.nodes];
             let voltages = [
                 sign * node_diff(nodes, jfet.g, jfet.junction_s),
@@ -2035,19 +2035,11 @@ impl Solver {
             let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);
             let raw_gd = sign * node_diff(nodes, jfet.g, jfet.junction_d);
             let raw_ds = sign * node_diff(nodes, jfet.junction_d, jfet.junction_s);
-            let critical = device::pn_critical_voltage(jfet.model.is, 1.0);
-            let gs = device::pn_limit(
-                raw_gs,
-                self.jfet_vgs[index],
-                device::THERMAL_VOLTAGE,
-                critical,
-            );
-            let gd = device::pn_limit(
-                raw_gd,
-                self.jfet_vgd[index],
-                device::THERMAL_VOLTAGE,
-                critical,
-            );
+            let vt = jfet.thermal_voltage();
+            let critical =
+                device::pn_critical_voltage_at_thermal_voltage(jfet.operating_model.is, 1.0, vt);
+            let gs = device::pn_limit(raw_gs, self.jfet_vgs[index], vt, critical);
+            let gd = device::pn_limit(raw_gd, self.jfet_vgd[index], vt, critical);
 
             // The lower-potential channel terminal is the effective source.
             // Gate junctions keep their physical terminal identities; only
@@ -2611,14 +2603,17 @@ impl Solver {
                 &negate(&channel_terms),
             );
 
+            let gate_model = jfet.operating_model;
+            let gate_vt = jfet.thermal_voltage();
             for (junction, (cathode, voltage, c0)) in [
-                (jfet.junction_s, self.jfet_vgs[index], jfet.model.cgs),
-                (jfet.junction_d, self.jfet_vgd[index], jfet.model.cgd),
+                (jfet.junction_s, self.jfet_vgs[index], gate_model.cgs),
+                (jfet.junction_d, self.jfet_vgd[index], gate_model.cgd),
             ]
             .into_iter()
             .enumerate()
             {
-                let gate = device::diode_op(voltage, jfet.model.is, 1.0);
+                let gate =
+                    device::diode_op_at_thermal_voltage(voltage, gate_model.is, 1.0, gate_vt);
                 let gate_voltage = sign * voltage;
                 let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
                 stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);
@@ -2636,9 +2631,9 @@ impl Solver {
                         let (charge, capacitance) = device::junction_depletion_charge(
                             voltage,
                             c0,
-                            jfet.model.pb,
+                            gate_model.pb,
                             0.5,
-                            jfet.model.fc,
+                            gate_model.fc,
                         );
                         let (geq, current) = match rule {
                             Integration::BackwardEuler => {

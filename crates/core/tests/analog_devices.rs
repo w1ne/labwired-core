@@ -6549,6 +6549,182 @@ mod analog {
         }
     }
 
+    /// Thermal voltage written out from CODATA constants, independent of the
+    /// engine's helper, for the JFET gate-junction temperature checks.
+    fn kelvin_thermal_voltage(kelvin: f64) -> f64 {
+        1.380_649e-23 * kelvin / 1.602_176_634e-19
+    }
+
+    /// An explicit instance `TEMP` heats both JFET gate junctions: `IS`
+    /// follows the `EG`/`XTI` saturation law and the diode exponent uses
+    /// `kT/q` at that temperature. The forward gate current is solved for both
+    /// polarities, with default and explicit `EG`/`XTI`, and compared against
+    /// a hand-written Shockley law. `TEMP == TNOM` must reproduce the card.
+    #[test]
+    fn jfet_gate_junction_leakage_follows_eg_xti_at_instance_temperature() {
+        let (is, tnom, vgs): (f64, f64, f64) = (1e-14, 27.0, 0.45);
+        let gate_current = |is_t: f64, kelvin: f64| {
+            let vt = kelvin_thermal_voltage(kelvin);
+            2.0 * (is_t * ((vgs / vt).exp() - 1.0) + device::GMIN * vgs)
+        };
+        let saturation = |eg: f64, xti: f64, kelvin: f64| {
+            let nominal = tnom + 273.15;
+            is * (eg / kelvin_thermal_voltage(nominal) - eg / kelvin_thermal_voltage(kelvin)).exp()
+                * (kelvin / nominal).powf(xti)
+        };
+        // (EG/XTI card text, EG, XTI): ngspice's 1.11 eV / 3 defaults, then a
+        // wide-gap card with a weaker power law.
+        let cases = [("", 1.11, 3.0), (" EG=1.2 XTI=2", 1.2, 2.0)];
+
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            for (parameters, eg, xti) in cases {
+                let netlist = |temp: Option<f64>| {
+                    let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                    format!(
+                        "Vg g 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                         J1 d g s JMOD{temp}\n.model JMOD {kind}(VTO={} BETA=100u \
+                         IS={is} TNOM={tnom}{parameters})\n",
+                        sign * vgs,
+                        -2.0 * sign
+                    )
+                };
+
+                let nominal = build(&netlist(Some(tnom)));
+                assert_eq!(nominal.circuit().jfets[0].operating_model.is, is);
+                let nominal_current = sign * source_current(&nominal, "Vg");
+                let nominal_expected = gate_current(is, tnom + 273.15);
+                assert!(
+                    relative(nominal_current, nominal_expected) < 1e-6,
+                    "{kind}{parameters}: TEMP=TNOM expected {nominal_expected} A, got \
+                     {nominal_current} A"
+                );
+
+                for temperature in [-20.0, 85.0, 125.0] {
+                    let kelvin = temperature + 273.15;
+                    let hot = build(&netlist(Some(temperature)));
+                    let expected_is = saturation(eg, xti, kelvin);
+                    let adjusted_is = hot.circuit().jfets[0].operating_model.is;
+                    assert!(
+                        relative(adjusted_is, expected_is) < 1e-12,
+                        "{kind}{parameters} at {temperature} C: IS(T) {expected_is} A, got \
+                         {adjusted_is} A"
+                    );
+                    let expected = gate_current(expected_is, kelvin);
+                    let measured = sign * source_current(&hot, "Vg");
+                    assert!(
+                        relative(measured, expected) < 1e-6,
+                        "{kind}{parameters} at {temperature} C: expected gate current \
+                         {expected} A, got {measured} A"
+                    );
+                    // A wrong law cannot hide in the tolerance: the solved
+                    // current moves by well over an order of magnitude.
+                    let ratio = measured / nominal_current;
+                    assert!(
+                        !(0.1..=10.0).contains(&ratio),
+                        "{kind}{parameters} at {temperature} C must move gate leakage \
+                         decisively, ratio {ratio}"
+                    );
+                }
+
+                // Without an instance TEMP the historical 300 K junction stays.
+                let fixed = sign * source_current(&build(&netlist(None)), "Vg");
+                let fixed_expected = gate_current(is, device::TEMPERATURE_K);
+                assert!(
+                    relative(fixed, fixed_expected) < 1e-6,
+                    "{kind}{parameters}: no TEMP expected {fixed_expected} A, got {fixed} A"
+                );
+            }
+        }
+    }
+
+    /// Instance `TEMP` moves the JFET gate potential `PB` and zero-bias
+    /// `CGS`/`CGD` by the silicon depletion law at grading 0.5. A reverse-bias
+    /// gate step through a resistor must then follow the same trajectory as a
+    /// card that states the hand-computed `PB(T)`/`CGS(T)`/`CGD(T)` directly,
+    /// and differ from the unheated card.
+    #[test]
+    fn jfet_gate_depletion_capacitance_follows_instance_temperature() {
+        let (tnom, temperature, pb, cgs, cgd): (f64, f64, f64, f64, f64) =
+            (27.0, 125.0, 0.8, 10e-9, 4e-9);
+        let (nominal, kelvin) = (tnom + 273.15, temperature + 273.15);
+        let bandgap = |t: f64| 1.16 - 7.02e-4 * t * t / (t + 1108.0);
+        let (vt_n, vt) = (
+            kelvin_thermal_voltage(nominal),
+            kelvin_thermal_voltage(kelvin),
+        );
+        let ratio = kelvin / nominal;
+        let pb_t =
+            pb * ratio - vt * (3.0 * ratio.ln() + bandgap(nominal) / vt_n - bandgap(kelvin) / vt);
+        let scale = 1.0 + 0.5 * (4e-4 * (kelvin - nominal) - pb_t / pb + 1.0);
+        let (cgs_t, cgd_t) = (cgs * scale, cgd * scale);
+        assert!(
+            pb_t < pb - 0.1 && scale > 1.05,
+            "a 98 K rise must lower PB and raise the depletion capacitance"
+        );
+
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let deck = |card: String, temp: Option<f64>| {
+                let temp = temp.map_or_else(String::new, |value| format!(" TEMP={value}"));
+                format!(
+                    "V1 in 0 dc 0\nR1 in g 1k\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                     J1 d g s JMOD{temp}\n.model JMOD {kind}(VTO={} BETA=100u IS=1e-30 \
+                     TNOM={tnom} FC=0.5 {card})\n",
+                    -2.0 * sign
+                )
+            };
+            let heated = deck(format!("CGS={cgs} CGD={cgd} PB={pb}"), Some(temperature));
+            let explicit = deck(format!("CGS={cgs_t} CGD={cgd_t} PB={pb_t}"), None);
+            let unheated = deck(format!("CGS={cgs} CGD={cgd} PB={pb}"), None);
+
+            let heated_circuit = parse_netlist(&heated).expect("heated JFET parses");
+            let operating = heated_circuit.jfets[0].operating_model;
+            assert!((operating.pb - pb_t).abs() < 1e-12, "{kind}: PB(T)");
+            assert!(relative(operating.cgs, cgs_t) < 1e-12, "{kind}: CGS(T)");
+            assert!(relative(operating.cgd, cgd_t) < 1e-12, "{kind}: CGD(T)");
+
+            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                let run = |netlist: &str| {
+                    let circuit = parse_netlist(netlist).expect("JFET step deck parses");
+                    let mut solver =
+                        Solver::new(circuit, integration).expect("JFET step solver builds");
+                    let gate = solver.circuit().node("g").expect("gate node");
+                    let source = solver.voltage_source_index("V1").expect("input source");
+                    solver.set_voltage_source(source, -sign * 3.0);
+                    (0..6)
+                        .map(|_| {
+                            solver.advance(2e-6).expect("gate step solves");
+                            sign * solver.node_voltage(gate)
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let heated_trace = run(&heated);
+                let explicit_trace = run(&explicit);
+                let unheated_trace = run(&unheated);
+                let mut largest_shift: f64 = 0.0;
+                for step in 0..heated_trace.len() {
+                    assert!(
+                        heated_trace[step] < 0.0 && heated_trace[step] > -3.0,
+                        "{kind} {integration:?}: the gate must still be charging"
+                    );
+                    assert!(
+                        (heated_trace[step] - explicit_trace[step]).abs() < 1e-9,
+                        "{kind} {integration:?} step {step}: TEMP gives {} V, explicit \
+                         PB(T)/CGS(T)/CGD(T) give {} V",
+                        heated_trace[step],
+                        explicit_trace[step]
+                    );
+                    largest_shift =
+                        largest_shift.max((heated_trace[step] - unheated_trace[step]).abs());
+                }
+                assert!(
+                    largest_shift > 0.02,
+                    "{kind} {integration:?}: heating must slow the gate charge, shift \
+                     {largest_shift} V"
+                );
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Newton iteration itself
     // -----------------------------------------------------------------------

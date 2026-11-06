@@ -570,7 +570,9 @@ dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
 `TVJE`/`TVJC` potential coefficients. BJT terminal resistances continue to
 use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
 use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
-`TEMP` is supplied. Gate-junction temperature effects and MOSFET temperature
+`TEMP` is supplied. The same `TEMP` scales JFET gate-junction `IS` by `EG`/`XTI`
+(defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD` by the diode depletion law
+at grading 0.5, and evaluates the gate diodes at that `kT/q`. MOSFET temperature
 laws are not modeled. These are external instance temperatures; self-heating
 is not modeled.
 Differential decks handed to ngspice pin `temp`/`tnom` to 26.85 °C unless the

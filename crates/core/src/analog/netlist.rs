@@ -108,8 +108,11 @@
 //! A JFET instance `TEMP` adjusts level-1 `VTO` by `VTOTC` when supplied, or
 //! otherwise by `-TCV`; it adjusts `BETA` by `1.01^(BETATCE·ΔT)` when
 //! `BETATCE` is supplied, or otherwise by `(T/TNOM)^BEX` using absolute
-//! temperatures. Without instance `TEMP`, the historical channel parameters
-//! are retained. Gate-junction temperature effects are not adjusted.
+//! temperatures. The same `TEMP` scales gate-junction `IS` by the `EG`/`XTI`
+//! saturation-current law (defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD`
+//! by the diode depletion law with grading 0.5, and evaluates the gate diodes
+//! at the instance thermal voltage. Without instance `TEMP`, the historical
+//! channel and gate parameters are retained.
 //! OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
 //! models fixed differential resistance between them, and `RINCM` models an
@@ -1534,6 +1537,10 @@ pub struct JfetModel {
     pub betatce: Option<f64>,
     /// Mobility temperature exponent used when `BETATCE` is absent.
     pub bex: f64,
+    /// Gate-junction activation energy `EG`, eV, for the `IS` temperature law.
+    pub eg: f64,
+    /// Gate-junction saturation-current temperature exponent `XTI`.
+    pub xti: f64,
 }
 
 impl JfetModel {
@@ -1556,6 +1563,8 @@ impl JfetModel {
             tcv: 0.0,
             betatce: None,
             bex: 0.0,
+            eg: 1.11,
+            xti: 3.0,
         }
     }
 }
@@ -2202,11 +2211,23 @@ pub struct Jfet {
     pub model_name: String,
     /// Resolved model parameters.
     pub model: JfetModel,
-    /// `VTO` and `BETA` adjusted for this instance's explicit `TEMP`.
+    /// Channel `VTO`/`BETA` and gate-junction `IS`/`PB`/`CGS`/`CGD` adjusted
+    /// for this instance's explicit `TEMP`.
     pub operating_model: JfetModel,
     /// Explicit instance temperature, in Celsius. `None` preserves the
-    /// historical channel parameters.
+    /// historical channel and gate parameters.
     pub temperature_celsius: Option<f64>,
+}
+
+impl Jfet {
+    /// Thermal voltage of the gate junctions: `kT/q` at the explicit instance
+    /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
+    pub fn thermal_voltage(&self) -> f64 {
+        self.temperature_celsius
+            .map_or(super::device::THERMAL_VOLTAGE, |celsius| {
+                super::device::thermal_voltage_at_temperature(celsius + 273.15)
+            })
+    }
 }
 
 /// Voltage threshold control for a switch: closes from the voltage between
@@ -3933,6 +3954,8 @@ fn bind_models(
                     || model.tnom_celsius <= -273.15
                     || !model.tcv.is_finite()
                     || !model.bex.is_finite()
+                    || !model.eg.is_finite()
+                    || !model.xti.is_finite()
                     || model.vtotc.is_some_and(|value| !value.is_finite())
                     || model.betatce.is_some_and(|value| !value.is_finite())
                 {
@@ -3971,9 +3994,18 @@ fn bind_models(
                 if !operating_model.vto.is_finite()
                     || !operating_model.beta.is_finite()
                     || operating_model.beta <= 0.0
+                    || !operating_model.is.is_finite()
+                    || operating_model.is <= 0.0
+                    || !operating_model.pb.is_finite()
+                    || operating_model.pb <= 0.0
+                    || !operating_model.cgs.is_finite()
+                    || operating_model.cgs < 0.0
+                    || !operating_model.cgd.is_finite()
+                    || operating_model.cgd < 0.0
                 {
                     return Err(ctx.parse_err(
-                        "temperature-adjusted JFET VTO/BETA must be finite and BETA > 0",
+                        "temperature-adjusted JFET parameters must be finite with BETA, IS, PB > 0 \
+                         and CGS/CGD >= 0",
                     ));
                 }
                 let junction_node = |circuit: &mut Circuit,
@@ -4421,6 +4453,8 @@ fn parse_model(
             (ModelCard::Jfet(model), "TCV") => model.tcv = value,
             (ModelCard::Jfet(model), "BETATCE") => model.betatce = Some(value),
             (ModelCard::Jfet(model), "BEX") => model.bex = value,
+            (ModelCard::Jfet(model), "EG") => model.eg = value,
+            (ModelCard::Jfet(model), "XTI") => model.xti = value,
             (ModelCard::Jfet(_), "LEVEL") if value != 1.0 => {
                 return Err(ctx.parse_err(format!(
                     "JFET `LEVEL={value}` is not modelled in-core; only level 1 is. Use \

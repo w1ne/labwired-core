@@ -1,0 +1,30 @@
+# Matched level-1 NJF pair used as gate-junction thermometers. Both forward
+# gate junctions carry the same bias; the 85 C instance's EG/XTI-scaled IS
+# and kT/q lower its gate voltage. PA6/PA7 resolve to ADC1_IN6/ADC1_IN7.
+name: "nucleo-f767zi-analog-jfet-gate-thermometer"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_gate_thermometer"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      bias_voltage: "ui.jfet_thermo.bias_v"
+    outputs:
+      reference_gate_voltage: "board.analog.pa6_volts"
+      heated_gate_voltage: "board.analog.pa7_volts"
+    config:
+      netlist_text: |
+        Vbias bias 0 dc 3.3
+        Rref bias gref 10k
+        Rhot bias ghot 10k
+        Jref 0 gref 0 NJF_SENSE TEMP=25
+        Jhot 0 ghot 0 NJF_SENSE TEMP=85
+        .model NJF_SENSE NJF(VTO=-2 BETA=500u IS=10f TNOM=25 EG=1.11 XTI=3)
+      probes:
+        reference_gate_voltage: "v(gref)"
+        heated_gate_voltage: "v(ghot)"
+      sources:
+        bias_voltage: "Vbias"
+      vdd: 3.3

@@ -217,6 +217,34 @@ fn jfet_drain_voltage(gate_v: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent forward gate-junction root for a JFET whose drain and source
+/// are both grounded: the bias resistor feeds two parallel gate diodes whose
+/// `IS` follows the `EG`/`XTI` law at the instance temperature.
+fn jfet_gate_thermometer_voltage(bias_v: f64, temperature_c: f64) -> f64 {
+    const BIAS_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 10e-15;
+    const EG_EV: f64 = 1.11;
+    const XTI: f64 = 3.0;
+    const TNOM_K: f64 = 25.0 + 273.15;
+    let thermal_v = |kelvin: f64| 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    let kelvin = temperature_c + 273.15;
+    let vt = thermal_v(kelvin);
+    let is_t = IS_A * (EG_EV / thermal_v(TNOM_K) - EG_EV / vt).exp() * (kelvin / TNOM_K).powf(XTI);
+    let residual = |gate_v: f64| {
+        (bias_v - gate_v) / BIAS_OHMS - 2.0 * (is_t * ((gate_v / vt).exp() - 1.0) + 1e-12 * gate_v)
+    };
+    let (mut low, mut high) = (0.0, bias_v);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -790,4 +818,102 @@ fn nucleo_f767zi_zener_breakdown_reaches_pa5_adc1_alongside_unrelated_devices() 
         zener_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
         "the breakdown voltage follows the driven load line: {zener_samples:?}"
     );
+}
+
+#[test]
+fn nucleo_f767zi_heated_jfet_gate_thermometer_reaches_pa6_pa7_adc1() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load the independent generic NTC and forward diode netlists");
+    let thermometer = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-jfet-gate-thermometer.yaml",
+    ))
+    .expect("load the generic JFET gate-junction thermometer netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(thermometer.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA6", 6), ("PA7", 7)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, forward diode, and JFET thermometer pair");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic netlists must resolve through PA0/PA1/PA6/PA7 to ADC1"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the independent NTC temperature");
+    let mut cycles = 0;
+    for bias_v in [1.5_f64, 3.3] {
+        session
+            .set_signal_number("ui.jfet_thermo.bias_v", bias_v)
+            .expect("drive the shared gate bias");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all three analog netlists");
+        assert_eq!(steps.len(), 3, "all devices solve at the 1 us boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let reference_v = signal_voltage(&session, "board.analog.pa6_volts");
+        let heated_v = signal_voltage(&session, "board.analog.pa7_volts");
+        for (label, measured, temperature_c) in
+            [("TNOM", reference_v, 25.0), ("85 C", heated_v, 85.0)]
+        {
+            let expected = jfet_gate_thermometer_voltage(bias_v, temperature_c);
+            assert!(
+                (measured - expected).abs() < 2e-5,
+                "{label} gate junction at {bias_v} V bias should sit at {expected} V, got {measured} V"
+            );
+        }
+        // About -2 mV/K over 60 K: a missing IS(T) or kT/q law collapses this.
+        let drop = reference_v - heated_v;
+        assert!(
+            (0.09..0.15).contains(&drop),
+            "the heated gate must read ~120 mV lower at {bias_v} V bias, got {drop} V"
+        );
+
+        for (channel, volts) in [
+            (0, 1.65),
+            (1, diode_load_line_voltage()),
+            (6, reference_v),
+            (7, heated_v),
+        ] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 channel {channel} conversion must report its analog voltage"
+            );
+        }
+        assert!(
+            u32::from(expected_adc_count(reference_v))
+                > u32::from(expected_adc_count(heated_v)) + 100,
+            "firmware must resolve the temperature difference in ADC counts"
+        );
+        for channel in [2, 3, 4, 5] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                0xFFFF,
+                "unconnected ADC1 channel {channel} remains undriven"
+            );
+        }
+    }
 }

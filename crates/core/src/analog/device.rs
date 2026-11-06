@@ -42,9 +42,9 @@
 //! diode `CJO`, `VJ`, `M`, and transit time use their documented temperature
 //! equations. BJT transit times use `TTF*`/`TTR*`, and terminal resistances use
 //! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. JFET level-1 channel `VTO`/`BETA`
-//! use `VTOTC`/`TCV` and `BETATCE`/`BEX` when an instance `TEMP` is supplied;
-//! gate-junction temperature effects and MOSFET temperature laws are not
-//! modeled. Other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
+//! use `VTOTC`/`TCV` and `BETATCE`/`BEX` when an instance `TEMP` is supplied,
+//! and its gate junctions use the diode `EG`/`XTI` and depletion laws;
+//! MOSFET temperature laws are not modeled. Other parameters are taken at [`TEMPERATURE_K`] as written. A `.model`
 //! line may carry unmodelled
 //! parameters (real vendor models do) and they are accepted and ignored; see
 //! [`super::netlist`]. Diode soft recovery covers the
@@ -260,10 +260,12 @@ pub fn bjt_parameters_at_temperature(
     (adjusted, thermal_voltage)
 }
 
-/// SPICE level-1 JFET channel parameters adjusted for an explicit instance
+/// SPICE level-1 JFET parameters adjusted for an explicit instance
 /// temperature. `VTOTC` overrides `TCV`; `BETATCE` overrides `BEX`, matching
-/// ngspice's documented alternatives. Gate-junction temperature effects are
-/// outside this helper.
+/// ngspice's documented alternatives. The gate junctions follow the diode
+/// laws: `IS` scales with `EG`/`XTI` at emission coefficient 1, and `PB` with
+/// `CGS`/`CGD` follow the silicon depletion law at the JFET's fixed grading
+/// coefficient of 0.5. At `TEMP == TNOM` every parameter is returned as written.
 pub fn jfet_parameters_at_temperature(
     model: JfetModel,
     temperature_celsius: Option<f64>,
@@ -286,6 +288,34 @@ pub fn jfet_parameters_at_temperature(
         let nominal_kelvin = model.tnom_celsius + 273.15;
         model.beta * libm::pow(temperature_kelvin / nominal_kelvin, model.bex)
     };
+
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    adjusted.is = diode_saturation_current_at_temperature(
+        model.is,
+        1.0,
+        model.eg,
+        model.xti,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    let (cgs, pb) = diode_depletion_parameters_at_temperature(
+        model.cgs,
+        model.pb,
+        0.5,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    let (cgd, _) = diode_depletion_parameters_at_temperature(
+        model.cgd,
+        model.pb,
+        0.5,
+        nominal_kelvin,
+        temperature_kelvin,
+    );
+    adjusted.cgs = cgs;
+    adjusted.cgd = cgd;
+    adjusted.pb = pb;
     adjusted
 }
 
