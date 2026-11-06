@@ -1,8 +1,9 @@
-# ESP32-DevKitC-32E GPIO, UART0, and BME280 I2C smokes
+# ESP32-DevKitC-32E GPIO, UART0, BME280 I2C, and RMT smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). This adds a real sensor path to the already-modelled ESP32-DevKitC-32E;
-it is peripheral depth on the highest-demand family, not a new MCU target.
+use). This round adds a timed classic RMT transmit path to the already-modelled
+ESP32-DevKitC-32E; it is peripheral depth on the highest-demand family, not a
+new MCU target.
 
 ## Board and modeled scope
 
@@ -17,6 +18,7 @@ resistor from GPIO23 to GND.
 | J3 pin 2 | GPIO23 | Base smoke toggles the output and requires at least 16 edges |
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
+| J3 pin 2 / GPIO23 | RMT channel 0 TX matrix output | RMT smoke sends red to one external WS2812 pixel and waits for TX_END |
 
 The BME280 breakout uses the standard `0x77` address and is powered directly
 from board 3V3/GND. Firmware reads ID register `0xD0` (`0x60`) and the raw
@@ -24,13 +26,16 @@ temperature registers `0xFA..0xFC` (`0x082DC0` in the deterministic model).
 The breakout, rather than a built-in board component, is declared as an
 external device in the BME280 system manifest.
 
-The UART0 controller is modeled. The board's USB-to-UART bridge and the
-pin-level UART TX/RX waveforms are not, so console capture does not prove USB
-serial behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers,
-flash boot behavior, and the 5 V power LED are outside these profiles. The
-classic ESP32 builder still has zero-answering windows for Wi-Fi MAC/PHY,
-I2S0/1, UHCI0, RMT, and PCNT, along with APB_CTRL and the DPORT analog-AHB
-fallbacks. The board profiles do not claim those blocks.
+The RMT model implements the channel 0 TX control/status offsets, RMTMEM symbol
+RAM, channel 0 transmit timing, GPIO-matrix output routing, and TX_END after the
+stream's reset interval. It does not model RX, channels 1–7 transmit behavior,
+or advancing APB FIFO pointers. The pixel is an
+external generic WS2812-compatible fixture, not an onboard DevKitC LED. The
+UART0 controller is modeled. The board's USB-to-UART bridge and the pin-level
+UART TX/RX waveforms are not, so console capture does not prove USB serial
+behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers, flash
+boot behavior, and the 5 V power LED are outside these profiles. I2S0/1,
+UHCI0, PCNT, APB_CTRL and DPORT analog-AHB retain fallback windows.
 
 ## Copy-paste firmware example
 
@@ -97,6 +102,11 @@ temperature registers. The Arduino ESP32 3.3.12 `Wire` driver stalls after its
 first split-command `END_DETECT` boundary in the current simulator, so the
 local smoke does not claim to verify that driver path.
 
+The RMT smoke firmware is [`firmware/src/rmt_smoke.cpp`](firmware/src/rmt_smoke.cpp).
+It writes one red GRB frame to RMTMEM, starts classic channel 0, and waits for
+the model's timed TX_END bit. The external pixel model decodes the GPIO23
+waveform and the smoke requires one red pixel.
+
 ## Reproduce
 
 From the repository root:
@@ -114,6 +124,20 @@ The build log, local simulator output, and generated metrics are committed
 under `evidence/bme280/`. This is deterministic digital-twin evidence, not a
 physical-board run. The classic ESP32 hosted verifier does not support its
 serial oracle; the committed local CLI smoke is the acceptance evidence.
+
+Run the RMT + pixel smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-rmt-neopixel \
+  --script examples/esp32-devkitc-32e/rmt-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/rmt-neopixel \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-rmt-smoke.sh
+```
+
+The run evidence belongs under `evidence/rmt-neopixel/`. This is deterministic
+digital-twin evidence, not a physical-board run.
 
 The current lifecycle and stock check is in
 [`evidence/vendor-status.md`](evidence/vendor-status.md). The evidence records

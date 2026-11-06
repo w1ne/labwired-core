@@ -45,6 +45,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32_dport" => Box::new(dport::Dport::new()),
         "esp32_sha" => Box::new(sha::Sha::new()),
         "esp32_rtc_cntl" => Box::new(rtc_cntl::RtcCntl::new()),
+        "esp32_rmt" => Box::new(rmt::Esp32Rmt::new(p_cfg.irq.unwrap_or(47))),
         // ESP32-classic is the only chip in this model that HAS a LACT timer
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
@@ -73,6 +74,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_dport",
     "esp32_sha",
     "esp32_rtc_cntl",
+    "esp32_rmt",
     "esp32_timg",
     "esp32_efuse",
     "esp32_syscon",

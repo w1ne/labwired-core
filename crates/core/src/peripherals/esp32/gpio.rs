@@ -231,6 +231,11 @@ const SIG_U2TXD: u32 = 198;
 /// channel, ...)`.
 const SIG_LEDC_HS0: u32 = 71;
 
+/// Classic ESP32 GPIO-matrix output signal indices for RMT TX channels 0–7
+/// (`soc/esp32/include/soc/gpio_sig_map.h`, `RMT_SIG_OUTn_IDX`).
+pub const RMT_SIG_OUT0: u32 = 87;
+const RMT_SIG_OUT7: u32 = 94;
+
 /// Names of the 16 LEDC output signals, as `gpio_sig_map.h` spells them.
 const LEDC_SIGNAL_NAMES: [&str; 16] = [
     "LEDC_HS_SIG_OUT0",
@@ -296,6 +301,16 @@ fn esp32_out_signal_name(idx: u32) -> Option<&'static str> {
         SIG_I2CEXT1_SCL => "I2CEXT1_SCL",
         SIG_I2CEXT1_SDA => "I2CEXT1_SDA",
         SIG_U2TXD => "U2TXD",
+        idx if (RMT_SIG_OUT0..=RMT_SIG_OUT7).contains(&idx) => [
+            "RMT_SIG_OUT0",
+            "RMT_SIG_OUT1",
+            "RMT_SIG_OUT2",
+            "RMT_SIG_OUT3",
+            "RMT_SIG_OUT4",
+            "RMT_SIG_OUT5",
+            "RMT_SIG_OUT6",
+            "RMT_SIG_OUT7",
+        ][(idx - RMT_SIG_OUT0) as usize],
         idx if (SIG_LEDC_HS0..SIG_LEDC_HS0 + 16).contains(&idx) => {
             LEDC_SIGNAL_NAMES[(idx - SIG_LEDC_HS0) as usize]
         }
@@ -425,6 +440,53 @@ impl Esp32Gpio {
             pad_sources: [PadSource::Latch; PAD_COUNT as usize],
             rtc: None,
         }
+    }
+
+    /// Drive a GPIO pad from a peripheral output-matrix source and timestamp
+    /// the observed transition at the peripheral's scheduled cycle.
+    pub fn drive_pad_output_at(&mut self, pin: u8, level: bool, sim_cycle: u64) -> bool {
+        self.cycle = sim_cycle;
+        self.drive_pad_output(pin, level)
+    }
+
+    /// Drive output pad `pin` to `level` from a peripheral source such as RMT.
+    /// The GPIO output latch is updated through the same observer path as a
+    /// firmware OUT-register write.
+    pub fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= PAD_COUNT {
+            return false;
+        }
+        let before = self.pad_levels();
+        if pin < 32 {
+            let mask = 1u32 << pin;
+            let new_out = if level {
+                self.out | mask
+            } else {
+                self.out & !mask
+            };
+            self.apply_out(new_out);
+        } else {
+            let mask = 1u32 << (pin - 32);
+            let new_out1 = if level {
+                self.out1 | mask
+            } else {
+                self.out1 & !mask
+            };
+            self.apply_out1(new_out1);
+        }
+        self.latch_input_edges(before);
+        self.sync_rtc_inputs();
+        true
+    }
+
+    /// Return pads whose output-matrix selector routes to `signal_idx`.
+    pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        let want = signal_idx & 0x1ff;
+        self.out_sel
+            .iter()
+            .enumerate()
+            .filter_map(|(pin, &selected)| (selected == want).then_some(pin as u8))
+            .collect()
     }
 
     /// The RTC IO MUX's view of the pads; all-digital without RTC_IO.

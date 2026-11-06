@@ -1,0 +1,15 @@
+# ESP32-DevKitC-32E classic RMT channel 0 TX to one external WS2812 pixel.
+schema_version: "1.0"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_rmt/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-rmt-neopixel.yaml"
+limits:
+  max_steps: 800000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_RMT_TX_END=1"
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+      colour: "0xF800"
+      min_colour_pixels: 1

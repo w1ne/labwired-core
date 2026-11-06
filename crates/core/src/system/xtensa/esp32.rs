@@ -721,7 +721,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
 
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
-    // (SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
+    // (SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT,
     // LEDC, etc). Most are touched briefly during esp-idf init; round-
     // trip stubs satisfy the access pattern even without modeling
     // any specific peripheral semantics.
@@ -743,7 +743,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("rmt", 0x3FF5_6000),
         ("pcnt", 0x3FF5_7000),
     ] {
         bus.add_peripheral(
@@ -983,6 +982,7 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("dport",    "esp32_dport",    0x3FF0_0000, 0x1000, None),
     ("sha",      "esp32_sha",      0x3FF0_3000, 0x0100, None),
     ("rtc_cntl", "esp32_rtc_cntl", 0x3FF4_8000, 0x0200, None),
+    ("rmt", "esp32_rmt", 0x3FF5_6000, 0x1000, Some(47)),
     ("timg0",    "esp32_timg",     0x3FF5_F000, 0x1000, None),
     ("timg1",    "esp32_timg",     0x3FF6_0000, 0x1000, None),
     ("efuse",    "esp32_efuse",    0x3FF5_A000, 0x1000, None),

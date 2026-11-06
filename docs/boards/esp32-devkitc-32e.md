@@ -11,16 +11,25 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
 - `configs/systems/esp32-devkitc-32e-bme280.yaml` adds an external BME280 model
   at I2C0 address `0x77`, with SDA=GPIO21 (J3 pin 6) and SCL=GPIO22 (J3 pin 3).
   The breakout uses 3V3/GND from J2/J3.
-- Demand rank: ESP32 is rank 1 in the standing list (38% MCU use). This work
-  adds I2C sensor depth to an existing ESP32 board.
+- Demand rank: ESP32 is rank 1 in the standing list (38% MCU use). This round
+  adds classic RMT channel 0 TX to an existing ESP32 board.
 - The smoke asserts sensor ID `0x60` and temperature raw value `0x082DC0` over
   the local UART0 capture.
 
-Wi-Fi/Bluetooth, SPI, timers, flash boot behavior, USB-to-UART hardware,
-pin-level UART waveforms, analog behavior, and the power LED remain outside the
-profile. The classic ESP32 builder retains zero-answering Wi-Fi MAC/PHY,
-I2S0/1, UHCI0, RMT, and PCNT windows plus APB_CTRL and DPORT analog-AHB
-fallbacks; these smokes do not exercise them.
+The RMT smoke sends a red WS2812 frame from channel 0 through the GPIO matrix
+on GPIO23 and waits for the timed TX_END event. It attaches one generic
+WS2812-compatible pixel as an external device; this is a test fixture, not a
+built-in board LED. The classic RMT model implements the register window,
+RMTMEM, channel 0 transmit timing and TX_END. Receive mode and channels 1–7
+remain outside the modeled scope. Wi-Fi/Bluetooth, SPI, timers, flash boot
+behavior, USB-to-UART hardware, pin-level UART waveforms, analog behavior, and
+the power LED also remain outside the profile. I2S0/1, UHCI0, PCNT, APB_CTRL
+and DPORT analog-AHB retain fallback windows.
+
+The rank-1 RMT smoke is in
+[`examples/esp32-devkitc-32e/rmt-smoke.yaml`](../../examples/esp32-devkitc-32e/rmt-smoke.yaml)
+and its complete copy-paste firmware source is
+[`rmt_smoke.cpp`](../../examples/esp32-devkitc-32e/firmware/src/rmt_smoke.cpp).
 
 Live board, module, and sensor status is recorded in
 [`examples/esp32-devkitc-32e/evidence/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/vendor-status.md).
