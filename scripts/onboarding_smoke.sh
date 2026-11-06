@@ -166,6 +166,31 @@ run_started_iso="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 capture_signature() {
   local log_file="$1"
+  local stage="${2:-}"
+  if [[ "${stage}" == "run_smoke" ]]; then
+    local result_file="${OUT_DIR}/simulation-output/result.json"
+    if [[ -f "${result_file}" ]]; then
+      local result_message
+      result_message="$(python3 - "${result_file}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+try:
+    result = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    result = {}
+message = result.get("message", "")
+if message:
+    print(str(message).replace("\r", " ").replace("\n", " "))
+PY
+)"
+      if [[ -n "${result_message}" ]]; then
+        printf '%s\n' "${result_message}" | cut -c1-240
+        return
+      fi
+    fi
+  fi
   awk '
     NF && first == "" { first = $0 }
     tolower($0) ~ /error|fail|assertion failed/ { print; found = 1; exit }
@@ -202,7 +227,7 @@ run_stage() {
 
   status="fail"
   failure_stage="${stage}"
-  first_error_signature="$(capture_signature "${log_file}")"
+  first_error_signature="$(capture_signature "${log_file}" "${stage}")"
   if [[ -z "${first_error_signature}" ]]; then
     first_error_signature="no-log-output"
   fi
@@ -238,6 +263,10 @@ infer_failure_hint() {
   fi
 
   if [[ "${stage}" == "run_smoke" ]]; then
+    if [[ "${sig_lc}" == *"unsupported arm real-time core"* ]]; then
+      echo "CPU model gap. Add a real adapter for this core before claiming boot support."
+      return
+    fi
     if [[ "${sig_lc}" == *"no such file or directory"* ]] || [[ "${sig_lc}" == *"not found"* ]]; then
       echo "Path mismatch. Verify script/system paths in workflow matrix and repository layout."
       return

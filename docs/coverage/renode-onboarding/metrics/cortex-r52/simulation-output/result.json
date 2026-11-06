@@ -1,0 +1,32 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "config_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "chip 'cortex-r52': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter",
+  "assertions": [],
+  "firmware_hash": "7c82c5f94451130d53f2d0a91a8ea58a2f11c9af6925a7a50d5ea32fd3d4de0c",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/cortex-r52-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/cortex-r52.yaml",
+    "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml"
+  }
+}

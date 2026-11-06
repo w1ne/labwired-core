@@ -6,18 +6,13 @@
 
 name: cortex-r52
 arch: arm
+core: cortex-r52
+# Generic memory windows support a direct CPU-only probe. The imported PL011
+# and generic-timer windows are omitted because this R52 CPU is unsupported.
 flash:
   base: 2281701376
   size: 67108864B
 ram:
   base: 536870912
   size: 2147483648B
-peripherals:
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
-- id: uart0
-  type: pl011
-  bus: sysbus
-  base_address: 2617835520
+peripherals: []
