@@ -274,8 +274,7 @@ impl WasmSimulator {
         // the SPI payload → blank render. Removing all of it lets the real SPI
         // bus mutex and critical sections run, matching the proven e2e path in
         // crates/core/tests/e2e_labwired_ereader.rs. (xQueueCreateMutexStatic
-        // keeps its echo thunk below — callers assert the returned handle equals
-        // the static buffer they passed in.)
+        // runs for real too.)
         // spi_flash_init_lock / op_lock / op_unlock are NOT stubbed: the real
         // FreeRTOS mutex create runs (see above), as in the shared profile.
 
@@ -302,11 +301,10 @@ impl WasmSimulator {
             "esp_clk_cpu_freq",
             rom_thunks::esp_clk_cpu_freq_240mhz,
         );
-        push_named(
-            &mut thunks,
-            "xQueueCreateMutexStatic",
-            rom_thunks::x_queue_create_mutex_static_echo,
-        );
+        // xQueueCreateMutexStatic is NOT echoed: the echo left the queue (and
+        // its spinlock) uninitialised, and IDF 5.x creates the UART driver's
+        // tx_mux through it, so the first Serial.print deadlocked. Same as the
+        // shared profile.
         push_named(
             &mut thunks,
             "xTaskGetCurrentTaskHandle",
