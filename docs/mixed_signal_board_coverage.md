@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 76 have end-to-end analog coverage; 27 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 77 have end-to-end analog coverage; 26 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -88,7 +88,7 @@ Current inventory: **103 profiles; 76 have end-to-end analog coverage; 27 have n
 | `nucleo-u575zi` | [`cosim_nucleo_u575zi_analog.rs`](../crates/core/tests/cosim_nucleo_u575zi_analog.rs)::`nucleo_u575zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode solve through PA0/PA1 analog-pad routes to ADC1 channels 5/6; solved voltages, 12-bit firmware-visible conversions, channel isolation, and undriven channel 7 are asserted |
 | `nucleo-u5a5zj` | [`cosim_nucleo_u5a5zj_analog.rs`](../crates/core/tests/cosim_nucleo_u5a5zj_analog.rs)::`nucleo_u5a5zj_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode solve through PA0/PA1 analog-pad routes to ADC1 channels 5/6; solved voltages, 12-bit firmware-visible conversions, channel isolation, and undriven channel 7 are asserted |
 | `nucleo_g474re` | [`cosim_nucleo_g474re_analog.rs`](../crates/core/tests/cosim_nucleo_g474re_analog.rs)::`nucleo_g474re_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists reach PA0/PA1 and assert solved voltages, GPIOA_IDR levels, and Schmitt hysteresis. Thresholds are test assumptions; this is GPIO threshold coverage, not ADC support. |
-| `nucleo_wba52cg` | **NO E2E analog coverage** |
+| `nucleo_wba52cg` | [`cosim_nucleo_wba52cg_analog.rs`](../crates/core/tests/cosim_nucleo_wba52cg_analog.rs)::`nucleo_wba52cg_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists solve onto PA0/PA1 and are asserted through GPIOA_IDR threshold crossings and hysteresis. Thresholds are test assumptions; ADC4 remains undeclared in the current chip model. |
 | `pic16f1829-curiosity` | **NO E2E analog coverage** |
 | `pic16f877a-demo` | **NO E2E analog coverage** |
 | `pic18f4520-demo` | **NO E2E analog coverage** |
