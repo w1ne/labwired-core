@@ -6,7 +6,8 @@
 # STM32F1 ADC block at 10 bits) for ch32fun's adc_polled, and I2C1 on its
 # default pins (PC1 SDA, PC2 SCL) for ch32fun's i2c_oled, and TIM2 with its
 # channel outputs on the reset-mapped pads (PD4/PD3/PC0/PD7) for ch32fun's
-# tim2_pwm.
+# tim2_pwm, and EXTI with its AFIO_EXTICR port select for ch32fun's
+# exti_pin_change_isr.
 #
 # Sources:
 # - ch32fun ch32v003hw.h (register map, DMDATA0/DMDATA1/sentinel at
@@ -38,8 +39,17 @@
 # RCC_APB1PRSTR reset (dropped, as for I2C1), PD7's NRST option byte (the
 # pad is treated as GPIO), encoder/slave modes, DMA and TIM2 interrupts.
 #
+# EXTI keeps the F1 register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR)
+# over its ten lines. A rising or falling edge on a pad whose port
+# AFIO_EXTICR selects for lines 0..7 latches INTFR when RTENR/FTENR asks for
+# it, and INTFR & INTENR drives PFIC interrupt 20 (EXTI7_0) as a level until
+# the handler clears INTFR. Not modeled on EXTI: event mode (EVENR wakes
+# nothing, as sleep is not modeled), the PVD (line 8) and AWU (line 9)
+# sources and their interrupts 17/21, and the input filter/synchroniser
+# latency (the flag is set on the same cycle as the pad edge).
+#
 # Not modeled: debug-printf input from the host, a detached probe, the rest
-# of the RISC-V debug module, TIM1, EXTI, SPI, DMA, OPA, the
+# of the RISC-V debug module, TIM1, SPI, DMA, OPA, the
 # watchdogs, sleep/standby, the HSE, the option bytes, and everything listed
 # as not modeled in ch32v003f4p6-pfic-smoke.yaml.
 name: ch32v003f4p6-ch32fun-smoke
@@ -82,12 +92,23 @@ peripherals:
     config:
       profile: stm32f1
 
-  # funGpioInitAll() sets AFIOEN with the port clocks; PCFR1 is storage only.
+  # funGpioInitAll() sets AFIOEN with the port clocks; PCFR1 is storage only,
+  # EXTICR (0x08) selects the port of EXTI lines 0..7.
   - id: afio
     type: afio
     base_address: 0x40010000
-    size: 8B
+    size: 12B
     clock: { reg: apb2enr, bit: 0 }
+    config:
+      profile: ch32v003
+
+  # EXTI has no RCC enable bit of its own on the CH32V003.
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: 24B
+    config:
+      profile: ch32v003
 
   # WCH-LinkE attached and polling like `minichlink -T`.
   - id: debug_printf

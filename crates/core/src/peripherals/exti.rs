@@ -32,6 +32,11 @@ pub enum ExtiRegisterLayout {
     /// PR at 0x00..0x14, port mux in `SYSCFG_EXTICRx`), with the Cortex-M0+
     /// grouped vectors: EXTI0_1 = IRQ 5, EXTI2_3 = 6, EXTI4_15 = 7.
     Stm32L0,
+    /// WCH CH32V003 (ch32fun `EXTI_TypeDef`: INTENR/EVENR/RTENR/FTENR/
+    /// SWIEVR/INTFR at the F1 offsets): 10 lines, GPIO lines 0..7 sharing
+    /// PFIC interrupt 20 (`EXTI7_0_IRQn`) as a level request, port select in
+    /// `AFIO_EXTICR`.
+    Ch32v003,
 }
 
 impl FromStr for ExtiRegisterLayout {
@@ -45,8 +50,9 @@ impl FromStr for ExtiRegisterLayout {
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
+            "ch32v003" => Ok(Self::Ch32v003),
             _ => Err(format!(
-                "unsupported EXTI register layout '{}'; supported: stm32f1, stm32l4, stm32g0, stm32u5, stm32l0",
+                "unsupported EXTI register layout '{}'; supported: stm32f1, stm32l4, stm32g0, stm32u5, stm32l0, ch32v003",
                 value
             )),
         }
@@ -248,6 +254,37 @@ impl SplitPendingGpioExti {
     }
 }
 
+// ── WCH CH32V003: the F1 register file, PFIC level delivery ─────────────────
+/// The CH32V003 EXTI. Lines 0..7 are the GPIO lines (port from
+/// `AFIO_EXTICR`), 8 is PVD and 9 is AWU. With a QingKe PFIC attached,
+/// `INTFR & INTENR` over lines 0..7 drives PFIC interrupt 20 as a LEVEL, like
+/// the QingKe SysTick: requested from the edge until the handler's INTFR
+/// write-1-clear, so a handler that acknowledges runs once per edge. Lines 8
+/// and 9 latch and clear like the others but raise nothing (no PVD or AWU
+/// model drives them). Without a PFIC the flags are register state only.
+/// Event mode (EVENR) wakes nothing: sleep is not modeled.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct QingkeExti {
+    bank1: ExtiBank,
+    #[serde(skip)]
+    pfic: Option<std::sync::Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
+}
+
+impl QingkeExti {
+    /// INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR implement bits 0..9.
+    const LINES: u32 = 0x3FF;
+    const GPIO_LINES: u32 = 0xFF;
+    /// `EXTI7_0_IRQn` in ch32fun's ch32v003hw.h.
+    const EXTI7_0_IRQ: u32 = 20;
+
+    fn publish(&self) {
+        if let Some(pfic) = &self.pfic {
+            let active = self.bank1.pr & self.bank1.imr & Self::GPIO_LINES;
+            pfic.set_level(Self::EXTI7_0_IRQ, active != 0);
+        }
+    }
+}
+
 /// External Interrupt/Event Controller — one variant per chip family.
 #[derive(Debug, serde::Serialize)]
 pub enum Exti {
@@ -257,6 +294,7 @@ pub enum Exti {
     Stm32U5(SplitPendingGpioExti),
     /// The F1 register file with the L0 vector routing.
     Stm32L0(F1Exti),
+    Ch32v003(QingkeExti),
 }
 
 impl Default for Exti {
@@ -289,6 +327,7 @@ impl Exti {
                 line_mask,
                 ..Default::default()
             }),
+            ExtiRegisterLayout::Ch32v003 => Self::Ch32v003(QingkeExti::default()),
         }
     }
 
@@ -311,6 +350,12 @@ impl Exti {
                 32..=39 => e.bank2.pr |= 1u32 << (line - 32),
                 _ => {}
             },
+            Self::Ch32v003(e) => {
+                if line < 10 {
+                    e.bank1.pr |= 1u32 << line;
+                    e.publish();
+                }
+            }
         }
     }
 
@@ -362,6 +407,19 @@ impl Exti {
             }
             Self::Stm32F1(e) | Self::Stm32L0(e) => &mut e.bank1,
             Self::Stm32L4(e) => &mut e.bank1,
+            Self::Ch32v003(e) => {
+                // GPIO lines 0..7 only; AFIO_EXTICR names no source above.
+                if line >= 8 || line_source != Some(port) {
+                    return false;
+                }
+                let selected = if after { e.bank1.rtsr } else { e.bank1.ftsr };
+                if selected & bit == 0 {
+                    return false;
+                }
+                e.bank1.pr |= bit;
+                e.publish();
+                return true;
+            }
         };
         if line_source != Some(port) {
             return false;
@@ -378,6 +436,13 @@ impl Exti {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.read(offset),
             Self::Stm32F1(e) | Self::Stm32L0(e) => match offset {
+                0x00..=0x14 => e.bank1.read(offset),
+                _ => {
+                    crate::census_reg!("exti:Exti", offset, "read");
+                    0
+                }
+            },
+            Self::Ch32v003(e) => match offset {
                 0x00..=0x14 => e.bank1.read(offset),
                 _ => {
                     crate::census_reg!("exti:Exti", offset, "read");
@@ -412,6 +477,15 @@ impl Exti {
                     crate::census_reg!("exti:Exti", offset, "write");
                 }
             },
+            Self::Ch32v003(e) => {
+                if (0x00..=0x14).contains(&offset) {
+                    e.bank1.write(offset, value, QingkeExti::LINES);
+                    // SWIEVR / INTENR can raise the request, INTFR drops it.
+                    e.publish();
+                } else {
+                    crate::census_reg!("exti:Exti", offset, "write");
+                }
+            }
         }
     }
 
@@ -451,6 +525,8 @@ impl Exti {
                     route_bank1_irqs(active1, &mut irqs);
                 }
             }
+            // Delivered as a PFIC level (`QingkeExti::publish`), not a pulse.
+            Self::Ch32v003(_) => {}
             Self::Stm32L4(e) => {
                 let active1 = e.bank1.pr & e.bank1.imr;
                 let active2 = e.bank2.pr & e.bank2.imr;
@@ -486,6 +562,8 @@ impl Exti {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.active() != 0,
             Self::Stm32F1(e) | Self::Stm32L0(e) => (e.bank1.pr & e.bank1.imr) != 0,
             Self::Stm32L4(e) => (e.bank1.pr & e.bank1.imr) != 0 || (e.bank2.pr & e.bank2.imr) != 0,
+            // Nothing to re-emit: the PFIC holds the level.
+            Self::Ch32v003(_) => false,
         }
     }
 
@@ -506,6 +584,7 @@ impl Exti {
             Self::Stm32G0(e) | Self::Stm32U5(e) => &e.clock,
             Self::Stm32F1(e) | Self::Stm32L0(e) => &e.clock,
             Self::Stm32L4(e) => &e.clock,
+            Self::Ch32v003(_) => return false,
         };
         cfg!(feature = "event-scheduler") && clock.is_some()
     }
@@ -515,6 +594,7 @@ impl Exti {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.chain_live = live,
             Self::Stm32F1(e) | Self::Stm32L0(e) => e.chain_live = live,
             Self::Stm32L4(e) => e.chain_live = live,
+            Self::Ch32v003(_) => {}
         }
     }
 
@@ -523,6 +603,7 @@ impl Exti {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.chain_live,
             Self::Stm32F1(e) | Self::Stm32L0(e) => e.chain_live,
             Self::Stm32L4(e) => e.chain_live,
+            Self::Ch32v003(_) => false,
         }
     }
 
@@ -533,6 +614,7 @@ impl Exti {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.clock = None,
             Self::Stm32F1(e) | Self::Stm32L0(e) => e.clock = None,
             Self::Stm32L4(e) => e.clock = None,
+            Self::Ch32v003(_) => {}
         }
     }
 }
@@ -615,7 +697,9 @@ impl Peripheral for Exti {
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        !self.scheduler_mode()
+        // The CH32V003 variant has no per-cycle work: every change to its
+        // request level happens in a write or an edge.
+        !matches!(self, Self::Ch32v003(_)) && !self.scheduler_mode()
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -623,6 +707,17 @@ impl Peripheral for Exti {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.clock = Some(clock),
             Self::Stm32F1(e) | Self::Stm32L0(e) => e.clock = Some(clock),
             Self::Stm32L4(e) => e.clock = Some(clock),
+            Self::Ch32v003(_) => {}
+        }
+    }
+
+    fn attach_qingke_pfic(
+        &mut self,
+        pfic: std::sync::Arc<crate::peripherals::qingke_pfic::QingkePficState>,
+    ) {
+        if let Self::Ch32v003(e) = self {
+            e.pfic = Some(pfic);
+            e.publish();
         }
     }
 
@@ -698,6 +793,7 @@ impl Peripheral for Exti {
             }
             Self::Stm32F1(e) => report_bank1_levels(e.bank1.pr & e.bank1.imr, report),
             Self::Stm32L4(e) => report_bank1_levels(e.bank1.pr & e.bank1.imr, report),
+            Self::Ch32v003(_) => {}
         }
     }
 

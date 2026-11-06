@@ -148,6 +148,15 @@ const RULE_A_ALLOWLIST: &[(&str, &str, &str)] = &[
 /// `uses_scheduler()`.
 const CONDITIONAL_ALLOWLIST: &[(&str, &str, &str)] = &[
     (
+        "peripherals/exti.rs",
+        "Exti",
+        "`!matches!(self, Self::Ch32v003(_)) && !self.scheduler_mode()`: the STM32 \
+         variants keep the plain `!uses_scheduler()` shape. The CH32V003 variant \
+         drives its PFIC request as a level from the MMIO write and the pad-edge \
+         paths (`QingkeExti::publish`); its `pending_irqs()` is always empty, so \
+         `tick()` returns the default result in every reachable state.",
+    ),
+    (
         "peripherals/bxcan.rs",
         "BxCan",
         "`self.bus_rx.is_some()`: the only thing tick() does is drain the CanBus \

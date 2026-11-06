@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build six unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build seven unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -20,6 +20,11 @@
 #                    count every Delay_Ms(5), CH2/CH4 180 degrees out of
 #                    phase with CH1. CH1/CH2 are active low; CH4 stays
 #                    active high (the example masks CC4P with 0xff).
+#   exti_pin_change_isr.elf
+#                    examples/exti_pin_change_isr: EXTI line 3 on PD3
+#                    (AFIO_EXTICR = PD, rising edge, INTENR), the
+#                    EXTI7_0 handler blipping PC1 high then low and
+#                    clearing INTFR; main spins on nop.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V003 (rv32ec/ilp32e, -Os -flto, generated_ch32v003.ld),
@@ -56,7 +61,7 @@ ld="${out_dir}/generated_ch32v003.ld"
 "${prefix}gcc" -E -P -x c -DTARGET_MCU=CH32V003 -DMCU_PACKAGE=1 -DTARGET_MCU_LD=0 \
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
-for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm; do
+for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

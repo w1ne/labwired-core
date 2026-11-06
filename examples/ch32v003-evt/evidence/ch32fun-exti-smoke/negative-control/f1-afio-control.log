@@ -1,0 +1,10 @@
+# chip profile with afio 'profile: stm32f1' (F103 EXTICR decoding), everything else as committed
+$ labwired test --script examples/ch32v003-evt/ch32fun-exti-smoke.yaml
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-06T22:59:12.265302Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioc:1", min_edges: 4 } }) (captured len=0)
+FAIL  8/9 checks · ch32fun-exti-smoke · 800000 steps · 0.54s
+
+$ cargo test -p labwired-core --test ch32v003_exti
+pd3_rising_edge_requests_exti7_0_until_intfr_is_cleared: panicked at ch32v003_exti.rs:77 (INTFR stays 0)
+intenr_gates_the_request_not_the_flag: panicked at ch32v003_exti.rs:99
+test result: FAILED. 1 passed; 2 failed

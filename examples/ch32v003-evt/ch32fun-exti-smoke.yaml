@@ -1,0 +1,42 @@
+# ch32fun examples/exti_pin_change_isr, unmodified (build-ch32fun-examples.sh).
+# EXTI line 3 takes PD3 (AFIO_EXTICR = 0xC0), rising edge only, and the
+# EXTI7_0 handler drives PC1 high then low and clears INTFR. main() spins on
+# nop, so every PC1 edge comes from the handler.
+#
+# The button is pressed, released and pressed again. Two rising edges on PD3
+# make two handler runs, i.e. four PC1 edges; the release (falling, FTENR
+# clear) makes none. gpio_edges only takes a minimum, so the exact count -
+# four, not six or eight - is pinned by the --watch-gpio capture committed as
+# evidence/ch32fun-exti-smoke/pc1-capture.json, and by
+# crates/core/tests/ch32v003_exti.rs.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/exti_pin_change_isr.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-exti-smoke.yaml"
+limits:
+  max_cycles: 800000
+  max_steps: 2000000
+  wall_time_ms: 120000
+stimuli:
+  - target: { component: button_pd3, channel: pressed }
+    trigger: !after_cycles { cycles: 200000 }
+    value: 1.0
+  - target: { component: button_pd3, channel: pressed }
+    trigger: !after_cycles { cycles: 400000 }
+    value: 0.0
+  - target: { component: button_pd3, channel: pressed }
+    trigger: !after_cycles { cycles: 600000 }
+    value: 1.0
+assertions:
+  - gpio_edges: { pin: "gpioc:1", min_edges: 4 }
+  # The configuration the example leaves: EXTICR line 3 -> PD, INTENR and
+  # RTENR line 3, FTENR clear, and INTFR acknowledged by the handler.
+  - memory_value: { address: 0x40010008, size: 32, expected_value: 0xC0 }
+  - memory_value: { address: 0x40010400, size: 32, expected_value: 0x8 }
+  - memory_value: { address: 0x40010408, size: 32, expected_value: 0x8 }
+  - memory_value: { address: 0x4001040C, size: 32, expected_value: 0x0 }
+  - memory_value: { address: 0x40010414, size: 32, expected_value: 0x0 }
+  # PFIC: EXTI7_0 (interrupt 20) enabled, not pending, not active.
+  - memory_value: { address: 0xE000E000, size: 32, mask: 0x00100000, expected_value: 0x00100000 }
+  - memory_value: { address: 0xE000E020, size: 32, mask: 0x00100000, expected_value: 0 }
+  - memory_value: { address: 0xE000E300, size: 32, mask: 0x00100000, expected_value: 0 }

@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs six of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs seven of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -165,6 +165,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `adc_polled` | a potentiometer on PD4 (AIN7) is turned 50 % → 25 % → 100 %; the printed codes must be `511`, `511`, `255`, `255`, `1023` | `Count: 0 adc: 511` .. `Count: 4 adc: 1023`, one sample every 200 ms |
 | `i2c_oled` | a 128x32 SSD1306 at 0x3C on I2C1 (PC1/PC2); after the half-lit "buffer fill with binary" frame, mode 1 must leave exactly the two diagonals `(x, x/4)` and `(x, 31 - x/4)` lit: 256 of 4096 pixels, corners, centre crossing and two empty bands checked | 12/12; every packet completes with no `ssd1306_i2c_error` timeout |
 | `tim2_pwm` | TIM2 PWM on CH1 (PD4), CH2 (PD3) and CH4 (PD7), with an LED on each; debug-printf banner and the TIM2 setup left behind (ATRLR, CEN/ARPE, CHCTLR1/2, CCER). [`check-tim2-pwm.py`](check-tim2-pwm.py) decodes the waveform of a `--watch-gpio` run, committed as [`pwm-capture.json.gz`](evidence/ch32fun-tim2-pwm-smoke/pwm-capture.json.gz) with its output in [`pwm-check.log`](evidence/ch32fun-tim2-pwm-smoke/pwm-check.log) | 11,546 whole 256-cycle periods (187.5 kHz); CH1 low for `count`/256 and CH2 low, CH4 high for `(count + 128) & 255`/256, through CH2's 255 → 0 wrap; `count` steps by 1 every 937.5 periods, i.e. `Delay_Ms(5)` |
+| `exti_pin_change_isr` | a button on PD3 is pressed, released and pressed again; the EXTI7_0 handler blips PC1. The smoke checks PC1 edges and the EXTI/AFIO/PFIC state left behind; the `--watch-gpio` run is committed as [`pc1-capture.json`](evidence/ch32fun-exti-smoke/pc1-capture.json) | PD3 rises at 200,001 and 600,001 and PC1 blips at 200,007-200,009 and 600,007-600,009: exactly 4 PC1 edges, none at the release (falling edge, FTENR clear) at 400,001 |
 
 This profile adds these to the PFIC profile:
 
@@ -216,6 +217,25 @@ This profile adds these to the PFIC profile:
   CH2/CH4 can take the new count one period after CH1, because the loop
   stores CH1CVR before the other two and the compare registers are
   preloaded. The waveform check allows exactly that one period.
+- **EXTI** (`0x40010400`) and the CH32V003 **`AFIO_EXTICR`**. EXTI is the F1
+  register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR) over ten lines, but
+  the port select is not: the CH32V003 has one `AFIO_EXTICR` at `0x08` with
+  a 2-bit field per line 0..7 (`AFIO_EXTICR_EXTI3_PD` = `0xC0`), where the
+  F103 has four EXTICRs of 4-bit fields. The `afio` model takes
+  `profile: ch32v003` for that layout, and the `exti` model takes
+  `profile: ch32v003`, which drives PFIC interrupt 20 (`EXTI7_0_IRQn`) as a
+  level from `INTFR & INTENR` over lines 0..7, like the QingKe SysTick. The
+  handler's `INTFR` write-1-clear drops the request on the same store, so it
+  runs once per edge. The test
+  [`crates/core/tests/ch32v003_exti.rs`](../../crates/core/tests/ch32v003_exti.rs)
+  pins the port select, the edge polarity, INTENR gating and SWIEVR. Its
+  negative control
+  ([`evidence/ch32fun-exti-smoke/negative-control/`](evidence/ch32fun-exti-smoke/negative-control/))
+  decodes `AFIO_EXTICR` the F103 way: `0xC0` then selects port A for line 3,
+  the handler never runs, PC1 never moves, and the smoke and two of the three
+  tests fail. The smoke uses
+  [`ch32v003evt-ch32fun-exti-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-exti-smoke.yaml),
+  which wires a `button` to PD3 and presses it with test-script `stimuli`.
 
 The debug-printf negative control
 ([`evidence/ch32fun-systick-irq-smoke/negative-control/`](evidence/ch32fun-systick-irq-smoke/negative-control/))
@@ -234,8 +254,14 @@ Read these results correctly:
   cycles on silicon. Line contents and order are exact; their timing is not.
 - Not modeled: input from the host over the debug channel (ch32fun's
   `handle_debug_input`), a detached probe as a configuration, and every
-  peripheral the other ch32fun examples need (TIM1, EXTI, SPI, DMA,
-  OPA, watchdogs, standby).
+  peripheral the other ch32fun examples need (TIM1, SPI, DMA, OPA,
+  watchdogs, standby).
+- On EXTI: the 6-cycle gap from the PD3 edge to the PC1 store is the
+  model's interrupt entry plus two instructions, not a measured QingKe V2
+  latency, and the input filter/synchroniser delay is not modeled (the flag
+  sets on the edge's cycle). Event mode (EVENR) wakes nothing, because sleep
+  is not modeled; lines 8 (PVD) and 9 (AWU) latch and clear but have no
+  source and raise no interrupt.
 - On I2C1: bus timing (`CKCFGR` is stored, and transfers complete
   immediately), the `RCC_APB1PRSTR` peripheral reset, the AFIO remaps,
   slave mode, PEC/SMBus, the I2C interrupts and DMA are not modeled. The
@@ -433,7 +459,7 @@ cargo run -q -p labwired-cli -- test \
 
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
-for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm; do
+for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm exti; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t
@@ -444,6 +470,11 @@ cargo run -q -p labwired-cli -- test \
   --output-dir /tmp/ch32v003-tim2-pwm \
   --watch-gpio gpiod:4 --watch-gpio gpiod:3 --watch-gpio gpiod:7
 python3 examples/ch32v003-evt/check-tim2-pwm.py /tmp/ch32v003-tim2-pwm/result.json
+# exti_pin_change_isr: the PD3 presses and the PC1 blips they cause.
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/ch32fun-exti-smoke.yaml \
+  --output-dir /tmp/ch32v003-exti \
+  --watch-gpio gpioc:1 --watch-gpio gpiod:3
 ```
 
 The committed SysTick and SDK-example runs are in
