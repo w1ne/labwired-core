@@ -1,0 +1,16 @@
+# ESP32-C3-DevKitM-1-N4X plus an Adafruit BME280 breakout on I2C0.
+# The profile exposes only the GPIO-matrix route, I2C0, UART0 and BME280 used
+# by the runnable sensor-read example.
+name: "esp32c3-devkitm1-n4x-bme280"
+chip: "../chips/esp32c3-devkitm1-n4x-bme280-smoke.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77

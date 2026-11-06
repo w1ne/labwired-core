@@ -14,9 +14,15 @@ ESP32 family coverage.
 | Smoke | [Firmware example and evidence](../../examples/esp32c3-devkitm1-n4x/README.md) |
 | Vendor status | [Live exact-SKU availability record](../../examples/esp32c3-devkitm1-n4x/evidence/vendor-status.md) |
 
+The same board also has a separate [BME280 I2C0 profile](../../examples/esp32c3-devkitm1-n4x-bme280/README.md).
+Its narrow descriptor exercises GPIO4/GPIO5 (J3 pins 11/10), I2C0, UART0,
+and the modeled sensor's chip-ID and temperature-register reads. The active
+N4X board and Adafruit breakout availability check is recorded in that
+example's [vendor-status evidence](../../examples/esp32c3-devkitm1-n4x-bme280/evidence/vendor-status.md).
+
 Espressif's live guide lists the N4X SKU and marks the older unsuffixed
-DevKitM-1 variant EOL. The exact N4X SKU was listed Active and in stock at
-DigiKey when checked on 2026-11-05. The profile is deliberately narrow: only
+DevKitM-1 variant EOL. The exact N4X SKU was listed Active with 692 in stock
+at DigiKey when checked on 2026-11-06. The RGB LED profile is deliberately narrow: only
 the C3 GPIO and IO_MUX register paths needed for the RGB LED are declared. The
 radio, USB ports and bridge, buttons, and other peripherals are omitted.
 GPIO8 is also an ESP32-C3 boot strapping pin; avoid external circuitry that

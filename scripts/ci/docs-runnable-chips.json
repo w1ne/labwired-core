@@ -614,6 +614,10 @@
       "how": "needs-build",
       "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
     },
+    "esp32c3-devkitm1-n4x-bme280-smoke": {
+      "how": "needs-build",
+      "why": "The focused BME280 profile and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
+    },
     "esp32c3-xiao-gpio-smoke": {
       "how": "needs-build",
       "why": "The focused chip descriptor and its firmware smoke are in this source tree, but this exact profile has not been verified with a published CLI release. Keep it out of clean-install runnable coverage until the matching engine build is released."
