@@ -30,17 +30,13 @@
 # key that has to cover the specific drift observed, plus prose saying why.
 
 acks:
-  # ── Pre-existing trunk regressions, NOT introduced by the STM32G431RB PR ───
-  #
-  # These two cells read `pass` in the merge-base snapshot (42b4a44c4) but the
-  # LIVE release run reports `blocked` on an unmodified origin/main tree too.
-  # Verified 2026-11-05: `labwired run --chip configs/chips/stm32g071.yaml
-  # --firmware tests/fixtures/tier1/stm32g071.elf` (yaml taken from origin/main)
-  # prints `TIER1 spi FAIL code=spi-rxne`, and esp32c6/gpio times out its class.
-  # Trunk core-ci is red for unrelated jobs as well, so this is a trunk-side
-  # break the G431 change neither caused nor can it fix. Tracked separately;
-  # these acks auto-fail (stale) the moment either cell recovers, which is the
-  # ratchet re-arming as designed.
+  # Pre-existing trunk regression, NOT introduced by the esp32c6 fixture fix.
+  # stm32g071/spi reads `pass` in the snapshot and the merge base, but a live
+  # release run on unmodified origin/main prints `TIER1 spi FAIL code=spi-rxne`
+  # (reproduced 2026-11-06). Partly diagnosed: the fixture never sets
+  # CR2.FRXTH, but setting it does not recover the cell, so a second,
+  # engine-side cause remains. This ack auto-fails (stale) once the cell
+  # recovers, which is the ratchet re-arming as designed.
   - cell: stm32g071/spi
     to: blocked
     reason: >
@@ -48,10 +44,3 @@ acks:
       stm32g071.yaml reports TIER1 spi FAIL code=spi-rxne against the committed
       fixture on a release build. Recovery is tracked as a separate chip-parity
       card; delete this ack when stm32g071/spi returns to pass.
-  - cell: esp32c6/gpio
-    to: blocked
-    reason: >
-      Pre-existing trunk regression, not from this change: the esp32c6 gpio
-      class does not reach a verdict within the 8M-step fast_boot budget on an
-      unmodified origin/main tree in release. Recovery is tracked as a separate
-      chip-parity card; delete this ack when esp32c6/gpio returns to pass.

@@ -86,7 +86,7 @@
       "status": "pass"
     },
     "gpio": {
-      "status": "blocked"
+      "status": "pass"
     },
     "i2c": {
       "status": "pass"
