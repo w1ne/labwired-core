@@ -16,7 +16,7 @@ The shared ESP32-S3 chip yamls are:
   full-featured ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
   authoritative wiring code that this yaml documents.
 - `configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml` — board-specific narrow
-  descriptor for the UART0-only DevKitC smoke below.
+  descriptor for the DevKitC UART0 + RMT LED smoke below.
 - `configs/chips/esp32s3-arduino-nano-smoke.yaml` — board-specific narrow
   descriptor for the Arduino Nano ESP32 GPIO46 LED smoke.
 - `configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml` — narrow Nano profile
@@ -37,22 +37,25 @@ The shared ESP32-S3 chip yamls are:
 | Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; hosted DevKitC UART0 oracle evidence in the example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
-## ESP32-S3-DevKitC-1-N16R8 UART0 smoke
+## ESP32-S3-DevKitC-1-N16R8 UART0 + RMT LED smoke
 
 The narrow profile at `configs/systems/esp32-s3-devkitc-1-n16r8.yaml` selects
-UART0 as its debug console and declares no external devices. Its chip descriptor
-lists UART0 only and omits the broader S3 YAML's placeholder windows. The
-dedicated Xtensa S3 builder still wires additional internal models in code; this
-smoke makes no claims about those peripherals. The committed Arduino sketch
-sends one marker through `Serial0`; LabWired's hosted model oracle reports
-`model_verified` for that UART0 output. This is model evidence, not a
-physical-board run. The twin's GPIO43 TX / GPIO44 RX mapping is **MODEL_ONLY**,
-and the hosted verifier assumes an ideal VDD rail, so reset behavior under
-power faults is not covered.
+UART0 as its debug console and attaches a one-pixel WS2812 model to GPIO38. Its
+chip descriptor lists GPIO, UART0, I²C0, and RMT, and omits the broader S3 YAML's
+placeholder windows. The committed register-level smoke routes RMT channel 0
+through GPIO38, waits for TX_END, and only then sends its UART marker. The local
+repository smoke also checks that the attached LED model decodes a red pixel;
+the hosted oracle confirms the marker and reports one RMT TX_START. This is
+model evidence, not a physical-board run.
 
-The board's USB-to-UART bridge, native USB, PSRAM, Wi-Fi/BLE, buttons and LEDs
-are outside the verified scope. The broader `configs/chips/esp32s3.yaml` still
-declares a `system_stub`; this UART0-only board profile does not reference it.
+The generic GPIO edge assertion undercounts this batched RMT waveform (29
+observed for a 48-transition frame), so this profile gates on TX_END and the
+decoded red pixel instead. Complete logic-analyzer edge capture is not claimed.
+The board's USB-to-UART bridge, native USB, PSRAM, Wi-Fi/BLE, buttons, and
+ESP-IDF boot-ROM startup are outside the smoke. The hosted verifier assumes an
+ideal VDD rail, so reset behavior under power faults is not covered. The
+broader `configs/chips/esp32s3.yaml` still declares a `system_stub`; this narrow
+board profile does not reference it.
 
 ## Arduino Nano ESP32 GPIO smoke
 

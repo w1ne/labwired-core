@@ -1,7 +1,8 @@
 # ESP32-S3-DevKitC-1 v1.1 N16R8 board smoke
 
-The base smoke boots firmware on the ESP32-S3-DevKitC-1 v1.1 N16R8, drives its
-onboard WS2812 RGB LED red through GPIO38, and sends a UART0 marker. The I²C
+The base smoke boots firmware on the ESP32-S3-DevKitC-1 v1.1 N16R8, sends a
+GRB frame to its onboard WS2812 RGB LED with RMT channel 0 through GPIO38, and
+sends a UART0 marker. The I²C
 extension also reads an Adafruit BME280 breakout through I²C0. The system
 profiles are
 [`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml).
@@ -12,7 +13,7 @@ The sensor profile is
 
 | Board connection | MCU signal | Pin | Scope |
 | --- | --- | --- | --- |
-| Onboard RGB LED DIN (v1.1) | GPIO output | GPIO38 | Bit-banged WS2812 GRB frame is decoded by the attached LED model |
+| Onboard RGB LED DIN (v1.1) | RMT TX channel 0 through GPIO matrix | GPIO38 | Timed WS2812 GRB symbols are decoded by the attached LED model |
 | J3-2 TX | UART0 TX / U0TXD | GPIO43 | UART FIFO is exercised; USB bridge is omitted |
 | J3-3 RX | UART0 RX / U0RXD | GPIO44 | Pin is mapped; receive path is not exercised |
 | Header IO8 | I²C0 SDA | GPIO8 | BME280 register reads in the I²C extension |
@@ -26,13 +27,19 @@ or claim physical USB serial behavior.
 
 ## Scope and limits
 
-- The base profile uses the S3 GPIO and UART0 models plus the WS2812 component
-  model. It checks UART output, at least 48 GPIO38 edges, and a decoded red pixel.
+- The base profile uses the S3 GPIO, UART0, and RMT models plus the WS2812
+  component model. Firmware sends its UART marker only after observing RMT
+  channel 0's TX_END status; the smoke also asserts the decoded red pixel.
 - The BME280 profile adds the S3 I²C0 model and the BME280 component model. It
   checks the `0x60` chip ID and the modeled raw temperature register sample.
-- The frame is bit-banged through GPIO38. RMT, PSRAM, Wi-Fi/BLE, buttons,
-  native USB, the USB-to-UART bridge, and ESP-IDF boot-ROM startup are outside
-  both smokes.
+- RMT TX completion is instantaneous in the model while the GPIO waveform is
+  timed. The playback clock uses the declared CPU clock and default RMT source
+  selection; fractional-divider changes and alternate source selections are
+  outside this profile. RMT RX, PSRAM, Wi-Fi/BLE, buttons, native USB, the
+  USB-to-UART bridge, and ESP-IDF boot-ROM startup are outside both smokes.
+- The generic GPIO edge assertion undercounts this batched RMT waveform (29
+  observed for a 48-transition frame). The smoke gates on RMT TX_END and the
+  decoded red pixel; complete logic-analyzer edge capture is not claimed.
 - Other S3 blocks remain outside this profile; the runtime builder supplies
   generic MMIO placeholders for unmodeled addresses. The smoke does not access
   or claim behavior for those blocks.
@@ -88,16 +95,22 @@ RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 
 The committed local build and simulator logs are in `evidence/logs/` and
 `evidence/simulation-output/`. The expected transcript is
-`ESP32_S3_DEVKITC1_V11_N16R8_OK`; the smoke also checks that the LED model
-decodes a red pixel.
+`ESP32_S3_DEVKITC1_V11_RMT_OK`; the marker is sent after RMT TX_END, and the
+smoke asserts that the LED model decodes a red pixel.
 
 ## Evidence
 
 - [`evidence/vendor-status.md`](evidence/vendor-status.md) records the live
   Espressif catalog, revision pin map, and retailer availability check.
+- [`evidence/rmt-model-provenance.md`](evidence/rmt-model-provenance.md) records
+  the vendor-SVD register claims and the model-only RMT output-signal mapping.
 - [`evidence/model-verification.json`](evidence/model-verification.json) records
-  the hosted UART and GPIO38 edge oracle. It assumes ideal VDD; it does not
-  assert the WS2812 pixel color.
+  the 2026-11-06 hosted RMT TX_END marker check. It assumes ideal VDD and does
+  not assert WS2812 pixel color; the local repository smoke asserts the pixel.
+- [`evidence/model-verification-2026-11-05.json`](evidence/model-verification-2026-11-05.json)
+  is the earlier hosted check for the prior bit-banged smoke.
+- [`evidence/verify-request-2026-11-06.json`](evidence/verify-request-2026-11-06.json)
+  preserves the hosted verification request and inline source.
 - [`evidence/model-verification-2026-11-04.json`](evidence/model-verification-2026-11-04.json)
   and [`evidence/verify-request-2026-11-04.json`](evidence/verify-request-2026-11-04.json)
   are the earlier UART-only check.

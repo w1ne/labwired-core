@@ -1,22 +1,18 @@
 {
-  "checked_at_utc": "2026-11-05",
+  "checked_at_utc": "2026-11-06",
   "tool": "labwired_pcb_labwired_verify",
   "status": "model_verified",
   "run_status": "pass",
   "stop_reason": "assertions_passed",
-  "verification": "serial contains ESP32_S3_DEVKITC1_V11_N16R8_OK; GPIO38 transitioned 49 time(s) (>= 48).",
+  "verification": "serial contains ESP32_S3_DEVKITC1_V11_RMT_OK after firmware observes RMT CH0_TX_END",
   "oracle_results": [
     {
       "kind": "serial",
       "passed": true,
-      "detail": "serial contains ESP32_S3_DEVKITC1_V11_N16R8_OK"
-    },
-    {
-      "kind": "gpio_edges",
-      "passed": true,
-      "detail": "GPIO38 transitioned 49 time(s) (>= 48)"
+      "detail": "serial contains ESP32_S3_DEVKITC1_V11_RMT_OK"
     }
   ],
+  "rmt_tx_start_count": 1,
   "gaps": [
     {
       "code": "approximation",
@@ -24,5 +20,5 @@
       "detail": "No power net drives the MCU; VDD is assumed to be an ideal rail, so power-on and brown-out reset are not simulated."
     }
   ],
-  "scope_note": "The hosted oracle verifies serial output and GPIO38 transitions. The local repository smoke separately verifies the attached WS2812 model decodes the red frame."
+  "scope_note": "The hosted verifier compiled the direct-register RMT sequence on a bare ESP32-S3-DevKitC-1-N16R8 diagram and asserted the marker emitted only after CH0_TX_END. The diagram did not include a WS2812 component, so hosted verification does not assert pixel color; the local repository smoke separately checks the decoded red pixel. This is simulated model evidence, not hardware confirmation."
 }

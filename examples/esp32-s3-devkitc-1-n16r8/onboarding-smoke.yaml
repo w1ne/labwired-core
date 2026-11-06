@@ -1,4 +1,4 @@
-# ESP32-S3-DevKitC-1 v1.1 N16R8: exercise UART0 and the GPIO38 WS2812 LED.
+# ESP32-S3-DevKitC-1 v1.1 N16R8: exercise UART0 and RMT-driven GPIO38 WS2812 LED.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-smoke"
@@ -6,10 +6,7 @@ inputs:
 limits:
   max_steps: 1000000
 assertions:
-  - uart_contains: "ESP32_S3_DEVKITC1_V11_N16R8_OK"
-  - gpio_edges:
-      pin: "gpio:38"
-      min_edges: 48
+  - uart_contains: "ESP32_S3_DEVKITC1_V11_RMT_OK"
   - display_region:
       id: "rgb_led"
       min_ink: 1.0

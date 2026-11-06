@@ -1,6 +1,7 @@
 # Minimal chip metadata for the ESP32-S3-DevKitC-1-N16R8 v1.1 board smoke.
 # The Xtensa S3 builder installs peripherals in code; this descriptor exposes
-# the UART0 and GPIO blocks needed for the board's UART pins and GPIO38 LED.
+# the UART0, GPIO, and RMT blocks needed for the board's UART pins and
+# GPIO38-addressable LED.
 # The descriptor adds no placeholders; the Xtensa runtime also has fallback
 # MMIO windows for unrelated S3 blocks that this smoke does not exercise.
 name: "esp32s3-devkitc-1-n16r8-smoke"
@@ -41,3 +42,12 @@ peripherals:
     irq: 42
     config:
       debug_schema: "../peripherals/esp32s3/i2c0.yaml"
+
+  - id: "rmt"
+    type: "esp32s3_rmt"
+    base_address: 0x60016000
+    size: "4KB"
+    irq: 40
+    config:
+      cpu_clock_hz: 240000000
+      debug_schema: "../peripherals/esp32s3/rmt.yaml"

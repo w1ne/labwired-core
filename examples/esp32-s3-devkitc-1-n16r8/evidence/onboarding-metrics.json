@@ -6,24 +6,24 @@
   "script": "examples/esp32-s3-devkitc-1-n16r8/onboarding-smoke.yaml",
   "system": "configs/systems/esp32-s3-devkitc-1-n16r8.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T06:03:14Z",
-  "finished_at_utc": "2026-11-05T06:03:31Z",
-  "elapsed_seconds": 17,
-  "elapsed_ms": 16835,
+  "started_at_utc": "2026-11-06T12:41:44Z",
+  "finished_at_utc": "2026-11-06T12:41:46Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1471,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 15.717,
-    "build_firmware": 0.48,
-    "run_smoke": 0.625
+    "build_cli": 0.365,
+    "build_firmware": 0.483,
+    "run_smoke": 0.582
   },
   "stages_ms": {
-    "build_cli": 15717,
-    "build_firmware": 480,
-    "run_smoke": 625
+    "build_cli": 365,
+    "build_firmware": 483,
+    "run_smoke": 582
   },
   "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-firmware.sh"
 }

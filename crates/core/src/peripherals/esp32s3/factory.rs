@@ -73,7 +73,14 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         }
         "esp32s3_i2s" => Box::new(i2s::Esp32s3I2s::new(src(25))),
         "esp32s3_mcpwm" => Box::new(mcpwm::Esp32s3Mcpwm::new(src(38))),
-        "esp32s3_rmt" => Box::new(rmt::Esp32s3Rmt::new(src(40))),
+        "esp32s3_rmt" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(240_000_000);
+            Box::new(rmt::Esp32s3Rmt::new_with_cpu_clock(src(40), cpu_clock_hz))
+        }
         "esp32s3_pcnt" => Box::new(pcnt::Esp32s3Pcnt::new(src(41))),
         "esp32s3_lcd_cam" => Box::new(lcd_cam::Esp32s3LcdCam::new(src(24))),
         "esp32s3_sdmmc" => Box::new(sdmmc::Esp32s3Sdmmc::new(src(36))),
