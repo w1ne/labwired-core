@@ -197,12 +197,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          imported descriptors.",
     ),
     (
-        "litex_controlandstatus",
-        "LiteX control-and-status register block. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/crosslink-nx-evn.",
-    ),
-    (
         "mcpwm",
         "ESP32-S3 MCPWM window. Carries a debug_schema only; no PWM behaviour is modelled on \
          the from_config path. Used by: esp32s3, esp32s3-zero.",

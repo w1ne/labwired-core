@@ -8,7 +8,7 @@
 - not_run: `21`
 - pass: `224`
 - fail: `0`
-- pass_loading_zero_answering_windows: `7/224`
+- pass_loading_zero_answering_windows: `6/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
@@ -27,7 +27,7 @@
 | `arduino_101-shield` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 7: `led:led`, `button:button`, `lm74:ti_lm74`, `spi0:stub`, `spi1:stub`, `pwm:stub`, `scss:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (Intel Quark) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `arduino_nano_33_ble` | `pass` | `True` | `yes` | `yes` | `2450` | `2.45` | `True` | 0 | `n/a` | n/a | n/a |
 | `arduino_uno_r4_minima` | `pass` | `True` | `yes` | `yes` | `119052` | `119.052` | `True` | 0 | `n/a` | n/a | n/a |
-| `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | 1: `cas:litex_controlandstatus` | `n/a` | n/a | n/a |
+| `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | 0 | `n/a` | n/a | n/a |
 | `arvsom` | `pass` | `True` | `yes` | `yes` | `8226` | `8.226` | `True` | 0 | `n/a` | n/a | n/a |
 | `at91rm9200` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | 4: `uart0:atmel91debugunit`, `ckgrPllar:pythonperipheral`, `ckgrPllbr:pythonperipheral`, `pmcMkcr:pythonperipheral` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | arm920t has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | 0 | `n/a` | n/a | n/a |

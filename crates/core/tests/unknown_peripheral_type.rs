@@ -267,6 +267,25 @@ fn known_stub_allowlist_has_no_stale_entries() {
     );
 }
 
+/// An allowlisted type that the generic factory models never reaches the stub
+/// arm: the factory builds it first. Such an entry is dead debt that the
+/// declared-type check above cannot see, and it makes the onboarding
+/// scoreboard count a modelled window as a zero window.
+#[test]
+fn known_stub_allowlist_names_no_modelled_type() {
+    let modelled: Vec<&str> = KNOWN_STUBBED_PERIPHERAL_TYPES
+        .iter()
+        .map(|(t, _)| *t)
+        .filter(|t| labwired_core::peripherals::generic_factory::is_canonical_model_type(t))
+        .collect();
+
+    assert!(
+        modelled.is_empty(),
+        "known-stub allowlist entr(ies) name types the generic factory models. \
+         Delete them: {modelled:?}"
+    );
+}
+
 /// Every entry must actually carry a reason, and the table must be sorted and
 /// free of duplicates so a second entry for the same type cannot hide behind
 /// the first.

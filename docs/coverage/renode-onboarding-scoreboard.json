@@ -7,7 +7,7 @@
     "not_run": 21,
     "pass": 224,
     "fail": 0,
-    "pass_loading_zero_answering_windows": 7,
+    "pass_loading_zero_answering_windows": 6,
     "median_elapsed_ms": 1223,
     "median_elapsed_seconds": 1.223,
     "threshold_seconds": 3600,
@@ -410,9 +410,7 @@
         "run_smoke": 2209
       },
       "_artifact_path": "arty_litex_vexriscv",
-      "zero_answering_windows": [
-        "cas:litex_controlandstatus"
-      ]
+      "zero_answering_windows": []
     },
     {
       "target_id": "arvsom",
