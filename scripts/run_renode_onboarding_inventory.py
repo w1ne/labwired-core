@@ -60,6 +60,11 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml",
     },
+    "arvsom": {
+        "crate": "firmware-arvsom-rv64-cpu-smoke",
+        "target": "riscv64imac-unknown-none-elf",
+        "script": "examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml",
+    },
     "alif_ae822fa0e5597bs0": {
         "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
         "script": "examples/renode-onboarding/alif-e8-m55-cpu-smoke.yaml",

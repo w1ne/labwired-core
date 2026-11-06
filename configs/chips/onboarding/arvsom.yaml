@@ -1,27 +1,17 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Bounded CPU-only profile for the imported ARV-SOM descriptor.
+# The imported board record identifies a PolarFire SoC with RV64GC. This
+# engine profile claims only its implemented RV64IMAC execution subset and a
+# small window inside the imported DDR range. It does not claim Linux boot,
+# floating point, supervisor mode, FPGA fabric, or board peripherals.
 
-name: arvsom
-arch: arm
-flash:
-  base: 1048576
-  size: 8192B
-ram:
-  base: 2147483648
-  size: 8589934592B
-peripherals:
-- id: rstgen
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 293863424
-- id: audiorstgen
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 273219584
-- id: voutsysrstgen
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 304414720
+name: "arvsom"
+arch: "riscv"
+core: "rv64imac"
+flash: { base: 0, size: 0 }
+
+# The generated import supplied an 8 GiB RAM window at 0x80000000. Expose only
+# the first 8 MiB for this direct-ELF smoke; this does not assert installed DDR
+# capacity on the physical module.
+ram: { base: 0x80000000, size: "8MiB" }
+flash_boot_alias: false
+peripherals: []

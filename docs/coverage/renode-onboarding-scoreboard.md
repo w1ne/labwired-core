@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `157`
-- booted: `157/245`
-- boot_and_smoke_passed: `157/245`
-- not_run: `88`
-- pass: `157`
+- run_attempted: `158`
+- booted: `158/245`
+- boot_and_smoke_passed: `158/245`
+- not_run: `87`
+- pass: `158`
 - fail: `0`
-- median_elapsed_ms: `1183`
-- median_elapsed_seconds: `1.183`
+- median_elapsed_ms: `1195`
+- median_elapsed_seconds: `1.195`
 - threshold_seconds: `3600`
-- threshold_met: `157/157`
+- threshold_met: `158/158`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -27,7 +27,7 @@
 | `arduino_nano_33_ble` | `pass` | `True` | `yes` | `yes` | `2450` | `2.45` | `True` | `n/a` | n/a | n/a |
 | `arduino_uno_r4_minima` | `pass` | `True` | `yes` | `yes` | `119052` | `119.052` | `True` | `n/a` | n/a | n/a |
 | `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | `n/a` | n/a | n/a |
-| `arvsom` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `arvsom` | `pass` | `True` | `yes` | `yes` | `8226` | `8.226` | `True` | `n/a` | n/a | n/a |
 | `at91rm9200` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `1530` | `1.53` | `True` | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `n/a` | n/a | n/a |

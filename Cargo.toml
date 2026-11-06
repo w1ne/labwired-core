@@ -82,6 +82,7 @@ members = [
     "crates/firmware-sifive-fu540-smoke",
     "crates/firmware-sifive-fu740-smoke",
     "crates/firmware-starfive-jh7100-smoke",
+    "crates/firmware-arvsom-rv64-cpu-smoke",
     "crates/firmware-ut32m0r500-smoke",
     "crates/firmware-kendryte-k210-smoke",
     "crates/firmware-miv-rv32-smoke",

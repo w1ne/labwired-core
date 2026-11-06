@@ -46,6 +46,7 @@ on:
       - "crates/firmware-sifive-fu540-smoke/**"
       - "crates/firmware-sifive-fu740-smoke/**"
       - "crates/firmware-starfive-jh7100-smoke/**"
+      - "crates/firmware-arvsom-rv64-cpu-smoke/**"
       - "crates/firmware-ut32m0r500-smoke/**"
       - "examples/renode-onboarding/ut32m0r500-smoke.yaml"
       - "crates/firmware-kendryte-k210-smoke/**"
@@ -1179,6 +1180,13 @@ jobs:
             prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
             script: examples/renode-onboarding/polarfire-soc-smoke.yaml
             system: configs/systems/onboarding/polarfire-soc.yaml
+          # ARV-SOM is narrowed to the engine's RV64IMAC CPU subset and a
+          # bounded DDR window; no board peripherals or Linux boot are claimed.
+          - id: arvsom
+            crate: firmware-arvsom-rv64-cpu-smoke
+            target: riscv64imac-unknown-none-elf
+            script: examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml
+            system: configs/systems/onboarding/arvsom.yaml
           # One Cortex-A53 PE and DDR from the imported FRDM i.MX 8M Plus
           # profile. The CPU-only fixture avoids claiming the other cores,
           # peripherals, or boot flow.
