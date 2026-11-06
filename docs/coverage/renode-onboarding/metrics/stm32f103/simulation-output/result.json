@@ -36,6 +36,15 @@
     },
     {
       "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortA:5",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -83,51 +92,9 @@
   "inspect": {
     "peripherals": [
       {
-        "name": "usart1",
+        "name": "rcc",
         "kind": "native",
-        "base": 1073821696,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart2",
-        "kind": "native",
-        "base": 1073759232,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart3",
-        "kind": "native",
-        "base": 1073760256,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart4",
-        "kind": "native",
-        "base": 1073761280,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart5",
-        "kind": "native",
-        "base": 1073762304,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c1",
-        "kind": "i2c",
-        "base": 1073763328,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c2",
-        "kind": "i2c",
-        "base": 1073764352,
+        "base": 1073876992,
         "registers": [],
         "artifacts": []
       },
@@ -139,163 +106,9 @@
         "artifacts": []
       },
       {
-        "name": "gpioPortB",
+        "name": "usart2",
         "kind": "native",
-        "base": 1073810432,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortC",
-        "kind": "native",
-        "base": 1073811456,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortD",
-        "kind": "native",
-        "base": 1073812480,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortE",
-        "kind": "native",
-        "base": 1073813504,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortF",
-        "kind": "native",
-        "base": 1073814528,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortG",
-        "kind": "native",
-        "base": 1073815552,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer1",
-        "kind": "native",
-        "base": 1073818624,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer2",
-        "kind": "native",
-        "base": 1073741824,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer3",
-        "kind": "native",
-        "base": 1073742848,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer4",
-        "kind": "native",
-        "base": 1073743872,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer5",
-        "kind": "native",
-        "base": 1073744896,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer6",
-        "kind": "native",
-        "base": 1073745920,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer7",
-        "kind": "native",
-        "base": 1073746944,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer8",
-        "kind": "native",
-        "base": 1073820672,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer9",
-        "kind": "native",
-        "base": 1073826816,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer10",
-        "kind": "native",
-        "base": 1073827840,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer11",
-        "kind": "native",
-        "base": 1073828864,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer12",
-        "kind": "native",
-        "base": 1073747968,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer13",
-        "kind": "native",
-        "base": 1073748992,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer14",
-        "kind": "native",
-        "base": 1073750016,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "dma1",
-        "kind": "native",
-        "base": 1073872896,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "dma2",
-        "kind": "native",
-        "base": 1073873920,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "afio",
-        "kind": "native",
-        "base": 1073807360,
+        "base": 1073759232,
         "registers": [],
         "artifacts": []
       },
@@ -339,6 +152,124 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortA",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 72,
+            "value": 1
+          },
+          {
+            "cycle": 20874,
+            "value": 0
+          },
+          {
+            "cycle": 41677,
+            "value": 1
+          },
+          {
+            "cycle": 62479,
+            "value": 0
+          },
+          {
+            "cycle": 83282,
+            "value": 1
+          },
+          {
+            "cycle": 104084,
+            "value": 0
+          },
+          {
+            "cycle": 124887,
+            "value": 1
+          },
+          {
+            "cycle": 145689,
+            "value": 0
+          },
+          {
+            "cycle": 166492,
+            "value": 1
+          },
+          {
+            "cycle": 187294,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 41,
+            "state": "0"
+          },
+          {
+            "cycle": 72,
+            "state": "1"
+          },
+          {
+            "cycle": 20874,
+            "state": "0"
+          },
+          {
+            "cycle": 41677,
+            "state": "1"
+          },
+          {
+            "cycle": 62479,
+            "state": "0"
+          },
+          {
+            "cycle": 83282,
+            "state": "1"
+          },
+          {
+            "cycle": 104084,
+            "state": "0"
+          },
+          {
+            "cycle": 124887,
+            "state": "1"
+          },
+          {
+            "cycle": 145689,
+            "state": "0"
+          },
+          {
+            "cycle": 166492,
+            "state": "1"
+          },
+          {
+            "cycle": 187294,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 10
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortA",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
@@ -357,9 +288,9 @@
     "bss_bytes": 0,
     "flash_used_bytes": 1568,
     "ram_static_bytes": 0,
-    "flash_total_bytes": 536870912,
-    "ram_total_bytes": 268435456,
-    "flash_used_pct": 0.0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 2.39,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",

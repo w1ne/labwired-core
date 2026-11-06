@@ -1,4 +1,4 @@
-# Cortex-M3 UART smoke against the imported Renode STM32F103 system.
+# Cortex-M3 USART2 and GPIOA smoke against the imported STM32F103 system.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke"
@@ -7,4 +7,7 @@ limits:
   max_steps: 200000
 assertions:
   - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioPortA:5"
+      min_edges: 1
   - expected_stop_reason: max_steps

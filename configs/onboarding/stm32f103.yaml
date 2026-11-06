@@ -1,6 +1,7 @@
 name: stm32f103
-description: 'STMicroelectronics STM32F103 performance line ARM Cortex-M3 (famous
-  ''Blue Pill'' target chip). Architecture: ARMv7-M.'
+description: >-
+  Imported STM32F103 Cortex-M3 profile, bounded to 64 KiB flash, 20 KiB SRAM,
+  RCC, GPIOA and USART2. The whole platform and other peripherals are unverified.
 family: STM32F1
 url: https://www.st.com/en/microcontrollers-microprocessors/stm32f103.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -9,17 +10,21 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/stm32f103.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded Cortex-M3, USART2 and GPIOA smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:26.905808+00:00'
+    cortex_m3_smoke: true
+    usart2_tx: true
+    gpioa_pa5_edges: true
+    whole_platform: false
+    other_peripherals: false
+  timestamp_utc: '2026-11-06T05:02:52Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/stm32f103.validation.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f103/
 provenance:
   generated_by: scripts/onboard_hw_targets.py
