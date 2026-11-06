@@ -653,6 +653,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/arduino-uno-blinky.elf
             script: examples/renode-onboarding/simavr-atmega328-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega328.yaml
+          # The Mega import maps the GPIO ports driven by the fixture and the
+          # USART0/ADC paths it checks; PB7/D13 is the observed LED output.
+          - id: simavr-atmega2560
+            prebuilt_firmware: tests/fixtures/avr/arduino-mega-2560-io.elf
+            script: examples/renode-onboarding/simavr-atmega2560-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega2560.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima
