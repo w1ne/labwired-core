@@ -1,0 +1,32 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "config_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "chip 'lpc2294': unsupported ARM classic core 'arm7tdmi-s'; no native adapter is available",
+  "assertions": [],
+  "firmware_hash": "c293168be6ecac987b9ba2083516ce06a76835ebf4a6dbd4d3978371c2864a8e",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
+    "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml"
+  }
+}

@@ -1,0 +1,2 @@
+2026-11-06T04:47:36.519935Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/lpc2294.yaml
+2026-11-06T04:47:36.520807Z  INFO labwired_loader: ELF Entry Point: 0x8000000

@@ -55,6 +55,10 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Arm => match chip.core.as_deref().map(|core| core.trim().to_ascii_lowercase()) {
             Some(core) if core == "cortex-a7" => Ok(MachineFamily::CortexA),
             Some(core) if core == "cortex-r5f" => Ok(MachineFamily::CortexR),
+            Some(core) if core.starts_with("arm7") => anyhow::bail!(
+                "chip '{}': unsupported ARM classic core '{core}'; no native adapter is available",
+                chip.name
+            ),
             Some(core) if core.starts_with("cortex-r") => anyhow::bail!(
                 "chip '{}': unsupported ARM real-time core '{core}'; only cortex-r5f has a native adapter",
                 chip.name

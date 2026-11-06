@@ -1,33 +1,38 @@
 {
   "target_id": "lpc2294",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
-  "crate": "",
-  "target_triple": "",
-  "script": "",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml",
   "system": "configs/systems/onboarding/lpc2294.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T02:30:05Z",
-  "finished_at_utc": "2026-11-03T02:30:05Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-06T04:45:43Z",
+  "finished_at_utc": "2026-11-06T04:47:36Z",
+  "elapsed_seconds": 114,
+  "elapsed_ms": 113500,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "chip 'lpc2294': unsupported ARM classic core 'arm7tdmi-s'; no native adapter is available",
+  "failure_hint": "CPU model gap. Add a real ARM7 adapter before claiming boot support.",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 113.154,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 0.274
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 113154,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 274
+  },
+  "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-cpu-smoke.elf"
 }

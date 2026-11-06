@@ -15,6 +15,10 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "lpc2294": {
+        "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml",
+    },
     "cortex_a53_console": {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml",

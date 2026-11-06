@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `171`
+- run_attempted: `172`
 - booted: `170/245`
 - boot_and_smoke_passed: `170/245`
-- not_run: `74`
+- not_run: `73`
 - pass: `170`
-- fail: `1`
-- median_elapsed_ms: `1288`
-- median_elapsed_seconds: `1.288`
+- fail: `2`
+- median_elapsed_ms: `1291`
+- median_elapsed_seconds: `1.291`
 - threshold_seconds: `3600`
-- threshold_met: `171/171`
+- threshold_met: `172/172`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -112,7 +112,7 @@
 | `litex_vexriscv_verilated_liteuart` | `pass` | `True` | `yes` | `yes` | `2364` | `2.364` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_zephyr` | `pass` | `True` | `yes` | `yes` | `1993` | `1.993` | `True` | `n/a` | n/a | n/a |
 | `litex_zephyr_vexriscv_i2s` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `n/a` | n/a | n/a |
-| `lpc2294` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `lpc2294` | `fail` | `True` | `no` | `no` | `113500` | `113.5` | `True` | `run_smoke` | CPU model gap. Add a real ARM7 adapter before claiming boot support. | chip 'lpc2294': unsupported ARM classic core 'arm7tdmi-s'; no native adapter is available |
 | `mars_zx3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `max32652` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `n/a` | n/a | n/a |
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1040` | `1.04` | `True` | `n/a` | n/a | n/a |

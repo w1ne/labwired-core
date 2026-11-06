@@ -263,6 +263,10 @@ infer_failure_hint() {
   fi
 
   if [[ "${stage}" == "run_smoke" ]]; then
+    if [[ "${sig_lc}" == *"unsupported arm classic core"* ]]; then
+      echo "CPU model gap. Add a real ARM7 adapter before claiming boot support."
+      return
+    fi
     if [[ "${sig_lc}" == *"unsupported arm real-time core"* ]]; then
       echo "CPU model gap. Add a real adapter for this core before claiming boot support."
       return

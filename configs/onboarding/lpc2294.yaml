@@ -9,13 +9,14 @@ verified: false
 system: systems/onboarding/lpc2294.yaml
 validation:
   method: renode-onboarding-inventory
-  reason: ARM7TDMI-S is unsupported; the previous Cortex-M fixture faulted and is not ARM7 evidence
+  reason: unsupported-arm7-core
   checks:
     system_manifest: true
     chip_descriptor: true
-    arm7_cpu_model: false
+    cpu_core_supported: false
+    booted: false
     simulation: false
-  timestamp_utc: '2026-11-06T02:50:38Z'
+  timestamp_utc: '2026-11-06T04:47:36Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/lpc2294/
 provenance:

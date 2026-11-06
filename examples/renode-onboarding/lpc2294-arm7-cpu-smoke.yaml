@@ -1,0 +1,10 @@
+# ARMv4T integer loop against the exact imported LPC2294 system. This checks
+# CPU admission only; it does not exercise the UART windows or board I/O.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/lpc2294.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps
