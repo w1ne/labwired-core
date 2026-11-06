@@ -1299,6 +1299,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-f401-lowram-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-f401cdu6-blackpill-demo"
 version = "0.25.0"
 dependencies = [

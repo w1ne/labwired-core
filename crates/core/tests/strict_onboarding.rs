@@ -17,11 +17,11 @@ const SMOKE_LESS_ALLOWLIST: &[&str] = &[
     // The five below are proven by full-OS boots, not by an io-smoke, the way
     // am6234 is. They were never reported because the example-gap error
     // above returned first.
-    "rv1103", // Luckfox Pico Mini A: Linux loader (rv1103_linux_loader.rs, cosim basket)
-    "r5f52618bgfp", // EK-RX261: stock Zephyr (ek_rx261_zephyr.rs)
-    "mpfs095t", // PolarFire SoC Discovery: stock Zephyr in firmware_survival.rs
-    "pic32mz2048efm144", // Curiosity PIC32MZ EF: stock NuttX (curiosity_pic32mz_nuttx.rs)
-    "xck26-rpu", // KV260 Cortex-R5F: stock Zephyr (kv260_r5_zephyr.rs)
+    "rv1103", // #1711: Luckfox Pico Mini A: Linux loader (rv1103_linux_loader.rs, cosim basket)
+    "r5f52618bgfp", // #1711: EK-RX261: stock Zephyr (ek_rx261_zephyr.rs)
+    "mpfs095t", // #1711: PolarFire SoC Discovery: stock Zephyr in firmware_survival.rs
+    "pic32mz2048efm144", // #1711: Curiosity PIC32MZ EF: stock NuttX (curiosity_pic32mz_nuttx.rs)
+    "xck26-rpu", // #1711: KV260 Cortex-R5F: stock Zephyr (kv260_r5_zephyr.rs)
 ];
 
 #[test]
