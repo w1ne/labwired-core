@@ -495,7 +495,8 @@ jobs:
             system: configs/systems/onboarding/mimxrt798s.yaml
           # The imported EK-RA8M1 profile uses the accurate RA8M1 memory map
           # and limits its claim to the modeled Cortex-M85, SYSTEM, GPIO/PFS,
-          # and SCI_B paths. Module-stop gating remains outside this smoke.
+          # and SCI_B paths, plus R_MSTP readback (SVD register file). Module-
+          # stop gating itself is not modelled.
           - id: renesas-ek_ra8m1
             crate: firmware-ek-ra8m1-smoke
             target: thumbv8m.main-none-eabi

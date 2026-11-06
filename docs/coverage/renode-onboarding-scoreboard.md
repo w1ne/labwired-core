@@ -8,7 +8,7 @@
 - not_run: `21`
 - pass: `224`
 - fail: `0`
-- pass_loading_zero_answering_windows: `8/224`
+- pass_loading_zero_answering_windows: `7/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
@@ -156,7 +156,7 @@
 | `renesas-ck_ra6m5` | `pass` | `True` | `yes` | `yes` | `1426` | `1.426` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-da14592` | `pass` | `True` | `yes` | `yes` | `1360` | `1.36` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-ek_ra2e1` | `pass` | `True` | `yes` | `yes` | `1325` | `1.325` | `True` | 0 | `n/a` | n/a | n/a |
-| `renesas-ek_ra8m1` | `pass` | `True` | `yes` | `yes` | `1406` | `1.406` | `True` | 1: `mstp:stub` | `n/a` | n/a | n/a |
+| `renesas-ek_ra8m1` | `pass` | `True` | `yes` | `yes` | `120815` | `120.815` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2e1a9` | `pass` | `True` | `yes` | `yes` | `1332` | `1.332` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2l1a` | `pass` | `True` | `yes` | `yes` | `1366` | `1.366` | `True` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa4m1a` | `pass` | `True` | `yes` | `yes` | `942` | `0.942` | `True` | 0 | `n/a` | n/a | n/a |

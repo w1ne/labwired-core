@@ -7,7 +7,7 @@
     "not_run": 21,
     "pass": 224,
     "fail": 0,
-    "pass_loading_zero_answering_windows": 8,
+    "pass_loading_zero_answering_windows": 7,
     "median_elapsed_ms": 1223,
     "median_elapsed_seconds": 1.223,
     "threshold_seconds": 3600,
@@ -5471,29 +5471,27 @@
       "script": "examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml",
       "system": "configs/systems/onboarding/renesas-ek_ra8m1.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:25Z",
-      "finished_at_utc": "2026-11-05T14:49:26Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1406,
+      "started_at_utc": "2026-11-06T22:40:57Z",
+      "finished_at_utc": "2026-11-06T22:42:58Z",
+      "elapsed_seconds": 121,
+      "elapsed_ms": 120815,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.318,
-        "build_firmware": 0.74,
-        "run_smoke": 0.334
+        "build_cli": 113.708,
+        "build_firmware": 6.729,
+        "run_smoke": 0.358
       },
       "stages_ms": {
-        "build_cli": 318,
-        "build_firmware": 740,
-        "run_smoke": 334
+        "build_cli": 113708,
+        "build_firmware": 6729,
+        "run_smoke": 358
       },
       "_artifact_path": "renesas-ek_ra8m1",
-      "zero_answering_windows": [
-        "mstp:stub"
-      ]
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-r7fa2e1a9",

@@ -33,12 +33,15 @@ peripherals:
     type: ra8_sysc
     base_address: 0x4001E000
     size: 4KB
-  # MSTP storage is still a known model gap; the smoke does not assert module
-  # gating. SCI_B currently operates independently of MSTPCRB in the model.
+  # R_MSTP: MSTPCRA-E register file from the R7FA8M1AH SVD (SVD reset
+  # values, readback). No module is gated by it: SCI_B runs whatever
+  # MSTPCRB.MSTPB22 holds.
   - id: mstp
-    type: stub
+    type: declarative
     base_address: 0x40203000
     size: 64B
+    config:
+      path: ../../peripherals/r7fa8m1ah/mstp.yaml
   # GPIO port latches and PFS pull-up setup used by the three LED and two
   # switch readbacks in the existing fixture.
   - id: port0

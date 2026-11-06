@@ -1,5 +1,7 @@
 # Exact imported EK-RA8M1 profile: Cortex-M85 scalar firmware, RA8 SYSTEM,
-# port/PFS, and SCI_B-backed SCI9 smoke. MSTP gating remains unverified.
+# port/PFS, and SCI_B-backed SCI9 smoke. R_MSTP is an SVD register file: the
+# readbacks below check its reset values and the firmware's MSTPB22 (SCI9)
+# clear. Module gating itself is not modelled.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra8m1-smoke"
@@ -21,4 +23,7 @@ assertions:
       - "s1=1 s2=1"
       - "hb=0 podr6=0001 s1=1 s2=1"
       - "hb=1 podr6=0001 s1=1 s2=1"
+  - memory_value: {address: 0x40203000, expected_value: 0xFFBF7FFC}  # MSTPCRA reset
+  - memory_value: {address: 0x40203004, expected_value: 0xFFBFFFFF}  # MSTPCRB & ~MSTPB22
+  - memory_value: {address: 0x40203010, expected_value: 0xFFFFFFFF}  # MSTPCRE reset
   - expected_stop_reason: max_steps

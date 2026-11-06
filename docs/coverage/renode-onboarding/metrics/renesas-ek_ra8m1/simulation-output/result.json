@@ -55,6 +55,39 @@
     },
     {
       "assertion": {
+        "memory_value": {
+          "address": 1075851264,
+          "expected_value": 4290740220,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1075851268,
+          "expected_value": 4290772991,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1075851280,
+          "expected_value": 4294967295,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -110,9 +143,591 @@
       },
       {
         "name": "mstp",
-        "kind": "native",
+        "kind": "declarative",
         "base": 1075851264,
-        "registers": [],
+        "registers": [
+          {
+            "name": "MSTPCRA",
+            "offset": 0,
+            "size": 32,
+            "value": 4290740220,
+            "fields": [
+              {
+                "name": "MSTPA0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSTPA1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSTPA15",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSTPA22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "Reserved",
+                "bits": [
+                  31,
+                  23
+                ],
+                "value": 511
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRB",
+            "offset": 4,
+            "size": 32,
+            "value": 4290772991,
+            "fields": [
+              {
+                "name": "MSTPB4",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB8",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB9",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB11",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB12",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB15",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB16",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB18",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB19",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "Reserved",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB28",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB29",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB30",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPB31",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRC",
+            "offset": 8,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPC0",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC1",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC4",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC6",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC7",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC8",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC10",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC11",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC12",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC13",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC14",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC16",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC26",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPC27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "Reserved",
+                "bits": [
+                  30,
+                  28
+                ],
+                "value": 7
+              },
+              {
+                "name": "MSTPC31",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRD",
+            "offset": 12,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPD4",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD5",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD11",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD12",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD13",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD14",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD15",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD16",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD20",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPD28",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 1
+              },
+              {
+                "name": "Reserved",
+                "bits": [
+                  31,
+                  29
+                ],
+                "value": 7
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "MSTPCRE",
+            "offset": 16,
+            "size": 32,
+            "value": 4294967295,
+            "fields": [
+              {
+                "name": "MSTPE8",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE9",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 1
+              },
+              {
+                "name": "Reserved",
+                "bits": [
+                  17,
+                  16
+                ],
+                "value": 3
+              },
+              {
+                "name": "MSTPE18",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE19",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE20",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE21",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE22",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE23",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE24",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE25",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE26",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE27",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE28",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE29",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE30",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 1
+              },
+              {
+                "name": "MSTPE31",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          }
+        ],
         "artifacts": []
       },
       {
