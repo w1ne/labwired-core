@@ -34,7 +34,9 @@ pub const FLASH_SIZE: usize = 32 * 1024;
 pub const RAMEND: u16 = 0x08FF;
 pub const SRAM_START: u16 = 0x0100;
 
-/// The AVR parts this interpreter runs. The imported ATmega1280 profile is
+/// The AVR parts this interpreter runs. ATmega168 selects its exact 16 KiB
+/// flash / 1 KiB SRAM geometry while retaining the shared classic AVR8 path;
+/// its imported profile claims no peripherals. The imported ATmega1280 profile is
 /// routed through ATmega1281 geometry for CPU-only execution: both descriptors
 /// specify 128 KB flash and 8 KB SRAM at 0x0200. This alias does not assert
 /// ATmega1280 peripheral behavior. The ATmega2560 (Arduino Mega) has 256 KB
@@ -61,6 +63,8 @@ pub enum AvrModel {
     Atmega328p,
     /// ATmega328PB shares the 328P core geometry and adds a second USART.
     Atmega328pb,
+    /// ATmega168 geometry for CPU/SRAM-only imported-profile execution.
+    Atmega168,
     /// ATmega128 geometry, with 128 KiB flash and 4 KiB SRAM. Its imported
     /// onboarding profile is CPU/SRAM-only and does not claim peripherals.
     Atmega128,
@@ -166,6 +170,8 @@ impl AvrModel {
             AvrModel::Attiny13
         } else if n.contains("1284") {
             AvrModel::Atmega1284p
+        } else if n.contains("atmega168") {
+            AvrModel::Atmega168
         } else if n.contains("1280") || n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.ends_with("atmega128") {
@@ -183,6 +189,7 @@ impl AvrModel {
     pub fn flash_size(self) -> usize {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
+            AvrModel::Atmega168 => 16 * 1024,
             AvrModel::Atmega128 | AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Atmega32u4 => 32 * 1024,
@@ -204,7 +211,7 @@ impl AvrModel {
     }
     pub fn sram_start(self) -> u16 {
         match self {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega168 => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Atmega32u4 | AvrModel::Atmega1284p | AvrModel::Atmega128 => 0x0100,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
@@ -230,6 +237,7 @@ impl AvrModel {
     pub fn ramend(self) -> u16 {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
+            AvrModel::Atmega168 => 0x04FF,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             AvrModel::Atmega128 => 0x10FF,
             AvrModel::Atmega32u4 => 0x0AFF,
@@ -261,6 +269,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p
             | AvrModel::Atmega328pb
+            | AvrModel::Atmega168
             | AvrModel::Atmega32u4
             | AvrModel::Atmega1284p => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega128 | AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
@@ -774,7 +783,10 @@ impl Avr {
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => {
+            AvrModel::Atmega328p
+            | AvrModel::Atmega328pb
+            | AvrModel::Atmega168
+            | AvrModel::Atmega32u4 => {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
@@ -808,9 +820,10 @@ impl Avr {
     #[inline]
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => {
-                (AVR_PINB..=AVR_PIND + 2).contains(&addr)
-            }
+            AvrModel::Atmega328p
+            | AvrModel::Atmega328pb
+            | AvrModel::Atmega168
+            | AvrModel::Atmega32u4 => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }

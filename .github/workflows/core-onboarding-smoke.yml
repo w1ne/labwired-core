@@ -20,6 +20,7 @@ on:
       - "configs/onboarding/simavr-atmega1280.yaml"
       - "configs/onboarding/simavr-atmega128.yaml"
       - "configs/onboarding/simavr-atmega1281.yaml"
+      - "configs/onboarding/simavr-atmega168.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
@@ -720,6 +721,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega1281-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1281-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1281.yaml
+          # ATmega168 is measured only for its bounded AVR8 CPU and SRAM path;
+          # the imported profile declares no peripherals.
+          - id: simavr-atmega168
+            prebuilt_firmware: tests/fixtures/avr/atmega168-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega168-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega168.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima

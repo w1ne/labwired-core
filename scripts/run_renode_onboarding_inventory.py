@@ -350,6 +350,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/atmega1281-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega1281-smoke.yaml",
     },
+    "simavr-atmega168": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega168-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega168-smoke.yaml",
+    },
     "efm32g210": {
         "crate": "firmware-efm32g210-smoke",
         "target": "thumbv7m-none-eabi",

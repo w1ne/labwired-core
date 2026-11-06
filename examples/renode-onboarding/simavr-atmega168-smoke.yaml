@@ -1,0 +1,10 @@
+# CPU and SRAM smoke for the imported ATmega168 profile.
+# No peripheral accesses or board I/O are asserted.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega168-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega168.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps
