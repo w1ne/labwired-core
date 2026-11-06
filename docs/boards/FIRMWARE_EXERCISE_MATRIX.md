@@ -134,7 +134,7 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 ### `ch32v003f4p6`
 
-_No tier-1 fixture or compiled ELF gate. A core unit smoke executes handwritten RV32E instructions through the reset alias, WCH RCC GPIOC clock gate, and PC0 output. No beyond-rubric firmware coverage is claimed._
+_No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. This is local simulator evidence, not hosted model_verified or hardware confirmation._
 
 ### `nrf5340`
 
