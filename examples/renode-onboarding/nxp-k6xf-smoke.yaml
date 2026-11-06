@@ -1,6 +1,6 @@
 # FRDM-K64F Cortex-M4, UART0, and GPIO smoke against the narrowed imported
-# K6x profile. SIM, WDOG, and PORT writes are absorbed by explicitly declared
-# stubs and are not claimed as modeled behavior.
+# K6x profile. The firmware's SIM, WDOG, and PORT writes land in SVD-generated
+# register files; no clock gating, watchdog timeout or pad muxing is claimed.
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/frdm-k64f-smoke.elf"
@@ -19,4 +19,15 @@ assertions:
       - "led=blue off pin=1"
       - "hb=0 red=0 green=1 blue=1"
       - "hb=1 red=0 green=1 blue=1"
+  # Register-file readback (a zero-answering stub reads 0 for all of these):
+  # SIM reset values from the SVD plus the firmware's clock-gate ORs, the
+  # WDOG disable sequence, and the PORT pin-mux writes.
+  - memory_value: {address: 0x40048024, expected_value: 0x00000380}  # SIM_SDID
+  - memory_value: {address: 0x40048034, expected_value: 0xF0100430}  # SIM_SCGC4 | UART0
+  - memory_value: {address: 0x40048038, expected_value: 0x00042582}  # SIM_SCGC5 | PORTB/E
+  - memory_value: {address: 0x40052000, size: 16, expected_value: 0x01D2}  # WDOG_STCTRLH
+  - memory_value: {address: 0x4005200E, size: 16, expected_value: 0xD928}  # WDOG_UNLOCK
+  - memory_value: {address: 0x4004A040, expected_value: 0x00000300}  # PORTB_PCR16 UART0_RX
+  - memory_value: {address: 0x4004A058, expected_value: 0x00000100}  # PORTB_PCR22 GPIO
+  - memory_value: {address: 0x4004D068, expected_value: 0x00000100}  # PORTE_PCR26 GPIO
   - expected_stop_reason: max_steps

@@ -6,9 +6,10 @@
 
 # Imported Renode execution profile narrowed to the model-backed K64F CPU,
 # memory, UART0, and GPIOB/E surface used by the onboarding smoke. Ethernet,
-# USB, RNG, and clock behavior are outside this profile. SIM, WDOG, and PORT
-# remain explicit write-absorbing stubs because the existing firmware touches
-# them; they are not counted as modeled peripheral coverage.
+# USB, RNG, and clock behavior are outside this profile. SIM, WDOG, and
+# PORTB/E are declarative register files generated from the NXP MK64F12 SVD:
+# they read back what was written and reset to silicon values, but no clock is
+# gated, no watchdog runs and no pad is muxed.
 name: nxp-k6xf
 arch: arm
 core: cortex-m4
@@ -42,22 +43,30 @@ peripherals:
   config:
     profile: kinetis
 - id: sim
-  type: stub
+  type: declarative
   bus: sysbus
   base_address: 0x40047000
   size: 8192B
+  config:
+    path: ../../peripherals/mk64f12/sim.yaml
 - id: wdog
-  type: stub
+  type: declarative
   bus: sysbus
   base_address: 0x40052000
   size: 32B
+  config:
+    path: ../../peripherals/mk64f12/wdog.yaml
 - id: portb
-  type: stub
+  type: declarative
   bus: sysbus
   base_address: 0x4004A000
   size: 1024B
+  config:
+    path: ../../peripherals/mk64f12/port.yaml
 - id: porte
-  type: stub
+  type: declarative
   bus: sysbus
   base_address: 0x4004D000
   size: 1024B
+  config:
+    path: ../../peripherals/mk64f12/port.yaml
