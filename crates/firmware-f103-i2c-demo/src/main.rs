@@ -348,6 +348,36 @@ fn main() -> ! {
         }
     };
 
+    // Exercise the BME280's oversampling skip codes before enabling its
+    // measurement channels. The Bosch datasheet specifies 0x80000 for skipped
+    // temperature/pressure outputs and 0x8000 for skipped humidity output.
+    putline(b"BME280_WAITING_FOR_OVERSAMPLING_SKIP");
+    match unsafe { write_bme280_byte(0xF2, 0x00).and_then(|()| write_bme280_byte(0xF4, 0x03)) } {
+        Some(()) => match (
+            unsafe { read_bme280_pressure_raw() },
+            unsafe { read_bme280_temperature_raw() },
+            unsafe { read_bme280_humidity_raw() },
+        ) {
+            (Some(pressure), Some(temperature), Some(humidity)) => {
+                print_reg(b"BME280_SKIPPED_PRESS_RAW=", pressure);
+                print_reg(b"BME280_SKIPPED_TEMP_RAW=", temperature);
+                print_reg(b"BME280_SKIPPED_HUM_RAW=", humidity);
+                if pressure == 0x8_0000 && temperature == 0x8_0000 && humidity == 0x8_000 {
+                    putline(b"BME280_OVERSAMPLING_SKIP_OK");
+                } else {
+                    putline(b"BME280_OVERSAMPLING_SKIP_MISMATCH");
+                }
+            }
+            _ => putline(b"BME280_OVERSAMPLING_SKIP_READ_FAIL"),
+        },
+        None => putline(b"BME280_OVERSAMPLING_SKIP_CONFIG_FAIL"),
+    }
+
+    match unsafe { write_bme280_byte(0xF2, 0x01).and_then(|()| write_bme280_byte(0xF4, 0x27)) } {
+        Some(()) => putline(b"BME280_MEASUREMENT_SETUP_OK"),
+        None => putline(b"BME280_MEASUREMENT_SETUP_FAIL"),
+    }
+
     // Read the BME280's measurement window as a driver does. Pressure and
     // temperature are 20-bit values split across three bytes; humidity is a
     // 16-bit word. The imported system seeds 40 °C / 80 %RH / 950 hPa; exact

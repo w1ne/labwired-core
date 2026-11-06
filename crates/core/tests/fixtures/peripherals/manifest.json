@@ -725,7 +725,7 @@
       "device_type": "bme280",
       "label": "BME280 Weather",
       "summary": "Bosch BME280 temp + humidity + pressure sensor over I2C.",
-      "detail": "Serves factory calibration coefficients plus raw ADC words. Firmware recovers engineering units with Bosch's integer compensation formulas. Stimulus inverts those exact formulas with the same coefficients. Defaults to 25 °C / 50 %RH / 1013.25 hPa. Conversion time, filtering and oversampling are not modelled; control registers retain writes and soft reset is ignored, matching the previous model.",
+      "detail": "Serves factory calibration coefficients plus raw ADC words. Firmware recovers engineering units with Bosch's integer compensation formulas. Stimulus inverts those exact formulas with the same coefficients. Disabled temperature, pressure, or humidity oversampling returns the documented skip code. CTRL_HUM and CTRL_MEAS retain their writable fields, but CTRL_HUM latching, conversion timing, operating modes, filtering, status transitions and soft reset are not modelled. Defaults to 25 °C / 50 %RH / 1013.25 hPa.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -733,6 +733,21 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant."
+        },
+        {
+          "name": "temperature",
+          "ty": "float",
+          "doc": "Starting ambient temperature in °C; defaults to 25."
+        },
+        {
+          "name": "humidity",
+          "ty": "float",
+          "doc": "Starting relative humidity in %RH; defaults to 50."
+        },
+        {
+          "name": "pressure",
+          "ty": "float",
+          "doc": "Starting pressure in hPa; defaults to 1013.25."
         }
       ],
       "labs": [

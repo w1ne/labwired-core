@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 50000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T14:59:37Z",
+  "finished_at_utc": "2026-11-06T15:01:37Z",
+  "elapsed_seconds": 121,
+  "elapsed_ms": 120527,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "bme280.yaml is a valid declarative i2c descriptor: Failed to parse Device Descriptor",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 115.556,
+    "build_firmware": 1.559,
+    "run_smoke": 3.367
+  },
+  "stages_ms": {
+    "build_cli": 115556,
+    "build_firmware": 1559,
+    "run_smoke": 3367
+  }
+}

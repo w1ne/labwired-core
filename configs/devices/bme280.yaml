@@ -18,6 +18,9 @@ behavior:
           - { name: v2, expr: 'shr(shr(a * a, 12) * -1000, 14)' }
           - { name: fine, expr: 'v1 + v2' }
         of: 'shr(fine * 5 + 128, 8)'
+    - name: adc_t_from_skip
+      integer:
+        of: 'adc_t - 524288'
     - name: t_fine
       integer:
         bindings:
@@ -45,6 +48,9 @@ behavior:
           - { name: q2, expr: 'shr(-10230 * p1, 19)', when: 'c != 0' }
         when: 'c != 0'
         of: '-min(max(shr(p1 + q1 + q2, 8) + shl(9900, 4), 0), 4294967295)'
+    - name: adc_p_from_skip
+      integer:
+        of: 'adc_p - 524288'
     - name: target_h
       quantize: { expr: 'humidity * 1024', rounding: nearest }
     - name: adc_h
@@ -60,6 +66,9 @@ behavior:
           - { name: v1, expr: 'left * r1' }
           - { name: correction, expr: 'shr(shr(shr(v1, 15) * shr(v1, 15), 7) * 75, 4)' }
         of: 'shr(min(max(v1 - correction, 0), 419430400), 12)'
+    - name: adc_h_from_skip
+      integer:
+        of: 'adc_h - 32768'
   i2c:
     default_address: 0x76
     auto_increment: true
@@ -85,13 +94,19 @@ behavior:
       - { name: DIG_H4_H5_LOW, addr: 0xE5, width: 1, endian: be, access: r, reset: 5 }
       - { name: DIG_H5_HIGH, addr: 0xE6, width: 1, endian: be, access: r, reset: 0 }
       - { name: DIG_H6, addr: 0xE7, width: 1, endian: be, access: r, reset: 30 }
-      - { name: CTRL_HUM, addr: 0xF2, width: 1, endian: be, access: rw, reset: 0 }
+      - { name: CTRL_HUM, addr: 0xF2, width: 1, endian: be, access: rw, write_mask: 0x07, reset: 0 }
       - { name: STATUS, addr: 0xF3, width: 1, endian: be, access: r, reset: 0 }
       - { name: CTRL_MEAS, addr: 0xF4, width: 1, endian: be, access: rw, reset: 0 }
       - { name: CONFIG, addr: 0xF5, width: 1, endian: be, access: rw, reset: 0 }
-      - { name: PRESS, addr: 0xF7, width: 3, endian: be, access: r, source: adc_p, encode: { scale: 16 } }
-      - { name: TEMP, addr: 0xFA, width: 3, endian: be, access: r, source: adc_t, encode: { scale: 16 } }
-      - { name: HUM, addr: 0xFD, width: 2, endian: be, access: r, source: adc_h }
+      # Datasheet rev. 1.23, pp. 28-29: skipped T/P channels report ADC
+      # 0x80000 and skipped H reports 0x8000. Each derived source is ADC minus
+      # that sentinel; its offset restores the sentinel while `scale_from`
+      # multiplies the source by zero only when the matching OSRS field is 0.
+      - { name: PRESS, addr: 0xF7, width: 3, endian: be, access: r, source: adc_p_from_skip, encode: { scale: 16, offset: 8388608 }, scale_from: { register: CTRL_MEAS, shift: 2, mask: 0x07, map: { 0: 0.0 } } }
+      - { name: TEMP, addr: 0xFA, width: 3, endian: be, access: r, source: adc_t_from_skip, encode: { scale: 16, offset: 8388608 }, scale_from: { register: CTRL_MEAS, shift: 5, mask: 0x07, map: { 0: 0.0 } } }
+      # CTRL_HUM currently gates the output immediately; the datasheet's
+      # write-CTRL_MEAS latch behavior is explicitly outside this model.
+      - { name: HUM, addr: 0xFD, width: 2, endian: be, access: r, source: adc_h_from_skip, encode: { offset: 32768 }, scale_from: { register: CTRL_HUM, mask: 0x07, map: { 0: 0.0 } } }
 
 metadata:
   label: BME280 Weather
@@ -99,10 +114,11 @@ metadata:
   detail: >-
     Serves factory calibration coefficients plus raw ADC words. Firmware recovers
     engineering units with Bosch's integer compensation formulas. Stimulus
-    inverts those exact formulas with the same coefficients. Defaults to
-    25 °C / 50 %RH / 1013.25 hPa. Conversion time, filtering and oversampling
-    are not modelled; control registers retain writes and soft reset is ignored,
-    matching the previous model.
+    inverts those exact formulas with the same coefficients. Disabled temperature,
+    pressure, or humidity oversampling returns the documented skip code. CTRL_HUM
+    and CTRL_MEAS retain their writable fields, but CTRL_HUM latching, conversion
+    timing, operating modes, filtering, status transitions and soft reset are not
+    modelled. Defaults to 25 °C / 50 %RH / 1013.25 hPa.
   category: i2c
   config_keys:
     - { name: i2c_address, ty: int, doc: '7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.' }

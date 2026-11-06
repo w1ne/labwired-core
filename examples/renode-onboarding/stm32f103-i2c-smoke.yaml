@@ -1,4 +1,4 @@
-# Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 measurements and control-register storage against the imported STM32F103 system.
+# Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 oversampling, input, compensation, and control-register behavior against the imported STM32F103 system.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -24,6 +24,11 @@ assertions:
   - uart_contains: "BME280_T2=00006743"
   - uart_contains: "BME280_CALIBRATION_READ_OK"
   - uart_contains: "BME280_CALIBRATION_MAP_READ_OK"
+  - uart_contains: "BME280_SKIPPED_PRESS_RAW=00080000"
+  - uart_contains: "BME280_SKIPPED_TEMP_RAW=00080000"
+  - uart_contains: "BME280_SKIPPED_HUM_RAW=00008000"
+  - uart_contains: "BME280_OVERSAMPLING_SKIP_OK"
+  - uart_contains: "BME280_MEASUREMENT_SETUP_OK"
   - uart_contains: "BME280_PRESS_RAW=0005883F"
   - uart_contains: "BME280_TEMP_RAW=0008E910"
   - uart_contains: "BME280_HUM_RAW=0000853F"
