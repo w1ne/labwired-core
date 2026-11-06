@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="45" failures="0" errors="0" time="1.128184">
+<testsuite name="labwired" tests="49" failures="0" errors="0" time="1.039488">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="e8d30a2ed1e0823af04d3cb058f6a05911d686a0b86a04daab2197aa9becb9b1"/>
+    <property name="firmware_hash" value="2786a749d1bbf722cdcb613f5bf6c34193f2b1550a41b1ed3f2f79e7cd1110b0"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.128184">
+  <testcase classname="labwired" name="run" time="1.039488">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -91,8 +91,16 @@
   </testcase>
   <testcase classname="labwired" name="assertion 42: uart_contains: BME280_DYNAMIC_PRESS_COMPENSATION_OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 43: uart_contains: DONE" time="0.000000">
+  <testcase classname="labwired" name="assertion 43: uart_contains: BME280_CTRL_HUM_STORAGE=00000001" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 44: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 44: uart_contains: BME280_CTRL_HUM_STORAGE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 45: uart_contains: BME280_CTRL_MEAS_STORAGE=00000027" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 46: uart_contains: BME280_CTRL_MEAS_STORAGE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 47: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 48: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

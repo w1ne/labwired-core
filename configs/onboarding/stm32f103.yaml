@@ -15,7 +15,7 @@ verified: false
 system: systems/onboarding/stm32f103.yaml
 validation:
   method: renode-onboarding-exact-import-smoke
-  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP, TMP102 register read/write, and BME280 seeded plus live temperature, humidity, and pressure input raw-read smoke; whole platform remains unverified
+  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP, TMP102 register read/write, and BME280 seeded plus live environmental input compensation and control-register storage read-back smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
@@ -34,9 +34,10 @@ validation:
     bme280_live_temperature_stimulus: true
     bme280_live_humidity_stimulus: true
     bme280_live_pressure_stimulus: true
+    bme280_control_register_storage: true
     whole_platform: false
     other_peripherals: false
-  timestamp_utc: '2026-11-06T14:00:25Z'
+  timestamp_utc: '2026-11-06T14:35:52Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f103/
 provenance:

@@ -6,7 +6,8 @@
 //! little-endian calibration word, reads the complete BME280 calibration map,
 //! then compensates pressure, temperature and humidity ADC registers using
 //! the Bosch fixed-point formulas, including scripted live changes to all
-//! three sensor inputs. USART2 emits a human-readable register
+//! three sensor inputs. It also checks I2C write/read-back for the BME280's
+//! control-register storage. USART2 emits a human-readable register
 //! fingerprint at 115200/8N1. The onboarding system attaches declarative TMP102
 //! and BME280 models at addresses 0x48 and 0x76; TMP102's reset temperature is
 //! 25 °C (0x1900). The absent address remains an intentional NACK check.
@@ -497,6 +498,37 @@ fn main() -> ! {
         putline(b"BME280_DYNAMIC_PRESSURE_COMPENSATION_READ_FAIL");
     }
 
+    // Exercise the existing model-backed BME280 control-register storage over
+    // the same STM32F1 I2C path. This checks transaction and read-back only;
+    // measurement mode, oversampling, timing and filtering remain unmodelled.
+    match unsafe {
+        write_bme280_byte(0xF2, 0x01).and_then(|()| read_i2c_byte(BME280_ADDRESS, 0xF2))
+    } {
+        Some(value) => {
+            print_reg(b"BME280_CTRL_HUM_STORAGE=", u32::from(value));
+            if value == 0x01 {
+                putline(b"BME280_CTRL_HUM_STORAGE_OK");
+            } else {
+                putline(b"BME280_CTRL_HUM_STORAGE_MISMATCH");
+            }
+        }
+        None => putline(b"BME280_CTRL_HUM_STORAGE_FAIL"),
+    }
+
+    match unsafe {
+        write_bme280_byte(0xF4, 0x27).and_then(|()| read_i2c_byte(BME280_ADDRESS, 0xF4))
+    } {
+        Some(value) => {
+            print_reg(b"BME280_CTRL_MEAS_STORAGE=", u32::from(value));
+            if value == 0x27 {
+                putline(b"BME280_CTRL_MEAS_STORAGE_OK");
+            } else {
+                putline(b"BME280_CTRL_MEAS_STORAGE_MISMATCH");
+            }
+        }
+        None => putline(b"BME280_CTRL_MEAS_STORAGE_FAIL"),
+    }
+
     putline(b"DONE");
 
     loop {}
@@ -579,6 +611,22 @@ unsafe fn write_tmp102_register(pointer: u8, value: u16) -> Option<()> {
 unsafe fn write_tmp102_msb(pointer: u8, msb: u8) -> Option<()> {
     begin_i2c_write(TMP102_ADDRESS, pointer)?;
     write_volatile(I2C1_DR as *mut u32, u32::from(msb));
+    if !wait_sr1(0x0004) {
+        return None;
+    }
+    rmw32(I2C1_CR1, 1 << 9); // STOP
+    for _ in 0..16_000 {
+        if read_volatile(I2C1_SR2 as *const u32) & 0x0002 == 0 {
+            return Some(());
+        }
+    }
+    None
+}
+
+/// Write one byte to a BME280 register through the F1 I2C1 master.
+unsafe fn write_bme280_byte(pointer: u8, value: u8) -> Option<()> {
+    begin_i2c_write(BME280_ADDRESS, pointer)?;
+    write_volatile(I2C1_DR as *mut u32, u32::from(value));
     if !wait_sr1(0x0004) {
         return None;
     }
