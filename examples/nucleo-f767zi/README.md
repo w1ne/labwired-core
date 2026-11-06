@@ -31,3 +31,4 @@ across F4/F7. What this proves and what it cannot: VALIDATION.md.
 2. `uart-smoke.yaml` / `io-smoke.yaml`: deterministic smoke assertions.
 3. `REQUIRED_DOCS.md`: source-grounding references.
 4. `EXTERNAL_COMPONENTS.md`: external component declaration.
+5. `analog-zener-breakdown.yaml`: generic reverse-breakdown diode netlist routed to PA5 / ADC1_IN5.
