@@ -80,6 +80,7 @@ The UART artifact must contain `NRF52840_SMOKE_OK`.
 | GPIO | `xiao_nrf52840_gpio_task_registers_drive_led_pins` |
 | SPI | `xiao_nrf52840_spim0_start_sets_end_event_and_amount` |
 | UART | `uart-gpio-spi-smoke.yaml` assertion for `NRF52840_SMOKE_OK` |
+| Mixed-signal | `cosim_seeed_xiao_nrf52840_analog::seeed_xiao_nrf52840_ntc_and_diode_netlists_reach_distinct_saadc_channels` asserts generic NTC/diode solves and SAADC EasyDMA conversion on channels 0/1 |
 
 ## Known Limits
 
@@ -90,6 +91,9 @@ The UART artifact must contain `NRF52840_SMOKE_OK`.
   and SPI device byte routing are future work.
 - GPIO1 uses a synthetic non-overlapping LabWired base address (see above);
   this is a model convenience, not a silicon divergence.
+- Mixed-signal coverage uses explicit SAADC channel routes. The shared
+  nRF52840 descriptor does not declare physical XIAO pad-to-AIN aliases, so
+  this test does not assert those aliases or claim pad-level silicon validation.
 
 ## Silicon validation over SWD (2026-06-03)
 
