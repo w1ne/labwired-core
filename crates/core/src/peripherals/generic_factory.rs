@@ -416,6 +416,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // fallbacks never coerce it onto the Cortex-M `systick` map, whose
     // CSR/RVR/CVR layout and down-counting semantics differ.
     "qingke_v2_systick",
+    // WCH QingKe V2 PFIC (CH32V003 interrupt controller at 0xE000E000). Its
+    // banks sit at NVIC offsets but number interrupts from 0, not 16.
+    "qingke_pfic",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
@@ -1789,6 +1792,8 @@ pub fn try_build(
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
         // WCH QingKe V2 STK: 32-bit up-counter CTLR/SR/CNT/CMP (CH32V003).
         "qingke_v2_systick" => Box::new(crate::peripherals::qingke_systick::QingkeV2Systick::new()),
+        // WCH QingKe V2 PFIC; `configure_riscv` shares its state with the core.
+        "qingke_pfic" => Box::new(crate::peripherals::qingke_pfic::QingkePfic::new()),
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config

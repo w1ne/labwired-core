@@ -25,12 +25,18 @@
 //! STRE=1 counts `0..=CMP` and starts again from 0, so the compare period is
 //! `CMP + 1` counts; STRE=0 keeps counting through CMP and wraps at 2^32.
 //!
-//! Not modeled: the PFIC. STIE and SWIE are stored, but no SysTick or
-//! software interrupt is delivered to the core; polled CNT/CNTIF is the
-//! firmware-visible surface. The counter advances from the bus's elapsed
-//! core cycles, so it assumes HCLK equals the core clock.
+//! Interrupts: with a PFIC attached (`configure_riscv` does this when the
+//! chip has a `qingke_pfic`), `STIE && CNTIF` drives PFIC interrupt 12 and
+//! `SWIE` drives the software interrupt 14, both as level requests: each
+//! stays requested until firmware clears CNTIF or SWIE, as the reference
+//! manual tells handlers to. Without a PFIC the bits are stored only.
+//!
+//! The counter advances from the bus's elapsed core cycles, so it assumes
+//! HCLK equals the core clock.
 
+use crate::peripherals::qingke_pfic::QingkePficState;
 use crate::{PeripheralTickResult, SimResult};
+use std::sync::Arc;
 
 const CTLR: u64 = 0x00;
 const SR: u64 = 0x04;
@@ -38,11 +44,16 @@ const CNT: u64 = 0x08;
 const CMP: u64 = 0x10;
 
 const CTLR_STE: u32 = 1 << 0;
+const CTLR_STIE: u32 = 1 << 1;
 const CTLR_STCLK: u32 = 1 << 2;
 const CTLR_STRE: u32 = 1 << 3;
+const CTLR_SWIE: u32 = 1 << 31;
 /// STE, STIE, STCLK, STRE and SWIE; the other bits are reserved.
 const CTLR_MASK: u32 = 0x8000_000F;
 const SR_CNTIF: u32 = 1 << 0;
+/// PFIC interrupt numbers (WCH `IRQn_Type`).
+const SYSTICK_IRQ: u32 = 12;
+const SOFTWARE_IRQ: u32 = 14;
 
 /// QingKe V2 STK register block.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -53,11 +64,28 @@ pub struct QingkeV2Systick {
     cmp: u32,
     /// Core cycles not yet worth a count in HCLK/8 mode.
     prescale_rem: u8,
+    /// Interrupt controller the STIE/SWIE requests drive, if the chip has one.
+    #[serde(skip)]
+    pfic: Option<Arc<QingkePficState>>,
 }
 
 impl QingkeV2Systick {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Route STIE/SWIE to `pfic` and publish the current request levels.
+    pub fn attach_pfic(&mut self, pfic: Arc<QingkePficState>) {
+        self.pfic = Some(pfic);
+        self.publish_irq_lines();
+    }
+
+    fn publish_irq_lines(&self) {
+        if let Some(pfic) = &self.pfic {
+            let systick = self.ctlr & CTLR_STIE != 0 && self.sr & SR_CNTIF != 0;
+            pfic.set_level(SYSTICK_IRQ, systick);
+            pfic.set_level(SOFTWARE_IRQ, self.ctlr & CTLR_SWIE != 0);
+        }
     }
 
     /// Advance the counter by `ticks` counts and latch CNTIF if CMP is hit.
@@ -89,6 +117,7 @@ impl QingkeV2Systick {
             return;
         }
         self.sr |= SR_CNTIF;
+        self.publish_irq_lines();
         let after = ticks - to_match;
         self.cnt = if reload {
             // Positions after the match: CMP, 0, 1, ..., CMP - 1.
@@ -112,6 +141,15 @@ impl QingkeV2Systick {
             self.prescale_rem = (total % 8) as u8;
             self.count(total / 8);
         }
+    }
+
+    /// Take a decoded snapshot's registers, keeping the PFIC wiring (which
+    /// is not part of the snapshot) and re-driving its request lines.
+    fn restore_from(&mut self, restored: Self) {
+        let pfic = self.pfic.take();
+        *self = restored;
+        self.pfic = pfic;
+        self.publish_irq_lines();
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -141,6 +179,7 @@ impl QingkeV2Systick {
             CMP => self.cmp = value,
             _ => crate::census_reg!("qingke_systick:QingkeV2Systick", offset, "write"),
         }
+        self.publish_irq_lines();
     }
 }
 
@@ -193,8 +232,12 @@ impl crate::Peripheral for QingkeV2Systick {
                 "QingkeV2Systick snapshot decode: {error}"
             ))
         })?;
-        *self = restored;
+        self.restore_from(restored);
         Ok(())
+    }
+
+    fn attach_qingke_pfic(&mut self, pfic: Arc<QingkePficState>) {
+        QingkeV2Systick::attach_pfic(self, pfic);
     }
 
     fn runtime_snapshot(&self) -> Vec<u8> {
@@ -210,7 +253,7 @@ impl crate::Peripheral for QingkeV2Systick {
                 "QingkeV2Systick runtime snapshot decode: {error}"
             ))
         })?;
-        *self = restored;
+        self.restore_from(restored);
         Ok(())
     }
 }
@@ -308,5 +351,35 @@ mod tests {
         assert_eq!(t.read_u32(CTLR).unwrap(), 0);
         let _ = t.tick_elapsed(1_000);
         assert_eq!(t.read_u32(CNT).unwrap(), 42);
+    }
+
+    #[test]
+    fn stie_and_swie_drive_pfic_levels() {
+        let pfic = Arc::new(QingkePficState::default());
+        let mut t = QingkeV2Systick::new();
+        t.attach_pfic(pfic.clone());
+        let level =
+            |irq: u32| pfic.level[0].load(std::sync::atomic::Ordering::SeqCst) & (1 << irq) != 0;
+
+        // SYSTICK_Interrupt example: CMP, CNT = 0, CTLR = 0xF.
+        t.write_u32(CMP, 9).unwrap();
+        t.write_u32(CTLR, 0xF).unwrap();
+        let _ = t.tick_elapsed(9);
+        assert!(level(SYSTICK_IRQ), "CNTIF with STIE requests IRQ 12");
+        // The handler's SysTick->SR = 0 drops the request on the same store.
+        t.write_u32(SR, 0).unwrap();
+        assert!(!level(SYSTICK_IRQ));
+
+        // CNTIF without STIE requests nothing.
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK | CTLR_STRE)
+            .unwrap();
+        let _ = t.tick_elapsed(10);
+        assert_eq!(t.read_u32(SR).unwrap(), 1);
+        assert!(!level(SYSTICK_IRQ));
+
+        t.write_u32(CTLR, CTLR_SWIE).unwrap();
+        assert!(level(SOFTWARE_IRQ));
+        t.write_u32(CTLR, 0).unwrap();
+        assert!(!level(SOFTWARE_IRQ));
     }
 }

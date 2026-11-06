@@ -562,6 +562,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // INTSYSCR CSR, and runs WCH's unmodified GPIO_Toggle example, but
         // still has no catalog board or physical-silicon differential.
         "ch32v003f4p6-systick-smoke",
+        // The PFIC profile adds QingKe V2 interrupt delivery (SysTick and
+        // software interrupts) and runs WCH's unmodified SYSTICK_Interrupt
+        // example; same gap: no catalog board or silicon differential.
+        "ch32v003f4p6-pfic-smoke",
         // CH32V203C8T6 on the WeAct BluePill-Plus-CH32 has a PB2 LED and
         // USART1 TX smoke on reused STM32F1-shaped models, but no Playground
         // catalog board or physical-silicon differential.

@@ -85,8 +85,9 @@ Three results to read correctly:
   R4/R5 fitted would run at 48 MHz, and this profile does not model that.
 - **ChipID 00000000** is deliberate. The factory chip-ID word is not modeled,
   and the system-area window reads zero rather than a plausible fake.
-- **Not modeled:** the PFIC, so no SysTick or other interrupt is delivered
-  (STIE, SWIE and INTSYSCR are accepted and ignored); the HSE; clock dividers
+- **Not modeled in this profile:** the PFIC, so no interrupt is delivered here
+  (STIE, SWIE and INTSYSCR are stored only; the `pfic-smoke` profile below
+  adds interrupt delivery); the HSE; clock dividers
   as an execution-speed change; and remap side effects of AFIO PCFR1. The
   descriptor's `cpu_hz` is 48 MHz, the replica's PLL target. The SDK example's
   24 MHz shows up only in its own `SystemCoreClock` and delay arithmetic.
@@ -96,6 +97,56 @@ microcontrollers. Its sources and the built ELF are therefore not committed:
 the build script fetches the pinned commit into a cache and writes the image
 under `target/`. The one local addition, `picolibc_stdout.c`, routes picolibc's
 `printf` to the SDK's own `_write()`.
+
+### Interrupts: the QingKe V2 PFIC
+
+The `ch32v003f4p6-pfic-smoke` profile adds the PFIC at `0xE000E000`, so the
+core takes interrupts the way WCH's startup code sets them up: `mtvec =
+_start | 3` (vectored, the table holds handler addresses), INTSYSCR = 3, and
+`mstatus.MIE` set before `main`. Modeled:
+
+- **PFIC registers**: ISR/IPR status, IENR/IRER enable, IPSR/IPRR pend,
+  IACTR active, IPRIOR (bits 7:6), ITHRESDR threshold, GISR, and the two VTF
+  channels that skip the table. Bit `n` is interrupt number `n`, so
+  `NVIC_EnableIRQ(SysTick_IRQn)` sets IENR0 bit 12.
+- **Trap entry and `mret`**: interrupts vector through their table slot;
+  ecall-M uses slot 5, a breakpoint slot 9, other exceptions HardFault (3).
+  With INTSYSCR.HWSTKEN the hardware prologue/epilogue (HPE) saves ra, t0-t2
+  and a0-a5 on entry and restores them on `mret`. Binaries built with WCH's
+  MounRiver GCC, whose `"WCH-Interrupt-fast"` handlers save nothing, rely on
+  that.
+- **SysTick and software interrupts**: STK `STIE && CNTIF` requests
+  interrupt 12 and `SWIE` requests 14. Both are level requests that stay
+  asserted until the handler clears CNTIF or SWIE.
+
+Two smokes use it:
+
+1. `pfic-smoke.yaml` runs `firmware_pfic.c` (our `main`, linked with WCH's
+   SDK startup and drivers). It takes a 1 kHz SysTick interrupt, checks that
+   `NVIC_DisableIRQ` stops it and re-enabling resumes it, then raises the
+   software interrupt once through `NVIC_SetPendingIRQ` and once through
+   `STK_CTLR.SWIE`. Each marker prints only after its handler ran, and PD0 is
+   toggled only from the SysTick ISR.
+2. `sdk-systick-interrupt-smoke.yaml` runs **WCH's unmodified
+   SYSTICK_Interrupt example**. Its handler only clears `STK_SR`, so the
+   assertion is that CNTIF reads 0 after two 1 s compare periods. The
+   committed negative control runs the same image on the SysTick profile
+   (no PFIC), where CNTIF stays at 1.
+
+Upstream GCC does not know WCH's `"WCH-Interrupt-fast"` attribute. It warns and
+drops the attribute, so the handler returns with `ret`, which is also wrong on
+silicon. `build-sdk-interrupt-examples.sh` compiles with
+`-D'interrupt(x)=interrupt'`, which turns those handlers into standard RISC-V
+interrupt handlers (software save plus `mret`, as ch32v003fun writes them).
+The SDK sources are unchanged.
+
+Not modeled: interrupt nesting (INESTEN is stored, and a pending interrupt
+waits for `mret`), the key-gated system reset that the SDK's HardFault handler
+requests, sleep-on-exit and WFE events, the NMI, and interrupts from the other
+peripherals (USART1, I2C1, EXTI, ...), which declare no `irq:` line in these
+profiles. QingKe V2 silicon pushes the HPE frame onto the stack. Here the frame
+is held inside the core, so registers come back exactly but the stack memory
+is not written.
 
 ## Copy-paste GPIO example
 
@@ -222,6 +273,14 @@ examples/ch32v003-evt/build-sdk-gpio-toggle.sh
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/sdk-gpio-toggle-smoke.yaml \
   --output-dir /tmp/ch32v003-sdk-gpio-toggle
+
+examples/ch32v003-evt/build-sdk-interrupt-examples.sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/pfic-smoke.yaml \
+  --output-dir /tmp/ch32v003-pfic-smoke
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/sdk-systick-interrupt-smoke.yaml \
+  --output-dir /tmp/ch32v003-sdk-systick-interrupt
 ```
 
 The committed SysTick and SDK-example runs are in

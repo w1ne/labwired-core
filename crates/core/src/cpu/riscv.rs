@@ -38,10 +38,14 @@ pub enum RiscVCoreProfile {
     StandardRv32E,
     /// WCH QingKe V2 (CH32V00x): the RV32EC profile plus the vendor
     /// interrupt-system CSR INTSYSCR (0x804) that WCH's startup code and
-    /// `ch32v003fun` write before `main`. Its HWSTKEN/INESTEN bits configure
-    /// hardware context stacking and nesting on interrupt entry; the PFIC is
-    /// not modeled and no interrupt is delivered, so the CSR is read-as-zero,
-    /// write-ignored here.
+    /// `ch32v003fun` write before `main`, and the QingKe trap entry: with a
+    /// `qingke_pfic` on the bus the core takes PFIC interrupts through the
+    /// vector table (see [`RiscV::attach_qingke_pfic`]). INTSYSCR keeps
+    /// HWSTKEN (bit 0) and INESTEN (bit 1); HWSTKEN turns on the hardware
+    /// prologue/epilogue (HPE) that saves the caller-saved registers on trap
+    /// entry and restores them on `mret`, which WCH's
+    /// `"WCH-Interrupt-fast"` handlers rely on. INESTEN is stored, but
+    /// nesting is not modeled: a pending interrupt waits for `mret`.
     QingkeV2,
 }
 
@@ -118,6 +122,19 @@ pub struct RiscV {
     pub triggers: trigger::TriggerModule,
 
     waiting_for_interrupt: bool,
+
+    /// QingKe V2 interrupt controller shared with the `qingke_pfic`
+    /// peripheral; `None` on every other core and on a QingKe chip
+    /// descriptor without a PFIC (no interrupt is then delivered).
+    qingke_pfic: Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>>,
+    /// INTSYSCR (CSR 0x804) HWSTKEN and INESTEN bits.
+    qingke_intsyscr: u32,
+    /// One frame per QingKe trap not yet returned from, innermost last.
+    qingke_frames: Vec<QingkeTrapFrame>,
+    /// Vector-table slot whose stored handler address becomes the PC once
+    /// the trapping instruction's step returns (mtvec MODE = 3 holds
+    /// absolute addresses, and `handle_trap` has no bus to read them).
+    qingke_vector_slot: Option<u32>,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
 
     /// Side-effect-free instruction-fetch window over flash-XIP and linear
@@ -165,6 +182,24 @@ pub struct RiscV {
     #[cfg(feature = "jit")]
     jit_engine: Option<crate::cpu::jit_framework::riscv::RiscvJitEngine>,
 }
+
+/// QingKe trap bookkeeping for `mret`: the interrupt to retire from the
+/// PFIC's active set, and the registers HPE saved on entry.
+///
+/// QingKe V2 silicon pushes the HPE frame onto the stack; here it is held
+/// inside the core, so the registers come back exactly but the stack memory
+/// below `sp` is not written. Firmware never reads that frame.
+#[derive(Debug, Clone, Copy)]
+struct QingkeTrapFrame {
+    irq: Option<u32>,
+    saved: Option<[u32; QINGKE_HPE_REGS.len()]>,
+}
+
+/// The RV32E caller-saved registers HPE saves: ra, t0-t2, a0-a5.
+const QINGKE_HPE_REGS: [usize; 10] = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15];
+/// HPE nests two levels on V2; deeper unreturned frames (a handler that
+/// never `mret`s, e.g. a fault loop) are dropped oldest-first.
+const QINGKE_MAX_FRAMES: usize = 8;
 
 /// Bytes of guest code held in the interpreter fetch window (power of two).
 const FETCH_WINDOW_BYTES: usize = 256;
@@ -242,6 +277,85 @@ impl Default for RiscV {
 }
 
 impl RiscV {
+    /// Connect the QingKe V2 PFIC the `qingke_pfic` peripheral exposes over
+    /// MMIO. Ignored on other profiles.
+    pub fn attach_qingke_pfic(
+        &mut self,
+        pfic: Arc<crate::peripherals::qingke_pfic::QingkePficState>,
+    ) {
+        if self.core_profile == RiscVCoreProfile::QingkeV2 {
+            self.qingke_pfic = Some(pfic);
+        }
+    }
+
+    /// The PFIC interrupt the core would take at the next boundary with
+    /// `mstatus.MIE` set.
+    fn qingke_next_interrupt(&self) -> Option<u32> {
+        self.qingke_pfic.as_ref()?.next_interrupt()
+    }
+
+    /// QingKe trap entry after the standard CSR updates in `handle_trap`.
+    ///
+    /// Vector numbers follow the CH32V003 table: interrupts use their PFIC
+    /// number; ecall from M-mode is 5, from U-mode 8, a breakpoint 9, and
+    /// every other exception is HardFault (3). mtvec MODE bit 0 selects
+    /// vectored entry and bit 1 whether a slot holds a handler address (WCH
+    /// startup and `ch32v003fun` both set 3) or a jump instruction. A VTF
+    /// channel bound to the interrupt bypasses the table.
+    fn qingke_trap_entry(&mut self, cause: u32) {
+        let interrupt = cause & 0x8000_0000 != 0;
+        let code = cause & 0x7FFF_FFFF;
+        let saved = (self.qingke_intsyscr & 1 != 0).then(|| QINGKE_HPE_REGS.map(|r| self.x[r]));
+        if self.qingke_frames.len() == QINGKE_MAX_FRAMES {
+            self.qingke_frames.remove(0);
+        }
+        self.qingke_frames.push(QingkeTrapFrame {
+            irq: interrupt.then_some(code),
+            saved,
+        });
+
+        let base = self.mtvec & !3;
+        if interrupt {
+            if let Some(target) = self.qingke_pfic.as_ref().and_then(|p| p.vtf_target(code)) {
+                self.pc = target;
+                return;
+            }
+        }
+        if self.mtvec & 1 == 0 {
+            self.pc = base;
+            return;
+        }
+        let vector = match (interrupt, code) {
+            (true, n) => n,
+            (false, 11) => 5,
+            (false, 8) => 8,
+            (false, 3) => 9,
+            (false, _) => 3,
+        };
+        let slot = base.wrapping_add(vector.wrapping_mul(4));
+        if self.mtvec & 2 != 0 {
+            self.qingke_vector_slot = Some(slot);
+        } else {
+            self.pc = slot;
+        }
+    }
+
+    /// QingKe `mret`: HPE restores what it saved, and the interrupt leaves
+    /// the PFIC's active set.
+    fn qingke_trap_return(&mut self) {
+        let Some(frame) = self.qingke_frames.pop() else {
+            return;
+        };
+        if let Some(saved) = frame.saved {
+            for (reg, value) in QINGKE_HPE_REGS.iter().zip(saved) {
+                self.x[*reg] = value;
+            }
+        }
+        if let (Some(irq), Some(pfic)) = (frame.irq, &self.qingke_pfic) {
+            pfic.complete(irq);
+        }
+    }
+
     pub fn new_for(core_profile: RiscVCoreProfile) -> Self {
         Self {
             core_profile,
@@ -260,6 +374,10 @@ impl RiscV {
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
+            qingke_pfic: None,
+            qingke_intsyscr: 0,
+            qingke_frames: Vec::new(),
+            qingke_vector_slot: None,
             decode_cache: Box::new([None; 4096]),
             fetch_base: 0,
             fetch_len: 0,
@@ -843,7 +961,7 @@ impl RiscV {
             }
             0xC80 if self.core_profile.has_standard_rv32_counters() => (self.mtime >> 32) as u32,
             // QingKe INTSYSCR: see `RiscVCoreProfile::QingkeV2`.
-            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => 0,
+            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => self.qingke_intsyscr,
             _ => return None,
         })
     }
@@ -872,7 +990,9 @@ impl RiscV {
             // See read_csr: accept PMA cfg/addr writes as no-ops.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
-            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => {}
+            0x804 if self.core_profile == RiscVCoreProfile::QingkeV2 => {
+                self.qingke_intsyscr = val & 0b11
+            }
             _ => return false,
         }
         true
@@ -931,6 +1051,9 @@ impl RiscV {
         self.mstatus |= 0b11 << 11; // MPP <- M-mode
                                     // tcontrol: mpte <- mte, mte <- 0, so no trigger fires in the handler.
         self.triggers.on_trap_entry();
+        if self.core_profile == RiscVCoreProfile::QingkeV2 {
+            self.qingke_trap_entry(cause);
+        }
     }
 
     /// The trigger-module check for the instruction about to execute
@@ -1201,33 +1324,15 @@ impl RiscV {
     }
 }
 
-impl Cpu for RiscV {
-    fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
-        self.pc = 0;
-        self.invalidate_fetch_window();
-        Ok(())
-    }
-
-    /// Mirror the RV32IMC JIT engine's counters into the feature-agnostic
-    /// [`crate::CpuJitStats`] so generic callers can prove non-vacuity. Only
-    /// present under `jit`; without it the trait default (`None`) applies.
-    #[cfg(feature = "jit")]
-    fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
-        self.jit_stats().map(|s| crate::CpuJitStats {
-            compiled: s.compiled,
-            block_runs: s.block_runs,
-            block_instrs: s.block_instrs,
-            interpreted: s.interpreted,
-        })
-    }
-
-    fn step(
+impl RiscV {
+    /// One interpreted instruction: [`Cpu::step`] minus the QingKe
+    /// vector-table load, which needs the bus after the trap is raised.
+    fn step_instruction(
         &mut self,
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
-        self.waiting_for_interrupt = false;
         let opcode = self.fetch_opcode_u32(bus)?;
 
         let retired_pc = self.pc;
@@ -1511,6 +1616,9 @@ impl Cpu for RiscV {
                 self.mstatus |= mpie << 3; // MIE <- MPIE
                 self.mstatus |= 1 << 7; // MPIE <- 1
                 self.triggers.on_mret();
+                if self.core_profile == RiscVCoreProfile::QingkeV2 {
+                    self.qingke_trap_return();
+                }
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
@@ -1843,6 +1951,27 @@ impl Cpu for RiscV {
         // lines level-sensitively via `external_irq_lines()` after routing
         // asserted sources through the interrupt matrix. OR them into the local
         // mip view so a line stays asserted only while its source does.
+        // QingKe V2: the PFIC arbitrates (enable, priority, threshold) and
+        // the core takes its pick while `mstatus.MIE` is set.
+        if (self.mstatus & (1 << 3)) != 0 {
+            if let Some(irq) = self.qingke_next_interrupt() {
+                if !observers.is_empty() {
+                    crate::emit_trace_event(
+                        observers,
+                        labwired_hw_trace::TraceEvent::InstructionRetired {
+                            pc: retired_pc,
+                            opcode,
+                        },
+                    );
+                }
+                if let Some(pfic) = &self.qingke_pfic {
+                    pfic.acknowledge(irq);
+                }
+                self.handle_trap(0x8000_0000 | irq, next_pc);
+                return Ok(());
+            }
+        }
+
         if (self.mstatus & (1 << 3)) != 0 {
             // Standard machine sources are masked by `mie`; ESP32-C3 external
             // lines arrive already gated (enable + priority/threshold) by the
@@ -1909,6 +2038,44 @@ impl Cpu for RiscV {
             }
         }
 
+        Ok(())
+    }
+}
+
+impl Cpu for RiscV {
+    fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
+        self.pc = 0;
+        self.qingke_intsyscr = 0;
+        self.qingke_frames.clear();
+        self.qingke_vector_slot = None;
+        self.invalidate_fetch_window();
+        Ok(())
+    }
+
+    /// Mirror the RV32IMC JIT engine's counters into the feature-agnostic
+    /// [`crate::CpuJitStats`] so generic callers can prove non-vacuity. Only
+    /// present under `jit`; without it the trait default (`None`) applies.
+    #[cfg(feature = "jit")]
+    fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
+        self.jit_stats().map(|s| crate::CpuJitStats {
+            compiled: s.compiled,
+            block_runs: s.block_runs,
+            block_instrs: s.block_instrs,
+            interpreted: s.interpreted,
+        })
+    }
+
+    fn step(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+    ) -> SimResult<()> {
+        self.step_instruction(bus, observers, config)?;
+        // A QingKe trap through an address table: load the handler.
+        if let Some(slot) = self.qingke_vector_slot.take() {
+            self.pc = bus.read_u32(u64::from(slot))? & !1;
+        }
         Ok(())
     }
 
@@ -2068,6 +2235,11 @@ impl Cpu for RiscV {
         self.write_reg(2, val); // x2 is SP
     }
     fn set_exception_pending(&mut self, _exception_num: u32) {
+        // QingKe V2: a peripheral's `irq:` is its PFIC interrupt number.
+        if let Some(pfic) = &self.qingke_pfic {
+            pfic.pend(_exception_num);
+            return;
+        }
         // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
         // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
         // Since we don't have a PLIC yet, we pend a generic external interrupt.
@@ -2079,6 +2251,9 @@ impl Cpu for RiscV {
             return None;
         }
         if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+            return None;
+        }
+        if self.qingke_next_interrupt().is_some() {
             return None;
         }
         if self.mtimecmp == u64::MAX {

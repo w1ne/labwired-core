@@ -1053,6 +1053,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The register state of a WCH QingKe V2 PFIC, which `configure_riscv`
+    /// shares with the core. Named capability rather than a downcast.
+    /// Default `None` = not a PFIC.
+    fn qingke_pfic_state(&self) -> Option<Arc<crate::peripherals::qingke_pfic::QingkePficState>> {
+        None
+    }
+
+    /// Route this peripheral's interrupt requests to a QingKe V2 PFIC (the
+    /// QingKe SysTick's STIE/SWIE level sources). Default: no-op, for
+    /// peripherals that raise no PFIC level request.
+    fn attach_qingke_pfic(&mut self, _pfic: Arc<crate::peripherals::qingke_pfic::QingkePficState>) {
+    }
+
     /// Stimulus reachability: call `f` once for every device attached to this
     /// controller that accepts simulated input, in attach order.
     ///
