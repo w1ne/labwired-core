@@ -1,6 +1,7 @@
-//! Functional external supply routing, fed by an existing plant's voltage.
-//! No battery model or silicon thresholds. Routed domains start off. I2C
-//! register state is retained on cutoff; only bus access and clocks are gated.
+//! Functional external supply routing, fed by an explicit voltage input or a
+//! board GPIO power switch. No battery model or silicon thresholds. Routed
+//! domains start off. I2C register state is retained on cutoff; only bus
+//! access and clocks are gated.
 use super::supply::powered_from_config;
 use crate::{
     inspect::{Artifact, InspectOpts},
@@ -126,6 +127,56 @@ impl crate::bus::SystemBus {
             .update(voltage_v)
     }
 }
+
+/// A board-level GPIO-controlled external supply for one routed domain.
+/// The voltage is a functional input, not an analog regulator model.
+#[derive(Debug)]
+struct GpioSupplyObserver {
+    pin: u8,
+    on_voltage_v: f64,
+    domain: Arc<SupplyDomain>,
+}
+
+impl crate::peripherals::device::GpioObserver for GpioSupplyObserver {
+    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, _sim_cycle: u64) {
+        if pin != self.pin {
+            return;
+        }
+        if let Err(error) = self.domain.update(if to { self.on_voltage_v } else { 0.0 }) {
+            tracing::error!(pin, %error, "failed to update GPIO-controlled supply domain");
+        }
+    }
+}
+
+/// Register and observe a GPIO-controlled external supply domain.
+///
+/// A system builder calls this before attaching I2C parts whose `supply_domain`
+/// config names the same domain. It starts off and follows the selected GPIO.
+pub fn install_gpio_supply_control(
+    bus: &mut crate::bus::SystemBus,
+    domain_name: &str,
+    pin: u8,
+    min_v: f64,
+    on_voltage_v: f64,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(pin < 40, "invalid GPIO supply-control pin {pin}");
+    anyhow::ensure!(
+        on_voltage_v.is_finite() && on_voltage_v >= min_v,
+        "GPIO supply voltage must be finite and meet the domain threshold"
+    );
+    let domain = bus.register_supply_domain(domain_name, min_v)?;
+    let observer = Arc::new(GpioSupplyObserver {
+        pin,
+        on_voltage_v,
+        domain,
+    });
+    anyhow::ensure!(
+        crate::bus::SystemBus::install_gpio_observer(bus, observer),
+        "GPIO-controlled supply domain requires an observer-capable GPIO peripheral"
+    );
+    Ok(())
+}
+
 pub(crate) type SupplyDomains = HashMap<String, Arc<SupplyDomain>>;
 pub struct GatedI2cDevice {
     inner: Box<dyn I2cDevice>,

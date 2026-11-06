@@ -1,7 +1,7 @@
 {
   "catalog_board": "adafruit-feather-esp32-v2",
   "chip": "esp32",
-  "description": "Adafruit ESP32 Feather V2 (PID 5400): ESP32-D0WD-V3 with 8 MB flash and 2 MB PSRAM, STEMMA QT I2C. Runs via the arduino-esp32 snapshot profile.",
+  "description": "Adafruit ESP32 Feather V2 (currently stocked headered PID 5900; electrically equivalent to PID 5400): ESP32-D0WD-V3 with 8 MB flash and 2 MB PSRAM, STEMMA QT I2C. Runs via the arduino-esp32 snapshot profile.",
   "runnable": true,
   "toolchains": [
     "arduino",
@@ -25,5 +25,5 @@
     "Serial output is not captured on the classic ESP32 profile; the onboarding smoke asserts GPIO state instead.",
     "GPIO2 powers both STEMMA QT and the NeoPixel and defaults low."
   ],
-  "profile_scope": "GPIO13 LED only; see configs/chips/esp32-feather-v2-smoke.yaml"
+  "profile_scope": "GPIO13 LED on the GPIO smoke; GPIO2-gated STEMMA QT BME280 on the BME280 profile"
 }

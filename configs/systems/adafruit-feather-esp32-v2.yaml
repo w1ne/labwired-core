@@ -1,8 +1,9 @@
 # LabWired - Adafruit ESP32 Feather V2 System Configuration
 #
-# Adafruit PID 5400: ESP32-D0WD-V3 (dual-core LX6) with 8 MiB flash and 2 MiB
-# PSRAM, plus a STEMMA QT / Qwiic connector. This board profile uses the narrow
-# `esp32-feather-v2-smoke` chip slice and claims only the discrete GPIO13 LED.
+# Adafruit Feather V2: ESP32-D0WD-V3 (dual-core LX6) with 8 MiB flash and 2 MiB
+# PSRAM, plus a STEMMA QT / Qwiic connector. The currently purchasable headered
+# listing is PID 5900; its electrical layout matches PID 5400. This profile
+# uses the narrow `esp32-feather-v2-smoke` chip slice and claims only GPIO13.
 #
 # The board_io below is NOT a copy of the DevKit's. Three Feather-specific pins
 # matter enough that getting them wrong makes a correct sketch look broken, and

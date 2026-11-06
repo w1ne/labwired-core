@@ -1,0 +1,39 @@
+Processing feather_bme280 (platform: espressif32; board: adafruit_feather_esp32_v2; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/adafruit_feather_esp32_v2.html
+PLATFORM: Espressif 32 (8.0.0) > Adafruit Feather ESP32 V2
+HARDWARE: ESP32 240MHz, 320KB RAM, 8MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32-libs @ 3.3.12
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in debug mode
+Compiling .pio/build/feather_bme280/src/bme280_smoke.cpp.o
+Linking .pio/build/feather_bme280/firmware.elf
+Retrieving maximum program size .pio/build/feather_bme280/firmware.elf
+Checking size .pio/build/feather_bme280/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   7.0% (used 22892 bytes from 327680 bytes)
+Flash: [==        ]  24.7% (used 324297 bytes from 1310720 bytes)
+Building .pio/build/feather_bme280/firmware.bin
+esptool v5.4.0
+Creating ESP32 image...
+Merged 3 ELF sections.
+Successfully created ESP32 image.
+========================= [SUCCESS] Took 3.90 seconds =========================
+
+Environment     Status    Duration
+--------------  --------  ------------
+feather_bme280  SUCCESS   00:00:03.895
+========================= 1 succeeded in 00:00:03.895 =========================

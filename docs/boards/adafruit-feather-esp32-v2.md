@@ -4,16 +4,22 @@ The board system is [`configs/systems/adafruit-feather-esp32-v2.yaml`](../../con
 and uses the limited
 [`esp32-feather-v2-smoke` chip profile](../../configs/chips/esp32-feather-v2-smoke.yaml).
 Its current onboarding smoke exercises the discrete active-high red user LED
-on GPIO13 through the classic ESP32 GPIO model.
+on GPIO13 through the classic ESP32 GPIO model. A second profile exercises the
+STEMMA QT BME280 path, including its GPIO2-controlled rail and I2C0.
 
 ## Verified scope
 
 - **Boot and GPIO smoke:** `examples/adafruit-feather-esp32-v2/io-smoke.yaml`
   runs the PlatformIO firmware and requires 16 GPIO13 edges.
+- **BME280 smoke:** `examples/adafruit-feather-esp32-v2/bme280-smoke.yaml`
+  accounts for Arduino initialization enabling GPIO2, switches it low to
+  verify an address NACK, then raises it and reads the sensor ID and raw
+  temperature on SDA=GPIO22 and SCL=GPIO20. Its local evidence is under
+  `examples/adafruit-feather-esp32-v2/evidence/bme280/`.
 - **Physical board map:** the user LED is GPIO13. GPIO2 is the STEMMA QT and
   NeoPixel power gate, not an LED. I2C uses SDA=GPIO22 and SCL=GPIO20.
-- **Outside this smoke:** PSRAM data behavior, wireless radios, the USB-to-UART
-  bridge, STEMMA QT power gating and attached sensors, and NeoPixel signaling.
+- **Outside these profiles:** PSRAM data behavior, wireless radios, the
+  USB-to-UART bridge, and NeoPixel signaling.
 - The twin treats PSRAM as a probe-only stub, so startup logs a PSRAM ID error
   and continues without external memory. It also assumes an ideal 3.3 V rail;
   power-on and brown-out behavior are untested.
