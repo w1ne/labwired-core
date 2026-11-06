@@ -131,6 +131,9 @@ on:
       - "scripts/build_renesas_rz_t2m_cpu_smoke.sh"
       - "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
+      - "tests/fixtures/avr/atmega1284p-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega1284p-cpu-smoke.elf"
+      - "scripts/build_atmega1284p_cpu_smoke.sh"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -681,6 +684,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega32u4-gpio-smoke.elf
             script: examples/renode-onboarding/simavr-atmega32u4-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega32u4.yaml
+          # ATmega1284P is measured only for CPU instruction execution and SRAM;
+          # the profile makes no peripheral or board-I/O claims.
+          - id: simavr-atmega1284p
+            prebuilt_firmware: tests/fixtures/avr/atmega1284p-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega1284p-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega1284p.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima

@@ -65,6 +65,9 @@ pub enum AvrModel {
     /// ATmega32U4 geometry, with the common AVR8 execution path. Its USB,
     /// interrupt-vector, and non-GPIO peripheral behavior are not modeled.
     Atmega32u4,
+    /// ATmega1284P flash and SRAM geometry. Peripheral behavior remains
+    /// outside this profile until its register map is modeled and exercised.
+    Atmega1284p,
     Attiny202,
     Attiny204,
     Attiny402,
@@ -157,6 +160,8 @@ impl AvrModel {
             AvrModel::Attiny25
         } else if n.contains("attiny13") || n.contains("attiny 13") {
             AvrModel::Attiny13
+        } else if n.contains("1284") {
+            AvrModel::Atmega1284p
         } else if n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
@@ -175,6 +180,7 @@ impl AvrModel {
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Atmega32u4 => 32 * 1024,
+            AvrModel::Atmega1284p => 128 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 4 * 1024,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
@@ -194,7 +200,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
-            AvrModel::Atmega32u4 => 0x0100,
+            AvrModel::Atmega32u4 | AvrModel::Atmega1284p => 0x0100,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 0x3E00,
@@ -220,6 +226,7 @@ impl AvrModel {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             AvrModel::Atmega32u4 => 0x0AFF,
+            AvrModel::Atmega1284p => 0x40FF,
             AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
@@ -245,9 +252,10 @@ impl AvrModel {
     /// at 0x1_002F..0x1_0034, where the 328P keeps its 8-channel window).
     pub fn adc_input_base(self) -> u64 {
         match self {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => {
-                AVR_ADC_INPUT_BASE
-            }
+            AvrModel::Atmega328p
+            | AvrModel::Atmega328pb
+            | AvrModel::Atmega32u4
+            | AvrModel::Atmega1284p => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Attiny202
             | AvrModel::Attiny204
@@ -761,6 +769,7 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega1284p => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -796,6 +805,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Atmega1284p => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
