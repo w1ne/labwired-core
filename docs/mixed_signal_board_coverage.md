@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 67 have end-to-end analog coverage; 36 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 68 have end-to-end analog coverage; 35 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -76,7 +76,7 @@ Current inventory: **103 profiles; 67 have end-to-end analog coverage; 36 have n
 | `nucleo-f103rb-epaper` | [`cosim_nucleo_f103rb_epaper_analog.rs`](../crates/core/tests/cosim_nucleo_f103rb_epaper_analog.rs)::`nucleo_f103rb_epaper_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists solve onto descriptor-routed PA0/ADC1_IN0 and PA1/ADC1_IN1; solved voltages, temperature response, firmware-visible 12-bit conversions, channel isolation, and undriven channel 2 are asserted with the e-paper device retained on SPI1 |
 | `nucleo-f103rb` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end` |
 | `nucleo-f401re` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end` |
-| `nucleo-f407` | **NO E2E analog coverage** |
+| `nucleo-f407` | [`cosim_nucleo_f407_analog.rs`](../crates/core/tests/cosim_nucleo_f407_analog.rs)::`nucleo_f407_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists solve onto descriptor-routed PA0/ADC1_IN0 and PA1/ADC1_IN1; solved voltages, temperature response, firmware-visible 12-bit conversions, channel isolation, and undriven channel 2 are asserted while retaining the NUCLEO-F407 LED and button wiring |
 | `nucleo-f767zi` | **NO E2E analog coverage** |
 | `nucleo-g071rb` | **NO E2E analog coverage** |
 | `nucleo-h563zi-demo` | **NO E2E analog coverage** |
