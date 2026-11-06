@@ -1,0 +1,14 @@
+# Espressif ESP32-C3-DevKit-RUST-2 board slice: GPIO2 drives its WS2812B RGB LED.
+# The onboard ICM-42670-P, SHTC3, button, user LED, USB, and battery circuit
+# are outside this focused profile.
+name: "esp32c3-devkit-rust-2"
+chip: "../chips/esp32c3-devkit-rust-2-smoke.yaml"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO2"
+      num_pixels: 1
+      cpu_hz: 160_000_000

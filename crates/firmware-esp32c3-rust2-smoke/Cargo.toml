@@ -1,0 +1,18 @@
+[package]
+name = "firmware-esp32c3-rust2-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+riscv = "0.10"
+riscv-rt = "0.12"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-esp32c3-rust2-smoke"
+path = "src/main.rs"
+test = false
+bench = false
