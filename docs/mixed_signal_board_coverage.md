@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 65 have end-to-end analog coverage; 38 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 66 have end-to-end analog coverage; 37 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -72,7 +72,7 @@ Current inventory: **103 profiles; 65 have end-to-end analog coverage; 38 have n
 | `nrf52840-dk` | [`cosim_nrf52840_dk_analog.rs`](../crates/core/tests/cosim_nrf52840_dk_analog.rs)::`nrf52840_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels` — generic Beta NTC and unrelated Shockley diode netlists route to explicit SAADC channels 0/1; solved voltages, temperature response, 12-bit EasyDMA results, channel isolation, and undriven channel 2 are asserted |
 | `nrf5340dk` | [`cosim_nrf5340dk_analog.rs`](../crates/core/tests/cosim_nrf5340dk_analog.rs)::`nrf5340dk_ntc_and_diode_netlists_reach_distinct_saadc_channels` — generic Beta NTC and unrelated Shockley diode netlists route to SAADC AIN0/AIN1; solved voltages, temperature response, 12-bit EasyDMA results, channel isolation, and undriven AIN2 are asserted. Uses explicit ADC channel routes; physical pad aliases and silicon validation are not claimed |
 | `nrf54l15dk` | [`cosim_nrf54l15_dk_analog.rs`](../crates/core/tests/cosim_nrf54l15_dk_analog.rs)::`nrf54l15_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels` — generic Beta NTC and unrelated Shockley diode netlists solve to separate SAADC channels; solved voltages, temperature response, 12-bit EasyDMA results using the nRF54L 0.9 V reference and gain encoding, channel isolation, and undriven channel 2 are asserted. Uses explicit ADC channel routes; physical pad aliases and silicon validation are not claimed |
-| `nrf54lm20dk` | **NO E2E analog coverage** |
+| `nrf54lm20dk` | [`cosim_nrf54lm20_dk_analog.rs`](../crates/core/tests/cosim_nrf54lm20_dk_analog.rs)::`nrf54lm20_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels` — generic Beta NTC and unrelated Shockley diode netlists solve into separate nRF54L SAADC channels; solved voltages, temperature response, 12-bit EasyDMA results using the 0.9 V reference and family gain encoding, channel isolation, and undriven channel 2 are asserted. Uses explicit channel routes; physical pad aliases and silicon validation are not claimed |
 | `nucleo-f103rb-epaper` | **NO E2E analog coverage** |
 | `nucleo-f103rb` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end` |
 | `nucleo-f401re` | [`cosim_pin_routing.rs`](../crates/core/tests/cosim_pin_routing.rs)::`nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end` |
