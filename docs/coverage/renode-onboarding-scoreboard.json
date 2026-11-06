@@ -7,6 +7,7 @@
     "not_run": 21,
     "pass": 224,
     "fail": 0,
+    "pass_loading_zero_answering_windows": 12,
     "median_elapsed_ms": 1223,
     "median_elapsed_seconds": 1.223,
     "threshold_seconds": 3600,
@@ -51,7 +52,8 @@
         "build_firmware": 629,
         "run_smoke": 405
       },
-      "_artifact_path": "A2_CV32E40P"
+      "_artifact_path": "A2_CV32E40P",
+      "zero_answering_windows": []
     },
     {
       "target_id": "a20",
@@ -90,7 +92,8 @@
         "run_smoke": 1529
       },
       "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf",
-      "_artifact_path": "a20"
+      "_artifact_path": "a20",
+      "zero_answering_windows": []
     },
     {
       "target_id": "acrn_x86_64",
@@ -124,7 +127,10 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "acrn_x86_64"
+      "_artifact_path": "acrn_x86_64",
+      "zero_answering_windows": [
+        "hpet:hpet"
+      ]
     },
     {
       "target_id": "alif_ae822fa0e5597bs0",
@@ -163,7 +169,8 @@
         "run_smoke": 270
       },
       "prebuilt_firmware": "tests/fixtures/alif-e8-m55-cpu-smoke.elf",
-      "_artifact_path": "alif_ae822fa0e5597bs0"
+      "_artifact_path": "alif_ae822fa0e5597bs0",
+      "zero_answering_windows": []
     },
     {
       "target_id": "ambiq-apollo4",
@@ -201,7 +208,10 @@
         "build_firmware": 4838,
         "run_smoke": 493
       },
-      "_artifact_path": "ambiq-apollo4"
+      "_artifact_path": "ambiq-apollo4",
+      "zero_answering_windows": [
+        "sync_read:stub"
+      ]
     },
     {
       "target_id": "andes_ae350_n25",
@@ -239,7 +249,8 @@
         "build_firmware": 485,
         "run_smoke": 286
       },
-      "_artifact_path": "andes_ae350_n25"
+      "_artifact_path": "andes_ae350_n25",
+      "zero_answering_windows": []
     },
     {
       "target_id": "arduino_101-shield",
@@ -273,7 +284,16 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "arduino_101-shield"
+      "_artifact_path": "arduino_101-shield",
+      "zero_answering_windows": [
+        "led:led",
+        "button:button",
+        "lm74:ti_lm74",
+        "spi0:stub",
+        "spi1:stub",
+        "pwm:stub",
+        "scss:stub"
+      ]
     },
     {
       "target_id": "arduino_nano_33_ble",
@@ -311,7 +331,8 @@
         "build_firmware": 548,
         "run_smoke": 1606
       },
-      "_artifact_path": "arduino_nano_33_ble"
+      "_artifact_path": "arduino_nano_33_ble",
+      "zero_answering_windows": []
     },
     {
       "target_id": "arduino_uno_r4_minima",
@@ -349,7 +370,8 @@
         "build_firmware": 178,
         "run_smoke": 279
       },
-      "_artifact_path": "arduino_uno_r4_minima"
+      "_artifact_path": "arduino_uno_r4_minima",
+      "zero_answering_windows": []
     },
     {
       "target_id": "arty_litex_vexriscv",
@@ -387,7 +409,10 @@
         "build_firmware": 1040,
         "run_smoke": 2209
       },
-      "_artifact_path": "arty_litex_vexriscv"
+      "_artifact_path": "arty_litex_vexriscv",
+      "zero_answering_windows": [
+        "cas:litex_controlandstatus"
+      ]
     },
     {
       "target_id": "arvsom",
@@ -425,7 +450,8 @@
         "build_firmware": 173,
         "run_smoke": 297
       },
-      "_artifact_path": "arvsom"
+      "_artifact_path": "arvsom",
+      "zero_answering_windows": []
     },
     {
       "target_id": "at91rm9200",
@@ -459,7 +485,13 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "at91rm9200"
+      "_artifact_path": "at91rm9200",
+      "zero_answering_windows": [
+        "uart0:atmel91debugunit",
+        "ckgrPllar:pythonperipheral",
+        "ckgrPllbr:pythonperipheral",
+        "pmcMkcr:pythonperipheral"
+      ]
     },
     {
       "target_id": "atsamd21j17d-aft",
@@ -497,7 +529,8 @@
         "build_firmware": 924,
         "run_smoke": 308
       },
-      "_artifact_path": "atsamd21j17d-aft"
+      "_artifact_path": "atsamd21j17d-aft",
+      "zero_answering_windows": []
     },
     {
       "target_id": "atsamd51g19a",
@@ -535,7 +568,8 @@
         "build_firmware": 445,
         "run_smoke": 272
       },
-      "_artifact_path": "atsamd51g19a"
+      "_artifact_path": "atsamd51g19a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "beaglev-fire",
@@ -574,7 +608,16 @@
         "run_smoke": 269
       },
       "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
-      "_artifact_path": "beaglev-fire"
+      "_artifact_path": "beaglev-fire",
+      "zero_answering_windows": [
+        "plic:stub",
+        "mss_gpio0:stub",
+        "mss_gpio1:stub",
+        "mss_gpio2:stub",
+        "i2c0:stub",
+        "i2c1:stub",
+        "spi1:stub"
+      ]
     },
     {
       "target_id": "beaglev_starlight",
@@ -612,7 +655,8 @@
         "build_firmware": 186,
         "run_smoke": 279
       },
-      "_artifact_path": "beaglev_starlight"
+      "_artifact_path": "beaglev_starlight",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4116a",
@@ -650,7 +694,8 @@
         "build_firmware": 508,
         "run_smoke": 274
       },
-      "_artifact_path": "brd4116a"
+      "_artifact_path": "brd4116a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4117a",
@@ -688,7 +733,8 @@
         "build_firmware": 168,
         "run_smoke": 281
       },
-      "_artifact_path": "brd4117a"
+      "_artifact_path": "brd4117a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4118a",
@@ -726,7 +772,8 @@
         "build_firmware": 165,
         "run_smoke": 280
       },
-      "_artifact_path": "brd4118a"
+      "_artifact_path": "brd4118a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4120a",
@@ -764,7 +811,8 @@
         "build_firmware": 169,
         "run_smoke": 272
       },
-      "_artifact_path": "brd4120a"
+      "_artifact_path": "brd4120a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4121a",
@@ -802,7 +850,8 @@
         "build_firmware": 164,
         "run_smoke": 285
       },
-      "_artifact_path": "brd4121a"
+      "_artifact_path": "brd4121a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4162a",
@@ -840,7 +889,8 @@
         "build_firmware": 421,
         "run_smoke": 277
       },
-      "_artifact_path": "brd4162a"
+      "_artifact_path": "brd4162a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4186c",
@@ -878,7 +928,8 @@
         "build_firmware": 433,
         "run_smoke": 274
       },
-      "_artifact_path": "brd4186c"
+      "_artifact_path": "brd4186c",
+      "zero_answering_windows": []
     },
     {
       "target_id": "brd4402a",
@@ -916,7 +967,8 @@
         "build_firmware": 421,
         "run_smoke": 266
       },
-      "_artifact_path": "brd4402a"
+      "_artifact_path": "brd4402a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cc2538",
@@ -954,7 +1006,24 @@
         "build_firmware": 657,
         "run_smoke": 449
       },
-      "_artifact_path": "cc2538"
+      "_artifact_path": "cc2538",
+      "zero_answering_windows": [
+        "ioc:stub",
+        "ana_regs:stub",
+        "soc_adc:stub",
+        "ssi0:stub",
+        "ssi1:stub",
+        "i2cm:stub",
+        "i2cs:stub",
+        "gptimer0:stub",
+        "gptimer1:stub",
+        "gptimer2:stub",
+        "gptimer3:stub",
+        "usb:stub",
+        "pka:stub",
+        "pka_sram:stub",
+        "cctest:stub"
+      ]
     },
     {
       "target_id": "colibri-vf61",
@@ -993,7 +1062,8 @@
         "run_smoke": 278
       },
       "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
-      "_artifact_path": "colibri-vf61"
+      "_artifact_path": "colibri-vf61",
+      "zero_answering_windows": []
     },
     {
       "target_id": "core-v-mcu",
@@ -1031,7 +1101,8 @@
         "build_firmware": 163,
         "run_smoke": 288
       },
-      "_artifact_path": "core-v-mcu"
+      "_artifact_path": "core-v-mcu",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-a53-gicv2",
@@ -1070,7 +1141,8 @@
         "run_smoke": 348
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "cortex-a53-gicv2"
+      "_artifact_path": "cortex-a53-gicv2",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-a53-gicv3",
@@ -1109,7 +1181,8 @@
         "run_smoke": 531
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "cortex-a53-gicv3"
+      "_artifact_path": "cortex-a53-gicv3",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-a53-gicv3_smp",
@@ -1148,7 +1221,8 @@
         "run_smoke": 303
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "cortex-a53-gicv3_smp"
+      "_artifact_path": "cortex-a53-gicv3_smp",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-a78",
@@ -1187,7 +1261,8 @@
         "run_smoke": 277
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "cortex-a78"
+      "_artifact_path": "cortex-a78",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-r52",
@@ -1226,7 +1301,8 @@
         "run_smoke": 314
       },
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
-      "_artifact_path": "cortex-r52"
+      "_artifact_path": "cortex-r52",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-r52_smp",
@@ -1265,7 +1341,8 @@
         "run_smoke": 316
       },
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
-      "_artifact_path": "cortex-r52_smp"
+      "_artifact_path": "cortex-r52_smp",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex-r52_smp_4",
@@ -1304,7 +1381,8 @@
         "run_smoke": 353
       },
       "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
-      "_artifact_path": "cortex-r52_smp_4"
+      "_artifact_path": "cortex-r52_smp_4",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex_a53_console",
@@ -1343,7 +1421,8 @@
         "run_smoke": 289
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "cortex_a53_console"
+      "_artifact_path": "cortex_a53_console",
+      "zero_answering_windows": []
     },
     {
       "target_id": "cortex_a53_virtio",
@@ -1382,7 +1461,8 @@
         "run_smoke": 284
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "cortex_a53_virtio"
+      "_artifact_path": "cortex_a53_virtio",
+      "zero_answering_windows": []
     },
     {
       "target_id": "crosslink-nx-evn",
@@ -1420,7 +1500,8 @@
         "build_firmware": 446,
         "run_smoke": 298
       },
-      "_artifact_path": "crosslink-nx-evn"
+      "_artifact_path": "crosslink-nx-evn",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32g210",
@@ -1458,7 +1539,8 @@
         "build_firmware": 448,
         "run_smoke": 281
       },
-      "_artifact_path": "efm32g210"
+      "_artifact_path": "efm32g210",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32g222",
@@ -1496,7 +1578,8 @@
         "build_firmware": 457,
         "run_smoke": 271
       },
-      "_artifact_path": "efm32g222"
+      "_artifact_path": "efm32g222",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32g232",
@@ -1534,7 +1617,8 @@
         "build_firmware": 433,
         "run_smoke": 278
       },
-      "_artifact_path": "efm32g232"
+      "_artifact_path": "efm32g232",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32g842",
@@ -1572,7 +1656,8 @@
         "build_firmware": 451,
         "run_smoke": 269
       },
-      "_artifact_path": "efm32g842"
+      "_artifact_path": "efm32g842",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32g890",
@@ -1610,7 +1695,8 @@
         "build_firmware": 170,
         "run_smoke": 270
       },
-      "_artifact_path": "efm32g890"
+      "_artifact_path": "efm32g890",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32gg942",
@@ -1648,7 +1734,8 @@
         "build_firmware": 182,
         "run_smoke": 269
       },
-      "_artifact_path": "efm32gg942"
+      "_artifact_path": "efm32gg942",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32gg995",
@@ -1686,7 +1773,8 @@
         "build_firmware": 170,
         "run_smoke": 301
       },
-      "_artifact_path": "efm32gg995"
+      "_artifact_path": "efm32gg995",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32hg350",
@@ -1724,7 +1812,8 @@
         "build_firmware": 447,
         "run_smoke": 269
       },
-      "_artifact_path": "efm32hg350"
+      "_artifact_path": "efm32hg350",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32jg1",
@@ -1762,7 +1851,8 @@
         "build_firmware": 453,
         "run_smoke": 268
       },
-      "_artifact_path": "efm32jg1"
+      "_artifact_path": "efm32jg1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32jg12",
@@ -1800,7 +1890,8 @@
         "build_firmware": 449,
         "run_smoke": 277
       },
-      "_artifact_path": "efm32jg12"
+      "_artifact_path": "efm32jg12",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32lg942",
@@ -1838,7 +1929,8 @@
         "build_firmware": 435,
         "run_smoke": 274
       },
-      "_artifact_path": "efm32lg942"
+      "_artifact_path": "efm32lg942",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32lg995",
@@ -1876,7 +1968,8 @@
         "build_firmware": 431,
         "run_smoke": 270
       },
-      "_artifact_path": "efm32lg995"
+      "_artifact_path": "efm32lg995",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32pg1",
@@ -1914,7 +2007,8 @@
         "build_firmware": 424,
         "run_smoke": 270
       },
-      "_artifact_path": "efm32pg1"
+      "_artifact_path": "efm32pg1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32pg12",
@@ -1952,7 +2046,8 @@
         "build_firmware": 420,
         "run_smoke": 280
       },
-      "_artifact_path": "efm32pg12"
+      "_artifact_path": "efm32pg12",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32tg840",
@@ -1990,7 +2085,8 @@
         "build_firmware": 418,
         "run_smoke": 278
       },
-      "_artifact_path": "efm32tg840"
+      "_artifact_path": "efm32tg840",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32wg995",
@@ -2028,7 +2124,8 @@
         "build_firmware": 431,
         "run_smoke": 268
       },
-      "_artifact_path": "efm32wg995"
+      "_artifact_path": "efm32wg995",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efm32zg222",
@@ -2066,7 +2163,8 @@
         "build_firmware": 422,
         "run_smoke": 274
       },
-      "_artifact_path": "efm32zg222"
+      "_artifact_path": "efm32zg222",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efr32mg1",
@@ -2104,7 +2202,8 @@
         "build_firmware": 416,
         "run_smoke": 269
       },
-      "_artifact_path": "efr32mg1"
+      "_artifact_path": "efr32mg1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efr32mg12",
@@ -2142,7 +2241,8 @@
         "build_firmware": 169,
         "run_smoke": 269
       },
-      "_artifact_path": "efr32mg12"
+      "_artifact_path": "efr32mg12",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efr32mg13",
@@ -2180,7 +2280,8 @@
         "build_firmware": 421,
         "run_smoke": 263
       },
-      "_artifact_path": "efr32mg13"
+      "_artifact_path": "efr32mg13",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efr32mg24",
@@ -2218,7 +2319,8 @@
         "build_firmware": 167,
         "run_smoke": 275
       },
-      "_artifact_path": "efr32mg24"
+      "_artifact_path": "efr32mg24",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efr32mg26",
@@ -2256,7 +2358,8 @@
         "build_firmware": 423,
         "run_smoke": 273
       },
-      "_artifact_path": "efr32mg26"
+      "_artifact_path": "efr32mg26",
+      "zero_answering_windows": []
     },
     {
       "target_id": "efr32xg22",
@@ -2294,7 +2397,8 @@
         "build_firmware": 168,
         "run_smoke": 265
       },
-      "_artifact_path": "efr32xg22"
+      "_artifact_path": "efr32xg22",
+      "zero_answering_windows": []
     },
     {
       "target_id": "egis_et171",
@@ -2332,7 +2436,8 @@
         "build_firmware": 485,
         "run_smoke": 288
       },
-      "_artifact_path": "egis_et171"
+      "_artifact_path": "egis_et171",
+      "zero_answering_windows": []
     },
     {
       "target_id": "eos-s3",
@@ -2370,7 +2475,8 @@
         "build_firmware": 169,
         "run_smoke": 273
       },
-      "_artifact_path": "eos-s3"
+      "_artifact_path": "eos-s3",
+      "zero_answering_windows": []
     },
     {
       "target_id": "eos-s3-qomu",
@@ -2408,7 +2514,8 @@
         "build_firmware": 437,
         "run_smoke": 273
       },
-      "_artifact_path": "eos-s3-qomu"
+      "_artifact_path": "eos-s3-qomu",
+      "zero_answering_windows": []
     },
     {
       "target_id": "eos-s3-quickfeather",
@@ -2446,7 +2553,8 @@
         "build_firmware": 168,
         "run_smoke": 273
       },
-      "_artifact_path": "eos-s3-quickfeather"
+      "_artifact_path": "eos-s3-quickfeather",
+      "zero_answering_windows": []
     },
     {
       "target_id": "ezr32hg320",
@@ -2484,7 +2592,8 @@
         "build_firmware": 422,
         "run_smoke": 276
       },
-      "_artifact_path": "ezr32hg320"
+      "_artifact_path": "ezr32hg320",
+      "zero_answering_windows": []
     },
     {
       "target_id": "ezr32lg330",
@@ -2522,7 +2631,8 @@
         "build_firmware": 456,
         "run_smoke": 287
       },
-      "_artifact_path": "ezr32lg330"
+      "_artifact_path": "ezr32lg330",
+      "zero_answering_windows": []
     },
     {
       "target_id": "ezr32wg330",
@@ -2560,7 +2670,8 @@
         "build_firmware": 170,
         "run_smoke": 272
       },
-      "_artifact_path": "ezr32wg330"
+      "_artifact_path": "ezr32wg330",
+      "zero_answering_windows": []
     },
     {
       "target_id": "focaltech_ft9001",
@@ -2598,7 +2709,8 @@
         "build_firmware": 182,
         "run_smoke": 412
       },
-      "_artifact_path": "focaltech_ft9001"
+      "_artifact_path": "focaltech_ft9001",
+      "zero_answering_windows": []
     },
     {
       "target_id": "fomu",
@@ -2636,7 +2748,8 @@
         "build_firmware": 412,
         "run_smoke": 304
       },
-      "_artifact_path": "fomu"
+      "_artifact_path": "fomu",
+      "zero_answering_windows": []
     },
     {
       "target_id": "fsl_lx2160ardb",
@@ -2675,7 +2788,8 @@
         "run_smoke": 310
       },
       "prebuilt_firmware": "tests/fixtures/lx2160a-a72-uart-smoke.elf",
-      "_artifact_path": "fsl_lx2160ardb"
+      "_artifact_path": "fsl_lx2160ardb",
+      "zero_answering_windows": []
     },
     {
       "target_id": "gr712rc",
@@ -2709,7 +2823,15 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "gr712rc"
+      "_artifact_path": "gr712rc",
+      "zero_answering_windows": [
+        "ftmctrl:gaisler_faulttolerantmemorycontroller",
+        "greth:gaislereth",
+        "phy:ethernetphysicallayer",
+        "ahbInfo:gaislerahbplugandplayinfo",
+        "apb1Controller:gaislerapbcontroller",
+        "apb2Controller:gaislerapbcontroller"
+      ]
     },
     {
       "target_id": "gr716",
@@ -2743,7 +2865,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "gr716"
+      "_artifact_path": "gr716",
+      "zero_answering_windows": []
     },
     {
       "target_id": "gr716-devboard",
@@ -2777,7 +2900,13 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "gr716-devboard"
+      "_artifact_path": "gr716-devboard",
+      "zero_answering_windows": [
+        "switch0:button",
+        "switch1:button",
+        "switch2:button",
+        "switch3:button"
+      ]
     },
     {
       "target_id": "ice40up5k-mdp-evn",
@@ -2815,7 +2944,8 @@
         "build_firmware": 397,
         "run_smoke": 281
       },
-      "_artifact_path": "ice40up5k-mdp-evn"
+      "_artifact_path": "ice40up5k-mdp-evn",
+      "zero_answering_windows": []
     },
     {
       "target_id": "imxrt1064",
@@ -2853,7 +2983,8 @@
         "build_firmware": 432,
         "run_smoke": 271
       },
-      "_artifact_path": "imxrt1064"
+      "_artifact_path": "imxrt1064",
+      "zero_answering_windows": []
     },
     {
       "target_id": "imxrt500",
@@ -2891,7 +3022,8 @@
         "build_firmware": 600,
         "run_smoke": 343
       },
-      "_artifact_path": "imxrt500"
+      "_artifact_path": "imxrt500",
+      "zero_answering_windows": []
     },
     {
       "target_id": "kendryte_k210",
@@ -2929,7 +3061,8 @@
         "build_firmware": 938,
         "run_smoke": 269
       },
-      "_artifact_path": "kendryte_k210"
+      "_artifact_path": "kendryte_k210",
+      "zero_answering_windows": []
     },
     {
       "target_id": "leon3",
@@ -2963,7 +3096,15 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "leon3"
+      "_artifact_path": "leon3",
+      "zero_answering_windows": [
+        "ahbInfo:gaislerahbplugandplayinfo",
+        "apbController:gaislerapbcontroller",
+        "esaMemController:esamemorycontroller",
+        "eth:gaislereth",
+        "phy:ethernetphysicallayer",
+        "led:led"
+      ]
     },
     {
       "target_id": "litex_common",
@@ -2997,7 +3138,10 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "litex_common"
+      "_artifact_path": "litex_common",
+      "zero_answering_windows": [
+        "phy:ethernetphysicallayer"
+      ]
     },
     {
       "target_id": "litex_ibex",
@@ -3035,7 +3179,8 @@
         "build_firmware": 926,
         "run_smoke": 290
       },
-      "_artifact_path": "litex_ibex"
+      "_artifact_path": "litex_ibex",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_linux_vexriscv_sdcard",
@@ -3073,7 +3218,8 @@
         "build_firmware": 596,
         "run_smoke": 745
       },
-      "_artifact_path": "litex_linux_vexriscv_sdcard"
+      "_artifact_path": "litex_linux_vexriscv_sdcard",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_microwatt",
@@ -3107,7 +3253,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "litex_microwatt"
+      "_artifact_path": "litex_microwatt",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_minerva",
@@ -3145,7 +3292,8 @@
         "build_firmware": 952,
         "run_smoke": 300
       },
-      "_artifact_path": "litex_minerva"
+      "_artifact_path": "litex_minerva",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_nexys_video_vexriscv_linux",
@@ -3183,7 +3331,8 @@
         "build_firmware": 510,
         "run_smoke": 1452
       },
-      "_artifact_path": "litex_nexys_video_vexriscv_linux"
+      "_artifact_path": "litex_nexys_video_vexriscv_linux",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_picorv32",
@@ -3221,7 +3370,8 @@
         "build_firmware": 447,
         "run_smoke": 1523
       },
-      "_artifact_path": "litex_picorv32"
+      "_artifact_path": "litex_picorv32",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_tock",
@@ -3259,7 +3409,8 @@
         "build_firmware": 476,
         "run_smoke": 305
       },
-      "_artifact_path": "litex_tock"
+      "_artifact_path": "litex_tock",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv",
@@ -3297,7 +3448,10 @@
         "build_firmware": 461,
         "run_smoke": 1591
       },
-      "_artifact_path": "litex_vexriscv"
+      "_artifact_path": "litex_vexriscv",
+      "zero_answering_windows": [
+        "spi_flash_ctrl:stub"
+      ]
     },
     {
       "target_id": "litex_vexriscv_linux",
@@ -3335,7 +3489,8 @@
         "build_firmware": 475,
         "run_smoke": 1543
       },
-      "_artifact_path": "litex_vexriscv_linux"
+      "_artifact_path": "litex_vexriscv_linux",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_micropython",
@@ -3373,7 +3528,8 @@
         "build_firmware": 458,
         "run_smoke": 1644
       },
-      "_artifact_path": "litex_vexriscv_micropython"
+      "_artifact_path": "litex_vexriscv_micropython",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_smp",
@@ -3411,7 +3567,8 @@
         "build_firmware": 441,
         "run_smoke": 285
       },
-      "_artifact_path": "litex_vexriscv_smp"
+      "_artifact_path": "litex_vexriscv_smp",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_tftp",
@@ -3449,7 +3606,8 @@
         "build_firmware": 445,
         "run_smoke": 1552
       },
-      "_artifact_path": "litex_vexriscv_tftp"
+      "_artifact_path": "litex_vexriscv_tftp",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_verilated_cfu",
@@ -3487,7 +3645,8 @@
         "build_firmware": 449,
         "run_smoke": 1512
       },
-      "_artifact_path": "litex_vexriscv_verilated_cfu"
+      "_artifact_path": "litex_vexriscv_verilated_cfu",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_verilated_liteuart",
@@ -3525,7 +3684,8 @@
         "build_firmware": 453,
         "run_smoke": 1612
       },
-      "_artifact_path": "litex_vexriscv_verilated_liteuart"
+      "_artifact_path": "litex_vexriscv_verilated_liteuart",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_vexriscv_zephyr",
@@ -3563,7 +3723,8 @@
         "build_firmware": 170,
         "run_smoke": 1524
       },
-      "_artifact_path": "litex_vexriscv_zephyr"
+      "_artifact_path": "litex_vexriscv_zephyr",
+      "zero_answering_windows": []
     },
     {
       "target_id": "litex_zephyr_vexriscv_i2s",
@@ -3601,7 +3762,8 @@
         "build_firmware": 430,
         "run_smoke": 310
       },
-      "_artifact_path": "litex_zephyr_vexriscv_i2s"
+      "_artifact_path": "litex_zephyr_vexriscv_i2s",
+      "zero_answering_windows": []
     },
     {
       "target_id": "lpc2294",
@@ -3640,7 +3802,8 @@
         "run_smoke": 329
       },
       "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
-      "_artifact_path": "lpc2294"
+      "_artifact_path": "lpc2294",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mars_zx3",
@@ -3679,7 +3842,8 @@
         "run_smoke": 1277
       },
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
-      "_artifact_path": "mars_zx3"
+      "_artifact_path": "mars_zx3",
+      "zero_answering_windows": []
     },
     {
       "target_id": "max32652",
@@ -3717,7 +3881,8 @@
         "build_firmware": 173,
         "run_smoke": 290
       },
-      "_artifact_path": "max32652"
+      "_artifact_path": "max32652",
+      "zero_answering_windows": []
     },
     {
       "target_id": "max32652-evkit",
@@ -3755,7 +3920,8 @@
         "build_firmware": 447,
         "run_smoke": 280
       },
-      "_artifact_path": "max32652-evkit"
+      "_artifact_path": "max32652-evkit",
+      "zero_answering_windows": []
     },
     {
       "target_id": "microwatt",
@@ -3789,7 +3955,10 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "microwatt"
+      "_artifact_path": "microwatt",
+      "zero_answering_windows": [
+        "uart:stub"
+      ]
     },
     {
       "target_id": "mimxrt1064_evk",
@@ -3827,7 +3996,8 @@
         "build_firmware": 203,
         "run_smoke": 274
       },
-      "_artifact_path": "mimxrt1064_evk"
+      "_artifact_path": "mimxrt1064_evk",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mimxrt700_evk",
@@ -3865,7 +4035,8 @@
         "build_firmware": 444,
         "run_smoke": 406
       },
-      "_artifact_path": "mimxrt700_evk"
+      "_artifact_path": "mimxrt700_evk",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mimxrt798s",
@@ -3903,7 +4074,8 @@
         "build_firmware": 410,
         "run_smoke": 390
       },
-      "_artifact_path": "mimxrt798s"
+      "_artifact_path": "mimxrt798s",
+      "zero_answering_windows": []
     },
     {
       "target_id": "miv",
@@ -3941,7 +4113,8 @@
         "build_firmware": 182,
         "run_smoke": 307
       },
-      "_artifact_path": "miv"
+      "_artifact_path": "miv",
+      "zero_answering_windows": []
     },
     {
       "target_id": "miv-board",
@@ -3979,7 +4152,8 @@
         "build_firmware": 464,
         "run_smoke": 312
       },
-      "_artifact_path": "miv-board"
+      "_artifact_path": "miv-board",
+      "zero_answering_windows": []
     },
     {
       "target_id": "miv-board-additional-uarts",
@@ -4017,7 +4191,8 @@
         "build_firmware": 439,
         "run_smoke": 288
       },
-      "_artifact_path": "miv-board-additional-uarts"
+      "_artifact_path": "miv-board-additional-uarts",
+      "zero_answering_windows": []
     },
     {
       "target_id": "miv_rv32",
@@ -4055,7 +4230,8 @@
         "build_firmware": 166,
         "run_smoke": 281
       },
-      "_artifact_path": "miv_rv32"
+      "_artifact_path": "miv_rv32",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mpc5567",
@@ -4089,7 +4265,12 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "mpc5567"
+      "_artifact_path": "mpc5567",
+      "zero_answering_windows": [
+        "fec:fastethernetcontroller",
+        "emios:emios",
+        "fmpllSynsr:pythonperipheral"
+      ]
     },
     {
       "target_id": "mpfs-icicle-kit",
@@ -4128,7 +4309,16 @@
         "run_smoke": 271
       },
       "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
-      "_artifact_path": "mpfs-icicle-kit"
+      "_artifact_path": "mpfs-icicle-kit",
+      "zero_answering_windows": [
+        "plic:stub",
+        "mss_gpio0:stub",
+        "mss_gpio1:stub",
+        "mss_gpio2:stub",
+        "i2c0:stub",
+        "i2c1:stub",
+        "spi1:stub"
+      ]
     },
     {
       "target_id": "msp430f2619",
@@ -4162,7 +4352,13 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "msp430f2619"
+      "_artifact_path": "msp430f2619",
+      "zero_answering_windows": [
+        "boot:arraymemory",
+        "ram_extended:arraymemory",
+        "code:arraymemory",
+        "info_mem:arraymemory"
+      ]
     },
     {
       "target_id": "mspsim-msp430f149",
@@ -4196,7 +4392,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "mspsim-msp430f149"
+      "_artifact_path": "mspsim-msp430f149",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mspsim-msp430f1611",
@@ -4230,7 +4427,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "mspsim-msp430f1611"
+      "_artifact_path": "mspsim-msp430f1611",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mspsim-msp430f2617",
@@ -4264,7 +4462,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "mspsim-msp430f2617"
+      "_artifact_path": "mspsim-msp430f2617",
+      "zero_answering_windows": []
     },
     {
       "target_id": "mspsim-msp430f5437",
@@ -4298,7 +4497,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "mspsim-msp430f5437"
+      "_artifact_path": "mspsim-msp430f5437",
+      "zero_answering_windows": []
     },
     {
       "target_id": "murax_vexriscv",
@@ -4336,7 +4536,8 @@
         "build_firmware": 442,
         "run_smoke": 292
       },
-      "_artifact_path": "murax_vexriscv"
+      "_artifact_path": "murax_vexriscv",
+      "zero_answering_windows": []
     },
     {
       "target_id": "murax_vexriscv_verilated_uart",
@@ -4374,7 +4575,8 @@
         "build_firmware": 168,
         "run_smoke": 287
       },
-      "_artifact_path": "murax_vexriscv_verilated_uart"
+      "_artifact_path": "murax_vexriscv_verilated_uart",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nrf52840",
@@ -4412,7 +4614,8 @@
         "build_firmware": 563,
         "run_smoke": 1871
       },
-      "_artifact_path": "nrf52840"
+      "_artifact_path": "nrf52840",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nrf52840dk_nrf52840",
@@ -4450,7 +4653,10 @@
         "build_firmware": 163,
         "run_smoke": 1670
       },
-      "_artifact_path": "nrf52840dk_nrf52840"
+      "_artifact_path": "nrf52840dk_nrf52840",
+      "zero_answering_windows": [
+        "led0:led"
+      ]
     },
     {
       "target_id": "nucleo_f767zi",
@@ -4488,7 +4694,8 @@
         "build_firmware": 2681,
         "run_smoke": 268
       },
-      "_artifact_path": "nucleo_f767zi"
+      "_artifact_path": "nucleo_f767zi",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nucleo_h753zi",
@@ -4526,7 +4733,10 @@
         "build_firmware": 546,
         "run_smoke": 1431
       },
-      "_artifact_path": "nucleo_h753zi"
+      "_artifact_path": "nucleo_h753zi",
+      "zero_answering_windows": [
+        "GreenLED:led"
+      ]
     },
     {
       "target_id": "nucleo_wba52cg",
@@ -4564,7 +4774,8 @@
         "build_firmware": 663,
         "run_smoke": 1293
       },
-      "_artifact_path": "nucleo_wba52cg"
+      "_artifact_path": "nucleo_wba52cg",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nuvoton_npcx9",
@@ -4602,7 +4813,8 @@
         "build_firmware": 646,
         "run_smoke": 314
       },
-      "_artifact_path": "nuvoton_npcx9"
+      "_artifact_path": "nuvoton_npcx9",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nuvoton_npcx9m6fb_evb",
@@ -4640,7 +4852,8 @@
         "build_firmware": 187,
         "run_smoke": 319
       },
-      "_artifact_path": "nuvoton_npcx9m6fb_evb"
+      "_artifact_path": "nuvoton_npcx9m6fb_evb",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nxp-frdm-imx8mplus",
@@ -4679,7 +4892,8 @@
         "run_smoke": 286
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "nxp-frdm-imx8mplus"
+      "_artifact_path": "nxp-frdm-imx8mplus",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nxp-k6xf",
@@ -4718,7 +4932,13 @@
         "run_smoke": 298
       },
       "prebuilt_firmware": "tests/fixtures/frdm-k64f-smoke.elf",
-      "_artifact_path": "nxp-k6xf"
+      "_artifact_path": "nxp-k6xf",
+      "zero_answering_windows": [
+        "sim:stub",
+        "wdog:stub",
+        "portb:stub",
+        "porte:stub"
+      ]
     },
     {
       "target_id": "nxp-mimx8ml",
@@ -4757,7 +4977,8 @@
         "run_smoke": 332
       },
       "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-      "_artifact_path": "nxp-mimx8ml"
+      "_artifact_path": "nxp-mimx8ml",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nxp-s32k388",
@@ -4795,7 +5016,8 @@
         "build_firmware": 712,
         "run_smoke": 303
       },
-      "_artifact_path": "nxp-s32k388"
+      "_artifact_path": "nxp-s32k388",
+      "zero_answering_windows": []
     },
     {
       "target_id": "nxp-s32k388evb",
@@ -4833,7 +5055,8 @@
         "build_firmware": 175,
         "run_smoke": 282
       },
-      "_artifact_path": "nxp-s32k388evb"
+      "_artifact_path": "nxp-s32k388evb",
+      "zero_answering_windows": []
     },
     {
       "target_id": "opentitan-earlgrey",
@@ -4871,7 +5094,8 @@
         "build_firmware": 231,
         "run_smoke": 289
       },
-      "_artifact_path": "opentitan-earlgrey"
+      "_artifact_path": "opentitan-earlgrey",
+      "zero_answering_windows": []
     },
     {
       "target_id": "opentitan-earlgrey-cw310",
@@ -4909,7 +5133,8 @@
         "build_firmware": 658,
         "run_smoke": 337
       },
-      "_artifact_path": "opentitan-earlgrey-cw310"
+      "_artifact_path": "opentitan-earlgrey-cw310",
+      "zero_answering_windows": []
     },
     {
       "target_id": "picosoc",
@@ -4947,7 +5172,8 @@
         "build_firmware": 632,
         "run_smoke": 358
       },
-      "_artifact_path": "picosoc"
+      "_artifact_path": "picosoc",
+      "zero_answering_windows": []
     },
     {
       "target_id": "polarfire-soc",
@@ -4986,7 +5212,16 @@
         "run_smoke": 325
       },
       "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
-      "_artifact_path": "polarfire-soc"
+      "_artifact_path": "polarfire-soc",
+      "zero_answering_windows": [
+        "plic:stub",
+        "mss_gpio0:stub",
+        "mss_gpio1:stub",
+        "mss_gpio2:stub",
+        "i2c0:stub",
+        "i2c1:stub",
+        "spi1:stub"
+      ]
     },
     {
       "target_id": "quark-c1000",
@@ -5020,7 +5255,13 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "quark-c1000"
+      "_artifact_path": "quark-c1000",
+      "zero_answering_windows": [
+        "spi0:stub",
+        "spi1:stub",
+        "pwm:stub",
+        "scss:stub"
+      ]
     },
     {
       "target_id": "quark_c1000-cc2520",
@@ -5054,7 +5295,17 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "quark_c1000-cc2520"
+      "_artifact_path": "quark_c1000-cc2520",
+      "zero_answering_windows": [
+        "led:led",
+        "button:button",
+        "radio:cc2520",
+        "lm74:ti_lm74",
+        "spi0:stub",
+        "spi1:stub",
+        "pwm:stub",
+        "scss:stub"
+      ]
     },
     {
       "target_id": "ramn",
@@ -5092,7 +5343,8 @@
         "build_firmware": 557,
         "run_smoke": 352
       },
-      "_artifact_path": "ramn"
+      "_artifact_path": "ramn",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-ck_ra6m5",
@@ -5130,7 +5382,8 @@
         "build_firmware": 731,
         "run_smoke": 355
       },
-      "_artifact_path": "renesas-ck_ra6m5"
+      "_artifact_path": "renesas-ck_ra6m5",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-da14592",
@@ -5168,7 +5421,8 @@
         "build_firmware": 682,
         "run_smoke": 337
       },
-      "_artifact_path": "renesas-da14592"
+      "_artifact_path": "renesas-da14592",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-ek_ra2e1",
@@ -5206,7 +5460,8 @@
         "build_firmware": 707,
         "run_smoke": 292
       },
-      "_artifact_path": "renesas-ek_ra2e1"
+      "_artifact_path": "renesas-ek_ra2e1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-ek_ra8m1",
@@ -5244,7 +5499,10 @@
         "build_firmware": 740,
         "run_smoke": 334
       },
-      "_artifact_path": "renesas-ek_ra8m1"
+      "_artifact_path": "renesas-ek_ra8m1",
+      "zero_answering_windows": [
+        "mstp:stub"
+      ]
     },
     {
       "target_id": "renesas-r7fa2e1a9",
@@ -5282,7 +5540,8 @@
         "build_firmware": 701,
         "run_smoke": 309
       },
-      "_artifact_path": "renesas-r7fa2e1a9"
+      "_artifact_path": "renesas-r7fa2e1a9",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-r7fa2l1a",
@@ -5320,7 +5579,8 @@
         "build_firmware": 698,
         "run_smoke": 336
       },
-      "_artifact_path": "renesas-r7fa2l1a"
+      "_artifact_path": "renesas-r7fa2l1a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-r7fa4m1a",
@@ -5358,7 +5618,8 @@
         "build_firmware": 179,
         "run_smoke": 404
       },
-      "_artifact_path": "renesas-r7fa4m1a"
+      "_artifact_path": "renesas-r7fa4m1a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-r7fa6m5b",
@@ -5396,7 +5657,8 @@
         "build_firmware": 671,
         "run_smoke": 289
       },
-      "_artifact_path": "renesas-r7fa6m5b"
+      "_artifact_path": "renesas-r7fa6m5b",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-r7fa8m1a",
@@ -5434,7 +5696,8 @@
         "build_firmware": 617,
         "run_smoke": 336
       },
-      "_artifact_path": "renesas-r7fa8m1a"
+      "_artifact_path": "renesas-r7fa8m1a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas-rz_t2m_rsk",
@@ -5473,7 +5736,8 @@
         "run_smoke": 341
       },
       "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
-      "_artifact_path": "renesas-rz_t2m_rsk"
+      "_artifact_path": "renesas-rz_t2m_rsk",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas_rz_g2l",
@@ -5512,7 +5776,8 @@
         "run_smoke": 278
       },
       "prebuilt_firmware": "tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
-      "_artifact_path": "renesas_rz_g2l"
+      "_artifact_path": "renesas_rz_g2l",
+      "zero_answering_windows": []
     },
     {
       "target_id": "renesas_rz_t2m",
@@ -5551,7 +5816,8 @@
         "run_smoke": 884
       },
       "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
-      "_artifact_path": "renesas_rz_t2m"
+      "_artifact_path": "renesas_rz_t2m",
+      "zero_answering_windows": []
     },
     {
       "target_id": "ri5cy",
@@ -5589,7 +5855,8 @@
         "build_firmware": 647,
         "run_smoke": 994
       },
-      "_artifact_path": "ri5cy"
+      "_artifact_path": "ri5cy",
+      "zero_answering_windows": []
     },
     {
       "target_id": "riscv_verilated_uartlite",
@@ -5627,7 +5894,8 @@
         "build_firmware": 596,
         "run_smoke": 380
       },
-      "_artifact_path": "riscv_verilated_uartlite"
+      "_artifact_path": "riscv_verilated_uartlite",
+      "zero_answering_windows": []
     },
     {
       "target_id": "riscv_virt",
@@ -5665,7 +5933,8 @@
         "build_firmware": 663,
         "run_smoke": 340
       },
-      "_artifact_path": "riscv_virt"
+      "_artifact_path": "riscv_virt",
+      "zero_answering_windows": []
     },
     {
       "target_id": "s32k118",
@@ -5703,7 +5972,8 @@
         "build_firmware": 631,
         "run_smoke": 355
       },
-      "_artifact_path": "s32k118"
+      "_artifact_path": "s32k118",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sam4s",
@@ -5741,7 +6011,8 @@
         "build_firmware": 714,
         "run_smoke": 332
       },
-      "_artifact_path": "sam4s"
+      "_artifact_path": "sam4s",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sam4s16c",
@@ -5779,7 +6050,8 @@
         "build_firmware": 633,
         "run_smoke": 303
       },
-      "_artifact_path": "sam4s16c"
+      "_artifact_path": "sam4s16c",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sam4s8b",
@@ -5817,7 +6089,8 @@
         "build_firmware": 585,
         "run_smoke": 283
       },
-      "_artifact_path": "sam4s8b"
+      "_artifact_path": "sam4s8b",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sam4s_xplained",
@@ -5855,7 +6128,25 @@
         "build_firmware": 739,
         "run_smoke": 323
       },
-      "_artifact_path": "sam4s_xplained"
+      "_artifact_path": "sam4s_xplained",
+      "zero_answering_windows": [
+        "LED:led",
+        "Button:button",
+        "dwt:dwt",
+        "sram_bb:bitbanding",
+        "tc0_1_2:sam_tc",
+        "tc3_4_5:sam_tc",
+        "adc:stub",
+        "dacc:stub",
+        "eefc:stub",
+        "rstc:stub",
+        "wdt:stub",
+        "peripheral_bb:bitbanding",
+        "crc:stub",
+        "spi:stub",
+        "twi1:stub",
+        "twi0:stub"
+      ]
     },
     {
       "target_id": "sam_e70",
@@ -5893,7 +6184,8 @@
         "build_firmware": 714,
         "run_smoke": 296
       },
-      "_artifact_path": "sam_e70"
+      "_artifact_path": "sam_e70",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sifive-fe310",
@@ -5931,7 +6223,8 @@
         "build_firmware": 679,
         "run_smoke": 351
       },
-      "_artifact_path": "sifive-fe310"
+      "_artifact_path": "sifive-fe310",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sifive-fu540",
@@ -5969,7 +6262,8 @@
         "build_firmware": 611,
         "run_smoke": 444
       },
-      "_artifact_path": "sifive-fu540"
+      "_artifact_path": "sifive-fu540",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sifive-fu740",
@@ -6007,7 +6301,8 @@
         "build_firmware": 729,
         "run_smoke": 372
       },
-      "_artifact_path": "sifive-fu740"
+      "_artifact_path": "sifive-fu740",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-at90usb162",
@@ -6046,7 +6341,8 @@
         "run_smoke": 300
       },
       "prebuilt_firmware": "tests/fixtures/avr/at90usb162-cpu-smoke.elf",
-      "_artifact_path": "simavr-at90usb162"
+      "_artifact_path": "simavr-at90usb162",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega128",
@@ -6085,7 +6381,8 @@
         "run_smoke": 364
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega128-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega128"
+      "_artifact_path": "simavr-atmega128",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega1280",
@@ -6124,7 +6421,8 @@
         "run_smoke": 301
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega1280-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega1280"
+      "_artifact_path": "simavr-atmega1280",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega1281",
@@ -6163,7 +6461,8 @@
         "run_smoke": 300
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega1281-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega1281"
+      "_artifact_path": "simavr-atmega1281",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega1284p",
@@ -6202,7 +6501,8 @@
         "run_smoke": 335
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega1284p-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega1284p"
+      "_artifact_path": "simavr-atmega1284p",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega128rfa1",
@@ -6241,7 +6541,8 @@
         "run_smoke": 303
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega128rfa1-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega128rfa1"
+      "_artifact_path": "simavr-atmega128rfa1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega128rfr2",
@@ -6280,7 +6581,8 @@
         "run_smoke": 312
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega128rfr2-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega128rfr2"
+      "_artifact_path": "simavr-atmega128rfr2",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega16",
@@ -6319,7 +6621,8 @@
         "run_smoke": 314
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega16-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega16"
+      "_artifact_path": "simavr-atmega16",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega164",
@@ -6358,7 +6661,8 @@
         "run_smoke": 296
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega164-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega164"
+      "_artifact_path": "simavr-atmega164",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega168",
@@ -6397,7 +6701,8 @@
         "run_smoke": 303
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega168-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega168"
+      "_artifact_path": "simavr-atmega168",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega169p",
@@ -6436,7 +6741,8 @@
         "run_smoke": 437
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega169p-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega169p"
+      "_artifact_path": "simavr-atmega169p",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega16m1",
@@ -6475,7 +6781,8 @@
         "run_smoke": 300
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega16m1-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega16m1"
+      "_artifact_path": "simavr-atmega16m1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega2560",
@@ -6514,7 +6821,8 @@
         "run_smoke": 4194
       },
       "prebuilt_firmware": "tests/fixtures/avr/arduino-mega-2560-io.elf",
-      "_artifact_path": "simavr-atmega2560"
+      "_artifact_path": "simavr-atmega2560",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega32",
@@ -6553,7 +6861,8 @@
         "run_smoke": 295
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega32-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega32"
+      "_artifact_path": "simavr-atmega32",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega324",
@@ -6592,7 +6901,8 @@
         "run_smoke": 293
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega324-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega324"
+      "_artifact_path": "simavr-atmega324",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega328",
@@ -6631,7 +6941,8 @@
         "run_smoke": 969
       },
       "prebuilt_firmware": "tests/fixtures/avr/arduino-uno-blinky.elf",
-      "_artifact_path": "simavr-atmega328"
+      "_artifact_path": "simavr-atmega328",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega328pb",
@@ -6670,7 +6981,8 @@
         "run_smoke": 367
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega328pb-usart1.elf",
-      "_artifact_path": "simavr-atmega328pb"
+      "_artifact_path": "simavr-atmega328pb",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega32u4",
@@ -6709,7 +7021,8 @@
         "run_smoke": 509
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega32u4-gpio-smoke.elf",
-      "_artifact_path": "simavr-atmega32u4"
+      "_artifact_path": "simavr-atmega32u4",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega48",
@@ -6748,7 +7061,8 @@
         "run_smoke": 294
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega48-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega48"
+      "_artifact_path": "simavr-atmega48",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega644",
@@ -6787,7 +7101,8 @@
         "run_smoke": 302
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega644-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega644"
+      "_artifact_path": "simavr-atmega644",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega64m1",
@@ -6826,7 +7141,8 @@
         "run_smoke": 317
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega64m1-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega64m1"
+      "_artifact_path": "simavr-atmega64m1",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega8",
@@ -6865,7 +7181,8 @@
         "run_smoke": 308
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega8-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega8"
+      "_artifact_path": "simavr-atmega8",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-atmega88",
@@ -6904,7 +7221,8 @@
         "run_smoke": 295
       },
       "prebuilt_firmware": "tests/fixtures/avr/atmega88-cpu-smoke.elf",
-      "_artifact_path": "simavr-atmega88"
+      "_artifact_path": "simavr-atmega88",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny13",
@@ -6943,7 +7261,8 @@
         "run_smoke": 312
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny13-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny13"
+      "_artifact_path": "simavr-attiny13",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny1634",
@@ -6982,7 +7301,8 @@
         "run_smoke": 300
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny1634-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny1634"
+      "_artifact_path": "simavr-attiny1634",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny2313",
@@ -7021,7 +7341,8 @@
         "run_smoke": 301
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny2313-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny2313"
+      "_artifact_path": "simavr-attiny2313",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny2313a",
@@ -7060,7 +7381,8 @@
         "run_smoke": 302
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny2313a"
+      "_artifact_path": "simavr-attiny2313a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny24",
@@ -7099,7 +7421,8 @@
         "run_smoke": 308
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny24-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny24"
+      "_artifact_path": "simavr-attiny24",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny25",
@@ -7138,7 +7461,8 @@
         "run_smoke": 293
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny25-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny25"
+      "_artifact_path": "simavr-attiny25",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny4313",
@@ -7177,7 +7501,8 @@
         "run_smoke": 309
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny4313-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny4313"
+      "_artifact_path": "simavr-attiny4313",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny44",
@@ -7216,7 +7541,8 @@
         "run_smoke": 327
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny44-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny44"
+      "_artifact_path": "simavr-attiny44",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny45",
@@ -7255,7 +7581,8 @@
         "run_smoke": 294
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny45-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny45"
+      "_artifact_path": "simavr-attiny45",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny84",
@@ -7294,7 +7621,8 @@
         "run_smoke": 317
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny84-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny84"
+      "_artifact_path": "simavr-attiny84",
+      "zero_answering_windows": []
     },
     {
       "target_id": "simavr-attiny85",
@@ -7333,7 +7661,8 @@
         "run_smoke": 304
       },
       "prebuilt_firmware": "tests/fixtures/avr/attiny85-cpu-smoke.elf",
-      "_artifact_path": "simavr-attiny85"
+      "_artifact_path": "simavr-attiny85",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sltb001a",
@@ -7371,7 +7700,8 @@
         "build_firmware": 239,
         "run_smoke": 288
       },
-      "_artifact_path": "sltb001a"
+      "_artifact_path": "sltb001a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "sltb004a",
@@ -7409,7 +7739,8 @@
         "build_firmware": 168,
         "run_smoke": 282
       },
-      "_artifact_path": "sltb004a"
+      "_artifact_path": "sltb004a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "slwstk6220a",
@@ -7447,7 +7778,8 @@
         "build_firmware": 613,
         "run_smoke": 373
       },
-      "_artifact_path": "slwstk6220a"
+      "_artifact_path": "slwstk6220a",
+      "zero_answering_windows": []
     },
     {
       "target_id": "starfive-jh7100",
@@ -7485,7 +7817,8 @@
         "build_firmware": 676,
         "run_smoke": 281
       },
-      "_artifact_path": "starfive-jh7100"
+      "_artifact_path": "starfive-jh7100",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stk3200",
@@ -7523,7 +7856,8 @@
         "build_firmware": 670,
         "run_smoke": 314
       },
-      "_artifact_path": "stk3200"
+      "_artifact_path": "stk3200",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stk3600",
@@ -7561,7 +7895,8 @@
         "build_firmware": 644,
         "run_smoke": 308
       },
-      "_artifact_path": "stk3600"
+      "_artifact_path": "stk3600",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stk3700",
@@ -7599,7 +7934,8 @@
         "build_firmware": 169,
         "run_smoke": 335
       },
-      "_artifact_path": "stk3700"
+      "_artifact_path": "stk3700",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stk3800",
@@ -7637,7 +7973,8 @@
         "build_firmware": 664,
         "run_smoke": 329
       },
-      "_artifact_path": "stk3800"
+      "_artifact_path": "stk3800",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f042",
@@ -7675,7 +8012,8 @@
         "build_firmware": 675,
         "run_smoke": 352
       },
-      "_artifact_path": "stm32f042"
+      "_artifact_path": "stm32f042",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f072",
@@ -7713,7 +8051,8 @@
         "build_firmware": 689,
         "run_smoke": 371
       },
-      "_artifact_path": "stm32f072"
+      "_artifact_path": "stm32f072",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f072b_discovery",
@@ -7751,7 +8090,8 @@
         "build_firmware": 803,
         "run_smoke": 365
       },
-      "_artifact_path": "stm32f072b_discovery"
+      "_artifact_path": "stm32f072b_discovery",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f103",
@@ -7789,7 +8129,8 @@
         "build_firmware": 211,
         "run_smoke": 1523
       },
-      "_artifact_path": "stm32f103"
+      "_artifact_path": "stm32f103",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f4",
@@ -7827,7 +8168,8 @@
         "build_firmware": 557,
         "run_smoke": 1419
       },
-      "_artifact_path": "stm32f4"
+      "_artifact_path": "stm32f4",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f401cdu6-blackpill",
@@ -7865,7 +8207,8 @@
         "build_firmware": 608,
         "run_smoke": 275
       },
-      "_artifact_path": "stm32f401cdu6-blackpill"
+      "_artifact_path": "stm32f401cdu6-blackpill",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f412",
@@ -7903,7 +8246,8 @@
         "build_firmware": 554,
         "run_smoke": 484
       },
-      "_artifact_path": "stm32f412"
+      "_artifact_path": "stm32f412",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f429",
@@ -7941,7 +8285,8 @@
         "build_firmware": 181,
         "run_smoke": 467
       },
-      "_artifact_path": "stm32f429"
+      "_artifact_path": "stm32f429",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f4_discovery",
@@ -7979,7 +8324,8 @@
         "build_firmware": 170,
         "run_smoke": 1428
       },
-      "_artifact_path": "stm32f4_discovery"
+      "_artifact_path": "stm32f4_discovery",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f4_discovery-kit",
@@ -8017,7 +8363,8 @@
         "build_firmware": 169,
         "run_smoke": 1464
       },
-      "_artifact_path": "stm32f4_discovery-kit"
+      "_artifact_path": "stm32f4_discovery-kit",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f746",
@@ -8055,7 +8402,8 @@
         "build_firmware": 182,
         "run_smoke": 290
       },
-      "_artifact_path": "stm32f746"
+      "_artifact_path": "stm32f746",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f777",
@@ -8093,7 +8441,8 @@
         "build_firmware": 174,
         "run_smoke": 277
       },
-      "_artifact_path": "stm32f777"
+      "_artifact_path": "stm32f777",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32f7_discovery-bb",
@@ -8131,7 +8480,8 @@
         "build_firmware": 172,
         "run_smoke": 275
       },
-      "_artifact_path": "stm32f7_discovery-bb"
+      "_artifact_path": "stm32f7_discovery-bb",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32h7",
@@ -8169,7 +8519,8 @@
         "build_firmware": 169,
         "run_smoke": 1464
       },
-      "_artifact_path": "stm32h7"
+      "_artifact_path": "stm32h7",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32h743",
@@ -8207,7 +8558,8 @@
         "build_firmware": 171,
         "run_smoke": 1440
       },
-      "_artifact_path": "stm32h743"
+      "_artifact_path": "stm32h743",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32h747",
@@ -8245,7 +8597,8 @@
         "build_firmware": 169,
         "run_smoke": 1430
       },
-      "_artifact_path": "stm32h747"
+      "_artifact_path": "stm32h747",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32h747-disco",
@@ -8283,7 +8636,8 @@
         "build_firmware": 170,
         "run_smoke": 1471
       },
-      "_artifact_path": "stm32h747-disco"
+      "_artifact_path": "stm32h747-disco",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32h753",
@@ -8321,7 +8675,8 @@
         "build_firmware": 171,
         "run_smoke": 1500
       },
-      "_artifact_path": "stm32h753"
+      "_artifact_path": "stm32h753",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32l071",
@@ -8359,7 +8714,8 @@
         "build_firmware": 476,
         "run_smoke": 298
       },
-      "_artifact_path": "stm32l071"
+      "_artifact_path": "stm32l071",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32l072",
@@ -8397,7 +8753,8 @@
         "build_firmware": 462,
         "run_smoke": 302
       },
-      "_artifact_path": "stm32l072"
+      "_artifact_path": "stm32l072",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32l151",
@@ -8435,7 +8792,8 @@
         "build_firmware": 481,
         "run_smoke": 274
       },
-      "_artifact_path": "stm32l151"
+      "_artifact_path": "stm32l151",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32l552",
@@ -8473,7 +8831,8 @@
         "build_firmware": 494,
         "run_smoke": 1137
       },
-      "_artifact_path": "stm32l552"
+      "_artifact_path": "stm32l552",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32w108",
@@ -8511,7 +8870,8 @@
         "build_firmware": 416,
         "run_smoke": 272
       },
-      "_artifact_path": "stm32w108"
+      "_artifact_path": "stm32w108",
+      "zero_answering_windows": []
     },
     {
       "target_id": "stm32wba52",
@@ -8549,7 +8909,8 @@
         "build_firmware": 774,
         "run_smoke": 1349
       },
-      "_artifact_path": "stm32wba52"
+      "_artifact_path": "stm32wba52",
+      "zero_answering_windows": []
     },
     {
       "target_id": "tegra2",
@@ -8588,7 +8949,8 @@
         "run_smoke": 849
       },
       "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
-      "_artifact_path": "tegra2"
+      "_artifact_path": "tegra2",
+      "zero_answering_windows": []
     },
     {
       "target_id": "tegra3",
@@ -8627,7 +8989,8 @@
         "run_smoke": 726
       },
       "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
-      "_artifact_path": "tegra3"
+      "_artifact_path": "tegra3",
+      "zero_answering_windows": []
     },
     {
       "target_id": "tock_veer_el2_sim",
@@ -8665,7 +9028,8 @@
         "build_firmware": 416,
         "run_smoke": 284
       },
-      "_artifact_path": "tock_veer_el2_sim"
+      "_artifact_path": "tock_veer_el2_sim",
+      "zero_answering_windows": []
     },
     {
       "target_id": "up_squared_x86_64",
@@ -8699,7 +9063,11 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "up_squared_x86_64"
+      "_artifact_path": "up_squared_x86_64",
+      "zero_answering_windows": [
+        "hpet:hpet",
+        "pci:pythonperipheral"
+      ]
     },
     {
       "target_id": "ut32m0r500",
@@ -8737,7 +9105,8 @@
         "build_firmware": 434,
         "run_smoke": 270
       },
-      "_artifact_path": "ut32m0r500"
+      "_artifact_path": "ut32m0r500",
+      "zero_answering_windows": []
     },
     {
       "target_id": "vegaboard_ri5cy",
@@ -8775,7 +9144,8 @@
         "build_firmware": 169,
         "run_smoke": 933
       },
-      "_artifact_path": "vegaboard_ri5cy"
+      "_artifact_path": "vegaboard_ri5cy",
+      "zero_answering_windows": []
     },
     {
       "target_id": "verilated_ibex",
@@ -8813,7 +9183,8 @@
         "build_firmware": 170,
         "run_smoke": 292
       },
-      "_artifact_path": "verilated_ibex"
+      "_artifact_path": "verilated_ibex",
+      "zero_answering_windows": []
     },
     {
       "target_id": "versatile",
@@ -8852,7 +9223,8 @@
         "run_smoke": 764
       },
       "prebuilt_firmware": "tests/fixtures/versatile-arm926-uart-smoke.elf",
-      "_artifact_path": "versatile"
+      "_artifact_path": "versatile",
+      "zero_answering_windows": []
     },
     {
       "target_id": "vexpress",
@@ -8891,7 +9263,8 @@
         "run_smoke": 756
       },
       "prebuilt_firmware": "tests/fixtures/vexpress-a9-uart-smoke.elf",
-      "_artifact_path": "vexpress"
+      "_artifact_path": "vexpress",
+      "zero_answering_windows": []
     },
     {
       "target_id": "vybrid",
@@ -8930,7 +9303,8 @@
         "run_smoke": 269
       },
       "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
-      "_artifact_path": "vybrid"
+      "_artifact_path": "vybrid",
+      "zero_answering_windows": []
     },
     {
       "target_id": "x86",
@@ -8964,7 +9338,10 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "x86"
+      "_artifact_path": "x86",
+      "zero_answering_windows": [
+        "hpet:hpet"
+      ]
     },
     {
       "target_id": "xtensa-sample-controller",
@@ -8998,7 +9375,8 @@
         "build_firmware": null,
         "run_smoke": null
       },
-      "_artifact_path": "xtensa-sample-controller"
+      "_artifact_path": "xtensa-sample-controller",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zedboard",
@@ -9037,7 +9415,8 @@
         "run_smoke": 1529
       },
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
-      "_artifact_path": "zedboard"
+      "_artifact_path": "zedboard",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zolertia-firefly",
@@ -9075,7 +9454,8 @@
         "build_firmware": 433,
         "run_smoke": 295
       },
-      "_artifact_path": "zolertia-firefly"
+      "_artifact_path": "zolertia-firefly",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zynq-7000",
@@ -9114,7 +9494,8 @@
         "run_smoke": 908
       },
       "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
-      "_artifact_path": "zynq-7000"
+      "_artifact_path": "zynq-7000",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zynqmp",
@@ -9153,7 +9534,8 @@
         "run_smoke": 313
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
-      "_artifact_path": "zynqmp"
+      "_artifact_path": "zynqmp",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zynqmp-zcu102-revA",
@@ -9192,7 +9574,8 @@
         "run_smoke": 308
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
-      "_artifact_path": "zynqmp-zcu102-revA"
+      "_artifact_path": "zynqmp-zcu102-revA",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zynqmp-zcu102-revB",
@@ -9231,7 +9614,8 @@
         "run_smoke": 384
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
-      "_artifact_path": "zynqmp-zcu102-revB"
+      "_artifact_path": "zynqmp-zcu102-revB",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zynqmp-zcu104",
@@ -9270,7 +9654,8 @@
         "run_smoke": 286
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
-      "_artifact_path": "zynqmp-zcu104"
+      "_artifact_path": "zynqmp-zcu104",
+      "zero_answering_windows": []
     },
     {
       "target_id": "zynqmp-zcu106-vcu",
@@ -9309,7 +9694,8 @@
         "run_smoke": 285
       },
       "prebuilt_firmware": "tests/fixtures/zynqmp-a53-uart-smoke.elf",
-      "_artifact_path": "zynqmp-zcu106-vcu"
+      "_artifact_path": "zynqmp-zcu106-vcu",
+      "zero_answering_windows": []
     }
   ]
 }
