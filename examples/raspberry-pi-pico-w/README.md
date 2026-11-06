@@ -33,3 +33,6 @@ engine evidence, not a physical-board capture.
 
 See [`evidence/vendor-status.md`](evidence/vendor-status.md) for the live
 availability check and [`REQUIRED_DOCS.md`](REQUIRED_DOCS.md) for source links.
+
+For a worked sensor design using this board's modeled I²C0 route, see the
+[Pico W + BME280 example](../raspberry-pi-pico-w-bme280/README.md).

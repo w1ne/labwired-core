@@ -1,0 +1,54 @@
+# Narrow Pico W + BME280 model: RP2040 core, UART0 console, I2C0 sensor route,
+# IO_BANK0 pad selection, and SIO support. CYW43439 and its LED remain omitted.
+name: "rp2040-pico-w-bme280-smoke"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+cpu_hz: 125_000_000
+
+flash:
+  base: 0x10000000
+  size: "2048KB"
+ram:
+  base: 0x20000000
+  size: "264KB"
+
+pins:
+  # I2C0 pin selection used by this smoke; peripheral routing is exercised via
+  # IO_BANK0 FUNCSEL and the RP2040's fixed I2C pad map.
+  GP4: { gpio: "sio", bit: 4 }
+  GP5: { gpio: "sio", bit: 5 }
+
+reset_vector_offset: 0x100
+
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40034000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/uart0.yaml"
+      profile: "pl011"
+
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40044000
+    size: "4KB"
+    irq: 23
+    config:
+      debug_schema: "../peripherals/rp2040/i2c0.yaml"
+
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    irq: 13
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/sio.yaml"

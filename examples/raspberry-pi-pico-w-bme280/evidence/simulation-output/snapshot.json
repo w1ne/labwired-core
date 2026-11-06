@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      24,
+      268436513,
+      10,
+      268436464,
+      1073954816,
+      15,
+      120,
+      537141232,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537141224,
+      268436317,
+      268436312
+    ],
+    "pc": 268436312,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 268435712,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 300000,
+  "cycles": 300000,
+  "instructions": 300000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 300000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 300000
+    }
+  },
+  "limits": {
+    "max_steps": 300000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "33ccdf93960dbce3cf63e434248f26fdc034bf27918baa2cf3c2535832ac46c6",
+  "config": {
+    "firmware": "examples/raspberry-pi-pico-w-bme280/../../target/thumbv6m-none-eabi/release/firmware-pico-w-bme280-smoke",
+    "system": "examples/raspberry-pi-pico-w-bme280/../../configs/systems/raspberry-pi-pico-w-bme280.yaml",
+    "script": "examples/raspberry-pi-pico-w-bme280/onboarding-smoke.yaml"
+  }
+}
