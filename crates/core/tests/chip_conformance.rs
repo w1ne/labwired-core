@@ -1055,6 +1055,21 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("pic24_ka_smoke::pic24f16ka102_uart_smoke"),
     },
+    ChipConf {
+        // WCH CH32V003F4P6 (QingKe RV32EC). SIM-DERIVED: nothing here has been
+        // diffed against a real CH32V003 over SDI, so no reset_oracle. This
+        // slice models the RV32E register window, PFIC, the WCH clock tree and
+        // GPIO A/C/D; USART/I2C/SPI/ADC are not modelled yet (their bases are
+        // in the memory map but no peripheral descriptor consumes them). The
+        // gate is the compiled RV32E blink below, which boots a real ELF and
+        // asserts PC0 toggles — not a register-state assertion.
+        name: "ch32v003f4p6",
+        yaml: "configs/chips/ch32v003f4p6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
+        ),
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`
