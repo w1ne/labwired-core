@@ -112,7 +112,7 @@
 | `litex_vexriscv_verilated_liteuart` | `pass` | `True` | `yes` | `yes` | `2364` | `2.364` | `True` | `n/a` | n/a | n/a |
 | `litex_vexriscv_zephyr` | `pass` | `True` | `yes` | `yes` | `1993` | `1.993` | `True` | `n/a` | n/a | n/a |
 | `litex_zephyr_vexriscv_i2s` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `n/a` | n/a | n/a |
-| `lpc2294` | `pass` | `True` | `yes` | `yes` | `153595` | `153.595` | `True` | `n/a` | n/a | n/a |
+| `lpc2294` | `pass` | `True` | `yes` | `yes` | `77804` | `77.804` | `True` | `n/a` | n/a | n/a |
 | `mars_zx3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `max32652` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `n/a` | n/a | n/a |
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1040` | `1.04` | `True` | `n/a` | n/a | n/a |

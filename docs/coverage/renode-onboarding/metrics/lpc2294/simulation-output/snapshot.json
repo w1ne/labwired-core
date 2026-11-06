@@ -3,7 +3,13 @@
   "cpu": {
     "type": "arm7_tdmi",
     "registers": [
-      50000,
+      0,
+      0,
+      0,
+      0,
+      134217788,
+      0,
+      3758145536,
       0,
       0,
       0,
@@ -12,16 +18,10 @@
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      134217736
+      134217756
     ],
-    "pc": 134217736,
-    "cpsr": 1073742291
+    "pc": 134217756,
+    "cpsr": 1610613203
   },
   "steps_executed": 100000,
   "cycles": 100000,
@@ -49,10 +49,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "c293168be6ecac987b9ba2083516ce06a76835ebf4a6dbd4d3978371c2864a8e",
+  "firmware_hash": "b9d53733c8d10e4f14d91966279cbcaf3271e35d56c7e8064cdfa007378c7124",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-uart-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
-    "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml"
   }
 }

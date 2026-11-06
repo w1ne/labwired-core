@@ -9,15 +9,16 @@ verified: false
 system: systems/onboarding/lpc2294.yaml
 validation:
   method: renode-onboarding-inventory
-  reason: arm7-cpu-smoke-only
+  reason: arm7-uart0-tx-smoke
   checks:
     system_manifest: true
     chip_descriptor: true
     cpu_core_supported: true
     booted: true
+    uart0_tx: true
     simulation: true
     smoke_passed: true
-  timestamp_utc: '2026-11-06T08:04:14Z'
+  timestamp_utc: '2026-11-06T08:42:30Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/tree/main/docs/coverage/renode-onboarding/metrics/lpc2294/
 provenance:

@@ -30,6 +30,12 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "LPC2294_UART0_TX_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -38,7 +44,13 @@
   "cpu_state": {
     "type": "arm7_tdmi",
     "registers": [
-      50000,
+      0,
+      0,
+      0,
+      0,
+      134217788,
+      0,
+      3758145536,
       0,
       0,
       0,
@@ -47,25 +59,27 @@
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      134217736
+      134217756
     ],
-    "pc": 134217736,
-    "cpsr": 1073742291
+    "pc": 134217756,
+    "cpsr": 1610613203
   },
-  "firmware_hash": "c293168be6ecac987b9ba2083516ce06a76835ebf4a6dbd4d3978371c2864a8e",
+  "firmware_hash": "b9d53733c8d10e4f14d91966279cbcaf3271e35d56c7e8064cdfa007378c7124",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-uart-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
-    "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 3758145536,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -77,16 +91,26 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LPC2294_UART0_TX_OK",
+        "cycle_lo": 0,
+        "cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 12,
+    "text_bytes": 60,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 12,
+    "flash_used_bytes": 60,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 0.02,
+    "flash_used_pct": 0.09,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -102,13 +126,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 4,
+    "memory_reads": 31,
     "memory_writes": 0,
-    "peripheral_accesses": 0,
+    "peripheral_accesses": 19,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134217736,
+        "pc": 134217756,
         "count": 390
       }
     ]

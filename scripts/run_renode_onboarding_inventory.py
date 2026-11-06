@@ -16,8 +16,8 @@ SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.p
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
     "lpc2294": {
-        "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
+        "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",
         "cli_features": "qemu-arm-system",
         "cli_profile": "native-system",
     },

@@ -106,6 +106,10 @@ on:
       - "tests/fixtures/mpfs-zephyr-hello.elf"
       - "tests/fixtures/frdm-k64f-smoke.elf"
       - "tests/fixtures/imx8mplus-a53-cpu-smoke.elf"
+      - "tests/fixtures/lpc2294-arm7-uart-smoke.elf"
+      - "examples/renode-onboarding/lpc2294-arm7-uart-smoke.S"
+      - "examples/renode-onboarding/lpc2294-arm7-uart-smoke.ld"
+      - "scripts/build_lpc2294_arm7_uart_smoke.sh"
       - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.S"
       - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.ld"
       - "examples/renode-onboarding/imx8mplus-a53-cpu-smoke.yaml"
@@ -146,6 +150,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # ARM7TDMI CPU execution plus only the imported UART0 TX write path;
+          # no other LPC2294 peripheral registers are claimed by this smoke.
+          - id: lpc2294
+            prebuilt_firmware: tests/fixtures/lpc2294-arm7-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml
+            system: configs/systems/onboarding/lpc2294.yaml
           # This imported STM32W108 profile is intentionally CPU-only: its
           # imported timer windows are not covered by this instruction smoke.
           - id: stm32w108
@@ -1351,6 +1363,8 @@ jobs:
             --crate "${{ matrix.crate }}" \
             --features "${{ matrix.features }}" \
             --target "${{ matrix.target }}" \
+            --cli-features "${{ matrix.cli_features }}" \
+            --cli-profile "${{ matrix.cli_profile }}" \
             --prebuilt-firmware "${{ matrix.prebuilt_firmware }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \

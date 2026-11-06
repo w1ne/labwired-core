@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.016974">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.017030">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="c293168be6ecac987b9ba2083516ce06a76835ebf4a6dbd4d3978371c2864a8e"/>
+    <property name="firmware_hash" value="b9d53733c8d10e4f14d91966279cbcaf3271e35d56c7e8064cdfa007378c7124"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.016974">
+  <testcase classname="labwired" name="run" time="0.017030">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: LPC2294_UART0_TX_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
