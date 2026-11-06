@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 57 have end-to-end analog coverage; 46 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 58 have end-to-end analog coverage; 45 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -64,7 +64,7 @@ Current inventory: **103 profiles; 57 have end-to-end analog coverage; 46 have n
 | `mb1355c` | [`cosim_mb1355c_analog.rs`](../crates/core/tests/cosim_mb1355c_analog.rs)::`mb1355c_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach STM32WB55 PA0/PA1; solved voltages, GPIOA IDR threshold crossings, and Schmitt hysteresis are asserted. The ADC is register-only with no external conversion engine. |
 | `metro-m4` | [`cosim_metro_m4_analog.rs`](../crates/core/tests/cosim_metro_m4_analog.rs)::`metro_m4_ntc_and_diode_netlists_reach_adc0_a0_and_a4` — generic Beta NTC and unrelated Shockley diode netlists route through A0/PA02/AIN0 and A4/PB08/AIN2; independent voltages, PMUX gating, 12-bit ADC results, and undriven AIN1 are asserted |
 | `microbit-v1` | [`cosim_microbit_v1_analog.rs`](../crates/core/tests/cosim_microbit_v1_analog.rs)::`microbit_v1_ntc_and_diode_netlists_reach_distinct_adc_channels` — generic Beta NTC and unrelated Shockley diode solve into nRF51 ADC channels 0/1; 10-bit conversion results, temperature response, channel isolation, and an undriven AIN2 are asserted. Uses explicit ADC channel routes; physical pad aliases and silicon validation are not claimed. |
-| `microbit-v2` | **NO E2E analog coverage** |
+| `microbit-v2` | [`cosim_microbit_v2_analog.rs`](../crates/core/tests/cosim_microbit_v2_analog.rs)::`microbit_v2_ntc_and_diode_netlists_reach_distinct_saadc_pads` — generic Beta NTC and unrelated Shockley diode netlists route through physical P0.02/AIN0 and P0.03/AIN1 with the edge rings' documented 10 MΩ pull-ups; solved voltages, 12-bit EasyDMA results, temperature response, channel isolation, and undriven P0.04/AIN2 are asserted while retaining the board's sensors and LED matrix |
 | `mimxrt595-evk` | **NO E2E analog coverage** |
 | `mpfs-disco-kit` | **NO E2E analog coverage** |
 | `nano-33-iot` | **NO E2E analog coverage** |

@@ -17,10 +17,13 @@
 2. micro:bit nRF52833 pin map (UART_INT_RX = P0.06, UART_INT_TX = P1.08,
    BTN_A = P0.14, BTN_B = P0.23):
    https://tech.microbit.org/hardware/schematic/
-3. micro:bit interface documentation (UART is bridged through the interface MCU
+3. micro:bit V2 edge connector pinout (P0/AIN0 = P0.02, P1/AIN1 = P0.03,
+   P2/AIN2 = P0.04; the three rings have fixed 10 MΩ pull-ups):
+   https://tech.microbit.org/hardware/edge-connector/
+4. micro:bit interface documentation (UART is bridged through the interface MCU
    to USB CDC; labels are from the interface chip's perspective):
    https://github.com/microbit-foundation/dev-docs/blob/master/software/interface.md
-4. codal-microbit-v2 pin definitions (`MICROBIT_PIN_UART_TX` = P0.06):
+5. codal-microbit-v2 pin definitions (`MICROBIT_PIN_UART_TX` = P0.06):
    https://github.com/lancaster-university/codal-microbit-v2
 
 ## Address Cross-Check Only (not a source of truth)
