@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 83 have end-to-end analog coverage; 20 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 84 have end-to-end analog coverage; 19 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -95,7 +95,7 @@ Current inventory: **103 profiles; 83 have end-to-end analog coverage; 20 have n
 | `pico-selftest` | [`cosim_pico_selftest_analog.rs`](../crates/core/tests/cosim_pico_selftest_analog.rs)::`pico_selftest_ntc_and_diode_netlists_reach_adc_channels_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists route to explicit ADC channels 0/1; solved voltages, 12-bit register-visible results, temperature response, channel isolation, and undriven ADC2 are asserted. Physical pad aliases and silicon validation are not claimed. |
 | `pico` | [`cosim_pico_analog.rs`](../crates/core/tests/cosim_pico_analog.rs)::`pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists route to explicit ADC channels 0/1 on the plain Pico profile; solved voltages, 12-bit register-visible results, temperature response, channel isolation, and undriven ADC2 are asserted. Physical pad aliases and silicon validation are not claimed. |
 | `pybadge` | [`cosim_pybadge_analog.rs`](../crates/core/tests/cosim_pybadge_analog.rs)::`pybadge_ntc_and_diode_netlists_reach_adc0_a0_and_a2` — the reusable Beta NTC and Shockley diode netlists resolve through PyBadge A0/PA02 and A2/PB08 into ADC0 AIN0/AIN2; solved voltages, PMUX gating, 12-bit conversion results, temperature response, channel isolation, and the descriptor's six Feather pad-to-channel mappings are asserted |
-| `rp2040-pico` | **NO E2E analog coverage** |
+| `rp2040-pico` | [`cosim_pico_analog.rs`](../crates/core/tests/cosim_pico_analog.rs)::`rp2040_pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end` — the generic Beta NTC and unrelated Shockley diode reuse the Pico netlists and are solved onto independent ADC0/ADC1 input channels; asserted 12-bit conversions, temperature response, diode-channel isolation, and undriven ADC2 confirm the `rp2040-pico` system profile |
 | `rp2350-zero` | **NO E2E analog coverage** |
 | `s32k388-evb` | **NO E2E analog coverage** |
 | `sam-e70-xplained` | **NO E2E analog coverage** |

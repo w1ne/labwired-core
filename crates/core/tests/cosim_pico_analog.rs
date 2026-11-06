@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Generic analog devices route through separate ADC input channels on the
-//! plain Raspberry Pi Pico profile, without simulation-only peripherals.
+//! Raspberry Pi Pico system profiles, without simulation-only peripherals.
 
 mod common;
 use common::root;
@@ -74,11 +74,10 @@ fn expected_adc_code(volts: f64) -> u16 {
     ((millivolts * 4096 / 3300).min(4095)) as u16
 }
 
-#[test]
-fn pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
-    let system_path = root("configs/systems/pico.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load Pico profile");
-    assert_eq!(profile.name, "pico");
+fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
+    let system_path = root(&format!("configs/systems/{system_name}.yaml"));
+    let mut profile = SystemManifest::from_file(&system_path).expect("load RP2040 Pico profile");
+    assert_eq!(profile.name, system_name);
 
     let analog_path = root("examples/pico/analog-ntc-diode-system.yaml");
     let analog = SystemManifest::from_file(&analog_path)
@@ -87,7 +86,7 @@ fn pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load RP2040 descriptor");
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Pico bus");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build RP2040 Pico bus");
     assert!(bus.find_peripheral_index_by_name("adc").is_some());
 
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
@@ -166,4 +165,14 @@ fn pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
         samples.iter().all(|sample| sample.3 == samples[0].3),
         "the independent diode channel stays constant as the NTC changes: {samples:?}"
     );
+}
+
+#[test]
+fn pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
+    generic_analog_devices_reach_rp2040_adc("pico");
+}
+
+#[test]
+fn rp2040_pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
+    generic_analog_devices_reach_rp2040_adc("rp2040-pico");
 }
