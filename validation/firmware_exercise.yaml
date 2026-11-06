@@ -1419,3 +1419,707 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+
+  - id: atmega4809
+    arch: avr8
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21g18a-feather-m0-express-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21g18a-mkr-wifi-1010-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003f4p6-ch32fun-smoke
+    arch: qingke-v2a
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003f4p6-gpio-smoke
+    arch: rv32ec
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003f4p6-pfic-smoke
+    arch: qingke-v2a
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003f4p6-sht31-smoke
+    arch: rv32ec
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003f4p6-systick-smoke
+    arch: qingke-v2a
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003f4p6-usart-smoke
+    arch: rv32ec
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v203c8t6-smoke
+    arch: rv32imac
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32-devkitc-32e-gpio-smoke
+    arch: xtensa-lx6
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32-feather-v2-bme280-smoke
+    arch: xtensa-lx6
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32-feather-v2-smoke
+    arch: xtensa-lx6
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-devkit-rust-2-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-devkitm1-n4x-bme280-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-devkitm1-n4x-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-lcdkit-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-waveshare-c3-zero-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-xiao-bme280-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c3-xiao-gpio-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c5
+    arch: rv32imac
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c6-devkitm1-n4-smoke
+    arch: rv32imac
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c6-xiao-bme280-smoke
+    arch: rv32imac
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c6-xiao-gpio-smoke
+    arch: rv32imac
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32c61
+    arch: rv32imac
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32h2-devkitm-1-n4s-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32p4
+    arch: rv32imac
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s2
+    arch: xtensa-lx7
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-arduino-nano-bme280-smoke
+    arch: xtensa-lx7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-atoms3-lite-smoke
+    arch: xtensa-lx7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-cardputer-adv-smoke
+    arch: xtensa-lx7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-devkitc-1-n16r8-v10-smoke
+    arch: xtensa-lx7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-feather-8mb
+    arch: xtensa-lx7
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke
+    arch: xtensa-lx7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32s3-xiao-gpio-smoke
+    arch: xtensa-lx7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp8684-devkitm-1-h4x-smoke
+    arch: rv32imc
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: nrf52833-microbit-v2-uart-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: nrf52840-dk-led-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: nrf52840-feather-uart-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: nrf5340-dk-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: nrf54l10
+    arch: cortex-m33
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: nrf54lm20a-dk-led-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ra4m1-nano-r4-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: rp2040-pico-w-bme280-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: rp2350-pico2-bme280-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: rp2350-pico2-w-bme280-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: rp2350-zero-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32c031c6-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32c051c8-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32c092rc-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32c542rc-nucleo-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32c5a3zg-nucleo-gpio-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f051r8-discovery-smoke
+    arch: cortex-m0
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f070rb-nucleo-smoke
+    arch: cortex-m0
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103c6t6a-gpio-smoke
+    arch: cortex-m3
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103c8-bluepill-smoke
+    arch: cortex-m3
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r6t6a-gpio-smoke
+    arch: cortex-m3
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r8
+    arch: cortex-m3
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger yet."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r8-gpio-smoke
+    arch: cortex-m3
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f207zg-nucleo-smoke
+    arch: cortex-m3
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f302r8-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f303k8-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f334c8-f3348-disco-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f334r8-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f410rb-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f411ceu6-blackpill-led-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f411re-nucleo-bme280-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f412zg-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f413zh-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f429zi-f429i-disc1-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f722ze-nucleo-smoke
+    arch: cortex-m7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f756zg-nucleo-smoke
+    arch: cortex-m7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32g031k8-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32h573ii-dk-gpio-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32h735igk6-dk-smoke
+    arch: cortex-m7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32h753zi-nucleo-smoke
+    arch: cortex-m7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32h755zi-nucleo-m7-smoke
+    arch: cortex-m7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32h7a3zit6q-nucleo-smoke
+    arch: cortex-m7
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32l010rb-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32l011k4-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32l031k6-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32l496zg-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32l4a6zg-nucleo-smoke
+    arch: cortex-m4
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32u031r8-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32u083rc-nucleo-smoke
+    arch: cortex-m0+
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32u385rg-nucleo-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32u3c5zi-q-nucleo-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32wba25ceu7-nucleo-smoke
+    arch: cortex-m33
+    headline: "Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []

@@ -208,6 +208,10 @@ _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in th
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
 
+### `stm32f303vc-f3discovery-smoke`
+
+_Board-bound smoke profile; the firmware toggles the on-board LD3 LED through GPIOE pin 9._
+
 ### `stm32f411re-nucleo-smoke`
 
 _Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
@@ -280,16 +284,15 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 ### `nrf5340`
 
-_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). A board-level bare-metal smoke also cycles all four nRF5340-DK user LEDs through GPIO0 and reports their GPIO OUT readback on UARTE0._
+_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
-- nRF5340-DK LED1–LED4 on P0.28–P0.31 toggle and are read back over UARTE0 — `firmware-nrf5340-dk-demo` · [`examples/nrf5340-dk/io-smoke.yaml`](../../examples/nrf5340-dk/io-smoke.yaml), evidence in [`examples/nrf5340-dk/evidence/`](../../examples/nrf5340-dk/evidence/)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO1`, `TIMER0-2`, `RTC0`, board buttons
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- The full Zephyr boot profile (`configs/chips/nrf5340.yaml`) keeps DCNF, FPU, CACHE, SPU, OSC_REG, CTRLAP, GPIOTE0, FICR, UICR, and analog-trim windows as zero-answering stubs. The customer-facing board smoke uses `configs/chips/nrf5340-dk-smoke.yaml`, which excludes them.
+- `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
 
 ### `nrf54l15`
 
@@ -913,3 +916,355 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real
 ### `xck26-rpu`
 
 _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._
+
+### `atmega4809`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `atsamd21g18a-feather-m0-express-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `atsamd21g18a-mkr-wifi-1010-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-ch32fun-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-pfic-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-sht31-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-systick-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v003f4p6-usart-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ch32v203c8t6-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32-devkitc-32e-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32-feather-v2-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32-feather-v2-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-devkit-rust-2-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-devkitm1-n4x-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-devkitm1-n4x-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-lcdkit-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-waveshare-c3-zero-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-xiao-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c3-xiao-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c5`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32c6-devkitm1-n4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c6-xiao-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c6-xiao-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32c61`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32h2-devkitm-1-n4s-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32p4`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32s2`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32s3-arduino-nano-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-atoms3-lite-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-cardputer-adv-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-devkitc-1-n16r8-v10-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-feather-8mb`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `esp32s3-heltec-wifi-lora-32-v4-s3r2-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp32s3-xiao-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `esp8684-devkitm-1-h4x-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf52833-microbit-v2-uart-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf52840-dk-led-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf52840-feather-uart-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf5340-dk-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `nrf54l10`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `nrf54lm20a-dk-led-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `ra4m1-nano-r4-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2040-pico-w-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-pico2-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-pico2-w-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `rp2350-zero-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c031c6-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c051c8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c092rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c542rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32c5a3zg-nucleo-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f051r8-discovery-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f070rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103c6t6a-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103c8-bluepill-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103r6t6a-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f103r8`
+
+_No beyond-rubric firmware exercise is recorded in this ledger yet._
+
+### `stm32f103r8-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f207zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f302r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f303k8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f334c8-f3348-disco-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f334r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f410rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f411ceu6-blackpill-led-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f411re-nucleo-bme280-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f412zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f413zh-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f429zi-f429i-disc1-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f722ze-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32f756zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32g031k8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h573ii-dk-gpio-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h735igk6-dk-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h753zi-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h755zi-nucleo-m7-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32h7a3zit6q-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l010rb-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l011k4-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l031k6-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l496zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32l4a6zg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u031r8-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u083rc-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u385rg-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32u3c5zi-q-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
+
+### `stm32wba25ceu7-nucleo-smoke`
+
+_Board-bound smoke profile; no beyond-rubric firmware exercise is recorded in this ledger._
