@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 92 have end-to-end analog coverage; 11 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 93 have end-to-end analog coverage; 10 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -104,7 +104,7 @@ Current inventory: **103 profiles; 92 have end-to-end analog coverage; 11 have n
 | `simctl-selftest` | [`cosim_simctl_selftest_analog.rs`](../crates/core/tests/cosim_simctl_selftest_analog.rs)::`simctl_selftest_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach the Cortex-M3 fixture's PA0/PA1 GPIO inputs; solved voltages, GPIO levels, and NTC hysteresis are asserted while retaining the simctl peripheral. Thresholds are CI fixture assumptions, not silicon data. |
 | `sk-am62` | [`cosim_sk_am62_analog.rs`](../crates/core/tests/cosim_sk_am62_analog.rs)::`sk_am62_ntc_and_diode_netlists_reach_simulated_input_thresholds` — generic Beta NTC and unrelated Shockley diode solve to separate simulation-only input endpoints; asserts solved voltages, threshold crossings, and NTC hysteresis. AM6234 GPIO registers, physical pads, ADC conversion, and silicon thresholds are not modelled |
 | `smart-ring` | [`cosim_nrf54l15_smart_ring_analog.rs`](../crates/core/tests/cosim_nrf54l15_smart_ring_analog.rs)::`smart_ring_ntc_and_diode_netlists_reach_distinct_saadc_channels` — generic Beta NTC and unrelated Shockley diode netlists solve to independent SAADC channels; solved voltages, temperature response, 12-bit results, channel isolation, and an undriven third channel are asserted while retaining the ring's four I²C devices and GPIO wiring. Uses explicit channel routes; physical pad aliases are not claimed |
-| `stm32f072b-disco` | **NO E2E analog coverage** |
+| `stm32f072b-disco` | [`cosim_stm32f072_analog.rs`](../crates/core/tests/cosim_stm32f072_analog.rs)::`stm32f072b_disco_ntc_and_diode_netlists_reach_pa0_pa9_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists route to PA0/PA9 GPIOA inputs; asserts independently solved voltages, descriptor-threshold crossings, GPIOA IDR levels, and NTC Schmitt hysteresis. The current F072 ADC profile has no external input conversion path, so this is GPIO threshold coverage, not ADC support. |
 | `stm32f103-bare` | **NO E2E analog coverage** |
 | `stm32f103-integrated-test` | **NO E2E analog coverage** |
 | `stm32f4-discovery` | **NO E2E analog coverage** |
