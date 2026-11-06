@@ -438,9 +438,8 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     ),
     (
         "msp430f2xxx_mpy",
-        "TI MSP430F2xxx hardware multiplier. Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/msp430f2619.",
+        "TI MSP430F2xxx hardware multiplier. No model in this engine; omitted from the \
+         MSP430F2619 onboarding profile because the MSP430 CPU is unsupported.",
     ),
     (
         "nrf5340_cache_stub",

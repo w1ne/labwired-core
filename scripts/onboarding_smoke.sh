@@ -13,6 +13,7 @@ PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
 INVENTORY_ONLY="false"
 NOT_RUN_REASON=""
+NOT_RUN_HINT=""
 
 usage() {
   cat <<'EOF'
@@ -28,6 +29,7 @@ Smoke mode options:
 Inventory-only mode (records an explicit not_run result when no runnable
 firmware/smoke mapping exists):
   --inventory-only [--not-run-reason TEXT]
+                  [--not-run-hint TEXT]
 
 Common options:
   --help, -h
@@ -46,6 +48,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --not-run-reason)
       NOT_RUN_REASON="$2"
+      shift 2
+      ;;
+    --not-run-hint)
+      NOT_RUN_HINT="$2"
       shift 2
       ;;
     --target-id)
@@ -312,7 +318,7 @@ if [[ "${INVENTORY_ONLY}" == "true" ]]; then
   status="not_run"
   failure_stage="not_configured"
   first_error_signature="${NOT_RUN_REASON}"
-  failure_hint="Add a compatible firmware build and smoke script before claiming a boot result."
+  failure_hint="${NOT_RUN_HINT:-Add a compatible firmware build and smoke script before claiming a boot result.}"
 elif ! run_stage build_cli cargo build -p labwired-cli; then
   :
 elif [[ -n "${PREBUILT_FIRMWARE}" ]]; then

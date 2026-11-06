@@ -870,6 +870,20 @@ SMOKE_MAPPINGS = {
     },
 }
 
+NOT_RUN_REASONS = {
+    "msp430f2619": (
+        "MSP430 CPU execution and MSP430 ELF architecture support are not implemented; "
+        "no firmware run was attempted. A real CPU core is required before this target "
+        "can enter executable coverage."
+    ),
+}
+NOT_RUN_HINTS = {
+    "msp430f2619": (
+        "Implement a real MSP430 CPU core and ELF architecture support before adding "
+        "a smoke; do not substitute a peripheral stub."
+    ),
+}
+
 
 def imported_system(descriptor: Path) -> str:
     for line in descriptor.read_text(encoding="utf-8").splitlines():
@@ -933,7 +947,7 @@ def main() -> int:
             )
         descriptors = selected
 
-    not_run_reason = (
+    default_not_run_reason = (
         "No compatible firmware crate and smoke script are mapped for this imported "
         "descriptor; no firmware run was attempted."
     )
@@ -946,6 +960,8 @@ def main() -> int:
             raise FileNotFoundError(f"{descriptor}: referenced system does not exist: {system_path}")
         out_dir = args.metrics_root / descriptor.stem
         mapping = SMOKE_MAPPINGS.get(descriptor.stem)
+        not_run_reason = NOT_RUN_REASONS.get(descriptor.stem, default_not_run_reason)
+        not_run_hint = NOT_RUN_HINTS.get(descriptor.stem)
         metrics_path = out_dir / "onboarding-metrics.json"
         if metrics_path.is_file():
             try:
@@ -953,10 +969,13 @@ def main() -> int:
             except (OSError, json.JSONDecodeError):
                 existing = {}
             same_system = existing.get("system") == f"configs/{system}"
-            if mapping is None and same_system and existing.get("measurement_mode") in {
-                "inventory_only",
-                "smoke",
-            }:
+            if (
+                mapping is None
+                and same_system
+                and existing.get("measurement_mode") in {"inventory_only", "smoke"}
+                and existing.get("first_error_signature") == not_run_reason
+                and (not_run_hint is None or existing.get("failure_hint") == not_run_hint)
+            ):
                 preserved += 1
                 continue
 
@@ -974,6 +993,8 @@ def main() -> int:
             command.extend(
                 ["--inventory-only", "--not-run-reason", not_run_reason]
             )
+            if not_run_hint is not None:
+                command.extend(["--not-run-hint", not_run_hint])
         else:
             script_path = REPO_ROOT / mapping["script"]
             if mapped_system(script_path) != system_path.resolve():
