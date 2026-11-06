@@ -88,6 +88,13 @@ pub enum AvrModel {
     Atmega164,
     Atmega324,
     Atmega644,
+    // Remaining simavr megaAVR/USB imports, same CPU/SRAM-only scope.
+    Atmega169,
+    Atmega16m1,
+    Atmega64m1,
+    Atmega128rfa1,
+    Atmega128rfr2,
+    At90usb162,
     Attiny202,
     Attiny204,
     Attiny402,
@@ -140,6 +147,12 @@ fn classic_mega_model(lower_name: &str) -> Option<AvrModel> {
                 "atmega164" => AvrModel::Atmega164,
                 "atmega324" => AvrModel::Atmega324,
                 "atmega644" => AvrModel::Atmega644,
+                "atmega169" => AvrModel::Atmega169,
+                "atmega16m1" => AvrModel::Atmega16m1,
+                "atmega64m1" => AvrModel::Atmega64m1,
+                "atmega128rfa1" => AvrModel::Atmega128rfa1,
+                "atmega128rfr2" => AvrModel::Atmega128rfr2,
+                "at90usb162" => AvrModel::At90usb162,
                 _ => return None,
             })
         })
@@ -251,6 +264,9 @@ impl AvrModel {
             AvrModel::Atmega164 => 16 * 1024,
             AvrModel::Atmega32 | AvrModel::Atmega324 => 32 * 1024,
             AvrModel::Atmega644 => 64 * 1024,
+            AvrModel::Atmega169 | AvrModel::Atmega16m1 | AvrModel::At90usb162 => 16 * 1024,
+            AvrModel::Atmega64m1 => 64 * 1024,
+            AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => 128 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 4 * 1024,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 8 * 1024,
@@ -282,7 +298,14 @@ impl AvrModel {
             | AvrModel::Atmega88
             | AvrModel::Atmega164
             | AvrModel::Atmega324
-            | AvrModel::Atmega644 => 0x0100,
+            | AvrModel::Atmega644
+            | AvrModel::Atmega169
+            | AvrModel::Atmega16m1
+            | AvrModel::Atmega64m1
+            | AvrModel::At90usb162 => 0x0100,
+            // The 128RFx1/RFR2 extended I/O file (radio, second USART) runs
+            // to 0x01FF, so SRAM starts at 0x0200 like the 1281/2560.
+            AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => 0x0200,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Atmega32u4 | AvrModel::Atmega1284p | AvrModel::Atmega128 => 0x0100,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
@@ -323,6 +346,10 @@ impl AvrModel {
             AvrModel::Atmega88 | AvrModel::Atmega164 => 0x04FF, // 0x0100 + 1KB
             AvrModel::Atmega324 => 0x08FF, // 0x0100 + 2KB
             AvrModel::Atmega644 => 0x10FF, // 0x0100 + 4KB
+            AvrModel::At90usb162 => 0x02FF, // 0x0100 + 512B
+            AvrModel::Atmega169 | AvrModel::Atmega16m1 => 0x04FF, // 0x0100 + 1KB
+            AvrModel::Atmega64m1 => 0x10FF, // 0x0100 + 4KB
+            AvrModel::Atmega128rfa1 | AvrModel::Atmega128rfr2 => 0x41FF, // 0x0200 + 16KB
             AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
@@ -367,7 +394,13 @@ impl AvrModel {
             | AvrModel::Atmega32
             | AvrModel::Atmega164
             | AvrModel::Atmega324
-            | AvrModel::Atmega644 => AVR_ADC_INPUT_BASE,
+            | AvrModel::Atmega644
+            | AvrModel::Atmega169
+            | AvrModel::Atmega16m1
+            | AvrModel::Atmega64m1
+            | AvrModel::Atmega128rfa1
+            | AvrModel::Atmega128rfr2
+            | AvrModel::At90usb162 => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega128 | AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 AVR_MEGA_ADC_INPUT_BASE
             }
@@ -896,7 +929,13 @@ impl Avr {
             | AvrModel::Atmega32
             | AvrModel::Atmega164
             | AvrModel::Atmega324
-            | AvrModel::Atmega644 => false,
+            | AvrModel::Atmega644
+            | AvrModel::Atmega169
+            | AvrModel::Atmega16m1
+            | AvrModel::Atmega64m1
+            | AvrModel::Atmega128rfa1
+            | AvrModel::Atmega128rfr2
+            | AvrModel::At90usb162 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -943,7 +982,13 @@ impl Avr {
             | AvrModel::Atmega32
             | AvrModel::Atmega164
             | AvrModel::Atmega324
-            | AvrModel::Atmega644 => false,
+            | AvrModel::Atmega644
+            | AvrModel::Atmega169
+            | AvrModel::Atmega16m1
+            | AvrModel::Atmega64m1
+            | AvrModel::Atmega128rfa1
+            | AvrModel::Atmega128rfr2
+            | AvrModel::At90usb162 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -3795,6 +3840,48 @@ mod tests {
                 0x0100,
                 0x10FF,
             ),
+            (
+                "simavr-atmega169p",
+                AvrModel::Atmega169,
+                16 * 1024,
+                0x0100,
+                0x04FF,
+            ),
+            (
+                "simavr-atmega16m1",
+                AvrModel::Atmega16m1,
+                16 * 1024,
+                0x0100,
+                0x04FF,
+            ),
+            (
+                "simavr-atmega64m1",
+                AvrModel::Atmega64m1,
+                64 * 1024,
+                0x0100,
+                0x10FF,
+            ),
+            (
+                "simavr-atmega128rfa1",
+                AvrModel::Atmega128rfa1,
+                128 * 1024,
+                0x0200,
+                0x41FF,
+            ),
+            (
+                "simavr-atmega128rfr2",
+                AvrModel::Atmega128rfr2,
+                128 * 1024,
+                0x0200,
+                0x41FF,
+            ),
+            (
+                "simavr-at90usb162",
+                AvrModel::At90usb162,
+                16 * 1024,
+                0x0100,
+                0x02FF,
+            ),
         ];
         for (name, model, flash, sram_start, ramend) in cases {
             let cpu = Avr::for_chip_name(name);
@@ -3811,6 +3898,8 @@ mod tests {
             ("atmega168", AvrModel::Atmega168),
             ("attiny88", AvrModel::Attiny88),
             ("atmega1284p", AvrModel::Atmega1284p),
+            ("atmega128", AvrModel::Atmega128),
+            ("atmega16", AvrModel::Atmega16),
         ] {
             assert_eq!(AvrModel::from_chip_name(name), model, "{name} unchanged");
         }
