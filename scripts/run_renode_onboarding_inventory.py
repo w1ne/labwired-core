@@ -359,6 +359,18 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/atmega168-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega168-smoke.yaml",
     },
+    "simavr-attiny25": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny25-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny25-smoke.yaml",
+    },
+    "simavr-attiny45": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny45-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny45-smoke.yaml",
+    },
+    "simavr-attiny85": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny85-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny85-smoke.yaml",
+    },
     "simavr-atmega16": {
         "prebuilt_firmware": "tests/fixtures/avr/atmega16-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega16-smoke.yaml",
