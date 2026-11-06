@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn gpio27_uses_its_c5_selector_and_requires_both_muxes() {
         let mut gpio = Esp32c5Gpio::new();
-        let iomux = super::super::io_mux::Esp32c5IoMux::new();
+        let mut iomux = super::super::io_mux::Esp32c5IoMux::new();
         gpio.set_io_mux_gpio27(iomux.gpio27_pad_control());
         let edges = Arc::new(Edges::default());
         gpio.add_observer(edges.clone());

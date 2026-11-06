@@ -9,7 +9,7 @@ cpu_hz: 400_000_000
 flash:
   # P4 unified flash mapped into the IROM/DROM window; this board has 16 MB.
   base: 0x40000000
-  size: "16MB"
+  size: "16384KB"
 ram:
   # 768 KiB HP IRAM/DRAM less the 256 KiB ROM-reserved area.
   base: 0x4FF40000

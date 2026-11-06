@@ -74,6 +74,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32/uart1.yaml", packed!("esp32/uart1.yaml")),
     ("esp32/uart2.yaml", packed!("esp32/uart2.yaml")),
     ("esp32/uhci0.yaml", packed!("esp32/uhci0.yaml")),
+    ("esp32c2/gpio.yaml", packed!("esp32c2/gpio.yaml")),
+    ("esp32c2/io_mux.yaml", packed!("esp32c2/io_mux.yaml")),
     ("esp32c3/aes.yaml", packed!("esp32c3/aes.yaml")),
     ("esp32c3/apb_ctrl.yaml", packed!("esp32c3/apb_ctrl.yaml")),
     (
@@ -126,6 +128,14 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32c3/wifi_mac.yaml", packed!("esp32c3/wifi_mac.yaml")),
     ("esp32c3/xts_aes.yaml", packed!("esp32c3/xts_aes.yaml")),
     (
+        "esp32c5/gpio_i2c_rgb.yaml",
+        packed!("esp32c5/gpio_i2c_rgb.yaml"),
+    ),
+    (
+        "esp32c5/io_mux_i2c_rgb.yaml",
+        packed!("esp32c5/io_mux_i2c_rgb.yaml"),
+    ),
+    (
         "esp32c6/apb_saradc.yaml",
         packed!("esp32c6/apb_saradc.yaml"),
     ),
@@ -148,6 +158,16 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32c6/timg1.yaml", packed!("esp32c6/timg1.yaml")),
     ("esp32c6/uart0.yaml", packed!("esp32c6/uart0.yaml")),
     ("esp32c6/uart1.yaml", packed!("esp32c6/uart1.yaml")),
+    (
+        "esp32c61/gpio_gpio8.yaml",
+        packed!("esp32c61/gpio_gpio8.yaml"),
+    ),
+    (
+        "esp32c61/io_mux_gpio8.yaml",
+        packed!("esp32c61/io_mux_gpio8.yaml"),
+    ),
+    ("esp32p4/gpio.yaml", packed!("esp32p4/gpio.yaml")),
+    ("esp32p4/io_mux.yaml", packed!("esp32p4/io_mux.yaml")),
     ("esp32s3/dma.yaml", packed!("esp32s3/dma.yaml")),
     ("esp32s3/efuse.yaml", packed!("esp32s3/efuse.yaml")),
     ("esp32s3/gpio.yaml", packed!("esp32s3/gpio.yaml")),
@@ -403,6 +423,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("rp2350/adc.yaml", packed!("rp2350/adc.yaml")),
     ("rp2350/clocks.yaml", packed!("rp2350/clocks.yaml")),
     ("rp2350/dma.yaml", packed!("rp2350/dma.yaml")),
+    ("rp2350/io_bank0.yaml", packed!("rp2350/io_bank0.yaml")),
     ("rp2350/pio0.yaml", packed!("rp2350/pio0.yaml")),
     ("rp2350/pwm.yaml", packed!("rp2350/pwm.yaml")),
     ("rp2350/sio.yaml", packed!("rp2350/sio.yaml")),
