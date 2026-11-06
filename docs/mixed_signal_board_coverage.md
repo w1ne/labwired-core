@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 101 have end-to-end analog coverage; 2 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -113,8 +113,8 @@ Current inventory: **103 profiles; 101 have end-to-end analog coverage; 2 have n
 | `stm32f401cdu6-blackpill` | [`cosim_stm32f401cdu6_analog.rs`](../crates/core/tests/cosim_stm32f401cdu6_analog.rs)::`stm32f401cdu6_blackpill_ntc_and_diode_netlists_reach_pa1_pa4_adc1_end_to_end` — shared generic Beta NTC and unrelated Shockley diode netlists route through PA1/PA4 to ADC1 channels 1/4; solved voltages, temperature response, firmware-visible 12-bit conversions, channel isolation, undriven neighbors, and retained PC13 LED/PA0 button mappings are asserted |
 | `stm32f401cdu6` | [`cosim_stm32f401cdu6_analog.rs`](../crates/core/tests/cosim_stm32f401cdu6_analog.rs)::`stm32f401cdu6_ntc_and_diode_netlists_reach_pa1_pa4_adc1_end_to_end` — the same generic Beta NTC and unrelated Shockley diode netlists solve through the profile's PA1/PA4 routes to ADC1 channels 1/4; solved voltages, firmware-visible 12-bit conversions, and isolation of undriven neighbors are asserted |
 | `stm32f411ceu6-blackpill` | [`cosim_stm32f411ceu6_analog.rs`](../crates/core/tests/cosim_stm32f411ceu6_analog.rs)::`stm32f411ceu6_blackpill_ntc_and_diode_netlists_reach_pa1_pa4_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists route via the F411 chip descriptor's PA1/PA4 aliases to ADC1 channels 1/4; solved voltages, temperature response, firmware-visible 12-bit conversions, and isolation of undriven neighbors are asserted. This is model coverage, not board pinout or silicon validation. |
-| `teensy-41` | **NO E2E analog coverage** |
-| `vegaboard-ri5cy` | **NO E2E analog coverage** |
+| `teensy-41` | [`cosim_input_bank_analog.rs`](../crates/core/tests/cosim_input_bank_analog.rs)::`teensy_41_ntc_and_diode_netlists_reach_simulated_input_thresholds` — generic Beta NTC and unrelated Shockley diode netlists reach separate `input_pin_bank` endpoints; solved voltages and Schmitt threshold crossings/hysteresis are asserted. Endpoints and 3.3 V / 0.3 / 0.7 thresholds are simulation assumptions, not Teensy ADC or pad behavior. |
+| `vegaboard-ri5cy` | [`cosim_input_bank_analog.rs`](../crates/core/tests/cosim_input_bank_analog.rs)::`vegaboard_ri5cy_ntc_and_diode_netlists_reach_simulated_input_thresholds` — the same generic device models reach separate input-bank endpoints; asserts solved voltages and threshold crossings/hysteresis. This is simulation-only: Vega GPIO registers, analog pads, ADC conversion, and silicon thresholds are not modeled. |
 
 The EK-RA6M5 and EK-RA8M1 proofs reuse the same generic Beta NTC and Shockley diode netlists and explicit RA ADC12 channel routing; both profiles lack pin-to-ADC aliases for these channels. The shared fixture is [examples/ek-ra6m5/analog-ntc-system.yaml](../examples/ek-ra6m5/analog-ntc-system.yaml). Apollo4 Plus uses the same generic analog adapter with an explicit channel route; its model currently covers single scans of external slots and FIFO output.
 

@@ -58,6 +58,12 @@ cd core
 | INTMUX, LPTMR0/1/2 | `type: stub` |
 | Silicon capture / executing-fidelity differential | **none** — SIM-DERIVED |
 
+The separate [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml)
+fixture and `cosim_input_bank_analog` integration test drive generic NTC and
+Shockley diode netlists into two simulation-only input endpoints. Their 3.3 V
+rail and thresholds are assumptions; this does not add RI5CY GPIO, ADC, or
+physical pad behavior.
+
 ## Documents
 
 - `REQUIRED_DOCS.md` — the sources the descriptor and this package are grounded on

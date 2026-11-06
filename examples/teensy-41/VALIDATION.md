@@ -54,3 +54,14 @@ cargo run -q -p labwired-cli -- \
   --max-steps 32 \
   --json
 ```
+
+## 7) Run simulation-only analog input routing coverage
+
+```bash
+cargo test -p labwired-core --test cosim_input_bank_analog teensy_41_ntc_and_diode_netlists_reach_simulated_input_thresholds -- --nocapture
+```
+
+This drives the generic NTC and Shockley diode netlists through the simulated
+`input_pin_bank`, then asserts solved node voltages and input threshold behavior.
+The bank's 3.3 V rail and 0.3/0.7 thresholds are simulation assumptions; this is
+not a claim of Teensy 4.1 ADC or analog-pad fidelity.

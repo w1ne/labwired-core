@@ -27,6 +27,12 @@ Expected result:
 1. smoke test passes
 2. UART contains `OK`
 
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) and
+`cosim_input_bank_analog` exercise generic Beta NTC and Shockley diode netlists
+through two simulation-only input endpoints. The 3.3 V rail and 0.3/0.7
+thresholds are fixture assumptions; this proof does not model the Teensy's ADC
+or physical analog pads.
+
 ## Files
 
 1. `system.yaml`: local board mapping for simulation runs.

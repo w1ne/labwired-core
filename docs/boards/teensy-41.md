@@ -23,7 +23,10 @@ behavioural models, not stubs.
 
 ## What is not proven
 
-No silicon diff and no executing-fidelity differential; FlexSPI is a stub
+The mixed-signal test routes generic NTC and Shockley diode netlists through
+two simulation-only input-bank endpoints and asserts solved voltages and
+assumed-threshold hysteresis. This does not claim Teensy ADC or analog-pad
+support. No silicon diff and no executing-fidelity differential; FlexSPI is a stub
 window and the XIP path is skipped (images run from DTCM). GPT/PIT/DMA and
 the USB blocks are unmodelled.
 

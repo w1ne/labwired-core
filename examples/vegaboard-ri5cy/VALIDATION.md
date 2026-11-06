@@ -16,7 +16,8 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | SCG / PCC clock blocks | **not modelled** | declared `type: stub`; the smoke polls, no clock gating is modelled |
 | INTMUX interrupt controller | **not modelled** | declared `type: stub` |
 | Low-power timers (LPTMR0/1/2) | **not modelled** | declared `type: stub` |
-| Board-level user I/O / sensors / radio | **not modelled** | the platform defines no GPIO bank |
+| Physical board-level user I/O / sensors / radio | **not modelled** | no physical GPIO, ADC, or analog pads are claimed |
+| Generic simulated analog input routing | sim-only | `cosim_input_bank_analog` asserts NTC and diode netlists, solved voltages, and threshold hysteresis |
 | Silicon capture / executing-fidelity differential | **none** | SIM-DERIVED |
 
 ## Commands and evidence (verified 2026-10-23)
@@ -50,6 +51,16 @@ cargo build -p firmware-vegaboard-ri5cy-smoke --release --target riscv32imc-unkn
 
 cargo test -p labwired-core --test firmware_survival test_vegaboard_ri5cy_smoke_survival
 ```
+
+The generic analog routing fixture has its own focused test:
+
+```bash
+cargo test -p labwired-core --test cosim_input_bank_analog vegaboard_ri5cy_ntc_and_diode_netlists_reach_simulated_input_thresholds -- --nocapture
+```
+
+It uses the simulation-only input bank with an assumed 3.3 V rail and 0.3/0.7
+input thresholds. It does not assert physical Vega board pin, ADC, or GPIO
+behavior.
 
 ## Notes
 
