@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `214`
-- booted: `212/245`
-- boot_and_smoke_passed: `212/245`
-- not_run: `31`
-- pass: `212`
+- run_attempted: `220`
+- booted: `218/245`
+- boot_and_smoke_passed: `218/245`
+- not_run: `25`
+- pass: `218`
 - fail: `2`
 - median_elapsed_ms: `1251`
 - median_elapsed_seconds: `1.251`
 - threshold_seconds: `3600`
-- threshold_met: `214/214`
+- threshold_met: `220/220`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -113,7 +113,7 @@
 | `litex_vexriscv_zephyr` | `pass` | `True` | `yes` | `yes` | `1993` | `1.993` | `True` | `n/a` | n/a | n/a |
 | `litex_zephyr_vexriscv_i2s` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `n/a` | n/a | n/a |
 | `lpc2294` | `pass` | `True` | `yes` | `yes` | `77804` | `77.804` | `True` | `n/a` | n/a | n/a |
-| `mars_zx3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `mars_zx3` | `pass` | `True` | `yes` | `yes` | `1589` | `1.589` | `True` | `n/a` | n/a | n/a |
 | `max32652` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `n/a` | n/a | n/a |
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1040` | `1.04` | `True` | `n/a` | n/a | n/a |
 | `microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
@@ -242,21 +242,21 @@
 | `stm32l552` | `pass` | `True` | `yes` | `yes` | `1940` | `1.94` | `True` | `n/a` | n/a | n/a |
 | `stm32w108` | `pass` | `True` | `yes` | `yes` | `990` | `0.99` | `True` | `n/a` | n/a | n/a |
 | `stm32wba52` | `pass` | `True` | `yes` | `yes` | `2429` | `2.429` | `True` | `n/a` | n/a | n/a |
-| `tegra2` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
-| `tegra3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `tegra2` | `pass` | `True` | `yes` | `yes` | `1154` | `1.154` | `True` | `n/a` | n/a | n/a |
+| `tegra3` | `pass` | `True` | `yes` | `yes` | `1043` | `1.043` | `True` | `n/a` | n/a | n/a |
 | `tock_veer_el2_sim` | `pass` | `True` | `yes` | `yes` | `1001` | `1.001` | `True` | `n/a` | n/a | n/a |
 | `up_squared_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `ut32m0r500` | `pass` | `True` | `yes` | `yes` | `1004` | `1.004` | `True` | `n/a` | n/a | n/a |
 | `vegaboard_ri5cy` | `pass` | `True` | `yes` | `yes` | `1404` | `1.404` | `True` | `n/a` | n/a | n/a |
 | `verilated_ibex` | `pass` | `True` | `yes` | `yes` | `757` | `0.757` | `True` | `n/a` | n/a | n/a |
 | `versatile` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | arm926ej-s has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
-| `vexpress` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `vexpress` | `pass` | `True` | `yes` | `yes` | `1062` | `1.062` | `True` | `n/a` | n/a | n/a |
 | `vybrid` | `pass` | `True` | `yes` | `yes` | `7594` | `7.594` | `True` | `n/a` | n/a | n/a |
 | `x86` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no IA-32 (x86) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `xtensa-sample-controller` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no Xtensa sample controller (not ESP32) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
-| `zedboard` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `zedboard` | `pass` | `True` | `yes` | `yes` | `1906` | `1.906` | `True` | `n/a` | n/a | n/a |
 | `zolertia-firefly` | `pass` | `True` | `yes` | `yes` | `1036` | `1.036` | `True` | `n/a` | n/a | n/a |
-| `zynq-7000` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real adapter for this core (tlib has the model) before adding a smoke. | cortex-a9 has no native adapter; the chip is refused rather than run as a Cortex-M. No firmware run was attempted. |
+| `zynq-7000` | `pass` | `True` | `yes` | `yes` | `138530` | `138.53` | `True` | `n/a` | n/a | n/a |
 | `zynqmp` | `pass` | `True` | `yes` | `yes` | `246519` | `246.519` | `True` | `n/a` | n/a | n/a |
 | `zynqmp-zcu102-revA` | `pass` | `True` | `yes` | `yes` | `607` | `0.607` | `True` | `n/a` | n/a | n/a |
 | `zynqmp-zcu102-revB` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `n/a` | n/a | n/a |

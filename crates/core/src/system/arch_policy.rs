@@ -47,6 +47,50 @@ pub enum MachineFamily {
     Mips,
 }
 
+/// The ARMv7-A core a [`MachineFamily::CortexA`] chip names. Each variant is a
+/// distinct CPU model in the native engine (ID registers, feature set); one is
+/// never substituted for the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CortexACore {
+    A7,
+    A9,
+}
+
+impl CortexACore {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::A7 => "Cortex-A7",
+            Self::A9 => "Cortex-A9",
+        }
+    }
+}
+
+fn cortex_a_core_named(core: &str) -> Option<CortexACore> {
+    match core {
+        "cortex-a7" => Some(CortexACore::A7),
+        "cortex-a9" => Some(CortexACore::A9),
+        _ => None,
+    }
+}
+
+/// The Cortex-A core this chip declares, or an error if it is not a
+/// [`MachineFamily::CortexA`] chip.
+pub fn cortex_a_core(chip: &ChipDescriptor) -> anyhow::Result<CortexACore> {
+    if chip.arch == Arch::Arm {
+        if let Some(core) = chip
+            .core
+            .as_deref()
+            .and_then(|core| cortex_a_core_named(&core.trim().to_ascii_lowercase()))
+        {
+            return Ok(core);
+        }
+    }
+    anyhow::bail!(
+        "chip '{}' does not declare a supported Cortex-A core",
+        chip.name
+    )
+}
+
 /// What machine family this chip is built as, or an error naming why not.
 ///
 /// A chip that declares no architecture is **refused**. It is never guessed:
@@ -55,7 +99,7 @@ pub enum MachineFamily {
 pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
     match chip.arch {
         Arch::Arm => match chip.core.as_deref().map(|core| core.trim().to_ascii_lowercase()) {
-            Some(core) if core == "cortex-a7" => Ok(MachineFamily::CortexA),
+            Some(core) if cortex_a_core_named(&core).is_some() => Ok(MachineFamily::CortexA),
             Some(core) if core == "cortex-r5f" => Ok(MachineFamily::CortexR),
             Some(core) if core == "arm7tdmi" || core == "arm7tdmi-s" => {
                 Ok(MachineFamily::Arm7Tdmi)
@@ -69,7 +113,7 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
                 chip.name
             ),
             Some(core) if core.starts_with("cortex-a") => anyhow::bail!(
-                "chip '{}': unsupported ARM application core '{core}'; only cortex-a7 has an experimental native adapter",
+                "chip '{}': unsupported ARM application core '{core}'; only cortex-a7 and cortex-a9 have an experimental native adapter",
                 chip.name
             ),
             // Only an absent core or a Cortex-M core is a Cortex-M. Any other

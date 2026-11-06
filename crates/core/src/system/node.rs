@@ -184,7 +184,10 @@ pub fn build_node_with_options(
                 };
                 let bus =
                     crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
-                Ok(Box::new(crate::system::cortex_a::load_elf(bus, &bytes)?))
+                let core = crate::system::arch_policy::cortex_a_core(chip)?;
+                Ok(Box::new(crate::system::cortex_a::load_elf_for_core(
+                    bus, &bytes, core,
+                )?))
             }
             #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
             anyhow::bail!("node '{id}': Cortex-A7 needs a native build with --features qemu-arm; browser execution is unavailable")

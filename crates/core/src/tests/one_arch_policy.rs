@@ -184,6 +184,31 @@ fn cortex_a7_never_routes_to_cortex_m() {
 }
 
 #[test]
+fn each_cortex_a_core_selects_its_own_model() {
+    use crate::system::arch_policy::{cortex_a_core, CortexACore};
+    let mut chip = chip_with_arch(Arch::Arm);
+    for (core, want) in [
+        ("cortex-a7", CortexACore::A7),
+        ("Cortex-A9", CortexACore::A9),
+    ] {
+        chip.core = Some(core.into());
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexA,
+            "{core}"
+        );
+        assert_eq!(cortex_a_core(&chip).unwrap(), want, "{core}");
+    }
+    for unsupported in ["cortex-a5", "cortex-a8", "cortex-a15", "cortex-m4"] {
+        chip.core = Some(unsupported.into());
+        assert!(cortex_a_core(&chip).is_err(), "{unsupported}");
+    }
+    chip.core = Some("cortex-a9".into());
+    chip.arch = Arch::Aarch64;
+    assert!(cortex_a_core(&chip).is_err());
+}
+
+#[test]
 fn cortex_r_never_routes_to_cortex_m() {
     let mut chip = chip_with_arch(Arch::Arm);
     chip.core = Some("cortex-r5f".into());
@@ -209,7 +234,7 @@ fn a_named_non_cortex_m_arm_core_never_routes_to_cortex_m() {
         "arm920t",
         "arm926ej-s",
         "arm1176jzf-s",
-        "cortex-a9",
+        "cortex-a15",
         "sparc-v8",
     ] {
         chip.core = Some(unsupported.into());
@@ -337,12 +362,6 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
         "litex_common",
         "at91rm9200",
         "versatile",
-        "vexpress",
-        "tegra2",
-        "tegra3",
-        "zynq-7000",
-        "zedboard",
-        "mars_zx3",
     ] {
         assert!(
             machine_family(&load(name)).is_err(),
@@ -353,6 +372,26 @@ fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
         machine_family(&load("a20")).unwrap(),
         MachineFamily::CortexA
     );
+    for name in [
+        "vexpress",
+        "tegra2",
+        "tegra3",
+        "zynq-7000",
+        "zedboard",
+        "mars_zx3",
+    ] {
+        let chip = load(name);
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexA,
+            "{name}"
+        );
+        assert_eq!(
+            crate::system::arch_policy::cortex_a_core(&chip).unwrap(),
+            crate::system::arch_policy::CortexACore::A9,
+            "{name}"
+        );
+    }
     for name in [
         "fsl_lx2160ardb",
         "zynqmp",

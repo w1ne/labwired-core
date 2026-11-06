@@ -1,0 +1,10 @@
+# Direct A32 fixture against the bounded imported tegra2 profile: one Cortex-A9 PE, a 64 KiB SDRAM aperture at 0x0, and polled UARTA TX only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tegra-a9-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/tegra2.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "TEGRA A9 UART SMOKE"
+  - expected_stop_reason: max_steps

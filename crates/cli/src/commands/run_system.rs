@@ -240,7 +240,9 @@ pub(crate) fn run_firmware_with_system(
     let cpu: Box<dyn Cpu> = if family == MachineFamily::CortexA {
         #[cfg(feature = "qemu-arm")]
         {
-            match labwired_core::cpu::CortexA7::new() {
+            match labwired_core::system::arch_policy::cortex_a_core(&chip)
+                .and_then(|core| Ok(labwired_core::cpu::CortexA7::with_core(core)?))
+            {
                 Ok(cpu) => Box::new(cpu),
                 Err(error) => {
                     emit_error(

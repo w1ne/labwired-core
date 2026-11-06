@@ -38,6 +38,17 @@ fn arm_test_family(
     Ok(family)
 }
 
+/// The declared Cortex-A core for a [`arm_test_family`] `CortexA` run.
+#[cfg(feature = "qemu-arm")]
+fn arm_test_cortex_a_core(
+    system: Option<&labwired_config::ResolvedSystem>,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> anyhow::Result<labwired_core::system::arch_policy::CortexACore> {
+    let system = system.ok_or_else(|| anyhow::anyhow!("Cortex-A run needs a system manifest"))?;
+    let chip = system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))?;
+    labwired_core::system::arch_policy::cortex_a_core(&chip)
+}
+
 /// Turn on scheduler-safe CPU idle fast-forward for this `labwired test` run.
 ///
 /// `SimulationConfig::idle_fast_forward_enabled` stays **false** in core's
@@ -2646,7 +2657,9 @@ pub(crate) fn run_test(
                 }
                 #[cfg(feature = "qemu-arm")]
                 {
-                    let cpu = match labwired_core::cpu::CortexA7::new() {
+                    let cpu = match arm_test_cortex_a_core(resolved_system.as_ref(), plugins)
+                        .and_then(|core| Ok(labwired_core::cpu::CortexA7::with_core(core)?))
+                    {
                         Ok(cpu) => cpu,
                         Err(error) => {
                             write_config_error_outputs(

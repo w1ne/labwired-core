@@ -15,6 +15,42 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "zynq-7000": {
+        "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zynq-7000-a9-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
+    "zedboard": {
+        "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
+        "script": "examples/renode-onboarding/zedboard-a9-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
+    "mars_zx3": {
+        "prebuilt_firmware": "tests/fixtures/zynq7000-a9-uart-smoke.elf",
+        "script": "examples/renode-onboarding/mars_zx3-a9-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
+    "vexpress": {
+        "prebuilt_firmware": "tests/fixtures/vexpress-a9-uart-smoke.elf",
+        "script": "examples/renode-onboarding/vexpress-a9-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
+    "tegra2": {
+        "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
+        "script": "examples/renode-onboarding/tegra2-a9-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
+    "tegra3": {
+        "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf",
+        "script": "examples/renode-onboarding/tegra3-a9-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
     "a20": {
         "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf",
         "script": "examples/renode-onboarding/a20-a7-uart-smoke.yaml",
@@ -1116,12 +1152,6 @@ NOT_RUN_HINTS["litex_common"] = "Measure the concrete LiteX platforms that inclu
 NO_ADAPTER_CORE_TARGETS = {
     "at91rm9200": "arm920t",
     "versatile": "arm926ej-s",
-    "vexpress": "cortex-a9",
-    "tegra2": "cortex-a9",
-    "tegra3": "cortex-a9",
-    "zynq-7000": "cortex-a9",
-    "zedboard": "cortex-a9",
-    "mars_zx3": "cortex-a9",
 }
 NOT_RUN_REASONS.update(
     {

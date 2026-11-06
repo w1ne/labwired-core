@@ -215,6 +215,54 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: zynq-7000
+            prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/zynq-7000-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/zynq-7000.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: zedboard
+            prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/zedboard-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/zedboard.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: mars_zx3
+            prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/mars_zx3-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/mars_zx3.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: vexpress
+            prebuilt_firmware: tests/fixtures/vexpress-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/vexpress-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/vexpress.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: tegra2
+            prebuilt_firmware: tests/fixtures/tegra-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/tegra2-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/tegra2.yaml
+          # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
+          # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
+          - id: tegra3
+            prebuilt_firmware: tests/fixtures/tegra-a9-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/tegra3-a9-uart-smoke.yaml
+            system: configs/systems/onboarding/tegra3.yaml
           # One A20 Cortex-A7 PE, a bounded DDR aperture and UART0 polled TX;
           # the BROM, multicore boot and other SoC peripherals are not modeled.
           - id: a20

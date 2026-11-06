@@ -53,13 +53,6 @@
 /// `fixtures/` and `configs/ci/`.
 pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
-        "armsnoopcontrolunit",
-        "ARM Snoop Control Unit (MPCore SCU). Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/cortex-a9, onboarding/cortex-a9_smp, onboarding/cortex-r8, \
-         onboarding/cortex-r8_smp, onboarding/tegra2.",
-    ),
-    (
         "armsysctl",
         "ARM Versatile/VExpress system controller. Renode-imported onboarding descriptor; no \
          model in this engine, so the window answers reads with zeros. Used by: \
@@ -92,19 +85,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          Renode-imported onboarding descriptor; no model in this engine, so the window \
          answers reads with zeros. Used by: onboarding/arduino_101-shield, \
          onboarding/arty_litex_vexriscv and other imported descriptors.",
-    ),
-    (
-        "cadence_ttc",
-        "Cadence Triple Timer Counter. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/cortex-r8, \
-         onboarding/cortex-r8_smp.",
-    ),
-    (
-        "cadencegem",
-        "Cadence GEM Ethernet MAC. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/mars_zx3, \
-         onboarding/sam_e70, onboarding/zedboard, \
-         onboarding/zynq-7000.",
     ),
     (
         "cc2520",
@@ -154,13 +134,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "efuse_stub",
         "ESP32-S3 eFuse window, authored as an explicit placeholder so eFuse reads decode \
          instead of faulting. No eFuse state is modelled. Used by: esp32s3-zero.",
-    ),
-    (
-        "ehcihostcontroller",
-        "USB EHCI host controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/a20, \
-         onboarding/colibri-vf61, onboarding/mars_zx3, onboarding/tegra2, onboarding/tegra3 \
-         (+3 more).",
     ),
     (
         "emios",
@@ -332,13 +305,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          ordering. Used by: rp2040, rp2350, stm32f401, stm32f405, stm32f407 (+8 more).",
     ),
     (
-        "pl031",
-        "ARM PrimeCell PL031 RTC. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/cortex-a53-gicv2, onboarding/cortex-a53-gicv3, \
-         onboarding/cortex-a53-gicv3_smp, onboarding/cortex-a78, onboarding/vexpress.",
-    ),
-    (
         "pl050",
         "ARM PrimeCell PL050 PS/2 interface. Renode-imported onboarding descriptor; no model \
          in this engine, so the window answers reads with zeros. Used by: \
@@ -349,13 +315,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "ARM PrimeCell PL110 colour LCD controller. Renode-imported onboarding descriptor; no \
          model in this engine, so the window answers reads with zeros. Used by: \
          onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
-        "pl310",
-        "ARM PL310 L2 cache controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/mars_zx3, \
-         onboarding/tegra2, onboarding/tegra3, onboarding/vexpress, onboarding/zedboard (+1 \
-         more).",
     ),
     (
         "pythonperipheral",
@@ -419,24 +378,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "system_stub",
         "ESP32 / ESP32-S3 SYSTEM (and classic I2S/PCNT/RMT/UHCI) windows, authored as \
          explicit placeholders so the address decodes. Used by: esp32, esp32s3, esp32s3-zero.",
-    ),
-    (
-        "tegradisplay",
-        "NVIDIA Tegra display controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/tegra2, \
-         onboarding/tegra3.",
-    ),
-    (
-        "tegradvc",
-        "NVIDIA Tegra display and video controller. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/tegra2.",
-    ),
-    (
-        "tegrasyncpts",
-        "NVIDIA Tegra sync points. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/tegra2, \
-         onboarding/tegra3.",
     ),
     (
         "ti_lm74",

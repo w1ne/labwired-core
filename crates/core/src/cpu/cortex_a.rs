@@ -1,10 +1,13 @@
 // LabWired - Firmware Simulation Platform
 // SPDX-License-Identifier: MIT
 
-//! Optional native Cortex-A7, using Unicorn's embedded QEMU-derived CPU.
+//! Optional native Cortex-A7/Cortex-A9, using Unicorn's embedded QEMU-derived
+//! CPU models. The type keeps its historical `CortexA7` name; the model is
+//! chosen from the chip's declared core and is never substituted.
 //! See docs/qemu-arm-core.md. This is a CPU integration, not RV1103/Linux support.
 
 use crate::snapshot::{CortexACpuSnapshot, CpuSnapshot};
+use crate::system::arch_policy::CortexACore;
 use crate::{
     Bus, Cpu, FetchPermission, SimResult, SimulationConfig, SimulationError, SimulationObserver,
 };
@@ -39,13 +42,14 @@ const REGS: [RegisterARM; 17] = [
 ];
 
 fn native_error(error: uc_error) -> SimulationError {
-    SimulationError::Other(format!("embedded Cortex-A7: {error:?}"))
+    SimulationError::Other(format!("embedded Cortex-A: {error:?}"))
 }
 
 /// Engine ownership never leaves this type; no Unicorn clones or persistent
 /// callbacks are exposed. LabWired's bus remains authoritative.
 pub struct CortexA7 {
     engine: Option<Unicorn<'static, ()>>,
+    core: CortexACore,
     pages: BTreeSet<u64>,
     refused: Option<String>,
     halted: bool,
@@ -60,15 +64,25 @@ unsafe impl Send for CortexA7 {}
 
 impl CortexA7 {
     pub fn new() -> SimResult<Self> {
+        Self::with_core(CortexACore::A7)
+    }
+
+    /// The native engine configured as exactly the declared core.
+    pub fn with_core(core: CortexACore) -> SimResult<Self> {
+        let model = match core {
+            CortexACore::A7 => ArmCpuModel::CORTEX_A7,
+            CortexACore::A9 => ArmCpuModel::CORTEX_A9,
+        };
         let mut engine = Unicorn::new(Arch::ARM, Mode::ARM).map_err(native_error)?;
         engine
-            .ctl_set_cpu_model(ArmCpuModel::CORTEX_A7 as i32)
+            .ctl_set_cpu_model(model as i32)
             .map_err(native_error)?;
         engine
             .reg_write(RegisterARM::CPSR, 0xd3)
             .map_err(native_error)?;
         Ok(Self {
             engine: Some(engine),
+            core,
             pages: BTreeSet::new(),
             refused: None,
             halted: false,
@@ -97,23 +111,26 @@ impl CortexA7 {
         // Accepting restored ITSTATE would bypass our per-instruction bus
         // fetch/permission check even if the IT opcode itself was rejected.
         if self.get_register(16) & ((3 << 25) | (0x3f << 10)) != 0 {
-            return Err(SimulationError::NotImplemented(
-                "Cortex-A7 Thumb IT-state single stepping".into(),
-            ));
+            return Err(SimulationError::NotImplemented(format!(
+                "{} Thumb IT-state single stepping",
+                self.core.name()
+            )));
         }
         let mut sctlr = RegisterARMCP::new().cp(15).crn(1);
         self.engine()
             .reg_read_arm_coproc(&mut sctlr)
             .map_err(native_error)?;
         if sctlr.val & 1 != 0 {
-            return Err(SimulationError::NotImplemented(
-                "Cortex-A7 MMU bus translation (Linux execution requires this)".into(),
-            ));
+            return Err(SimulationError::NotImplemented(format!(
+                "{} MMU bus translation (Linux execution requires this)",
+                self.core.name()
+            )));
         }
         if self.get_register(16) & (1 << 9) != 0 {
-            return Err(SimulationError::NotImplemented(
-                "Cortex-A7 big-endian execution".into(),
-            ));
+            return Err(SimulationError::NotImplemented(format!(
+                "{} big-endian execution",
+                self.core.name()
+            )));
         }
         Ok(())
     }
@@ -219,7 +236,7 @@ fn stop_with_error(uc: &mut Unicorn<'_, StepBus<'_>>, error: SimulationError) {
 
 impl Cpu for CortexA7 {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
-        *self = Self::new()?;
+        *self = Self::with_core(self.core)?;
         Ok(())
     }
     fn uses_elf_entry_point(&self) -> bool {
@@ -267,16 +284,18 @@ impl Cpu for CortexA7 {
         }
         let opcode = u32::from_le_bytes(bytes);
         if thumb && low & 0xff00 == 0xbf00 && low & 0xf != 0 {
-            return Err(SimulationError::NotImplemented(
-                "Cortex-A7 Thumb IT-block single stepping".into(),
-            ));
+            return Err(SimulationError::NotImplemented(format!(
+                "{} Thumb IT-block single stepping",
+                self.core.name()
+            )));
         }
         if (thumb && matches!(low, 0xbf20 | 0xbf30))
             || (!thumb && matches!(opcode & 0x0fffffff, 0x0320f002 | 0x0320f003))
         {
-            return Err(SimulationError::NotImplemented(
-                "Cortex-A7 WFE/WFI event scheduling".into(),
-            ));
+            return Err(SimulationError::NotImplemented(format!(
+                "{} WFE/WFI event scheduling",
+                self.core.name()
+            )));
         }
         for observer in observers {
             observer.on_step_start(pc, opcode);
@@ -419,7 +438,8 @@ impl Cpu for CortexA7 {
     }
     fn set_exception_pending(&mut self, exception: u32) {
         self.refused = Some(format!(
-            "Cortex-A7 IRQ delivery ({exception}); GIC/exception entry not connected"
+            "{} IRQ delivery ({exception}); GIC/exception entry not connected",
+            self.core.name()
         ));
     }
     fn get_register(&self, id: u8) -> u32 {
@@ -448,13 +468,16 @@ impl Cpu for CortexA7 {
         })
     }
     fn apply_snapshot(&mut self, _snapshot: &CpuSnapshot) {
-        self.refused =
-            Some("Cortex-A7 full snapshot restore (banked registers and CP15 state)".into());
+        self.refused = Some(format!(
+            "{} full snapshot restore (banked registers and CP15 state)",
+            self.core.name()
+        ));
     }
     fn try_apply_snapshot(&mut self, _snapshot: &CpuSnapshot) -> SimResult<()> {
-        Err(SimulationError::NotImplemented(
-            "Cortex-A7 full snapshot restore (banked registers and CP15 state)".into(),
-        ))
+        Err(SimulationError::NotImplemented(format!(
+            "{} full snapshot restore (banked registers and CP15 state)",
+            self.core.name()
+        )))
     }
     fn get_register_names(&self) -> Vec<String> {
         (0..13)

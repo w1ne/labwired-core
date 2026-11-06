@@ -363,3 +363,20 @@ fn shared_builder_and_world_node_choose_the_embedded_core() {
     node.step().unwrap();
     assert_eq!(node.get_register(1), 12);
 }
+
+#[test]
+fn each_declared_core_reports_its_own_midr_part_number_across_reset() {
+    use labwired_core::system::arch_policy::CortexACore;
+    for (core, part) in [(CortexACore::A7, 0xc07), (CortexACore::A9, 0xc09)] {
+        let mut cpu = CortexA7::with_core(core).expect("native Cortex-A core");
+        let mut bus = TestBus::program(&[0xee100f10]); // mrc p15, 0, r0, c0, c0, 0 (MIDR)
+        for _ in 0..2 {
+            cpu.set_pc(ENTRY);
+            step(&mut cpu, &mut bus).unwrap();
+            let midr = cpu.get_register(0);
+            assert_eq!(midr >> 24, 0x41, "{core:?} implementer: {midr:#x}");
+            assert_eq!((midr >> 4) & 0xfff, part, "{core:?} part: {midr:#x}");
+            cpu.reset(&mut bus).unwrap();
+        }
+    }
+}
