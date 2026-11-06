@@ -9624,6 +9624,32 @@ boards:
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/uart.rs
 
+  - id: stm32g431rb
+    doc: docs/boards/stm32g431rb.md
+    chip: configs/chips/stm32g431rb.yaml
+    tier: structural
+    note: "STM32G431RB (Cortex-M4F, RM0440; NUCLEO-G431RB). Shares the RM0440 peripheral map with stm32g474re at the G431 geometry (128 KiB flash, 22 KiB SRAM + 10 KiB CCM). Exercised by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g431rb.elf) via examples/stm32g431rb/{tier1-smoke,io-smoke}.yaml. No G431 silicon bench."
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - configs/chips/stm32g431rb.yaml
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/rtc.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/uart.rs
+
   - id: stm32wb55
     doc: docs/boards/stm32wb55.md
     chip: configs/chips/stm32wb55.yaml
