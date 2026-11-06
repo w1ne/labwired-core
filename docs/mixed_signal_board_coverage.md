@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 70 have end-to-end analog coverage; 33 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 71 have end-to-end analog coverage; 32 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -80,7 +80,7 @@ Current inventory: **103 profiles; 70 have end-to-end analog coverage; 33 have n
 | `nucleo-f407` | [`cosim_nucleo_f407_analog.rs`](../crates/core/tests/cosim_nucleo_f407_analog.rs)::`nucleo_f407_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists solve onto descriptor-routed PA0/ADC1_IN0 and PA1/ADC1_IN1; solved voltages, temperature response, firmware-visible 12-bit conversions, channel isolation, and undriven channel 2 are asserted while retaining the NUCLEO-F407 LED and button wiring |
 | `nucleo-f767zi` | [`cosim_nucleo_f767zi_analog.rs`](../crates/core/tests/cosim_nucleo_f767zi_analog.rs)::`nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end` — generic Beta NTC and unrelated Shockley diode netlists solve onto descriptor-routed PA0/ADC1_IN0 and PA1/ADC1_IN1; solved voltages, temperature response, firmware-visible 12-bit conversions, channel isolation, and undriven channel 2 are asserted while retaining the NUCLEO-F767ZI PB0 LED and PC13 button |
 | `nucleo-g071rb` | [`cosim_nucleo_g071rb_analog.rs`](../crates/core/tests/cosim_nucleo_g071rb_analog.rs)::`nucleo_g071rb_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists solve onto modeled PA0/PA1 GPIO inputs; asserts voltages, GPIOA_IDR levels, and hysteresis. Threshold ratios are simulation assumptions; the current ADC model has no external input path |
-| `nucleo-h563zi-demo` | **NO E2E analog coverage** |
+| `nucleo-h563zi-demo` | [`cosim_nucleo_h563zi_analog.rs`](../crates/core/tests/cosim_nucleo_h563zi_analog.rs)::`nucleo_h563zi_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs` — generic Beta NTC and unrelated Shockley diode netlists solve onto modeled PA0/PA1 GPIO inputs; asserts voltages, GPIOA_IDR levels, and hysteresis. Threshold ratios are simulation assumptions; external ADC routing is not claimed |
 | `nucleo-l073rz` | **NO E2E analog coverage** |
 | `nucleo-l476rg` | [`cosim_nucleo_l476_analog.rs`](../crates/core/tests/cosim_nucleo_l476_analog.rs)::`nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds` — generic NTC divider and Shockley diode solve onto PA0/PA1; asserts solved voltages, GPIO input levels, and Schmitt hysteresis. This is GPIO threshold coverage, not ADC support. |
 | `nucleo-l552ze-q` | [`cosim_nucleo_l552_analog.rs`](../crates/core/tests/cosim_nucleo_l552_analog.rs)::`nucleo_l552ze_q_ntc_and_diode_netlists_reach_gpio_thresholds` — generic Beta NTC and Shockley diode netlists solve onto PA0/PA1; asserts voltages, GPIOA_IDR levels, and Schmitt hysteresis. This is GPIO threshold coverage; ADC1 remains a stub. |
