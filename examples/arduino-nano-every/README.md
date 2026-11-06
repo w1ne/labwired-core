@@ -38,3 +38,8 @@ cargo run -q -p labwired-cli -- test --script io-smoke.yaml --no-uart-stdout
 
 The committed smoke log and structured result are under `evidence/`. This is a
 repository smoke result, not a LabWired model-verification verdict.
+
+The run records `unpowered_rail_assumed`: there is no routed Nano Every power
+net in this narrow system, so VDD is idealized at 5 V and power-on/brown-out
+reset behavior is not exercised. The hosted verifier catalog also has no
+ATmega4809 target, so this round has local CLI evidence only.
