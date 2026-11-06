@@ -1,8 +1,8 @@
-2026-11-06T14:00:25.499734Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
-2026-11-06T14:00:25.575183Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+2026-11-06T14:21:00.448078Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-06T14:21:00.526532Z  INFO labwired_loader: ELF Entry Point: 0x8000017
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-06T14:00:25.946938Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
-2026-11-06T14:00:25.952782Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
-2026-11-06T14:00:25.953123Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
-PASS  29/29 checks · stm32f103-i2c-smoke · 50000000 steps · 0.40s
+2026-11-06T14:21:00.900150Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-06T14:21:01.223409Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-06T14:21:01.591040Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+PASS  44/44 checks · stm32f103-i2c-smoke · 50000000 steps · 1.13s

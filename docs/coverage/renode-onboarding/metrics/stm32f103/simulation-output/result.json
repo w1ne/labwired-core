@@ -132,6 +132,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "BME280_CALIBRATION_MAP_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "BME280_PRESS_RAW=0005883F"
       },
       "passed": true
@@ -156,6 +162,30 @@
     },
     {
       "assertion": {
+        "uart_contains": "BME280_SEEDED_TEMP_CENTI=00000FA0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_PRESS_Q8=01731804"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_HUM_Q10=00014005"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_COMPENSATION_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "BME280_DYNAMIC_TEMP_RAW=0009A510"
       },
       "passed": true
@@ -168,7 +198,13 @@
     },
     {
       "assertion": {
-        "uart_contains": "BME280_DYNAMIC_HUM_RAW=0000837C"
+        "uart_contains": "BME280_DYNAMIC_TEMP_CENTI=0000157C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMP_COMPENSATION_OK"
       },
       "passed": true
     },
@@ -180,13 +216,67 @@
     },
     {
       "assertion": {
-        "uart_contains": "BME280_DYNAMIC_PRESS_RAW=0005BE33"
+        "uart_contains": "BME280_DYNAMIC_HUM_RAW=000064D2"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_TEMP_CENTI=0000157C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_PRESS_Q8=0173180D"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_Q10=00008BFD"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_HUM_COMPENSATION_OK"
       },
       "passed": true
     },
     {
       "assertion": {
         "uart_contains": "BME280_DYNAMIC_PRESSURE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_PRESS_RAW=0005305F"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_TEMP_CENTI=0000157C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_Q8=018B81EE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_HUM_Q10=00008BFD"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_PRESS_COMPENSATION_OK"
       },
       "passed": true
     },
@@ -210,20 +300,20 @@
       3221225472,
       75,
       3,
-      14899969,
-      1073759232,
+      25919982,
+      35837,
       3221225472,
       536891376,
-      4080,
-      376371,
+      632080,
+      1073759232,
+      25810,
       999999,
-      362559,
       999999,
-      536891360,
-      134236805,
-      134235260
+      536891192,
+      134245570,
+      134241248
     ],
-    "pc": 134235260,
+    "pc": 134241248,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -236,7 +326,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "8a9eb75346dbb7e15bb929bb11303aa3b2d4aea75310b3366c690978b3013d8c",
+  "firmware_hash": "e8d30a2ed1e0823af04d3cb058f6a05911d686a0b86a04daab2197aa9becb9b1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -756,34 +846,64 @@
         "end_cycle": 20000
       },
       {
+        "text": "BME280_CALIBRATION_MAP_READ_OK",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
+      },
+      {
         "text": "BME280_PRESS_RAW=0005883F",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "BME280_TEMP_RAW=0008E910",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "BME280_HUM_RAW=0000853F",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "BME280_SEEDED_ENVIRONMENT_OK",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_SEEDED_TEMP_CENTI=00000FA0",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_SEEDED_PRESS_Q8=01731804",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_SEEDED_HUM_Q10=00014005",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_SEEDED_COMPENSATION_OK",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "BME280_WAITING_FOR_TEMPERATURE_STIMULUS",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "BME280_DYNAMIC_TEMP_RAW=0009A510",
@@ -798,46 +918,118 @@
         "end_cycle": 1010000
       },
       {
-        "text": "BME280_WAITING_FOR_HUMIDITY_STIMULUS",
+        "text": "BME280_DYNAMIC_TEMP_CENTI=0000157C",
         "cycle_lo": 1000000,
         "cycle": 1010000,
         "end_cycle": 1010000
       },
       {
-        "text": "BME280_DYNAMIC_HUM_RAW=0000837C",
+        "text": "BME280_DYNAMIC_PRESS_Q8=0173180D",
         "cycle_lo": 1000000,
         "cycle": 1010000,
         "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUM_Q10=00013FFF",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1020000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMP_COMPENSATION_OK",
+        "cycle_lo": 1010000,
+        "cycle": 1020000,
+        "end_cycle": 1020000
+      },
+      {
+        "text": "BME280_WAITING_FOR_HUMIDITY_STIMULUS",
+        "cycle_lo": 1010000,
+        "cycle": 1020000,
+        "end_cycle": 1020000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUM_RAW=000064D2",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
       },
       {
         "text": "BME280_DYNAMIC_HUMIDITY_OK",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
-        "end_cycle": 1010000
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_HUM_TEMP_CENTI=0000157C",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_HUM_PRESS_Q8=0173180D",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_HUM_Q10=00008BFD",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUM_COMPENSATION_OK",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
       },
       {
         "text": "BME280_WAITING_FOR_PRESSURE_STIMULUS",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
-        "end_cycle": 1010000
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
       },
       {
-        "text": "BME280_DYNAMIC_PRESS_RAW=0005BE33",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
-        "end_cycle": 1010000
+        "text": "BME280_DYNAMIC_PRESS_RAW=0005305F",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
       },
       {
         "text": "BME280_DYNAMIC_PRESSURE_OK",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
-        "end_cycle": 1010000
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_PRESS_TEMP_CENTI=0000157C",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_PRESS_Q8=018B81EE",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_PRESS_HUM_Q10=00008BFD",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_DYNAMIC_PRESS_COMPENSATION_OK",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
       },
       {
         "text": "DONE",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
-        "end_cycle": 1010000
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
       }
     ],
     "dropped_lines": 0
@@ -882,14 +1074,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 19136,
+    "text_bytes": 27924,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 19136,
+    "flash_used_bytes": 27924,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 29.2,
+    "flash_used_pct": 42.61,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -899,15 +1091,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 20480,
-    "main_stack_high_water_bytes": 64,
-    "main_stack_free_min_bytes": 20416,
+    "main_stack_high_water_bytes": 252,
+    "main_stack_free_min_bytes": 20128,
     "main_stack_base": 536870912,
     "main_stack_top": 536891392,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 20480,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 20416,
+    "heap_free_min_bytes": 20128,
     "heap_base": 536870912,
     "heap_top": 536891392
   },
@@ -915,90 +1107,90 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 5663,
-    "memory_writes": 1882,
-    "peripheral_accesses": 283896,
+    "memory_reads": 186113,
+    "memory_writes": 53976,
+    "peripheral_accesses": 708689,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134235260,
-        "count": 191406,
+        "pc": 134241248,
+        "count": 183594,
         "symbol": "firmware_f103_i2c_demo::main"
       },
       {
-        "pc": 134218662,
-        "count": 235,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134218720,
-        "count": 235,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134218558,
-        "count": 234,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134218638,
-        "count": 234,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134218648,
-        "count": 234,
+        "pc": 134219802,
+        "count": 430,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134218546,
-        "count": 196,
+        "pc": 134219754,
+        "count": 391,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134218628,
-        "count": 196,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+        "pc": 134219728,
+        "count": 390,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134218530,
-        "count": 195,
+        "pc": 134219818,
+        "count": 390,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134218632,
-        "count": 195,
+        "pc": 134219738,
+        "count": 352,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134218690,
-        "count": 195,
+        "pc": 134219788,
+        "count": 352,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134218706,
-        "count": 195,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134218534,
-        "count": 156,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134218686,
-        "count": 156,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134218696,
-        "count": 156,
+        "pc": 134219794,
+        "count": 351,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134218540,
-        "count": 118,
+        "pc": 134219814,
+        "count": 313,
         "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219734,
+        "count": 312,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219742,
+        "count": 312,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219746,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219808,
+        "count": 275,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219624,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219756,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219760,
+        "count": 273,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
       }
     ]
   }

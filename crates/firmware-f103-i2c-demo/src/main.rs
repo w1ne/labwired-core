@@ -3,9 +3,10 @@
 //! Probes an absent I²C address, reads the TMP102 temperature, then writes and
 //! reads back its configuration and alert threshold registers through I2C1,
 //! including a one-byte MSB update. It also reads the BME280 chip ID and a
-//! little-endian calibration word, then reads the BME280 pressure, temperature
-//! and humidity ADC registers, including scripted live changes to all three
-//! sensor inputs. USART2 emits a human-readable register
+//! little-endian calibration word, reads the complete BME280 calibration map,
+//! then compensates pressure, temperature and humidity ADC registers using
+//! the Bosch fixed-point formulas, including scripted live changes to all
+//! three sensor inputs. USART2 emits a human-readable register
 //! fingerprint at 115200/8N1. The onboarding system attaches declarative TMP102
 //! and BME280 models at addresses 0x48 and 0x76; TMP102's reset temperature is
 //! 25 °C (0x1900). The absent address remains an intentional NACK check.
@@ -57,6 +58,133 @@ const I2C1_TRISE: u32 = I2C1_BASE + 0x20;
 
 const TMP102_ADDRESS: u8 = 0x48;
 const BME280_ADDRESS: u8 = 0x76;
+
+#[derive(Clone, Copy)]
+struct Bme280Calibration {
+    t1: u16,
+    t2: i16,
+    t3: i16,
+    p1: u16,
+    p2: i16,
+    p3: i16,
+    p4: i16,
+    p5: i16,
+    p6: i16,
+    p7: i16,
+    p8: i16,
+    p9: i16,
+    h1: u8,
+    h2: i16,
+    h3: u8,
+    h4: i16,
+    h5: i16,
+    h6: i8,
+}
+
+#[derive(Clone, Copy)]
+struct Bme280Raw {
+    pressure: u32,
+    temperature: u32,
+    humidity: u32,
+}
+
+#[derive(Clone, Copy)]
+struct Bme280Compensated {
+    temperature_centi_c: i32,
+    pressure_q8_pa: u32,
+    humidity_q10_pct: u32,
+}
+
+impl Bme280Calibration {
+    unsafe fn read_from_i2c() -> Option<Self> {
+        let h4_high = read_i2c_byte(BME280_ADDRESS, 0xE4)?;
+        let h4_h5_low = read_i2c_byte(BME280_ADDRESS, 0xE5)?;
+        let h5_high = read_i2c_byte(BME280_ADDRESS, 0xE6)?;
+        Some(Self {
+            t1: read_bme280_u16_le(0x88)?,
+            t2: read_bme280_u16_le(0x8A)? as i16,
+            t3: read_bme280_u16_le(0x8C)? as i16,
+            p1: read_bme280_u16_le(0x8E)?,
+            p2: read_bme280_u16_le(0x90)? as i16,
+            p3: read_bme280_u16_le(0x92)? as i16,
+            p4: read_bme280_u16_le(0x94)? as i16,
+            p5: read_bme280_u16_le(0x96)? as i16,
+            p6: read_bme280_u16_le(0x98)? as i16,
+            p7: read_bme280_u16_le(0x9A)? as i16,
+            p8: read_bme280_u16_le(0x9C)? as i16,
+            p9: read_bme280_u16_le(0x9E)? as i16,
+            h1: read_i2c_byte(BME280_ADDRESS, 0xA1)?,
+            h2: read_bme280_u16_le(0xE1)? as i16,
+            h3: read_i2c_byte(BME280_ADDRESS, 0xE3)?,
+            h4: ((h4_high as i8 as i16) << 4) | i16::from(h4_h5_low & 0x0F),
+            h5: ((h5_high as i8 as i16) << 4) | i16::from(h4_h5_low >> 4),
+            h6: read_i2c_byte(BME280_ADDRESS, 0xE7)? as i8,
+        })
+    }
+
+    fn compensate(self, raw: Bme280Raw) -> Bme280Compensated {
+        let adc_t = raw.temperature as i32;
+        let t1 = self.t1 as i32;
+        let var1 = (((adc_t >> 3) - (t1 << 1)) * self.t2 as i32) >> 11;
+        let t_delta = (adc_t >> 4) - t1;
+        let var2 = (((t_delta * t_delta) >> 12) * self.t3 as i32) >> 14;
+        let t_fine = var1 + var2;
+        let temperature_centi_c = (t_fine * 5 + 128) >> 8;
+
+        let mut var1 = t_fine as i64 - 128_000;
+        let mut var2 = var1 * var1 * self.p6 as i64;
+        var2 += (var1 * self.p5 as i64) << 17;
+        var2 += (self.p4 as i64) << 35;
+        var1 = ((var1 * var1 * self.p3 as i64) >> 8) + ((var1 * self.p2 as i64) << 12);
+        var1 = (((1i64 << 47) + var1) * self.p1 as i64) >> 33;
+        let mut pressure = if var1 == 0 {
+            0
+        } else {
+            let mut p = 1_048_576 - raw.pressure as i64;
+            p = (((p << 31) - var2) * 3125) / var1;
+            var1 = (self.p9 as i64 * (p >> 13) * (p >> 13)) >> 25;
+            var2 = (self.p8 as i64 * p) >> 19;
+            ((p + var1 + var2) >> 8) + ((self.p7 as i64) << 4)
+        };
+        pressure = pressure.clamp(0, u32::MAX as i64);
+
+        let mut humidity = t_fine - 76_800;
+        let humidity_left = (((raw.humidity as i32) << 14)
+            - ((self.h4 as i32) << 20)
+            - (self.h5 as i32 * humidity)
+            + 16_384)
+            >> 15;
+        let humidity_var1 = (humidity * self.h6 as i32) >> 10;
+        let humidity_var2 = ((humidity * self.h3 as i32) >> 11) + 32_768;
+        let humidity_var3 = ((humidity_var1 * humidity_var2) >> 10) + 2_097_152;
+        let humidity_right = (humidity_var3 * self.h2 as i32 + 8_192) >> 14;
+        humidity = humidity_left * humidity_right;
+        humidity -= ((((humidity >> 15) * (humidity >> 15)) >> 7) * self.h1 as i32) >> 4;
+        humidity = humidity.clamp(0, 419_430_400);
+
+        Bme280Compensated {
+            temperature_centi_c,
+            pressure_q8_pa: pressure as u32,
+            humidity_q10_pct: (humidity >> 12) as u32,
+        }
+    }
+}
+
+impl Bme280Compensated {
+    fn matches(self, temperature_centi_c: i32, pressure_pa: u32, humidity_pct: u32) -> bool {
+        self.temperature_centi_c == temperature_centi_c
+            && within(self.pressure_q8_pa, pressure_pa * 256, 128)
+            && within(self.humidity_q10_pct, humidity_pct * 1024, 16)
+    }
+}
+
+fn within(actual: u32, expected: u32, tolerance: u32) -> bool {
+    if actual >= expected {
+        actual - expected <= tolerance
+    } else {
+        expected - actual <= tolerance
+    }
+}
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
@@ -208,6 +336,17 @@ fn main() -> ! {
         None => putline(b"BME280_CALIBRATION_READ_FAIL"),
     }
 
+    let calibration = match unsafe { Bme280Calibration::read_from_i2c() } {
+        Some(calibration) => {
+            putline(b"BME280_CALIBRATION_MAP_READ_OK");
+            calibration
+        }
+        None => {
+            putline(b"BME280_CALIBRATION_MAP_READ_FAIL");
+            loop {}
+        }
+    };
+
     // Read the BME280's measurement window as a driver does. Pressure and
     // temperature are 20-bit values split across three bytes; humidity is a
     // 16-bit word. The imported system seeds 40 °C / 80 %RH / 950 hPa; exact
@@ -227,6 +366,22 @@ fn main() -> ! {
             } else {
                 putline(b"BME280_SEEDED_ENVIRONMENT_MISMATCH");
             }
+            let compensated = calibration.compensate(Bme280Raw {
+                pressure,
+                temperature,
+                humidity,
+            });
+            print_bme280_compensated(
+                b"BME280_SEEDED_TEMP_CENTI=",
+                b"BME280_SEEDED_PRESS_Q8=",
+                b"BME280_SEEDED_HUM_Q10=",
+                compensated,
+            );
+            if compensated.matches(4_000, 95_000, 80) {
+                putline(b"BME280_SEEDED_COMPENSATION_OK");
+            } else {
+                putline(b"BME280_SEEDED_COMPENSATION_MISMATCH");
+            }
         }
         _ => putline(b"BME280_RAW_READ_FAIL"),
     }
@@ -245,6 +400,30 @@ fn main() -> ! {
                     } else {
                         putline(b"BME280_DYNAMIC_TEMPERATURE_MISMATCH");
                     }
+                    if let (Some(pressure), Some(humidity)) =
+                        (unsafe { read_bme280_pressure_raw() }, unsafe {
+                            read_bme280_humidity_raw()
+                        })
+                    {
+                        let compensated = calibration.compensate(Bme280Raw {
+                            pressure,
+                            temperature: current_temperature,
+                            humidity,
+                        });
+                        print_bme280_compensated(
+                            b"BME280_DYNAMIC_TEMP_CENTI=",
+                            b"BME280_DYNAMIC_PRESS_Q8=",
+                            b"BME280_DYNAMIC_HUM_Q10=",
+                            compensated,
+                        );
+                        if compensated.matches(5_500, 95_000, 80) {
+                            putline(b"BME280_DYNAMIC_TEMP_COMPENSATION_OK");
+                        } else {
+                            putline(b"BME280_DYNAMIC_TEMP_COMPENSATION_MISMATCH");
+                        }
+                    } else {
+                        putline(b"BME280_DYNAMIC_TEMP_COMPENSATION_READ_FAIL");
+                    }
                     break;
                 }
             }
@@ -253,46 +432,69 @@ fn main() -> ! {
         putline(b"BME280_DYNAMIC_TEMPERATURE_READ_FAIL");
     }
 
-    // The script changes humidity after the live temperature sample. Poll the
-    // sensor registers until the changed raw humidity code reaches I2C1.
+    // The temperature change also re-derives the humidity ADC code. Wait for
+    // compensated 35 %RH so the temperature stimulus cannot satisfy this
+    // check by itself.
     putline(b"BME280_WAITING_FOR_HUMIDITY_STIMULUS");
-    if let Some(initial_humidity) = humidity {
+    if let (Some(pressure), Some(temperature)) = (unsafe { read_bme280_pressure_raw() }, unsafe {
+        read_bme280_temperature_raw()
+    }) {
         loop {
             if let Some(current_humidity) = unsafe { read_bme280_humidity_raw() } {
-                if current_humidity != initial_humidity {
+                let compensated = calibration.compensate(Bme280Raw {
+                    pressure,
+                    temperature,
+                    humidity: current_humidity,
+                });
+                if compensated.matches(5_500, 95_000, 35) {
                     print_reg(b"BME280_DYNAMIC_HUM_RAW=", current_humidity);
-                    if current_humidity == 33_660 {
-                        putline(b"BME280_DYNAMIC_HUMIDITY_OK");
-                    } else {
-                        putline(b"BME280_DYNAMIC_HUMIDITY_MISMATCH");
-                    }
+                    putline(b"BME280_DYNAMIC_HUMIDITY_OK");
+                    print_bme280_compensated(
+                        b"BME280_HUM_TEMP_CENTI=",
+                        b"BME280_HUM_PRESS_Q8=",
+                        b"BME280_HUM_Q10=",
+                        compensated,
+                    );
+                    putline(b"BME280_DYNAMIC_HUM_COMPENSATION_OK");
                     break;
                 }
             }
         }
     } else {
-        putline(b"BME280_DYNAMIC_HUMIDITY_READ_FAIL");
+        putline(b"BME280_DYNAMIC_HUMIDITY_COMPENSATION_READ_FAIL");
     }
 
-    // Pressure is then changed independently, proving its raw conversion is
-    // refreshed through the same imported-system I2C path.
+    // Wait for compensated 1012.5 hPa. The earlier temperature change also
+    // re-derived pressure's ADC code, so a raw-code change alone is not enough.
     putline(b"BME280_WAITING_FOR_PRESSURE_STIMULUS");
-    if let Some(initial_pressure) = pressure {
+    if let (Some(temperature), Some(humidity)) =
+        (unsafe { read_bme280_temperature_raw() }, unsafe {
+            read_bme280_humidity_raw()
+        })
+    {
         loop {
             if let Some(current_pressure) = unsafe { read_bme280_pressure_raw() } {
-                if current_pressure != initial_pressure {
+                let compensated = calibration.compensate(Bme280Raw {
+                    pressure: current_pressure,
+                    temperature,
+                    humidity,
+                });
+                if compensated.matches(5_500, 101_250, 35) {
                     print_reg(b"BME280_DYNAMIC_PRESS_RAW=", current_pressure);
-                    if current_pressure == 376_371 {
-                        putline(b"BME280_DYNAMIC_PRESSURE_OK");
-                    } else {
-                        putline(b"BME280_DYNAMIC_PRESSURE_MISMATCH");
-                    }
+                    putline(b"BME280_DYNAMIC_PRESSURE_OK");
+                    print_bme280_compensated(
+                        b"BME280_PRESS_TEMP_CENTI=",
+                        b"BME280_PRESS_Q8=",
+                        b"BME280_PRESS_HUM_Q10=",
+                        compensated,
+                    );
+                    putline(b"BME280_DYNAMIC_PRESS_COMPENSATION_OK");
                     break;
                 }
             }
         }
     } else {
-        putline(b"BME280_DYNAMIC_PRESSURE_READ_FAIL");
+        putline(b"BME280_DYNAMIC_PRESSURE_COMPENSATION_READ_FAIL");
     }
 
     putline(b"DONE");
@@ -486,6 +688,22 @@ unsafe fn read_bme280_pressure_raw() -> Option<u32> {
 unsafe fn read_bme280_humidity_raw() -> Option<u32> {
     read_i2c_register(BME280_ADDRESS, 0xFD, 2)
         .map(|bytes| (u32::from(bytes[0]) << 8) | u32::from(bytes[1]))
+}
+
+/// Read one little-endian BME280 calibration coefficient through I2C1.
+unsafe fn read_bme280_u16_le(register: u8) -> Option<u16> {
+    read_i2c_register(BME280_ADDRESS, register, 2).map(u16::from_le_bytes)
+}
+
+fn print_bme280_compensated(
+    temperature_label: &[u8],
+    pressure_label: &[u8],
+    humidity_label: &[u8],
+    values: Bme280Compensated,
+) {
+    print_reg(temperature_label, values.temperature_centi_c as u32);
+    print_reg(pressure_label, values.pressure_q8_pa);
+    print_reg(humidity_label, values.humidity_q10_pct);
 }
 
 /// Begin a write-address transaction and select a device register pointer.
