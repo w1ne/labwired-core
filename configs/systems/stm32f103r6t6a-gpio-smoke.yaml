@@ -1,0 +1,11 @@
+# Exact STM32F103R6T6A bare-part fixture with an external active-low LED on PC13.
+name: "stm32f103r6t6a-gpio-smoke"
+chip: "../chips/stm32f103r6t6a-gpio-smoke.yaml"
+external_devices: []
+board_io:
+  - id: "external_led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

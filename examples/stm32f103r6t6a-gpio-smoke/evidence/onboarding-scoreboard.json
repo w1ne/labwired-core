@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 18930,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 18.93
+  },
+  "targets": [
+    {
+      "target_id": "stm32f103r6t6a-gpio-smoke",
+      "status": "pass",
+      "crate": "firmware-stm32f103r6-gpio-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/stm32f103r6t6a-gpio-smoke/io-smoke.yaml",
+      "system": "configs/systems/stm32f103r6t6a-gpio-smoke.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-06T10:53:45Z",
+      "finished_at_utc": "2026-11-06T10:54:04Z",
+      "elapsed_seconds": 19,
+      "elapsed_ms": 18930,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 18.109,
+        "build_firmware": 0.463,
+        "run_smoke": 0.313
+      },
+      "stages_ms": {
+        "build_cli": 18109,
+        "build_firmware": 463,
+        "run_smoke": 313
+      },
+      "_artifact_path": "examples/stm32f103r6t6a-gpio-smoke/evidence"
+    }
+  ]
+}
