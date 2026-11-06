@@ -18,3 +18,7 @@ modelled or attached in this example:
 When any of these becomes a milestone, it goes here with its fidelity tier and
 descriptor path, and the system manifest grows the matching
 `external_devices` entry.
+
+The analog co-simulation fixture injects generic NTC and diode netlist
+voltages at EXT1 PA17/PA18. It does not instantiate an external analog part,
+the ADC peripheral, or the touch/joystick controls.

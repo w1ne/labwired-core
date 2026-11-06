@@ -13,6 +13,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | UART0 console (8N1, BRGR 65 at 120 MHz) | smoke-tested | banner + heartbeat on the TX sink |
 | SAM4S PIO output (PER/OER/SODR/CODR/ODSR) | smoke-tested | `led=on odsr=00000400`, `led=off odsr=00000000` |
 | SAM4S PIO input with pull-up (PIOA PA5) | smoke-tested | `btn=1` (released) |
+| Generic analog-to-GPIO route on EXT1 PA17/AD[0] and PA18/AD[1] | co-sim tested | `cosim_sam4s_analog::sam4s_xplained_ntc_and_diode_netlists_reach_ext1_pio_inputs`; Beta NTC and Shockley diode voltages solve to distinct pads and are asserted through PDSR with test-only thresholds |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | TC0/TC1, SPI0, TWI0/TWI1, EEFC, RSTC/SUPC/RTT/WDT/RTC, CHIPID | **not modelled** | declared `type: stub` |
@@ -63,3 +64,13 @@ cargo test -p labwired-core --test firmware_survival test_sam4s_xplained_smoke_s
   running, so firmware does not need to reprogram the PLL. PLL bring-up is not
   exercised by this smoke.
 - TC/SPI/TWI/EEFC/system-controller blocks are stubs.
+
+## Analog pad routing (verified 2026-11-06)
+
+```bash
+cargo test -p labwired-core --test cosim_sam4s_analog -- --nocapture
+# 1 passed: generic NTC and Shockley diode netlists route to PA17/PA18 PDSR
+```
+
+This uses test-only GPIO thresholds. It does not claim SAM4S ADC conversions
+or silicon threshold values.
