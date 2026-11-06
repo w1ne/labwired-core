@@ -5,19 +5,19 @@ url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontr
 family: NXP LPC2000
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/lpc2294.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-inventory
+  reason: ARM7TDMI-S is unsupported; the previous Cortex-M fixture faulted and is not ARM7 evidence
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:01.396088+00:00'
+    arm7_cpu_model: false
+    simulation: false
+  timestamp_utc: '2026-11-06T02:50:38Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/lpc2294.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/lpc2294/
 provenance:
   generated_by: scripts/onboard_hw_targets.py
   parse_fallbacks:
