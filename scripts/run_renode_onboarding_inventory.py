@@ -55,6 +55,11 @@ SMOKE_MAPPINGS = {
         "features": "crosslink-nx-evn",
         "script": "examples/renode-onboarding/crosslink-nx-evn-smoke.yaml",
     },
+    "ice40up5k-mdp-evn": {
+        "crate": "firmware-fomu-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml",
+    },
     "mpfs-icicle-kit": {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",

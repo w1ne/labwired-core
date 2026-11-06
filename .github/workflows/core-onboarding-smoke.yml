@@ -1188,6 +1188,14 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/fomu-smoke.yaml
             system: configs/systems/onboarding/fomu.yaml
+          # The iCE40 MDP imports the same Fomu VexRiscv CPU profile. Limit it
+          # to the sourced RV32IM subset, boot ROM, and SRAM; peripherals stay
+          # outside the claim.
+          - id: ice40up5k-mdp-evn
+            crate: firmware-fomu-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml
+            system: configs/systems/onboarding/ice40up5k-mdp-evn.yaml
           # Run the committed stock Zephyr RV64 image against the imported
           # MPFS Icicle Kit system; the exact imported profile exposes the U54
           # memory, in-core CLINT, MMUART0/1, and explicit startup stubs for

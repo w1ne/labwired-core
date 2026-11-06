@@ -1,0 +1,15 @@
+# Exact-import CPU/memory smoke for the iCE40 UltraPlus MDP's Fomu VexRiscv.
+# Checks RV32IM multiply and a volatile SRAM readback; no sensors, I2C, SPI
+# flash, reset flow, or other board I/O is included.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-fomu-smoke"
+  system: "../../configs/systems/onboarding/ice40up5k-mdp-evn.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x10000000
+      expected_value: 0x00000143
+      size: 4
+  - expected_stop_reason: max_steps
