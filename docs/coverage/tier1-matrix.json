@@ -484,7 +484,7 @@
       "status": "pass"
     },
     "spi": {
-      "status": "pass"
+      "status": "blocked"
     },
     "timer": {
       "status": "pass"

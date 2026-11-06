@@ -2637,7 +2637,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 20f87993aaa51d92d03c1ed1c2e9a122fc4f868ce56eee5591d8664a2207e089
+    drift_ack_digest: 1b66043f16a4f5b4aa270889ae766e40e74e7fa94dfdf2995d27ed0ce91342e0
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3494,6 +3494,11 @@ boards:
     # mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
     # (the test that would catch a pin_count regression). ACK, NOT A SILICON
     # CAPTURE; live re-capture remains pending.
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
@@ -8740,8 +8745,13 @@ boards:
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-29
-    drift_ack_digest: 9bf67e33982a546e9231f535016f4c705266f71a0c1faf768262bea62394b98b
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
+    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
