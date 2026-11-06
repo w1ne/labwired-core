@@ -2816,13 +2816,12 @@ impl crate::Peripheral for GpioPort {
 
     fn read_gpio_input_word(&self) -> u32 {
         // The same register `read_gpio_input` reads, read ONCE instead of once
-        // per pin. That is not an approximation of the default 32-call loop, it
-        // is the identity it computes: the loop's bit `pin` is
-        // `read_reg(idr_offset()) >> pin & 1` for every pin below 32, and this
-        // model answers `Some` for all 32, so the loop never breaks early and
-        // reassembles this exact word. Every family's input offset comes from
-        // `idr_offset`. Nordic's canonical IN snapshot can bypass the register
-        // decoder, but only when the window algebra resolves exactly to IN.
+        // per pin. Physical pins beyond `pin_count()` return `None`; their
+        // backing register bits are masked to zero, so this word is still the
+        // exact value the default low-to-high loop assembles before it stops.
+        // Every family's input offset comes from `idr_offset`. Nordic's
+        // canonical IN snapshot can bypass the register decoder, but only when
+        // the window algebra resolves exactly to IN.
         // Saturating subtraction for an invalid window must still take the
         // old decoder path (including its unknown-register census).
         //
@@ -3098,9 +3097,12 @@ mod routing_tests {
                 }
                 assert!(port.set_gpio_input(2, false));
                 let mut single = 0u32;
-                for pin in 0..32 {
+                for pin in 0..width.min(32) as u8 {
                     single |= u32::from(port.read_gpio_input(pin).unwrap()) << pin;
                 }
+                let pin_count = width.min(32) as u8;
+                assert_eq!(port.read_gpio_input(pin_count), None);
+                assert_eq!(port.read_gpio_output(pin_count), None);
                 assert_eq!(port.read_gpio_input_word(), single);
                 assert_eq!(
                     port.read_gpio_input_word(),
