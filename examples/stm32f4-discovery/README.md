@@ -19,6 +19,12 @@ A bare-register smoke firmware (`crates/firmware-f4-discovery-smoke`) that:
 On this board the on-board ST-LINK VCP is **not wired** to the MCU UART
 (UM1472): the console pins are read from the PA2/PA3 header pins.
 
+The reusable [analog fixture](analog-ntc-diode-system.yaml) routes a generic
+Beta-model NTC divider and an unrelated Shockley diode load line to PA1/ADC1_IN1
+and PA4/ADC1_IN4. PA0 remains mapped to the on-board USER button, and PA2/PA3
+remain the USART2 console pins. The board-specific co-simulation test solves
+both netlists and checks the resulting firmware-visible ADC counts.
+
 ## Build and run
 
 ```bash
