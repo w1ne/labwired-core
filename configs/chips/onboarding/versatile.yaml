@@ -5,7 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: versatile
+# The imported descriptor named no core, so the old policy selected Cortex-M.
+# This platform has an ARM926EJ-S, which has no native adapter.
 arch: arm
+core: arm926ej-s
 flash:
   base: 134217728
   size: 268435456B

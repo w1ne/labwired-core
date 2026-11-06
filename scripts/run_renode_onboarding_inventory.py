@@ -1047,6 +1047,66 @@ NOT_RUN_HINTS.update(
     {target: CORTEX_R52_NOT_RUN_HINT for target in CORTEX_R52_UNMAPPED_TARGETS}
 )
 
+# Imported as `arch: arm` with no core, so they would have run as a Cortex-M.
+# The descriptors now say `arch: unknown` and the build refuses them.
+NO_ISA_TARGETS = {
+    "x86": "IA-32 (x86)",
+    "acrn_x86_64": "x86-64",
+    "up_squared_x86_64": "x86-64",
+    "quark-c1000": "IA-32 (Intel Quark)",
+    "quark_c1000-cc2520": "IA-32 (Intel Quark)",
+    "arduino_101-shield": "IA-32 (Intel Quark)",
+    "leon3": "SPARC V8 (LEON3)",
+    "gr712rc": "SPARC V8 (LEON3FT)",
+    "gr716": "SPARC V8 (LEON3FT)",
+    "gr716-devboard": "SPARC V8 (LEON3FT)",
+    "mpc5567": "PowerPC e200z6",
+    "litex_microwatt": "OpenPOWER (Microwatt)",
+    "xtensa-sample-controller": "Xtensa sample controller (not ESP32)",
+}
+NOT_RUN_REASONS.update(
+    {
+        target: f"The engine has no {isa} CPU core; the chip declares `arch: unknown` and is refused. "
+        "No firmware run was attempted."
+        for target, isa in NO_ISA_TARGETS.items()
+    }
+)
+NOT_RUN_HINTS.update(
+    {
+        target: "Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M."
+        for target in NO_ISA_TARGETS
+    }
+)
+NOT_RUN_REASONS["litex_common"] = (
+    "Shared LiteX include with no CPU of its own; it is not a runnable platform."
+)
+NOT_RUN_HINTS["litex_common"] = "Measure the concrete LiteX platforms that include it instead."
+
+# ARM application/classic cores with no native adapter: machine_family refuses them.
+NO_ADAPTER_CORE_TARGETS = {
+    "at91rm9200": "arm920t",
+    "versatile": "arm926ej-s",
+    "vexpress": "cortex-a9",
+    "tegra2": "cortex-a9",
+    "tegra3": "cortex-a9",
+    "zynq-7000": "cortex-a9",
+    "zedboard": "cortex-a9",
+    "mars_zx3": "cortex-a9",
+}
+NOT_RUN_REASONS.update(
+    {
+        target: f"{core} has no native adapter; the chip is refused rather than run as a Cortex-M. "
+        "No firmware run was attempted."
+        for target, core in NO_ADAPTER_CORE_TARGETS.items()
+    }
+)
+NOT_RUN_HINTS.update(
+    {
+        target: "Add a real adapter for this core (tlib has the model) before adding a smoke."
+        for target in NO_ADAPTER_CORE_TARGETS
+    }
+)
+
 
 def imported_system(descriptor: Path) -> str:
     for line in descriptor.read_text(encoding="utf-8").splitlines():

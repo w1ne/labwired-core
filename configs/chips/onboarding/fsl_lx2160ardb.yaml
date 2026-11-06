@@ -5,7 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: fsl_lx2160ardb
-arch: arm
+# The imported descriptor named no core, so the old policy selected Cortex-M.
+# This platform has a Cortex-A72 and uses the AArch64 backend.
+arch: aarch64
+core: cortex-a72
 flash:
   base: 2147483648
   size: 2147483648B

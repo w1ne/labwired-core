@@ -5,7 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: at91rm9200
+# The imported descriptor named no core, so the old policy selected Cortex-M.
+# This platform has an ARM920T, which has no native adapter.
 arch: arm
+core: arm920t
 flash:
   base: 134217728
   size: 196608B

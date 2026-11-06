@@ -5,7 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: a20
+# The imported descriptor named no core, so the old policy selected Cortex-M.
+# This platform has a Cortex-A7, which has an experimental native adapter.
 arch: arm
+core: cortex-a7
 flash:
   base: 4294901760
   size: 65536B

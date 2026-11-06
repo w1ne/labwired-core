@@ -5,7 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: zedboard
+# The imported descriptor named no core, so the old policy selected Cortex-M.
+# This platform has a Cortex-A9, which has no native adapter.
 arch: arm
+core: cortex-a9
 flash:
   base: 134217728
   size: 1073741824B

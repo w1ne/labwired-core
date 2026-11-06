@@ -72,7 +72,14 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
                 "chip '{}': unsupported ARM application core '{core}'; only cortex-a7 has an experimental native adapter",
                 chip.name
             ),
-            _ => Ok(MachineFamily::CortexM),
+            // Only an absent core or a Cortex-M core is a Cortex-M. Any other
+            // named core (ARM9, ARM11, ...) is refused, not run as a Cortex-M.
+            None => Ok(MachineFamily::CortexM),
+            Some(core) if core.starts_with("cortex-m") => Ok(MachineFamily::CortexM),
+            Some(core) => anyhow::bail!(
+                "chip '{}': unsupported ARM core '{core}'; it is not a Cortex-M and has no native adapter",
+                chip.name
+            ),
         },
         Arch::RiscV => Ok(MachineFamily::RiscV),
         Arch::Xtensa => Ok(MachineFamily::Xtensa),

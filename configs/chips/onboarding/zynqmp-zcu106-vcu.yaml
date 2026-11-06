@@ -5,7 +5,10 @@
 # See the LICENSE file in the project root for full license information.
 
 name: zynqmp-zcu106-vcu
-arch: arm
+# The imported descriptor named no core, so the old policy selected Cortex-M.
+# This platform has a Cortex-A53 and uses the AArch64 backend.
+arch: aarch64
+core: cortex-a53
 flash:
   base: 3221225472
   size: 536870912B

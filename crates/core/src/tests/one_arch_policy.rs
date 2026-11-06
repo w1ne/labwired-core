@@ -195,6 +195,29 @@ fn cortex_r_never_routes_to_cortex_m() {
 }
 
 #[test]
+fn a_named_non_cortex_m_arm_core_never_routes_to_cortex_m() {
+    let mut chip = chip_with_arch(Arch::Arm);
+    for core in ["cortex-m0+", "cortex-m4f", "Cortex-M33"] {
+        chip.core = Some(core.into());
+        assert_eq!(
+            machine_family(&chip).unwrap(),
+            MachineFamily::CortexM,
+            "{core}"
+        );
+    }
+    for unsupported in [
+        "arm920t",
+        "arm926ej-s",
+        "arm1176jzf-s",
+        "cortex-a9",
+        "sparc-v8",
+    ] {
+        chip.core = Some(unsupported.into());
+        assert!(machine_family(&chip).is_err(), "{unsupported}");
+    }
+}
+
+#[test]
 fn the_elf_machine_table_is_the_only_one() {
     assert_eq!(
         elf_arch(goblin::elf::header::EM_ARM),
@@ -285,4 +308,63 @@ fn the_scan_is_not_vacuous() {
         stripped.contains("EM_ARM") && !stripped.contains("EM_XTENSA"),
         "the scan must read code and ignore comments; got {stripped:?}"
     );
+}
+
+/// Renode imports that named no core and so would have run as a Cortex-M.
+/// Each is read from the shipped file: non-ARM ISAs and ARM cores without an
+/// adapter must be refused, and the ARMv8-A application parts must be AArch64.
+#[test]
+fn imported_non_cortex_m_platforms_never_route_to_cortex_m() {
+    let root = repo_root();
+    let load = |name: &str| -> ChipDescriptor {
+        let rel = format!("configs/chips/onboarding/{name}.yaml");
+        serde_yaml::from_str(&read(&root, &rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+    };
+    for name in [
+        "x86",
+        "acrn_x86_64",
+        "up_squared_x86_64",
+        "quark-c1000",
+        "quark_c1000-cc2520",
+        "arduino_101-shield",
+        "leon3",
+        "gr712rc",
+        "gr716",
+        "gr716-devboard",
+        "mpc5567",
+        "litex_microwatt",
+        "xtensa-sample-controller",
+        "litex_common",
+        "at91rm9200",
+        "versatile",
+        "vexpress",
+        "tegra2",
+        "tegra3",
+        "zynq-7000",
+        "zedboard",
+        "mars_zx3",
+    ] {
+        assert!(
+            machine_family(&load(name)).is_err(),
+            "{name} must be refused"
+        );
+    }
+    assert_eq!(
+        machine_family(&load("a20")).unwrap(),
+        MachineFamily::CortexA
+    );
+    for name in [
+        "fsl_lx2160ardb",
+        "zynqmp",
+        "zynqmp-zcu102-revA",
+        "zynqmp-zcu102-revB",
+        "zynqmp-zcu104",
+        "zynqmp-zcu106-vcu",
+    ] {
+        assert_eq!(
+            machine_family(&load(name)).unwrap(),
+            MachineFamily::Aarch64,
+            "{name}"
+        );
+    }
 }
