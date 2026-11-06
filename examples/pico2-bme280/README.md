@@ -18,7 +18,7 @@ Availability checked live on 2026-11-06:
 - Raspberry Pi's [Pico 2 product page](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
   says “Available now from $5” and that Pico 2 series will remain in production
   until at least January 2040.
-- [SparkFun's Pico board listing](https://www.sparkfun.com/development-boards/raspberry-pi/raspberry-pi-boards.html?product_list_order=price)
+- [SparkFun's Pico 2 product listing](https://www.sparkfun.com/raspberry-pi-pico-2.html)
   listed Raspberry Pi Pico 2 at $5.75 and “In stock”.
 - The [Adafruit BME280 STEMMA QT breakout](https://www.adafruit.com/product/2652)
   was listed in stock. Adafruit's [pinout guide](https://learn.adafruit.com/adafruit-bme280-humidity-barometric-pressure-temperature-sensor-breakout/pinouts)
