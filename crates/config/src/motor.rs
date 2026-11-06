@@ -84,6 +84,11 @@ pub struct BrushedMotorConfig {
     /// plant at PWM rate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enable_pin: Option<String>,
+    /// Optional second bridge inhibit (IBT-2 / BTS7960 L_EN and R_EN).
+    /// Both enables must be high to connect both motor terminals. Absent =
+    /// no additional inhibit, preserving single-enable driver behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable2_pin: Option<String>,
     /// Optional: unused encoder outputs may be left unwired.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_a_pin: Option<String>,
@@ -357,6 +362,12 @@ impl MotorModelConfig {
                 );
                 validate_optional_motor_pin(
                     &config.id,
+                    "enable2_pin",
+                    config.enable2_pin.as_deref(),
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
                     "encoder_a_pin",
                     config.encoder_a_pin.as_deref(),
                     &mut issues,
@@ -523,6 +534,7 @@ fn validate_circuit_armature(config: &BrushedMotorConfig, issues: &mut Vec<Strin
         ("both_inputs_low", config.both_inputs_low.is_some()),
         ("brake_pin", config.brake_pin.is_some()),
         ("enable_pin", config.enable_pin.is_some()),
+        ("enable2_pin", config.enable2_pin.is_some()),
         ("timer_name", config.timer_name.is_some()),
         ("timer_channel", config.timer_channel.is_some()),
     ] {

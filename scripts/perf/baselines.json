@@ -7,6 +7,10 @@
     "batch": 7.6,
     "step": 1044.8
   },
+  "atmega328pb": {
+    "batch": 7.6,
+    "step": 1026.4
+  },
   "atsamd21": {
     "batch": 1.4,
     "step": 895.0

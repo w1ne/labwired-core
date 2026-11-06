@@ -364,7 +364,10 @@ external_devices:
 "#
     ))
     .unwrap();
-    SystemBus::from_config(&chip, &manifest).expect("terminal-driven motor must construct")
+    let mut bus =
+        SystemBus::from_config(&chip, &manifest).expect("terminal-driven motor must construct");
+    bus.write_u32(0x4800_0000, 0x05).unwrap(); // PA0/PA1 must actually drive the inputs
+    bus
 }
 
 fn run_cycles(bus: &mut SystemBus, cycles: u64) {
