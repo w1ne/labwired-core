@@ -118,3 +118,41 @@ smoke asserts that the LED model decodes a red pixel.
   records the local four-assertion smoke, including the decoded red pixel.
 - [`firmware/board_smoke.c`](firmware/board_smoke.c) and `firmware/link.ld` are
   the local fast-boot firmware.
+
+## ESP32-S3-DevKitC-1 N16R8 v1.0
+
+The current base smoke above covers v1.1, whose onboard WS2812 LED is on
+GPIO38. Espressif documents v1.0 boards with the same LED on GPIO48; the
+separate [v1.0 system profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10.yaml)
+and [chip profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml)
+model that exact wiring. The narrow simulation assumes an ideal VDD rail and boots a register-level image,
+routes RMT channel 0 to GPIO48, checks a non-black decoded pixel, and captures
+UART0 marker `ESP32_S3_DEVKITC1_V10_RMT_OK`. It does not assert the pixel's
+color or claim the ESP-IDF boot path, USB bridge, radio, PSRAM, or a physical
+board run.
+
+For a copy-paste Arduino example, select **ESP32-S3 Dev Module** and use
+[`firmware/arduino-v10/main.ino`](firmware/arduino-v10/main.ino). It configures
+a red RMT frame for GPIO48; use GPIO38 on v1.1 boards. The hosted check decoded
+the direct-register frame as black and a separate Adafruit NeoPixel probe
+decoded no pixels, so neither hosted LED path is verified.
+The [availability receipt](evidence/v10/vendor-status.md) records Espressif's
+live product listing and revision-specific pin documentation.
+
+Reproduce the v1.0 local smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-s3-devkitc-1-n16r8-v10 \
+  --script examples/esp32-s3-devkitc-1-n16r8/v10-smoke.yaml \
+  --system configs/systems/esp32-s3-devkitc-1-n16r8-v10.yaml \
+  --firmware-build-script examples/esp32-s3-devkitc-1-n16r8/ci/build-v10-firmware.sh \
+  --out-dir examples/esp32-s3-devkitc-1-n16r8/evidence/v10
+```
+
+The committed output in `evidence/v10/` includes build logs, simulator logs,
+structured assertions, and onboarding metrics.
+The hosted verification record in [`evidence/v10/hosted-verification.md`](evidence/v10/hosted-verification.md)
+notes that the UART marker passed while the hosted RGB LED artifact remained
+black. That hosted LED result is not claimed as verified; the committed local
+smoke separately passes its non-black-pixel assertion.

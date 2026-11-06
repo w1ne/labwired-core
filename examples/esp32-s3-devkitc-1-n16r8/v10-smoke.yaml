@@ -1,0 +1,13 @@
+# ESP32-S3-DevKitC-1 v1.0 N16R8: exercise UART0 and RMT on the GPIO48 LED.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-v10-smoke"
+  system: "../../configs/systems/esp32-s3-devkitc-1-n16r8-v10.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ESP32_S3_DEVKITC1_V10_RMT_OK"
+  - display_region:
+      id: "rgb_led"
+      min_ink: 1.0
+  - expected_stop_reason: max_steps

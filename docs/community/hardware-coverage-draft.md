@@ -17,14 +17,15 @@ and RP2040 12%. It reports kit use of ESP32-based boards at 42%, Arduino at
 37%, and STM32 Nucleo/Discovery at 23%. Those are survey shares, not market
 share estimates. RP2350 has no separate row in that survey.
 
-This review draft now includes a focused ESP32-P4X Function EV board profile
-and its GPIO8 smoke. It remains unpublished pending Andrii's approval.
+This review draft includes a focused ESP32-P4X Function EV board profile, its
+GPIO8 smoke, and both ESP32-S3-DevKitC-1 N16R8 PCB revisions. It remains
+unpublished pending Andrii's approval.
 
 ## Demand-ranked coverage
 
 | Survey position | Representative board | What the local smoke exercises | Availability receipt |
 | --- | --- | --- | --- |
-| **#1 ESP32, 38%** | [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md) | P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel | [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md) |
+| **#1 ESP32, 38%** | [Espressif ESP32-P4X Function EV](../../examples/esp32p4x-function-ev-board/README.md); [Waveshare ESP32-C3-Zero](../../examples/waveshare-esp32c3-zero/README.md); [ESP32-S3-DevKitC-1 N16R8 v1.0](../../examples/esp32-s3-devkitc-1-n16r8/README.md) | P4X GPIO8 transitions at J1 pin 5; C3-Zero GPIO10 waveform decoded as a red WS2812 pixel; DevKitC v1.0 RMT drives one non-black GPIO48 pixel | [P4X listing, checked 2026-11-06](../../examples/esp32p4x-function-ev-board/evidence/vendor-status.md); [Waveshare listing, checked 2026-11-06](../../examples/waveshare-esp32c3-zero/evidence/vendor-status.md); [Espressif status, checked 2026-11-06](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md) |
 | **#2 ATmega328, 30%** | No current recommendation | The existing Uno R3 notes identify ATmega328P as NRND; we do not recommend buying it for a new design. | [Legacy note](../../examples/arduino-uno-blinky/README.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md) | USART3 output on the ST-LINK virtual COM route | [ST status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md) |
@@ -85,6 +86,37 @@ the modeled waveform and decoded color. It does not verify the Arduino core's
 NeoPixel waveform path. The narrow board profile omits radio, USB, UART,
 buttons, and other header pins. See the [full quickstart and smoke command](../../examples/waveshare-esp32c3-zero/README.md)
 and [committed evidence](../../examples/waveshare-esp32c3-zero/evidence/).
+
+### #1 — ESP32: ESP32-S3-DevKitC-1 N16R8 v1.0
+
+Select **ESP32-S3 Dev Module** in Arduino IDE and install Adafruit NeoPixel.
+The onboard addressable RGB LED is connected to GPIO48 on v1.0 (v1.1 uses
+GPIO38). This sketch sets the onboard LED red:
+
+```cpp
+#include <Adafruit_NeoPixel.h>
+
+Adafruit_NeoPixel led(1, 48, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+    led.begin();
+    led.setPixelColor(0, led.Color(255, 0, 0));
+    led.show();
+}
+
+void loop() {}
+```
+
+The repository smoke uses RMT channel 0 and the GPIO48 output matrix, then
+checks that the local model decodes a non-black pixel. It does not assert the
+pixel's color. It runs the board's fast-boot bare-metal profile; it does not
+verify ESP-IDF startup or the Arduino library path. A hosted verification
+attempt emitted the UART marker but decoded a black pixel, and a separate
+Adafruit NeoPixel library probe decoded no pixels. This draft does not claim
+hosted LED verification. See the
+[board instructions and smoke](../../examples/esp32-s3-devkitc-1-n16r8/README.md),
+[revision status receipt](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md),
+and [local evidence](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/).
 
 ### #2 — ATmega328: legacy status
 

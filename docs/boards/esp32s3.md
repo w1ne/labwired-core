@@ -16,7 +16,9 @@ The shared ESP32-S3 chip yamls are:
   full-featured ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
   authoritative wiring code that this yaml documents.
 - `configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml` — board-specific narrow
-  descriptor for the DevKitC UART0 + RMT LED smoke below.
+  descriptor for the DevKitC v1.1 UART0 + GPIO38 RMT LED smoke below.
+- `configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml` — board-revision
+  profile for the v1.0 UART0 + GPIO48 RMT LED smoke.
 - `configs/chips/esp32s3-arduino-nano-smoke.yaml` — board-specific narrow
   descriptor for the Arduino Nano ESP32 GPIO46 LED smoke.
 - `configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml` — narrow Nano profile
@@ -56,6 +58,21 @@ ESP-IDF boot-ROM startup are outside the smoke. The hosted verifier assumes an
 ideal VDD rail, so reset behavior under power faults is not covered. The
 broader `configs/chips/esp32s3.yaml` still declares a `system_stub`; this narrow
 board profile does not reference it.
+
+## ESP32-S3-DevKitC-1 N16R8 v1.0 GPIO48 LED smoke
+
+Espressif's FAQ documents two LED pin assignments: v1.0 uses GPIO48 and v1.1
+uses GPIO38. The separate [v1.0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10.yaml)
+attaches the WS2812 model to GPIO48 and uses its own [narrow chip descriptor](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml).
+The firmware routes RMT channel 0 to GPIO48, waits for TX_END, and then prints
+`ESP32_S3_DEVKITC1_V10_RMT_OK`. The local smoke also checks that the modeled
+LED decodes one non-black pixel. Pixel color is not asserted. The register
+behavior and limits match the v1.1 smoke above; no radio, USB bridge, PSRAM,
+or physical board run is claimed. See the
+[availability receipt](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/vendor-status.md)
+and [committed smoke evidence](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/).
+The hosted verifier's UART clause passed but its GPIO48 NeoPixel artifact was
+black; see the [hosted result](../../examples/esp32-s3-devkitc-1-n16r8/evidence/v10/hosted-verification.md).
 
 ## Arduino Nano ESP32 GPIO smoke
 
