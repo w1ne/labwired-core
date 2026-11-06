@@ -508,8 +508,21 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
         }
     }
     // pxCurrentTCB's address is handed to the rom_thunks side so the
-    // xTaskGetCurrentTaskHandle stub above can read it.
-    if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
+    // xTaskGetCurrentTaskHandle stub above can read it, and so the CPU's
+    // hybrid window preserve is keyed by the RUNNING task's TCB.
+    //
+    // IDF 5 dual-core names the array `pxCurrentTCBs` (trailing s). Looking up
+    // only the singular left the address unset on every IDF 5 sketch: the
+    // getter returned NULL, and `XtensaLx7::px_current_tcb` fell back to a
+    // hardcoded 0x3FFC_27C8 from a different firmware — for an esp32dev
+    // sketch that is a list node next to the real array (0x3FFC_27E4), so
+    // every task parked its window state under the same bogus key. The first
+    // real context switch (a print loop filling the UART FIFO) then resumed
+    // a task with another task's windows and xTaskPriorityDisinherit asserted.
+    if let Some(&addr) = symbol_addrs
+        .get("pxCurrentTCBs")
+        .or_else(|| symbol_addrs.get("pxCurrentTCB"))
+    {
         rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(addr)));
     }
     // NO SPI-bus lock shims and NO SPI init fakes. GxEPD2_EPD::init() calls
