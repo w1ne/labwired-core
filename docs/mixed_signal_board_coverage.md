@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). The 245 imported profiles in `configs/systems/onboarding/` are not yet inventoried. Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -121,3 +121,7 @@ The EK-RA6M5 and EK-RA8M1 proofs reuse the same generic Beta NTC and Shockley di
 EK-RX261 uses the reusable input-only `input_pin_bank` endpoint because its PORT/MPC register map remains a stub. It demonstrates the shared MNA-to-thresholded-input route for two unrelated devices, but does not model silicon GPIO thresholds, analog pad muxing, ADC conversion, or firmware-visible port registers.
 
 SK-AM62 uses the same generic input-only endpoint mechanism for its otherwise unmodelled AM6234 GPIO path. Its 3.3 V supply and threshold ratios are simulation assumptions; the profile does not claim AM6234 pad electrical behavior or firmware-visible GPIO access.
+
+## STM32 catalog profiles
+
+All 26 exact-part smoke profiles in `configs/systems/stm32-catalog/*.yaml` (STM32F103 C/R/T x4/x6 including the `h` BGA variants, STM32F401 C/R/V xB–xE, STM32F407 V/Z/I xE/xG) are covered by one descriptor-driven proof: [`cosim_stm32_catalog_analog.rs`](../crates/core/tests/cosim_stm32_catalog_analog.rs)::`every_stm32_catalog_profile_routes_ntc_and_diode_netlists_into_adc1`. For each part it reads ADC1's base, register profile (F1 or F4) and clock gate from the chip descriptor, then routes the generic Beta NTC divider to PA0 and the unrelated Shockley diode to the package's highest-numbered bonded ADC1 pad (PB1/IN9 on 36- and 48-pin packages, PC5/IN15 on 64-pin and larger). Both solved voltages are checked against independent references and read back through a firmware-style one-shot conversion. On packages without PC0, a route to `board.analog.pc0_volts` must fail at binding time. The test enumerates the directory, so a new catalog profile is covered without editing the test, and the asserted profile count flags it for this inventory.
