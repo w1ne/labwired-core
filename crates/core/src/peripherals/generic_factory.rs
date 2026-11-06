@@ -148,6 +148,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_gpio",
     "esp32c5_io_mux",
     "esp32p4_gpio",
+    // P4 IO MUX and the RMT TX models are built by the Espressif family
+    // factories; canonical so the fuzzy fallbacks never coerce them first.
+    "esp32p4_io_mux",
+    "esp32_rmt",
+    "esp32c6_rmt",
     // H2's narrowly reused GPIO output model is built by the Espressif family
     // factory. Keep its name canonical so the generic `gpio` fallback cannot
     // replace it with a register-layout placeholder before that factory runs.
