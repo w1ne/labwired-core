@@ -12,9 +12,10 @@ scripts/onboarding_smoke.sh \
   --out-dir examples/esp32c3-devkit-rust-2/evidence
 ```
 
-The pass condition requires at least 48 GPIO2 edges, a decoded red pixel
-(`RGB565 0xF800`) from the 24-bit GRB frame, and the configured maximum-step
-stop reason. Logs and generated metrics are committed under `evidence/`.
+The pass condition requires the firmware to read a six-byte SHTC3 measurement
+with both CRCs valid, at least 48 GPIO2 edges, a decoded red pixel (`RGB565
+0xF800`) from the 24-bit GRB frame, and the configured maximum-step stop
+reason. Logs and generated metrics are committed under `evidence/`.
 
 This repository smoke runs the local simulator against the exact narrow board
 profile. It is distinct from hosted LabWired verification and from physical

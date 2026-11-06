@@ -1,11 +1,12 @@
-# ESP32-C3-DevKit-RUST-2: send a red frame to the built-in WS2812B on GPIO2.
+# ESP32-C3-DevKit-RUST-2: exercise the built-in GPIO2 WS2812B and SHTC3 over I2C0.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-rust2-smoke"
   system: "../../configs/systems/esp32c3-devkit-rust-2.yaml"
 limits:
-  max_steps: 200000
+  max_steps: 1000000
 assertions:
+  - uart_contains: "ESP32_C3_RUST2_SHTC3_OK_T24_RH40"
   - gpio_edges:
       pin: "gpio:2"
       min_edges: 48

@@ -1,5 +1,6 @@
 # Narrow ESP32-C3 profile for Espressif's DevKit-RUST-2 RGB LED smoke.
-# The only declared pad is GPIO2, which drives the on-board WS2812B.
+# Focused ESP32-C3-DevKit-RUST-2 slice: GPIO2 WS2812B plus the onboard SHTC3
+# temperature/humidity sensor on I2C0 (SDA GPIO10, SCL GPIO8).
 name: "esp32c3-devkit-rust-2-smoke"
 arch: "riscv"
 core: "rv32imc"
@@ -15,8 +16,19 @@ ram:
 
 pins:
   GPIO2: { gpio: "gpio", bit: 2 }
+  GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: i2c, peripheral: "i2c0", role: scl }] }
+  GPIO10: { gpio: "gpio", bit: 10, functions: [{ type: i2c, peripheral: "i2c0", role: sda }] }
 
 peripherals:
+  - id: "uart0"
+    type: "esp32c3_uart"
+    irq: 21
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      echo_stdout: true
+      debug_schema: "../peripherals/esp32c3/uart0.yaml"
+
   - id: "gpio"
     type: "esp32c3_gpio"
     base_address: 0x60004000
@@ -30,3 +42,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/esp32c3/io_mux.yaml"
       path: "../peripherals/esp32c3/io_mux.yaml"
+
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/i2c0.yaml"

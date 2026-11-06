@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 200000,
-  "cycles": 400200,
-  "instructions": 200000,
+  "steps_executed": 1000000,
+  "cycles": 2103096,
+  "instructions": 1000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 1000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 1000000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 1000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -28,6 +28,12 @@
     "stop_when_assertions_pass_min_steps": 0
   },
   "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ESP32_C3_RUST2_SHTC3_OK_T24_RH40"
+      },
+      "passed": true
+    },
     {
       "assertion": {
         "gpio_edges": {
@@ -61,23 +67,23 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107298092,
-      1070481376,
+      1107298302,
+      1070481360,
       1070073856,
       0,
+      61440,
+      26112,
       0,
-      1070481408,
-      0,
-      1070481408,
-      0,
-      0,
-      0,
-      4,
-      2816,
-      0,
-      0,
-      0,
-      0,
+      1,
+      1,
+      1107298724,
+      1610612736,
+      1107298724,
+      10,
+      8504211,
+      147,
+      100,
+      102,
       0,
       0,
       0,
@@ -93,16 +99,16 @@
       0,
       0
     ],
-    "pc": 1107298092,
+    "pc": 1107298332,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
-    "mtvec": 1107296568,
+    "mtvec": 1107296588,
     "mscratch": 0,
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 200000,
+    "mtime": 1000000,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -129,7 +135,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "1d76081d14827c207e80aa51bdf4d9d1164bafa58addb5003cd60661764bf9a8",
+  "firmware_hash": "47f82c4fd82ed365b2c4b94bd65b14db45efddacd910cd945947980caf7c3e53",
   "config": {
     "firmware": "examples/esp32c3-devkit-rust-2/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-rust2-smoke",
     "system": "examples/esp32c3-devkit-rust-2/../../configs/systems/esp32c3-devkit-rust-2.yaml",
@@ -137,6 +143,278 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [
+          {
+            "name": "FIFO",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ST",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLKDIV",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RX_FILT",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "STATUS",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF0",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CONF1",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "LOWPULSE",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "HIGHPULSE",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXD_CNT",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FLOW_CONF",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLEEP_CONF",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF0",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SWFC_CONF1",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXBRK_CONF",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDLE_CONF",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RS485_CONF",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_PRECNT",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_POSTCNT",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_GAPTOUT",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AT_CMD_CHAR",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_CONF",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_TX_STATUS",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "MEM_RX_STATUS",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FSM_STATUS",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "POSPULSE",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "NEGPULSE",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ID",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
       {
         "name": "gpio",
         "kind": "native",
@@ -231,7 +509,7 @@
             "name": "ENABLE",
             "offset": 32,
             "size": 32,
-            "value": 4,
+            "value": 1284,
             "fields": [
               {
                 "name": "DATA",
@@ -239,7 +517,7 @@
                   25,
                   0
                 ],
-                "value": 4
+                "value": 1284
               }
             ],
             "access": "rw"
@@ -248,7 +526,7 @@
             "name": "ENABLE_W1TS",
             "offset": 36,
             "size": 32,
-            "value": 4,
+            "value": 1284,
             "fields": [
               {
                 "name": "ENABLE_W1TS",
@@ -256,7 +534,7 @@
                   25,
                   0
                 ],
-                "value": 4
+                "value": 1284
               }
             ],
             "access": "rw"
@@ -265,7 +543,7 @@
             "name": "ENABLE_W1TC",
             "offset": 40,
             "size": 32,
-            "value": 4,
+            "value": 1284,
             "fields": [
               {
                 "name": "ENABLE_W1TC",
@@ -273,7 +551,7 @@
                   25,
                   0
                 ],
-                "value": 4
+                "value": 1284
               }
             ],
             "access": "rw"
@@ -3874,7 +4152,7 @@
             "name": "FUNC53_IN_SEL_CFG",
             "offset": 552,
             "size": 32,
-            "value": 0,
+            "value": 72,
             "fields": [
               {
                 "name": "IN_SEL",
@@ -3882,7 +4160,7 @@
                   4,
                   0
                 ],
-                "value": 0
+                "value": 8
               },
               {
                 "name": "IN_INV_SEL",
@@ -3898,7 +4176,7 @@
                   6,
                   6
                 ],
-                "value": 0
+                "value": 1
               }
             ],
             "access": "rw"
@@ -3907,7 +4185,7 @@
             "name": "FUNC54_IN_SEL_CFG",
             "offset": 556,
             "size": 32,
-            "value": 0,
+            "value": 74,
             "fields": [
               {
                 "name": "IN_SEL",
@@ -3915,7 +4193,7 @@
                   4,
                   0
                 ],
-                "value": 0
+                "value": 10
               },
               {
                 "name": "IN_INV_SEL",
@@ -3931,7 +4209,7 @@
                   6,
                   6
                 ],
-                "value": 0
+                "value": 1
               }
             ],
             "access": "rw"
@@ -6677,7 +6955,7 @@
             "name": "FUNC8_OUT_SEL_CFG",
             "offset": 1396,
             "size": 32,
-            "value": 128,
+            "value": 53,
             "fields": [
               {
                 "name": "OUT_SEL",
@@ -6685,7 +6963,7 @@
                   7,
                   0
                 ],
-                "value": 128
+                "value": 53
               },
               {
                 "name": "INV_SEL",
@@ -6759,7 +7037,7 @@
             "name": "FUNC10_OUT_SEL_CFG",
             "offset": 1404,
             "size": 32,
-            "value": 128,
+            "value": 54,
             "fields": [
               {
                 "name": "OUT_SEL",
@@ -6767,7 +7045,7 @@
                   7,
                   0
                 ],
-                "value": 128
+                "value": 54
               },
               {
                 "name": "INV_SEL",
@@ -9639,9 +9917,344 @@
           }
         ],
         "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1610690560,
+        "registers": [
+          {
+            "name": "SCL_LOW_PERIOD",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CTR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TO",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SLAVE_ADDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_ST",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_CONF",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATA",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "INT_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_HOLD",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_SAMPLE",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_HIGH_PERIOD",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_START_HOLD",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_RSTART_SETUP",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_HOLD",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_SETUP",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FILTER_CFG",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CLK_CONF",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD0",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD1",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD2",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD3",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD4",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD5",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD6",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "COMD7",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_ST_TIME_OUT",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_MAIN_ST_TIME_OUT",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_SP_CONF",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STRETCH_CONF",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 248,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "TXFIFO_START_ADDR",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RXFIFO_START_ADDR",
+            "offset": 384,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x70",
+            "meta": {
+              "inputs": {
+                "humidity": 40.0,
+                "temperature": 24.0
+              },
+              "powered": true,
+              "registers": {},
+              "supply_generation": null
+            }
+          }
+        ]
       }
     ],
     "devices": [
+      {
+        "id": "shtc3",
+        "device_type": "shtc3",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 112
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "shtc3",
+            "meta": {
+              "inputs": {
+                "humidity": 40.0,
+                "temperature": 24.0
+              },
+              "powered": true,
+              "registers": {},
+              "supply_generation": null
+            }
+          }
+        ]
+      },
       {
         "id": "rgb_led",
         "device_type": "neopixel",
@@ -9670,6 +10283,13 @@
   },
   "fidelity": [
     {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (160000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
       "first_pc": "0x0",
@@ -9679,7 +10299,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 200000,
+    "now_cycle": 1000000,
     "channels": [
       {
         "ch": 0,
@@ -9689,199 +10309,199 @@
         "initial": 1,
         "transitions": [
           {
-            "cycle": 94,
+            "cycle": 106,
             "value": 0
           },
           {
-            "cycle": 97,
+            "cycle": 109,
             "value": 1
           },
           {
-            "cycle": 138,
+            "cycle": 150,
             "value": 0
           },
           {
-            "cycle": 291,
+            "cycle": 303,
             "value": 1
           },
           {
-            "cycle": 332,
+            "cycle": 344,
             "value": 0
           },
           {
-            "cycle": 485,
+            "cycle": 497,
             "value": 1
           },
           {
-            "cycle": 526,
+            "cycle": 538,
             "value": 0
           },
           {
-            "cycle": 679,
+            "cycle": 691,
             "value": 1
           },
           {
-            "cycle": 720,
+            "cycle": 732,
             "value": 0
           },
           {
-            "cycle": 873,
+            "cycle": 885,
             "value": 1
           },
           {
-            "cycle": 914,
+            "cycle": 926,
             "value": 0
           },
           {
-            "cycle": 1067,
+            "cycle": 1079,
             "value": 1
           },
           {
-            "cycle": 1108,
+            "cycle": 1120,
             "value": 0
           },
           {
-            "cycle": 1261,
+            "cycle": 1273,
             "value": 1
           },
           {
-            "cycle": 1302,
+            "cycle": 1314,
             "value": 0
           },
           {
-            "cycle": 1455,
+            "cycle": 1467,
             "value": 1
           },
           {
-            "cycle": 1496,
+            "cycle": 1508,
             "value": 0
           },
           {
-            "cycle": 1651,
+            "cycle": 1663,
             "value": 1
           },
           {
-            "cycle": 1748,
+            "cycle": 1760,
             "value": 0
           },
           {
-            "cycle": 1845,
+            "cycle": 1857,
             "value": 1
           },
           {
-            "cycle": 1942,
+            "cycle": 1954,
             "value": 0
           },
           {
-            "cycle": 2039,
+            "cycle": 2051,
             "value": 1
           },
           {
-            "cycle": 2136,
+            "cycle": 2148,
             "value": 0
           },
           {
-            "cycle": 2233,
+            "cycle": 2245,
             "value": 1
           },
           {
-            "cycle": 2330,
+            "cycle": 2342,
             "value": 0
           },
           {
-            "cycle": 2427,
+            "cycle": 2439,
             "value": 1
           },
           {
-            "cycle": 2524,
+            "cycle": 2536,
             "value": 0
           },
           {
-            "cycle": 2621,
+            "cycle": 2633,
             "value": 1
           },
           {
-            "cycle": 2718,
+            "cycle": 2730,
             "value": 0
           },
           {
-            "cycle": 2815,
+            "cycle": 2827,
             "value": 1
           },
           {
-            "cycle": 2912,
+            "cycle": 2924,
             "value": 0
           },
           {
-            "cycle": 3009,
+            "cycle": 3021,
             "value": 1
           },
           {
-            "cycle": 3106,
+            "cycle": 3118,
             "value": 0
           },
           {
-            "cycle": 3205,
+            "cycle": 3217,
             "value": 1
           },
           {
-            "cycle": 3246,
+            "cycle": 3258,
             "value": 0
           },
           {
-            "cycle": 3399,
+            "cycle": 3411,
             "value": 1
           },
           {
-            "cycle": 3440,
+            "cycle": 3452,
             "value": 0
           },
           {
-            "cycle": 3593,
+            "cycle": 3605,
             "value": 1
           },
           {
-            "cycle": 3634,
+            "cycle": 3646,
             "value": 0
           },
           {
-            "cycle": 3787,
+            "cycle": 3799,
             "value": 1
           },
           {
-            "cycle": 3828,
+            "cycle": 3840,
             "value": 0
           },
           {
-            "cycle": 3981,
+            "cycle": 3993,
             "value": 1
           },
           {
-            "cycle": 4022,
+            "cycle": 4034,
             "value": 0
           },
           {
-            "cycle": 4175,
+            "cycle": 4187,
             "value": 1
           },
           {
-            "cycle": 4216,
+            "cycle": 4228,
             "value": 0
           },
           {
-            "cycle": 4369,
+            "cycle": 4381,
             "value": 1
           },
           {
-            "cycle": 4410,
+            "cycle": 4422,
             "value": 0
           },
           {
-            "cycle": 4563,
+            "cycle": 4575,
             "value": 1
           },
           {
-            "cycle": 4604,
+            "cycle": 4616,
             "value": 0
           }
         ],
@@ -9889,199 +10509,199 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 94,
+            "cycle": 106,
             "state": "0"
           },
           {
-            "cycle": 97,
+            "cycle": 109,
             "state": "1"
           },
           {
-            "cycle": 138,
+            "cycle": 150,
             "state": "0"
           },
           {
-            "cycle": 291,
+            "cycle": 303,
             "state": "1"
           },
           {
-            "cycle": 332,
+            "cycle": 344,
             "state": "0"
           },
           {
-            "cycle": 485,
+            "cycle": 497,
             "state": "1"
           },
           {
-            "cycle": 526,
+            "cycle": 538,
             "state": "0"
           },
           {
-            "cycle": 679,
+            "cycle": 691,
             "state": "1"
           },
           {
-            "cycle": 720,
+            "cycle": 732,
             "state": "0"
           },
           {
-            "cycle": 873,
+            "cycle": 885,
             "state": "1"
           },
           {
-            "cycle": 914,
+            "cycle": 926,
             "state": "0"
           },
           {
-            "cycle": 1067,
+            "cycle": 1079,
             "state": "1"
           },
           {
-            "cycle": 1108,
+            "cycle": 1120,
             "state": "0"
           },
           {
-            "cycle": 1261,
+            "cycle": 1273,
             "state": "1"
           },
           {
-            "cycle": 1302,
+            "cycle": 1314,
             "state": "0"
           },
           {
-            "cycle": 1455,
+            "cycle": 1467,
             "state": "1"
           },
           {
-            "cycle": 1496,
+            "cycle": 1508,
             "state": "0"
           },
           {
-            "cycle": 1651,
+            "cycle": 1663,
             "state": "1"
           },
           {
-            "cycle": 1748,
+            "cycle": 1760,
             "state": "0"
           },
           {
-            "cycle": 1845,
+            "cycle": 1857,
             "state": "1"
           },
           {
-            "cycle": 1942,
+            "cycle": 1954,
             "state": "0"
           },
           {
-            "cycle": 2039,
+            "cycle": 2051,
             "state": "1"
           },
           {
-            "cycle": 2136,
+            "cycle": 2148,
             "state": "0"
           },
           {
-            "cycle": 2233,
+            "cycle": 2245,
             "state": "1"
           },
           {
-            "cycle": 2330,
+            "cycle": 2342,
             "state": "0"
           },
           {
-            "cycle": 2427,
+            "cycle": 2439,
             "state": "1"
           },
           {
-            "cycle": 2524,
+            "cycle": 2536,
             "state": "0"
           },
           {
-            "cycle": 2621,
+            "cycle": 2633,
             "state": "1"
           },
           {
-            "cycle": 2718,
+            "cycle": 2730,
             "state": "0"
           },
           {
-            "cycle": 2815,
+            "cycle": 2827,
             "state": "1"
           },
           {
-            "cycle": 2912,
+            "cycle": 2924,
             "state": "0"
           },
           {
-            "cycle": 3009,
+            "cycle": 3021,
             "state": "1"
           },
           {
-            "cycle": 3106,
+            "cycle": 3118,
             "state": "0"
           },
           {
-            "cycle": 3205,
+            "cycle": 3217,
             "state": "1"
           },
           {
-            "cycle": 3246,
+            "cycle": 3258,
             "state": "0"
           },
           {
-            "cycle": 3399,
+            "cycle": 3411,
             "state": "1"
           },
           {
-            "cycle": 3440,
+            "cycle": 3452,
             "state": "0"
           },
           {
-            "cycle": 3593,
+            "cycle": 3605,
             "state": "1"
           },
           {
-            "cycle": 3634,
+            "cycle": 3646,
             "state": "0"
           },
           {
-            "cycle": 3787,
+            "cycle": 3799,
             "state": "1"
           },
           {
-            "cycle": 3828,
+            "cycle": 3840,
             "state": "0"
           },
           {
-            "cycle": 3981,
+            "cycle": 3993,
             "state": "1"
           },
           {
-            "cycle": 4022,
+            "cycle": 4034,
             "state": "0"
           },
           {
-            "cycle": 4175,
+            "cycle": 4187,
             "state": "1"
           },
           {
-            "cycle": 4216,
+            "cycle": 4228,
             "state": "0"
           },
           {
-            "cycle": 4369,
+            "cycle": 4381,
             "state": "1"
           },
           {
-            "cycle": 4410,
+            "cycle": 4422,
             "state": "0"
           },
           {
-            "cycle": 4563,
+            "cycle": 4575,
             "state": "1"
           },
           {
-            "cycle": 4604,
+            "cycle": 4616,
             "state": "0"
           }
         ],
@@ -10103,16 +10723,27 @@
       "drive": "0"
     }
   ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ESP32_C3_RUST2_SHTC3_OK_T24_RH40",
+        "cycle_lo": 440000,
+        "cycle": 450000,
+        "end_cycle": 890000
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1982,
+    "text_bytes": 2580,
     "data_bytes": 0,
     "bss_bytes": 4096,
-    "flash_used_bytes": 1982,
+    "flash_used_bytes": 2580,
     "ram_static_bytes": 4096,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 409600,
-    "flash_used_pct": 0.05,
+    "flash_used_pct": 0.06,
     "ram_static_pct": 1.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -10125,28 +10756,83 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400200,
-    "instructions": 200000,
-    "steps_executed": 200000,
-    "memory_reads": 40,
-    "memory_writes": 2,
-    "peripheral_accesses": 52,
+    "cycles": 2103096,
+    "instructions": 1000000,
+    "steps_executed": 1000000,
+    "memory_reads": 100,
+    "memory_writes": 15,
+    "peripheral_accesses": 25746,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107298092,
-        "count": 703,
+        "pc": 1107298332,
+        "count": 2266,
         "symbol": "main"
       },
       {
-        "pc": 1107296868,
+        "pc": 1107298352,
+        "count": 625,
+        "symbol": "firmware_esp32c3_rust2_smoke::measurement_delay"
+      },
+      {
+        "pc": 1107296964,
+        "count": 195,
+        "symbol": "firmware_esp32c3_rust2_smoke::wait_i2c"
+      },
+      {
+        "pc": 1107298286,
+        "count": 195,
+        "symbol": "firmware_esp32c3_rust2_smoke::wakeup_delay"
+      },
+      {
+        "pc": 1107296954,
+        "count": 157,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107298406,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1107298408,
+        "count": 78,
+        "symbol": "firmware_esp32c3_rust2_smoke::wait_i2c"
+      },
+      {
+        "pc": 1107298418,
+        "count": 78,
+        "symbol": "firmware_esp32c3_rust2_smoke::wait_i2c"
+      },
+      {
+        "pc": 1107296890,
+        "count": 39,
+        "symbol": "firmware_esp32c3_rust2_smoke::ws2812_reset_gap"
+      },
+      {
+        "pc": 1107296892,
+        "count": 39,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107298402,
         "count": 39,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 1107296872,
+        "pc": 1107298404,
         "count": 39,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107298412,
+        "count": 39,
+        "symbol": "firmware_esp32c3_rust2_smoke::wait_i2c"
+      },
+      {
+        "pc": 1107298414,
+        "count": 39,
+        "symbol": "firmware_esp32c3_rust2_smoke::wait_i2c"
       }
     ]
   }
