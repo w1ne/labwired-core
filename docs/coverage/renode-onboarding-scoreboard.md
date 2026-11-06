@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `179`
-- booted: `177/245`
-- boot_and_smoke_passed: `177/245`
-- not_run: `66`
-- pass: `177`
+- run_attempted: `180`
+- booted: `178/245`
+- boot_and_smoke_passed: `178/245`
+- not_run: `65`
+- pass: `178`
 - fail: `2`
-- median_elapsed_ms: `1314`
-- median_elapsed_seconds: `1.314`
+- median_elapsed_ms: `1319`
+- median_elapsed_seconds: `1.319`
 - threshold_seconds: `3600`
-- threshold_met: `179/179`
+- threshold_met: `180/180`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -177,7 +177,7 @@
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `1354` | `1.354` | `True` | `n/a` | n/a | n/a |
 | `sifive-fu740` | `pass` | `True` | `yes` | `yes` | `1456` | `1.456` | `True` | `n/a` | n/a | n/a |
 | `simavr-at90usb162` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-atmega128` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `simavr-atmega128` | `pass` | `True` | `yes` | `yes` | `85887` | `85.887` | `True` | `n/a` | n/a | n/a |
 | `simavr-atmega1280` | `pass` | `True` | `yes` | `yes` | `86214` | `86.214` | `True` | `n/a` | n/a | n/a |
 | `simavr-atmega1281` | `pass` | `True` | `yes` | `yes` | `100493` | `100.493` | `True` | `n/a` | n/a | n/a |
 | `simavr-atmega1284p` | `pass` | `True` | `yes` | `yes` | `86419` | `86.419` | `True` | `n/a` | n/a | n/a |

@@ -61,6 +61,9 @@ pub enum AvrModel {
     Atmega328p,
     /// ATmega328PB shares the 328P core geometry and adds a second USART.
     Atmega328pb,
+    /// ATmega128 geometry, with 128 KiB flash and 4 KiB SRAM. Its imported
+    /// onboarding profile is CPU/SRAM-only and does not claim peripherals.
+    Atmega128,
     Atmega1281,
     Atmega2560,
     /// ATmega32U4 geometry, with the common AVR8 execution path. Its USB,
@@ -101,8 +104,8 @@ pub enum AvrModel {
 }
 
 impl AvrModel {
-    /// The model a chip descriptor names. atmega1281 selects the 128 KB
-    /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
+    /// The model a chip descriptor names. atmega128/atmega1281 select 128 KB
+    /// two-byte-PC core geometry; atmega2560/atmega2561/mega2560 select the
     /// 256 KB three-byte-PC mega core; the listed tinyAVR 0-series parts
     /// select the AVRxt data map and their exact flash/SRAM geometry. Other
     /// names default to the ATmega328P. ATmega328PB is matched explicitly so
@@ -165,6 +168,8 @@ impl AvrModel {
             AvrModel::Atmega1284p
         } else if n.contains("1280") || n.contains("1281") {
             AvrModel::Atmega1281
+        } else if n.ends_with("atmega128") {
+            AvrModel::Atmega128
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
         } else if n.contains("32u4") || n.contains("32u 4") {
@@ -178,7 +183,7 @@ impl AvrModel {
     pub fn flash_size(self) -> usize {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
-            AvrModel::Atmega1281 => 128 * 1024,
+            AvrModel::Atmega128 | AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Atmega32u4 => 32 * 1024,
             AvrModel::Atmega1284p => 128 * 1024,
@@ -201,7 +206,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
-            AvrModel::Atmega32u4 | AvrModel::Atmega1284p => 0x0100,
+            AvrModel::Atmega32u4 | AvrModel::Atmega1284p | AvrModel::Atmega128 => 0x0100,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
             AvrModel::Attiny804 | AvrModel::Attiny806 | AvrModel::Attiny807 => 0x3E00,
@@ -226,6 +231,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
+            AvrModel::Atmega128 => 0x10FF,
             AvrModel::Atmega32u4 => 0x0AFF,
             AvrModel::Atmega1284p => 0x40FF,
             AvrModel::Attiny202
@@ -257,7 +263,9 @@ impl AvrModel {
             | AvrModel::Atmega328pb
             | AvrModel::Atmega32u4
             | AvrModel::Atmega1284p => AVR_ADC_INPUT_BASE,
-            AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
+            AvrModel::Atmega128 | AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
+                AVR_MEGA_ADC_INPUT_BASE
+            }
             AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
@@ -770,7 +778,7 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
-            AvrModel::Atmega1284p => false,
+            AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -806,7 +814,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
-            AvrModel::Atmega1284p => false,
+            AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -3572,6 +3580,18 @@ mod tests {
         assert_eq!(cpu.flash.len(), 128 * 1024);
         assert_eq!(cpu.sram.len(), 8 * 1024);
         assert_eq!(cpu.sp, 0x21FF);
+        assert!(!cpu.model.three_byte_pc());
+    }
+
+    #[test]
+    fn atmega128_selects_its_128k_flash_and_4k_sram_geometry() {
+        let cpu = Avr::for_chip_name("simavr-atmega128");
+        assert_eq!(cpu.model, AvrModel::Atmega128);
+        assert_eq!(cpu.flash.len(), 128 * 1024);
+        assert_eq!(cpu.sram_start, 0x0100);
+        assert_eq!(cpu.sram.len(), 4 * 1024);
+        assert_eq!(cpu.ramend, 0x10FF);
+        assert_eq!(cpu.sp, 0x10FF, "SP resets to ATmega128 RAMEND");
         assert!(!cpu.model.three_byte_pc());
     }
 

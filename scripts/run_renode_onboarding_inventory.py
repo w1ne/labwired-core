@@ -342,6 +342,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/atmega1280-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega1280-smoke.yaml",
     },
+    "simavr-atmega128": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega128-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega128-smoke.yaml",
+    },
     "simavr-atmega1281": {
         "prebuilt_firmware": "tests/fixtures/avr/atmega1281-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega1281-smoke.yaml",

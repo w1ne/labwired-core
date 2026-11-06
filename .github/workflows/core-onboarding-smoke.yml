@@ -18,6 +18,7 @@ on:
       - "configs/onboarding/renesas_rz_g2l.yaml"
       - "configs/onboarding/cortex-a78.yaml"
       - "configs/onboarding/simavr-atmega1280.yaml"
+      - "configs/onboarding/simavr-atmega128.yaml"
       - "configs/onboarding/simavr-atmega1281.yaml"
       - "configs/systems/**"
       - "examples/**"
@@ -139,6 +140,9 @@ on:
       - "tests/fixtures/avr/atmega1280-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1280-cpu-smoke.elf"
       - "scripts/build_atmega1280_cpu_smoke.sh"
+      - "tests/fixtures/avr/atmega128-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega128-cpu-smoke.elf"
+      - "scripts/build_atmega128_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega1281-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1281-cpu-smoke.elf"
       - "scripts/build_atmega1281_cpu_smoke.sh"
@@ -704,6 +708,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega1280-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1280-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1280.yaml
+          # ATmega128 is measured only for its imported AVR8 CPU and SRAM;
+          # the profile makes no peripheral or board-I/O claims.
+          - id: simavr-atmega128
+            prebuilt_firmware: tests/fixtures/avr/atmega128-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega128-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega128.yaml
           # ATmega1281 is measured only for its imported AVR8 CPU and SRAM;
           # the profile makes no peripheral or board-I/O claims.
           - id: simavr-atmega1281
