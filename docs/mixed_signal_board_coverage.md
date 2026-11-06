@@ -8,7 +8,7 @@ input on profiles without an ADC or without an externally routable ADC input. A 
 does not imply ADC support. Generic chip bus tests, analog output traces without a board endpoint,
 and device-only unit tests do not count.
 
-Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). The 245 imported profiles in `configs/systems/onboarding/` are not yet inventoried. Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage; 0 have no end-to-end analog coverage.** The 26 exact-part profiles in `configs/systems/stm32-catalog/` are also covered (see [STM32 catalog profiles](#stm32-catalog-profiles)). Of the 245 imported profiles in `configs/systems/onboarding/`, 12 are covered through every ADC instance they declare, 8 declare an ADC LabWired cannot yet convert from a routed input, and 225 declare no modelled ADC (see [Onboarding profiles](#onboarding-profiles)). Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -125,3 +125,15 @@ SK-AM62 uses the same generic input-only endpoint mechanism for its otherwise un
 ## STM32 catalog profiles
 
 All 26 exact-part smoke profiles in `configs/systems/stm32-catalog/*.yaml` (STM32F103 C/R/T x4/x6 including the `h` BGA variants, STM32F401 C/R/V xB–xE, STM32F407 V/Z/I xE/xG) are covered by one descriptor-driven proof: [`cosim_stm32_catalog_analog.rs`](../crates/core/tests/cosim_stm32_catalog_analog.rs)::`every_stm32_catalog_profile_routes_ntc_and_diode_netlists_into_adc1`. For each part it reads ADC1's base, register profile (F1 or F4) and clock gate from the chip descriptor, then routes the generic Beta NTC divider to PA0 and the unrelated Shockley diode to the package's highest-numbered bonded ADC1 pad (PB1/IN9 on 36- and 48-pin packages, PC5/IN15 on 64-pin and larger). Both solved voltages are checked against independent references and read back through a firmware-style one-shot conversion. On packages without PC0, a route to `board.analog.pc0_volts` must fail at binding time. The test enumerates the directory, so a new catalog profile is covered without editing the test, and the asserted profile count flags it for this inventory.
+
+## Onboarding profiles
+
+The 245 imported profiles in `configs/systems/onboarding/*.yaml` are inventoried by one descriptor-driven proof: [`cosim_onboarding_analog.rs`](../crates/core/tests/cosim_onboarding_analog.rs)::`every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_each_instance`. For each profile it reads every non-stub ADC from the chip descriptor, picks the converter family from the peripheral type and `config.profile`, routes the generic Beta NTC divider and the unrelated Shockley diode to `adc.<id>.5_volts` / `adc.<id>.6_volts`, checks both solved voltages against independent references, and reads them back through that family's firmware register sequence. NTC codes must fall monotonically from -10 °C to 80 °C.
+
+| Status | Profiles |
+|---|---|
+| Covered, all 24 ADC instances converted | `stm32f777`, `nucleo_f767zi` (ADC1–3, F4 map); `stm32f401cdu6-blackpill` (ADC1, F4 map); `stm32h7`, `stm32h743`, `stm32h747`, `stm32h747-disco`, `stm32h753`, `nucleo_h753zi` (ADC3 and ADC1/2 `adcM1S2`, H7 map: DEEPPWD/ADVREGEN bring-up, PCSEL, SQR1); `imxrt1064`, `mimxrt1064_evk` (ADC1/2, HC0/R0 software trigger at 12 bits); `nrf52840` (SAADC EasyDMA scan, idle AIN7 reads zero) |
+| ADC declared, not convertible yet | `stm32f042`, `stm32f072`, `stm32f072b_discovery`, `stm32l071`, `stm32l072`, `stm32wba52`, `nucleo_wba52cg` (F0/L0/WBA `CHSELR` ADC, which no `adc` layout models); `ramn` (STM32L5, where the L4-map engine converts a fixed internal source instead of the routed channel) |
+| No modelled ADC | 225 profiles: ADC absent or a `stub` |
+
+The F7 and H7 onboarding descriptors used to declare their Renode ADC types with no `profile`, so the shared `adc` model fell back to the STM32F1 register map. They now name `stm32f4` (RM0410 §15) and `stm32h7` (RM0433 §25). The test fails if a profile moves between the first two rows, if the instance count changes, or if the no-ADC count changes. The 8 non-convertible profiles need a `CHSELR` layout and a routed-input L4 engine in `peripherals/adc.rs`. Every STM32 silicon-validated board watches that file, so the change needs a drift ack.

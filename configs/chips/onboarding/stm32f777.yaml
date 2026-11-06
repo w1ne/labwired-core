@@ -69,14 +69,26 @@ peripherals:
   type: stm32_adc
   bus: sysbus
   base_address: 1073815552
+  # RM0410 §15: the F7 ADC is the F2/F4 block (SWSTART = CR2 bit 30).
+  # Without a profile the generic `adc` model falls back to the F1 map.
+  config:
+    profile: stm32f4
 - id: adc2
   type: stm32_adc
   bus: sysbus
   base_address: 1073815808
+  # RM0410 §15: the F7 ADC is the F2/F4 block (SWSTART = CR2 bit 30).
+  # Without a profile the generic `adc` model falls back to the F1 map.
+  config:
+    profile: stm32f4
 - id: adc3
   type: stm32_adc
   bus: sysbus
   base_address: 1073816064
+  # RM0410 §15: the F7 ADC is the F2/F4 block (SWSTART = CR2 bit 30).
+  # Without a profile the generic `adc` model falls back to the F1 map.
+  config:
+    profile: stm32f4
 - id: crc
   type: stm32_crc
   bus: sysbus
