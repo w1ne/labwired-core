@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `170`
-- booted: `169/245`
-- boot_and_smoke_passed: `169/245`
-- not_run: `75`
-- pass: `169`
+- run_attempted: `171`
+- booted: `170/245`
+- boot_and_smoke_passed: `170/245`
+- not_run: `74`
+- pass: `170`
 - fail: `1`
-- median_elapsed_ms: `1277`
-- median_elapsed_seconds: `1.277`
+- median_elapsed_ms: `1288`
+- median_elapsed_seconds: `1.288`
 - threshold_seconds: `3600`
-- threshold_met: `170/170`
+- threshold_met: `171/171`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -52,7 +52,7 @@
 | `cortex-r52_smp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `cortex-r52_smp_4` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `cortex_a53_console` | `pass` | `True` | `yes` | `yes` | `7996` | `7.996` | `True` | `n/a` | n/a | n/a |
-| `cortex_a53_virtio` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `cortex_a53_virtio` | `pass` | `True` | `yes` | `yes` | `7589` | `7.589` | `True` | `n/a` | n/a | n/a |
 | `crosslink-nx-evn` | `pass` | `True` | `yes` | `yes` | `8533` | `8.533` | `True` | `n/a` | n/a | n/a |
 | `efm32g210` | `pass` | `True` | `yes` | `yes` | `1035` | `1.035` | `True` | `n/a` | n/a | n/a |
 | `efm32g222` | `pass` | `True` | `yes` | `yes` | `1031` | `1.031` | `True` | `n/a` | n/a | n/a |

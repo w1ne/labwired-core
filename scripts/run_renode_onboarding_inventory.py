@@ -19,6 +19,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml",
     },
+    "cortex_a53_virtio": {
+        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml",
+    },
     "cortex-r52": {
         "prebuilt_firmware": "tests/fixtures/cortex-r52-cpu-smoke.elf",
         "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml",

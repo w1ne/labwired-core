@@ -1266,6 +1266,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
             script: examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml
             system: configs/systems/onboarding/cortex_a53_console.yaml
+          # One Cortex-A53 PE and DDR only. The CPU-only fixture does not
+          # exercise the imported timer, PL011, or virtio entropy device.
+          - id: cortex_a53_virtio
+            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
+            script: examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml
+            system: configs/systems/onboarding/cortex_a53_virtio.yaml
           # Cortex-M4 execution in the imported VF61 profile; A5 and devices
           # are outside this direct-ELF OCRAM smoke.
           - id: colibri-vf61
