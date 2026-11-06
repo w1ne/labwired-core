@@ -218,9 +218,11 @@ fn each_cortex_a_core_selects_its_own_model() {
 #[test]
 fn cortex_r_never_routes_to_cortex_m() {
     let mut chip = chip_with_arch(Arch::Arm);
-    chip.core = Some("cortex-r5f".into());
-    assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexR);
-    for unsupported in ["cortex-r5", "cortex-r52", "cortex-r8"] {
+    for supported in ["cortex-r5f", "cortex-r52"] {
+        chip.core = Some(supported.into());
+        assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexR);
+    }
+    for unsupported in ["cortex-r5", "cortex-r82", "cortex-r8"] {
         chip.core = Some(unsupported.into());
         assert!(machine_family(&chip).is_err(), "{unsupported}");
     }

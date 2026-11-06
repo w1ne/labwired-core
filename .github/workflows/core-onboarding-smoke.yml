@@ -162,11 +162,18 @@ on:
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml"
       - "scripts/build_rzg2l_cm33_cpu_smoke.sh"
       - "tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
-      - "tests/fixtures/renesas-rz-t2m-cpu-smoke.S"
-      - "tests/fixtures/renesas-rz-t2m-cpu-smoke.ld"
-      - "tests/fixtures/renesas-rz-t2m-cpu-smoke.elf"
-      - "scripts/build_renesas_rz_t2m_cpu_smoke.sh"
-      - "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml"
+      - "tests/fixtures/cortex-r52-uart-smoke.elf"
+      - "tests/fixtures/rz-t2m-r52-sci-smoke.elf"
+      - "examples/renode-onboarding/cortex-r52-uart-smoke.S"
+      - "examples/renode-onboarding/cortex-r52-uart-smoke.ld"
+      - "examples/renode-onboarding/rz-t2m-r52-sci-smoke.S"
+      - "examples/renode-onboarding/rz-t2m-r52-sci-smoke.ld"
+      - "scripts/build_cortex_r52_uart_smokes.sh"
+      - "examples/renode-onboarding/cortex-r52-uart-smoke.yaml"
+      - "examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml"
+      - "examples/renode-onboarding/cortex-r52_smp_4-r52-uart-smoke.yaml"
+      - "examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml"
+      - "examples/renode-onboarding/renesas-rz_t2m_rsk-r52-sci-smoke.yaml"
       - "tests/fixtures/avr/arduino-uno-blinky.elf"
       - "tests/fixtures/avr/atmega1284p-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1284p-cpu-smoke.elf"
@@ -365,13 +372,46 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/renode-onboarding/renesas-r7fa8m1a-smoke.yaml
             system: configs/systems/onboarding/renesas-r7fa8m1a.yaml
-          # RZ/T2M's imported Cortex-R52 is not supported. Keep the exact-system
-          # CPU-admission failure visible until a real R52 adapter exists.
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
           - id: renesas_rz_t2m
-            prebuilt_firmware: tests/fixtures/renesas-rz-t2m-cpu-smoke.elf
-            script: examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/rz-t2m-r52-sci-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml
             system: configs/systems/onboarding/renesas_rz_t2m.yaml
-            expected_failure_signature: "chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter"
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: renesas-rz_t2m_rsk
+            prebuilt_firmware: tests/fixtures/rz-t2m-r52-sci-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/renesas-rz_t2m_rsk-r52-sci-smoke.yaml
+            system: configs/systems/onboarding/renesas-rz_t2m_rsk.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: cortex-r52
+            prebuilt_firmware: tests/fixtures/cortex-r52-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/cortex-r52-uart-smoke.yaml
+            system: configs/systems/onboarding/cortex-r52.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: cortex-r52_smp
+            prebuilt_firmware: tests/fixtures/cortex-r52-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml
+            system: configs/systems/onboarding/cortex-r52_smp.yaml
+          # One AArch32 Cortex-R52 PE (tlib arm64 target), a bounded RAM window and
+          # one polled UART TX; GIC, generic timer, TCM and other PEs are not modeled.
+          - id: cortex-r52_smp_4
+            prebuilt_firmware: tests/fixtures/cortex-r52-uart-smoke.elf
+            cli_features: qemu-arm-system
+            cli_profile: native-system
+            script: examples/renode-onboarding/cortex-r52_smp_4-r52-uart-smoke.yaml
+            system: configs/systems/onboarding/cortex-r52_smp_4.yaml
           # DA14592 is scoped to the primary M33 core, exact flash/SRAM map,
           # and model-backed DA UART0. The M0+ CMAC core and other peripherals
           # are not claimed by this smoke.

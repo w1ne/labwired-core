@@ -1,14 +1,20 @@
 {
   "result_schema_version": "1.0",
-  "status": "error",
-  "steps_executed": 0,
-  "cycles": 0,
-  "instructions": 0,
-  "stop_reason": "config_error",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
   "stop_reason_details": {
-    "triggered_stop_condition": "config_error",
-    "triggered_limit": null,
-    "observed": null
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
   },
   "limits": {
     "max_steps": 100000,
@@ -21,12 +27,115 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "message": "chip 'cortex-r52': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter",
-  "assertions": [],
-  "firmware_hash": "7c82c5f94451130d53f2d0a91a8ea58a2f11c9af6925a7a50d5ea32fd3d4de0c",
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "CORTEX-R52 PL011 UART SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "cortex_a",
+    "registers": [
+      3347,
+      3347,
+      0,
+      0,
+      117,
+      0,
+      2617835520,
+      144,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      68
+    ],
+    "pc": 68,
+    "cpsr": 1610613210
+  },
+  "firmware_hash": "7a471136828ff7260a3d738a42b3250e9f8c2f2aa7924b02d21a0fcb9b69946a",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/cortex-r52-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/cortex-r52-uart-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cortex-r52.yaml",
-    "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/cortex-r52-uart-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 2617835520,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "CORTEX-R52 PL011 UART SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 117,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 117,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 0,
+    "ram_total_bytes": 65536,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "stack_region_too_small_or_unknown",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 305,
+    "memory_writes": 0,
+    "peripheral_accesses": 57,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 68,
+        "count": 390
+      }
+    ]
   }
 }

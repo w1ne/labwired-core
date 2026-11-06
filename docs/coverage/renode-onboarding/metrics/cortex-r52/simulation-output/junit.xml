@@ -1,24 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="1" failures="0" errors="1" time="0.000000">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.017651">
   <properties>
     <property name="result_schema_version" value="1.0"/>
-    <property name="stop_reason" value="ConfigError"/>
-    <property name="firmware_hash" value="7c82c5f94451130d53f2d0a91a8ea58a2f11c9af6925a7a50d5ea32fd3d4de0c"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="7a471136828ff7260a3d738a42b3250e9f8c2f2aa7924b02d21a0fcb9b69946a"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000000">
-    <error message="config error">result_schema_version=1.0
-stop_reason=ConfigError
-message=chip &apos;cortex-r52&apos;: unsupported ARM real-time core &apos;cortex-r52&apos;; only cortex-r5f has a native adapter
-stop_reason_details.triggered_stop_condition=ConfigError
-steps_executed=0
-cycles=0
-instructions=0
-limits:
-  - max_steps=100000
-firmware_hash=7c82c5f94451130d53f2d0a91a8ea58a2f11c9af6925a7a50d5ea32fd3d4de0c
-firmware=examples/renode-onboarding/../../tests/fixtures/cortex-r52-cpu-smoke.elf
-system=examples/renode-onboarding/../../configs/systems/onboarding/cortex-r52.yaml
-script=examples/renode-onboarding/cortex-r52-cpu-smoke.yaml
-</error>
+  <testcase classname="labwired" name="run" time="0.017651">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: CORTEX-R52 PL011 UART SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

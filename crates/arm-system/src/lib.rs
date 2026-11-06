@@ -34,6 +34,10 @@ pub enum ArmModel {
     CortexR5F = 1,
     /// ARMv4T ARM7TDMI core (ARM/Thumb integer execution; no CP15, MMU or MPU).
     Arm7Tdmi = 2,
+    /// ARMv8-R AArch32 Cortex-R52 (PMSAv8 EL1/EL2 MPUs, no MMU). Built from
+    /// tlib's arm64 target; its GIC and generic-timer system registers read
+    /// as zero because no CPU interface or timer is attached.
+    CortexR52 = 3,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Execution {

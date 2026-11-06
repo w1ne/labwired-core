@@ -78,12 +78,34 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml",
     },
     "cortex-r52": {
-        "prebuilt_firmware": "tests/fixtures/cortex-r52-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-r52-uart-smoke.yaml",
+        "cli_features": "qemu-arm-system",
+        "cli_profile": "native-system",
+    },
+    "cortex-r52_smp": {
+        "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml",
+        "cli_features": "qemu-arm-system",
+        "cli_profile": "native-system",
+    },
+    "cortex-r52_smp_4": {
+        "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-r52_smp_4-r52-uart-smoke.yaml",
+        "cli_features": "qemu-arm-system",
+        "cli_profile": "native-system",
     },
     "renesas_rz_t2m": {
-        "prebuilt_firmware": "tests/fixtures/renesas-rz-t2m-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
+        "script": "examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml",
+        "cli_features": "qemu-arm-system",
+        "cli_profile": "native-system",
+    },
+    "renesas-rz_t2m_rsk": {
+        "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf",
+        "script": "examples/renode-onboarding/renesas-rz_t2m_rsk-r52-sci-smoke.yaml",
+        "cli_features": "qemu-arm-system",
+        "cli_profile": "native-system",
     },
     "ambiq-apollo4": {
         "crate": "firmware-apollo4p-evb-smoke",
@@ -1099,25 +1121,6 @@ MSP430_TARGETS = (
 )
 NOT_RUN_REASONS = {target: MSP430_NOT_RUN_REASON for target in MSP430_TARGETS}
 NOT_RUN_HINTS = {target: MSP430_NOT_RUN_HINT for target in MSP430_TARGETS}
-
-CORTEX_R52_NOT_RUN_REASON = (
-    "Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted."
-)
-CORTEX_R52_NOT_RUN_HINT = (
-    "Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; "
-    "do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub."
-)
-CORTEX_R52_UNMAPPED_TARGETS = (
-    "cortex-r52_smp",
-    "cortex-r52_smp_4",
-    "renesas-rz_t2m_rsk",
-)
-NOT_RUN_REASONS.update(
-    {target: CORTEX_R52_NOT_RUN_REASON for target in CORTEX_R52_UNMAPPED_TARGETS}
-)
-NOT_RUN_HINTS.update(
-    {target: CORTEX_R52_NOT_RUN_HINT for target in CORTEX_R52_UNMAPPED_TARGETS}
-)
 
 # Imported as `arch: arm` with no core, so they would have run as a Cortex-M.
 # The descriptors now say `arch: unknown` and the build refuses them.

@@ -1,33 +1,38 @@
 {
   "target_id": "cortex-r52_smp",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
   "crate": null,
   "target_triple": null,
-  "script": "",
+  "script": "examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml",
   "system": "configs/systems/onboarding/cortex-r52_smp.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T08:23:18Z",
-  "finished_at_utc": "2026-11-06T08:23:18Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted.",
-  "failure_hint": "Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub.",
+  "started_at_utc": "2026-11-06T20:56:30Z",
+  "finished_at_utc": "2026-11-06T20:56:30Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 632,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 0.308,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 0.316
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 308,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 316
+  },
+  "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf"
 }

@@ -1,14 +1,20 @@
 {
   "result_schema_version": "1.0",
-  "status": "error",
-  "steps_executed": 0,
-  "cycles": 0,
-  "instructions": 0,
-  "stop_reason": "config_error",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
   "stop_reason_details": {
-    "triggered_stop_condition": "config_error",
-    "triggered_limit": null,
-    "observed": null
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
   },
   "limits": {
     "max_steps": 100000,
@@ -21,12 +27,115 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "message": "chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter",
-  "assertions": [],
-  "firmware_hash": "2527a81b47a7af917ce15ef4ee982287b2016df1cb46b2d1701b2bbd3a6dea5f",
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "RZ/T2M R52 SCI0 SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "cortex_a",
+    "registers": [
+      3347,
+      3347,
+      0,
+      0,
+      268435563,
+      0,
+      2147487744,
+      1610612736,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      268435524
+    ],
+    "pc": 268435524,
+    "cpsr": 1610613210
+  },
+  "firmware_hash": "6e7c05c469ee9536dcac0e1a15b1aaf77d34b7e6c095a45e6a202292ecce27e4",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/renesas-rz-t2m-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/rz-t2m-r52-sci-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas_rz_t2m.yaml",
-    "script": "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "sci0",
+        "kind": "native",
+        "base": 2147487744,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "RZ/T2M R52 SCI0 SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 107,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 107,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 0,
+    "ram_total_bytes": 1572864,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "stack_ram_region_unknown",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 250,
+    "memory_writes": 0,
+    "peripheral_accesses": 45,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 268435524,
+        "count": 390
+      }
+    ]
   }
 }

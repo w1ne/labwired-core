@@ -4,15 +4,26 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Imported Renode target `cortex-r52_smp` (platforms/cpus/cortex-r52_smp.repl), narrowed to what the
+# engine executes and the UART smoke exercises: one of the two Cortex-R52 PEs (cpu0) on the
+# native AArch32 Cortex-R52 model (pinned tlib arm64 target), a 64 KiB aperture
+# at the current Renode DRAM base 0x0, and UART0 (PL011, polled TX) at
+# 0x9C090000. The aperture is a simulator limit, not the 2 GiB DRAM size. The
+# GICv3, generic timer, flash0 at 0x88000000 and any other PE or UART are not
+# modeled here and are intentionally omitted; their system registers read as
+# zero. The original import placed DRAM at 0x20000000; current Renode maps it
+# at 0x0.
 name: cortex-r52_smp
 arch: arm
 core: cortex-r52
-# Imported memory windows retained for catalog context. The engine has no
-# Cortex-R52 CPU model, so this profile makes no executable or peripheral claim.
-flash:
-  base: 2281701376
-  size: 67108864B
+flash: { base: 0, size: 0 }
 ram:
-  base: 536870912
-  size: 2147483648B
-peripherals: []
+  base: 0x00000000
+  size: 64KB
+flash_boot_alias: false
+peripherals:
+- id: uart0
+  type: pl011
+  bus: sysbus
+  base_address: 0x9C090000
+  size: 4096

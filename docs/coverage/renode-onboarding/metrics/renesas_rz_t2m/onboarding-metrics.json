@@ -1,38 +1,38 @@
 {
   "target_id": "renesas_rz_t2m",
-  "status": "fail",
+  "status": "pass",
   "measurement_mode": "smoke",
   "run_attempted": true,
-  "booted": false,
+  "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 0,
-    "stop_reason": "config_error"
+    "instructions": 100000,
+    "stop_reason": "max_steps"
   },
-  "smoke_passed": false,
+  "smoke_passed": true,
   "crate": null,
   "target_triple": null,
-  "script": "examples/renode-onboarding/renesas-rz-t2m-cpu-smoke.yaml",
+  "script": "examples/renode-onboarding/renesas_rz_t2m-r52-sci-smoke.yaml",
   "system": "configs/systems/onboarding/renesas_rz_t2m.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T05:32:40Z",
-  "finished_at_utc": "2026-11-06T05:32:48Z",
-  "elapsed_seconds": 9,
-  "elapsed_ms": 8386,
-  "failure_stage": "run_smoke",
-  "first_error_signature": "chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter",
-  "failure_hint": "CPU model gap. Add a real adapter for this core before claiming boot support.",
+  "started_at_utc": "2026-11-06T20:53:14Z",
+  "finished_at_utc": "2026-11-06T20:56:15Z",
+  "elapsed_seconds": 182,
+  "elapsed_ms": 181038,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 8.038,
+    "build_cli": 180.14,
     "build_firmware": null,
-    "run_smoke": 0.308
+    "run_smoke": 0.884
   },
   "stages_ms": {
-    "build_cli": 8038,
+    "build_cli": 180140,
     "build_firmware": null,
-    "run_smoke": 308
+    "run_smoke": 884
   },
-  "prebuilt_firmware": "tests/fixtures/renesas-rz-t2m-cpu-smoke.elf"
+  "prebuilt_firmware": "tests/fixtures/rz-t2m-r52-sci-smoke.elf"
 }

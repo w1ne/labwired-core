@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `221`
-- booted: `219/245`
-- boot_and_smoke_passed: `219/245`
-- not_run: `24`
-- pass: `219`
-- fail: `2`
-- median_elapsed_ms: `1263`
-- median_elapsed_seconds: `1.263`
+- run_attempted: `224`
+- booted: `224/245`
+- boot_and_smoke_passed: `224/245`
+- not_run: `21`
+- pass: `224`
+- fail: `0`
+- median_elapsed_ms: `1223`
+- median_elapsed_seconds: `1.223`
 - threshold_seconds: `3600`
-- threshold_met: `221/221`
+- threshold_met: `224/224`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -48,9 +48,9 @@
 | `cortex-a53-gicv3` | `pass` | `True` | `yes` | `yes` | `10155` | `10.155` | `True` | `n/a` | n/a | n/a |
 | `cortex-a53-gicv3_smp` | `pass` | `True` | `yes` | `yes` | `8231` | `8.231` | `True` | `n/a` | n/a | n/a |
 | `cortex-a78` | `pass` | `True` | `yes` | `yes` | `7642` | `7.642` | `True` | `n/a` | n/a | n/a |
-| `cortex-r52` | `fail` | `True` | `no` | `no` | `665` | `0.665` | `True` | `run_smoke` | CPU model gap. Add a real adapter for this core before claiming boot support. | chip 'cortex-r52': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter |
-| `cortex-r52_smp` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub. | Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted. |
-| `cortex-r52_smp_4` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub. | Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted. |
+| `cortex-r52` | `pass` | `True` | `yes` | `yes` | `652` | `0.652` | `True` | `n/a` | n/a | n/a |
+| `cortex-r52_smp` | `pass` | `True` | `yes` | `yes` | `632` | `0.632` | `True` | `n/a` | n/a | n/a |
+| `cortex-r52_smp_4` | `pass` | `True` | `yes` | `yes` | `677` | `0.677` | `True` | `n/a` | n/a | n/a |
 | `cortex_a53_console` | `pass` | `True` | `yes` | `yes` | `7996` | `7.996` | `True` | `n/a` | n/a | n/a |
 | `cortex_a53_virtio` | `pass` | `True` | `yes` | `yes` | `7589` | `7.589` | `True` | `n/a` | n/a | n/a |
 | `crosslink-nx-evn` | `pass` | `True` | `yes` | `yes` | `8533` | `8.533` | `True` | `n/a` | n/a | n/a |
@@ -161,9 +161,9 @@
 | `renesas-r7fa4m1a` | `pass` | `True` | `yes` | `yes` | `942` | `0.942` | `True` | `n/a` | n/a | n/a |
 | `renesas-r7fa6m5b` | `pass` | `True` | `yes` | `yes` | `1295` | `1.295` | `True` | `n/a` | n/a | n/a |
 | `renesas-r7fa8m1a` | `pass` | `True` | `yes` | `yes` | `1267` | `1.267` | `True` | `n/a` | n/a | n/a |
-| `renesas-rz_t2m_rsk` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real ARMv8-R Cortex-R52 CPU model and compatible ELF execution before adding a smoke; do not route this core through Cortex-M or Cortex-R5F and do not add a CPU stub. | Cortex-R52 CPU execution is unsupported by the native ARM backend; no firmware run was attempted. |
+| `renesas-rz_t2m_rsk` | `pass` | `True` | `yes` | `yes` | `676` | `0.676` | `True` | `n/a` | n/a | n/a |
 | `renesas_rz_g2l` | `pass` | `True` | `yes` | `yes` | `7765` | `7.765` | `True` | `n/a` | n/a | n/a |
-| `renesas_rz_t2m` | `fail` | `True` | `no` | `no` | `8386` | `8.386` | `True` | `run_smoke` | CPU model gap. Add a real adapter for this core before claiming boot support. | chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter |
+| `renesas_rz_t2m` | `pass` | `True` | `yes` | `yes` | `181038` | `181.038` | `True` | `n/a` | n/a | n/a |
 | `ri5cy` | `pass` | `True` | `yes` | `yes` | `1953` | `1.953` | `True` | `n/a` | n/a | n/a |
 | `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `1297` | `1.297` | `True` | `n/a` | n/a | n/a |
 | `riscv_virt` | `pass` | `True` | `yes` | `yes` | `1408` | `1.408` | `True` | `n/a` | n/a | n/a |

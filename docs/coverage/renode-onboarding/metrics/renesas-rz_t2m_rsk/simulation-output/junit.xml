@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.018020">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="6e7c05c469ee9536dcac0e1a15b1aaf77d34b7e6c095a45e6a202292ecce27e4"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.018020">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: RZ/T2M R52 SCI0 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
