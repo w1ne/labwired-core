@@ -132,6 +132,30 @@
     },
     {
       "assertion": {
+        "uart_contains": "BME280_PRESS_RAW="
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_TEMP_RAW="
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_RAW="
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_RAW_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "DONE"
       },
       "passed": true
@@ -148,22 +172,22 @@
     "registers": [
       10,
       3221225472,
-      75,
-      3,
       3221225472,
+      3221225472,
+      28995,
+      999999,
       1073759232,
+      536891376,
+      309724,
+      4419841,
+      536000,
+      1,
       999999,
       536891376,
-      1073763348,
-      0,
-      0,
-      0,
-      999999,
-      536891376,
-      134233607,
-      134232604
+      134235735,
+      134233814
     ],
-    "pc": 134232604,
+    "pc": 134233814,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -176,7 +200,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "12cfc12ca7c596a7d0b17bbe87d2c91c96e6d3250a3b7649200d6ede73c37e7f",
+  "firmware_hash": "d36e612f110cdecd9f11d348af458d5f9a1b4b96fab83aeb961c7bc8fb0bac6e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -696,24 +720,48 @@
         "end_cycle": 20000
       },
       {
+        "text": "BME280_PRESS_RAW=0004B9DC",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
+      },
+      {
+        "text": "BME280_TEMP_RAW=00082DC0",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
+      },
+      {
+        "text": "BME280_HUM_RAW=00007143",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
+      },
+      {
+        "text": "BME280_RAW_READ_OK",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
+      },
+      {
         "text": "DONE",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 15905,
+    "text_bytes": 18032,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 15905,
+    "flash_used_bytes": 18032,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 24.27,
+    "flash_used_pct": 27.51,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -739,15 +787,20 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 3225,
-    "memory_writes": 174,
-    "peripheral_accesses": 4427,
+    "memory_reads": 4442,
+    "memory_writes": 196,
+    "peripheral_accesses": 6376,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134232604,
-        "count": 195273,
+        "pc": 134233814,
+        "count": 195234,
         "symbol": "firmware_f103_i2c_demo::main"
+      },
+      {
+        "pc": 134218630,
+        "count": 39,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 134218636,

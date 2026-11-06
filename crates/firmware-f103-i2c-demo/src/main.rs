@@ -3,7 +3,8 @@
 //! Probes an absent I²C address, reads the TMP102 temperature, then writes and
 //! reads back its configuration and alert threshold registers through I2C1,
 //! including a one-byte MSB update. It also reads the BME280 chip ID and a
-//! little-endian calibration word. USART2 emits a human-readable register
+//! little-endian calibration word, then reads the BME280 pressure, temperature
+//! and humidity ADC registers. USART2 emits a human-readable register
 //! fingerprint at 115200/8N1. The onboarding system attaches declarative TMP102
 //! and BME280 models at addresses 0x48 and 0x76; TMP102's reset temperature is
 //! 25 °C (0x1900). The absent address remains an intentional NACK check.
@@ -206,6 +207,46 @@ fn main() -> ! {
         None => putline(b"BME280_CALIBRATION_READ_FAIL"),
     }
 
+    // Read the BME280's live measurement window as a driver does. The three
+    // Pressure and temperature are 20-bit values split across three bytes;
+    // humidity is a 16-bit word. The model's default inputs map to broad,
+    // deterministic raw-code ranges for 25 °C / 1013.25 hPa / 50 %RH.
+    let pressure = unsafe {
+        read_i2c_register(BME280_ADDRESS, 0xF7, 2).and_then(|bytes| {
+            read_i2c_byte(BME280_ADDRESS, 0xF9).map(|xlsb| {
+                (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
+            })
+        })
+    };
+    let temperature = unsafe {
+        read_i2c_register(BME280_ADDRESS, 0xFA, 2).and_then(|bytes| {
+            read_i2c_byte(BME280_ADDRESS, 0xFC).map(|xlsb| {
+                (u32::from(bytes[0]) << 12) | (u32::from(bytes[1]) << 4) | (u32::from(xlsb) >> 4)
+            })
+        })
+    };
+    let humidity = unsafe {
+        read_i2c_register(BME280_ADDRESS, 0xFD, 2)
+            .map(|bytes| (u32::from(bytes[0]) << 8) | u32::from(bytes[1]))
+    };
+
+    match (pressure, temperature, humidity) {
+        (Some(pressure), Some(temperature), Some(humidity)) => {
+            print_reg(b"BME280_PRESS_RAW=", pressure);
+            print_reg(b"BME280_TEMP_RAW=", temperature);
+            print_reg(b"BME280_HUM_RAW=", humidity);
+            if (200_000..500_000).contains(&pressure)
+                && (500_000..600_000).contains(&temperature)
+                && (10_000..50_000).contains(&humidity)
+            {
+                putline(b"BME280_RAW_READ_OK");
+            } else {
+                putline(b"BME280_RAW_RANGE_MISMATCH");
+            }
+        }
+        _ => putline(b"BME280_RAW_READ_FAIL"),
+    }
+
     putline(b"DONE");
 
     loop {}
@@ -368,6 +409,11 @@ unsafe fn read_i2c_register(address: u8, pointer: u8, length: u8) -> Option<[u8;
         }
     }
     None
+}
+
+/// Read one byte from an I2C register using the STM32F1 final-byte NACK path.
+unsafe fn read_i2c_byte(address: u8, pointer: u8) -> Option<u8> {
+    read_i2c_register(address, pointer, 1).map(|bytes| bytes[0])
 }
 
 /// Begin a write-address transaction and select a device register pointer.
