@@ -34,8 +34,8 @@ pub const FLASH_SIZE: usize = 32 * 1024;
 pub const RAMEND: u16 = 0x08FF;
 pub const SRAM_START: u16 = 0x0100;
 
-/// The AVR parts this interpreter runs. ATmega168 selects its exact 16 KiB
-/// flash / 1 KiB SRAM geometry while retaining the shared classic AVR8 path;
+/// The AVR parts this interpreter runs. ATmega16 and ATmega168 select their
+/// exact flash / SRAM geometry while retaining the shared classic AVR8 path;
 /// its imported profile claims no peripherals. The imported ATmega1280 profile is
 /// routed through ATmega1281 geometry for CPU-only execution: both descriptors
 /// specify 128 KB flash and 8 KB SRAM at 0x0200. This alias does not assert
@@ -63,6 +63,8 @@ pub enum AvrModel {
     Atmega328p,
     /// ATmega328PB shares the 328P core geometry and adds a second USART.
     Atmega328pb,
+    /// ATmega16 geometry for CPU/SRAM-only imported-profile execution.
+    Atmega16,
     /// ATmega168 geometry for CPU/SRAM-only imported-profile execution.
     Atmega168,
     /// ATmega128 geometry, with 128 KiB flash and 4 KiB SRAM. Its imported
@@ -172,6 +174,11 @@ impl AvrModel {
             AvrModel::Atmega1284p
         } else if n.contains("atmega168") {
             AvrModel::Atmega168
+        } else if n
+            .split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|part| part == "atmega16")
+        {
+            AvrModel::Atmega16
         } else if n.contains("1280") || n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.ends_with("atmega128") {
@@ -189,6 +196,7 @@ impl AvrModel {
     pub fn flash_size(self) -> usize {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
+            AvrModel::Atmega16 => 16 * 1024,
             AvrModel::Atmega168 => 16 * 1024,
             AvrModel::Atmega128 | AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
@@ -212,6 +220,7 @@ impl AvrModel {
     pub fn sram_start(self) -> u16 {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega168 => SRAM_START,
+            AvrModel::Atmega16 => 0x0060,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Atmega32u4 | AvrModel::Atmega1284p | AvrModel::Atmega128 => 0x0100,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
@@ -237,6 +246,7 @@ impl AvrModel {
     pub fn ramend(self) -> u16 {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
+            AvrModel::Atmega16 => 0x045F,
             AvrModel::Atmega168 => 0x04FF,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             AvrModel::Atmega128 => 0x10FF,
@@ -269,6 +279,7 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p
             | AvrModel::Atmega328pb
+            | AvrModel::Atmega16
             | AvrModel::Atmega168
             | AvrModel::Atmega32u4
             | AvrModel::Atmega1284p => AVR_ADC_INPUT_BASE,
@@ -790,7 +801,7 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
-            AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
+            AvrModel::Atmega16 | AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -827,7 +838,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
-            AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
+            AvrModel::Atmega16 | AvrModel::Atmega128 | AvrModel::Atmega1284p => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -3594,6 +3605,26 @@ mod tests {
         assert_eq!(cpu.sram.len(), 8 * 1024);
         assert_eq!(cpu.sp, 0x21FF);
         assert!(!cpu.model.three_byte_pc());
+    }
+
+    #[test]
+    fn atmega16_selects_its_16k_flash_and_low_sram_geometry() {
+        let name = "simavr-atmega16";
+        let cpu = Avr::for_chip_name(name);
+        assert_eq!(cpu.model, AvrModel::Atmega16);
+        assert_eq!(cpu.flash.len(), 16 * 1024);
+        assert_eq!(cpu.sram_start, 0x0060);
+        assert_eq!(cpu.sram.len(), 1024);
+        assert_eq!(cpu.ramend, 0x045F);
+        assert!(!cpu.model.three_byte_pc());
+
+        for name in ["simavr-atmega164", "simavr-atmega168", "simavr-atmega169p"] {
+            assert_ne!(
+                AvrModel::from_chip_name(name),
+                AvrModel::Atmega16,
+                "{name} must not match the ATmega16 model"
+            );
+        }
     }
 
     #[test]
