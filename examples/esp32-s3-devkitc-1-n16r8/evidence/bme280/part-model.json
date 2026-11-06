@@ -1,0 +1,26 @@
+{
+  "checked_at_utc": "2026-11-06",
+  "tool": "labwired_part",
+  "board": {
+    "part": "esp32-s3-devkitc-1-n16r8",
+    "outcome": "MODEL_ONLY",
+    "assurance": "modelled",
+    "pins": {
+      "GPIO8": ["gpio", "i2c0.sda", "i2c0.scl"],
+      "GPIO9": ["gpio", "i2c0.sda", "i2c0.scl"]
+    },
+    "caveat": "The component model describes the LabWired twin, not a datasheet or manufacturer's claim."
+  },
+  "sensor": {
+    "part": "bme280",
+    "outcome": "MODEL_ONLY",
+    "assurance": "modelled",
+    "pins": {
+      "VCC": ["power"],
+      "GND": ["power"],
+      "SDA": ["i2c.sda"],
+      "SCL": ["i2c.scl"]
+    },
+    "caveat": "The component model describes the LabWired twin, not a datasheet or manufacturer's claim."
+  }
+}
