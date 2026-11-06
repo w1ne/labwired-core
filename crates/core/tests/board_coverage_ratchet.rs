@@ -558,6 +558,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // physical-silicon differential. Promote only after both exist.
         "ch32v003f4p6-gpio-smoke",
         "ch32v003f4p6-usart-smoke",
+        // CH32V203C8T6 on the WeAct BluePill-Plus-CH32 has a PB2 LED and
+        // USART1 TX smoke on reused STM32F1-shaped models, but no Playground
+        // catalog board or physical-silicon differential.
+        "ch32v203c8t6-smoke",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)

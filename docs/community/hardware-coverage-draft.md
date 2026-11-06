@@ -311,6 +311,14 @@ current reseller stock for the MCU and evaluation board instead. See the
 [CH32V003 guide](../../examples/ch32v003-evt/README.md) and [availability
 receipt, checked 2026-11-06](../../examples/ch32v003-evt/evidence/vendor-status.md).
 
+The next WCH step is the CH32V203C8T6, a QingKe V4B (RV32IMAC) part, on the
+WeAct BluePill-Plus-CH32. Its smoke runs on the reset 8 MHz HSI. It checks a
+USART1 marker on PA9, and the UART output only appears once PA9 is set to
+alternate function. It also checks edges on the blue PB2 LED. PLL setup,
+interrupts, the user key, USB and the other peripherals are not modeled. See the
+[BluePill-Plus-CH32 guide](../../examples/weact-bluepill-plus-ch32v203/README.md)
+and [availability receipt, checked 2026-11-06](../../examples/weact-bluepill-plus-ch32v203/evidence/vendor-status.md).
+
 ## Evidence and limits
 
 Each linked example contains its reproducible smoke command, a narrow list of

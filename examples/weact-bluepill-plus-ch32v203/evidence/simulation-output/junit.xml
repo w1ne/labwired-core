@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.054446">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="961c814198d0c2921ec93b833fc7f6489bd7760350e1544e447acfdf4811a742"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.054446">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: CH32V203_BLUEPILL_PLUS_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpiob:2 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
