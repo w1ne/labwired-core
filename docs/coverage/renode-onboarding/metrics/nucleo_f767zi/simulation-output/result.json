@@ -36,6 +36,15 @@
     },
     {
       "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortI:1",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -83,212 +92,9 @@
   "inspect": {
     "peripherals": [
       {
-        "name": "GreenLED",
-        "kind": "native",
-        "base": 0,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "BlueLED",
-        "kind": "native",
-        "base": 7,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "RedLED",
-        "kind": "native",
-        "base": 14,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "UserButton1",
-        "kind": "native",
-        "base": 13,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "phy",
-        "kind": "native",
-        "base": 0,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "flash_controller",
-        "kind": "native",
-        "base": 1073888256,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "usart1",
         "kind": "native",
         "base": 1073811456,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart2",
-        "kind": "native",
-        "base": 1073759232,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart3",
-        "kind": "native",
-        "base": 1073760256,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "uart4",
-        "kind": "native",
-        "base": 1073761280,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "uart5",
-        "kind": "native",
-        "base": 1073762304,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart6",
-        "kind": "native",
-        "base": 1073812480,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "uart7",
-        "kind": "native",
-        "base": 1073773568,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "uart8",
-        "kind": "native",
-        "base": 1073772544,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "can1",
-        "kind": "native",
-        "base": 1073767424,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "can2",
-        "kind": "native",
-        "base": 1073768448,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "can3",
-        "kind": "native",
-        "base": 1073755136,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "dwt",
-        "kind": "native",
-        "base": 3758100480,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "adc1",
-        "kind": "native",
-        "base": 1073815552,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "adc2",
-        "kind": "native",
-        "base": 1073815808,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "adc3",
-        "kind": "native",
-        "base": 1073816064,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "crc",
-        "kind": "native",
-        "base": 1073885184,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortA",
-        "kind": "native",
-        "base": 1073872896,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortB",
-        "kind": "native",
-        "base": 1073873920,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortC",
-        "kind": "native",
-        "base": 1073874944,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortD",
-        "kind": "native",
-        "base": 1073875968,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortE",
-        "kind": "native",
-        "base": 1073876992,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortF",
-        "kind": "native",
-        "base": 1073878016,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortG",
-        "kind": "native",
-        "base": 1073879040,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortH",
-        "kind": "native",
-        "base": 1073880064,
         "registers": [],
         "artifacts": []
       },
@@ -300,191 +106,9 @@
         "artifacts": []
       },
       {
-        "name": "gpioPortJ",
-        "kind": "native",
-        "base": 1073882112,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortK",
-        "kind": "native",
-        "base": 1073883136,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "ethernet",
-        "kind": "native",
-        "base": 1073905664,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi1",
-        "kind": "native",
-        "base": 1073819648,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi2",
-        "kind": "native",
-        "base": 1073756160,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi3",
-        "kind": "native",
-        "base": 1073757184,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi4",
-        "kind": "native",
-        "base": 1073820672,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi5",
-        "kind": "native",
-        "base": 1073827840,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi6",
-        "kind": "native",
-        "base": 1073828864,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "dma1",
-        "kind": "native",
-        "base": 1073897472,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "dma2",
-        "kind": "native",
-        "base": 1073898496,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "ltdc",
-        "kind": "native",
-        "base": 1073833984,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "dma2d",
-        "kind": "native",
-        "base": 1073917952,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c1",
-        "kind": "i2c",
-        "base": 1073763328,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c2",
-        "kind": "i2c",
-        "base": 1073764352,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c3",
-        "kind": "i2c",
-        "base": 1073765376,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c4",
-        "kind": "i2c",
-        "base": 1073766400,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "syscfg",
-        "kind": "native",
-        "base": 1073821696,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "lptim1Isr",
-        "kind": "native",
-        "base": 1073751040,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "rtc",
-        "kind": "native",
-        "base": 1073752064,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "rcc",
         "kind": "native",
         "base": 1073887232,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "rng",
-        "kind": "native",
-        "base": 1342572544,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "pwrCr1",
-        "kind": "native",
-        "base": 1073770496,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "pwrCsr1",
-        "kind": "native",
-        "base": 1073770500,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "sdMmcSta",
-        "kind": "native",
-        "base": 1073818676,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer5",
-        "kind": "native",
-        "base": 1073744932,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer6",
-        "kind": "native",
-        "base": 1073745920,
         "registers": [],
         "artifacts": []
       },
@@ -499,6 +123,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
         "registers": [],
         "artifacts": []
       },
@@ -521,6 +152,52 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 800000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortI",
+        "pin": 1,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 55,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 34,
+            "state": "0"
+          },
+          {
+            "cycle": 55,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 1
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortI",
+      "number": 1,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
@@ -540,7 +217,7 @@
     "flash_used_bytes": 1268,
     "ram_static_bytes": 0,
     "flash_total_bytes": 2097152,
-    "ram_total_bytes": 268435456,
+    "ram_total_bytes": 393216,
     "flash_used_pct": 0.06,
     "ram_static_pct": 0.0,
     "notes": [
@@ -570,13 +247,6 @@
     "memory_reads": 76,
     "memory_writes": 6,
     "peripheral_accesses": 14,
-    "exceptions": 0,
-    "pc_samples": [
-      {
-        "pc": 134218978,
-        "count": 3125,
-        "symbol": "firmware_stm32f746_demo::__cortex_m_rt_main"
-      }
-    ]
+    "exceptions": 0
   }
 }

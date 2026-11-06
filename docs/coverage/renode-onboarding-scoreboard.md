@@ -8,8 +8,8 @@
 - not_run: `72`
 - pass: `170`
 - fail: `3`
-- median_elapsed_ms: `1295`
-- median_elapsed_seconds: `1.295`
+- median_elapsed_ms: `1297`
+- median_elapsed_seconds: `1.297`
 - threshold_seconds: `3600`
 - threshold_met: `173/173`
 
@@ -135,7 +135,7 @@
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `754` | `0.754` | `True` | `n/a` | n/a | n/a |
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `2733` | `2.733` | `True` | `n/a` | n/a | n/a |
 | `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `2156` | `2.156` | `True` | `n/a` | n/a | n/a |
-| `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `1266` | `1.266` | `True` | `n/a` | n/a | n/a |
+| `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `10204` | `10.204` | `True` | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2391` | `2.391` | `True` | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `n/a` | n/a | n/a |
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | `n/a` | n/a | n/a |
