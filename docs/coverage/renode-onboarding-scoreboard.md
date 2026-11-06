@@ -2,23 +2,23 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `213`
-- booted: `211/245`
-- boot_and_smoke_passed: `211/245`
-- not_run: `32`
-- pass: `211`
+- run_attempted: `214`
+- booted: `212/245`
+- boot_and_smoke_passed: `212/245`
+- not_run: `31`
+- pass: `212`
 - fail: `2`
-- median_elapsed_ms: `1239`
-- median_elapsed_seconds: `1.239`
+- median_elapsed_ms: `1251`
+- median_elapsed_seconds: `1.251`
 - threshold_seconds: `3600`
-- threshold_met: `213/213`
+- threshold_met: `214/214`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
 | Target | Status | Run Attempted | Booted | Smoke Passed | Elapsed (ms) | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |
 |---|---|---|---|---|---:|---:|---|---|---|---|
 | `A2_CV32E40P` | `pass` | `True` | `yes` | `yes` | `91017` | `91.017` | `True` | `n/a` | n/a | n/a |
-| `a20` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted. |
+| `a20` | `pass` | `True` | `yes` | `yes` | `270406` | `270.406` | `True` | `n/a` | n/a | n/a |
 | `acrn_x86_64` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no x86-64 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `alif_ae822fa0e5597bs0` | `pass` | `True` | `yes` | `yes` | `7479` | `7.479` | `True` | `n/a` | n/a | n/a |
 | `ambiq-apollo4` | `pass` | `True` | `yes` | `yes` | `5634` | `5.634` | `True` | `n/a` | n/a | n/a |

@@ -1,0 +1,29 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+   Compiling bindgen v0.71.1
+   Compiling unicorn-engine-sys v2.1.5
+   Compiling bitflags v2.11.1
+   Compiling labwired-config v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/config)
+   Compiling labwired-core v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/core)
+   Compiling unicorn-engine v2.1.5
+   Compiling gdbstub v0.7.10
+   Compiling labwired-loader v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/loader)
+   Compiling gdbstub_arch v0.3.3
+   Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/gdbstub)
+   Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/labwired-fuzz)
+   Compiling svd-ingestor v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/svd-ingestor)
+   Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/cli)
+    Finished `native-system` profile [optimized] target(s) in 4m 28s

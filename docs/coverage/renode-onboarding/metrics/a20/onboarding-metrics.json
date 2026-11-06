@@ -1,33 +1,38 @@
 {
   "target_id": "a20",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
   "crate": null,
   "target_triple": null,
-  "script": "",
+  "script": "examples/renode-onboarding/a20-a7-uart-smoke.yaml",
   "system": "configs/systems/onboarding/a20.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T17:54:54Z",
-  "finished_at_utc": "2026-11-06T17:54:54Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No compatible firmware crate and smoke script are mapped for this imported descriptor; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-06T19:11:40Z",
+  "finished_at_utc": "2026-11-06T19:16:10Z",
+  "elapsed_seconds": 271,
+  "elapsed_ms": 270406,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 268.857,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 1.529
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 268857,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 1529
+  },
+  "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf"
 }

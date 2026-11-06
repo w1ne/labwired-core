@@ -15,6 +15,12 @@ SMOKE_RUNNER = REPO_ROOT / "scripts" / "onboarding_smoke.sh"
 SCOREBOARD_GENERATOR = REPO_ROOT / "scripts" / "generate_onboarding_scoreboard.py"
 DESCRIPTOR_ROOT = REPO_ROOT / "configs" / "onboarding"
 SMOKE_MAPPINGS = {
+    "a20": {
+        "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf",
+        "script": "examples/renode-onboarding/a20-a7-uart-smoke.yaml",
+        "cli_features": "qemu-arm",
+        "cli_profile": "native-system",
+    },
     "lpc2294": {
         "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf",
         "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",

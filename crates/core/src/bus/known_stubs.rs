@@ -416,11 +416,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          stm32f401cdu6 (+3 more).",
     ),
     (
-        "sunximmc",
-        "Allwinner sunxi MMC controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/a20.",
-    ),
-    (
         "system_stub",
         "ESP32 / ESP32-S3 SYSTEM (and classic I2S/PCNT/RMT/UHCI) windows, authored as \
          explicit placeholders so the address decodes. Used by: esp32, esp32s3, esp32s3-zero.",

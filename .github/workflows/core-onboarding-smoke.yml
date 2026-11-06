@@ -215,6 +215,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # One A20 Cortex-A7 PE, a bounded DDR aperture and UART0 polled TX;
+          # the BROM, multicore boot and other SoC peripherals are not modeled.
+          - id: a20
+            prebuilt_firmware: tests/fixtures/a20-a7-uart-smoke.elf
+            cli_features: qemu-arm
+            cli_profile: native-system
+            script: examples/renode-onboarding/a20-a7-uart-smoke.yaml
+            system: configs/systems/onboarding/a20.yaml
           # ARM7TDMI CPU execution plus only the imported UART0 TX write path;
           # no other LPC2294 peripheral registers are claimed by this smoke.
           - id: lpc2294
