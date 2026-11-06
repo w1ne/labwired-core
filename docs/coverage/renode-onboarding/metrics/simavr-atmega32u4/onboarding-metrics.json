@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/simavr-atmega32u4-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-atmega32u4.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T06:40:09Z",
-  "finished_at_utc": "2026-11-06T06:41:42Z",
-  "elapsed_seconds": 93,
-  "elapsed_ms": 92061,
+  "started_at_utc": "2026-11-06T06:45:23Z",
+  "finished_at_utc": "2026-11-06T06:47:24Z",
+  "elapsed_seconds": 122,
+  "elapsed_ms": 121577,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 91.408,
+    "build_cli": 121.057,
     "build_firmware": null,
-    "run_smoke": 0.643
+    "run_smoke": 0.509
   },
   "stages_ms": {
-    "build_cli": 91408,
+    "build_cli": 121057,
     "build_firmware": null,
-    "run_smoke": 643
+    "run_smoke": 509
   },
   "prebuilt_firmware": "tests/fixtures/avr/atmega32u4-gpio-smoke.elf"
 }
