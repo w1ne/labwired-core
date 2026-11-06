@@ -101,6 +101,26 @@
         "lane": "none"
       }
     },
+    "atmega328pb": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_atmega328pb_usart1.rs",
+        "test": "atmega328pb_firmware_uses_usart1_and_drives_pb5",
+        "signal": "the committed AVR-GCC ELF compiled with -mmcu=atmega328pb prints `PB_USART1_OK` through USART1 UDR1; the integration test asserts captured serial and PB5 high, and examples/atmega328pb-usart1/io-smoke.yaml asserts the serial marker under `labwired test`. The host AVR-LibC lacks a PB header/startup object, so the example supplies data-space register definitions and a reset vector; USART1 interrupts remain unmodelled.",
+        "lane": "cargo test -p labwired-core --test avr_atmega328pb_usart1; cargo run -q -p labwired-cli -- test --script examples/atmega328pb-usart1/io-smoke.yaml --output-dir out/boards/atmega328pb-usart1/io-smoke --no-uart-stdout"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No ATmega328PB SPI evidence is included in this slice.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No ATmega328PB I2C evidence is included in this slice.",
+        "lane": "none"
+      }
+    },
     "atmega1281": {
       "in_boards": true,
       "uart": {

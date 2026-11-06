@@ -359,6 +359,10 @@
       "expect": null,
       "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
     },
+    "atmega328pb": {
+      "how": "needs-build",
+      "why": "The ATmega328PB USART1 model is being added to core; the released clean-install CLI does not contain it yet. Promote to a runnable smoke after a release includes this model."
+    },
     "atsamd21g18a": {
       "how": "committed",
       "firmware": "tests/fixtures/samd21-smoke.elf",
