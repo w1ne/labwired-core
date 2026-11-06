@@ -53,8 +53,8 @@ const DPORT_BASE: u32 = 0x3FF0_0000;
 // SPI3 / VSPI controller (TRM §7). Free general-purpose SPI on classic ESP32
 // (SPI0/SPI1 are the flash controllers). Wired as a real Esp32Spi model.
 const SPI3_BASE: u32 = 0x3FF6_5000;
-// I2C0 / I2C_EXT0 controller (TRM §11). Real command-list engine; a BMP280 is
-// attached on the bus at address 0x76 by configure_xtensa_esp32.
+// I2C0 / I2C_EXT0 controller (TRM §11). Real command-list engine; the Tier-1
+// system manifest explicitly attaches its BMP280 at address 0x76.
 const I2C0_BASE: u32 = 0x3FF5_3000;
 // SENS block (TRM §29.4) — the classic ESP32 has no APB_SARADC; the one-shot
 // ("RTC controller") ADC path the IDF adc1_get_raw driver uses lives here.

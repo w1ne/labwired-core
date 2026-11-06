@@ -1,57 +1,101 @@
-# ESP32-DevKitC-32E GPIO + UART0 console smoke
+# ESP32-DevKitC-32E GPIO, UART0, and BME280 I2C smokes
 
-**Demand rank:** ESP32 is rank 1 in the demand list (38% in the 2025 JetBrains
-State of Embedded MCU survey). This extends the existing ESP32-DevKitC-32E
-profile from GPIO-only to GPIO plus UART0 output; it does not add a chip or
-board variant.
+**Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
+use). This adds a real sensor path to the already-modelled ESP32-DevKitC-32E;
+it is peripheral depth on the highest-demand family, not a new MCU target.
 
-## Board and scope
+## Board and modeled scope
 
-The board is Espressif's ESP32-DevKitC-32E with an ESP32-WROOM-32E module and
-4 MB flash. The narrow profile exposes the classic ESP32 GPIO and UART0 models.
-It maps J3 pin 2 to GPIO23. The smoke observes GPIO23 directly and does not
-invent an on-board user LED; the board's 5 V power indicator is not GPIO-driven.
-For a physical blink, connect an LED in series with a resistor from GPIO23 to
-GND.
+The board is Espressif's exact **ESP32-DevKitC-32E** with an ESP32-WROOM-32E
+module and 4 MB flash. The narrow board profile exposes the classic ESP32 GPIO,
+UART0 console, and I2C0 models. GPIO23 maps to J3 pin 2; it is a header pin,
+not a built-in LED. For a physical blink, connect an LED in series with a
+resistor from GPIO23 to GND.
 
 | Board connection | MCU behavior | Smoke |
 | --- | --- | --- |
-| J3 pin 2 | GPIO23 | Arduino firmware toggles output; local assertion requires 16 edges |
-| UART0 output | Serial console capture | Sends `ESP32_DEVKITC32E_UART0_OK`; local assertion checks the UART marker |
+| J3 pin 2 | GPIO23 | Base smoke toggles the output and requires at least 16 edges |
+| UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
+| J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
+
+The BME280 breakout uses the standard `0x77` address and is powered directly
+from board 3V3/GND. Firmware reads ID register `0xD0` (`0x60`) and the raw
+temperature registers `0xFA..0xFC` (`0x082DC0` in the deterministic model).
+The breakout, rather than a built-in board component, is declared as an
+external device in the BME280 system manifest.
 
 The UART0 controller is modeled. The board's USB-to-UART bridge and the
-pin-level UART TX/RX waveforms are not, so the console capture does not prove
-USB serial behavior or a signal at the board header. Wi-Fi/Bluetooth, I2C,
-SPI, timers, flash boot behavior, and the power LED are also outside this
-profile. Espressif's live guide and the lifecycle/availability check are in
-[`evidence/vendor-status.md`](evidence/vendor-status.md).
+pin-level UART TX/RX waveforms are not, so console capture does not prove USB
+serial behavior or a signal at the board header. Wi-Fi/Bluetooth, SPI, timers,
+flash boot behavior, and the 5 V power LED are outside these profiles. The
+classic ESP32 builder still has zero-answering windows for Wi-Fi MAC/PHY,
+I2S0/1, UHCI0, RMT, and PCNT, along with APB_CTRL and the DPORT analog-AHB
+fallbacks. The board profiles do not claim those blocks.
 
-## Firmware
+## Copy-paste firmware example
 
-The committed sketch uses Arduino `Serial` and the ESP-IDF GPIO API. Copy it
-into `src/main.cpp` in a PlatformIO `esp32dev` Arduino project:
+This complete Arduino sketch reads the chip ID and raw temperature registers
+from an Adafruit BME280 breakout on GPIO21/GPIO22:
 
 ```cpp
 #include <Arduino.h>
-#include <driver/gpio.h>
+#include <Wire.h>
 
-constexpr gpio_num_t kHeaderPin = GPIO_NUM_23;
+constexpr uint8_t kBme280Address = 0x77;
+
+bool readRegisters(uint8_t first, uint8_t *bytes, uint8_t count) {
+  Wire.beginTransmission(kBme280Address);
+  Wire.write(first);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(kBme280Address, count) != count) return false;
+  for (uint8_t i = 0; i < count; ++i) bytes[i] = Wire.read();
+  return true;
+}
+
+bool writeRegister(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(kBme280Address);
+  Wire.write(reg);
+  Wire.write(value);
+  return Wire.endTransmission() == 0;
+}
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("ESP32_DEVKITC32E_UART0_OK");
+  Wire.begin(21, 22, 100000);  // SDA=GPIO21, SCL=GPIO22
 
-  gpio_reset_pin(kHeaderPin);
-  gpio_set_direction(kHeaderPin, GPIO_MODE_OUTPUT);
-  gpio_set_level(kHeaderPin, 0);
+  uint8_t id = 0;
+  if (!readRegisters(0xD0, &id, 1) || id != 0x60) {
+    Serial.println("BME280 not found");
+    return;
+  }
+
+  // Enable humidity first, then temperature/pressure oversampling and normal mode.
+  if (!writeRegister(0xF2, 0x01) || !writeRegister(0xF4, 0x27)) {
+    Serial.println("BME280 setup failed");
+    return;
+  }
+  delay(100);
+
+  uint8_t temperature[3] = {};
+  if (!readRegisters(0xFA, temperature, sizeof(temperature))) {
+    Serial.println("BME280 read failed");
+    return;
+  }
+  const uint32_t raw = (static_cast<uint32_t>(temperature[0]) << 12) |
+                       (static_cast<uint32_t>(temperature[1]) << 4) |
+                       (temperature[2] >> 4);
+  Serial.printf("BME280_TEMP_RAW=0x%06lX\n", static_cast<unsigned long>(raw));
 }
 
-void loop() {
-  static bool output_high = false;
-  output_high = !output_high;
-  gpio_set_level(kHeaderPin, output_high ? 1 : 0);
-}
+void loop() {}
 ```
+
+The local acceptance firmware is
+[`firmware/src/bme280_smoke.cpp`](firmware/src/bme280_smoke.cpp). It programs
+the classic ESP32 I2C0 command registers directly and reads the same ID and
+temperature registers. The Arduino ESP32 3.3.12 `Wire` driver stalls after its
+first split-command `END_DETECT` boundary in the current simulator, so the
+local smoke does not claim to verify that driver path.
 
 ## Reproduce
 
@@ -59,23 +103,18 @@ From the repository root:
 
 ```sh
 RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
-  --target-id esp32-devkitc-32e \
-  --script examples/esp32-devkitc-32e/io-smoke.yaml \
-  --system configs/systems/esp32-devkitc-32e-gpio-smoke.yaml \
-  --out-dir examples/esp32-devkitc-32e/evidence \
-  --firmware-build-script scripts/build-esp32-devkitc-32e-smoke.sh
+  --target-id esp32-devkitc-32e-bme280 \
+  --script examples/esp32-devkitc-32e/bme280-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-bme280.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/bme280 \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-bme280.sh
 ```
 
-The firmware build log, local simulator result, and generated onboarding
-metrics are committed under `evidence/`. The smoke requires the UART marker and
-at least 16 GPIO23 edges. This is local digital-twin evidence, not a
-physical-board run.
+The build log, local simulator output, and generated metrics are committed
+under `evidence/bme280/`. This is deterministic digital-twin evidence, not a
+physical-board run. The classic ESP32 hosted verifier does not support its
+serial oracle; the committed local CLI smoke is the acceptance evidence.
 
-The hosted `labwired_verify` rejects a serial oracle for the classic ESP32 with
-`SERIAL_NOT_OBSERVABLE`: that hosted profile stubs `HardwareSerial`. Its result
-is recorded separately from the local CLI smoke as `unsupported`; it is not a
-model-verification pass. The exercised GPIO and UART blocks use real models.
-The wider classic ESP32 builder still installs zero-answering `SystemStub`
-windows for Wi-Fi MAC/PHY and unused I2S/PCNT/RMT/UHCI blocks. APB_CTRL has a
-separate register placeholder, and the analog-AHB catch-all reads as zero.
-This smoke does not assert behavior from those blocks.
+The current lifecycle and stock check is in
+[`evidence/vendor-status.md`](evidence/vendor-status.md). The evidence records
+why the exact board and WROOM-32E variant satisfy the no-obsolete-parts rule.

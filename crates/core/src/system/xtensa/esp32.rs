@@ -575,24 +575,11 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     register_esp32_peripherals(bus);
 
     // I2C0 (I2C_EXT0, TRM §11) at 0x3FF5_3000 — real command-list engine
-    // (`peripherals::esp32::i2c::Esp32I2c`). Built directly (not via the table
-    // loop) so a board-level I2C slave is attached: a BMP280 at 0x76, the
-    // canonical register-pointer device, lets firmware drive a full
-    // write-pointer / repeated-start / read transaction and read back genuine
-    // device data (CHIP_ID 0x58). Source 49 = ETS_I2C_EXT0_INTR_SOURCE.
+    // (`peripherals::esp32::i2c::Esp32I2c`). Board-level I2C slaves are
+    // attached only from the system manifest below, so a bare ESP32 board
+    // does not acquire a phantom sensor. Source 49 = ETS_I2C_EXT0_INTR_SOURCE.
     let i2c0 = crate::peripherals::esp32::i2c::Esp32I2c::new();
     bus.add_peripheral("i2c0", 0x3FF5_3000, 0x1000, None, Box::new(i2c0));
-    // Register first, then attach through the single bus choke point so the
-    // slave is wrapped into the shared bus trace (universal logic analyzer).
-    bus.attach_i2c_slave(
-        "i2c0",
-        crate::peripherals::components::build_i2c_device(
-            "bmp280",
-            &std::collections::HashMap::new(),
-        )
-        .expect("the bmp280 descriptor is embedded"),
-    )
-    .expect("i2c0 just registered as Esp32I2c");
     // Bind I2C0's SCL/SDA wire to the classic GPIO output matrix, so a pad the
     // firmware routes to I2CEXT0_SCL/SDA (signals 29/30) carries the real
     // waveform for `read_gpio_pad` and the in-engine logic analyzer. Must come
