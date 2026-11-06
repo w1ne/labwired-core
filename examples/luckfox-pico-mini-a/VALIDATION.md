@@ -12,6 +12,7 @@ Original record: **2026-10-12**; updated with later joint evidence on **2026-10-
 | Dimensions | Official shared Mini A/B dimension image, manually inspected | Documented; no physical measurement |
 | Cortex-A7 core prototype | Separate [prototype document](../../docs/qemu-arm-core.md) and [`qemu_arm_core.rs`](../../crates/core/tests/qemu_arm_core.rs) | See that document for executed commands and receipts; not board proof |
 | RV1103 configs and reset contract | Generic CPU/memory-only declarations; reset/ROM/SD/BSP absent; separate Linux platform does not populate this YAML | Declared; below L0 |
+| Generic analog netlists | [`cosim_luckfox_pico_mini_a_analog`](../../crates/core/tests/cosim_luckfox_pico_mini_a_analog.rs): Beta NTC divider and unrelated Shockley diode solve to separate simulation-only input endpoints; voltages, threshold crossings and hysteresis are asserted | Model fixture only; no GPIO, pinmux, physical pad mapping or SARADC conversion |
 | Deterministic Mini A UART smoke | No board firmware, result JSON or UART capture | Pending; no L1 |
 | Reduced RV1103 direct Linux boot | [Native zImage receipt](../luckfox-pico-mini-a-linux/VALIDATION.md): real MMU/GIC/timer/UART2, kernel/PID1/mounts/proc/uname and sleep/uptime | Passed locally; SD/vendor BSP/physical boot pending |
 | I2C3 + ADXL345 | Actual native I2C3 controller and shared ADXL345 kit; decoded transactions, registers and synthetic XYZ inputs in the eight-phase Linux receipt | Accepted in the reduced native basket; physical/pinmux/electrical qualification unavailable |
