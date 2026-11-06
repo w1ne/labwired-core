@@ -813,7 +813,36 @@ pub fn try_build(
                 )
             }
         }
-        "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
+        "avr_gpio" => {
+            let pin_count = p_cfg
+                .config
+                .get("pin_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8);
+            if !(1..=8).contains(&pin_count) {
+                anyhow::bail!(
+                    "avr_gpio '{}': config.pin_count must be in 1..=8, got {pin_count}",
+                    p_cfg.id
+                );
+            }
+            let layout = p_cfg.config.get("layout").and_then(|v| v.as_str());
+            match layout {
+                None | Some("atmega") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_with_pin_count(
+                        pin_count as u8,
+                    ),
+                ),
+                Some("avrxt_vport") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_avrxt_vport(
+                        pin_count as u8,
+                    ),
+                ),
+                Some(other) => anyhow::bail!(
+                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport)",
+                    p_cfg.id
+                ),
+            }
+        }
         "pic24_gpio" => {
             // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
             // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
@@ -1180,7 +1209,13 @@ pub fn try_build(
         // (F1), or — `[channel, selector]` — to a channel while its L4
         // `CSELR` nibble holds the selector.
         "dma" | "stm32dma" => {
-            let mut dma = crate::peripherals::dma::Dma1::new();
+            let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
+                Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some(profile) => {
+                    anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
+                }
+            };
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()
@@ -1216,6 +1251,17 @@ pub fn try_build(
                 .and_then(|v| v.as_str())
                 .unwrap_or("dma1");
             let mut mux = crate::peripherals::dmamux::Dmamux::new(channels, dma);
+            if let Some(total) = p_cfg
+                .config
+                .get("physical_channels")
+                .and_then(|v| v.as_u64())
+            {
+                anyhow::ensure!(
+                    total as usize >= channels && total <= 32,
+                    "dmamux physical_channels must cover modeled channels and be <=32"
+                );
+                mux = mux.with_physical_channels(total as usize);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let Some(id) = v.as_u64() else {
                     anyhow::bail!(

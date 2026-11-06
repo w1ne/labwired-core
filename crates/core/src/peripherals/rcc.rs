@@ -2427,6 +2427,8 @@ impl RccModel for G4Rcc {
 // SWS hold.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct G0Rcc {
+    #[serde(skip)]
+    live_clocks: Option<Arc<super::stm32g0_clock::G0ClockRegisters>>,
     cr: u32,        // 0x00 — HSION bit8 → HSIRDY bit10
     icscr: u32,     // 0x04 — HSI16 calibration, plain storage
     cfgr: u32,      // 0x08 — SW[2:0] → SWS[5:3]
@@ -2576,6 +2578,9 @@ impl RccModel for G0Rcc {
             _ => {
                 crate::census_reg!("rcc:G0Rcc", offset, "write");
             }
+        }
+        if let Some(live) = &self.live_clocks {
+            live.publish(self.cr, self.cfgr, self.pllcfgr, self.ccipr);
         }
     }
 
@@ -2851,6 +2856,19 @@ impl Rcc {
         }
     }
 
+    /// Opt-in live G0 clock contract for a fixed-operating-point transceiver.
+    /// Other RCC families are not silently treated as G0.
+    pub fn g0_clock_registers(&mut self) -> Option<Arc<super::stm32g0_clock::G0ClockRegisters>> {
+        let Self::Stm32G0(r) = self else {
+            return None;
+        };
+        let live = r
+            .live_clocks
+            .get_or_insert_with(|| Arc::new(Default::default()));
+        live.publish(r.cr, r.cfgr, r.pllcfgr, r.ccipr);
+        Some(live.clone())
+    }
+
     fn model(&self) -> &dyn RccModel {
         match self {
             Self::Stm32F1(r) => r,
@@ -2958,6 +2976,10 @@ impl crate::Peripheral for Rcc {
     // Exposed so the bus can resolve a peripheral's symbolic clock-gate register
     // name to a concrete offset via the family-aware `rcc_reg_offset`.
     fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
 }
