@@ -172,8 +172,11 @@ fn cores() -> Vec<CoreUnderTest> {
     vec![
         #[cfg(feature = "qemu-arm-system")]
         CoreUnderTest {
-            name: "CortexA7System",
+            // `CortexA7System` is a public alias; the sole `Cpu` impl is
+            // `ArmSystem`. Exercise its ARM7TDMI profile, used by LPC2294.
+            name: "ArmSystem",
             entry: 0x100,
+            // `mov r0, #1` ×4 (ARM state, 4 bytes each).
             program: std::iter::repeat_n(0xe3a00001u32, 4)
                 .flat_map(u32::to_le_bytes)
                 .collect(),
@@ -181,7 +184,10 @@ fn cores() -> Vec<CoreUnderTest> {
             opcode_bytes: 4,
             sp: 0x8000,
             build: |_entry, _program| {
-                let mut cpu = labwired_core::cpu::CortexA7System::new().unwrap();
+                let mut cpu = labwired_core::cpu::ArmSystem::with_model(
+                    labwired_core::cpu::ArmModel::Arm7Tdmi,
+                )
+                .unwrap();
                 cpu.executable_range(0, 0x10000).unwrap();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)

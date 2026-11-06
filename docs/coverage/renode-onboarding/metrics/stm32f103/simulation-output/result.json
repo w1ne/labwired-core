@@ -60,6 +60,18 @@
     },
     {
       "assertion": {
+        "uart_contains": "TMP102_CONFIG=0000FFF0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_CONFIG_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "DONE"
       },
       "passed": true
@@ -77,21 +89,21 @@
       10,
       3221225472,
       3221225472,
-      1073759232,
+      3221225472,
+      65520,
       1073759232,
       999999,
-      25,
       536891376,
-      0,
+      1073763348,
       0,
       0,
       0,
       999999,
       536891376,
-      50,
-      134224172
+      134226435,
+      134225768
     ],
-    "pc": 134224172,
+    "pc": 134225768,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -104,7 +116,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "f2470f171558ab9a87bd24ac351acb5a4e7e0a765aabbcf06d77f8ecd917bb8f",
+  "firmware_hash": "1934195c1fd127c0910f9c2cc2936a9c41d2f642ff52e9a779f49b82f8a919d6",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -153,7 +165,7 @@
               "inputs": {},
               "powered": true,
               "registers": {
-                "CONFIG": 24736,
+                "CONFIG": 65520,
                 "TEMP": 6528,
                 "T_HIGH": 20480,
                 "T_LOW": 19200
@@ -210,7 +222,7 @@
               "inputs": {},
               "powered": true,
               "registers": {
-                "CONFIG": 24736,
+                "CONFIG": 65520,
                 "TEMP": 6528,
                 "T_HIGH": 20480,
                 "T_LOW": 19200
@@ -456,6 +468,18 @@
         "end_cycle": 10000
       },
       {
+        "text": "TMP102_CONFIG=0000FFF0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102_CONFIG_WRITE_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "DONE",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -466,14 +490,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 7347,
+    "text_bytes": 8735,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 7347,
+    "flash_used_bytes": 8735,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 11.21,
+    "flash_used_pct": 13.33,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -499,13 +523,13 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 1493,
-    "memory_writes": 136,
-    "peripheral_accesses": 1420,
+    "memory_reads": 2186,
+    "memory_writes": 144,
+    "peripheral_accesses": 1964,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134224172,
+        "pc": 134225768,
         "count": 195312,
         "symbol": "firmware_f103_i2c_demo::main"
       }
