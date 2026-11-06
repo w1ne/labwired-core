@@ -2,6 +2,9 @@
 
 Boots a bare-register Cortex-M7 smoke on the Microchip SAM E70 Xplained map
 and proves the EDBG console (USART1), the LED0 output path and the SW0 input.
+A separate analog co-simulation fixture routes a generic Beta NTC divider and
+Shockley diode to the EXT1 analog pads (PC31 and PA19) through PIO's
+voltage-thresholded input path; AFEC conversion is not modeled.
 
 ## What the firmware does
 
@@ -58,6 +61,7 @@ that touches configs/ or examples/.
 | :--- | :--- |
 | `system.yaml` | Board manifest (same as `configs/systems/sam-e70-xplained.yaml`) |
 | `io-smoke.yaml` | Ordered UART assertions over 4,000,000 steps |
+| `analog-ntc-diode-system.yaml` | Generic NTC and diode netlists routed to EXT1 PC31/PA19 |
 | `zephyr-hello.yaml` | Stock Zephyr v3.7.0 `hello_world` |
 | `zephyr-sync.yaml` | Stock Zephyr v3.7.0 `synchronization` (threads, semaphore, SysTick sleep) |
 | `ci/build.sh`, `ci/test.sh` | Board gate build and proof |
@@ -68,3 +72,13 @@ that touches configs/ or examples/.
 The committed fixture `tests/fixtures/sam-e70-xplained-smoke.elf` is the same
 build; `firmware_survival::test_sam_e70_xplained_smoke_survival` boots it.
 SIM-DERIVED: there is no SAM E70 bench part.
+
+Run the analog route proof from `core/` with:
+
+```bash
+cargo test -p labwired-core --test cosim_same70_analog -- --nocapture
+```
+
+The threshold ratios are test assumptions, not SAM E70 silicon threshold
+data. This proves a GPIO-level route on the board's EXT1 analog pins; AFEC
+conversion is outside this profile's current model.

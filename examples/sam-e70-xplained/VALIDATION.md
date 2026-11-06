@@ -25,6 +25,7 @@ there is no SAM E70 bench part, and no Renode parity claim is made.
 | USART1 async TX, 8N1, `BRGR` CD 6 / FP 4 | smoke-tested | every console line, polled on `US_CSR.TXRDY` |
 | PIOC `PER/OER/SODR/CODR/ODSR/PDSR` (LED0 on PC8, active low) | smoke-tested | `led=on pin=0 odsr=00000000` … (the whole-ODSR read proves no other pin moved) |
 | PIOA `PUER` + `PDSR` (SW0 on PA11) | smoke-tested | `sw0=1`: the released button reads high through the pull-up |
+| Generic analog-to-GPIO route on EXT1 ADC(+)/PC31 and ADC(-)/PA19 | co-sim tested | `cosim_same70_analog::sam_e70_xplained_ntc_and_diode_netlists_reach_ext1_pio_inputs`; Beta NTC and Shockley diode voltages solve to distinct pads and are asserted through PDSR with test-only thresholds |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | USART/PIO interrupts | **not modelled** in this slice | the smoke is polled |
@@ -144,3 +145,13 @@ spins forever in `soc_pmc_switch_mainck_to_fastrc` waiting for `MOSCRCS`.
   platform's 256 MiB flash at `0x08000000` and 256 MiB of RAM, which is not
   the SAM E70 map. It is kept, marked superseded, because
   `crates/core/src/bus/known_stubs.rs` still cites it.
+
+## Analog pad routing (verified 2026-11-06)
+
+```bash
+cargo test -p labwired-core --test cosim_same70_analog -- --nocapture
+# 1 passed: generic NTC and Shockley diode netlists route to PC31/PA19 PDSR
+```
+
+This uses test-only GPIO thresholds. It does not claim AFEC conversions or
+silicon threshold values.
