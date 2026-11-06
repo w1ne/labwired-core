@@ -5,14 +5,27 @@
 # See the LICENSE file in the project root for full license information.
 
 name: simavr-atmega1281
-description: 'atmega1281 (Atmel AVR). Declared from the simavr core-model - metadata-only T3 entry, not
-  runnable. Memory geometry: flash 128KB @ 0x0, ram 8KB @ 0x200.'
+description: >-
+  Imported ATmega1281 profile bounded to AVR8 instruction execution, 128 KiB
+  flash, and 8 KiB SRAM. No peripheral or board-I/O behavior is claimed.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-atmega1281.yaml
+validation:
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded AVR8 CPU and SRAM execution only; ideal rail assumed; whole platform remains unverified
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    avr8_cpu_sram_smoke: true
+    whole_platform: false
+    peripherals: false
+    board_io: false
+  timestamp_utc: '2026-11-06T09:49:30Z'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-atmega1281.validation.md
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

@@ -18,6 +18,7 @@ on:
       - "configs/onboarding/renesas_rz_g2l.yaml"
       - "configs/onboarding/cortex-a78.yaml"
       - "configs/onboarding/simavr-atmega1280.yaml"
+      - "configs/onboarding/simavr-atmega1281.yaml"
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
@@ -138,6 +139,9 @@ on:
       - "tests/fixtures/avr/atmega1280-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1280-cpu-smoke.elf"
       - "scripts/build_atmega1280_cpu_smoke.sh"
+      - "tests/fixtures/avr/atmega1281-cpu-smoke.c"
+      - "tests/fixtures/avr/atmega1281-cpu-smoke.elf"
+      - "scripts/build_atmega1281_cpu_smoke.sh"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -700,6 +704,12 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega1280-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-atmega1280-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega1280.yaml
+          # ATmega1281 is measured only for its imported AVR8 CPU and SRAM;
+          # the profile makes no peripheral or board-I/O claims.
+          - id: simavr-atmega1281
+            prebuilt_firmware: tests/fixtures/avr/atmega1281-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-atmega1281-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega1281.yaml
           # The Uno R4 import keeps the model-backed RA4M1 system, PORT1/PFS,
           # SysTick, and SCI2 profile exercised by its UART and D13 smoke.
           - id: arduino_uno_r4_minima

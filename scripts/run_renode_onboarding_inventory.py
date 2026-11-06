@@ -342,6 +342,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/atmega1280-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega1280-smoke.yaml",
     },
+    "simavr-atmega1281": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega1281-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-atmega1281-smoke.yaml",
+    },
     "efm32g210": {
         "crate": "firmware-efm32g210-smoke",
         "target": "thumbv7m-none-eabi",
