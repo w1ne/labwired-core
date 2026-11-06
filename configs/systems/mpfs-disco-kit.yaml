@@ -6,7 +6,9 @@
 #
 # Not modelled yet: the LEDs and buttons (fabric GPIO via the FPGA design),
 # DDR training and the HSS boot flow (images are loaded straight into the DDR
-# window, as the HSS leaves them before handing a U54 its entry point).
+# window, as the HSS leaves them before handing a U54 its entry point). The
+# chip descriptor's two generic analog input endpoints are simulation-only and
+# do not claim a physical GPIO, ADC, or connector route.
 name: "mpfs-disco-kit"
 chip: "../chips/mpfs095t.yaml"
 external_devices: []

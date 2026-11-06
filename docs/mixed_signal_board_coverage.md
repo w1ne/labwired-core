@@ -7,7 +7,7 @@ and asserts the result. Endpoints include an ADC conversion or a voltage-thresho
 input on profiles without an ADC. Generic chip bus tests, analog output traces without a board
 endpoint, and device-only unit tests do not count.
 
-Current inventory: **103 profiles; 59 have end-to-end analog coverage; 44 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
+Current inventory: **103 profiles; 60 have end-to-end analog coverage; 43 have no end-to-end analog coverage.** Each round selects the next uncovered profile and extends shared device, netlist, or routing support where needed. Coverage through GPIO thresholds does not imply ADC support.
 
 | System profile | End-to-end proof |
 |---|---|
@@ -66,7 +66,7 @@ Current inventory: **103 profiles; 59 have end-to-end analog coverage; 44 have n
 | `microbit-v1` | [`cosim_microbit_v1_analog.rs`](../crates/core/tests/cosim_microbit_v1_analog.rs)::`microbit_v1_ntc_and_diode_netlists_reach_distinct_adc_channels` — generic Beta NTC and unrelated Shockley diode solve into nRF51 ADC channels 0/1; 10-bit conversion results, temperature response, channel isolation, and an undriven AIN2 are asserted. Uses explicit ADC channel routes; physical pad aliases and silicon validation are not claimed. |
 | `microbit-v2` | [`cosim_microbit_v2_analog.rs`](../crates/core/tests/cosim_microbit_v2_analog.rs)::`microbit_v2_ntc_and_diode_netlists_reach_distinct_saadc_pads` — generic Beta NTC and unrelated Shockley diode netlists route through physical P0.02/AIN0 and P0.03/AIN1 with the edge rings' documented 10 MΩ pull-ups; solved voltages, 12-bit EasyDMA results, temperature response, channel isolation, and undriven P0.04/AIN2 are asserted while retaining the board's sensors and LED matrix |
 | `mimxrt595-evk` | [`cosim_mimxrt595_analog.rs`](../crates/core/tests/cosim_mimxrt595_analog.rs)::`mimxrt595_evk_ntc_and_diode_netlists_reach_gpio_pin_register` — generic Beta NTC and unrelated Shockley diode netlists route through mapped SW2/P0_10 and SW1/P0_25 into the modeled LPC GPIO PIN register; solved voltages, threshold transitions, and NTC hysteresis are asserted with test-only threshold assumptions. The profile has no modeled ADC, and no silicon threshold claim is made. |
-| `mpfs-disco-kit` | **NO E2E analog coverage** |
+| `mpfs-disco-kit` | [`cosim_mpfs_disco_kit_analog.rs`](../crates/core/tests/cosim_mpfs_disco_kit_analog.rs)::`mpfs_disco_kit_ntc_and_diode_netlists_reach_simulated_input_thresholds` — generic Beta NTC and unrelated Shockley diode netlists solve through two simulation-only input endpoints; solved voltages, threshold levels, and Schmitt hysteresis are asserted. This does not model MPFS MSS GPIO, FPGA fabric pads, connectors, or ADC, and thresholds are test assumptions. |
 | `nano-33-iot` | **NO E2E analog coverage** |
 | `nrf52-dk` | **NO E2E analog coverage** |
 | `nrf52840-dk` | **NO E2E analog coverage** |
