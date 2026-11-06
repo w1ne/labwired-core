@@ -67,6 +67,23 @@ fn arduino_nano_esp32_from_config_builds() {
 }
 
 #[test]
+fn arduino_nano_esp32_bme280_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/arduino-nano-esp32-bme280.yaml",
+        "esp32s3 / arduino-nano-esp32-bme280 must build",
+    );
+    assert_eq!(chip.name, "esp32s3-arduino-nano-bme280-smoke");
+    assert!(
+        bus.find_peripheral_index_by_name("gpio").is_some(),
+        "bus must expose esp32s3_gpio for the Nano's GPIO matrix"
+    );
+    assert!(
+        bus.find_peripheral_index_by_name("i2c0").is_some(),
+        "bus must expose esp32s3_i2c for A4/GPIO11 and A5/GPIO12"
+    );
+}
+
+#[test]
 fn atsamd51_from_config_builds() {
     let (chip, bus) = from_config(
         "configs/systems/metro-m4.yaml",

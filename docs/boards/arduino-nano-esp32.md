@@ -8,7 +8,7 @@ lists ESP32-S3R8 as Mass Production.
 
 ## Current modeled scope
 
-The narrow system profile at
+The GPIO-only system profile at
 [`configs/systems/arduino-nano-esp32.yaml`](../../configs/systems/arduino-nano-esp32.yaml)
 declares the ESP32-S3 GPIO model and all three active-low RGB LED contacts on
 GPIO46, GPIO0, and GPIO45. The smoke toggles all three pads, and the hosted
@@ -18,10 +18,17 @@ pad and does not guarantee their color assignment. This is **model evidence**,
 not a physical-board test. The hosted twin assumes an ideal 3.3 V rail, so
 power-on and brown-out reset behavior are not covered.
 
-The smoke does not claim Wi-Fi/Bluetooth, PSRAM, native USB, ADC, timer, I²C,
-or SPI support for this board profile. The hosted catalog's I²C map conflicts
-with Arduino's published A4/A5 mapping; those pins are intentionally not
-exposed as a verified board path here.
+The separate BME280 system profile at
+[`configs/systems/arduino-nano-esp32-bme280.yaml`](../../configs/systems/arduino-nano-esp32-bme280.yaml)
+models I²C0 routed through the documented A4/SDA GPIO11 and A5/SCL GPIO12
+pins. Its local firmware reads a BME280 ID and temperature register. The
+reproducible example and smoke evidence are in
+[`examples/arduino-nano-esp32-bme280/`](../../examples/arduino-nano-esp32-bme280/).
+
+The hosted catalog's default I²C aliases still point to GPIO8/GPIO9. The new
+profile and sketch use the manufacturer-published GPIO11/GPIO12 route
+explicitly. Wi-Fi/Bluetooth, PSRAM, native USB, ADC, timers, and SPI remain
+outside both narrow smoke profiles.
 
 ## Header pin map
 
@@ -56,11 +63,13 @@ alias did not drive the documented D13/GPIO48 high; the accepted smoke uses
 physical GPIO numbers directly. The hosted Arduino alias mapping remains
 unverified.
 
-The hosted catalog currently reports I²C on
-GPIO8/GPIO9, but Arduino's official pinout identifies A4/SDA as GPIO11 and
-A5/SCL as GPIO12. No I²C claim is made until that discrepancy is resolved.
+The hosted catalog's automatic I²C default remains GPIO8/GPIO9. The local
+system profile has a separate I²C path on Arduino's official A4/SDA GPIO11 and
+A5/SCL GPIO12 mapping, selected explicitly by the firmware.
 
 ## Evidence
 
 See [`examples/arduino-nano-esp32/`](../../examples/arduino-nano-esp32/) for
-the firmware, live vendor status, hosted model record, and verification output.
+the RGB GPIO smoke and
+[`examples/arduino-nano-esp32-bme280/`](../../examples/arduino-nano-esp32-bme280/)
+for the BME280 I²C smoke and live vendor-status record.
