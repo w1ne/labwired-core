@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `166`
-- booted: `165/245`
-- boot_and_smoke_passed: `165/245`
-- not_run: `79`
-- pass: `165`
+- run_attempted: `167`
+- booted: `166/245`
+- boot_and_smoke_passed: `166/245`
+- not_run: `78`
+- pass: `166`
 - fail: `1`
-- median_elapsed_ms: `1264`
-- median_elapsed_seconds: `1.264`
+- median_elapsed_ms: `1266`
+- median_elapsed_seconds: `1.266`
 - threshold_seconds: `3600`
-- threshold_met: `166/166`
+- threshold_met: `167/167`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -77,7 +77,7 @@
 | `efr32mg24` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `n/a` | n/a | n/a |
 | `efr32mg26` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `n/a` | n/a | n/a |
 | `efr32xg22` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `n/a` | n/a | n/a |
-| `egis_et171` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `egis_et171` | `pass` | `True` | `yes` | `yes` | `8152` | `8.152` | `True` | `n/a` | n/a | n/a |
 | `eos-s3` | `pass` | `True` | `yes` | `yes` | `736` | `0.736` | `True` | `n/a` | n/a | n/a |
 | `eos-s3-qomu` | `pass` | `True` | `yes` | `yes` | `1009` | `1.009` | `True` | `n/a` | n/a | n/a |
 | `eos-s3-quickfeather` | `pass` | `True` | `yes` | `yes` | `754` | `0.754` | `True` | `n/a` | n/a | n/a |

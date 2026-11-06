@@ -1159,6 +1159,13 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/andes_ae350_n25-smoke.yaml
             system: configs/systems/onboarding/andes_ae350_n25.yaml
+          # ET171 is narrowed to the generic RV32IM and Renode-mapped SRAM;
+          # the Andes Xandes extensions and imported peripheral claims are out of scope.
+          - id: egis_et171
+            crate: firmware-andes-ae350-n25-smoke
+            target: riscv32im-unknown-none-elf
+            script: examples/renode-onboarding/egis_et171-smoke.yaml
+            system: configs/systems/onboarding/egis_et171.yaml
           # Tock VeeR EL2 is narrowed to generic RV32IMC execution and the
           # code/RAM windows exercised by this direct-ELF memory smoke.
           - id: tock_veer_el2_sim

@@ -44,6 +44,11 @@ SMOKE_MAPPINGS = {
         "target": "riscv32im-unknown-none-elf",
         "script": "examples/renode-onboarding/andes_ae350_n25-smoke.yaml",
     },
+    "egis_et171": {
+        "crate": "firmware-andes-ae350-n25-smoke",
+        "target": "riscv32im-unknown-none-elf",
+        "script": "examples/renode-onboarding/egis_et171-smoke.yaml",
+    },
     "mpfs-icicle-kit": {
         "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
         "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",
