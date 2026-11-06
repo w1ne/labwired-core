@@ -98,58 +98,9 @@
   "inspect": {
     "peripherals": [
       {
-        "name": "led",
+        "name": "rcc",
         "kind": "native",
-        "base": 6,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart1",
-        "kind": "native",
-        "base": 1073821696,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart2",
-        "kind": "native",
-        "base": 1073759232,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart3",
-        "kind": "native",
-        "base": 1073760256,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart4",
-        "kind": "native",
-        "base": 1073761280,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart5",
-        "kind": "native",
-        "base": 1073762304,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart6",
-        "kind": "native",
-        "base": 1073812480,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "usart7",
-        "kind": "native",
-        "base": 1073813504,
+        "base": 1073876992,
         "registers": [],
         "artifacts": []
       },
@@ -161,13 +112,6 @@
         "artifacts": []
       },
       {
-        "name": "gpioPortB",
-        "kind": "native",
-        "base": 1207960576,
-        "registers": [],
-        "artifacts": []
-      },
-      {
         "name": "gpioPortC",
         "kind": "native",
         "base": 1207961600,
@@ -175,156 +119,9 @@
         "artifacts": []
       },
       {
-        "name": "gpioPortD",
+        "name": "usart1",
         "kind": "native",
-        "base": 1207962624,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortE",
-        "kind": "native",
-        "base": 1207963648,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "gpioPortF",
-        "kind": "native",
-        "base": 1207964672,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c1",
-        "kind": "i2c",
-        "base": 1073763328,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2c2",
-        "kind": "i2c",
-        "base": 1073764352,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi1",
-        "kind": "native",
-        "base": 1073819648,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "spi2",
-        "kind": "native",
-        "base": 1073756160,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer1",
-        "kind": "native",
-        "base": 1073818624,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer2",
-        "kind": "native",
-        "base": 1073741824,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer3",
-        "kind": "native",
-        "base": 1073742848,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer6",
-        "kind": "native",
-        "base": 1073745920,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer7",
-        "kind": "native",
-        "base": 1073746944,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer14",
-        "kind": "native",
-        "base": 1073750016,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer15",
-        "kind": "native",
-        "base": 1073823744,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer16",
-        "kind": "native",
-        "base": 1073824768,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "timer17",
-        "kind": "native",
-        "base": 1073825792,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "can",
-        "kind": "native",
-        "base": 1073767424,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "rtc",
-        "kind": "native",
-        "base": 1073752064,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "rcc",
-        "kind": "native",
-        "base": 1073876992,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "DMA",
-        "kind": "native",
-        "base": 1073872896,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "adc",
-        "kind": "native",
-        "base": 1073816576,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "crc",
-        "kind": "native",
-        "base": 1073885184,
+        "base": 1073821696,
         "registers": [],
         "artifacts": []
       },
