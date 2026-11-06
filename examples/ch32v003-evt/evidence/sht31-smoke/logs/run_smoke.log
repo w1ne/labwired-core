@@ -1,0 +1,4 @@
+2026-11-06T05:03:52.010688Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v003f4p6-sht31-smoke.yaml
+2026-11-06T05:03:52.087413Z  INFO labwired_loader: ELF Entry Point: 0x8000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  2/2 checks · i2c-smoke · 500000 steps · 0.08s

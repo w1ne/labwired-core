@@ -2291,6 +2291,21 @@ impl SystemBus {
             ("i2c2", 'b', 10, LINE_SCL, "I2C2_SCL"),
             ("i2c2", 'b', 11, LINE_SDA, "I2C2_SDA"),
         ];
+        // WCH CH32V003RM v1.9, I2C1 pin-remap table: reset mapping is
+        // PC1/SDA + PC2/SCL. The controller uses the same CR1/CR2/DR event
+        // register layout as the legacy F1 model, but its default pads differ
+        // from STM32F103; select this table only when the chip's RCC profile is
+        // explicitly `ch32v003`.
+        const CH32V003: &[I2cPadF1] = &[
+            ("i2c1", 'c', 2, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'c', 1, LINE_SDA, "I2C1_SDA"),
+        ];
+
+        let ch32v003 = self
+            .find_peripheral_index_by_name("rcc")
+            .and_then(|idx| self.peripherals[idx].dev.as_any())
+            .and_then(|any| any.downcast_ref::<crate::peripherals::rcc::Rcc>())
+            .is_some_and(crate::peripherals::rcc::Rcc::is_ch32v003);
 
         // Modern controller on an STM32G0 (`pad_map: stm32g0`): STM32G071
         // DS12232 port A/B alternate-function tables, AF6 column. The L4
@@ -2352,7 +2367,8 @@ impl SystemBus {
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {
-                        for &(i2c, p, pin, line, func) in F1 {
+                        let pads = if ch32v003 { CH32V003 } else { F1 };
+                        for &(i2c, p, pin, line, func) in pads {
                             if i2c == i2c_name && p == port {
                                 plan.push((port, pin, None, line, func));
                             }

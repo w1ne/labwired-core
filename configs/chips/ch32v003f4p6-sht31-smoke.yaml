@@ -1,0 +1,65 @@
+# Focused CH32V003F4P6 profile for USART1 output and a default-mapped I2C1
+# SHT31 read on the WCH-CH32V003EVT. I2C1 reuses the engine's STM32F1-shaped
+# event/register subset after checking WCH's CR1/CR2/DR map; this is not a claim
+# that the CH32V003 RCC, pin mux, or every I2C corner case matches STM32F1.
+name: ch32v003f4p6-sht31-smoke
+arch: riscv
+core: rv32ec
+registers_count: 16
+cpu_hz: 24_000_000
+
+flash:
+  base: 0x08000000
+  size: 16KB
+ram:
+  base: 0x20000000
+  size: 2KB
+
+pins:
+  PC1: { gpio: gpioc, bit: 1, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
+  PC2: { gpio: gpioc, bit: 2, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PD5: { gpio: gpiod, bit: 5, functions: [{ type: uart, peripheral: uart1, role: tx }] }
+
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    # Includes APB2PCENR@0x18 and APB1PCENR@0x1C; only the gates used below
+    # are modeled by the `ch32v003` RCC subset.
+    size: 32B
+    config:
+      profile: ch32v003
+
+  - id: gpioc
+    type: gpio
+    base_address: 0x40011000
+    size: 1KB
+    clock: { reg: apb2pcenr, bit: 4 }
+    config:
+      profile: ch32v003
+
+  - id: gpiod
+    type: gpio
+    base_address: 0x40011400
+    size: 1KB
+    clock: { reg: apb2pcenr, bit: 5 }
+    config:
+      profile: ch32v003
+
+  - id: uart1
+    type: uart
+    base_address: 0x40013800
+    size: 1KB
+    clock: { reg: apb2pcenr, bit: 14 }
+    config:
+      profile: stm32f1
+      pad_map: ch32v003
+
+  - id: i2c1
+    type: i2c
+    base_address: 0x40005400
+    size: 1KB
+    clock: { reg: apb1pcenr, bit: 1 }
+    config:
+      profile: stm32f1
+      debug_schema: ../peripherals/stm32f103/i2c1.yaml

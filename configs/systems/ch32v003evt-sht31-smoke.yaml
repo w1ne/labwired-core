@@ -1,0 +1,15 @@
+# WCH CH32V003EVT + an Adafruit SHT31-D breakout on default-mapped I2C1
+# (PC1/SDA, PC2/SCL). The focused profile claims I2C1 and USART1 only.
+name: ch32v003evt-sht31-smoke
+chip: ../chips/ch32v003f4p6-sht31-smoke.yaml
+cpu_hz: 24_000_000
+debug_uart: uart1
+external_devices:
+  - id: sht31
+    type: sht31
+    connection: i2c1
+    route:
+      sda: PC1
+      scl: PC2
+    config:
+      i2c_address: 0x44

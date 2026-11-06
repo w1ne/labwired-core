@@ -2764,21 +2764,24 @@ impl RccModel for U3Rcc {
     }
 }
 
-/// Narrow CH32V003 clock gates used by the GPIO and USART onboarding smokes.
+/// Narrow CH32V003 clock gates used by the GPIO, USART, and I2C onboarding smokes.
 ///
-/// The WCH reference manual places RCC_APB2PCENR at 0x4002_1018 and assigns
-/// bit 5 to IOPDEN and bit 14 to USART1EN. This profile models those reset-low
-/// gates only; oscillator selection, PLLs, reset controls, and all other RCC
-/// gates remain outside the descriptor's claim.
+/// The WCH reference manual places RCC_APB2PCENR at 0x4002_1018 (GPIOD bit 5,
+/// GPIOC bit 4, USART1 bit 14) and RCC_APB1PCENR at 0x4002_101C (I2C1 bit 1).
+/// This profile models those reset-low gates only; oscillator selection, PLLs,
+/// reset controls, and all other RCC gates remain outside the descriptor's
+/// claim.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Ch32v003Rcc {
     apb2pcenr: u32,
+    apb1pcenr: u32,
 }
 
 impl RccModel for Ch32v003Rcc {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x18 => self.apb2pcenr,
+            0x1C => self.apb1pcenr,
             _ => {
                 crate::census_reg!("rcc:Ch32v003Rcc", offset, "read");
                 0
@@ -2788,9 +2791,10 @@ impl RccModel for Ch32v003Rcc {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            // Retain only GPIOD and USART1, the blocks present in the two
-            // narrow CH32V003 smoke descriptors.
-            0x18 => self.apb2pcenr = value & ((1 << 5) | (1 << 14)),
+            // Retain only GPIOC, GPIOD, and USART1 from APB2, plus I2C1 from
+            // APB1, the blocks present in the focused board profiles.
+            0x18 => self.apb2pcenr = value & ((1 << 4) | (1 << 5) | (1 << 14)),
+            0x1C => self.apb1pcenr = value & (1 << 1),
             _ => crate::census_reg!("rcc:Ch32v003Rcc", offset, "write"),
         }
     }
@@ -2858,6 +2862,11 @@ impl Rcc {
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
             RccRegisterLayout::Stm32Wba => Self::Stm32V2(V2Rcc::new_wba()),
         }
+    }
+
+    /// Whether this instance uses the narrow WCH CH32V003 RCC subset.
+    pub fn is_ch32v003(&self) -> bool {
+        matches!(self, Self::Ch32v003(_))
     }
 
     /// Board option: an external HSE oscillator is fitted. Only the U5/V2
@@ -3049,6 +3058,7 @@ impl Rcc {
             },
             Self::Ch32v003(_) => match r.as_str() {
                 "apb2pcenr" | "apb2enr" => Some(0x18),
+                "apb1pcenr" | "apb1enr" => Some(0x1C),
                 _ => None,
             },
             // WB (RM0434, 0x4C/0x58/0x60) and WBA (RM0493, H5-style
@@ -4354,21 +4364,26 @@ mod tests {
         assert_eq!(rcc.read_u32(0x4C).unwrap(), 0, "must not alias U5 AHB2ENR");
     }
 
-    /// WCH APB2PCENR bits 5 and 14 enable GPIOD and USART1. The narrow profile
-    /// must not inherit STM32F1 oscillator reset behavior or unrelated gates.
+    /// WCH's focused APB2PCENR/APB1PCENR gates include GPIOC, GPIOD, USART1,
+    /// and I2C1. The narrow profile must not inherit STM32F1 oscillator reset
+    /// behavior or unrelated gates.
     #[test]
-    fn ch32v003_models_only_the_smoked_gpio_and_usart_clock_gates() {
+    fn ch32v003_models_only_the_smoked_gpio_usart_and_i2c_clock_gates() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Ch32v003);
         assert_eq!(
             "ch32v003".parse::<RccRegisterLayout>().unwrap(),
             RccRegisterLayout::Ch32v003
         );
         assert_eq!(rcc.read_u32(0x18).unwrap(), 0);
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), 0);
         assert_eq!(rcc.rcc_reg_offset("apb2pcenr"), Some(0x18));
+        assert_eq!(rcc.rcc_reg_offset("apb1pcenr"), Some(0x1C));
         assert_eq!(rcc.rcc_reg_offset("cr"), None);
 
         rcc.write_u32(0x18, u32::MAX).unwrap();
-        assert_eq!(rcc.read_u32(0x18).unwrap(), (1 << 5) | (1 << 14));
+        rcc.write_u32(0x1C, u32::MAX).unwrap();
+        assert_eq!(rcc.read_u32(0x18).unwrap(), (1 << 4) | (1 << 5) | (1 << 14));
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), 1 << 1);
     }
 
     /// The F030 clock bring-up STM32Cube and generated programs run (RM0360

@@ -3,7 +3,7 @@
 **Demand rank:** Tier C strategic vendor bet, not a measured MCU rank in the
 JetBrains survey. The measured ranks remain ESP32 (38%), ATmega328 (30%),
 STM32F103 (17%), other STM32 (13%), and RP2040 (12%). This round extends the
-first WCH/QingKe profile from GPIO-only to USART1 transmit.
+first WCH/QingKe profile from GPIO/USART1 coverage to I2C1 with an SHT31 sensor.
 
 ## What these profiles run
 
@@ -19,11 +19,20 @@ both the serial marker and GPIO edges. USART receive, PLL setup, WCH SDI, other
 CH32 peripherals, supply/reset sequencing, and physical-board parity are not
 modeled. Stack analysis is unsupported for this architecture.
 
-The engine reuses its STM32F1-shaped GPIO and USART register behavior for the
-subset used by the smoke. The `ch32v003` RCC alias resolves APB2PCENR at offset
-`0x18`; the USART descriptor selects the separate CH32 PD5 pad map explicitly.
-This is not a claim that the CH32V003 clock tree or all of its peripherals are
-STM32F1-compatible.
+The I2C profile adds the CH32V003's reset-mapped I2C1 pins (PC1/SDA and PC2/SCL)
+and a clock-gated I2C1 register window. Firmware sends the SHT31 status command
+`0xF32D`, reads the modeled power-on status `0x8010`, and prints
+`CH32V003_SHT31_STATUS_OK` on USART1 only when both bytes match. The smoke
+therefore exercises the sensor transaction, not merely the MCU's I2C registers.
+I2C slave mode, alternate pin remaps, timing accuracy, CRC checking, sensor
+conversion behavior, and physical-board parity remain outside this profile.
+
+The engine reuses its STM32F1-shaped GPIO, USART, and I2C register behavior for
+the exercised subset. WCH's I2C1 CR1/CR2/DR event map shares the offsets used by
+that controller model; the CH32-specific clock gate and default PC1/PC2 I2C pad
+mapping are declared separately. The USART descriptor selects the separate
+CH32 PD5 TX pad map. This is not a claim that the CH32V003 clock tree or all of
+its peripherals are STM32F1-compatible.
 
 For the GPIO smoke, connect an LED and current-limiting resistor between PD0
 and GND. The [WCH-CH32V003EVT board reference](https://www.olimex.com/Products/RISC-V/WCH-CH32V003EVT/resources/CH32V00x-Evaluation-Board-Reference-EN.pdf)
@@ -94,6 +103,40 @@ int main(void) {
 }
 ```
 
+## Copy-paste SHT31 status read
+
+The [official CH32 Arduino core](https://github.com/openwch/arduino_core_ch32)
+supports I2C master mode for CH32V003. Its default `Wire` pins are PC1/SDA and
+PC2/SCL. Connect a 3.3 V SHT31-D breakout to those pins and GND.
+
+```cpp
+#include <Wire.h>
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();  // CH32V003 default I2C1: PC1/SDA, PC2/SCL
+
+  Wire.beginTransmission(0x44);
+  Wire.write(0xF3);  // SHT31 read-status command
+  Wire.write(0x2D);
+  if (Wire.endTransmission() != 0) {
+    Serial.println("SHT31 command failed");
+    return;
+  }
+
+  delay(1);
+  if (Wire.requestFrom((uint8_t)0x44, (uint8_t)2) != 2) {
+    Serial.println("SHT31 status read failed");
+    return;
+  }
+  uint16_t status = ((uint16_t)Wire.read() << 8) | Wire.read();
+  Serial.print("SHT31 status: 0x");
+  Serial.println(status, HEX);
+}
+
+void loop() {}
+```
+
 ## Build and run
 
 ```sh
@@ -106,10 +149,16 @@ examples/ch32v003-evt/build-usart-firmware.sh
 cargo run -q -p labwired-cli -- test \
   --script examples/ch32v003-evt/usart-smoke.yaml \
   --output-dir /tmp/ch32v003-usart-smoke
+
+examples/ch32v003-evt/build-sht31-firmware.sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003-evt/i2c-smoke.yaml \
+  --output-dir /tmp/ch32v003-sht31-smoke
 ```
 
-The USART run evidence is in [`evidence/usart-smoke/`](evidence/usart-smoke/).
-The fixture is handwritten assembly without calls or an ABI-dependent stack
-frame because the upstream Rust toolchain warns that its RV32E ABI support is
-incomplete. These are deterministic local engine runs, not physical-board
-captures or hosted `labwired_verify` results.
+The committed I2C run evidence is in [`evidence/sht31-smoke/`](evidence/sht31-smoke/);
+the earlier GPIO and USART receipts are alongside it. The fixtures are
+handwritten assembly without calls or an ABI-dependent stack frame because the
+upstream Rust toolchain warns that its RV32E ABI support is incomplete. These
+are deterministic local engine runs, not physical-board captures or hosted
+`labwired_verify` results.
