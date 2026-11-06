@@ -43,6 +43,12 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     ("nrf52840_gpio", 0x510, "nRF52840 PS §6.9.2 IN"),
     ("sam4s_pio", 0x3C, "SAM4S DS §31.7 PIO_PDSR"),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
+    // The AVR CPU answers an IN/LDS of PINx with this mirror's input bits.
+    (
+        "avr_gpio",
+        0x00,
+        "PINx (DS8271 §14.4, DS2549 §13.4), via the CPU IO mirror",
+    ),
 ];
 
 /// Placeholder IDR offset: GPIO types LabWired does not model yet run on the
@@ -93,12 +99,12 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 117;
+const COVERED: usize = 124;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 15;
+const SILICON_REGISTER: usize = 22;
 /// Profiles whose descriptor declares no GPIO input and no convertible ADC:
 /// nothing analog can reach them yet.
-const NO_ANALOG_ENDPOINT: usize = 128;
+const NO_ANALOG_ENDPOINT: usize = 121;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

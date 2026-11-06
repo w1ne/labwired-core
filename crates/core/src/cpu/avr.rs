@@ -58,12 +58,14 @@ pub enum AvrModel {
 }
 
 impl AvrModel {
-    /// The model a chip descriptor names. atmega1281 selects the 128 KB
-    /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
-    /// 256 KB three-byte-PC mega core. Other names default to the ATmega328P.
+    /// The model a chip descriptor names. atmega1280/atmega1281 select the
+    /// 128 KB two-byte-PC mega core (the 1280 is the 100-pin die: same data
+    /// map as the 2560, ports H..L included, which this core already has);
+    /// atmega2560/atmega2561/mega2560 select the 256 KB three-byte-PC mega
+    /// core. Other names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
-        if n.contains("1281") {
+        if n.contains("1280") || n.contains("1281") {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
@@ -3013,6 +3015,10 @@ mod tests {
     fn chip_name_selects_the_model() {
         assert_eq!(Avr::for_chip_name("atmega2560").model, AvrModel::Atmega2560);
         assert_eq!(Avr::for_chip_name("atmega328p").model, AvrModel::Atmega328p);
+        assert_eq!(
+            Avr::for_chip_name("simavr-atmega1280").model,
+            AvrModel::Atmega1281
+        );
         let m = mega();
         assert_eq!(m.sp, 0x21FF, "SP resets to RAMEND");
         assert_eq!(m.flash.len(), 256 * 1024);

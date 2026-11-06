@@ -436,6 +436,7 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
     let mut converted = Vec::new();
     let mut not_convertible = Vec::new();
     let mut without_adc = 0;
+    let mut cpu_owned = 0;
     let mut instances = 0;
     for system_path in onboarding_profiles() {
         let board = system_path
@@ -447,6 +448,12 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
             SystemManifest::from_file(&system_path).unwrap_or_else(|e| panic!("load {board}: {e}"));
         let chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&profile.chip))
             .unwrap_or_else(|e| panic!("load {board} descriptor: {e}"));
+        // The AVR ADC registers live on the CPU, not the bus; firmware
+        // conversions for these are in `cosim_onboarding_avr_analog.rs`.
+        if chip.peripherals.iter().any(|p| p.r#type == "avr_adc") {
+            cpu_owned += 1;
+            continue;
+        }
         match converters(&chip) {
             Ok(list) if list.is_empty() => without_adc += 1,
             Ok(list) => {
@@ -472,7 +479,11 @@ fn every_onboarding_profile_with_a_convertible_adc_routes_ntc_and_diode_into_eac
         "ADC instances exercised; update docs/mixed_signal_board_coverage.md"
     );
     assert_eq!(
-        without_adc, 225,
+        cpu_owned, 7,
+        "simavr profiles with a CPU-owned AVR ADC, converted in cosim_onboarding_avr_analog.rs"
+    );
+    assert_eq!(
+        without_adc, 218,
         "onboarding profiles that declare no modelled ADC"
     );
 }
