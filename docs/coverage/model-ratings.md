@@ -62,6 +62,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f103r4h | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103r6 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103r6h | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
+| stm32f103r8 | open | L0 | 31 | — | — | ≥1× (CI) | — |
 | stm32f103t4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103t6 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f401 | open | L1 | 24 | 936.7 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f401.md) |
@@ -89,6 +90,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f407zg | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32g0b1re | open | L0 | 15 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
 | stm32g474re | open | L1 | 22 | 936.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g474re.md) |
+| stm32g431rb | open | L0 | 22 | — | — | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
 | stm32h563 | open | L1 | 37 | 986.5 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32h563.md) |
 | stm32u575 | open | L1 | 43 | 986.8 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u575.md) |
 | stm32u545 | open | L1 | 39 | 986.8 | 1.8 | ≥1× (CI) | — |
