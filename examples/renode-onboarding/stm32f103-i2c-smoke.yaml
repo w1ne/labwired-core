@@ -1,4 +1,4 @@
-# Cortex-M3 USART2 and I2C1 NACK plus TMP102 register access against the imported STM32F103 system.
+# Cortex-M3 USART2 and I2C1 NACK plus TMP102/BME280 register access against the imported STM32F103 system.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -19,5 +19,9 @@ assertions:
   - uart_contains: "TMP102_THIGH_WRITE_OK"
   - uart_contains: "TMP102_TLOW_SHORT=00002250"
   - uart_contains: "TMP102_TLOW_SHORT_WRITE_OK"
+  - uart_contains: "BME280_ID=00000060"
+  - uart_contains: "BME280_ID_READ_OK"
+  - uart_contains: "BME280_T2=00006743"
+  - uart_contains: "BME280_CALIBRATION_READ_OK"
   - uart_contains: "DONE"
   - expected_stop_reason: max_steps

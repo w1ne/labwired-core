@@ -2,10 +2,11 @@
 //!
 //! Probes an absent I²C address, reads the TMP102 temperature, then writes and
 //! reads back its configuration and alert threshold registers through I2C1,
-//! including a one-byte MSB update. USART2 emits a human-readable register
-//! fingerprint at 115200/8N1. The onboarding system
-//! attaches the declarative TMP102 model at address 0x48; its reset temperature
-//! is 25 °C (0x1900). The absent address remains an intentional NACK check.
+//! including a one-byte MSB update. It also reads the BME280 chip ID and a
+//! little-endian calibration word. USART2 emits a human-readable register
+//! fingerprint at 115200/8N1. The onboarding system attaches declarative TMP102
+//! and BME280 models at addresses 0x48 and 0x76; TMP102's reset temperature is
+//! 25 °C (0x1900). The absent address remains an intentional NACK check.
 //! These exact sensor values are simulator assertions, not a claim about a
 //! physical board's ambient reading.
 //!
@@ -51,6 +52,9 @@ const I2C1_SR1: u32 = I2C1_BASE + 0x14;
 const I2C1_SR2: u32 = I2C1_BASE + 0x18;
 const I2C1_CCR: u32 = I2C1_BASE + 0x1C;
 const I2C1_TRISE: u32 = I2C1_BASE + 0x20;
+
+const TMP102_ADDRESS: u8 = 0x48;
+const BME280_ADDRESS: u8 = 0x76;
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
@@ -176,6 +180,32 @@ fn main() -> ! {
         None => putline(b"TMP102_TLOW_SHORT_WRITE_FAIL"),
     }
 
+    match unsafe { read_i2c_register(BME280_ADDRESS, 0xD0, 1) } {
+        Some(bytes) => {
+            let id = bytes[0];
+            print_reg(b"BME280_ID=", u32::from(id));
+            if id == 0x60 {
+                putline(b"BME280_ID_READ_OK");
+            } else {
+                putline(b"BME280_ID_READ_MISMATCH");
+            }
+        }
+        None => putline(b"BME280_ID_READ_FAIL"),
+    }
+
+    match unsafe { read_i2c_register(BME280_ADDRESS, 0x8A, 2) } {
+        Some(bytes) => {
+            let dig_t2 = u16::from_le_bytes(bytes);
+            print_reg(b"BME280_T2=", u32::from(dig_t2));
+            if dig_t2 == 26_435 {
+                putline(b"BME280_CALIBRATION_READ_OK");
+            } else {
+                putline(b"BME280_CALIBRATION_READ_MISMATCH");
+            }
+        }
+        None => putline(b"BME280_CALIBRATION_READ_FAIL"),
+    }
+
     putline(b"DONE");
 
     loop {}
@@ -234,7 +264,7 @@ unsafe fn i2c1_init() {
 
 /// Write a 16-bit big-endian TMP102 register through the F1 I2C1 master.
 unsafe fn write_tmp102_register(pointer: u8, value: u16) -> Option<()> {
-    begin_tmp102_write(pointer)?;
+    begin_i2c_write(TMP102_ADDRESS, pointer)?;
     let [msb, lsb] = value.to_be_bytes();
     write_volatile(I2C1_DR as *mut u32, u32::from(msb));
     if !wait_sr1(0x0004) {
@@ -256,7 +286,7 @@ unsafe fn write_tmp102_register(pointer: u8, value: u16) -> Option<()> {
 /// Update only a TMP102 register's most-significant byte, then terminate with
 /// STOP so the device commits the documented single-byte update.
 unsafe fn write_tmp102_msb(pointer: u8, msb: u8) -> Option<()> {
-    begin_tmp102_write(pointer)?;
+    begin_i2c_write(TMP102_ADDRESS, pointer)?;
     write_volatile(I2C1_DR as *mut u32, u32::from(msb));
     if !wait_sr1(0x0004) {
         return None;
@@ -273,19 +303,50 @@ unsafe fn write_tmp102_msb(pointer: u8, msb: u8) -> Option<()> {
 /// Read a 16-bit big-endian TMP102 register using the F1 write-pointer /
 /// repeated-START / master-receive sequence.
 unsafe fn read_tmp102_register(pointer: u8) -> Option<u16> {
-    begin_tmp102_write(pointer)?;
+    let [msb, lsb] = read_i2c_register(TMP102_ADDRESS, pointer, 2)?;
+    Some(u16::from_be_bytes([msb, lsb]))
+}
 
-    // Repeated START, then address for a two-byte read. ACK is armed before
-    // the address phase so the first temperature byte is accepted.
+/// Read one or two bytes from an addressed I2C device after selecting its
+/// register. The returned bytes retain their on-wire order; callers apply the
+/// device's register endianness.
+unsafe fn read_i2c_register(address: u8, pointer: u8, length: u8) -> Option<[u8; 2]> {
+    if !(length == 1 || length == 2) {
+        return None;
+    }
+    begin_i2c_write(address, pointer)?;
+
+    // Repeated START, then address for a read. ACK is armed before the address
+    // phase for a two-byte transfer; the one-byte path clears it before ADDR.
     rmw32(I2C1_CR1, 1 << 8);
     if !wait_sr1(0x0001) {
         return None;
     }
-    rmw32(I2C1_CR1, 1 << 10); // ACK
-    write_volatile(I2C1_DR as *mut u32, 0x91); // 0x48 << 1 | R
+    if length == 2 {
+        rmw32(I2C1_CR1, 1 << 10); // ACK
+    }
+    write_volatile(I2C1_DR as *mut u32, u32::from((address << 1) | 1));
     if !wait_sr1(0x0002) {
         return None;
     }
+
+    if length == 1 {
+        let cr1 = read_volatile(I2C1_CR1 as *const u32);
+        write_volatile(I2C1_CR1 as *mut u32, cr1 & !(1 << 10)); // NACK
+        clear_addr();
+        rmw32(I2C1_CR1, 1 << 9); // STOP
+        if !wait_sr1(1 << 6) {
+            return None;
+        }
+        let byte = read_volatile(I2C1_DR as *const u32) as u8;
+        for _ in 0..16_000 {
+            if read_volatile(I2C1_SR2 as *const u32) & 0x0002 == 0 {
+                return Some([byte, 0]);
+            }
+        }
+        return None;
+    }
+
     clear_addr();
 
     if !wait_sr1(1 << 6) {
@@ -303,21 +364,21 @@ unsafe fn read_tmp102_register(pointer: u8) -> Option<u16> {
     rmw32(I2C1_CR1, 1 << 9); // STOP
     for _ in 0..16_000 {
         if read_volatile(I2C1_SR2 as *const u32) & 0x0002 == 0 {
-            return Some(u16::from_be_bytes([msb, lsb]));
+            return Some([msb, lsb]);
         }
     }
     None
 }
 
-/// Begin a TMP102 write-address transaction and select the register pointer.
-unsafe fn begin_tmp102_write(pointer: u8) -> Option<()> {
+/// Begin a write-address transaction and select a device register pointer.
+unsafe fn begin_i2c_write(address: u8, pointer: u8) -> Option<()> {
     // Clear any prior address-failure flag; error flags are rc_w0.
     write_volatile(I2C1_SR1 as *mut u32, !(1 << 10));
     rmw32(I2C1_CR1, 1 << 8); // START
     if !wait_sr1(0x0001) {
         return None;
     }
-    write_volatile(I2C1_DR as *mut u32, 0x90); // 0x48 << 1 | W
+    write_volatile(I2C1_DR as *mut u32, u32::from(address << 1));
     if !wait_sr1(0x0002) {
         return None;
     }

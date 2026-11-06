@@ -1,8 +1,8 @@
 name: stm32f103
 description: >-
   Imported STM32F103 Cortex-M3 profile, bounded to 64 KiB flash, 20 KiB SRAM,
-  RCC, GPIOA/GPIOB, USART2 and I2C1 with a modeled TMP102. The whole platform
-  and other peripherals are unverified.
+  RCC, GPIOA/GPIOB, USART2 and I2C1 with modeled TMP102 and BME280 devices. The
+  whole platform and other peripherals are unverified.
 family: STM32F1
 url: https://www.st.com/en/microcontrollers-microprocessors/stm32f103.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -15,7 +15,7 @@ verified: false
 system: systems/onboarding/stm32f103.yaml
 validation:
   method: renode-onboarding-exact-import-smoke
-  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP plus TMP102 temperature, configuration, alert-threshold, and single-byte MSB update smoke; whole platform remains unverified
+  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP, TMP102 register read/write, and BME280 chip-ID/calibration read smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
@@ -27,6 +27,8 @@ validation:
     tmp102_configuration_write_mask: true
     tmp102_alert_threshold_write_masks: true
     tmp102_single_byte_msb_update: true
+    bme280_chip_id_read: true
+    bme280_calibration_read: true
     whole_platform: false
     other_peripherals: false
   timestamp_utc: '2026-11-06T12:28:20Z'

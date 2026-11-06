@@ -108,6 +108,30 @@
     },
     {
       "assertion": {
+        "uart_contains": "BME280_ID=00000060"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_ID_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_T2=00006743"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CALIBRATION_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "DONE"
       },
       "passed": true
@@ -136,10 +160,10 @@
       0,
       999999,
       536891376,
-      134231042,
-      134230200
+      134233607,
+      134232604
     ],
-    "pc": 134230200,
+    "pc": 134232604,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -152,7 +176,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "53da4e16ecdaac366eb1155e7b58d5047230b7ae95249be5d19c1f5ac4aa4389",
+  "firmware_hash": "12cfc12ca7c596a7d0b17bbe87d2c91c96e6d3250a3b7649200d6ede73c37e7f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -205,6 +229,48 @@
                 "TEMP": 6528,
                 "T_HIGH": 26504,
                 "T_LOW": 8784
+              },
+              "supply_generation": null
+            }
+          },
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x76",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
               },
               "supply_generation": null
             }
@@ -262,6 +328,60 @@
                 "TEMP": 6528,
                 "T_HIGH": 26504,
                 "T_LOW": 8784
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 118
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
               },
               "supply_generation": null
             }
@@ -552,6 +672,30 @@
         "end_cycle": 20000
       },
       {
+        "text": "BME280_ID=00000060",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_ID_READ_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_T2=00006743",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_CALIBRATION_READ_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
         "text": "DONE",
         "cycle_lo": 10000,
         "cycle": 20000,
@@ -562,14 +706,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 13372,
+    "text_bytes": 15905,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 13372,
+    "flash_used_bytes": 15905,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 20.4,
+    "flash_used_pct": 24.27,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -595,18 +739,18 @@
     "cycles": 50000000,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 2773,
-    "memory_writes": 162,
-    "peripheral_accesses": 3598,
+    "memory_reads": 3225,
+    "memory_writes": 174,
+    "peripheral_accesses": 4427,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134230200,
+        "pc": 134232604,
         "count": 195273,
         "symbol": "firmware_f103_i2c_demo::main"
       },
       {
-        "pc": 134218432,
+        "pc": 134218636,
         "count": 39,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="16" failures="0" errors="0" time="0.054392">
+<testsuite name="labwired" tests="20" failures="0" errors="0" time="0.086958">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="53da4e16ecdaac366eb1155e7b58d5047230b7ae95249be5d19c1f5ac4aa4389"/>
+    <property name="firmware_hash" value="12cfc12ca7c596a7d0b17bbe87d2c91c96e6d3250a3b7649200d6ede73c37e7f"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.054392">
+  <testcase classname="labwired" name="run" time="0.086958">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -33,8 +33,16 @@
   </testcase>
   <testcase classname="labwired" name="assertion 13: uart_contains: TMP102_TLOW_SHORT_WRITE_OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 14: uart_contains: DONE" time="0.000000">
+  <testcase classname="labwired" name="assertion 14: uart_contains: BME280_ID=00000060" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 15: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 15: uart_contains: BME280_ID_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: uart_contains: BME280_T2=00006743" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 17: uart_contains: BME280_CALIBRATION_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
