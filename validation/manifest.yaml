@@ -2609,7 +2609,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 1bea3abf94dcd2d8822f3415ac8cfab5a76eb687cf513b465bf7787da4a52371
+    drift_ack_digest: 44221ed01c6b108290ad5bfc0286188cd08dfcdf6569085523d2354b5b4b98fa
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3439,7 +3439,12 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-01
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -8579,8 +8584,13 @@ boards:
     # slave behavior, not the S3 I2C controller's register model. The 9-register
     # reset-state anchor is unchanged. Local parity and STM32F103 exact-import
     # smokes cover the modeled transaction; no S3 hardware recapture is claimed.
-    drift_ack: 2026-10-29
-    drift_ack_digest: e32da4c5304ff3e721899663c87505e755ec29fba6f5ecd327f4fccfc2313bf6
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
+    drift_ack_digest: 9daf1c68c124e0336cd627677552e092233cac160ca1fae2d33ed55edca2faf9
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
