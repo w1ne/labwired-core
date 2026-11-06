@@ -4,11 +4,19 @@ Run all commands from `core/`.
 
 ## Purpose
 
-This example provides deterministic bring-up for Adafruit Metro M4 Express (SAMD51J19A) using the minimal supported subset:
+This example provides deterministic bring-up for Adafruit Metro M4 Express (SAMD51J19A) using the supported subset:
 1. `mclk` / `gclk` (SAMD51 clock gating — MCLK masks + GCLK PCHCTRL)
 2. `porta` / `portb` (`sam_port`)
 3. `sercom3` UART (Serial1 on PA22/PA23)
 4. `systick`
+
+The mixed-signal fixture routes a generic Beta NTC divider to A0 and an unrelated
+Shockley diode to A4, then checks both through ADC0 conversions. This is
+simulation-derived coverage, not silicon validation. Run its end-to-end proof with:
+
+```bash
+cargo test -p labwired-core --test cosim_metro_m4_analog
+```
 
 On-board QSPI flash, USB, and NeoPixel are intentionally omitted.
 
