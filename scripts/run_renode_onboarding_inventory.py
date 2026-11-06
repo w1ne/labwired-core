@@ -320,6 +320,10 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/arduino-uno-blinky.elf",
         "script": "examples/renode-onboarding/simavr-atmega328-smoke.yaml",
     },
+    "simavr-atmega328pb": {
+        "prebuilt_firmware": "tests/fixtures/avr/atmega328pb-usart1.elf",
+        "script": "examples/renode-onboarding/simavr-atmega328pb-smoke.yaml",
+    },
     "simavr-atmega2560": {
         "prebuilt_firmware": "tests/fixtures/avr/arduino-mega-2560-io.elf",
         "script": "examples/renode-onboarding/simavr-atmega2560-smoke.yaml",

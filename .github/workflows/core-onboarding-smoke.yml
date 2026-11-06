@@ -653,6 +653,11 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/arduino-uno-blinky.elf
             script: examples/renode-onboarding/simavr-atmega328-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega328.yaml
+          # The ATmega328PB import is limited to its polled USART1 path.
+          - id: simavr-atmega328pb
+            prebuilt_firmware: tests/fixtures/avr/atmega328pb-usart1.elf
+            script: examples/renode-onboarding/simavr-atmega328pb-smoke.yaml
+            system: configs/systems/onboarding/simavr-atmega328pb.yaml
           # The Mega import maps the GPIO ports driven by the fixture and the
           # USART0/ADC paths it checks; PB7/D13 is the observed LED output.
           - id: simavr-atmega2560
