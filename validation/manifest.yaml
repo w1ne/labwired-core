@@ -2616,7 +2616,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 3e46c7bd3d85b09ab84b9088fb69483e281263654a1d8b0cad1eb9e3ca7a108e
+    drift_ack_digest: a6473c317717589fc3b279f29652c6a901c66de9ef9f5a42b082d940b644c19b
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3446,12 +3446,17 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-11-06
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and
     # polls SB alone, so its traces are unchanged; i2c lib tests and the
     # F103/F411/F407 I2C smokes and suites pass. ACK, NOT A SILICON CAPTURE.
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
 
   - id: nucleo-l476rg
     # 2026-11-06: CH32V003 EXTI/AFIO layouts change the shared exti.rs/afio.rs
@@ -8627,13 +8632,18 @@ boards:
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
     # 2026-11-06 (ch32fun i2c_oled): the shared STM32F1-layout I2C model in
     # i2c.rs now sets SR2.MSL|BUSY with SR1.SB on START (RM0008 §26.3.3) and
     # takes a 16-bit DR store as one byte. HAL code writes DR as a word and
     # polls SB alone, so its traces are unchanged; i2c lib tests and the
     # F103/F411/F407 I2C smokes and suites pass. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 63198d3d2b58b9de45ceb7ec4ba9498fef7e314c551c045266c558b16e6bcaec
+    # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+    # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+    # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+    # Firmware-library thunk only: no peripheral register map, reset value
+    # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-06
+    drift_ack_digest: 4a5a428d2e80d0f06c72b3b7225b64df4bbb2908bcd9a6a23f5d2a115cdf04f7
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

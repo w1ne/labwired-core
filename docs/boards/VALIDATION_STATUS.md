@@ -12,13 +12,13 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `18b383d8fdb75288` | ⚠ drift acked 2026-11-01, expires 2026-12-01 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `18b383d8fdb75288` | ⚠ drift acked 2026-11-01, expires 2026-12-01 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `b2a680e53de01c68` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `3e46c7bd3d85b09a` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `a6473c317717589f` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `e0724d981c432ed9` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `cacd8d08c6e253ce` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `134c715ff3ca196e` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `559cf575aa7095d0` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `63198d3d2b58b9de` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
-| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `790824e00bc04e52` | no silicon capture |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `4a5a428d2e80d0f0` | ⚠ drift acked 2026-11-06, expires 2026-12-06 (re-capture pending) |
+| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `31bad882d25fa3fe` | no silicon capture |
 | `stm32f401` | 🔵 sim-validated (deep model, no HW diff) | — | `ab00be55df083e65` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `da91a9608930a40a` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `01575c907ed5cf6d` | no silicon capture |
