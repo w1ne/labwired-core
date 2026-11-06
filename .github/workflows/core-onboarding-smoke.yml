@@ -22,6 +22,14 @@ on:
       - "configs/onboarding/simavr-atmega1281.yaml"
       - "configs/onboarding/simavr-atmega168.yaml"
       - "configs/onboarding/simavr-atmega16.yaml"
+      - "configs/onboarding/simavr-attiny13.yaml"
+      - "configs/onboarding/simavr-attiny2313.yaml"
+      - "configs/onboarding/simavr-attiny2313a.yaml"
+      - "configs/onboarding/simavr-attiny4313.yaml"
+      - "configs/onboarding/simavr-attiny24.yaml"
+      - "configs/onboarding/simavr-attiny44.yaml"
+      - "configs/onboarding/simavr-attiny84.yaml"
+      - "configs/onboarding/simavr-attiny1634.yaml"
       - "configs/onboarding/simavr-attiny25.yaml"
       - "configs/onboarding/simavr-attiny45.yaml"
       - "configs/onboarding/simavr-attiny85.yaml"
@@ -157,6 +165,14 @@ on:
       - "tests/fixtures/avr/atmega16-cpu-smoke.elf"
       - "scripts/build_atmega16_cpu_smoke.sh"
       - "tests/fixtures/avr/attiny-x5-cpu-smoke.c"
+      - "tests/fixtures/avr/attiny13-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny2313-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny2313a-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny4313-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny24-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny44-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny84-cpu-smoke.elf"
+      - "tests/fixtures/avr/attiny1634-cpu-smoke.elf"
       - "tests/fixtures/avr/attiny25-cpu-smoke.elf"
       - "tests/fixtures/avr/attiny45-cpu-smoke.elf"
       - "tests/fixtures/avr/attiny85-cpu-smoke.elf"
@@ -755,8 +771,40 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/atmega16-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-atmega16-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega16.yaml
-          # ATtiny25/45/85 are measured only for their bounded AVR8 CPU and SRAM
-          # path; the imported profiles declare no peripherals.
+          # Classic tinyAVR parts are measured only for their bounded AVR8 CPU
+          # and SRAM path; the imported profiles declare no peripherals.
+          - id: simavr-attiny13
+            prebuilt_firmware: tests/fixtures/avr/attiny13-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny13-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny13.yaml
+          - id: simavr-attiny2313
+            prebuilt_firmware: tests/fixtures/avr/attiny2313-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny2313-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny2313.yaml
+          - id: simavr-attiny2313a
+            prebuilt_firmware: tests/fixtures/avr/attiny2313a-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny2313a-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny2313a.yaml
+          - id: simavr-attiny4313
+            prebuilt_firmware: tests/fixtures/avr/attiny4313-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny4313-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny4313.yaml
+          - id: simavr-attiny24
+            prebuilt_firmware: tests/fixtures/avr/attiny24-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny24-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny24.yaml
+          - id: simavr-attiny44
+            prebuilt_firmware: tests/fixtures/avr/attiny44-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny44-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny44.yaml
+          - id: simavr-attiny84
+            prebuilt_firmware: tests/fixtures/avr/attiny84-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny84-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny84.yaml
+          - id: simavr-attiny1634
+            prebuilt_firmware: tests/fixtures/avr/attiny1634-cpu-smoke.elf
+            script: examples/renode-onboarding/simavr-attiny1634-smoke.yaml
+            system: configs/systems/onboarding/simavr-attiny1634.yaml
           - id: simavr-attiny25
             prebuilt_firmware: tests/fixtures/avr/attiny25-cpu-smoke.elf
             script: examples/renode-onboarding/simavr-attiny25-smoke.yaml

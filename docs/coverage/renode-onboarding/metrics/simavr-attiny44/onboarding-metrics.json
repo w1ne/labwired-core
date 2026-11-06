@@ -1,33 +1,38 @@
 {
   "target_id": "simavr-attiny44",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
-  "crate": "",
-  "target_triple": "",
-  "script": "",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-attiny44-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-attiny44.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T02:30:09Z",
-  "finished_at_utc": "2026-11-03T02:30:09Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted.",
-  "failure_hint": "Add a compatible firmware build and smoke script before claiming a boot result.",
+  "started_at_utc": "2026-11-06T16:56:16Z",
+  "finished_at_utc": "2026-11-06T16:56:16Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 633,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 0.297,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 0.327
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 297,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 327
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/attiny44-cpu-smoke.elf"
 }

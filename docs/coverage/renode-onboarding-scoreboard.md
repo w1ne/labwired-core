@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `186`
-- booted: `184/245`
-- boot_and_smoke_passed: `184/245`
-- not_run: `59`
-- pass: `184`
+- run_attempted: `194`
+- booted: `192/245`
+- boot_and_smoke_passed: `192/245`
+- not_run: `51`
+- pass: `192`
 - fail: `2`
-- median_elapsed_ms: `1319`
-- median_elapsed_seconds: `1.319`
+- median_elapsed_ms: `1300`
+- median_elapsed_seconds: `1.3`
 - threshold_seconds: `3600`
-- threshold_met: `186/186`
+- threshold_met: `194/194`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -199,16 +199,16 @@
 | `simavr-atmega64m1` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `simavr-atmega8` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `simavr-atmega88` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-attiny13` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-attiny1634` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-attiny2313` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-attiny2313a` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-attiny24` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `simavr-attiny13` | `pass` | `True` | `yes` | `yes` | `86399` | `86.399` | `True` | `n/a` | n/a | n/a |
+| `simavr-attiny1634` | `pass` | `True` | `yes` | `yes` | `656` | `0.656` | `True` | `n/a` | n/a | n/a |
+| `simavr-attiny2313` | `pass` | `True` | `yes` | `yes` | `634` | `0.634` | `True` | `n/a` | n/a | n/a |
+| `simavr-attiny2313a` | `pass` | `True` | `yes` | `yes` | `603` | `0.603` | `True` | `n/a` | n/a | n/a |
+| `simavr-attiny24` | `pass` | `True` | `yes` | `yes` | `618` | `0.618` | `True` | `n/a` | n/a | n/a |
 | `simavr-attiny25` | `pass` | `True` | `yes` | `yes` | `604` | `0.604` | `True` | `n/a` | n/a | n/a |
-| `simavr-attiny4313` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
-| `simavr-attiny44` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `simavr-attiny4313` | `pass` | `True` | `yes` | `yes` | `615` | `0.615` | `True` | `n/a` | n/a | n/a |
+| `simavr-attiny44` | `pass` | `True` | `yes` | `yes` | `633` | `0.633` | `True` | `n/a` | n/a | n/a |
 | `simavr-attiny45` | `pass` | `True` | `yes` | `yes` | `588` | `0.588` | `True` | `n/a` | n/a | n/a |
-| `simavr-attiny84` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `simavr-attiny84` | `pass` | `True` | `yes` | `yes` | `660` | `0.66` | `True` | `n/a` | n/a | n/a |
 | `simavr-attiny85` | `pass` | `True` | `yes` | `yes` | `601` | `0.601` | `True` | `n/a` | n/a | n/a |
 | `sltb001a` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `n/a` | n/a | n/a |
 | `sltb004a` | `pass` | `True` | `yes` | `yes` | `809` | `0.809` | `True` | `n/a` | n/a | n/a |

@@ -1,4 +1,5 @@
-// CPU and SRAM smoke for the imported ATtiny25/45/85 profiles.
+// CPU and SRAM smoke for the imported classic tinyAVR profiles
+// (ATtiny13, 2313/2313A/4313, 24/44/84, 25/45/85, 1634).
 // Build with scripts/build_attiny_x5_cpu_smoke.sh.
 #include <stdint.h>
 

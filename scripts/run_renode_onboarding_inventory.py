@@ -359,6 +359,38 @@ SMOKE_MAPPINGS = {
         "prebuilt_firmware": "tests/fixtures/avr/atmega168-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-atmega168-smoke.yaml",
     },
+    "simavr-attiny13": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny13-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny13-smoke.yaml",
+    },
+    "simavr-attiny2313": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny2313-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny2313-smoke.yaml",
+    },
+    "simavr-attiny2313a": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny2313a-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny2313a-smoke.yaml",
+    },
+    "simavr-attiny4313": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny4313-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny4313-smoke.yaml",
+    },
+    "simavr-attiny24": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny24-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny24-smoke.yaml",
+    },
+    "simavr-attiny44": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny44-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny44-smoke.yaml",
+    },
+    "simavr-attiny84": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny84-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny84-smoke.yaml",
+    },
+    "simavr-attiny1634": {
+        "prebuilt_firmware": "tests/fixtures/avr/attiny1634-cpu-smoke.elf",
+        "script": "examples/renode-onboarding/simavr-attiny1634-smoke.yaml",
+    },
     "simavr-attiny25": {
         "prebuilt_firmware": "tests/fixtures/avr/attiny25-cpu-smoke.elf",
         "script": "examples/renode-onboarding/simavr-attiny25-smoke.yaml",
