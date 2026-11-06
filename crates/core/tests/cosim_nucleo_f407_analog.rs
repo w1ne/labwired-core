@@ -81,6 +81,45 @@ fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent SPICE level-1 JFET load-line reference, including the
+/// Parker–Skellern B fit and channel-length modulation.
+fn jfet_drain_voltage(gate_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = -2.0;
+    const BETA_A_PER_V2: f64 = 500e-6;
+    const LAMBDA_PER_V: f64 = 0.025;
+    const B: f64 = 0.8;
+    const PB: f64 = 1.0;
+
+    let overdrive = gate_v - VTO;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let bfac = (1.0 - B) / (PB - VTO);
+    let drain_current = |vds: f64| {
+        let beta_p = BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds);
+        if overdrive >= vds {
+            beta_p
+                * vds
+                * (vds * (bfac * vds - B) + overdrive * (2.0 * B + 3.0 * bfac * (overdrive - vds)))
+        } else {
+            beta_p * overdrive * overdrive * (B + overdrive * bfac)
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -339,5 +378,132 @@ fn nucleo_f407_mosfet_load_line_reaches_pa2_adc1_alongside_ntc_and_diode() {
     assert!(
         drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
         "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
+    );
+}
+
+#[test]
+fn nucleo_f407_jfet_load_line_reaches_pa3_adc1_alongside_unrelated_devices() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    assert_eq!(profile.name, "nucleo-f407");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load the independent generic NTC and diode netlists");
+    let mosfet = SystemManifest::from_file(root("examples/nucleo-f407/analog-mosfet-switch.yaml"))
+        .expect("load the generic low-side MOSFET netlist");
+    let jfet = SystemManifest::from_file(root("examples/nucleo-f407/analog-jfet-load.yaml"))
+        .expect("load the generic level-1 JFET netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+    profile.cosim_models.extend(jfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries four independent analog devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, diode, NMOS, and JFET routes must resolve to distinct ADC1 inputs"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the independent NTC temperature");
+    session
+        .set_signal_number("ui.mosfet.gate_v", 2.0)
+        .expect("set the independent MOSFET gate voltage");
+
+    let mut cycles = 0;
+    let mut drain_samples = Vec::new();
+    for gate_v in [0.0_f64, -0.5, -1.0, -1.5, -2.2] {
+        session
+            .set_signal_number("ui.jfet.gate_v", gate_v)
+            .expect("set generic JFET gate voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, MOSFET, and JFET netlists");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four devices solve at the 1 us boundary"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let drain_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_drain_v = jfet_drain_voltage(gate_v);
+        assert!(
+            (drain_v - expected_drain_v).abs() < 5e-5,
+            "level-1 NJF load line at Vgs={gate_v} V should be {expected_drain_v} V, got {drain_v} V"
+        );
+        let jfet_count = expected_adc_count(drain_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, 3),
+            jfet_count,
+            "the solved JFET drain voltage must seed ADC1 channel 3"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, 3),
+            u32::from(jfet_count),
+            "firmware-visible ADC1 channel 3 conversion must report the JFET load line"
+        );
+
+        for (channel, volts) in [
+            (0, expected_ntc_v),
+            (1, expected_diode_v),
+            (2, mosfet_drain_voltage(2.0)),
+        ] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the unrelated analog source must remain isolated on ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 channel {channel} conversion remains stable"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        drain_samples.push((gate_v, drain_v));
+    }
+
+    assert!(
+        drain_samples[0].1 < 2.0,
+        "zero-bias JFET load line exercises the linear channel region: {drain_samples:?}"
+    );
+    assert!(
+        drain_samples[1].1 > 1.5,
+        "the reverse-biased gate moves the JFET into saturation: {drain_samples:?}"
+    );
+    assert!(
+        (drain_samples[4].1 - 3.3).abs() < 1e-6,
+        "gate voltage beyond pinch-off leaves the JFET drain at the supply"
+    );
+    assert!(
+        drain_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "the drain voltage rises monotonically toward cutoff as Vgs becomes more negative: {drain_samples:?}"
     );
 }
