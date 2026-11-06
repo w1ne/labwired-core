@@ -878,19 +878,24 @@ SMOKE_MAPPINGS = {
     },
 }
 
-NOT_RUN_REASONS = {
-    "msp430f2619": (
-        "MSP430 CPU execution and MSP430 ELF architecture support are not implemented; "
-        "no firmware run was attempted. A real CPU core is required before this target "
-        "can enter executable coverage."
-    ),
-}
-NOT_RUN_HINTS = {
-    "msp430f2619": (
-        "Implement a real MSP430 CPU core and ELF architecture support before adding "
-        "a smoke; do not substitute a peripheral stub."
-    ),
-}
+MSP430_NOT_RUN_REASON = (
+    "MSP430 CPU execution and MSP430 ELF architecture support are not implemented; "
+    "no firmware run was attempted. A real CPU core is required before this target "
+    "can enter executable coverage."
+)
+MSP430_NOT_RUN_HINT = (
+    "Implement a real MSP430 CPU core and ELF architecture support before adding "
+    "a smoke; do not substitute a peripheral stub."
+)
+MSP430_TARGETS = (
+    "msp430f2619",
+    "mspsim-msp430f149",
+    "mspsim-msp430f1611",
+    "mspsim-msp430f2617",
+    "mspsim-msp430f5437",
+)
+NOT_RUN_REASONS = {target: MSP430_NOT_RUN_REASON for target in MSP430_TARGETS}
+NOT_RUN_HINTS = {target: MSP430_NOT_RUN_HINT for target in MSP430_TARGETS}
 
 
 def imported_system(descriptor: Path) -> str:
