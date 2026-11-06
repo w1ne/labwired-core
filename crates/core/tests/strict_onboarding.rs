@@ -378,10 +378,12 @@ fn firmware_path_from_smoke(smoke_test: &Path) -> anyhow::Result<Option<PathBuf>
 /// a matcher, and a copy drifts; following the reference the smoke already
 /// declares does not.
 fn example_uses_chip(dir: &std::path::Path, chip_name: &str) -> bool {
-    let names_chip = |content: &str| -> bool {
-        content.contains(&format!("chips/{}.yaml", chip_name))
-            || content.contains(&format!("chips/{}", chip_name))
-    };
+    // Exact descriptor file only. A bare `chips/<name>` prefix match let a
+    // chip borrow a longer-named sibling's example: `stm32f401cd` was
+    // "covered" by `stm32f401cdu6`'s, and the generic `atsamd21` by any
+    // `atsamd21<variant>` example, so neither descriptor was ever booted.
+    let names_chip =
+        |content: &str| -> bool { content.contains(&format!("chips/{}.yaml", chip_name)) };
 
     let system_yaml = dir.join("system.yaml");
     if system_yaml.exists() && names_chip(&fs::read_to_string(&system_yaml).unwrap_or_default()) {
