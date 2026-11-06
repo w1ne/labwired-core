@@ -18,14 +18,20 @@
 //! no ADCSRB); there the test also checks the internal 2.56 V reference and
 //! the part's bandgap input. The ATmega164/324/644/1284P run on the port-A
 //! cores (ADC0..7 on PA0..PA7); there it checks the internal 1.1 V and 2.56 V
-//! references and the MUX 0x1E bandgap. Every result is read back with LDS ADCL/ADCH.
+//! references and the MUX 0x1E bandgap. The ATmega128RFA1/128RFR2 run on the
+//! RF core, whose ADC is powered from the internal 1.8 V AVDD: there the codes
+//! are against 1.8 V (the NTC divider clips at 0x3FF when it sits above it),
+//! and it checks the internal 1.5 V and 1.6 V references, the 1.2 V bandgap
+//! on MUX 0x1E, AVSS on 0x1F, and that firmware polling ADCSRB.AVDDOK/REFOK
+//! sees them set once ADEN is. Every result is read back with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
 //! and highest ADC pad. On the 100-pin megas the highest pad is PK7/ADC15,
 //! which needs ADCSRB.MUX5. Both solved voltages are checked against
-//! independent references, the 10-bit codes against `mV * 1024 / 5000`, and
-//! the NTC code must fall monotonically with temperature.
+//! independent references, the 10-bit codes against `mV * 1024 / AVcc` (5 V,
+//! or the RF parts' 1.8 V AVDD), and the NTC code must fall monotonically with
+//! temperature wherever it is below full scale.
 //!
 //! [`UNCOVERED`] lists the simavr parts whose register map no LabWired core
 //! runs (their ADC or ports sit elsewhere, per avr-libc), so a part cannot
@@ -46,6 +52,8 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega1280", AvrModel::Atmega1281, "pf0", "pk7"),
     ("simavr-atmega1281", AvrModel::Atmega1281, "pf0", "pf7"),
     ("simavr-atmega1284p", AvrModel::Atmega1284, "pa0", "pa7"),
+    ("simavr-atmega128rfa1", AvrModel::Atmega128Rf, "pf0", "pf7"),
+    ("simavr-atmega128rfr2", AvrModel::Atmega128Rf, "pf0", "pf7"),
     ("simavr-atmega16", AvrModel::Atmega16, "pa0", "pa7"),
     ("simavr-atmega164", AvrModel::Atmega164, "pa0", "pa7"),
     ("simavr-atmega168", AvrModel::Atmega328p, "pc0", "pc5"),
@@ -64,8 +72,6 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
 const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-at90usb162", "no ADC"),
     ("simavr-atmega128", "ADMUX at 0x27, the 328P core's DDRC"),
-    ("simavr-atmega128rfa1", "mega map, but no 128RFA1 core"),
-    ("simavr-atmega128rfr2", "mega map, but no 128RFR2 core"),
     ("simavr-atmega169p", "LCD-controller part, no 169P core"),
     (
         "simavr-atmega16m1",
@@ -94,6 +100,17 @@ const UNCOVERED: &[(&str, &str)] = &[
 ];
 
 const AVCC_MV: u32 = 5000;
+/// ATmega128RFA1/128RFR2 ADC supply: the internal AVDD regulator (REFS = 01).
+const RF_AVDD_MV: u32 = 1800;
+
+/// Full scale of a REFS = 01 conversion on `core`.
+fn avcc_mv(core: AvrModel) -> u32 {
+    if core.is_rf() {
+        RF_AVDD_MV
+    } else {
+        AVCC_MV
+    }
+}
 
 /// ADCSRB/ADMUX/ADCSRA/ADCL data addresses on `core` (ADCH = ADCL + 1). The
 /// classic ATmega8/16/32 keep the ADC in I/O space and have no ADCSRB (MUX5
@@ -203,9 +220,26 @@ fn convert_mux(chip: &ChipDescriptor, bus: &mut SystemBus, refs: u8, mux: u8) ->
     code
 }
 
-fn expected_code(volts: f64) -> u16 {
+/// ATmega128RFA1/128RFR2 firmware poll: LDS ADCSRB, set ADEN, LDS ADCSRB
+/// again. Returns the AVDDOK|REFOK bits before and after ADEN.
+fn poll_adcsrb_status(chip: &ChipDescriptor, bus: &mut SystemBus) -> (u8, u8) {
+    let mut cpu = Avr::for_chip_name(&chip.name);
+    let mut words = Vec::new();
+    words.extend(lds(20, 0x7B));
+    words.push(ldi(16, 0x80));
+    words.extend(sts(0x7A, 16));
+    words.extend(lds(21, 0x7B));
+    cpu.load_words(0, &words);
+    let config = SimulationConfig::default();
+    for _ in 0..4 {
+        cpu.step(bus, &[], &config).expect("poll ADCSRB");
+    }
+    (cpu.r[20] & 0xA0, cpu.r[21] & 0xA0)
+}
+
+fn expected_code(core: AvrModel, volts: f64) -> u16 {
     let mv = (volts * 1000.0).round() as u32;
-    (mv * 1024 / AVCC_MV).min(1023) as u16
+    (mv * 1024 / avcc_mv(core)).min(1023) as u16
 }
 
 fn generic_netlists(ntc_pad: &str, diode_pad: &str) -> SystemManifest {
@@ -310,17 +344,21 @@ fn assert_avr_converts_generic_analog(
         let ntc_code = convert(chip, &mut bus, ntc_channel);
         assert_eq!(
             ntc_code,
-            expected_code(expected_ntc_v),
+            expected_code(core, expected_ntc_v),
             "{board}: ADC{ntc_channel} ({ntc_pad}) converts the NTC divider at {temperature_c} °C"
         );
         assert!(
-            ntc_code < last_ntc_code,
+            ntc_code < last_ntc_code || (ntc_code == 1023 && last_ntc_code == 1023),
             "{board}: NTC code falls as temperature rises ({last_ntc_code} -> {ntc_code})"
         );
+        if core.is_rf() && temperature_c < 0.0 {
+            // The divider sits above the 1.8 V AVDD the RF ADC converts against.
+            assert_eq!(ntc_code, 1023, "{board}: {expected_ntc_v} V clips at 0x3FF");
+        }
         last_ntc_code = ntc_code;
         assert_eq!(
             convert(chip, &mut bus, diode_channel),
-            expected_code(expected_diode_v),
+            expected_code(core, expected_diode_v),
             "{board}: ADC{diode_channel} ({diode_pad}) converts the diode load line"
         );
     }
@@ -330,7 +368,7 @@ fn assert_avr_converts_generic_analog(
         .unwrap();
     assert_eq!(
         convert(chip, &mut bus, idle),
-        expected_code(f64::from(AVR_ADC_UNDRIVEN_MV) / 1000.0),
+        expected_code(core, f64::from(AVR_ADC_UNDRIVEN_MV) / 1000.0),
         "{board}: idle ADC{idle} is not written by either route"
     );
 
@@ -357,6 +395,36 @@ fn assert_avr_converts_generic_analog(
             convert_mux(chip, &mut bus, 0x40, 0x0E),
             0,
             "{board}: MUX 0x0E is a differential code, not the bandgap"
+        );
+    }
+    if core.is_rf() {
+        // REFS = 10 is the internal 1.5 V and 11 the internal 1.6 V (not the
+        // 1281's 1.1 V / 2.56 V); MUX 0x1E is the 1.2 V VBG and 0x1F AVSS.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x80, diode_channel),
+            (mv * 1024 / 1500) as u16,
+            "{board}: the diode converts against the internal 1.5 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 1600) as u16,
+            "{board}: the diode converts against the internal 1.6 V reference"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x1E),
+            (1200 * 1024 / RF_AVDD_MV) as u16,
+            "{board}: MUX 0x1E converts the 1.2 V bandgap against AVDD"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x1F),
+            0,
+            "{board}: MUX 0x1F is AVSS"
+        );
+        assert_eq!(
+            poll_adcsrb_status(chip, &mut bus),
+            (0, 0xA0),
+            "{board}: AVDDOK/REFOK read 0 before ADEN and 1 after"
         );
     }
     if core.is_classic() {

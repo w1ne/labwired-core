@@ -72,6 +72,21 @@ pub const SRAM_START: u16 = 0x0100;
 /// (PCINT0..7 are port A here, not port B; the registers are stored only),
 /// output-compare pads (OC0A/OC0B are PB3/PB4, OC1A/OC1B PD5/PD4, OC2A/OC2B
 /// PD7/PD6; the pads follow `PORTx`), USART1 (stored only).
+///
+/// The ATmega128RFA1 and ATmega128RFR2 (avr-libc `iom128rfa1.h`,
+/// `iom128rfr2.h`) have the ATmega1281 data map for ports A..G (no ports
+/// H..L: 0x100..0x10B is empty), ADCL..ADMUX and the 1281 vector table for
+/// slots 1..56 (the radio, symbol counter, AES and BAT_LOW vectors follow).
+/// They run on the mega core with 16 KB SRAM (RAMEND 0x41FF). Their ADC is
+/// powered from the internal 1.8 V AVDD regulator (ATmega128RFA1 datasheet
+/// 8266F §27, ATmega256RFR2 family 8393C §27): MUX5:0 0..7 are ADC0..7
+/// (PF0..PF7), 0x1E the 1.2 V bandgap, 0x1F AVSS; differential, temperature
+/// sensor and back-bias codes read 0. REFS = 01 is AVDD (1.8 V), 10 the
+/// internal 1.5 V and 11 the internal 1.6 V; 00 (AREF) is taken as AVDD
+/// because AREF is not a modelled pin. ADCSRB.AVDDOK and REFOK read 1 while
+/// ADEN is set (no start-up delay is modelled). Not modelled: the radio
+/// transceiver, the RFA1's REFS latch-until-re-enable, OC pads (they follow
+/// `PORTx`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -85,6 +100,7 @@ pub enum AvrModel {
     Atmega324,
     Atmega644,
     Atmega1284,
+    Atmega128Rf,
 }
 
 impl AvrModel {
@@ -96,8 +112,10 @@ impl AvrModel {
     /// classic I/O-space cores; the part name must match exactly, because
     /// atmega88, atmega168, atmega16m1 and atmega328 are other maps. The
     /// ATmega164/324/644/1284 (with their `a`/`p`/`pa` variants) select the
-    /// port-A cores, again by exact name (atmega644rfr2 is another map). Other
-    /// names default to the ATmega328P.
+    /// port-A cores, again by exact name (atmega644rfr2 is another map).
+    /// atmega128rfa1/atmega128rfr2 select the 128 KB RF core (exact name:
+    /// the 64/256/644/1284/2564RFR2 have other memory sizes). Other names
+    /// default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
         let part = n.rsplit(['-', '_', ' ']).next().unwrap_or(&n);
@@ -115,6 +133,7 @@ impl AvrModel {
                 return AvrModel::Atmega644
             }
             "atmega1284" | "atmega1284p" => return AvrModel::Atmega1284,
+            "atmega128rfa1" | "atmega128rfr2" => return AvrModel::Atmega128Rf,
             _ => {}
         }
         if n.contains("1280") || n.contains("1281") {
@@ -136,7 +155,7 @@ impl AvrModel {
             AvrModel::Atmega164 => 16 * 1024,
             AvrModel::Atmega324 => 32 * 1024,
             AvrModel::Atmega644 => 64 * 1024,
-            AvrModel::Atmega1284 => 128 * 1024,
+            AvrModel::Atmega1284 | AvrModel::Atmega128Rf => 128 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -146,7 +165,7 @@ impl AvrModel {
             | AvrModel::Atmega324
             | AvrModel::Atmega644
             | AvrModel::Atmega1284 => SRAM_START,
-            AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => 0x0200,
             AvrModel::Atmega8 | AvrModel::Atmega16 | AvrModel::Atmega32 => 0x0060,
         }
     }
@@ -160,6 +179,7 @@ impl AvrModel {
             AvrModel::Atmega324 => 0x08FF,
             AvrModel::Atmega644 => 0x10FF,
             AvrModel::Atmega1284 => 0x40FF,
+            AvrModel::Atmega128Rf => 0x41FF,
         }
     }
     /// The classic ATmega8/16/32 I/O-space map (see [`AvrModel`]).
@@ -176,6 +196,10 @@ impl AvrModel {
             AvrModel::Atmega164 | AvrModel::Atmega324 | AvrModel::Atmega644 | AvrModel::Atmega1284
         )
     }
+    /// The ATmega128RFA1/128RFR2 1.8 V-AVDD ADC map (see [`AvrModel`]).
+    pub fn is_rf(self) -> bool {
+        self == AvrModel::Atmega128Rf
+    }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
     /// The 2560's 16 channels move it past the port mirrors (PINF..PING sit
     /// at 0x1_002F..0x1_0034, where the 328P keeps its 8-channel window).
@@ -186,7 +210,9 @@ impl AvrModel {
             | AvrModel::Atmega324
             | AvrModel::Atmega644
             | AvrModel::Atmega1284 => AVR_ADC_INPUT_BASE,
-            AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => {
+                AVR_MEGA_ADC_INPUT_BASE
+            }
             AvrModel::Atmega8 | AvrModel::Atmega16 | AvrModel::Atmega32 => {
                 AVR_CLASSIC_ADC_INPUT_BASE
             }
@@ -430,6 +456,12 @@ const MEGA16_BANDGAP_MV: u32 = 1220;
 /// AVcc on the 5 V boards this part is modelled for, and the internal bandgap.
 const AVR_AVCC_MV: u32 = 5000;
 const AVR_BANDGAP_MV: u32 = 1100;
+/// ATmega128RFA1/128RFR2 ADC: AVDD from the internal regulator, the internal
+/// references and the VBG mux input (8266F §27.11.1, Tables 27-10/27-11).
+const RF_AVDD_MV: u32 = 1800;
+const RF_REF_1V5_MV: u32 = 1500;
+const RF_REF_1V6_MV: u32 = 1600;
+const RF_BANDGAP_MV: u32 = 1200;
 
 pub const VEC_TIMER0_OVF: u32 = 17; // datasheet 1-based; @0x40 = __vector_16
 /// TWI_vect is `_VECTOR(24)` → PC 0x60; pending bit uses vec=25 (`(vec-1)*4`).
@@ -650,7 +682,10 @@ impl Avr {
 
     #[inline]
     fn is_mega(&self) -> bool {
-        matches!(self.model, AvrModel::Atmega1281 | AvrModel::Atmega2560)
+        matches!(
+            self.model,
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf
+        )
     }
 
     /// INT0/INT1 and PCINT0..2 wired to the 328P's pins. The mega and the
@@ -672,6 +707,7 @@ impl Avr {
                 matches!(addr, AVR_PINA | AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega128Rf => MEGA2560_PIN_ADDRS[..7].contains(&addr),
             AvrModel::Atmega8 => CLASSIC_PIN_ADDRS[..3].contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => CLASSIC_PIN_ADDRS.contains(&addr),
         }
@@ -689,6 +725,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Atmega128Rf => (0x20..=0x34).contains(&addr),
             AvrModel::Atmega8 => (0x30..=0x38).contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => (0x30..=0x3B).contains(&addr),
         }
@@ -875,6 +912,7 @@ impl Avr {
             0x0079 => Ok(self.adch),
             0x007A => Ok(self.adcsra),
             0x007C => Ok(self.admux),
+            0x007B if self.model.is_rf() => Ok(self.rf_adcsrb()),
             ext_int::ADDR_PCIFR..=ext_int::ADDR_EIMSK
             | ext_int::ADDR_SMCR
             | ext_int::ADDR_PCICR
@@ -1307,6 +1345,45 @@ impl Avr {
         Ok((input_mv, reference_mv))
     }
 
+    /// ATmega128RFA1/128RFR2 ADCSRB: AVDDOK (bit 7) and REFOK (bit 5) are
+    /// read-only status bits, 1 once ADEN has powered AVDD and the reference.
+    fn rf_adcsrb(&self) -> u8 {
+        const AVDDOK_REFOK: u8 = (1 << 7) | (1 << 5);
+        let stored = self.io[(0x7B - 0x20) as usize] & !AVDDOK_REFOK;
+        if self.adcsra & (1 << 7) != 0 {
+            stored | AVDDOK_REFOK
+        } else {
+            stored
+        }
+    }
+
+    /// ATmega128RFA1/128RFR2 ADMUX: the input millivolts and the reference.
+    ///
+    /// MUX5:0 (ADCSRB.MUX5 with MUX4:0): 0..7 are ADC0..7 (PF0..PF7), 0x1E
+    /// the 1.2 V bandgap, 0x1F AVSS; differential, temperature-sensor (0x29)
+    /// and back-bias codes are not modelled and read 0. REFS = 01 is AVDD
+    /// (1.8 V), 10 the internal 1.5 V, 11 the internal 1.6 V; 00 (AREF) is
+    /// taken as AVDD because AREF is not a modelled pin.
+    fn rf_adc_input(&self, bus: &dyn Bus) -> SimResult<(u32, u32)> {
+        let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 3) != 0;
+        let input_mv = match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
+            ch @ 0..=7 => {
+                let base = self.model.adc_input_base() + u64::from(ch) * 2;
+                let lo = bus.read_u8(base)?;
+                let hi = bus.read_u8(base + 1)?;
+                u32::from(u16::from_le_bytes([lo, hi]))
+            }
+            0x1E => RF_BANDGAP_MV,
+            _ => 0,
+        };
+        let reference_mv = match self.admux >> 6 {
+            0b10 => RF_REF_1V5_MV,
+            0b11 => RF_REF_1V6_MV,
+            _ => RF_AVDD_MV,
+        };
+        Ok((input_mv, reference_mv))
+    }
+
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
@@ -1325,6 +1402,10 @@ impl Avr {
         }
         if self.model.is_xx4() {
             let (input_mv, reference_mv) = self.xx4_adc_input(bus)?;
+            return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
+        }
+        if self.model.is_rf() {
+            let (input_mv, reference_mv) = self.rf_adc_input(bus)?;
             return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
         }
         let channel: Option<u8> = if self.is_mega() {
@@ -3459,6 +3540,32 @@ mod tests {
             .unwrap();
         cpu.data_write(CLASSIC_SFIOR, 0, &mut bus).unwrap();
         assert_eq!(bus.pud, [true, false]);
+    }
+
+    // ---- ATmega128RFA1/128RFR2 (AvrModel::is_rf) ----
+
+    #[test]
+    fn rf_core_needs_the_exact_part_name_and_has_the_rf_memory_map() {
+        for (name, model) in [
+            ("simavr-atmega128rfa1", AvrModel::Atmega128Rf),
+            ("simavr-atmega128rfr2", AvrModel::Atmega128Rf),
+            ("atmega128rfa1", AvrModel::Atmega128Rf),
+            // Other RFR2 sizes are other memory maps.
+            ("atmega256rfr2", AvrModel::Atmega328p),
+            ("atmega2564rfr2", AvrModel::Atmega328p),
+            ("atmega64rfr2", AvrModel::Atmega328p),
+        ] {
+            assert_eq!(AvrModel::from_chip_name(name), model, "{name}");
+        }
+        // RAMSTART/RAMEND/FLASHEND + 1 per avr-libc iom128rfa1.h/iom128rfr2.h.
+        let rf = AvrModel::Atmega128Rf;
+        assert_eq!((rf.sram_start(), rf.ramend()), (0x0200, 0x41FF));
+        assert_eq!(rf.flash_size(), 128 * 1024);
+        assert!(!rf.three_byte_pc() && !rf.supports_eind());
+        let cpu = Avr::new_model(rf);
+        // Ports A..G only: PING (0x32) is a port, 0x100 (PINH on the 2560) is not.
+        assert!(cpu.is_pin_reg(0x32) && cpu.is_port_reg(0x34));
+        assert!(!cpu.is_pin_reg(0x100) && !cpu.is_port_reg(0x100));
     }
 
     // ---- ATmega164/324/644/1284 (AvrModel::is_xx4) ----
