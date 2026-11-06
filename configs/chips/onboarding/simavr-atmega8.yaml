@@ -13,7 +13,43 @@ flash:
 ram:
   base: 96
   size: 1KB
-peripherals: []
+# Register map checked against avr-libc 2.0.0 avr/iom8.h: the classic I/O-space
+# map LabWired's Atmega8 core runs (AvrModel::Atmega8). ADCL/ADCH 0x24/0x25,
+# ADCSRA 0x26, ADMUX 0x27; PINx/DDRx/PORTx ascending at 0x36 (B), 0x33 (C), 0x30 (D).
+# The CPU owns those registers; each port is mirrored at 0x1_0000 + PINx and
+# the ADC input side (millivolts per channel, two bytes each) sits at
+# 0x1_0060, past the I/O space. ADC0..5 are PC0..PC5; ADC6/7
+# are TQFP-only pins with no port bit, so they have no pad here.
+# VIL 0.2 VCC / VIH 0.6 VCC are the datasheet DC input limits.
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.6
+peripherals:
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010036
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010033
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010030
+    size: "3"
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010060
+    size: "16"
+    config:
+      channels: 8
+analog_pins:
+  PC0: { peripheral: adc, channel: 0 }
+  PC1: { peripheral: adc, channel: 1 }
+  PC2: { peripheral: adc, channel: 2 }
+  PC3: { peripheral: adc, channel: 3 }
+  PC4: { peripheral: adc, channel: 4 }
+  PC5: { peripheral: adc, channel: 5 }
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

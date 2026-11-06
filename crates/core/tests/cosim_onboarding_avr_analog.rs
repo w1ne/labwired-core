@@ -14,6 +14,10 @@
 //! does, with STS to ADCSRB/ADMUX/ADCSRA on the CPU core the descriptor
 //! selects.
 //!
+//! The classic ATmega8/16/32 run on their own I/O-space cores (ADMUX 0x27,
+//! no ADCSRB); there the test also checks the internal 2.56 V reference and
+//! the part's bandgap input. Every result is read back with LDS ADCL/ADCH.
+//!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
 //! and highest ADC pad. On the 100-pin megas the highest pad is PK7/ADC15,
@@ -39,10 +43,13 @@ use std::path::{Path, PathBuf};
 const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega1280", AvrModel::Atmega1281, "pf0", "pk7"),
     ("simavr-atmega1281", AvrModel::Atmega1281, "pf0", "pf7"),
+    ("simavr-atmega16", AvrModel::Atmega16, "pa0", "pa7"),
     ("simavr-atmega168", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega2560", AvrModel::Atmega2560, "pf0", "pk7"),
+    ("simavr-atmega32", AvrModel::Atmega32, "pa0", "pa7"),
     ("simavr-atmega328", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega48", AvrModel::Atmega328p, "pc0", "pc5"),
+    ("simavr-atmega8", AvrModel::Atmega8, "pc0", "pc5"),
     ("simavr-atmega88", AvrModel::Atmega328p, "pc0", "pc5"),
 ];
 
@@ -57,14 +64,12 @@ const UNCOVERED: &[(&str, &str)] = &[
     ),
     ("simavr-atmega128rfa1", "mega map, but no 128RFA1 core"),
     ("simavr-atmega128rfr2", "mega map, but no 128RFR2 core"),
-    ("simavr-atmega16", "ADMUX at 0x27"),
     ("simavr-atmega164", "ADC on port A at 0x20"),
     ("simavr-atmega169p", "LCD-controller part, no 169P core"),
     (
         "simavr-atmega16m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
     ),
-    ("simavr-atmega32", "ADMUX at 0x27"),
     ("simavr-atmega324", "ADC on port A at 0x20"),
     (
         "simavr-atmega328pb",
@@ -76,7 +81,6 @@ const UNCOVERED: &[(&str, &str)] = &[
         "simavr-atmega64m1",
         "ADMUX MUX4:0 maps ADC0..10 differently",
     ),
-    ("simavr-atmega8", "ADMUX at 0x27"),
     ("simavr-attiny13", "ADMUX at 0x27"),
     ("simavr-attiny1634", "ADMUX at 0x24"),
     ("simavr-attiny2313", "no ADC"),
@@ -90,10 +94,18 @@ const UNCOVERED: &[(&str, &str)] = &[
     ("simavr-attiny85", "ADMUX at 0x27"),
 ];
 
-const ADCSRB: u16 = 0x7B;
-const ADMUX: u16 = 0x7C;
-const ADCSRA: u16 = 0x7A;
 const AVCC_MV: u32 = 5000;
+
+/// ADCSRB/ADMUX/ADCSRA/ADCL data addresses on `core` (ADCH = ADCL + 1). The
+/// classic ATmega8/16/32 keep the ADC in I/O space and have no ADCSRB (MUX5
+/// does not exist).
+fn adc_registers(core: AvrModel) -> (Option<u16>, u16, u16, u16) {
+    if core.is_classic() {
+        (None, 0x27, 0x26, 0x24)
+    } else {
+        (Some(0x7B), 0x7C, 0x7A, 0x78)
+    }
+}
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -143,26 +155,53 @@ fn sts(addr: u16, rr: u16) -> [u16; 2] {
     [0x9200 | (rr << 4), addr]
 }
 
-/// One firmware conversion of ADC `channel` against AVcc: ADCSRB.MUX5 for
-/// ADC8..15, ADMUX = REFS0 | MUX, then ADCSRA = ADEN | ADSC.
+/// `LDS Rd, k` (two words).
+fn lds(rd: u16, addr: u16) -> [u16; 2] {
+    [0x9000 | (rd << 4), addr]
+}
+
+/// One firmware conversion of ADC `channel` against AVcc.
 fn convert(chip: &ChipDescriptor, bus: &mut SystemBus, channel: u8) -> u16 {
-    let mut words = Vec::new();
-    words.push(ldi(16, if channel >= 8 { 1 << 3 } else { 0 }));
-    words.extend(sts(ADCSRB, 16));
-    words.push(ldi(16, 0x40 | (channel & 0x07)));
-    words.extend(sts(ADMUX, 16));
-    words.push(ldi(16, 0xC0));
-    words.extend(sts(ADCSRA, 16));
+    convert_mux(chip, bus, 0x40, channel)
+}
+
+/// One firmware conversion: ADCSRB.MUX5 for ADC8..15 (where ADCSRB exists),
+/// ADMUX = `refs` | MUX, then ADCSRA = ADEN | ADSC, and the result read back
+/// with LDS ADCL/ADCH into r24/r25.
+fn convert_mux(chip: &ChipDescriptor, bus: &mut SystemBus, refs: u8, mux: u8) -> u16 {
     let mut cpu = Avr::for_chip_name(&chip.name);
+    let (adcsrb, admux, adcsra, adcl) = adc_registers(cpu.model);
+    let mut words = Vec::new();
+    if let Some(adcsrb) = adcsrb {
+        words.push(ldi(16, if mux >= 8 { 1 << 3 } else { 0 }));
+        words.extend(sts(adcsrb, 16));
+    }
+    words.push(ldi(
+        16,
+        refs | if adcsrb.is_some() { mux & 0x07 } else { mux },
+    ));
+    words.extend(sts(admux, 16));
+    words.push(ldi(16, 0xC0));
+    words.extend(sts(adcsra, 16));
+    words.extend(lds(24, adcl));
+    words.extend(lds(25, adcl + 1));
+    let instructions = (words.len() - 4) / 3 * 2 + 2;
     cpu.load_words(0, &words);
     let config = SimulationConfig::default();
-    for _ in 0..6 {
+    for _ in 0..instructions {
         cpu.step(bus, &[], &config)
             .expect("execute ADC setup and conversion");
     }
     assert_eq!(cpu.adcsra & (1 << 6), 0, "ADSC clears at completion");
     assert_ne!(cpu.adcsra & (1 << 4), 0, "ADIF records the conversion");
-    u16::from(cpu.adch) << 8 | u16::from(cpu.adcl)
+    let code = u16::from(cpu.r[25]) << 8 | u16::from(cpu.r[24]);
+    assert_eq!(
+        code,
+        u16::from(cpu.adch) << 8 | u16::from(cpu.adcl),
+        "{}: LDS ADCL/ADCH reads the converter's result",
+        chip.name
+    );
+    code
 }
 
 fn expected_code(volts: f64) -> u16 {
@@ -295,6 +334,27 @@ fn assert_avr_converts_generic_analog(
         expected_code(f64::from(AVR_ADC_UNDRIVEN_MV) / 1000.0),
         "{board}: idle ADC{idle} is not written by either route"
     );
+
+    if core.is_classic() {
+        // REFS = 11 is the classic parts' internal 2.56 V, not the 328P's 1.1 V.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 2560) as u16,
+            "{board}: the diode converts against the internal 2.56 V reference"
+        );
+        // The bandgap input: 1.30 V on MUX 0x0E (ATmega8), 1.22 V on 0x1E (16/32).
+        let (code, bandgap_mv) = if core == AvrModel::Atmega8 {
+            (0x0E, 1300)
+        } else {
+            (0x1E, 1220)
+        };
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, code),
+            (bandgap_mv * 1024 / AVCC_MV) as u16,
+            "{board}: MUX {code:#04x} converts the {bandgap_mv} mV bandgap"
+        );
+    }
 }
 
 #[test]
