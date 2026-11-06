@@ -1,5 +1,5 @@
 # Raspberry Pi Pico 2 board profile backed by the RP2350 descriptor.
-# The smoke covers the modeled SIO output for the onboard user LED on GP25
+# The smokes cover modeled SIO and PIO0 output for the onboard user LED on GP25
 # and the UART0 data-register path. USB boot/CDC, PADS_BANK0 electrical
 # behavior, Wi-Fi, and Bluetooth are not claimed by this system.
 name: "pico2"

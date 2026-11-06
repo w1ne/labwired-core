@@ -1,8 +1,8 @@
 # External components (Pico 2 / RP2350)
 
 The minimal deterministic smoke requires no external simulated components.
-The narrow board slice uses UART0 (PL011), IO_BANK0 function selection, and
-SIO for the onboard GP25 LED output.
+The narrow board slice uses UART0 (PL011), IO_BANK0 function selection, SIO,
+and PIO0 for the onboard GP25 LED output.
 
 ## Adding an external device
 

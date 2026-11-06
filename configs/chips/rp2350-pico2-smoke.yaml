@@ -28,6 +28,15 @@ peripherals:
     base_address: 0x40028000
     size: "4KB"
 
+  # PIO0 supports the basic instruction set used by the Pico 2 board smoke:
+  # set GP25 direction/value, then jump to repeat the LED waveform.
+  - id: "pio0"
+    type: "pio"
+    base_address: 0x50200000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/pio0.yaml"
+
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000
