@@ -13,9 +13,8 @@ use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
 use labwired_core::Bus;
 use std::path::Path;
 
-const ADC_BASE: u64 = 0x4004_C000;
-const ADC_CS: u64 = ADC_BASE;
-const ADC_RESULT: u64 = ADC_BASE + 0x04;
+const RP2040_ADC_BASE: u64 = 0x4004_C000;
+const RP2350_ADC_BASE: u64 = 0x400A_0000;
 const CS_EN: u32 = 1;
 const CS_START_ONCE: u32 = 1 << 2;
 const CS_AINSEL_SHIFT: u32 = 12;
@@ -59,13 +58,13 @@ fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
 }
 
 /// Exercise the RP2040's firmware-visible AINSEL / START_ONCE / RESULT path.
-fn convert_channel(bus: &mut SystemBus, channel: u8) -> u16 {
+fn convert_channel(bus: &mut SystemBus, adc_base: u64, channel: u8) -> u16 {
     bus.write_u32(
-        ADC_CS,
+        adc_base,
         CS_EN | (u32::from(channel) << CS_AINSEL_SHIFT) | CS_START_ONCE,
     )
     .expect("select ADC input and start one conversion");
-    bus.read_u32(ADC_RESULT)
+    bus.read_u32(adc_base + 0x04)
         .expect("read the converted ADC result") as u16
 }
 
@@ -74,19 +73,30 @@ fn expected_adc_code(volts: f64) -> u16 {
     ((millivolts * 4096 / 3300).min(4095)) as u16
 }
 
-fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
+fn generic_analog_devices_reach_adc_profile(
+    system_name: &str,
+    adc_base: u64,
+    ntc_output: &str,
+    diode_output: &str,
+) {
     let system_path = root(&format!("configs/systems/{system_name}.yaml"));
-    let mut profile = SystemManifest::from_file(&system_path).expect("load RP2040 Pico profile");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load board system profile");
     assert_eq!(profile.name, system_name);
 
     let analog_path = root("examples/pico/analog-ntc-diode-system.yaml");
-    let analog = SystemManifest::from_file(&analog_path)
+    let mut analog = SystemManifest::from_file(&analog_path)
         .expect("load generic NTC and Shockley diode netlists");
+    analog.cosim_models[0]
+        .outputs
+        .insert("v_sense".to_string(), ntc_output.to_string());
+    analog.cosim_models[1]
+        .outputs
+        .insert("v_diode".to_string(), diode_output.to_string());
     profile.cosim_models = analog.cosim_models;
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load RP2040 descriptor");
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build RP2040 Pico bus");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build board system bus");
     assert!(bus.find_peripheral_index_by_name("adc").is_some());
 
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
@@ -95,7 +105,7 @@ fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "both devices must resolve to distinct RP2040 ADC channels"
+        "both devices must resolve to distinct ADC input channels"
     );
 
     let expected_diode_v = diode_load_line_voltage();
@@ -119,7 +129,7 @@ fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
             "unexpected ADC routing errors: {errors:?}"
         );
 
-        let ntc_v = signal_voltage(&session, "adc.adc.0_volts");
+        let ntc_v = signal_voltage(&session, ntc_output);
         let expected_ntc_v = 3.3 * ntc_resistance_ohms(temperature_c)
             / (10_000.0 + ntc_resistance_ohms(temperature_c));
         assert!(
@@ -127,14 +137,14 @@ fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
             "at {temperature_c} °C the NTC divider should be {expected_ntc_v} V, got {ntc_v} V"
         );
 
-        let diode_v = signal_voltage(&session, "adc.adc.1_volts");
+        let diode_v = signal_voltage(&session, diode_output);
         assert!(
             (diode_v - expected_diode_v).abs() < 2e-5,
             "the Shockley load line should be {expected_diode_v} V, got {diode_v} V"
         );
 
-        let ntc_code = convert_channel(&mut bus, 0);
-        let diode_code = convert_channel(&mut bus, 1);
+        let ntc_code = convert_channel(&mut bus, adc_base, 0);
+        let diode_code = convert_channel(&mut bus, adc_base, 1);
         assert_eq!(
             ntc_code,
             expected_adc_code(ntc_v),
@@ -146,7 +156,7 @@ fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
             "the independent ADC1 result must follow the Shockley load line"
         );
         assert_eq!(
-            convert_channel(&mut bus, 2),
+            convert_channel(&mut bus, adc_base, 2),
             0,
             "undriven ADC2 remains at ground"
         );
@@ -169,10 +179,39 @@ fn generic_analog_devices_reach_rp2040_adc(system_name: &str) {
 
 #[test]
 fn pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
-    generic_analog_devices_reach_rp2040_adc("pico");
+    generic_analog_devices_reach_adc_profile(
+        "pico",
+        RP2040_ADC_BASE,
+        "adc.adc.0_volts",
+        "adc.adc.1_volts",
+    );
 }
 
 #[test]
 fn rp2040_pico_ntc_and_diode_netlists_reach_adc_channels_end_to_end() {
-    generic_analog_devices_reach_rp2040_adc("rp2040-pico");
+    generic_analog_devices_reach_adc_profile(
+        "rp2040-pico",
+        RP2040_ADC_BASE,
+        "adc.adc.0_volts",
+        "adc.adc.1_volts",
+    );
+}
+
+#[test]
+fn rp2350_zero_ntc_and_diode_netlists_reach_gp26_gp27_adc_inputs() {
+    let chip = ChipDescriptor::from_file(root("configs/chips/rp2350.yaml"))
+        .expect("load RP2350 descriptor");
+    for (pad, channel) in [("GP26", 0), ("GP27", 1), ("GP28", 2), ("GP29", 3)] {
+        assert_eq!(
+            chip.analog_pins[pad].channel, channel,
+            "RP2350A {pad} must resolve to ADC input {channel}"
+        );
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc");
+    }
+    generic_analog_devices_reach_adc_profile(
+        "rp2350-zero",
+        RP2350_ADC_BASE,
+        "board.analog.gp26_volts",
+        "board.analog.gp27_volts",
+    );
 }
