@@ -4,32 +4,54 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Bounded profile for the imported FocalTech FT9001 target.
+#
+# The machine-imported chip used the 4 KiB secure ROM at 0x80000 as its
+# flash and the 32 KiB SRAMD0 window as its only RAM. It dropped the 2 MiB
+# flash at 0x10000000 and the 224 KiB SRAM at 0x20000000, and it routed
+# usart2 through a 16550 layout. It also declared CPM, reset and TRNG blocks
+# that answered every read with zero.
+#
+# Memory map and USART2 follow Renode's platforms/cpus/focaltech_ft9001.repl
+# and the UART.FT9001_USART model, as read on 2026-11-06. The profile claims
+# only the Cortex-M4F core, SysTick, these memories and USART2's polled
+# register path, which examples/renode-onboarding/focaltech_ft9001-smoke.yaml
+# exercises. USART2 interrupts, baud/framing behavior, RX-enable gating,
+# FSR2 error flags, CPM, reset, TRNG, and the blocks Renode
+# itself only tags (pinctrl, CCM, flash controller, WDT, timers, EPORT,
+# USART3, USB, caches, MPU) are not modelled.
+#
+# Nothing in the Renode platform sits at 0x0, so the flash boot alias is
+# off. Renode sets the SysTick reference to 160 MHz (and the DWT to 72 MHz);
+# cpu_hz uses the SysTick figure.
+
 name: focaltech_ft9001
 arch: arm
+core: cortex-m4
+cpu_hz: 160000000
+flash_boot_alias: false
+
 flash:
-  base: 524288
-  size: 4096B
+  base: 0x10000000
+  size: 2048KB
 ram:
-  base: 536838144
-  size: 32768B
+  base: 0x20000000
+  size: 224KB
+
+memory_regions:
+  - name: secure_rom
+    base: 0x00080000
+    size: 4KB
+  - name: sramd0
+    base: 0x1FFF8000
+    size: 32KB
+
 peripherals:
-- id: cpm
-  type: focaltechft9001_cpm
-  bus: sysbus
-  base_address: 1073758208
-- id: rst
-  type: focaltechft9001_reset
-  bus: sysbus
-  base_address: 1073750016
-- id: trng
-  type: focaltechft9001_trng
-  bus: sysbus
-  base_address: 1073983488
-- id: usart2
-  type: ft9001_usart
-  bus: sysbus
-  base_address: 1073823744
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+    size: 16B
+  - id: usart2
+    type: ft9001_usart
+    base_address: 0x40014000
+    size: 256B

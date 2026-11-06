@@ -36,6 +36,7 @@ on:
       - "crates/firmware-stm32l072-smoke/**"
       - "crates/firmware-stm32l151-smoke/**"
       - "crates/firmware-apollo4p-evb-smoke/**"
+      - "crates/firmware-ft9001-smoke/**"
       - "crates/firmware-efm32g222-smoke/**"
       - "crates/firmware-efm32g842-smoke/**"
       - "crates/firmware-efm32tg840-smoke/**"
@@ -104,6 +105,7 @@ on:
       - "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
       - "examples/renode-onboarding/ramn-smoke.yaml"
       - "examples/renode-onboarding/ambiq-apollo4-smoke.yaml"
+      - "examples/renode-onboarding/focaltech_ft9001-smoke.yaml"
       - "examples/renode-onboarding/nxp-k6xf-smoke.yaml"
       - "scripts/run_renode_onboarding_inventory.py"
       - "examples/renode-onboarding/fomu-smoke.yaml"
@@ -193,6 +195,14 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/ambiq-apollo4-smoke.yaml
             system: configs/systems/onboarding/ambiq-apollo4.yaml
+          # FT9001: corrected flash/SRAM map and the polled USART2 path that
+          # Renode's FT9001_USART exposes; interrupts and other blocks are
+          # outside scope.
+          - id: focaltech_ft9001
+            crate: firmware-ft9001-smoke
+            target: thumbv7em-none-eabi
+            script: examples/renode-onboarding/focaltech_ft9001-smoke.yaml
+            system: configs/systems/onboarding/focaltech_ft9001.yaml
           # EOS S3 smokes cover only the corrected M4 code/SRAM windows and
           # the model-backed PL011; generated peripheral claims are omitted.
           - id: eos-s3

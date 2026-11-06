@@ -1,0 +1,8 @@
+FT9001 SMOKE
+cpu=cortex-m4f uart=usart2
+cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0
+rx fsr=64 drl=A fsr=64
+rxfclr fsr=45 drl=00 fcr2=00
+late drl=Z fsr=45
+te=off|te=on
+FT9001 SMOKE DONE

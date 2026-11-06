@@ -42,6 +42,11 @@ SMOKE_MAPPINGS = {
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/ambiq-apollo4-smoke.yaml",
     },
+    "focaltech_ft9001": {
+        "crate": "firmware-ft9001-smoke",
+        "target": "thumbv7em-none-eabi",
+        "script": "examples/renode-onboarding/focaltech_ft9001-smoke.yaml",
+    },
     "core-v-mcu": {
         "crate": "firmware-cv32e40p-smoke",
         "target": "riscv32imc-unknown-none-elf",

@@ -59,27 +59,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          zeros. Used by: onboarding/zynqmp-zcu106-vcu.",
     ),
     (
-        "ambiqapollo4_bootromlogger",
-        "Ambiq Apollo4 boot-ROM logger. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/ambiq-apollo4.",
-    ),
-    (
-        "andesatcpit100",
-        "Andes ATCPIT100 PIT timer. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/egis_et171.",
-    ),
-    (
-        "andesatcrtc100",
-        "Andes ATCRTC100 RTC. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/egis_et171.",
-    ),
-    (
-        "andesatcwdt200_watchdog",
-        "Andes ATCWDT200 watchdog. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/egis_et171.",
-    ),
-    (
         "armsnoopcontrolunit",
         "ARM Snoop Control Unit (MPCore SCU). Renode-imported onboarding descriptor; no model \
          in this engine, so the window answers reads with zeros. Used by: \
@@ -111,12 +90,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          (SystemBus::bit_band_enabled), so the imported peripheral entry is inert. \
          Renode-imported onboarding descriptor; no model in this engine, so the window \
          answers reads with zeros. Used by: onboarding/cc2538 (+33 more).",
-    ),
-    (
-        "bmp180",
-        "Bosch BMP180 pressure sensor. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/ice40up5k-mdp-evn.",
     ),
     (
         "button",
@@ -197,32 +170,9 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/eos-s3-quickfeather (+10 more).",
     ),
     (
-        "efr32_rtcc",
-        "Silicon Labs EFR32 RTCC. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/brd4162a, \
-         onboarding/efr32mg12, onboarding/efr32mg13, onboarding/sltb004a.",
-    ),
-    (
         "efuse_stub",
         "ESP32-S3 eFuse window, authored as an explicit placeholder so eFuse reads decode \
          instead of faulting. No eFuse state is modelled. Used by: esp32s3-zero.",
-    ),
-    (
-        "egiset171_aosmu",
-        "eGIS ET171 always-on system management unit. Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/egis_et171.",
-    ),
-    (
-        "egiset171_crypto",
-        "eGIS ET171 crypto engine. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/egis_et171.",
-    ),
-    (
-        "egiset171_smu2",
-        "eGIS ET171 system management unit 2. Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/egis_et171.",
     ),
     (
         "ehcihostcontroller",
@@ -263,36 +213,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "flash_xip",
         "ESP32-S3 flash XIP cache window (I-cache / D-cache alias). A memory-map declaration, \
          wired for real by the Xtensa builder. Used by: esp32s3-zero.",
-    ),
-    (
-        "focaltechft9001_cpm",
-        "FocalTech FT9001 clock/power manager. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/focaltech_ft9001.",
-    ),
-    (
-        "focaltechft9001_reset",
-        "FocalTech FT9001 reset controller. Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/focaltech_ft9001.",
-    ),
-    (
-        "focaltechft9001_trng",
-        "FocalTech FT9001 TRNG. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/focaltech_ft9001.",
-    ),
-    (
-        "fslnand",
-        "Freescale NAND flash controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/colibri-vf61, onboarding/vybrid.",
-    ),
-    (
-        "fusionf0710a",
-        "Fusion F0710A touch controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/colibri-vf61.",
     ),
     (
         "gaisler_faulttolerantmemorycontroller",
@@ -341,30 +261,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          onboarding/versatile, onboarding/vexpress.",
     ),
     (
-        "k6xf_ethernet",
-        "NXP Kinetis K6xF Ethernet MAC. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/imxrt1064, \
-         onboarding/mimxrt1064_evk, onboarding/nxp-k6xf.",
-    ),
-    (
-        "k6xf_mcg",
-        "NXP Kinetis K6xF multipurpose clock generator. Renode-imported onboarding \
-         descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/nxp-k6xf.",
-    ),
-    (
-        "k6xf_rng",
-        "NXP Kinetis K6xF random number generator. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nxp-k6xf.",
-    ),
-    (
-        "k6xf_sim",
-        "NXP Kinetis K6xF system integration module. Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nxp-k6xf.",
-    ),
-    (
         "led",
         "Renode board LED. LabWired models board LEDs through `board_io` / external devices, \
          not as a bus peripheral, so the imported entry is inert. Renode-imported onboarding \
@@ -373,73 +269,15 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          imported descriptors.",
     ),
     (
-        "lis2ds12",
-        "ST LIS2DS12 accelerometer. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/ice40up5k-mdp-evn.",
-    ),
-    (
         "litex_controlandstatus",
         "LiteX control-and-status register block. Renode-imported onboarding descriptor; no \
          model in this engine, so the window answers reads with zeros. Used by: \
          onboarding/crosslink-nx-evn.",
     ),
     (
-        "litex_soc_controller",
-        "LiteX SoC controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/crosslink-nx-evn, onboarding/litex_ibex, onboarding/litex_vexriscv_tftp, \
-         onboarding/verilated_ibex.",
-    ),
-    (
-        "lpc_can",
-        "NXP LPC CAN controller. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/lpc2294.",
-    ),
-    (
-        "lsm303dlhc_accelerometer",
-        "ST LSM303DLHC accelerometer. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/ice40up5k-mdp-evn.",
-    ),
-    (
-        "lsm303dlhc_gyroscope",
-        "ST LSM303DLHC magnetometer/gyro half. Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/ice40up5k-mdp-evn.",
-    ),
-    (
-        "lsm330_accelerometer",
-        "ST LSM330 accelerometer. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/ice40up5k-mdp-evn.",
-    ),
-    (
-        "lsm330_gyroscope",
-        "ST LSM330 gyroscope. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/ice40up5k-mdp-evn.",
-    ),
-    (
-        "mc3635",
-        "mCube MC3635 accelerometer. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/eos-s3-quickfeather.",
-    ),
-    (
         "mcpwm",
         "ESP32-S3 MCPWM window. Carries a debug_schema only; no PWM behaviour is modelled on \
          the from_config path. Used by: esp32s3, esp32s3-zero.",
-    ),
-    (
-        "mpfs_sdcontroller",
-        "Microchip PolarFire SoC SD/eMMC controller. Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/polarfire-soc.",
-    ),
-    (
-        "msp430f2xxx_mpy",
-        "TI MSP430F2xxx hardware multiplier. No model in this engine; omitted from the \
-         MSP430F2619 onboarding profile because the MSP430 CPU is unsupported.",
     ),
     (
         "nrf5340_cache_stub",
@@ -513,36 +351,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          ordering. Used by: rp2040, rp2350, stm32f401, stm32f405, stm32f407 (+8 more).",
     ),
     (
-        "nxp_flexcan",
-        "NXP FlexCAN controller (i.MX 8M). Renode-imported onboarding descriptor; no model \
-         in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nxp-frdm-imx8mplus, onboarding/nxp-mimx8ml.",
-    ),
-    (
-        "nxp_imx8mp_systemresetcontroller",
-        "NXP i.MX 8M Plus system reset controller (SRC). Renode-imported onboarding \
-         descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/nxp-frdm-imx8mplus, onboarding/nxp-mimx8ml.",
-    ),
-    (
-        "nxp_imx_watchdog",
-        "NXP i.MX watchdog (WDOG). Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/nxp-frdm-imx8mplus, onboarding/nxp-mimx8ml.",
-    ),
-    (
-        "nxp_usdhc",
-        "NXP uSDHC SD/eMMC host controller (i.MX 8M). Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nxp-frdm-imx8mplus, onboarding/nxp-mimx8ml.",
-    ),
-    (
-        "pac1934",
-        "Microchip PAC1934 power monitor. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/mpfs-icicle-kit.",
-    ),
-    (
         "pca9548",
         "NXP PCA9548 I2C switch. LabWired models bus switches as external devices \
          (validate_i2c_mux_topology), not as an MCU peripheral. Renode-imported onboarding \
@@ -575,12 +383,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          this engine, so the window answers reads with zeros. Used by: onboarding/mars_zx3, \
          onboarding/tegra2, onboarding/tegra3, onboarding/vexpress, onboarding/zedboard (+1 \
          more).",
-    ),
-    (
-        "pulp_i2s",
-        "PULP I2S interface. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/A2_CV32E40P, \
-         onboarding/core-v-mcu.",
     ),
     (
         "pythonperipheral",
@@ -616,36 +418,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          esp32s3-zero.",
     ),
     (
-        "s32k3xx_lowpowerinterintegratedcircuit",
-        "NXP S32K3xx LPI2C. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \
-         onboarding/nxp-s32k388evb.",
-    ),
-    (
-        "s32k3xx_miscellaneoussystemcontrolmodule",
-        "NXP S32K3xx MSCM. Renode-imported onboarding descriptor; no model in this engine, so \
-         the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \
-         onboarding/nxp-s32k388evb.",
-    ),
-    (
-        "s32k3xx_realtimeclock",
-        "NXP S32K3xx RTC. Renode-imported onboarding descriptor; no model in this engine, so \
-         the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \
-         onboarding/nxp-s32k388evb.",
-    ),
-    (
-        "s32k3xx_systemintegrationunitlite2",
-        "NXP S32K3xx SIUL2. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \
-         onboarding/nxp-s32k388evb.",
-    ),
-    (
-        "s32kxx_modeentrymodule",
-        "NXP S32K mode entry module. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: onboarding/nxp-s32k388, \
-         onboarding/nxp-s32k388evb.",
-    ),
-    (
         "sam_tc",
         "Microchip SAM timer/counter. Renode-imported onboarding descriptor; no model in this \
          engine, so the window answers reads with zeros. Used by: onboarding/sam4s, \
@@ -658,104 +430,9 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
          stm32l073, stm32l476.",
     ),
     (
-        "sema4",
-        "NXP SEMA4 hardware semaphore. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/colibri-vf61, onboarding/vybrid.",
-    ),
-    (
-        "si70xx",
-        "Silicon Labs Si70xx humidity/temperature sensor. Renode-imported onboarding \
-         descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/sltb001a, onboarding/slwstk6220a.",
-    ),
-    (
         "smc91x",
         "SMSC LAN91C Ethernet controller. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: onboarding/versatile.",
-    ),
-    (
-        "stm32_crc",
-        "STM32 CRC unit as spelled by the Renode import (the modelled type is `crc`; this \
-         vendor spelling is not aliased to it). Renode-imported onboarding descriptor; no \
-         model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nucleo_h753zi, onboarding/stm32f0, onboarding/stm32f042, \
-         onboarding/stm32f072, onboarding/stm32f072b_discovery (+9 more).",
-    ),
-    (
-        "stm32_fdcan",
-        "STM32 FDCAN as spelled by the Renode import. Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/ramn, onboarding/stm32l552.",
-    ),
-    (
-        "stm32_independentwatchdog",
-        "STM32 IWDG as spelled by the Renode import (the modelled type is `iwdg`). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/nucleo_h753zi, \
-         onboarding/nucleo_wba52cg, onboarding/stm32f4, onboarding/stm32f4_discovery, \
-         onboarding/stm32f4_discovery-kit (+8 more).",
-    ),
-    (
-        "stm32_rng",
-        "STM32 RNG as spelled by the current Renode import (the modelled type is `rng`; \
-         older Renode spelled it `stm32f4_rng`, which this entry replaced). Renode-imported \
-         onboarding descriptor; no model in this engine, so the window answers reads with \
-         zeros. Used by: onboarding/nucleo_f767zi, onboarding/nucleo_h753zi, onboarding/ramn, \
-         onboarding/stm32f4, onboarding/stm32f412 (+13 more).",
-    ),
-    (
-        "stm32_syscfg",
-        "STM32 SYSCFG as spelled by the Renode import. Renode-imported onboarding descriptor; \
-         no model in this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nucleo_h753zi, onboarding/stm32f7_discovery-bb, onboarding/stm32f746, \
-         onboarding/stm32h743, onboarding/stm32h753.",
-    ),
-    (
-        "stm32_usb",
-        "STM32 USB peripheral as spelled by the Renode import. Renode-imported onboarding \
-         descriptor; no model in this engine, so the window answers reads with zeros. Used \
-         by: onboarding/ramn, onboarding/stm32l552.",
-    ),
-    (
-        "stm32f1afio",
-        "STM32F1 AFIO as spelled by the Renode import (the modelled type is `afio`). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/stm32f103.",
-    ),
-    (
-        "stm32f4_flashcontroller",
-        "STM32 flash controller as spelled by the Renode import (the modelled type is \
-         `flash`). Renode-imported onboarding descriptor; no model in this engine, so the \
-         window answers reads with zeros. Used by: onboarding/stm32g0.",
-    ),
-    (
-        "stm32f4_rtc",
-        "STM32 RTC as spelled by the Renode import (the modelled type is `rtc`). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/nucleo_h753zi, \
-         onboarding/nucleo_wba52cg, onboarding/stm32f0, onboarding/stm32f042, \
-         onboarding/stm32f072 (+14 more).",
-    ),
-    (
-        "stm32ltdc",
-        "STM32 LTDC display controller. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/nucleo_h753zi, onboarding/stm32f429, onboarding/stm32f7_discovery-bb, \
-         onboarding/stm32f746, onboarding/stm32h743 (+1 more).",
-    ),
-    (
-        "stm32wba_flashcontroller",
-        "STM32WBA flash controller as spelled by the Renode import. Renode-imported \
-         onboarding descriptor; no model in this engine, so the window answers reads with \
-         zeros. Used by: onboarding/nucleo_wba52cg, onboarding/stm32wba52.",
-    ),
-    (
-        "stmcan",
-        "STM32 bxCAN as spelled by the Renode import (the modelled type is `bxcan`). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/stm32f0, onboarding/stm32f042, \
-         onboarding/stm32f072, onboarding/stm32f072b_discovery, onboarding/stm32f4 (+7 more).",
     ),
     (
         "stub",
@@ -769,21 +446,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "sunximmc",
         "Allwinner sunxi MMC controller. Renode-imported onboarding descriptor; no model in \
          this engine, so the window answers reads with zeros. Used by: onboarding/a20.",
-    ),
-    (
-        "synopsysdwcethernetqualityofservice",
-        "Synopsys DesignWare Ethernet QoS MAC (the multi-queue DWMAC variant). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/nucleo_h753zi, \
-         onboarding/nxp-frdm-imx8mplus, onboarding/nxp-mimx8ml, onboarding/stm32h7, \
-         onboarding/stm32h743 (+3 more).",
-    ),
-    (
-        "synopsysethernetmac",
-        "Synopsys DesignWare Ethernet MAC. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: onboarding/stm32f4, \
-         onboarding/stm32f4_discovery, onboarding/stm32f4_discovery-kit, \
-         onboarding/stm32f412, onboarding/stm32f429 (+2 more).",
     ),
     (
         "system_stub",
@@ -843,23 +505,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "USB HID mouse. Renode-imported onboarding descriptor; no model in this engine, so \
          the window answers reads with zeros. Used by: onboarding/colibri-vf61, \
          onboarding/tegra2, onboarding/tegra3, onboarding/versatile, onboarding/vexpress.",
-    ),
-    (
-        "virtiommioconsole",
-        "virtio-mmio console. Renode-imported onboarding descriptor; no model in this engine, \
-         so the window answers reads with zeros. Used by: onboarding/cortex_a53_console.",
-    ),
-    (
-        "virtiommioentropy",
-        "virtio-mmio entropy source. Renode-imported onboarding descriptor; no model in this \
-         engine, so the window answers reads with zeros. Used by: \
-         onboarding/cortex_a53_virtio.",
-    ),
-    (
-        "vybriddcu",
-        "NXP Vybrid display control unit. Renode-imported onboarding descriptor; no model in \
-         this engine, so the window answers reads with zeros. Used by: \
-         onboarding/colibri-vf61, onboarding/vybrid.",
     ),
 ];
 

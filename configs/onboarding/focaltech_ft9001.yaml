@@ -1,5 +1,5 @@
 name: focaltech_ft9001
-description: 'FocalTech FT9001 Touch Controller target. Architecture: RISC / Proprietary.'
+description: 'FocalTech FT9001 target. Architecture: Arm Cortex-M4F (Renode cortex-m4f).'
 url: http://www.focaltech-electronics.com/
 family: FocalTech
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

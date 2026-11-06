@@ -968,7 +968,7 @@ pub mod integration_tests {
             ("miv_coreuart", L::CoreUart),
             ("k6xf_uart", L::KinetisUart),
             ("pulp_udma_uart", L::Pulp),
-            ("ft9001_usart", L::Ns16550),
+            ("ft9001_usart", L::Ft9001),
             ("cosimulateduart", L::Ns16550),
             ("mpc5567_uart", L::Esci),
             ("picosoc_simpleuart", L::PicoUart),

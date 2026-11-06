@@ -1781,7 +1781,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2f67afbca2f38eae45a3aa52b28985001b33ab2a0dc40c50b703f88473ee11b6
+    drift_ack_digest: 884ca160cb72b35913539d34d0e944c0759eb221014e3fb782a056cd5a677a98
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2374,6 +2374,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
+    # USART layout (new enum arm, FT9001-only control-register store and
+    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
+    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -3903,7 +3907,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 2566aebdd4d3710ea4afc4f16d7541fed8479adf7e962b252420f7eabcbe457b
+    drift_ack_digest: ab21b38195b3866dc0cf4635f32477787d316e6f39f8223d6dd50c3edd5568c4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4484,6 +4488,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
+    # USART layout (new enum arm, FT9001-only control-register store and
+    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
+    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -4976,7 +4984,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: d048302c796b6ba2cd436fcc8243c0f97adf10586d4547a056e7fce728275250
+    drift_ack_digest: 4db81cc060fa88289e4a625b234782c377d31732e807571c1ddaa9e2d15bc767
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5490,6 +5498,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
+    # USART layout (new enum arm, FT9001-only control-register store and
+    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
+    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -6040,7 +6052,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 78960e78c1828b5e75aa08d28ea1900a3bdabbe28c59e79eb788800e96a4d193
+    drift_ack_digest: 93c33846be2076871acc9becd79b636996e4ee1a8161a995cda783f06be2fd8b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6624,6 +6636,10 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
+    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
+    # USART layout (new enum arm, FT9001-only control-register store and
+    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
+    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
@@ -7137,7 +7153,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 37c8b28cb423baec9b08d7107e118004006c94090d0cadf1dec1c21f330a4dac
+    drift_ack_digest: ab1fb5a795074aa3bc0c57a845eb5593c839b81faf39a24f95dc05f6cdfda818
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7653,6 +7669,10 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
+    # USART layout (new enum arm, FT9001-only control-register store and
+    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
+    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-02
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`

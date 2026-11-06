@@ -2,16 +2,16 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `182`
-- booted: `180/245`
-- boot_and_smoke_passed: `180/245`
-- not_run: `63`
-- pass: `180`
+- run_attempted: `183`
+- booted: `181/245`
+- boot_and_smoke_passed: `181/245`
+- not_run: `62`
+- pass: `181`
 - fail: `2`
-- median_elapsed_ms: `1326`
-- median_elapsed_seconds: `1.326`
+- median_elapsed_ms: `1328`
+- median_elapsed_seconds: `1.328`
 - threshold_seconds: `3600`
-- threshold_met: `182/182`
+- threshold_met: `183/183`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor.
 
@@ -84,7 +84,7 @@
 | `ezr32hg320` | `pass` | `True` | `yes` | `yes` | `995` | `0.995` | `True` | `n/a` | n/a | n/a |
 | `ezr32lg330` | `pass` | `True` | `yes` | `yes` | `1047` | `1.047` | `True` | `n/a` | n/a | n/a |
 | `ezr32wg330` | `pass` | `True` | `yes` | `yes` | `738` | `0.738` | `True` | `n/a` | n/a | n/a |
-| `focaltech_ft9001` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
+| `focaltech_ft9001` | `pass` | `True` | `yes` | `yes` | `86395` | `86.395` | `True` | `n/a` | n/a | n/a |
 | `fomu` | `pass` | `True` | `yes` | `yes` | `1011` | `1.011` | `True` | `n/a` | n/a | n/a |
 | `fsl_lx2160ardb` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
 | `gr712rc` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `not_configured` | Add a compatible firmware build and smoke script before claiming a boot result. | No platform-specific firmware crate and smoke script are mapped for this imported descriptor in the existing onboarding workflow; no firmware run was attempted. |
