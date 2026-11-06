@@ -7,6 +7,7 @@ limits:
   max_steps: 200000
 assertions:
   - uart_contains: "RP2040_SMOKE_OK"
+  - uart_contains: "RP2040_ADC_TEMP_OK raw="
   - gpio_edges:
       pin: "sio:25"
       min_edges: 8

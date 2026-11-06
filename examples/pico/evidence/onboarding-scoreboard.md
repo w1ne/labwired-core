@@ -3,11 +3,11 @@
 - targets_total: `1`
 - pass: `1`
 - fail: `0`
-- median_elapsed_ms: `1231`
-- median_elapsed_seconds: `1.231`
+- median_elapsed_ms: `1470`
+- median_elapsed_seconds: `1.47`
 - threshold_seconds: `3600`
 - threshold_met: `1/1`
 
 | Target | Status | Elapsed (ms) | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |
 |---|---|---:|---:|---|---|---|---|
-| `pico` | `pass` | `1231` | `1.231` | `True` | `n/a` | `n/a` | `n/a` |
+| `pico` | `pass` | `1470` | `1.47` | `True` | `n/a` | `n/a` | `n/a` |

@@ -36,6 +36,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "RP2040_ADC_TEMP_OK raw="
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "gpio_edges": {
           "pin": "sio:25",
           "min_edges": 8
@@ -55,22 +61,22 @@
     "registers": [
       16,
       10,
-      5,
-      2048,
+      10,
+      1,
       1073954816,
-      268435908,
-      372,
+      268436253,
+      324,
       537133040,
       0,
       0,
       0,
       0,
       0,
-      537133032,
-      268435847,
-      268435842
+      537133024,
+      268436031,
+      268436026
     ],
-    "pc": 268435842,
+    "pc": 268436026,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -83,7 +89,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "04bf7a42b680108fd62245b62f8d8a5aa70bd9960ddb75e3cf694e860ef8f637",
+  "firmware_hash": "d92d1daa0fc9ffa5894e9c690a948d88db7aac25700b1f8810ae361f5cf29b80",
   "config": {
     "firmware": "examples/pico/../../target/thumbv6m-none-eabi/release/firmware-rp2040-demo",
     "system": "examples/pico/../../configs/systems/rp2040-pico.yaml",
@@ -8153,6 +8159,13 @@
         "base": 3758096384,
         "registers": [],
         "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157296,
+        "registers": [],
+        "artifacts": []
       }
     ],
     "devices": []
@@ -8185,163 +8198,123 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 64,
+            "cycle": 50274,
             "value": 1
           },
           {
-            "cycle": 5068,
+            "cycle": 55278,
             "value": 0
           },
           {
-            "cycle": 10154,
+            "cycle": 60364,
             "value": 1
           },
           {
-            "cycle": 15158,
+            "cycle": 65368,
             "value": 0
           },
           {
-            "cycle": 20244,
+            "cycle": 70454,
             "value": 1
           },
           {
-            "cycle": 25248,
+            "cycle": 75458,
             "value": 0
           },
           {
-            "cycle": 30334,
+            "cycle": 80544,
             "value": 1
           },
           {
-            "cycle": 35338,
+            "cycle": 85548,
             "value": 0
           },
           {
-            "cycle": 40424,
+            "cycle": 90634,
             "value": 1
           },
           {
-            "cycle": 45428,
+            "cycle": 95638,
             "value": 0
           },
           {
-            "cycle": 50514,
+            "cycle": 100724,
             "value": 1
           },
           {
-            "cycle": 55518,
+            "cycle": 105728,
             "value": 0
           },
           {
-            "cycle": 60604,
+            "cycle": 110814,
             "value": 1
           },
           {
-            "cycle": 65608,
+            "cycle": 115818,
             "value": 0
           },
           {
-            "cycle": 70694,
+            "cycle": 120904,
             "value": 1
           },
           {
-            "cycle": 75698,
+            "cycle": 125908,
             "value": 0
           },
           {
-            "cycle": 80784,
+            "cycle": 130994,
             "value": 1
           },
           {
-            "cycle": 85788,
+            "cycle": 135998,
             "value": 0
           },
           {
-            "cycle": 90874,
+            "cycle": 141084,
             "value": 1
           },
           {
-            "cycle": 95878,
+            "cycle": 146088,
             "value": 0
           },
           {
-            "cycle": 100964,
+            "cycle": 151174,
             "value": 1
           },
           {
-            "cycle": 105968,
+            "cycle": 156178,
             "value": 0
           },
           {
-            "cycle": 111054,
+            "cycle": 161264,
             "value": 1
           },
           {
-            "cycle": 116058,
+            "cycle": 166268,
             "value": 0
           },
           {
-            "cycle": 121144,
+            "cycle": 171354,
             "value": 1
           },
           {
-            "cycle": 126148,
+            "cycle": 176358,
             "value": 0
           },
           {
-            "cycle": 131234,
+            "cycle": 181444,
             "value": 1
           },
           {
-            "cycle": 136238,
+            "cycle": 186448,
             "value": 0
           },
           {
-            "cycle": 141324,
+            "cycle": 191534,
             "value": 1
           },
           {
-            "cycle": 146328,
-            "value": 0
-          },
-          {
-            "cycle": 151414,
-            "value": 1
-          },
-          {
-            "cycle": 156418,
-            "value": 0
-          },
-          {
-            "cycle": 161504,
-            "value": 1
-          },
-          {
-            "cycle": 166508,
-            "value": 0
-          },
-          {
-            "cycle": 171594,
-            "value": 1
-          },
-          {
-            "cycle": 176598,
-            "value": 0
-          },
-          {
-            "cycle": 181684,
-            "value": 1
-          },
-          {
-            "cycle": 186688,
-            "value": 0
-          },
-          {
-            "cycle": 191774,
-            "value": 1
-          },
-          {
-            "cycle": 196778,
+            "cycle": 196538,
             "value": 0
           }
         ],
@@ -8349,172 +8322,132 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 57,
+            "cycle": 50267,
             "state": "0"
           },
           {
-            "cycle": 64,
+            "cycle": 50274,
             "state": "1"
           },
           {
-            "cycle": 5068,
+            "cycle": 55278,
             "state": "0"
           },
           {
-            "cycle": 10154,
+            "cycle": 60364,
             "state": "1"
           },
           {
-            "cycle": 15158,
+            "cycle": 65368,
             "state": "0"
           },
           {
-            "cycle": 20244,
+            "cycle": 70454,
             "state": "1"
           },
           {
-            "cycle": 25248,
+            "cycle": 75458,
             "state": "0"
           },
           {
-            "cycle": 30334,
+            "cycle": 80544,
             "state": "1"
           },
           {
-            "cycle": 35338,
+            "cycle": 85548,
             "state": "0"
           },
           {
-            "cycle": 40424,
+            "cycle": 90634,
             "state": "1"
           },
           {
-            "cycle": 45428,
+            "cycle": 95638,
             "state": "0"
           },
           {
-            "cycle": 50514,
+            "cycle": 100724,
             "state": "1"
           },
           {
-            "cycle": 55518,
+            "cycle": 105728,
             "state": "0"
           },
           {
-            "cycle": 60604,
+            "cycle": 110814,
             "state": "1"
           },
           {
-            "cycle": 65608,
+            "cycle": 115818,
             "state": "0"
           },
           {
-            "cycle": 70694,
+            "cycle": 120904,
             "state": "1"
           },
           {
-            "cycle": 75698,
+            "cycle": 125908,
             "state": "0"
           },
           {
-            "cycle": 80784,
+            "cycle": 130994,
             "state": "1"
           },
           {
-            "cycle": 85788,
+            "cycle": 135998,
             "state": "0"
           },
           {
-            "cycle": 90874,
+            "cycle": 141084,
             "state": "1"
           },
           {
-            "cycle": 95878,
+            "cycle": 146088,
             "state": "0"
           },
           {
-            "cycle": 100964,
+            "cycle": 151174,
             "state": "1"
           },
           {
-            "cycle": 105968,
+            "cycle": 156178,
             "state": "0"
           },
           {
-            "cycle": 111054,
+            "cycle": 161264,
             "state": "1"
           },
           {
-            "cycle": 116058,
+            "cycle": 166268,
             "state": "0"
           },
           {
-            "cycle": 121144,
+            "cycle": 171354,
             "state": "1"
           },
           {
-            "cycle": 126148,
+            "cycle": 176358,
             "state": "0"
           },
           {
-            "cycle": 131234,
+            "cycle": 181444,
             "state": "1"
           },
           {
-            "cycle": 136238,
+            "cycle": 186448,
             "state": "0"
           },
           {
-            "cycle": 141324,
+            "cycle": 191534,
             "state": "1"
           },
           {
-            "cycle": 146328,
-            "state": "0"
-          },
-          {
-            "cycle": 151414,
-            "state": "1"
-          },
-          {
-            "cycle": 156418,
-            "state": "0"
-          },
-          {
-            "cycle": 161504,
-            "state": "1"
-          },
-          {
-            "cycle": 166508,
-            "state": "0"
-          },
-          {
-            "cycle": 171594,
-            "state": "1"
-          },
-          {
-            "cycle": 176598,
-            "state": "0"
-          },
-          {
-            "cycle": 181684,
-            "state": "1"
-          },
-          {
-            "cycle": 186688,
-            "state": "0"
-          },
-          {
-            "cycle": 191774,
-            "state": "1"
-          },
-          {
-            "cycle": 196778,
+            "cycle": 196538,
             "state": "0"
           }
         ],
         "mode": "output",
-        "edge_count": 40
+        "edge_count": 30
       }
     ]
   },
@@ -8534,34 +8467,10 @@
   "uart_lines": {
     "lines": [
       {
-        "text": "RP2040_SMOKE_OK",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
-      },
-      {
-        "text": "RP2040_SMOKE_OK",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
-      },
-      {
-        "text": "RP2040_SMOKE_OK",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
-      },
-      {
-        "text": "RP2040_SMOKE_OK",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
-      },
-      {
-        "text": "RP2040_SMOKE_OK",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "text": "RP2040_ADC_TEMP_OK raw=876",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "RP2040_SMOKE_OK",
@@ -8658,14 +8567,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 468,
+    "text_bytes": 832,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 468,
+    "flash_used_bytes": 832,
     "ram_static_bytes": 0,
     "flash_total_bytes": 2097152,
     "ram_total_bytes": 270336,
-    "flash_used_pct": 0.02,
+    "flash_used_pct": 0.04,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -8675,15 +8584,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 262144,
-    "main_stack_high_water_bytes": 24,
-    "main_stack_free_min_bytes": 262120,
+    "main_stack_high_water_bytes": 32,
+    "main_stack_free_min_bytes": 262112,
     "main_stack_base": 536870912,
     "main_stack_top": 537133056,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 262144,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 262120,
+    "heap_free_min_bytes": 262112,
     "heap_base": 536870912,
     "heap_top": 537133056
   },
@@ -8691,14 +8600,19 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 545,
-    "memory_writes": 8,
-    "peripheral_accesses": 372,
+    "memory_reads": 535,
+    "memory_writes": 15,
+    "peripheral_accesses": 313,
     "exceptions": 0,
     "pc_samples": [
       {
+        "pc": 268436026,
+        "count": 586,
+        "symbol": "cortex_m::asm::nop"
+      },
+      {
         "pc": 268435842,
-        "count": 781,
+        "count": 195,
         "symbol": "cortex_m::asm::nop"
       }
     ]
