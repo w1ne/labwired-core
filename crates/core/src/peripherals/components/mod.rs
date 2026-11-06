@@ -53,7 +53,9 @@ pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
 pub mod iolink_native;
 pub mod iolink_station;
+pub mod joystick;
 pub mod lcd1602;
+pub mod limit_switch;
 pub mod max30102;
 pub mod mcp2515;
 pub mod microsd;
@@ -80,6 +82,7 @@ pub mod step_dir_motor;
 pub mod supply;
 pub mod supply_domain;
 pub mod tca9548a;
+pub mod tiol112;
 pub mod unipolar_stepper;
 /// Hand-written VEML7700 model, retained only as the byte-parity oracle the
 /// declarative descriptor is proven identical against (see `veml7700_parity`).

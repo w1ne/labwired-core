@@ -1175,6 +1175,38 @@
       "inputs": []
     },
     {
+      "device_type": "ili9488",
+      "label": "ILI9488 TFT",
+      "summary": "320×480 SPI TFT controller with modelled 18-bit COLMOD.",
+      "detail": "Ilitek ILI9488 against an in-memory 320×480 RGB888 frame (bit-expanded RGB666). COLMOD selects the SPI pixel depth; hardware default and the common 0x66 init are 18-bit / three bytes per pixel. MADCTL MV selects landscape 480×320 addressing. The playground surfaces pixels through the simulator bridge.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin label (e.g. \"PB2\")."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback."
+        },
+        {
+          "name": "reset_pin",
+          "ty": "str",
+          "doc": "Active-low hardware reset GPIO. Optional; omit when RESET is tied high or unused."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part — ABSENT MEANS POWERED. Only an explicit false, which the diagram compiler emits when supply pins are on no net, darkens the panel."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "amoled-rm67162",
       "label": "RM67162 AMOLED",
       "summary": "240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C).",
@@ -1595,29 +1627,49 @@
       "device_type": "iolink-master",
       "label": "IO-Link Master",
       "summary": "IO-Link master state machine over UART.",
-      "detail": "Drives wake-up / startup / operate cycles, m-sequence types, process-data exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels.",
+      "detail": "Tick-paced IO-Link test peer with bounded process-data framing. Supports TYPE_2_1/2/variable and the legacy LabWired receive-only demo envelope. The opt-in tiol112-eval profile waits for explicit Start, schedules logical WAKE, validates DPP, and alternates TYPE_2_V PD reads/writes at the advertised minimum cycle. This peer does not prove physical baud timing, tA, master conformance, ISDU service execution, or Beckhoff compatibility.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
         {
+          "name": "startup_profile",
+          "ty": "str",
+          "doc": "legacy (default) or tiol112-eval. Evaluation requires a TIOL112 attached earlier to the same UART, PDin32/PDout1/TYPE_2_V/OD1 and COM2/3. Explicit start input schedules a logical 1ms WAKE, validated DPP reads and DeviceOperate; cyclic ISDU-IDLE read/write PD follows. It does not execute ISDU services."
+        },
+        {
           "name": "pd_in_len",
           "ty": "int",
-          "doc": "Process-data input length in bytes. Defaults to 1 (single-byte DI device)."
+          "doc": "Process-data input length, 0..32 bytes. Default 1. Must match the selected M-sequence."
+        },
+        {
+          "name": "pd_out_len",
+          "ty": "int",
+          "doc": "Process-data output length, 0..32 bytes. Default 0; initialized to zero and changeable through set_process_data_output."
         },
         {
           "name": "m_seq_type",
           "ty": "int",
-          "doc": "M-sequence type (1..6). Used to derive od_len: one OD octet, or two for TYPE_2_V (Table A.10)."
+          "doc": "Engine enum: 1=legacy receive-only demo (default), 4=TYPE_2_1, 5=TYPE_2_2, 6=TYPE_2_V. This is NOT the DPP capability code. Other values are rejected."
+        },
+        {
+          "name": "pd_out_pattern",
+          "ty": "str",
+          "doc": "Optional demo stimulus: constant (default) or counter. Counter increments the first PD output octet once per queued OPERATE frame; requires pd_out_len >= 1."
+        },
+        {
+          "name": "od_len",
+          "ty": "int",
+          "doc": "On-request octets: TYPE_2_V permits 1, 2, 8, 32; other supported modes require 1. Default 2 for TYPE_2_V, otherwise 1. Long-PD TYPE_2_V OD1 corresponds to DPP capability code 4."
         },
         {
           "name": "com",
           "ty": "str",
-          "doc": "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."
+          "doc": "Communication speed: COM1, COM2 (default), or COM3. Legacy mode treats it as metadata; tiol112-eval paces bytes in simulated time and reports the baud to the UART guard. No physical timing claim."
         },
         {
           "name": "frame_gap_ticks",
           "ty": "int",
-          "doc": "Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget."
+          "doc": "Legacy inter-frame gap in UART polls, 1..4294967295 (default 6000). Not a cycle time in microseconds. Cannot be specified for tiol112-eval, which honors device MinCycleTime."
         }
       ],
       "labs": [
@@ -1628,7 +1680,80 @@
           "demo_elf": "demo-iolink-dido.elf"
         }
       ],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "start",
+          "label": "Start TIOL112 evaluation (logical WAKE then DPP)",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "tiol112",
+      "label": "TIOL112",
+      "summary": "TI IO-Link digital transceiver: EN, inverted CQ, WAKE and NFAULT.",
+      "detail": "Digital behavior from TI SLLSFJ1D. Timed UART models TX/RX propagation; ordinary streams are byte-functional. Analog electrical behavior, wake-current detection and enable-time bounds are not modeled.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "en",
+          "ty": "str",
+          "doc": "Required driver-enable pad, or high/low rail. Low releases CQ."
+        },
+        {
+          "name": "wake",
+          "ty": "str",
+          "doc": "Optional WAKE active-low output pad, ideal pull-up."
+        },
+        {
+          "name": "nfault",
+          "ty": "str",
+          "doc": "Optional NFAULT active-low output pad, ideal pull-up."
+        },
+        {
+          "name": "driver_delay_ns",
+          "ty": "int",
+          "doc": "Timed-mode TX-to-CQ propagation, 0..1200 ns; default datasheet maximum1200."
+        },
+        {
+          "name": "receiver_delay_ns",
+          "ty": "int",
+          "doc": "Timed-mode CQ-to-RX propagation, 0..300 ns; default datasheet maximum300."
+        },
+        {
+          "name": "enable_delay_ns",
+          "ty": "int",
+          "doc": "Timed EN settling scenario, default4000ns TYPICAL, not a guaranteed maximum. Premature frames are rejected."
+        },
+        {
+          "name": "disable_delay_ns",
+          "ty": "int",
+          "doc": "Timed EN release scenario, default4000ns TYPICAL, not a guaranteed maximum."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "wake",
+          "label": "WAKE asserted",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "fault",
+          "label": "NFAULT asserted",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "ntc-thermistor",
@@ -1717,6 +1842,118 @@
           "min": 0.0,
           "max": 100.0,
           "default": 50.0
+        }
+      ]
+    },
+    {
+      "device_type": "joystick",
+      "label": "Analog Joystick",
+      "summary": "Two ratiometric potentiometer axes and a push contact.",
+      "detail": "x/y range -1..1, centered at zero. Each connected axis spans GND to VCC. SW is an active-low momentary contact. Mechanical bounce, axis noise and spring dynamics are not modeled.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "x_channel",
+          "ty": "int",
+          "doc": "ADC channel for VRX; absent when unwired."
+        },
+        {
+          "name": "y_channel",
+          "ty": "int",
+          "doc": "ADC channel for VRY; absent when unwired."
+        },
+        {
+          "name": "x_connection",
+          "ty": "str",
+          "doc": "Optional ADC controller for VRX; defaults to connection."
+        },
+        {
+          "name": "y_connection",
+          "ty": "str",
+          "doc": "Optional ADC controller for VRY; defaults to connection."
+        },
+        {
+          "name": "sw_pin",
+          "ty": "str",
+          "doc": "MCU input wired to the active-low SW contact; optional."
+        },
+        {
+          "name": "supply_mv",
+          "ty": "float",
+          "doc": "Voltage across the axis potentiometers, millivolts; default 3300."
+        },
+        {
+          "name": "x",
+          "ty": "float",
+          "doc": "Initial X axis position (-1..1, default 0)."
+        },
+        {
+          "name": "y",
+          "ty": "float",
+          "doc": "Initial Y axis position (-1..1, default 0)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X axis",
+          "unit": "normalized",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "y",
+          "label": "Y axis",
+          "unit": "normalized",
+          "min": -1.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "pressed",
+          "label": "Pressed",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "limit-switch",
+      "label": "Limit Switch (SPDT)",
+      "summary": "Mechanical end-stop with common, normally-open and normally-closed contacts.",
+      "detail": "Pressed=0 connects COM to NC; pressed=1 connects COM to NO. Wire one or both contacts to pulled MCU inputs. common_high reflects the COM rail. Bounce and contact resistance are not modeled.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "no_pin",
+          "ty": "str",
+          "doc": "MCU input connected to NO; optional when NC is wired."
+        },
+        {
+          "name": "nc_pin",
+          "ty": "str",
+          "doc": "MCU input connected to NC; optional when NO is wired."
+        },
+        {
+          "name": "common_high",
+          "ty": "bool",
+          "doc": "COM rail: false=GND with input pull-ups, true=VCC with pull-downs."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "pressed",
+          "label": "Pressed",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
         }
       ]
     },
@@ -3155,7 +3392,7 @@
       "device_type": "l298n",
       "label": "H-bridge motor driver",
       "summary": "L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort).",
-      "detail": "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when IN3/IN4 or BIN* keys are present. IBT-2 / BTS7960 boards use              LPWM/RPWM + L_EN/R_EN (Modulshop Arduino: speed>0 → LPWM, speed<0 →              RPWM, 0 → coast; both enables high). Digital on/off effort ±1 for              v1 — PWM duty is not observed. Aliases: tb6612, l293d, bts7960,              ibt-2, ibt2.",
+      "detail": "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when IN3/IN4 or BIN* keys are present. IBT-2 / BTS7960 boards use LPWM/RPWM plus L_EN/R_EN: RPWM drives M+, LPWM drives M-, both enables must be high, and unwired enables are low. Digital on/off effort ±1; PWM duty is not observed. Aliases: tb6612, l293d, bts7960, ibt-2, ibt2.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
@@ -3177,12 +3414,12 @@
         {
           "name": "lpwm_pin",
           "ty": "str",
-          "doc": "IBT-2 LPWM (forward PWM); synonym LPWM."
+          "doc": "IBT-2 LPWM controls M- (negative terminal voltage); synonym LPWM."
         },
         {
           "name": "rpwm_pin",
           "ty": "str",
-          "doc": "IBT-2 RPWM (reverse PWM); synonym RPWM."
+          "doc": "IBT-2 RPWM controls M+ (positive terminal voltage); synonym RPWM."
         },
         {
           "name": "l_en_pin",
@@ -3372,6 +3609,42 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "acs712",
+      "label": "ACS712 Current Sensor (5 A)",
+      "summary": "Ratiometric Hall current sensor, 185 mV/A and VCC/2 at zero current.",
+      "detail": "ACS712 5 A variant at typical 25 C sensitivity. Drive current in amperes from -5 to +5; OUT follows VCC/2 + 0.185*current at a 5 V supply. Noise, bandwidth, thermal drift and the current conductor are not modeled.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel attached to OUT."
+        },
+        {
+          "name": "supply_mv",
+          "ty": "float",
+          "doc": "Sensor supply in millivolts (default 5000)."
+        },
+        {
+          "name": "current",
+          "ty": "float",
+          "doc": "Initial signed conductor current in amperes (default 0)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "current",
+          "label": "Current",
+          "unit": "A",
+          "min": -5.0,
+          "max": 5.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "rotary_encoder",

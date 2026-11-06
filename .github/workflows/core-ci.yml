@@ -445,6 +445,11 @@ jobs:
     # 2026-09-30: it did. Two warm runs were cancelled at this wall inside
     # Firmware survival. The feature-off lib tests and the steps after them
     # moved to `pr-core-feature-off`, which is required on main.
+    # 2026-11-05: the default-members library compile reached the same wall
+    # after the earlier gates and Clippy passed. Its exact command now runs
+    # in pr-default-members-lib. The required pr-core-feature-off aggregate
+    # requires that job AND the distinct core-only feature-off job to pass.
+    # Execution budgets stay at 20 minutes; no test or feature graph is removed.
     timeout-minutes: 20
     steps:
       # Full history required: generate_validation_status.py uses
@@ -588,8 +593,10 @@ jobs:
             scripts/ci/test_ignore_reasons.py \
             scripts/ci/test_linker_script_single_source.py \
             scripts/ci/test_host_clippy_scope.py \
+            scripts/ci/test_git_hooks.py \
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_gen_debug_schemas.py \
+            scripts/test_generate_chip_catalog.py \
             scripts/test_generate_firmware_exercise_matrix.py \
             scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \
@@ -651,9 +658,10 @@ jobs:
             exit 1
           fi
 
-      # Clippy + lib tests over the workspace's default-members — cli, core,
+      # Clippy over the workspace's default-members — cli, core,
       # dap, loader, labwired-fuzz. Feature lanes and the firmware/matrix
-      # crates stay in nightly integrity-full.
+      # crates stay in nightly integrity-full. The matching bare library-test
+      # command is required through the pr-core-feature-off aggregate below.
       #
       # These two steps used to narrow to `-p labwired-core -p labwired-cli`,
       # which left `dap`, `loader` and `labwired-fuzz` compiled by NO pre-merge
@@ -693,19 +701,11 @@ jobs:
           cargo clippy --locked -p labwired-arm-system --all-targets -- -D warnings
           scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
 
-      - name: Unit tests (default-members lib)
-        run: cargo test --lib
-
-
-  # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
-  # Rust sources were cancelled at timeout-minutes 20 inside Firmware
-  # survival, after every earlier step had passed. The note above pr-gate
-  # says to split at that wall, not to raise it. This job has no path
-  # filter, so it reports on every PR. It is a required context on main
-  # alongside pr-gate: a step that leaves the required job stops blocking
-  # merges.
-  pr-core-feature-off:
-    name: pr-core-feature-off
+  # Separate feature graphs compile independently so neither displaces the
+  # other's tests at the 20-minute execution wall. The protected aggregate
+  # below requires both jobs to succeed, including this bare workspace command.
+  pr-default-members-lib:
+    name: pr-default-members-lib
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -729,13 +729,50 @@ jobs:
             . -> target
           save-if: false
 
-      # THE DEFAULT CONFIGURATION, WHICH NOTHING ELSE RUNS.
+      - name: Unit tests (default-members lib)
+        run: cargo test --lib
+
+  # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
+  # Rust sources were cancelled at timeout-minutes 20 inside Firmware
+  # survival, after every earlier step had passed. The note above pr-gate
+  # says to split at that wall, not to raise it. This job has no path
+  # filter, so it runs on every PR. Its result remains merge-blocking through
+  # the stable required pr-core-feature-off aggregate below. On 2026-11-05,
+  # putting both feature graphs in one allocation hit 20 minutes after both
+  # lib suites passed, before the guest/survival tail could run.
+  pr-core-feature-off-tests:
+    name: pr-core-feature-off-tests
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history: `cargo test -p labwired-core --lib` includes the bus-proof
+      # ratchet, which refuses a shallow clone.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-pr-gate
+          workspaces: |
+            . -> target
+          save-if: false
+
+      # THE CORE-ONLY DEFAULT CONFIGURATION, WHICH NOTHING ELSE RUNS.
       #
       # `pr-workspace-tests` builds labwired-core's lib tests WITH
-      # `event-scheduler`, and so does `pr-scheduler-observable`. pr-gate's
-      # `cargo test --lib` is the default-members run, which does not carry the
-      # feature but also does not carry labwired-core's own scheduler-mode
-      # unit tests unless they are reachable from the default build.
+      # `event-scheduler`, and so does `pr-scheduler-observable`. The bare
+      # default-members job above unifies the CLI's default features,
+      # which enable event-scheduler. The explicit core-only command below
+      # has a different feature graph: core's own default feature set is empty.
+      # Both commands must remain; they do not substitute for each other.
       #
       # The gap is not theoretical: seven scheduler-mode unit tests added with
       # the nRF54L/ATSAMD21 walk migration passed every lane and failed
@@ -898,6 +935,28 @@ jobs:
         run: |
           cargo test -p nrf-softdevice-hle --features capi
           cargo rustc -p nrf-softdevice-hle --features capi --crate-type cdylib
+
+  # Preserve the existing protected context. always() prevents a failed,
+  # cancelled, or skipped prerequisite from turning this gate into a skip.
+  # Both exact feature configurations must actually finish successfully.
+  pr-core-feature-off:
+    name: pr-core-feature-off
+    needs: [pr-default-members-lib, pr-core-feature-off-tests]
+    if: >
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both library feature graphs and firmware checks must pass
+        env:
+          DEFAULT_MEMBERS_RESULT: ${{ needs.pr-default-members-lib.result }}
+          FEATURE_OFF_RESULT: ${{ needs.pr-core-feature-off-tests.result }}
+        run: |
+          if [ "$DEFAULT_MEMBERS_RESULT" != success ] || [ "$FEATURE_OFF_RESULT" != success ]; then
+            echo "::error::Required test jobs did not both pass: default-members=$DEFAULT_MEMBERS_RESULT feature-off=$FEATURE_OFF_RESULT"
+            exit 1
+          fi
 
   # ── Cache seed for pr-gate (push to main; asserts nothing) ────────────────
   #
@@ -1657,6 +1716,36 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
+      # RECLAIM DISK BEFORE THE BUILD. Measured failure, 2026-11-04: shard 2 died
+      # after 8 minutes (not at the 45-minute timeout) with
+      #
+      #   error: could not compile `labwired-cli` (test "rc_oscilloscope_lab")
+      #     No space left on device (os error 28)
+      #
+      # and shard 3 never uploaded its report at all. Every other shard red in
+      # this job - including the ones on `main` - is the same exhaustion, not a
+      # code failure. Each of the three shards builds the ENTIRE 270-binary
+      # workspace test set in one `cargo test --workspace --no-run` (that is
+      # deliberate: feature unification differs per-package, see the header of
+      # scripts/ci/workspace_test_shard.py), and the ubuntu-latest image spends
+      # most of its ~14 GB on preinstalled toolchains none of these tests use.
+      #
+      # The `.NET / Android / GHC / Swift` directories below are the standard
+      # reclaim set; skipping the download of the PowerShell and Chromium payloads
+      # saves the rest. This runs BEFORE checkout so the space is free when the
+      # build starts.
+      - name: Reclaim disk space
+        run: |
+          set -euo pipefail
+          before=$(df -m --output=avail / | tail -1)
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift \
+                      /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          after=$(df -m --output=avail / | tail -1)
+          echo "root filesystem free space: ${before} MB -> ${after} MB"
+          df -h / | sed 's/^/  /'
+
       # Full history, on purpose — the same reason as `full:`: the Tier-1
       # baseline ratchet (labwired-cli lib) and bus_proof_matrix
       # (labwired-core lib) resolve their baseline from

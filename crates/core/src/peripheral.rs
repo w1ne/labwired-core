@@ -1267,6 +1267,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `value` (little-endian, `transform.src_width` bytes) from its source:
     /// the data now enters the controller's FIFO. Default: not a FIFO DMA.
     fn dma_load_data(&mut self, _item: &DmaRequest, _value: u32) {}
+    /// A DMA item this controller issued completed its bus access. Called
+    /// after the destination write, before the CPU can observe the next
+    /// transfer count or completion flag. Return true to reconcile IRQ levels
+    /// and collect newly scheduled work. Legacy controllers commit when
+    /// issuing the item and retain the original no-callback path.
+    fn dma_transfer_complete(&mut self, _item: &DmaRequest) -> bool {
+        false
+    }
     /// A DMA item this controller issued faulted on the bus (an unmapped
     /// address: the bus error a DMA reports as a transfer error, STM32
     /// `TEIF` / GPDMA `DTEF`). The bus calls it on the issuer right after
