@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="12.095073">
+  <testcase classname="labwired" name="run" time="12.095073">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x40006408=0x9" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x40006418=0x80040" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;Message sent successfully on mailbox 0&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x4000640c=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40006418=0x1000010" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: debug_printf.terminal contains &quot;Exiting CAN Init mode...Done&quot;" time="0.000000">
+  </testcase>
+
+</testsuite>

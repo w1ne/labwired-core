@@ -23,7 +23,8 @@ offsets and bit positions. This is not a claim that the CH32V203 clock tree
 or other peripherals are STM32F1-compatible.
 
 **Not modeled:** PFIC/interrupts, PLL/HSE clock setup (WCH's `SystemInit`
-raises the clock to 96/144 MHz), the PA0 user key, USB-C, CAN, timers, ADC,
+raises the clock to 96/144 MHz), the PA0 user key, USB-C, CAN (see the
+ch32fun profile below), timers, ADC,
 RTC, the unplaced SPI flash, WCH SDI debug, and physical-board parity.
 
 ## Copy-paste example (WCH SDK / MounRiver Studio)
@@ -76,7 +77,9 @@ availability receipt).
 A second chip profile, [`ch32v203c8t6-ch32fun-smoke`](../../configs/chips/ch32v203c8t6-ch32fun-smoke.yaml),
 runs [ch32fun](https://github.com/cnlohr/ch32fun) (MIT) CH32V20x examples
 built with ch32fun's own compile and link lines and with no source changes
-([`build-ch32fun-examples.sh`](build-ch32fun-examples.sh)). The ELFs are
+([`build-ch32fun-examples.sh`](build-ch32fun-examples.sh)). The one exception
+is canbus_network's second node: it sets `#define TRANSMIT 1`, which is the
+edit the example's README asks for. The ELFs are
 committed in [`ch32fun/`](ch32fun/).
 
 It adds what those examples need and the narrow profile above lacks:
@@ -94,6 +97,10 @@ It adds what those examples need and the narrow profile above lacks:
 - **EXTI on the PFIC** (`profile: ch32v20x`). The sixteen GPIO lines drive
   PFIC 22..26, 39 and 56 as level requests, and AFIO_EXTICR1..4 select the port.
 - **The WCH-LinkE debug printf channel** at 0xE0000380.
+- **CAN1** (`bxcan` at 0x40006400, APB1PCENR bit 25). The CH32V20x CAN
+  registers sit at the STM32F1 bxCAN offsets and bits, so the bxCAN model
+  and the timed world CAN bus carry it: bit time comes from BTIMR and PCLK1,
+  and every frame is acked, arbitrated and error-counted on the bus.
 - **DMA1 on the PFIC** (`profile: ch32v20x`). Channel N's flags are PFIC
   level 26 + N, and a CNTR store on an enabled channel re-arms it, as on the
   CH32V003. SPI2 is the F1 register block on the F1 default pads (PB13 SCK,
@@ -105,6 +112,7 @@ It adds what those examples need and the narrow profile above lacks:
 | [`ch32fun-exti-blink-smoke.yaml`](ch32fun-exti-blink-smoke.yaml) | `examples_v20x/exti_blink` | each rising PA1 edge enters EXTI1_IRQHandler (PFIC 23), which toggles PA10 ~30 cycles later; the release does nothing | 9/9 |
 | [`ch32fun-debugprintf-smoke.yaml`](ch32fun-debugprintf-smoke.yaml) | `examples_v20x/debugprintfdemo` | `+0`, `-1[`, … `-5[` on the debug-printf terminal; the probe took every request | 5/5 |
 | [`ch32fun-spidmatest-smoke.yaml`](ch32fun-spidmatest-smoke.yaml) | `examples_v20x/spidmatest` | SPI2 (16-bit, 1-line TX, 72 MHz) fed by DMA1 channel 5, circular: [`check-spidmatest.py`](check-spidmatest.py) decodes PB13/PB15 from the first SCK edge as 256 × `0xAAAA`, then 814 × `0x0AAF` (3.18 laps), the half-buffer refill DMA1_Channel5_IRQHandler (PFIC 31) writes on HT and TC | 8/8 |
+| [`can-network/test.yaml`](can-network/test.yaml) | `examples_v20x/canbus_network` (two nodes) | the README's two-node network on one timed CAN bus: node `rx` runs the example as committed (TRANSMIT 0), node `tx` the same source with TRANSMIT 1. `rx` prints `FIFO: 1/3: 8 bytes from 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45`; `tx` TSTATR has RQCP0 + TXOK0; both ESRs are 0 | 7/7 |
 
 Negative controls (committed with their logs):
 - `evidence/ch32fun-blink-smoke/negative-control/`: with `core: rv32imac`,
@@ -117,6 +125,25 @@ Negative controls (committed with their logs):
   CH32V003 profile (channel lines 22..28), channel 5's HT/TC never reach
   PFIC 31, `sendbuff` keeps 0xAAAA (4/8), and the second lap on the wire is
   0xAAAA again.
+- `evidence/ch32fun-canbus-network-wrong-bitrate/`
+  ([`can-network/test-wrong-bitrate.yaml`](can-network/test-wrong-bitrate.yaml),
+  6/6): the same two nodes on a 25 kbit/s bus. `rx` FIFO0 stays empty
+  (REC 1, stuff error), `tx` ends with TERR0 (TEC 8, bit error). The example
+  still prints "Message sent successfully", because its wait loop
+  `while (!MessageSent(mb) && timeout--)` leaves `timeout` at 0xFFFFFFFF, so
+  the `timeout == 0` branch never runs. That is a ch32fun bug, not a model
+  artifact. Not reported upstream.
+
+**CAN bit rate on the CH32V203.** canbus_network's `BAUD_25kbps` table assumes
+PCLK1 = 144 MHz. That holds for its own Makefile target, the CH32V208
+(`CH32V20x_D8`: ch32fun's SystemInit sets PPRE1 /1). On the CH32V203, SystemInit
+sets PPRE1 /2, so PCLK1 = 72 MHz and the same BTIMR gives 12.5 kbit/s. The
+example computes and prints this itself ("CAN Baud Rate: 12500bps"), so the
+world bus runs at 12.5 kbit/s. A CH32V203 and a CH32V208 running this source
+unchanged would run at different rates (12.5 and 25 kbit/s).
+
+The world runner's `peripheral_log` assertion takes a `node:` for this, as
+`memory_value` does, so a test can read each node's debug-printf terminal.
 
 ```bash
 examples/weact-bluepill-plus-ch32v203/build-ch32fun-examples.sh   # optional: ELFs are committed
@@ -124,7 +151,8 @@ cargo run -q -p labwired-cli -- test \
   --script examples/weact-bluepill-plus-ch32v203/ch32fun-exti-blink-smoke.yaml
 ```
 
-**Not modelled in this profile:** SPI1, I2C, timers, ADC, USB, CAN, RTC,
+**Not modelled in this profile:** SPI1, I2C, timers, ADC, USB, CAN2, the
+CAN interrupts (the example polls), RTC,
 the SPI2 HSCR high-speed bit (accepted, reads 0, no effect), USART1 output (configured
 by ch32fun's UART printf setup, not asserted),
 PFIC nesting and V4 priority grouping, HSE, low-power modes, host-to-target

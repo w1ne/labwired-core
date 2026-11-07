@@ -420,11 +420,21 @@ fn validate_environment_assertions(
         ) {
             continue;
         }
+        if let TestAssertion::PeripheralLog(log) = assertion {
+            let node = log.peripheral_log.node.as_deref().unwrap_or_default();
+            if !manifest.nodes.iter().any(|candidate| candidate.id == node) {
+                return Some(format!(
+                    "environment peripheral_log assertion {index} references nonexistent node '{node}'"
+                ));
+            }
+            continue;
+        }
         let TestAssertion::MemoryValue(memory) = assertion else {
             return Some(format!(
-                "environment assertion {index} is not a uart_contains/uart_regex/uart_ordered \
-                 or node-qualified memory_value assertion; the world runner cannot observe the \
-                 others (no per-node simctl verdict, motor bus, or post-run footprint)"
+                "environment assertion {index} is not a uart_contains/uart_regex/uart_ordered, \
+                 node-qualified memory_value or node-qualified peripheral_log assertion; the \
+                 world runner cannot observe the others (no per-node simctl verdict, motor bus, \
+                 or post-run footprint)"
             ));
         };
         let node = memory.memory_value.node.as_deref().unwrap_or_default();
@@ -657,6 +667,18 @@ fn evaluate_assertions(
                         .get(node)
                         .map(|machine| memory_assertion_passes(machine.as_ref(), memory))
                         .unwrap_or(false)
+                }
+                TestAssertion::PeripheralLog(log) => {
+                    let details = &log.peripheral_log;
+                    let node = details.node.as_deref().unwrap_or_default();
+                    world
+                        .machines
+                        .get(node)
+                        .and_then(|machine| machine.peripheral_logs(&details.peripheral))
+                        .and_then(|logs| logs.into_iter().find(|l| l.name == details.log))
+                        .is_some_and(|l| {
+                            l.count_matching(&details.contains) >= u64::from(details.min_count)
+                        })
                 }
                 // A UART assertion names no node, so it is satisfied by ANY
                 // node printing it. Evaluated per node rather than against the

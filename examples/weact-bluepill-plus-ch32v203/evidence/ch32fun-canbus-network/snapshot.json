@@ -1,0 +1,1226 @@
+{
+  "type": "environment",
+  "status": "pass",
+  "steps_executed": 2000,
+  "cycles": 28790293,
+  "instructions": 4000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000
+    }
+  },
+  "limits": {
+    "max_steps": 2000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "config": {
+    "script": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/test.yaml",
+    "environment": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/env.yaml",
+    "world_firmware_hash": "648ecab647cfc1aac8c85bd303d92ab6c00903070e5fe1208c65cee324de54e0",
+    "nodes": [
+      {
+        "id": "rx",
+        "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/system.yaml",
+        "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/ch32fun/canbus_network.elf",
+        "system_hash": "12c2b826978972742370a5630ccb3c8d47fc27dae3e31efbdc2e60a34ae70ffd",
+        "firmware_hash": "cb63342d5fb6f7f528fab57bbaa3ac240db7ccc409773abbb600368bff4d50e5"
+      },
+      {
+        "id": "tx",
+        "system": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/can-network/system.yaml",
+        "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/examples/weact-bluepill-plus-ch32v203/ch32fun/canbus_network_tx.elf",
+        "system_hash": "12c2b826978972742370a5630ccb3c8d47fc27dae3e31efbdc2e60a34ae70ffd",
+        "firmware_hash": "b6aa284162d4504ac6050fbff69dec0fdc93794445bf5a88329af8ded0c1bcf6"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "rx",
+      "cycles": 28790293,
+      "state": {
+        "schema_version": 1,
+        "cpu": {
+          "type": "risc_v",
+          "registers": [
+            0,
+            2314,
+            536891344,
+            536871932,
+            0,
+            0,
+            536891192,
+            0,
+            1073767424,
+            8,
+            3598783,
+            0,
+            0,
+            1,
+            4294967295,
+            3602052,
+            3758157824,
+            53,
+            3,
+            4096,
+            4096,
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            9,
+            0,
+            0,
+            0
+          ],
+          "pc": 2358,
+          "mstatus": 6280,
+          "mie": 0,
+          "mip": 128,
+          "mtvec": 3,
+          "mscratch": 0,
+          "mepc": 1866,
+          "mcause": 0,
+          "mtval": 0,
+          "mtime": 28790292,
+          "mtimecmp": 0,
+          "triggers": {
+            "tselect": 0,
+            "tdata1": [
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624
+            ],
+            "tdata2": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "tcontrol": 0
+          }
+        },
+        "peripherals": {
+          "afio": {
+            "evcr": 0,
+            "exticr": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "layout": "stm32_f1",
+            "mapr": 0,
+            "mapr2": 0
+          },
+          "bxcan1": {
+            "btr": 4522463,
+            "esr": 0,
+            "extra": {},
+            "fa1r": 1,
+            "ffa1r": 0,
+            "filter_banks": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "fm1r": 0,
+            "fmr": 706481664,
+            "fs1r": 1,
+            "ier": 0,
+            "mcr": 65552,
+            "msr": 1032,
+            "rf1r": 0,
+            "tsr": 469762048,
+            "tx_mb": [
+              1567491828,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "debug_printf": {
+            "dmdata0": 0,
+            "dmdata1": 0,
+            "dropped_lines": 0,
+            "lines": [
+              "Entering CAN Init mode...Done",
+              "System Core Clock: 144MHz",
+              "CAN Baud Rate: 12500bps",
+              "Exiting CAN Init mode...Done",
+              "FIFO: 1/3: 8 bytes from 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45 "
+            ],
+            "partial": ""
+          },
+          "dma1": {
+            "channels": [
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              }
+            ],
+            "cselr": 0,
+            "ifcr": 0,
+            "irq_deferred": false,
+            "isr": 0,
+            "observations": [
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              }
+            ],
+            "profile": "ch32v20x"
+          },
+          "exten": {
+            "data": [
+              16,
+              0,
+              0,
+              0
+            ],
+            "peripheral": "EXTEN"
+          },
+          "exti": {
+            "Qingke": {
+              "bank1": {
+                "emr": 0,
+                "ftsr": 0,
+                "imr": 0,
+                "pr": 0,
+                "rtsr": 0,
+                "swier": 0
+              },
+              "family": "Ch32v20x"
+            }
+          },
+          "flash_ctrl": {
+            "acr": 48,
+            "cr": 128,
+            "eccr": 0,
+            "error_flags": false,
+            "key_locked_out": false,
+            "key_state": "Locked",
+            "keyr": 0,
+            "layout": "stm32_f1",
+            "optkey_state": "Locked",
+            "optkeyr": 0,
+            "optr": 0,
+            "optsr_prg": 0,
+            "pcrop1er": 0,
+            "pcrop1sr": 0,
+            "pcrop2er": 0,
+            "pcrop2sr": 0,
+            "pdkeyr": 0,
+            "read_while_write": false,
+            "sr": 0,
+            "swapped": false,
+            "wrp1ar": 0,
+            "wrp1br": 0,
+            "wrp2ar": 0,
+            "wrp2br": 0
+          },
+          "gpioa": {
+            "crh": 1145783364,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "gpiob": {
+            "crh": 1145324612,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "gpioc": {
+            "crh": 1145324612,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "gpiod": {
+            "crh": 1145324612,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "pfic": {
+            "active": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "enabled": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "event": false,
+            "exti_internal_flags": 0,
+            "pending": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "priority": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sctlr": 0,
+            "threshold": 0,
+            "vtf_addr": [
+              0,
+              0
+            ],
+            "vtf_id": 0
+          },
+          "rcc": {
+            "ahbenr": 20,
+            "ahbrstr": 0,
+            "apb1enr": 33554432,
+            "apb1rstr": 0,
+            "apb2enr": 5,
+            "apb2rstr": 0,
+            "bdcr": 0,
+            "cfgr": 3933194,
+            "cir": 0,
+            "cr": 50856067,
+            "csr": 0
+          },
+          "spi2": {
+            "cr1_mask": null,
+            "cr2_mask": 231,
+            "fifo_ovr": false,
+            "fifo_ovr_dr_read": false,
+            "fifo_rx": {
+              "buf": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "len": 0
+            },
+            "frame": null,
+            "limited_features": false,
+            "loopback": false,
+            "pad_map": "None",
+            "regs": {
+              "Stm32": {
+                "cr1": 0,
+                "cr2": 0,
+                "crcpr": 0,
+                "dr": 0,
+                "fifo": false,
+                "i2scfgr": 0,
+                "i2spr": 0,
+                "rxcrcr": 0,
+                "sr": 2,
+                "txcrcr": 0
+              }
+            },
+            "rx_fifo": false,
+            "tx_queue": []
+          },
+          "stk": {
+            "cmp": 0,
+            "cnt": 3598783,
+            "ctlr": 1,
+            "prescale_rem": 4,
+            "sr": 0
+          },
+          "usart1": {
+            "autocr": 2147483648,
+            "avr_baud_set": false,
+            "avr_ubrr": 0,
+            "avr_ucsra": 0,
+            "brr": 0,
+            "cr1": 0,
+            "cr2": 0,
+            "cr3": 0,
+            "cr3_mask": 2047,
+            "dll16550": 0,
+            "dlm16550": 0,
+            "dma_tx_pending": false,
+            "echo_stdout": true,
+            "elapsed_us": 0,
+            "fbrd": 0,
+            "full_featured": false,
+            "gtpr": 0,
+            "ibrd": 0,
+            "last_tx_on_bus": false,
+            "layout": "stm32_f1",
+            "lcr16550": 0,
+            "presc": 0,
+            "sci_b_irq": null,
+            "sci_b_regs": [
+              0,
+              0,
+              4278255364,
+              0,
+              0,
+              0,
+              0,
+              522125312,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sci_fcr": 0,
+            "sci_irq_vectors": false,
+            "sci_scr": 0,
+            "stm32_lpuart": false,
+            "u5_features": false
+          }
+        }
+      }
+    },
+    {
+      "id": "tx",
+      "cycles": 28790293,
+      "state": {
+        "schema_version": 1,
+        "cpu": {
+          "type": "risc_v",
+          "registers": [
+            0,
+            2578,
+            536891328,
+            536871932,
+            0,
+            0,
+            536891176,
+            0,
+            1073767424,
+            4096,
+            3598783,
+            0,
+            0,
+            1,
+            4294967295,
+            18195453,
+            3758157824,
+            48,
+            4096,
+            4096,
+            4096,
+            4096,
+            8,
+            8,
+            0,
+            0,
+            0,
+            0,
+            9,
+            0,
+            0,
+            0
+          ],
+          "pc": 2380,
+          "mstatus": 6280,
+          "mie": 0,
+          "mip": 128,
+          "mtvec": 3,
+          "mscratch": 0,
+          "mepc": 1866,
+          "mcause": 0,
+          "mtval": 0,
+          "mtime": 28790292,
+          "mtimecmp": 0,
+          "triggers": {
+            "tselect": 0,
+            "tdata1": [
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624,
+              601882624
+            ],
+            "tdata2": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "tcontrol": 0
+          }
+        },
+        "peripherals": {
+          "afio": {
+            "evcr": 0,
+            "exticr": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "layout": "stm32_f1",
+            "mapr": 0,
+            "mapr2": 0
+          },
+          "bxcan1": {
+            "btr": 4522463,
+            "esr": 0,
+            "extra": {},
+            "fa1r": 1,
+            "ffa1r": 0,
+            "filter_banks": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "fm1r": 0,
+            "fmr": 706481664,
+            "fs1r": 1,
+            "ier": 0,
+            "mcr": 65552,
+            "msr": 1032,
+            "rf1r": 0,
+            "tsr": 469762051,
+            "tx_mb": [
+              1567491828,
+              8,
+              3854465790,
+              1173290944,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "debug_printf": {
+            "dmdata0": 0,
+            "dmdata1": 0,
+            "dropped_lines": 0,
+            "lines": [
+              "Entering CAN Init mode...Done",
+              "System Core Clock: 144MHz",
+              "CAN Baud Rate: 12500bps",
+              "Exiting CAN Init mode...Done",
+              "Sending message with ID 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45 ",
+              "Message sent successfully on mailbox 0"
+            ],
+            "partial": ""
+          },
+          "dma1": {
+            "channels": [
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              },
+              {
+                "active": false,
+                "ccr": 0,
+                "cmar": 0,
+                "cmar_ptr": 0,
+                "cndtr": 0,
+                "cndtr_initial": 0,
+                "cpar": 0,
+                "cpar_ptr": 0,
+                "requests": 0
+              }
+            ],
+            "cselr": 0,
+            "ifcr": 0,
+            "irq_deferred": false,
+            "isr": 0,
+            "observations": [
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              },
+              {
+                "completed_bytes": 0,
+                "completed_items": 0,
+                "last_destination": 0,
+                "last_source": 0,
+                "transfer_errors": 0
+              }
+            ],
+            "profile": "ch32v20x"
+          },
+          "exten": {
+            "data": [
+              16,
+              0,
+              0,
+              0
+            ],
+            "peripheral": "EXTEN"
+          },
+          "exti": {
+            "Qingke": {
+              "bank1": {
+                "emr": 0,
+                "ftsr": 0,
+                "imr": 0,
+                "pr": 0,
+                "rtsr": 0,
+                "swier": 0
+              },
+              "family": "Ch32v20x"
+            }
+          },
+          "flash_ctrl": {
+            "acr": 48,
+            "cr": 128,
+            "eccr": 0,
+            "error_flags": false,
+            "key_locked_out": false,
+            "key_state": "Locked",
+            "keyr": 0,
+            "layout": "stm32_f1",
+            "optkey_state": "Locked",
+            "optkeyr": 0,
+            "optr": 0,
+            "optsr_prg": 0,
+            "pcrop1er": 0,
+            "pcrop1sr": 0,
+            "pcrop2er": 0,
+            "pcrop2sr": 0,
+            "pdkeyr": 0,
+            "read_while_write": false,
+            "sr": 0,
+            "swapped": false,
+            "wrp1ar": 0,
+            "wrp1br": 0,
+            "wrp2ar": 0,
+            "wrp2br": 0
+          },
+          "gpioa": {
+            "crh": 1145783364,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "gpiob": {
+            "crh": 1145324612,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "gpioc": {
+            "crh": 1145324612,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "gpiod": {
+            "crh": 1145324612,
+            "crl": 1145324612,
+            "idr": 0,
+            "lckr": 0,
+            "odr": 0
+          },
+          "pfic": {
+            "active": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "enabled": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "event": false,
+            "exti_internal_flags": 0,
+            "pending": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "priority": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sctlr": 0,
+            "threshold": 0,
+            "vtf_addr": [
+              0,
+              0
+            ],
+            "vtf_id": 0
+          },
+          "rcc": {
+            "ahbenr": 20,
+            "ahbrstr": 0,
+            "apb1enr": 33554432,
+            "apb1rstr": 0,
+            "apb2enr": 5,
+            "apb2rstr": 0,
+            "bdcr": 0,
+            "cfgr": 3933194,
+            "cir": 0,
+            "cr": 50856067,
+            "csr": 0
+          },
+          "spi2": {
+            "cr1_mask": null,
+            "cr2_mask": 231,
+            "fifo_ovr": false,
+            "fifo_ovr_dr_read": false,
+            "fifo_rx": {
+              "buf": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "len": 0
+            },
+            "frame": null,
+            "limited_features": false,
+            "loopback": false,
+            "pad_map": "None",
+            "regs": {
+              "Stm32": {
+                "cr1": 0,
+                "cr2": 0,
+                "crcpr": 0,
+                "dr": 0,
+                "fifo": false,
+                "i2scfgr": 0,
+                "i2spr": 0,
+                "rxcrcr": 0,
+                "sr": 2,
+                "txcrcr": 0
+              }
+            },
+            "rx_fifo": false,
+            "tx_queue": []
+          },
+          "stk": {
+            "cmp": 0,
+            "cnt": 3598783,
+            "ctlr": 1,
+            "prescale_rem": 4,
+            "sr": 0
+          },
+          "usart1": {
+            "autocr": 2147483648,
+            "avr_baud_set": false,
+            "avr_ubrr": 0,
+            "avr_ucsra": 0,
+            "brr": 0,
+            "cr1": 0,
+            "cr2": 0,
+            "cr3": 0,
+            "cr3_mask": 2047,
+            "dll16550": 0,
+            "dlm16550": 0,
+            "dma_tx_pending": false,
+            "echo_stdout": true,
+            "elapsed_us": 0,
+            "fbrd": 0,
+            "full_featured": false,
+            "gtpr": 0,
+            "ibrd": 0,
+            "last_tx_on_bus": false,
+            "layout": "stm32_f1",
+            "lcr16550": 0,
+            "presc": 0,
+            "sci_b_irq": null,
+            "sci_b_regs": [
+              0,
+              0,
+              4278255364,
+              0,
+              0,
+              0,
+              0,
+              522125312,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sci_fcr": 0,
+            "sci_irq_vectors": false,
+            "sci_scr": 0,
+            "stm32_lpuart": false,
+            "u5_features": false
+          }
+        }
+      }
+    }
+  ]
+}

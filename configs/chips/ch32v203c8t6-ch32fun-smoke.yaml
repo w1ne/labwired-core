@@ -17,8 +17,14 @@
 # as PFIC levels 27..33. USART1 is here because ch32fun's UART printf setup
 # programs it; nothing in these smokes asserts its output.
 #
-# Not modeled here: SPI1/I2C/timers/ADC/USB/CAN/RTC, PFIC interrupt nesting and
-# the V4 priority grouping, the VTF table beyond the V2 channels, HSE,
+# CAN1 carries the canbus_network smoke: the bxCAN register block at
+# 0x40006400 (CTLR/STATR/TSTATR/RFIFO0, three TX mailboxes, two RX FIFOs,
+# FCTLR/FMCFGR/FSCFGR/FAFIFOR/FWR and the filter banks at +0x240), which the
+# CH32V20x RM gives at the STM32F1 bxCAN offsets and bits. PA11 RX / PA12 TX
+# (AFIO CAN_REMAP 00); the pins matter to a wire, not to the timed bus.
+#
+# Not modeled here: SPI1/I2C/timers/ADC/USB/CAN2/RTC, the CAN interrupts,
+# PFIC interrupt nesting and the V4 priority grouping, the VTF table beyond the V2 channels, HSE,
 # low-power modes, and physical-board parity.
 name: ch32v203c8t6-ch32fun-smoke
 arch: riscv
@@ -50,6 +56,8 @@ pins:
   PA4: { gpio: gpioa, bit: 4 }
   PA7: { gpio: gpioa, bit: 7 }
   PA10: { gpio: gpioa, bit: 10 }
+  PA11: { gpio: gpioa, bit: 11 }
+  PA12: { gpio: gpioa, bit: 12 }
   PB2: { gpio: gpiob, bit: 2 }
   PB12: { gpio: gpiob, bit: 12 }
   PB13: { gpio: gpiob, bit: 13 }
@@ -173,3 +181,12 @@ peripherals:
       # ch32fun spidmatest: "DMA1_Channel5 is for SPI2TX").
       requests:
         spi2_tx: 5
+
+  # CAN1 (bxCAN), clocked from APB1PCENR.CAN1EN (bit 25). Unclocked it never
+  # acknowledges INRQ. Bit time from the APB1 clock: on the CH32V203 (not
+  # CH32V20x_D8) ch32fun's SystemInit sets PPRE1 /2, so PCLK1 = 72 MHz.
+  - id: bxcan1
+    type: bxcan
+    base_address: 0x40006400
+    size: 1KB
+    clock: { reg: apb1enr, bit: 25 }

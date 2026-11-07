@@ -1124,6 +1124,55 @@ assertions:
     }
 }
 
+/// A `peripheral_log` reads one node's peripheral, so in an environment
+/// script it names the node, as a `memory_value` does. A single-node script
+/// has one machine and refuses the field.
+#[test]
+fn env_script_peripheral_log_needs_a_node() {
+    let script_path = write_temp_file(
+        "env-peripheral-log-node",
+        r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - peripheral_log: { node: tester, peripheral: debug_printf, log: terminal, contains: "FIFO" }
+"#,
+    );
+    let script = load_test_script(&script_path).expect("node-qualified peripheral_log loads");
+    assert!(matches!(script, LoadedTestScript::Env(_)));
+
+    let script_path = write_temp_file(
+        "env-peripheral-log-no-node",
+        r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "FIFO" }
+"#,
+    );
+    let err = load_test_script(&script_path).unwrap_err().to_string();
+    assert!(
+        err.contains("requires a non-empty 'node'"),
+        "unexpected error: {err}"
+    );
+
+    let yaml = r#"
+schema_version: "1.0"
+inputs: { firmware: "fw.elf" }
+limits: { max_steps: 10 }
+assertions:
+  - peripheral_log: { node: tester, peripheral: debug_printf, log: terminal, contains: "FIFO" }
+"#;
+    let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+    let err = script.validate().unwrap_err().to_string();
+    assert!(
+        err.contains("do not support 'node' on peripheral_log"),
+        "unexpected error: {err}"
+    );
+}
+
 #[test]
 fn env_script_may_assert_nothing_and_still_load() {
     // An observational world run: it reports what each node printed and

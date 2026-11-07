@@ -485,6 +485,12 @@ pub trait MachineTrait: Send {
     fn bus_trace_snapshot(&self) -> Vec<crate::bus::BusTraceEvent> {
         Vec::new()
     }
+    /// The named logs of peripheral `name`, as
+    /// [`crate::bus::SystemBus::peripheral_logs`] gives them. Default `None`:
+    /// a mock machine has no peripherals.
+    fn peripheral_logs(&self, _name: &str) -> Option<Vec<crate::peripheral_log::PeripheralLog>> {
+        None
+    }
     fn get_pc(&self) -> u32 {
         0
     }
@@ -643,6 +649,10 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn bus_trace_snapshot(&self) -> Vec<crate::bus::BusTraceEvent> {
         self.bus.bus_trace_snapshot()
+    }
+
+    fn peripheral_logs(&self, name: &str) -> Option<Vec<crate::peripheral_log::PeripheralLog>> {
+        self.bus.peripheral_logs(name)
     }
 
     fn get_pc(&self) -> u32 {

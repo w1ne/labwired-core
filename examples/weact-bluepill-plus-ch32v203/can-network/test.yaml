@@ -1,0 +1,29 @@
+# CLI: labwired test --script examples/weact-bluepill-plus-ch32v203/can-network/test.yaml --output-dir out
+# ch32fun's examples_v20x/canbus_network on two CH32V203C8T6 nodes over one
+# timed 12.5 kbit/s CAN bus (env.yaml). Rebuild both ELFs with
+# ../build-ch32fun-examples.sh.
+schema_version: "1.0"
+inputs:
+  env: "env.yaml"
+limits:
+  # One world step is 100 us here: 2 000 steps = 200 ms. The transmitter
+  # sends its first frame right after init (~10.6 ms on the wire at
+  # 12.5 kbit/s). The receiver polls FIFO0 every Delay_Ms(50).
+  max_steps: 2000
+  wall_time_ms: 120000
+assertions:
+  # Receiver: the frame, through the example's own Receive() and printf
+  # (extended ID 0xBADC0DE, DLC 8, the data[] bytes).
+  - peripheral_log: { node: rx, peripheral: debug_printf, log: terminal, contains: "CAN Baud Rate: 12500bps" }
+  - peripheral_log: { node: rx, peripheral: debug_printf, log: terminal, contains: "Exiting CAN Init mode...Done" }
+  - peripheral_log: { node: rx, peripheral: debug_printf, log: terminal, contains: "FIFO: 1/3: 8 bytes from 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45" }
+  # Receiver ESR (0x40006418): REC 0, LEC 0, no error flags.
+  - memory_value: { node: rx, address: 0x40006418, expected_value: 0 }
+  # Transmitter TSTATR (0x40006408): RQCP0 | TXOK0. The example's own
+  # "Message sent successfully" line is not evidence. Its wait loop is
+  # `while (!MessageSent(mb) && timeout--)`, which leaves timeout at
+  # 0xFFFFFFFF when it expires, so `timeout == 0` never holds and it prints
+  # "successfully" on a failed send too (see test-wrong-bitrate.yaml).
+  - memory_value: { node: tx, address: 0x40006408, mask: 0x0F, expected_value: 0x03 }
+  - memory_value: { node: tx, address: 0x40006418, expected_value: 0 }
+  - peripheral_log: { node: tx, peripheral: debug_printf, log: terminal, contains: "Sending message with ID 0x0BADC0DE: FE 7A BE E5 C0 FF EE 45" }
