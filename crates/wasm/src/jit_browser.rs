@@ -1521,8 +1521,7 @@ pub(crate) fn run_browser_cortex_m_jit_window(
 
     let mut retired = 0u32;
     while retired < max_n {
-        let n;
-        if cpu.jit_takeable_exception() {
+        let n = if cpu.jit_takeable_exception() {
             // Match interpreter `step_batch`: at zero progress the exception
             // is dispatched by `step`; after progress the window ends so the
             // next boundary can take it without a compiled block jumping the
@@ -1531,10 +1530,10 @@ pub(crate) fn run_browser_cortex_m_jit_window(
                 break;
             }
             cpu.step(bus, observers, config)?;
-            n = 1;
+            1
         } else if cpu.it_state != 0 || cpu.waiting_for_event() {
             cpu.step(bus, observers, config)?;
-            n = 1;
+            1
         } else {
             let block_n = try_browser_cortex_m_jit_step(
                 cpu,
@@ -1543,7 +1542,7 @@ pub(crate) fn run_browser_cortex_m_jit_window(
                 max_n - retired,
                 config.cortex_m_jit_loop_traces,
             );
-            n = if block_n > 0 {
+            if block_n > 0 {
                 // Compiled instructions skip the interpreter's per-step
                 // SysTick consume, so hand the block's cycles to it directly
                 // (mirrors `run_jit_loop`). A partial block that stopped on a
@@ -1555,7 +1554,7 @@ pub(crate) fn run_browser_cortex_m_jit_window(
             } else {
                 cpu.step(bus, observers, config)?;
                 1
-            };
+            }
         };
         if live_step != 0 {
             bus.current_cycle += live_step * u64::from(n);
