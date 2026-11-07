@@ -106,6 +106,19 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v003_compiled_firmware",
     ),
+    (
+        "ch32v003f4p6",
+        BusKind::I2c,
+        "I2C1 (SCL=PC2, SDA=PC1) runs the F1 engine, but the F1 I2C pad table \
+         binds only STM32F1 ports, so no PadLines cell is installed; \
+         transactions are proven by the ch32v003 Arduino matrix L3 cell",
+    ),
+    (
+        "ch32v003f4p6",
+        BusKind::Spi,
+        "no SPI bring-up for the WCH family in this harness yet; frames are \
+         proven by the ch32v003 Arduino matrix L4 cell",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No

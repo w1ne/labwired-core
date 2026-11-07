@@ -615,6 +615,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// GPIO capability: the register layout of a [`GpioPort`] (STM32 F1-style,
+    /// WCH, STM32v2, nRF, ...), so pad tables keyed by layout can tell a
+    /// CH32V003 port from an STM32F103 one without downcasting. `None` for
+    /// every other peripheral.
+    ///
+    /// [`GpioPort`]: crate::peripherals::gpio::GpioPort
+    fn gpio_register_layout(&self) -> Option<crate::peripherals::gpio::GpioRegisterLayout> {
+        None
+    }
+
     /// Pin capability: this peripheral's pads, through the one pad interface
     /// ([`pins::PinPort`]). `None` (the default) for a peripheral that owns
     /// no pads. Every GPIO model answers `Some(self)`; the GPIO methods

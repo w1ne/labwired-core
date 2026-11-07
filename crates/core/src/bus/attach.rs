@@ -2648,7 +2648,7 @@ impl SystemBus {
             ("tim2", 'c', 0, 2, "TIM2_CH3"),
             ("tim2", 'd', 7, 3, "TIM2_CH4"),
         ];
-        use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+        use crate::peripherals::gpio::GpioRegisterLayout;
         use crate::peripherals::timer::TimerInputStage;
         let rows = F1
             .iter()
@@ -2672,11 +2672,7 @@ impl SystemBus {
             // A WCH port runs the F1 engine but has its own pad map: an F1 row
             // must not land on a CH32 port (PA1/PA2 exist there and carry
             // TIM1/ADC), nor a WCH row on an F1 port.
-            let gpio_layout = self.peripherals[gpio_idx]
-                .dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<GpioPort>())
-                .map(GpioPort::register_layout);
+            let gpio_layout = self.peripherals[gpio_idx].dev.gpio_register_layout();
             if gpio_layout != Some(layout) {
                 continue;
             }
