@@ -69,3 +69,49 @@ peripherals:
   type: fslnand
   bus: sysbus
   base_address: 1074659328
+# GPIO0-GPIO4. Renode's vybrid platform leaves GPIO out, so the import carried
+# none. The VF6xx GPIO module puts GPIO0..GPIO4 at 0x400FF000 + 0x40 * n (Linux
+# arch/arm/boot/dts/nxp/vf/vf610.dtsi, the second `reg` of each gpio node; the
+# first is its PORT block at 0x40049000 + 0x1000 * n), with the Kinetis register
+# set: PDOR/PSOR/PCOR/PTOR at +0x00..+0x0C and PDIR at +0x10 (VFxxx RM rev 7
+# ch. 7 GPIO; drivers/gpio/gpio-vf610.c GPIO_PDIR). That is the map the promoted
+# configs/chips/mk64f12.yaml runs on `profile: kinetis`. Not modelled: Vybrid
+# has no PDDR (+0x14), and direction and the input buffer live in the IOMUXC
+# pad register (OBE/IBE), which is not declared, so PDIR reads the pad whatever
+# IBE says and the model also answers PDDR. The PORT blocks (interrupts) are
+# not declared either.
+- id: gpio0
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF000
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio1
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio2
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF080
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio3
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF0C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio4
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis
