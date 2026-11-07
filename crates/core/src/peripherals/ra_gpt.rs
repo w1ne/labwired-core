@@ -43,9 +43,11 @@
 //!   a pad carries one while its `PmnPFS` has PMR = 1, PSEL = 00011.
 //!
 //! Interrupts are ELC events, not NVIC lines: channel n's capture/compare
-//! A, B and overflow are `elc_event` + 9n + 0, + 1 and + 6 (FSP `bsp_elc.h`:
+//! A, B and overflow are `elc_event` + kn + 0, + 1 and + 6 (FSP `bsp_elc.h`:
 //! `ELC_EVENT_GPT0_CAPTURE_COMPARE_A` 0x0A1 .. `ELC_EVENT_GPT0_COUNTER_
-//! OVERFLOW` 0x0A7, nine per channel on the RA8M1; 0x0C0 on the RA6M5).
+//! OVERFLOW` 0x0A7, k = nine per channel on the RA8M1; 0x0C0 on the RA6M5).
+//! The RA4M1 has k = 8 (no ADTRG pair: GPT0 87, GPT1 95, overflow +6),
+//! set with `events_per_channel`.
 //! They leave through `explicit_irqs` with
 //! [`Peripheral::explicit_irqs_are_link_events`], so the bus links them
 //! through the ICU `IELSRn` ([`super::ra_icu`]).
@@ -111,7 +113,7 @@ const CCRB_SHIFT: u32 = 18;
 const PR_SHIFT: u32 = 20;
 const CCRSWT: u32 = 1 << 22;
 
-const EVENTS_PER_CHANNEL: u32 = 9;
+pub const DEFAULT_EVENTS_PER_CHANNEL: u32 = 9;
 const EV_CCMPA: u32 = 0;
 const EV_CCMPB: u32 = 1;
 const EV_OVF: u32 = 6;
@@ -196,6 +198,8 @@ pub struct RaGpt {
     elc_event: u32,
     /// Bit n: channel n is a 32-bit GPT32 (else 16-bit).
     wide_channels: u32,
+    /// ELC event stride between channels (9 on RA6/RA8, 8 on the RA4M1).
+    events_per_channel: u32,
     channels: Vec<Channel>,
     /// Words past the last channel (GPT_OPS, reserved), stored only.
     extra: BTreeMap<u64, u32>,
@@ -235,6 +239,7 @@ impl RaGpt {
             pclkd_hz: pclkd_hz.max(1),
             elc_event,
             wide_channels,
+            events_per_channel: DEFAULT_EVENTS_PER_CHANNEL,
             channels: (0..n)
                 .map(|ch| Channel::new(wide_channels & (1 << ch) != 0))
                 .collect(),
@@ -262,6 +267,12 @@ impl RaGpt {
 
     /// Parse a `gtioc_pads` entry: `GTIOC7A` and `P603` give
     /// `(14, "port6", 3)`.
+    /// Set the ELC event stride between channels.
+    pub fn with_events_per_channel(mut self, stride: u32) -> Self {
+        self.events_per_channel = stride.max(1);
+        self
+    }
+
     pub fn parse_pad(signal: &str, pad: &str) -> Option<(usize, String, u8)> {
         let line = LINE_NAMES
             .iter()
@@ -411,7 +422,7 @@ impl RaGpt {
                 break;
             }
             self.channels[ch].done[kind as usize] = tick;
-            let ev = self.elc_event + EVENTS_PER_CHANNEL * ch as u32;
+            let ev = self.elc_event + self.events_per_channel * ch as u32;
             match kind {
                 Kind::Overflow => {
                     self.unsent.push(ev + EV_OVF);
@@ -1048,6 +1059,19 @@ mod tests {
         assert_eq!(r(&g, 7, GTST) & (TCFA | TCFPO), TCFA, "write 0 clears");
         let ev = walk(&mut g, &clock, 801);
         assert_eq!(ev[0], (400 + 30 * 4 - 4, base + EV_CCMPA));
+    }
+
+    #[test]
+    fn events_per_channel_sets_the_ra4m1_stride() {
+        // RA4M1 bsp_elc.h: GPT0 capture/compare A 87, GPT1 95, eight per
+        // channel; overflow is still +6.
+        let clock = CycleClock::default();
+        let mut g = RaGpt::new(8, CLOCK, PCLKD, 87, 0x03).with_events_per_channel(8);
+        g.attach_cycle_clock(clock.clone());
+        zephyr_pwm(&mut g, 2, 100, 30);
+        let ev = walk(&mut g, &clock, 401);
+        assert_eq!(ev[0], (196, 87 + 8 * 2 + EV_CCMPA));
+        assert_eq!(ev[1], (400, 87 + 8 * 2 + EV_OVF));
     }
 
     #[test]

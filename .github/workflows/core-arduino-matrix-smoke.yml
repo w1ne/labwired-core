@@ -60,6 +60,7 @@ jobs:
           - stm32wb55
           - stm32wba52
           - atmega328p
+          - uno-r4-wifi
 
     steps:
       - uses: actions/checkout@v4
@@ -122,6 +123,7 @@ jobs:
             rp2040)      platform=raspberrypi ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             atmega328p)  platform=atmelavr@5.3.0 ;;
+            uno-r4-*)    platform=renesas-ra@1.9.0 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1

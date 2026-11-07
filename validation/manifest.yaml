@@ -10022,6 +10022,13 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_pfs.rs
       - crates/core/src/peripherals/uart.rs
+      # 2026-11-07: ra4m1.yaml grew the ICU event link, AGT, RIIC, GPT and
+      # ADC14 for the stock-Arduino UNO R4 WiFi matrix row.
+      - crates/core/src/peripherals/ra_icu.rs
+      - crates/core/src/peripherals/ra_agt.rs
+      - crates/core/src/peripherals/ra_iic.rs
+      - crates/core/src/peripherals/ra_gpt.rs
+      - crates/core/src/peripherals/ra_adc12.rs
       - configs/chips/ra4m1.yaml
       - configs/systems/arduino-uno-r4-minima.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that

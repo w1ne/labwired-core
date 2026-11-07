@@ -37,6 +37,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | stm32f407 | ✅ L0–L4 | ❌ | ✅ Arduino | Add Zephyr `nucleo_f407zg` if west board ok |
 | stm32f411ceu6 | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 ACK-only, F4 sketch ifdef) | WeAct Black Pill (`blackpill_f411ce`); L6 on PA0 TIM2_CH1, pad edges not routed |
 | stm32g474re | ✅ L0–L4 | ✅ | ✅ Arduino | |
+| ra4m1 (UNO R4 WiFi) | ✅ L0–L3, L5–L7 (L4 skip: no RSPI model; L8 skip) | ❌ | ✅ Arduino (exact) | Stock ArduinoCore-renesas (`uno_r4_wifi`); Serial = SCI9; L6 P102 pad edges 490 Hz / 128/255 |
 | stm32h563 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32h735 | ❌ | ❌ | — | Chip model; framework path TBD |
 | stm32l073 | ✅ L0–L4 | ✅ | ✅ Arduino | |

@@ -262,6 +262,33 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  # ── Arduino UNO R4 WiFi (Renesas RA4M1, R7FA4M1AB) ──────────────────────
+  #
+  # Stock ArduinoCore-renesas (renesas-ra@1.9.0, framework 1.6.0). The WiFi
+  # board, not the Minima: on the Minima `Serial` is USB CDC (not modelled),
+  # on the WiFi it is _UART1_ = SCI9 (P109/P110), the UART to the ESP32-S3
+  # USB bridge. The sketch is linked at 0x4000 behind the DFU bootloader;
+  # ra4m1.yaml's reset_vector_offset takes reset from there.
+  - id: uno-r4-wifi
+    chip: ra4m1
+    system: systems/uno-r4-wifi.yaml
+    pio: { platform: renesas-ra, board: uno_r4_wifi, framework: arduino }
+    max_steps: 5000000
+    budget_reason: "L0~0.11M L1-L5/L7 <0.3M; L6 ~1.55M with the P102 pad watch (490 Hz GPT2 PWM)"
+    # LED_BUILTIN = D13 = P102 on the WiFi board (variants/UNOWIFIR4
+    # variant.cpp); P111 is the Minima's.
+    led_watch: "port1:2"
+    led_min_edges: 2
+    # analogWrite(D13) = GPT2 GTIOC2B on P102: 490 Hz, 128/255 duty.
+    pwm_watch: "port1:2"
+    pwm_min_edges: 4
+    family: ra
+    notes: "Stock ArduinoCore-renesas; Serial = SCI9; Wire = IIC1 (INA219 exact tier)"
+    sketches_skip: [L4_spi_sensor, L8_can]
+    sketches_skip_reason:
+      L4_spi_sensor: "RA4M1 SPI0 (RSPI) is not modelled yet (declared stub)"
+      L8_can: "RA4M1 CAN0 is not modelled; the L8 sketch has no renesas CAN path"
+
   # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
   #
   # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon
