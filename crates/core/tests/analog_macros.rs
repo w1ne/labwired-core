@@ -29,6 +29,23 @@ mod analog {
         ((actual - expected) / expected).abs()
     }
 
+    fn macro_input_after_one_tau(x_line: &str, model_line: &str) -> f64 {
+        let resistance = 100e3;
+        let capacitance = 10e-12;
+        let tau = resistance * capacitance;
+        let mut solver = build(&format!(
+            "Vcc vcc 0 dc 5\nVdrive src 0 dc 0\nRdrive src inp {resistance}\n\
+             {x_line}\n{model_line}\n"
+        ));
+        let source = solver.voltage_source_index("Vdrive").expect("drive source");
+        solver.set_voltage_source(source, 1.0);
+        let steps = 10_000u32;
+        for _ in 0..steps {
+            solver.advance(tau / f64::from(steps)).unwrap();
+        }
+        v(&solver, "inp")
+    }
+
     // -----------------------------------------------------------------------
     // Linear dependent sources
     // -----------------------------------------------------------------------
@@ -168,6 +185,488 @@ mod analog {
     }
 
     #[test]
+    fn opamp_sr_limits_large_signal_slew_and_preserves_small_signal_gbw() {
+        let (aol, gbw, sr, h) = (1e5, 1e6, 1e6, 100e-9);
+        let rg = MACRO_GAIN_RESISTANCE;
+        let gm = aol / rg;
+        let cg = aol / (2.0 * core::f64::consts::PI * gbw * rg);
+        let current_limit = cg * sr;
+        let expected = |input: f64| {
+            let current = gm * input;
+            if current.abs() >= current_limit {
+                current.clamp(-current_limit, current_limit) / (cg / h)
+            } else {
+                current / (1.0 / rg + cg / h)
+            }
+        };
+        let netlist = format!(
+            "Vcc vcc 0 dc 1000\nVee vee 0 dc -1000\n\
+             Vinp inp 0 dc 0\nVinn inn 0 dc 0\n\
+             X1 inp inn vcc vee out AMP\n\
+             .model AMP OPAMP(AOL={aol} GBW={gbw} ROUT=1 SR={sr})\n"
+        );
+
+        for large_input in [-5.0, 5.0] {
+            let mut large = build(&netlist);
+            let input = large.voltage_source_index("Vinp").expect("input source");
+            let initial = v(&large, "out");
+            large.set_voltage_source(input, large_input);
+            large
+                .advance(h)
+                .expect("slew-limited large-signal step solves");
+            let actual = v(&large, "out") - initial;
+            assert!(
+                (actual - expected(large_input)).abs() < 1e-7,
+                "large input step {large_input} V: expected {} V, got {actual} V",
+                expected(large_input)
+            );
+            assert!(actual.abs() / h <= sr * (1.0 + 1e-6));
+        }
+
+        let mut small = build(&netlist);
+        let input = small.voltage_source_index("Vinp").expect("input source");
+        small.set_voltage_source(input, 1e-3);
+        small.advance(h).expect("small-signal step solves");
+        let actual = v(&small, "out");
+        let expected = gm * 1e-3 / (1.0 / rg + cg / h);
+        assert!(
+            (actual - expected).abs() < 1e-8,
+            "below SR, the one-pole response must remain linear: expected {expected} V, got {actual} V"
+        );
+    }
+
+    #[test]
+    fn opamp_sr_preserves_settled_open_loop_dc_gain() {
+        let (aol, gbw, sr, input, vos, cm_gain) = (1e5, 1e6, 1e6, 0.2, 100e-6, 1e-3);
+        let netlist = |slew| {
+            format!(
+                "Vcc vcc 0 dc 1meg\nVee vee 0 dc -1meg\n\
+                 Vinp inp 0 dc {input}\nVinn inn 0 dc 0\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW={gbw} ROUT=1 VOS={vos} CMRR=60{slew})\n"
+            )
+        };
+        let linear = build(&netlist(""));
+        let slew_limited = build(&netlist(&format!(" SR={sr}")));
+        let expected = aol * (input + vos + cm_gain * input / 2.0);
+
+        for (name, solver) in [("without SR", &linear), ("with SR", &slew_limited)] {
+            let actual = v(solver, "out");
+            assert!(
+                (actual - expected).abs() < 0.1,
+                "{name} settled output should retain AOL: expected {expected} V, got {actual} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_sr_must_be_finite_and_positive() {
+        for sr in ["0", "-1", "1e999"] {
+            let error = parse_netlist(&format!(
+                "Vcc vcc 0 dc 5\nX1 inp inn vcc 0 out AMP\n\
+                 .model AMP OPAMP(AOL=100 GBW=1meg ROUT=100 SR={sr})\n"
+            ))
+            .expect_err("SR must be a finite positive slew rate")
+            .to_string();
+            assert!(error.contains("SR must be finite and positive"), "{error}");
+        }
+    }
+
+    #[test]
+    fn opamp_common_mode_rejection_uses_supply_midpoint_and_db_scale() {
+        let (aol, rout, load, attenuation) = (100.0, 100.0, 10e3, 0.01);
+        for common_mode in [-1.0, 0.0, 1.0] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc -5\n\
+                 Vp inp 0 dc {common_mode}\nVm inn 0 dc {common_mode}\n\
+                 Rl out 0 {load}\nX1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW=1meg ROUT={rout} CMRR=40)\n"
+            ));
+            let expected = aol * attenuation * common_mode * load / (load + rout);
+            let actual = v(&solver, "out");
+            assert!(
+                (actual - expected).abs() < 3e-6,
+                "common-mode input {common_mode} V: out = {actual} V, expected {expected} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_common_mode_rejection_must_be_finite_and_non_negative() {
+        for (cmrr, message) in [
+            ("CMRR=-1", "CMRR must be finite and non-negative"),
+            ("CMRR=1e999", "CMRR must be finite and non-negative"),
+        ] {
+            let error = parse_netlist(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc -5\nX1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL=100 GBW=1meg ROUT=100 {cmrr})\n"
+            ))
+            .unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[test]
+    fn opamp_input_bias_current_drops_across_both_input_source_resistances() {
+        let (aol, rout, load, ibias) = (100.0, 100.0, 10e3, 10e-9);
+        // Equal 1 V sources leave a 0.5 mV differential after the same bias
+        // current flows through the unequal source resistances. Reversing the
+        // current and the resistor order checks the signed-current convention.
+        for (current, r_plus, r_minus) in [(ibias, 50e3, 100e3), (-ibias, 100e3, 50e3)] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp {r_plus}\nRm vm inn {r_minus}\nRl out 0 {load}\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW=1meg ROUT={rout} IBIAS={current})\n"
+            ));
+            let differential = current * (r_minus - r_plus);
+            let gain_node = aol * differential;
+            let expected = gain_node * load / (load + rout);
+            let actual = v(&solver, "out");
+            assert!(
+                // Ignore the clamp diodes' reverse leakage at the gain node.
+                (actual - expected).abs() < 1e-5,
+                "IBIAS={current}: out = {actual} V, expected {expected} V"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_input_offset_current_splits_around_the_average_bias_current() {
+        let (aol, rout, load, ibias, resistance) = (2.0, 100.0, 10e3, 10e-9, 100e3);
+        for ios in [4e-9, -4e-9] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp {resistance}\nRm vm inn {resistance}\nRl out 0 {load}\n\
+                 X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(AOL={aol} GBW=1meg ROUT={rout} IBIAS={ibias} IOS={ios})\n"
+            ));
+            let input_plus = ibias + 0.5 * ios;
+            let input_minus = ibias - 0.5 * ios;
+            let expected_inp = 1.0 - input_plus * resistance;
+            let expected_inn = 1.0 - input_minus * resistance;
+            assert!(
+                (v(&solver, "inp") - expected_inp).abs() < 1e-8,
+                "IOS={ios}: in+ = {} V, expected {expected_inp} V",
+                v(&solver, "inp")
+            );
+            assert!(
+                (v(&solver, "inn") - expected_inn).abs() < 1e-8,
+                "IOS={ios}: in- = {} V, expected {expected_inn} V",
+                v(&solver, "inn")
+            );
+
+            let differential = expected_inp - expected_inn;
+            let gain_node = aol * differential;
+            let expected_out = gain_node * load / (load + rout);
+            assert!(
+                (v(&solver, "out") - expected_out).abs() < 1e-5,
+                "IOS={ios}: out = {} V, expected {expected_out} V",
+                v(&solver, "out")
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_input_bias_current_must_be_finite() {
+        for (parameter, message) in [
+            ("IBIAS=1e999", "IBIAS must be finite"),
+            ("IOS=1e999", "IOS must be finite"),
+            (
+                "IBIAS=1.7e308 IOS=1.7e308",
+                "IBIAS and IOS produce a non-finite input current",
+            ),
+        ] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out AMP\n.model AMP OPAMP({parameter})\n"
+            ))
+            .expect_err("non-finite input currents cannot be stamped");
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[test]
+    fn comparator_input_bias_current_drops_across_both_input_source_resistances() {
+        let current = 10e-9;
+        for bias in [current, -current] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp 50k\nRm vm inn 100k\nRpu vcc out 10k\n\
+                 X1 inp inn vcc vee out CMP\n\
+                 .model CMP COMP(AOL=10 GBW=1meg ROUT=100 IBIAS={bias})\n"
+            ));
+            let expected_inp = 1.0 - bias * 50e3;
+            let expected_inn = 1.0 - bias * 100e3;
+            let actual_inp = v(&solver, "inp");
+            let actual_inn = v(&solver, "inn");
+            assert!(
+                (actual_inp - expected_inp).abs() < 1e-8,
+                "IBIAS={bias}: in+ = {actual_inp} V, expected {expected_inp} V"
+            );
+            assert!(
+                (actual_inn - expected_inn).abs() < 1e-8,
+                "IBIAS={bias}: in- = {actual_inn} V, expected {expected_inn} V"
+            );
+        }
+    }
+
+    #[test]
+    fn comparator_input_offset_current_splits_around_the_average_bias_current() {
+        let (ibias, ios, resistance) = (10e-9, 4e-9, 100e3);
+        for offset_current in [ios, -ios] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc 0\n\
+                 Vp vp 0 dc 1\nVm vm 0 dc 1\n\
+                 Rp vp inp {resistance}\nRm vm inn {resistance}\nRpu vcc out 10k\n\
+                 X1 inp inn vcc vee out CMP\n\
+                 .model CMP COMP(AOL=10 GBW=1meg ROUT=100 IBIAS={ibias} IOS={offset_current})\n"
+            ));
+            let input_plus = ibias + 0.5 * offset_current;
+            let input_minus = ibias - 0.5 * offset_current;
+            let expected_inp = 1.0 - input_plus * resistance;
+            let expected_inn = 1.0 - input_minus * resistance;
+            assert!(
+                (v(&solver, "inp") - expected_inp).abs() < 1e-8,
+                "IOS={offset_current}: in+ = {} V, expected {expected_inp} V",
+                v(&solver, "inp")
+            );
+            assert!(
+                (v(&solver, "inn") - expected_inn).abs() < 1e-8,
+                "IOS={offset_current}: in- = {} V, expected {expected_inn} V",
+                v(&solver, "inn")
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_and_comparator_input_capacitances_load_the_source_in_transient_runs() {
+        // CINCM loads each input to V−; CIND loads the differential input.
+        // With the negative input held at ground, these 4 pF + 6 pF capacitors
+        // give the driven input a 1 µs time constant through 100 kΩ.
+        let expected = 1.0 - (1.0 + 1.0 / 10_000.0f64).powf(-10_000.0);
+        for (x_line, model_line) in [
+            (
+                "X1 inp 0 vcc 0 out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 CINCM=4p CIND=6p)",
+            ),
+            (
+                "X1 inp 0 vcc 0 out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 CINCM=4p CIND=6p OUTPUT=PP)",
+            ),
+        ] {
+            let actual = macro_input_after_one_tau(x_line, model_line);
+            assert!(
+                (actual - expected).abs() < 1e-5,
+                "{x_line}: input is {actual} V after one tau, expected {expected} V"
+            );
+        }
+    }
+
+    #[test]
+    fn macro_input_capacitances_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for (params, message) in [
+                ("CINCM=-1p", "CINCM must be finite and non-negative"),
+                ("CIND=-1p", "CIND must be finite and non-negative"),
+                ("CINCM=1e999", "CINCM must be finite and non-negative"),
+                ("CIND=1e999", "CIND must be finite and non-negative"),
+            ] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}({params}{output})\n"
+                ))
+                .expect_err("invalid input capacitance must be rejected");
+                assert!(error.to_string().contains(message), "{error}");
+            }
+        }
+    }
+
+    #[test]
+    fn opamp_and_comparator_quiescent_current_flows_between_supply_pins() {
+        let iq = 2e-3;
+        for (x_line, model_line, inputs) in [
+            (
+                "X1 inp inn vcc vee out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 IQ=2m)",
+                "Vinp inp 0 dc 0.25\nVinn inn 0 dc 0",
+            ),
+            (
+                "X1 inp inn vcc vee out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 IQ=2m OUTPUT=PP)",
+                "Vinp inp 0 dc 0\nVinn inn 0 dc 0.25",
+            ),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc -5\n{inputs}\nRl out 0 10k\n\
+                 {x_line}\n{model_line}\n"
+            ));
+            let from_vcc = -source_current(&solver, "Vcc");
+            let into_vee = source_current(&solver, "Vee");
+            assert!(
+                (from_vcc - iq).abs() < 1e-8,
+                "{x_line}: V+ supplies {from_vcc} A, expected {iq} A"
+            );
+            assert!(
+                (into_vee - iq).abs() < 1e-8,
+                "{x_line}: V− returns {into_vee} A, expected {iq} A"
+            );
+        }
+    }
+
+    #[test]
+    fn macro_quiescent_current_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for value in ["-1m", "1e999"] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}(IQ={value}{output})\n"
+                ))
+                .expect_err("invalid quiescent current must be rejected");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("IQ must be finite and non-negative"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn opamp_and_comparator_differential_input_resistance_draws_between_inputs() {
+        let rin = 10e3;
+        for (x_line, model_line) in [
+            (
+                "X1 inp inn vcc vee out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 RIN=10k)",
+            ),
+            (
+                "X1 inp inn vcc vee out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 RIN=10k OUTPUT=PP)",
+            ),
+        ] {
+            for (vp, vn) in [(0.5, -0.25), (-0.25, 0.5), (0.75, 0.75)] {
+                let solver = build(&format!(
+                    "Vcc vcc 0 dc 5\nVee vee 0 dc -5\n\
+                     Vp inp 0 dc {vp}\nVn inn 0 dc {vn}\n\
+                     Rl out 0 10k\n{x_line}\n{model_line}\n"
+                ));
+                let expected = (vp - vn) / rin;
+                let from_plus = -source_current(&solver, "Vp");
+                let into_minus = source_current(&solver, "Vn");
+                assert!(
+                    (from_plus - expected).abs() < 1e-10,
+                    "{x_line}: in+ current is {from_plus} A, expected {expected} A"
+                );
+                assert!(
+                    (into_minus - expected).abs() < 1e-10,
+                    "{x_line}: in- current is {into_minus} A, expected {expected} A"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn macro_differential_input_resistance_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for value in ["-1", "1e999"] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}(RIN={value}{output})\n"
+                ))
+                .expect_err("invalid differential input resistance must be rejected");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("RIN must be finite and non-negative"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn opamp_and_comparator_common_mode_input_resistance_loads_each_input_to_vminus() {
+        let rin_cm = 100e3;
+        let (input, vminus) = (1.0, -1.0);
+        let expected = (input - vminus) / rin_cm;
+        for (x_line, model_line) in [
+            (
+                "X1 inp inn vcc vee out AMP",
+                ".model AMP OPAMP(AOL=2 GBW=1meg ROUT=100 RINCM=100k)",
+            ),
+            (
+                "X1 inp inn vcc vee out CMP",
+                ".model CMP COMP(AOL=2 GBW=1meg ROUT=100 RINCM=100k OUTPUT=PP)",
+            ),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVee vee 0 dc {vminus}\n\
+                 Vp inp 0 dc {input}\nVn inn 0 dc {input}\n\
+                 Rl out 0 10k\n{x_line}\n{model_line}\n"
+            ));
+            let from_plus = -source_current(&solver, "Vp");
+            let from_minus = -source_current(&solver, "Vn");
+            assert!(
+                (from_plus - expected).abs() < 1e-10,
+                "{x_line}: in+ current is {from_plus} A, expected {expected} A"
+            );
+            assert!(
+                (from_minus - expected).abs() < 1e-10,
+                "{x_line}: in- current is {from_minus} A, expected {expected} A"
+            );
+        }
+    }
+
+    #[test]
+    fn macro_common_mode_input_resistance_must_be_finite_and_non_negative() {
+        for (kind, x_line, model_name, output) in [
+            ("OPAMP", "X1 inp 0 vcc 0 out AMP", "AMP", ""),
+            ("COMP", "X1 inp 0 vcc 0 out CMP", "CMP", " OUTPUT=PP"),
+        ] {
+            for value in ["-1", "1e999"] {
+                let error = parse_netlist(&format!(
+                    "{x_line}\n.model {model_name} {kind}(RINCM={value}{output})\n"
+                ))
+                .expect_err("invalid common-mode input resistance must be rejected");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("RINCM must be finite and non-negative"),
+                    "{error}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn comparator_input_bias_current_must_be_finite() {
+        for (parameter, message) in [
+            ("IBIAS=1e999", "IBIAS must be finite"),
+            ("IOS=1e999", "IOS must be finite"),
+            (
+                "IBIAS=1.7e308 IOS=1.7e308",
+                "IBIAS and IOS produce a non-finite input current",
+            ),
+        ] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out CMP\n.model CMP COMP({parameter})\n"
+            ))
+            .expect_err("non-finite input currents cannot be stamped");
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[test]
     fn a_saturated_opamp_sits_at_its_rails_less_the_drop() {
         // LM358: DROP_HI = 1.5 V, DROP_LO = 0. Open loop, driven both ways,
         // into 10 kΩ through ROUT = 50 Ω: the high rail reads 10.5 V · 10 k /
@@ -181,6 +680,76 @@ mod analog {
             assert!(
                 out > low && out < high,
                 "vin = {vin}: out = {out} V, expected within [{low}, {high}]"
+            );
+        }
+    }
+
+    #[test]
+    fn opamp_output_current_limit_keeps_rout_below_limit_and_clamps_both_directions() {
+        let unlimited = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 0.5\n\
+             Rl out 0 500\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50)\n",
+        );
+        let limited = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 0.5\n\
+             Rl out 0 500\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        let expected = v(&limited, "X1#p") * 500.0 / (500.0 + 50.0);
+        assert!(
+            (v(&limited, "out") - expected).abs() < 1e-8,
+            "below IOLIM, Rout should set the divider output: got {}, expected {expected}",
+            v(&limited, "out")
+        );
+        assert!(v(&limited, "out") / 500.0 < 10e-3);
+        assert!(
+            (v(&limited, "out") - v(&unlimited, "out")).abs() < 1e-8,
+            "below IOLIM, Rout should retain the unlimited output: limited={}, unlimited={}",
+            v(&limited, "out"),
+            v(&unlimited, "out")
+        );
+
+        // A 100 Ω load asks for 50 mA from the high rail, so 10 mA at the
+        // output pin sets Vout = IOLIM·RL = 1 V.
+        let sourcing = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVin inp 0 dc 1\n\
+             Rl out 0 100\nX1 inp 0 vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        assert!(
+            (v(&sourcing, "out") - 1.0).abs() < 1e-8,
+            "source current should clamp at 10 mA: got {} V",
+            v(&sourcing, "out")
+        );
+
+        // Reversing the drive makes the output sink 10 mA from a 5 V pull-up;
+        // the same symmetric limit puts the pin at 4 V.
+        let sinking = build(
+            "Vcc vcc 0 dc 100\nVee vee 0 dc -100\nVload load 0 dc 5\nVin inn 0 dc 1\n\
+             Rl load out 100\nX1 0 inn vcc vee out AMP\n\
+             .model AMP OPAMP(AOL=10 GBW=1meg ROUT=50 IOLIM=10m)\n",
+        );
+        assert!(
+            (v(&sinking, "out") - 4.0).abs() < 1e-8,
+            "sink current should clamp at 10 mA: got {} V",
+            v(&sinking, "out")
+        );
+    }
+
+    #[test]
+    fn opamp_output_current_limit_must_be_finite_and_positive() {
+        for ilim in ["0", "-1m", "1e999"] {
+            let error = parse_netlist(&format!(
+                "X1 inp inn vcc vee out AMP\n\
+                 .model AMP OPAMP(IOLIM={ilim})\n"
+            ))
+            .expect_err("an invalid IOLIM cannot be stamped");
+            assert!(
+                error
+                    .to_string()
+                    .contains("IOLIM must be finite and positive"),
+                "{error}"
             );
         }
     }
@@ -239,6 +808,78 @@ mod analog {
     // -----------------------------------------------------------------------
     // Comparator
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn comparator_common_mode_rejection_uses_supply_midpoint_and_db_scale() {
+        // With CMRR=40 dB, a 1.5 V common-mode offset from the 2.5 V supply
+        // midpoint becomes a 15 mV input-referred error. The 10 mV differential
+        // input is therefore below threshold at 1 V common mode, but above it
+        // at the midpoint. Without CMRR, the 1 V case stays above threshold.
+        for (common_mode, cmrr, expect_low) in [
+            (1.0, " CMRR=40", true),
+            (2.5, " CMRR=40", false),
+            (1.0, "", false),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVp inp 0 dc {}\nVn inn 0 dc {}\n\
+                 X1 inp inn vcc 0 out CMP\n\
+                 .model CMP COMP(AOL=1e5 GBW=1meg ROUT=60 OUTPUT=PP{cmrr})\n",
+                common_mode + 5e-3,
+                common_mode - 5e-3,
+            ));
+            let out = v(&solver, "out");
+            if expect_low {
+                assert!(out < 0.1, "common mode {common_mode} V: out = {out} V");
+            } else {
+                assert!(out > 4.9, "common mode {common_mode} V: out = {out} V");
+            }
+        }
+    }
+
+    #[test]
+    fn comparator_common_mode_rejection_must_be_finite_and_non_negative() {
+        for (cmrr, expected) in [
+            ("-1", "CMRR must be finite and non-negative"),
+            ("1e999", "CMRR must be finite and non-negative"),
+        ] {
+            let error = parse_netlist(&format!(
+                "X1 a b vcc vee out CMP\n.model CMP COMP(CMRR={cmrr})\n"
+            ))
+            .expect_err("invalid CMRR must be rejected");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn comparator_input_offset_voltage_shifts_the_switching_threshold_in_both_polarities() {
+        // With no hysteresis the documented threshold is V(in+) − V(in−) =
+        // −VOS. Check both sides of that shifted threshold, for positive and
+        // negative offsets, through the open-collector output stage.
+        for (vos, input, expect_sink) in [
+            (50e-3, 0.925, true),
+            (50e-3, 0.975, false),
+            (-50e-3, 1.025, true),
+            (-50e-3, 1.075, false),
+        ] {
+            let solver = build(&format!(
+                "Vcc vcc 0 dc 5\nVp inp 0 dc {input}\nVn inn 0 dc 1\n\
+                 Rpu vcc out 10k\nX1 inp inn vcc 0 out CMP\n\
+                 .model CMP COMP(AOL=1e5 GBW=1meg ROUT=60 VOS={vos})\n"
+            ));
+            let out = v(&solver, "out");
+            if expect_sink {
+                assert!(
+                    out < 0.1,
+                    "VOS={vos} V, input={input} V: output should sink, got {out} V"
+                );
+            } else {
+                assert!(
+                    out > 4.9,
+                    "VOS={vos} V, input={input} V: output should float high, got {out} V"
+                );
+            }
+        }
+    }
 
     #[test]
     fn an_open_collector_comparator_sinks_or_floats() {
@@ -437,7 +1078,10 @@ mod analog {
 
     const OPAMP_HASH: u64 = 0x434d_e1ed_0fe0_c115;
     const ZENER_HASH: u64 = 0x272a_2e74_684b_dc23;
-    const SCHMITT_HASH: u64 = 0xf72e_a892_be8c_9d3a;
+    // The comparator's open-collector MOSFET now includes its reverse-biased
+    // bulk-drain junction, so the Schmitt output trajectory includes that
+    // junction's IS + GMIN leakage. The op-amp and zener hashes are unchanged.
+    const SCHMITT_HASH: u64 = 0xbad1_3c95_8766_f606;
 
     // -----------------------------------------------------------------------
     // Regulators
