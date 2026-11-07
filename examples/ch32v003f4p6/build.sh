@@ -4,6 +4,7 @@ set -eu
 example_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$example_dir/../.." && pwd)
 output="$repo_root/tests/fixtures/ch32v003f4p6-blink.elf"
+hello_output="$repo_root/tests/fixtures/ch32v003f4p6-uart-hello.elf"
 
 if [ -n "${RISCV_CC:-}" ]; then
     cc=$RISCV_CC
@@ -28,3 +29,15 @@ mkdir -p "$(dirname -- "$output")"
     "$example_dir/start.S" "$example_dir/main.c"
 
 printf 'Built %s\n' "$output"
+
+# The UART hello targets RV32EC, the chip's full ISA, so it also exercises
+# compressed instructions on the RV32E register file.
+"$cc" \
+    -march=rv32ec -mabi=ilp32e -Os \
+    -ffreestanding -fno-builtin -fno-pic -fno-pie \
+    -nostdlib -nostartfiles \
+    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax \
+    -o "$hello_output" \
+    "$example_dir/start.S" "$example_dir/uart_hello.c"
+
+printf 'Built %s\n' "$hello_output"

@@ -2238,6 +2238,11 @@ impl GpioPort {
 
     pub(crate) fn register_layout(&self) -> GpioRegisterLayout {
         match &self.family {
+            // A WCH port reuses the F1 engine but is a different chip. Reported
+            // as `Stm32F1`, it picked up the STM32F103 pad tables in
+            // `bus::attach`: CH32V003 USART1 got bound to PA9 (an F103 pad that
+            // part does not bond), so its console gate never opened.
+            GpioFamily::Stm32F1(_) if self.wch_single_config_register => GpioRegisterLayout::Wch,
             GpioFamily::Stm32F1(_) => GpioRegisterLayout::Stm32F1,
             GpioFamily::Stm32V2(_) => GpioRegisterLayout::Stm32V2,
             // Reported as its own layout, which is what keeps
@@ -3413,6 +3418,8 @@ mod tests {
             " ch32v003 ".parse::<GpioRegisterLayout>().unwrap(),
             GpioRegisterLayout::Wch
         );
+        // Must not report Stm32F1, or bus::attach applies STM32F103 pad tables.
+        assert_eq!(gpio.register_layout(), GpioRegisterLayout::Wch);
     }
 
     #[test]
