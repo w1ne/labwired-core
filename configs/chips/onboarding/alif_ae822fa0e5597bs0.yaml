@@ -6,6 +6,7 @@
 
 name: alif_ae822fa0e5597bs0
 arch: arm
+core: cortex-m55
 flash:
   base: 0
   size: 262144B

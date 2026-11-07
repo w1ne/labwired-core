@@ -6,6 +6,7 @@
 
 name: stm32wba52
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 1048576B

@@ -6,6 +6,7 @@
 
 name: stm32l552
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 524288B
