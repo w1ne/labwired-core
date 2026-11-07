@@ -4,7 +4,7 @@
 //
 //! CC2538DK (CC2538SF53, Cortex-M3) L1 smoke: UART0 console, a walk over the
 //! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels, an SSI0
-//! loopback self-test, an I2CM/TMP102 transfer, a PKA SRAM readback, a GPTimer0/1 self-test and a heartbeat, in bare
+//! loopback self-test, an I2CM/TMP102 transfer, an I2CM->I2CS loopback, a PKA SRAM readback, a GPTimer0/1 self-test and a heartbeat, in bare
 //! registers.
 //!
 //! Board facts (Contiki-NG `cc2538dk` dev/board.h; RIOT `cc2538dk`):
@@ -150,6 +150,22 @@ const I2CM_STAT_ADRACK: u32 = 1 << 2;
 const I2CM_STAT_DATACK: u32 = 1 << 3;
 const I2CM_STAT_IDLE: u32 = 1 << 5;
 const IRQ_I2CM: u32 = 8;
+const I2CM_LPBK: u32 = 1 << 0;
+const I2CM_SFE: u32 = 1 << 5;
+const I2CM_STAT_BUSY: u32 = 1 << 0;
+
+// ── I2C slave (SWRU319C §20.5.2, base 0x4002_0800) ────────────────────────
+const I2CS: u32 = 0x4002_0800;
+const I2CS_OAR: u32 = I2CS;
+const I2CS_CTRL_STAT: u32 = I2CS + 0x004;
+const I2CS_DR: u32 = I2CS + 0x008;
+const I2CS_IMR: u32 = I2CS + 0x00C;
+const I2CS_RIS: u32 = I2CS + 0x010;
+const I2CS_MIS: u32 = I2CS + 0x014;
+const I2CS_ICR: u32 = I2CS + 0x018;
+const I2CS_RREQ: u32 = 1 << 0;
+const I2CS_TREQ: u32 = 1 << 1;
+const I2CS_OWN_ADDR: u32 = 0x3C;
 
 // ── GPTimer (SWRU319C §11; GPTIMER0/1 at 0x4003_0000/0x4003_1000) ──────────
 const SYS_CTRL_RCGCGPT: u32 = SYS_CTRL + 0x08;
@@ -423,6 +439,94 @@ fn i2cm_selftest() {
     } else {
         puts(b"i2cm nack stat=");
         put_hex8(status);
+        putc(b'\n');
+    }
+}
+
+/// Bounded poll: returns the last value read and whether `done` held.
+fn poll(addr: u32, done: impl Fn(u32) -> bool) -> (u32, bool) {
+    let mut value = rd(addr);
+    for _ in 0..1000 {
+        if done(value) {
+            return (value, true);
+        }
+        value = rd(addr);
+    }
+    (value, done(value))
+}
+
+/// I2CM -> I2CS loopback (SWRU319C §20.3.4, Figure 20-13 slave sequence):
+/// the master sends one byte to the chip's own slave address, the slave reads
+/// it on RREQ; then the master reads one byte, the slave supplies it on TREQ
+/// while the master waits BUSY. Reports what each side saw, the slave's
+/// raw/masked interrupts and the shared IRQ 8 pend.
+fn i2cs_loopback_selftest() {
+    wr(NVIC_ICPR0, 1 << IRQ_I2CM);
+    wr(I2CM_IMR, 0);
+    wr(I2CM_ICR, 1);
+    wr(I2CM_CR, I2CM_LPBK | I2CM_MFE | I2CM_SFE);
+    wr(I2CS_OAR, I2CS_OWN_ADDR);
+    wr(I2CS_CTRL_STAT, 1); // DA
+    wr(I2CS_IMR, 1); // DATAIM
+
+    // Master transmit, slave receive.
+    wr(I2CM_SA, I2CS_OWN_ADDR << 1);
+    wr(I2CM_DR, 0x5A);
+    wr(I2CM_CTRL_STAT, I2CM_START | I2CM_RUN | I2CM_STOP);
+    let (rx_stat, rx_ok) = poll(I2CS_CTRL_STAT, |v| v & I2CS_RREQ != 0);
+    let rx = rd(I2CS_DR) & 0xFF;
+    let rx_after = rd(I2CS_CTRL_STAT);
+    let mis = rd(I2CS_MIS);
+    let irq8 = (rd(NVIC_ISPR0) >> IRQ_I2CM) & 1;
+    let (_, wr_idle) = poll(I2CM_CTRL_STAT, |v| v & I2CM_STAT_BUSY == 0);
+    let ris_tx = rd(I2CS_RIS);
+    wr(I2CS_ICR, 0x7);
+    wr(NVIC_ICPR0, 1 << IRQ_I2CM);
+    wr(I2CM_ICR, 1);
+
+    // Master receive, slave transmit.
+    wr(I2CM_SA, (I2CS_OWN_ADDR << 1) | 1);
+    wr(I2CM_CTRL_STAT, I2CM_START | I2CM_RUN | I2CM_STOP);
+    let (tx_stat, tx_ok) = poll(I2CS_CTRL_STAT, |v| v & I2CS_TREQ != 0);
+    let busy = rd(I2CM_CTRL_STAT) & I2CM_STAT_BUSY;
+    wr(I2CS_DR, 0xC3);
+    let (mstat, rd_idle) = poll(I2CM_CTRL_STAT, |v| v & I2CM_STAT_BUSY == 0);
+    let got = rd(I2CM_DR) & 0xFF;
+
+    wr(I2CS_ICR, 0x7);
+    wr(I2CS_IMR, 0);
+    wr(I2CS_CTRL_STAT, 0);
+    wr(I2CM_ICR, 1);
+    wr(I2CM_CR, 0);
+    wr(NVIC_ICPR0, 1 << IRQ_I2CM);
+
+    if rx_ok && tx_ok && wr_idle && rd_idle {
+        puts(b"i2cs rx stat=");
+        put_hex8(rx_stat);
+        puts(b" dr=");
+        put_hex8(rx);
+        puts(b" after=");
+        put_hex8(rx_after);
+        puts(b" mis=");
+        put_hex8(mis);
+        puts(b" irq8=");
+        put_dec32(irq8);
+        puts(b" ris=");
+        put_hex8(ris_tx);
+        puts(b" tx stat=");
+        put_hex8(tx_stat);
+        puts(b" busy=");
+        put_dec32(busy);
+        puts(b" m_dr=");
+        put_hex8(got);
+        puts(b" m_stat=");
+        put_hex8(mstat);
+        putc(b'\n');
+    } else {
+        puts(b"i2cs loopback timeout rx=");
+        put_hex8(rx_stat);
+        puts(b" tx=");
+        put_hex8(tx_stat);
         putc(b'\n');
     }
 }
@@ -775,6 +879,7 @@ fn main() -> ! {
     soc_adc_selftest();
     ssi0_selftest();
     i2cm_selftest();
+    i2cs_loopback_selftest();
     pka_sram_selftest();
     gpt_selftest();
 

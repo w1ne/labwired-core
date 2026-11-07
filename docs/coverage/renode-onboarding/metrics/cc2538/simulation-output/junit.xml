@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.394246">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.541237">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="eefd097d66909a2cd8bb216faea6d4f469d02ff0876aad3e305a575c8fc26977"/>
+    <property name="firmware_hash" value="a86971cbc41455deedd3967c1c63c7ec9133bbfe06fee80b2e9a918c8381e577"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.394246">
+  <testcase classname="labwired" name="run" time="1.541237">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: CC2538DK SMOKE" time="0.000000">
   </testcase>

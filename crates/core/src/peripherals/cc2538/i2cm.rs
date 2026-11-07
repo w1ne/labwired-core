@@ -2,11 +2,16 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! CC2538 I2C master (`cc2538_i2cm`) at 0x4002_0000 (SWRU319C Table 4-1),
-//! interrupt 8 in the regular map (Table 5-2). Renode's `cc2538.repl` has no
+//! CC2538 I2C master and slave (`cc2538_i2cm`): I2CM at 0x4002_0000 and
+//! I2CS at 0x4002_0800 (SWRU319C Table 4-1), sharing interrupt 8 in the
+//! regular map (Table 5-2): "only a single interrupt signal is sent to the
+//! interrupt controller" (§20.3.3). One model owns both windows so that the
+//! LPBK loopback (§20.3.4) can tie master and slave together. The chip maps
+//! it as one 0x900-byte window; the reserved 0x100..0x7FF gap between the two
+//! register files reads 0 and drops writes. Renode's `cc2538.repl` has no
 //! I2C model, so this goes beyond Renode parity.
 //!
-//! Register map (SWRU319C §21.6, the Stellaris-family I2C master):
+//! Master register map (SWRU319C §20.5.1, the Stellaris-family I2C master):
 //!
 //! | Offset | Name | Access | Meaning |
 //! | --- | --- | --- | --- |
@@ -19,7 +24,23 @@
 //! | 0x014 | I2CM_RIS | R | RIS 0, set when a command completes |
 //! | 0x018 | I2CM_MIS | R | RIS & IMR |
 //! | 0x01C | I2CM_ICR | W1C | IC 0 |
-//! | 0x020 | I2CM_CR | R/W | SFE 5, MFE 4 (master enable), LPBK 0 (stored only) |
+//! | 0x020 | I2CM_CR | R/W | SFE 5 (slave enable), MFE 4 (master enable), LPBK 0 (loopback) |
+//!
+//! Slave register map (SWRU319C §20.5.2, Table 20-5):
+//!
+//! | Offset | Name | Access | Meaning |
+//! | --- | --- | --- | --- |
+//! | 0x800 | I2CS_OAR | R/W | OAR \[6:0\] own address |
+//! | 0x804 | I2CS_CTRL | W | DA 0 (device active) |
+//! | 0x804 | I2CS_STAT | R | FBR 2, TREQ 1, RREQ 0 |
+//! | 0x808 | I2CS_DR | R/W | byte received / byte to transmit |
+//! | 0x80C | I2CS_IMR | R/W | STOPIM 2, STARTIM 1, DATAIM 0 |
+//! | 0x810 | I2CS_RIS | R | STOPRIS 2, STARTRIS 1, DATARIS 0 |
+//! | 0x814 | I2CS_MIS | R | RIS & IMR |
+//! | 0x818 | I2CS_ICR | W1C | STOPIC 2, STARTIC 1, DATAIC 0 |
+//!
+//! The register table types STOPIM/STARTIM as RO, but §20.3.3.2 says they
+//! are enabled "by setting the STARTIM and STOPIM bits", so they are RW here.
 //!
 //! A CTRL write runs one command of the SWRU319C §21.3.1 master state
 //! machine (TI driverlib `I2C_MASTER_CMD_*`) when MFE is set: from idle
@@ -35,10 +56,25 @@
 //! already carry). Attached devices always acknowledge data bytes. Every
 //! command, including a bare STOP, sets RIS on completion.
 //!
-//! Not modelled: the I2C slave (I2CS_* at 0x4002_0800 stays a stub), loopback
-//! (LPBK), multi-master arbitration (ARBLST is never set), clock stretching,
-//! the SCL rate from TPR and transfer time (BUSY is never seen set, because
-//! each command completes at its CTRL write), glitch filtering, and the
+//! **Loopback.** With LPBK set the master's bus is the internal one tied to
+//! this chip's own slave, so `external_devices:` are not reachable. The slave
+//! takes part when it is active (CR.SFE and CTRL.DA): every START (including a
+//! repeated one) sets STARTRIS and a STOP sets STOPRIS. An address equal to
+//! OAR is acknowledged; any other is not (ERROR + ADRACK). A master write
+//! latches its byte into I2CS_DR and sets RREQ (and FBR for the first byte
+//! after the address) plus DATARIS; reading I2CS_DR clears RREQ and FBR. A
+//! master read sets TREQ and DATARIS and stalls the master (STAT.BUSY) until
+//! firmware writes I2CS_DR, which hands the byte to I2CM_DR, clears TREQ,
+//! completes the command (RIS, and STOP if it carried one) — the clock
+//! stretching of Figure 20-13. CTRL writes while the master is stalled are
+//! ignored.
+//!
+//! Not modelled: the slave on the external bus (without LPBK it is never
+//! addressed; IOC routing of I2CMSSDA/SCL is not followed), clock stretching
+//! on a master write (the write completes at the CTRL write; a second byte
+//! before I2CS_DR is read overwrites it), multi-master arbitration (ARBLST is
+//! never set), the SCL rate from TPR and transfer time (BUSY is only seen
+//! while a loopback read waits for the slave), glitch filtering, and the
 //! SYS_CTRL RCGCI2C clock gate.
 
 use crate::peripherals::device::{drain_i2c_pin_drives, I2cDevice};
@@ -54,17 +90,37 @@ const MIS: u64 = 0x018;
 const ICR: u64 = 0x01C;
 const CR: u64 = 0x020;
 
+const S_OAR: u64 = 0x800;
+const S_CTRL_STAT: u64 = 0x804;
+const S_DR: u64 = 0x808;
+const S_IMR: u64 = 0x80C;
+const S_RIS: u64 = 0x810;
+const S_MIS: u64 = 0x814;
+const S_ICR: u64 = 0x818;
+
+const S_STAT_RREQ: u32 = 1 << 0;
+const S_STAT_TREQ: u32 = 1 << 1;
+const S_STAT_FBR: u32 = 1 << 2;
+
+const S_INT_DATA: u32 = 1 << 0;
+const S_INT_START: u32 = 1 << 1;
+const S_INT_STOP: u32 = 1 << 2;
+const S_INT_MASK: u32 = 0x7;
+
 const CTRL_RUN: u32 = 1 << 0;
 const CTRL_START: u32 = 1 << 1;
 const CTRL_STOP: u32 = 1 << 2;
 
+const STAT_BUSY: u32 = 1 << 0;
 const STAT_ERROR: u32 = 1 << 1;
 const STAT_ADRACK: u32 = 1 << 2;
 const STAT_DATACK: u32 = 1 << 3;
 const STAT_IDLE: u32 = 1 << 5;
 const STAT_BUSBSY: u32 = 1 << 6;
 
+const CR_LPBK: u32 = 1 << 0;
 const CR_MFE: u32 = 1 << 4;
+const CR_SFE: u32 = 1 << 5;
 const CR_MASK: u32 = 0x31;
 const TPR_MASK: u32 = 0x7F;
 
@@ -82,6 +138,22 @@ pub struct Cc2538I2cm {
     holding: bool,
     /// Index into `slaves` of the device addressed by the current transfer.
     selected: Option<usize>,
+    /// I2CS_OAR.
+    s_oar: u32,
+    /// I2CS_CTRL.DA.
+    s_da: bool,
+    s_dr: u32,
+    s_imr: u32,
+    s_ris: u32,
+    /// I2CS_STAT. A cell because reading I2CS_DR clears RREQ and FBR.
+    s_stat: std::cell::Cell<u32>,
+    /// The own slave is addressed by the current loopback transfer.
+    s_addressed: bool,
+    /// The next byte the own slave receives is the first after its address.
+    s_first: bool,
+    /// A loopback master read waits for the slave to write I2CS_DR; the
+    /// value is whether the stalled command carried STOP.
+    stalled: Option<bool>,
     #[serde(skip)]
     slaves: Vec<Box<dyn I2cDevice>>,
 }
@@ -116,6 +188,15 @@ impl Cc2538I2cm {
             error: 0,
             holding: false,
             selected: None,
+            s_oar: 0,
+            s_da: false,
+            s_dr: 0,
+            s_imr: 0,
+            s_ris: 0,
+            s_stat: std::cell::Cell::new(0),
+            s_addressed: false,
+            s_first: false,
+            stalled: None,
             slaves: Vec::new(),
         }
     }
@@ -128,11 +209,29 @@ impl Cc2538I2cm {
     }
 
     fn irq_active(&self) -> bool {
-        self.ris & self.imr & 1 != 0
+        self.ris & self.imr & 1 != 0 || self.s_ris & self.s_imr != 0
+    }
+
+    fn loopback(&self) -> bool {
+        self.cr & CR_LPBK != 0
+    }
+
+    fn slave_active(&self) -> bool {
+        self.cr & CR_SFE != 0 && self.s_da
+    }
+
+    /// A START or STOP on the loopback bus, as the own slave sees it.
+    fn slave_condition(&mut self, int: u32) {
+        if self.loopback() && self.slave_active() {
+            self.s_ris |= int;
+        }
     }
 
     fn status(&self) -> u32 {
         let mut stat = self.error;
+        if self.stalled.is_some() {
+            stat |= STAT_BUSY;
+        }
         if self.holding {
             stat |= STAT_BUSBSY;
         } else {
@@ -150,6 +249,63 @@ impl Cc2538I2cm {
     fn release(&mut self) {
         self.deselect();
         self.holding = false;
+        self.s_addressed = false;
+        self.stalled = None;
+    }
+
+    /// The loopback address phase: only the own slave is on the bus.
+    fn address_own_slave(&mut self, address: u8) -> bool {
+        self.deselect();
+        self.slave_condition(S_INT_START);
+        self.s_addressed = self.loopback() && self.slave_active() && address as u32 == self.s_oar;
+        if self.s_addressed {
+            self.s_first = true;
+        } else {
+            self.error = STAT_ERROR | STAT_ADRACK;
+        }
+        self.s_addressed
+    }
+
+    /// One loopback data byte. Returns whether the master now waits for the
+    /// slave (a read stretches the clock until I2CS_DR is written).
+    fn data_own_slave(&mut self) -> bool {
+        if !self.s_addressed {
+            self.error = STAT_ERROR | STAT_DATACK;
+            return false;
+        }
+        let mut stat = self.s_stat.get();
+        self.s_ris |= S_INT_DATA;
+        if self.sa & 1 != 0 {
+            self.s_stat.set(stat | S_STAT_TREQ);
+            return true;
+        }
+        self.s_dr = self.dr;
+        stat |= S_STAT_RREQ;
+        if self.s_first {
+            stat |= S_STAT_FBR;
+        }
+        self.s_first = false;
+        self.s_stat.set(stat);
+        false
+    }
+
+    /// Bus-level end of a command: STOP if it carried one, then RIS.
+    fn complete(&mut self, stop: bool) {
+        if stop {
+            self.slave_condition(S_INT_STOP);
+            self.release();
+        }
+        self.ris = 1;
+    }
+
+    /// I2CS_DR write: the byte a stalled loopback read was waiting for.
+    fn slave_transmit(&mut self, value: u32) {
+        self.s_dr = value & 0xFF;
+        if let Some(stop) = self.stalled.take() {
+            self.dr = self.s_dr;
+            self.s_stat.set(self.s_stat.get() & !S_STAT_TREQ);
+            self.complete(stop);
+        }
     }
 
     /// START (or repeated START) and the address phase. Returns whether the
@@ -159,6 +315,9 @@ impl Cc2538I2cm {
     fn address(&mut self) -> bool {
         self.holding = true;
         let address = ((self.sa >> 1) & 0x7F) as u8;
+        if self.loopback() {
+            return self.address_own_slave(address);
+        }
         let found = self.slaves.iter().position(|d| d.claims_address(address));
         if self.selected != found {
             self.deselect();
@@ -177,17 +336,22 @@ impl Cc2538I2cm {
         }
     }
 
-    /// One data byte in the SA.RS direction.
-    fn data(&mut self) {
+    /// One data byte in the SA.RS direction. Returns whether the master now
+    /// waits for the loopback slave.
+    fn data(&mut self) -> bool {
+        if self.loopback() {
+            return self.data_own_slave();
+        }
         let Some(i) = self.selected else {
             self.error = STAT_ERROR | STAT_DATACK;
-            return;
+            return false;
         };
         if self.sa & 1 != 0 {
             self.dr = self.slaves[i].read() as u32;
         } else {
             self.slaves[i].write(self.dr as u8);
         }
+        false
     }
 
     /// ACK is not read: it only shapes the acknowledge the master returns on
@@ -198,17 +362,20 @@ impl Cc2538I2cm {
         let stop = ctrl & CTRL_STOP != 0;
         // Without MFE, without RUN or STOP, or from idle without START, the
         // write is not a command of the master state machine.
-        if self.cr & CR_MFE == 0 || !(run || stop) || (!self.holding && !start) {
+        // A stalled loopback read is still in progress: the master is busy.
+        if self.cr & CR_MFE == 0
+            || self.stalled.is_some()
+            || !(run || stop)
+            || (!self.holding && !start)
+        {
             return;
         }
         self.error = 0;
-        if run && (!start || self.address()) {
-            self.data();
+        if run && (!start || self.address()) && self.data() {
+            self.stalled = Some(stop);
+            return;
         }
-        if stop {
-            self.release();
-        }
-        self.ris = 1;
+        self.complete(stop);
     }
 
     fn read_reg(&self, reg: u64) -> u32 {
@@ -221,6 +388,16 @@ impl Cc2538I2cm {
             RIS => self.ris,
             MIS => self.ris & self.imr,
             CR => self.cr,
+            S_OAR => self.s_oar,
+            S_CTRL_STAT => self.s_stat.get(),
+            S_DR => {
+                self.s_stat
+                    .set(self.s_stat.get() & !(S_STAT_RREQ | S_STAT_FBR));
+                self.s_dr
+            }
+            S_IMR => self.s_imr,
+            S_RIS => self.s_ris,
+            S_MIS => self.s_ris & self.s_imr,
             _ => 0,
         }
     }
@@ -240,6 +417,11 @@ impl Cc2538I2cm {
                     self.error = 0;
                 }
             }
+            S_OAR => self.s_oar = value & 0x7F,
+            S_CTRL_STAT => self.s_da = value & 1 != 0,
+            S_DR => self.slave_transmit(value),
+            S_IMR => self.s_imr = value & S_INT_MASK,
+            S_ICR => self.s_ris &= !(value & S_INT_MASK),
             _ => {}
         }
     }
@@ -495,6 +677,128 @@ mod tests {
         i.write_reg(CR, 0);
         assert_eq!(i.read_reg(CTRL_STAT), STAT_IDLE);
         assert_eq!(events.lock().unwrap().last().unwrap(), "stop");
+    }
+
+    /// LPBK | MFE | SFE, own slave at 0x3C with DA set, the external TMP102-
+    /// style device still attached at 0x48.
+    fn looped() -> (Cc2538I2cm, Arc<Mutex<Vec<String>>>) {
+        let (mut i, events) = with_device();
+        i.write_reg(CR, CR_LPBK | CR_MFE | CR_SFE);
+        i.write_reg(S_OAR, 0x3C);
+        i.write_reg(S_CTRL_STAT, 1);
+        (i, events)
+    }
+
+    #[test]
+    fn slave_registers_reset_to_zero_and_keep_field_bits() {
+        let mut i = Cc2538I2cm::new();
+        for off in [S_OAR, S_CTRL_STAT, S_DR, S_IMR, S_RIS, S_MIS] {
+            assert_eq!(i.read_reg(off), 0, "reset @ {off:#x}");
+        }
+        i.write_reg(S_OAR, 0xFF);
+        i.write_reg(S_DR, 0x1FF);
+        i.write_reg(S_IMR, 0xFF);
+        assert_eq!(i.read_reg(S_OAR), 0x7F);
+        assert_eq!(i.read_reg(S_DR), 0xFF);
+        assert_eq!(i.read_reg(S_IMR), 0x7);
+        // CTRL.DA is write-only; STAT stays clear without a transfer.
+        i.write_reg(S_CTRL_STAT, 1);
+        assert_eq!(i.read_reg(S_CTRL_STAT), 0);
+        // The reserved gap between the two register files.
+        i.write_reg(0x400, 0xFFFF_FFFF);
+        assert_eq!(i.read_reg(0x400), 0);
+    }
+
+    #[test]
+    fn loopback_master_write_reaches_own_slave() {
+        let (mut i, events) = looped();
+        i.write_reg(SA, 0x3C << 1);
+        i.write_reg(DR, 0x5A);
+        i.write_reg(CTRL_STAT, 0x03); // BURST_SEND_START
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_BUSBSY);
+        assert_eq!(i.read_reg(S_CTRL_STAT), S_STAT_RREQ | S_STAT_FBR);
+        assert_eq!(i.read_reg(S_RIS), S_INT_START | S_INT_DATA);
+        assert_eq!(i.read_reg(S_DR), 0x5A);
+        assert_eq!(i.read_reg(S_CTRL_STAT), 0, "DR read clears RREQ/FBR");
+
+        i.write_reg(DR, 0xC3);
+        i.write_reg(CTRL_STAT, 0x05); // BURST_SEND_FINISH
+        assert_eq!(i.read_reg(S_CTRL_STAT), S_STAT_RREQ, "no FBR on byte 2");
+        assert_eq!(i.read_reg(S_DR), 0xC3);
+        assert_eq!(i.read_reg(S_RIS), S_INT_STOP | S_INT_START | S_INT_DATA);
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_IDLE);
+        assert_eq!(i.read_reg(RIS), 1);
+        // The external device is not on the loopback bus.
+        assert!(events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn loopback_master_read_stalls_until_slave_writes_dr() {
+        let (mut i, _) = looped();
+        i.write_reg(SA, (0x3C << 1) | 1);
+        i.write_reg(CTRL_STAT, 0x07); // SINGLE_RECEIVE
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_BUSBSY | STAT_BUSY);
+        assert_eq!(i.read_reg(S_CTRL_STAT), S_STAT_TREQ);
+        assert_eq!(i.read_reg(RIS), 0);
+        // A command while stalled is ignored.
+        i.write_reg(CTRL_STAT, 0x04);
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_BUSBSY | STAT_BUSY);
+
+        i.write_reg(S_DR, 0xA7);
+        assert_eq!(i.read_reg(S_CTRL_STAT), 0);
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_IDLE);
+        assert_eq!(i.read_reg(DR), 0xA7);
+        assert_eq!(i.read_reg(RIS), 1);
+        assert_eq!(i.read_reg(S_RIS), S_INT_STOP | S_INT_START | S_INT_DATA);
+    }
+
+    #[test]
+    fn loopback_wrong_address_or_inactive_slave_is_not_acknowledged() {
+        let (mut i, _) = looped();
+        i.write_reg(SA, 0x48 << 1); // the external device's address
+        i.write_reg(CTRL_STAT, 0x07);
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_IDLE | STAT_ADRACK | STAT_ERROR);
+        assert_eq!(i.read_reg(S_RIS), S_INT_START | S_INT_STOP);
+
+        i.write_reg(S_ICR, 0x7);
+        i.write_reg(S_CTRL_STAT, 0); // DA off
+        i.write_reg(SA, 0x3C << 1);
+        i.write_reg(CTRL_STAT, 0x07);
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_IDLE | STAT_ADRACK | STAT_ERROR);
+        assert_eq!(i.read_reg(S_RIS), 0, "an inactive slave sees no conditions");
+    }
+
+    #[test]
+    fn without_lpbk_the_own_slave_is_not_on_the_bus() {
+        let (mut i, events) = with_device();
+        i.write_reg(CR, CR_MFE | CR_SFE);
+        i.write_reg(S_OAR, 0x3C);
+        i.write_reg(S_CTRL_STAT, 1);
+        i.write_reg(SA, 0x3C << 1);
+        i.write_reg(CTRL_STAT, 0x07);
+        assert_eq!(i.read_reg(CTRL_STAT), STAT_IDLE | STAT_ADRACK | STAT_ERROR);
+        assert_eq!(i.read_reg(S_RIS), 0);
+        i.write_reg(SA, 0x48 << 1);
+        i.write_reg(CTRL_STAT, 0x07);
+        assert_eq!(*events.lock().unwrap(), vec!["start", "w00", "stop"]);
+    }
+
+    #[test]
+    fn slave_interrupts_share_the_line_and_clear_by_icr() {
+        let (mut i, _) = looped();
+        i.write_reg(SA, 0x3C << 1);
+        i.write_reg(CTRL_STAT, 0x07);
+        assert!(!i.irq_active());
+        i.write_reg(S_IMR, S_INT_DATA);
+        assert_eq!(i.read_reg(S_MIS), S_INT_DATA);
+        assert!(i.irq_active());
+        i.write_reg(S_ICR, S_INT_DATA);
+        assert_eq!(i.read_reg(S_RIS), S_INT_START | S_INT_STOP);
+        assert!(!i.irq_active());
+        i.write_reg(S_IMR, S_INT_STOP);
+        assert!(i.irq_active());
+        i.write_reg(S_ICR, 0x7);
+        assert!(!i.irq_active());
     }
 
     #[test]

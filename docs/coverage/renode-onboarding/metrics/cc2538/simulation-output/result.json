@@ -55,6 +55,7 @@
           "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
           "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
           "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
+          "i2cs rx stat=05 dr=5a after=00 mis=01 irq8=1 ris=07 tx stat=02 busy=1 m_dr=c3 m_stat=20",
           "pka_sram words=512 bad=0 last=751ef9b8",
           "gpt0 to=3 nvic19=1 held=1",
           "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok",
@@ -74,24 +75,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      79204,
+      79460,
       1073741824,
       24,
       111,
       108,
       1073791000,
       103,
-      536903568,
+      536903552,
       101,
+      32,
+      32,
       61,
-      32,
-      32,
       1074638856,
-      536903568,
-      2122993,
-      2124544
+      536903552,
+      2128249,
+      2129800
     ],
-    "pc": 2124544,
+    "pc": 2129800,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -104,7 +105,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "eefd097d66909a2cd8bb216faea6d4f469d02ff0876aad3e305a575c8fc26977",
+  "firmware_hash": "a86971cbc41455deedd3967c1c63c7ec9133bbfe06fee80b2e9a918c8381e577",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",
@@ -221,13 +222,6 @@
         "name": "i2cm",
         "kind": "native",
         "base": 1073872896,
-        "registers": [],
-        "artifacts": []
-      },
-      {
-        "name": "i2cs",
-        "kind": "native",
-        "base": 1073874944,
         "registers": [],
         "artifacts": []
       },
@@ -493,6 +487,12 @@
         "end_cycle": 10000
       },
       {
+        "text": "i2cs rx stat=05 dr=5a after=00 mis=01 irq8=1 ris=07 tx stat=02 busy=1 m_dr=c3 m_stat=20",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "pka_sram words=512 bad=0 last=751ef9b8",
         "cycle_lo": 10000,
         "cycle": 20000,
@@ -500,12 +500,12 @@
       },
       {
         "text": "gpt0 to=3 nvic19=1 held=1",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
       },
       {
-        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16004",
+        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16002",
         "cycle_lo": 30000,
         "cycle": 40000,
         "end_cycle": 40000
@@ -557,14 +557,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 29388,
+    "text_bytes": 34644,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 29388,
+    "flash_used_bytes": 34644,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 5.61,
+    "flash_used_pct": 6.61,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -574,15 +574,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 32768,
-    "main_stack_high_water_bytes": 140,
-    "main_stack_free_min_bytes": 32628,
+    "main_stack_high_water_bytes": 156,
+    "main_stack_free_min_bytes": 32612,
     "main_stack_base": 536870912,
     "main_stack_top": 536903680,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 32768,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 32628,
+    "heap_free_min_bytes": 32612,
     "heap_base": 536870912,
     "heap_top": 536903680
   },
@@ -590,38 +590,38 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 7149,
-    "memory_writes": 2336,
-    "peripheral_accesses": 8971,
+    "memory_reads": 7960,
+    "memory_writes": 2354,
+    "peripheral_accesses": 9181,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2124544,
+        "pc": 2129800,
         "count": 5196,
         "symbol": "firmware_cc2538dk_smoke::spin"
       },
       {
-        "pc": 2124542,
+        "pc": 2129798,
         "count": 5156,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 2124546,
+        "pc": 2129802,
         "count": 5156,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 2118378,
+        "pc": 2123618,
         "count": 39,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_cc2538dk_smoke::pka_sram_selftest"
       },
       {
-        "pc": 2121038,
+        "pc": 2125328,
         "count": 39,
         "symbol": "firmware_cc2538dk_smoke::wait_set"
       },
       {
-        "pc": 2121104,
+        "pc": 2126352,
         "count": 39,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }

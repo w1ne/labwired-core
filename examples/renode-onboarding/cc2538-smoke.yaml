@@ -3,7 +3,7 @@
 # register readback (reset values and field masks), CCTEST/ANA_REGS
 # register readback, SOC_ADC internal-channel
 # conversions with the IRQ 14 pend, the RNG LFSR/CRC16 and the comparator, and an
-# SSI0 loopback self-test, an I2CM/TMP102 read, a PKA SRAM fill/readback and
+# SSI0 loopback self-test, an I2CM/TMP102 read, an I2CM->I2CS loopback, a PKA SRAM fill/readback and
 # GPTimer0/1 time-out, match, one-shot and prescaler checks.
 schema_version: "1.0"
 inputs:
@@ -32,6 +32,7 @@ assertions:
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
       - "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0"
+      - "i2cs rx stat=05 dr=5a after=00 mis=01 irq8=1 ris=07 tx stat=02 busy=1 m_dr=c3 m_stat=20"
       - "pka_sram words=512 bad=0 last=751ef9b8"
       - "gpt0 to=3 nvic19=1 held=1"
       - "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok"
