@@ -41,6 +41,23 @@
  * The zero-answering window this replaced reads STATUS 0x00, which on this
  * controller is the bus-error code, and never sets SI.
  *
+ * Then MSS SPI1 (mss_spi_regs.h; the MSS_SPI_transfer_frame sequence) sends
+ * one 8-bit frame, 0x9F, to slave 0 with FRAMECNT 1 and INTTXDATA enabled;
+ * nothing is attached on the imported board, so MISO reads 0:
+ *
+ *   STATUS after RXDATARCVD             -> 0x483 (TXDATASENT, RXDATARCVD,
+ *                                          one RX frame, TX FIFO empty, SS
+ *                                          pin low)
+ *   INTRAW                              -> 0x3 (TXDONE, RXDONE); PLIC
+ *                                          source 55 pending via INTTXDATA
+ *   RX_DATA                             -> 0, then STATUS 0x441
+ *   INT_CLEAR 0x3                       -> INTRAW 0
+ *   SLAVE_SELECT 0                      -> STATUS 0x2441 at the final
+ *                                          memory assertion
+ *
+ * The zero-answering window this replaced never reports RXDATARCVD, so the
+ * poll times out and the line reads all zeros.
+ *
  * Build (GNU binutils, riscv64-unknown-elf):
  *   as -march=rv64imac_zicsr -mabi=lp64 -o mpfs-gpio-smoke.o \
  *       examples/renode-onboarding/mpfs-gpio-smoke.S
@@ -62,6 +79,20 @@
 .equ I2C_STA, 1 << 5
 .equ I2C_ENS1, 1 << 6
 .equ PLIC_PRIO58, 4 * 58
+
+.equ SPI1, 0x20109000
+.equ SPI_CONTROL, 0x00
+.equ SPI_FRAMESIZE, 0x04
+.equ SPI_STATUS, 0x08
+.equ SPI_INT_CLEAR, 0x0C
+.equ SPI_RX_DATA, 0x10
+.equ SPI_TX_DATA, 0x14
+.equ SPI_SLAVE_SELECT, 0x1C
+.equ SPI_INTRAW, 0x24
+.equ SPI_RXDATARCVD, 1 << 1
+/* ENABLE | MASTER | INTTXDATA | FRAMECNT 1; RESET (bit 31) clear */
+.equ SPI_CTRL_RUN, 1 | (1 << 1) | (1 << 5) | (1 << 8)
+.equ PLIC_PRIO55, 4 * 55
 
 .equ PLIC_PRIO51, 4 * 51
 .equ PLIC_PENDING1, 0x1004
@@ -245,6 +276,69 @@ _start:
     jal ra, puthex
     la a0, newline
     jal ra, puts
+
+    /* --- MSS SPI1: one 8-bit frame to slave 0, FRAMECNT 1 --- */
+    li s9, PLIC
+    li t0, 1
+    sw t0, PLIC_PRIO55(s9)
+    li s11, SPI1
+    li t0, 1 << 1          /* MASTER, out of reset, disabled */
+    sw t0, SPI_CONTROL(s11)
+    li t0, 8
+    sw t0, SPI_FRAMESIZE(s11)
+    li t0, SPI_CTRL_RUN
+    sw t0, SPI_CONTROL(s11)
+    li t0, 1
+    sw t0, SPI_SLAVE_SELECT(s11)
+    li t0, 0x9F
+    sw t0, SPI_TX_DATA(s11)
+    li t1, 1000
+6:
+    lw t0, SPI_STATUS(s11)
+    andi t0, t0, SPI_RXDATARCVD
+    bnez t0, 7f
+    addi t1, t1, -1
+    bnez t1, 6b
+7:
+    lw s3, SPI_STATUS(s11)
+    lw s4, SPI_INTRAW(s11)
+    li t5, PLIC + PLIC_PAGE1
+    lw s5, PLIC_PENDING1 - PLIC_PAGE1(t5)
+    srli s5, s5, 55 - 32
+    andi s5, s5, 1
+    lw s7, SPI_RX_DATA(s11)
+    lw s8, SPI_STATUS(s11)
+    li t0, 3
+    sw t0, SPI_INT_CLEAR(s11)
+    lw s10, SPI_INTRAW(s11)
+    sw zero, SPI_SLAVE_SELECT(s11)
+
+    la a0, label_spi
+    jal ra, puts
+    mv a0, s3
+    jal ra, puthex
+    la a0, label_raw
+    jal ra, puts
+    mv a0, s4
+    jal ra, puthex
+    la a0, label_irq55
+    jal ra, puts
+    mv a0, s5
+    jal ra, puthex
+    la a0, label_rx
+    jal ra, puts
+    mv a0, s7
+    jal ra, puthex
+    la a0, label_after
+    jal ra, puts
+    mv a0, s8
+    jal ra, puthex
+    la a0, label_clear
+    jal ra, puts
+    mv a0, s10
+    jal ra, puthex
+    la a0, newline
+    jal ra, puts
 1:
     wfi
     j 1b
@@ -327,3 +421,9 @@ label_irq:    .asciz " irq58="
 label_sla:    .asciz " sla_w="
 label_stop:   .asciz " stop="
 label_ctrl:   .asciz " ctrl="
+label_spi:    .asciz "spi1 status="
+label_raw:    .asciz " raw="
+label_irq55:  .asciz " irq55="
+label_rx:     .asciz " rx="
+label_after:  .asciz " after="
+label_clear:  .asciz " cleared="

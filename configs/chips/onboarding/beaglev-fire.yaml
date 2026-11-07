@@ -5,9 +5,9 @@
 # engine's RV64IMAC subset, one hart, an 8 MiB DDR aperture, L2 LIM, the two
 # model-backed MMUARTs used by the direct smoke, and the model-backed
 # MSS GPIO_0..2 banks, whose lines reach the in-core PLIC, and the
-# master-mode MSS I2C0/1 controllers (PLIC 58/61; `mpfs_i2c`, no slave mode).
-# SPI1 startup accesses use an explicit zero-answering stub; it does not
-# model that peripheral. The E51, other
+# master-mode MSS I2C0/1 controllers (PLIC 58/61; `mpfs_i2c`, no slave mode)
+# and SPI1 controller (PLIC 55; `mpfs_spi`, no slave mode or TX FIFO).
+# The E51, other
 # U54 harts, FPGA fabric, and remaining MSS peripherals are outside this profile.
 name: "beaglev-fire"
 arch: "riscv"
@@ -60,9 +60,10 @@ peripherals:
     size: "4KB"
     irq: 61
   - id: "spi1"
-    type: "stub"
+    type: "mpfs_spi"
     base_address: 0x20109000
     size: "4KB"
+    irq: 55
   - id: "mmuart0"
     type: "uart"
     base_address: 0x20000000

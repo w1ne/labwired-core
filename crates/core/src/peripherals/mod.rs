@@ -85,6 +85,7 @@ pub mod lptim;
 pub mod mcg;
 pub mod miv;
 pub mod mpfs_i2c;
+pub mod mpfs_spi;
 pub mod noise;
 pub mod nrf52;
 pub mod nrf54l;
