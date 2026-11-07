@@ -39,6 +39,12 @@ const DIODE_PIN: u8 = 1;
 /// `gpio` type is keyed by its layout, as `gpio/<config.profile>`.
 const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
     ("stm32f1gpioport", 0x08, "RM0008 §9.2.3 GPIOx_IDR"),
+    // STM32W108 (EM357) GPIO_PxIN sits at the F1 IDR offset.
+    (
+        "gpio/stm32f1",
+        0x08,
+        "RM0008 §9.2.3 GPIOx_IDR; RM0298 GPIO_PxIN (em357 regs.h GPIO_PAIN)",
+    ),
     ("gpio/stm32v2", 0x10, "RM0368 §8.4.5 GPIOx_IDR"),
     ("gpio/kinetis", 0x10, "S32K1xx RM rev 14 §12.3 GPIOx_PDIR"),
     ("gpio/sam_port", 0x20, "SAM D5x/E5x DS60001507 §32.7 IN"),
@@ -126,13 +132,13 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
 ];
 
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 171;
+const COVERED: usize = 172;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 69;
+const SILICON_REGISTER: usize = 70;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 74;
+const NO_ANALOG_ENDPOINT: usize = 73;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()

@@ -21,3 +21,39 @@ peripherals:
   type: stm32_timer
   bus: sysbus
   base_address: 1073803264
+# GPIO ports A-C. Renode's stm32w108 platform declares only the two timers, so
+# the import carried no GPIO. The STM32W108 (an Ember EM357 core) puts each
+# 8-pin port at 0x4000B000 + 0x400 * n with GPIO_PxCFGL @0x00, GPIO_PxCFGH
+# @0x04, GPIO_PxIN @0x08, GPIO_PxOUT @0x0C, GPIO_PxSET @0x10 and GPIO_PxCLR
+# @0x14 (RM0298 GPIO register map; Ember em357 regs.h GPIO_PAIN 0x4000B008,
+# GPIO_PBIN 0x4000B408, GPIO_PCIN 0x4000B808). Those are the STM32F1 offsets
+# (CRL/CRH/IDR/ODR/BSRR/BRR, RM0008 §9.2), with the same 4-bit pin-config
+# encoding: 0x4 floating input (the reset value), 0x8 input with pull chosen by
+# PxOUT, MODE bits [1:0] non-zero for every output mode. So the ports run on
+# `profile: stm32f1`. Not modelled: PxCFGL holds pins 0-3 only and PxCFGH pins
+# 4-7, where the F1 model gives CRL to pins 0-7 and CRH to pins 8-15, so a
+# direction or pull written for pins 4-7 lands on the wrong pins (pins 0-3 and
+# every read of PxIN are right); ports are 8 pins wide but the model answers 16;
+# the model also answers LCKR @0x18, which the W108 does not have. The wake and
+# interrupt registers at 0x4000BC00 are not declared.
+- id: gpioa
+  type: gpio
+  bus: sysbus
+  base_address: 0x4000B000
+  size: 1KB
+  config:
+    profile: stm32f1
+- id: gpiob
+  type: gpio
+  bus: sysbus
+  base_address: 0x4000B400
+  size: 1KB
+  config:
+    profile: stm32f1
+- id: gpioc
+  type: gpio
+  bus: sysbus
+  base_address: 0x4000B800
+  size: 1KB
+  config:
+    profile: stm32f1
