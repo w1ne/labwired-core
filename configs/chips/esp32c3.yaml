@@ -248,6 +248,9 @@ peripherals:
     base_address: 0x6002B000
     size: "4KB"
     irq: 25
+    config:
+      # Register names for the debugger / twin; the model owns behaviour.
+      debug_schema: "../peripherals/esp32c3/twai0.yaml"
   # I2S
   - id: "i2s0"
     type: "declarative"

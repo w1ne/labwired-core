@@ -2685,7 +2685,7 @@ boards:
     # 0x0008FE10, a floating bus), so there is no silicon TWAI reset value to
     # pin yet. A TWAI capture needs SYSTEM_PERIP_CLK_EN0.TWAI_CLK_EN set and
     # TWAI_RST cleared first. This is an ACK, NOT A CAPTURE.
-    drift_ack_digest: 8f321c93c4cfcd9b3b28053a722e543b47a5dbf1465b288da5e9c484c32bc352
+    drift_ack_digest: 7095007318743bf97d59b87aa4622d28ed9edc82d363b7c2d259154ced82a501
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
