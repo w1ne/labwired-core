@@ -148,6 +148,14 @@ chips:
     shim: []
 
   # ── Chips with NO tier1 fixture (not in the rubric grid) ─────────────────
+  - id: ch32v003f4p6
+    arch: riscv32ec
+    headline: "No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. This is local simulator evidence, not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: nrf5340
     arch: cortex-m33
     headline: "No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs."
