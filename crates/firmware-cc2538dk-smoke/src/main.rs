@@ -387,6 +387,103 @@ fn i2cm_selftest() {
     }
 }
 
+// ── SOC_ADC (SWRU319C Tables 15-1, 16-1, 17-1, base 0x400D_7000) ──────────
+const SOC_ADC: u32 = 0x400D_7000;
+const ADC_ADCCON1: u32 = SOC_ADC;
+const ADC_ADCCON3: u32 = SOC_ADC + 0x08;
+const ADC_ADCL: u32 = SOC_ADC + 0x0C;
+const ADC_ADCH: u32 = SOC_ADC + 0x10;
+const ADC_RNDL: u32 = SOC_ADC + 0x14;
+const ADC_RNDH: u32 = SOC_ADC + 0x18;
+const ADC_CMPCTL: u32 = SOC_ADC + 0x24;
+const ADCCON1_EOC: u32 = 1 << 7;
+/// ADCCON1: STSEL = 11 (reset), RCTRL = 01 (clock the LFSR once).
+const ADCCON1_RNG_CLOCK: u32 = 0x30 | 0x04;
+/// ADCCONx: internal reference, decimation 512 (12 bits).
+const ADC_REF_INT_DIV_512: u32 = 0x30;
+const ADC_CH_GND: u32 = 0xC;
+const ADC_CH_TEMP: u32 = 0xE;
+const ADC_CH_VDD_3: u32 = 0xF;
+const CMPCTL_EN: u32 = 1 << 1;
+/// Table 5-2: ADC interrupt.
+const IRQ_ADC: u32 = 14;
+
+/// Contiki-NG `adc_get`: write ADCCON3, poll EOC, read ADCL then ADCH (which
+/// clears EOC). Returns the MSB-aligned 16-bit result.
+fn adc_single(control: u32) -> u32 {
+    wr(ADC_ADCCON3, control);
+    while rd(ADC_ADCCON1) & ADCCON1_EOC == 0 {}
+    let lo = rd(ADC_ADCL) & 0xFC;
+    (rd(ADC_ADCH) << 8) | lo
+}
+
+fn rng_value() -> u32 {
+    (rd(ADC_RNDH) << 8) | rd(ADC_RNDL)
+}
+
+/// SOC_ADC: single conversions of the internal channels (VDD/3, temperature
+/// sensor, GND) against the 1.19 V internal reference, EOC cleared by the ADCH
+/// read, the IRQ 14 pend; the RNG LFSR seeded 0x1234 and clocked once, a
+/// CRC16 of "123456789" through RNDH; the comparator reset/enabled outputs.
+fn soc_adc_selftest() {
+    let con1 = rd(ADC_ADCCON1);
+    wr(NVIC_ICPR0, 1 << IRQ_ADC);
+    let vdd3 = adc_single(ADC_REF_INT_DIV_512 | ADC_CH_VDD_3);
+    let irq14 = (rd(NVIC_ISPR0) >> IRQ_ADC) & 1;
+    wr(NVIC_ICPR0, 1 << IRQ_ADC);
+    let eoc = (rd(ADC_ADCCON1) & ADCCON1_EOC) >> 7;
+    let temp = adc_single(ADC_REF_INT_DIV_512 | ADC_CH_TEMP);
+    let gnd = adc_single(ADC_REF_INT_DIV_512 | ADC_CH_GND);
+    wr(NVIC_ICPR0, 1 << IRQ_ADC);
+    puts(b"adc con1=");
+    put_hex8(con1);
+    puts(b" vdd3=");
+    put_hex16(vdd3);
+    puts(b" temp=");
+    put_hex16(temp);
+    puts(b" gnd=");
+    put_hex16(gnd);
+    puts(b" eoc=");
+    put_dec32(eoc);
+    puts(b" irq14=");
+    put_dec32(irq14);
+    putc(b'\n');
+
+    let reset = rng_value();
+    wr(ADC_RNDL, 0x12);
+    wr(ADC_RNDL, 0x34);
+    let seeded = rng_value();
+    wr(ADC_ADCCON1, ADCCON1_RNG_CLOCK);
+    let clocked = rng_value();
+    let rctrl = (rd(ADC_ADCCON1) >> 2) & 0x3;
+    wr(ADC_RNDL, 0);
+    wr(ADC_RNDL, 0);
+    for byte in b"123456789" {
+        wr(ADC_RNDH, *byte as u32);
+    }
+    puts(b"rng reset=");
+    put_hex16(reset);
+    puts(b" seed=");
+    put_hex16(seeded);
+    puts(b" clock=");
+    put_hex16(clocked);
+    puts(b" rctrl=");
+    put_dec32(rctrl);
+    puts(b" crc=");
+    put_hex16(rng_value());
+    putc(b'\n');
+
+    let cmp_off = rd(ADC_CMPCTL);
+    wr(ADC_CMPCTL, CMPCTL_EN);
+    let cmp_on = rd(ADC_CMPCTL);
+    wr(ADC_CMPCTL, 0);
+    puts(b"cmp off=");
+    put_hex8(cmp_off);
+    puts(b" on=");
+    put_hex8(cmp_on);
+    putc(b'\n');
+}
+
 // ── PKA SRAM (SWRU319C Table 4-1: 0x4400_6000-0x4400_67FF) ────────────────
 const PKA_SRAM: u32 = 0x4400_6000;
 const PKA_SRAM_WORDS: u32 = 2048 / 4;
@@ -634,6 +731,7 @@ fn main() -> ! {
     putc(b'\n');
 
     ioc_selftest();
+    soc_adc_selftest();
     ssi0_selftest();
     i2cm_selftest();
     pka_sram_selftest();

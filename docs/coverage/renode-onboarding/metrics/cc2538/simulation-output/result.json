@@ -48,6 +48,9 @@
           "led=orange off pin=0 leds=00",
           "keys select=1 left=1 right=1 up=1 down=1",
           "ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00",
+          "adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1",
+          "rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8",
+          "cmp off=01 on=02",
           "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
           "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
           "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
@@ -70,7 +73,7 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      78709,
+      78990,
       24,
       32,
       101,
@@ -84,10 +87,10 @@
       61,
       1074638856,
       536903632,
-      2117471,
-      2119022
+      2121855,
+      2123408
     ],
-    "pc": 2119022,
+    "pc": 2123408,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -100,7 +103,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "7b7d38f2164af8903e8329499b5809888c018793461659db5c8c42b237a0859e",
+  "firmware_hash": "71d30c65746a2969ff4930faac5eb6d9c2d47dc67eb5e4a102b934047e5fa5ef",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",
@@ -447,6 +450,24 @@
         "end_cycle": 10000
       },
       {
+        "text": "adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cmp off=01 on=02",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -477,7 +498,7 @@
         "end_cycle": 20000
       },
       {
-        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16007",
+        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 15995",
         "cycle_lo": 30000,
         "cycle": 40000,
         "end_cycle": 40000
@@ -529,14 +550,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 23832,
+    "text_bytes": 28216,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 23832,
+    "flash_used_bytes": 28216,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 4.55,
+    "flash_used_pct": 5.38,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -562,38 +583,38 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 5744,
-    "memory_writes": 2298,
-    "peripheral_accesses": 8497,
+    "memory_reads": 6745,
+    "memory_writes": 2317,
+    "peripheral_accesses": 8790,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2119022,
+        "pc": 2123408,
         "count": 5196,
-        "symbol": "firmware_cc2538dk_smoke::spin"
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 2119020,
+        "pc": 2123404,
         "count": 5156,
         "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 2119024,
+        "pc": 2123406,
         "count": 5156,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "symbol": "firmware_cc2538dk_smoke::spin"
       },
       {
-        "pc": 2112804,
+        "pc": 2117154,
         "count": 39,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_cc2538dk_smoke::pka_sram_selftest"
       },
       {
-        "pc": 2115500,
+        "pc": 2119820,
         "count": 39,
         "symbol": "firmware_cc2538dk_smoke::wait_set"
       },
       {
-        "pc": 2115586,
+        "pc": 2119906,
         "count": 39,
         "symbol": "firmware_cc2538dk_smoke::wait_set"
       }

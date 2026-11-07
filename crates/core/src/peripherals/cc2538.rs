@@ -4,7 +4,8 @@
 
 //! TI CC2538 peripherals: the PL061-style GPIO port and the SYS_CTRL block.
 //! The RF core, the sleep timer, the flash controller and the IOC register
-//! file live in [`rfcore`], [`sleep_timer`], [`flash_ctrl`] and [`ioc`].
+//! file live in [`rfcore`], [`sleep_timer`], [`flash_ctrl`] and [`ioc`]; the
+//! ADC / RNG / comparator block in [`soc_adc`].
 //!
 //! Source: *CC2538 System-on-Chip Solution for 2.4-GHz IEEE 802.15.4 and
 //! ZigBee/ZigBee IP Applications, User's Guide* (SWRU319C, April 2012, revised
@@ -290,6 +291,7 @@ pub mod i2cm;
 pub mod ioc;
 pub mod rfcore;
 pub mod sleep_timer;
+pub mod soc_adc;
 pub mod ssi;
 pub mod udma;
 

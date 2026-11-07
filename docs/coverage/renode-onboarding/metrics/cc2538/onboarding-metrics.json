@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/cc2538-smoke.yaml",
   "system": "configs/systems/onboarding/cc2538.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-07T19:48:50Z",
-  "finished_at_utc": "2026-11-07T19:50:47Z",
-  "elapsed_seconds": 117,
-  "elapsed_ms": 116720,
+  "started_at_utc": "2026-11-07T21:09:09Z",
+  "finished_at_utc": "2026-11-07T21:17:08Z",
+  "elapsed_seconds": 480,
+  "elapsed_ms": 479341,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 109.971,
-    "build_firmware": 5.304,
-    "run_smoke": 1.434
+    "build_cli": 477.02,
+    "build_firmware": 0.306,
+    "run_smoke": 1.99
   },
   "stages_ms": {
-    "build_cli": 109971,
-    "build_firmware": 5304,
-    "run_smoke": 1434
+    "build_cli": 477020,
+    "build_firmware": 306,
+    "run_smoke": 1990
   }
 }

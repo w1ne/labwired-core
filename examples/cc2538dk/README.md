@@ -8,8 +8,8 @@ booting through a clean-room boot ROM with the RF core and sleep timer
 modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
 cryptoprocessor (the Contiki-NG crypto suite), and a **three-node Contiki-NG
 RPL-UDP network** on a shared 802.15.4 air (RF core RX/TX, AUTOACK, µDMA).
-SSI0/1, GPTimer0-3 and the I2C master are modelled; PKA, the I2C slave,
-USB and the SoC ADC remain stubs. The onboarding smoke attaches a virtual
+SSI0/1, GPTimer0-3, the I2C master and SOC_ADC (ADC, RNG, comparator) are
+modelled; PKA, the I2C slave and USB remain stubs. The onboarding smoke attaches a virtual
 TMP102 as an explicit I2C test fixture; it is not fitted to the CC2538DK.
 
 ## What runs here
@@ -196,6 +196,9 @@ hb=0 yellow=1 green=0 orange=0
   attached `external_devices`, NACK status and completion IRQ are modelled.
   Transfer timing, TPR clocking, clock stretching, arbitration, loopback and
   the I2CS slave are not modelled.
-- **PKA, USB and SoC ADC** are declared stubs.
+- **SOC_ADC** conversions complete inside the ADCCON3/ADCCON1 write; the
+  temperature channel is a fixed 25 °C level. STSEL free-run/timer starts,
+  IOC channel skipping and ADC DMA are not modelled.
+- **PKA, USB, I2CS, ANA_REGS and CCTEST** are declared stubs.
 
 See `VALIDATION.md` for the tier table.

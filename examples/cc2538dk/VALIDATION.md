@@ -77,20 +77,30 @@ ELFs are not run. No wider Renode parity claim is made.
 | I2CM transfer timing, TPR clock division, clock stretching, multi-master arbitration, loopback; I2CS slave mode | **not modelled** | `crates/core/src/peripherals/cc2538/i2cm.rs`; I2CS remains a separate stub |
 | PKA SRAM (`0x4400_6000`, 2 KiB): all 512 words written and read back | smoke-exercised | `memory_regions` entry `pka_sram` in `configs/chips/cc2538sf53.yaml`; imported-system onboarding smoke line `pka_sram words=512 bad=0 last=751ef9b8` |
 | Negative control (PKA SRAM) | fail | `pka_sram` back to a `type: stub` peripheral → `pka_sram words=512 bad=512 last=00000000`, FAIL 2/3 |
-| PKA engine (modular arithmetic, ECC), USB, SoC ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| SOC_ADC: ADCCON3 single conversion of VDD/3, temperature sensor and GND against the 1.19 V internal reference, EOC cleared by the ADCH read, NVIC pending IRQ 14; RNG reset 0xFFFF, RNDL seed, RCTRL=01 clock-once (13 shifts, x^16+x^15+x^2+1) and RNDH CRC16 of "123456789" = 0xFEE8; comparator reset/enabled outputs | 9 unit tests defined; smoke-exercised | `crates/core/src/peripherals/cc2538/soc_adc.rs` tests; smoke lines `adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1`, `rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8`, `cmp off=01 on=02` |
+| SOC_ADC conversion time, STSEL 01/10 sequence starts, IOC_Pxx_SEL channel skipping, ADC DMA triggers, temperature variation, CSP-clocked RNG, comparator PA5 edge override and IRQ 41 | **not modelled** | `crates/core/src/peripherals/cc2538/soc_adc.rs` |
+| PKA engine (modular arithmetic, ECC), USB, I2CS, ANA_REGS, CCTEST | declared stubs | `configs/chips/cc2538sf53.yaml` |
+
+The focused unit-test command was attempted on 2026-11-07, but rustc received
+SIGKILL while compiling the `labwired-core` test binary; no unit tests ran and
+there is no unit-test verdict. The exact imported-system smoke below passed.
+The attempt is recorded at
+`docs/coverage/renode-onboarding/attempt-history/cc2538/2026-11-07-soc-adc-unit-test-sigkill/README.md`.
 
 On 2026-11-07, the imported-platform measurement
 `CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 scripts/run_renode_onboarding_inventory.py --only cc2538`
-passed after mapping the PKA SRAM range as ordinary RAM: 4,000,000
-instructions, 3/3 smoke assertions, and UART `pka_sram words=512 bad=0
-last=751ef9b8` alongside the I2CM checks. The complete build, UART, JUnit,
-result and snapshot evidence is under
+passed against the exact imported system: 4,000,000 instructions and 3/3
+smoke assertions. Alongside the previously exercised I2CM and PKA SRAM paths,
+the UART log now checks the bounded SOC_ADC register behavior for the ADC
+result/EOC/IRQ, RNG seed/clock/CRC and comparator output. The complete build,
+UART, JUnit, result and snapshot evidence is under
 `docs/coverage/renode-onboarding/metrics/cc2538/`. Its system injects a virtual
 TMP102 as a test fixture; this does not claim that the CC2538DK includes that
 sensor. The shared scoreboard remains at 245 descriptors, 224 booted and
 smoke-passing, 21 not run, and 0 measured failures. The CC2538 profile retains
-seven zero-answering stub windows: IOC, analog registers, SoC ADC, I2CS, USB,
-the PKA compute engine and CCTEST.
+five zero-answering stub windows: ANA_REGS, I2CS, USB, the PKA compute engine
+and CCTEST. IOC register storage and SOC_ADC behavior remain bounded to the
+surfaces exercised by their smokes.
 
 ## Commands and evidence (updated 2026-11-07)
 

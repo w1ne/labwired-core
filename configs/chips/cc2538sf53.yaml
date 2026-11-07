@@ -76,7 +76,10 @@
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
 # - GPTimer RTC, capture and PWM modes, the ADC trigger and timer sync.
-# - PKA engine, I2CS slave, USB, SoC ADC/analog: declared stubs (the PKA
+# - SOC_ADC: conversion timing, STSEL 01/10 sequence starts, the IOC check
+#   that skips inactive sequence channels, ADC DMA triggers, a varying
+#   temperature, the CSP-clocked RNG and the comparator's PA5 edge/IRQ.
+# - PKA engine, I2CS slave, USB, ANA_REGS: declared stubs (the PKA
 #   SRAM window is plain RAM). I2CM is a
 #   synchronous byte-command master; it has no clock stretching, bus timing,
 #   arbitration or loopback.
@@ -245,10 +248,18 @@ peripherals:
     type: "stub"
     base_address: 0x400D6000
     size: "4KB"
+  # SOC_ADC (§15-17): ADC single (ADCCON3) and ST-started sequence
+  # conversions, the RNG LFSR / CRC16 and the analog comparator
+  # (crates/core/src/peripherals/cc2538/soc_adc.rs). Conversions finish inside
+  # the register write; AIN0-7 are driven as ADC channels 0-7; AVDD5 is the
+  # routed reference rail (3.0 V by default). ADC interrupt, IRQ 14 (Table
+  # 5-2). Not modelled: conversion time, STSEL 01/10 starts, IOC channel
+  # skipping, DMA triggers, temperature changes, the comparator's PA5 edge.
   - id: "soc_adc"
-    type: "stub"
+    type: "cc2538_soc_adc"
     base_address: 0x400D7000
     size: "4KB"
+    irq: 14
   # SSI0/SSI1 (SWRU319C §19; Renode SPI.CC2538_SSI): master
   # mode, LBM loopback, 4..16-bit frames, 8-deep TX/RX FIFOs, RORRIS and the
   # TX/RX FIFO-level interrupts (crates/core/src/peripherals/cc2538/ssi.rs).

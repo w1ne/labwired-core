@@ -8,7 +8,9 @@
 # then walks LED2-LED4 (PC1-PC3, active high) with single address-masked
 # GPIO_DATA stores and prints the pin and the whole LED nibble it read back.
 # It reads the IOC registers back (written routing, PD7_OVER reset 0x4, a
-# masked IOC_GPT3OCP2 write).
+# masked IOC_GPT3OCP2 write), converts VDD/3, the temperature sensor and GND
+# on SOC_ADC (IRQ 14 pend), seeds/clocks the RNG LFSR, runs a CRC16 through
+# RNDH and reads the comparator.
 # LED1 (PC0) shares the USB D+ pull-up and is never driven. SSI0 then runs an
 # internal-loopback self-test: TX-FIFO queueing while disabled, 8- and 16-bit
 # frames, and the RX overrun flag with its ICR clear. GPTimer0 then
@@ -37,6 +39,9 @@ assertions:
       - "led=orange off pin=0 leds=00"
       - "keys select=1 left=1 right=1 up=1 down=1"
       - "ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00"
+      - "adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1"
+      - "rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8"
+      - "cmp off=01 on=02"
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
       - "gpt0 to=3 nvic19=1 held=1"

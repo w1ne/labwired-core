@@ -1,6 +1,7 @@
 # CC2538 Cortex-M3 smoke against the imported Renode system path. Exercises the
 # model-backed UART0, SYS_CTRL clock reads, GPIO register readback, IOC
-# register readback (reset values and field masks) and an
+# register readback (reset values and field masks), SOC_ADC internal-channel
+# conversions with the IRQ 14 pend, the RNG LFSR/CRC16 and the comparator, and an
 # SSI0 loopback self-test, an I2CM/TMP102 read, a PKA SRAM fill/readback and
 # GPTimer0/1 time-out, match, one-shot and prescaler checks.
 schema_version: "1.0"
@@ -23,6 +24,9 @@ assertions:
       - "led=orange off pin=0 leds=00"
       - "keys select=1 left=1 right=1 up=1 down=1"
       - "ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00"
+      - "adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1"
+      - "rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8"
+      - "cmp off=01 on=02"
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
       - "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0"
