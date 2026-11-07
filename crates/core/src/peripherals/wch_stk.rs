@@ -213,11 +213,7 @@ impl Peripheral for WchStk {
         match offset {
             CTLR => self.ctlr = value,
             // CNTIF is cleared by software writing 0; writing 1 does not set it.
-            SR => {
-                if value & SR_CNTIF == 0 {
-                    self.cntif.set(false);
-                }
-            }
+            SR if value & SR_CNTIF == 0 => self.cntif.set(false),
             CNT => self.cnt.set(value),
             CMP => self.cmp = value,
             _ => {}
