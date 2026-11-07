@@ -9,8 +9,8 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `198/224`
-- pass_stop_reason_only: `26/224`
+- pass_observable_assertions: `199/224`
+- pass_stop_reason_only: `25/224`
 - pass_depth_unknown: `0/224`
 - median_elapsed_ms: `1223`
 - median_elapsed_seconds: `1.223`
@@ -181,7 +181,7 @@
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `1354` | `1.354` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu740` | `pass` | `True` | `yes` | `yes` | `1456` | `1.456` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-at90usb162` | `pass` | `True` | `yes` | `yes` | `596` | `0.596` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `simavr-atmega128` | `pass` | `True` | `yes` | `yes` | `85887` | `85.887` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `simavr-atmega128` | `pass` | `True` | `yes` | `yes` | `247064` | `247.064` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega1280` | `pass` | `True` | `yes` | `yes` | `7863` | `7.863` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega1281` | `pass` | `True` | `yes` | `yes` | `645` | `0.645` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega1284p` | `pass` | `True` | `yes` | `yes` | `710` | `0.71` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

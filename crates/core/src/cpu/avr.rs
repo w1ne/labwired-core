@@ -961,8 +961,11 @@ impl Avr {
         if let Some(canon) = self.classic_usart_alias(addr) {
             return Ok(canon);
         }
+        // ATmega128: the whole I/O file and its 0x60..0xFF extended I/O use
+        // the classic layout (PORTA at 0x3B, not the 328P PCIFR); SRAM from
+        // 0x0100 falls through to the shared decode.
         if self.model.has_classic_io_file()
-            || (self.model.has_classic_usart() && (0x00C0..=0x00C6).contains(&addr))
+            || (self.model == AvrModel::Atmega128 && (0x0020..=0x00FF).contains(&addr))
         {
             return Err(());
         }
@@ -996,7 +999,9 @@ impl Avr {
             }
             // ATmega8 has no port A: PINB/PINC/PIND at 0x36/0x33/0x30.
             AvrModel::Atmega8 => matches!(addr, 0x0030 | 0x0033 | 0x0036),
-            AvrModel::Atmega128 => false,
+            // ATmega128 ports A-D as on the 16/32, plus PINE/DDRE/PORTE at
+            // 0x21..0x23. Ports F/G (DDRF/PORTF in extended I/O) are not mirrored.
+            AvrModel::Atmega128 => matches!(addr, 0x0021 | 0x0030 | 0x0033 | 0x0036 | 0x0039),
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1050,7 +1055,9 @@ impl Avr {
             | AvrModel::Atmega1284p => (AVR_PINA..=AVR_PIND + 2).contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => (0x0030..=0x003B).contains(&addr),
             AvrModel::Atmega8 => (0x0030..=0x0038).contains(&addr),
-            AvrModel::Atmega128 => false,
+            AvrModel::Atmega128 => {
+                (0x0021..=0x0023).contains(&addr) || (0x0030..=0x003B).contains(&addr)
+            }
             AvrModel::Atmega169
             | AvrModel::Atmega16m1
             | AvrModel::Atmega64m1
@@ -1743,7 +1750,7 @@ impl Avr {
     fn classic_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         match addr {
             0x0000..=0x001F => self.r[addr as usize] = value,
-            // ATmega8/16/32 PINx are read-only: no write-one-to-toggle.
+            // ATmega8/16/32/128 PINx are read-only: no write-one-to-toggle.
             a if self.is_pin_reg(a) => {}
             0x005D => self.sp = (self.sp & 0xFF00) | value as u16,
             0x005E => self.sp = (self.sp & 0x00FF) | ((value as u16) << 8),
@@ -4552,6 +4559,29 @@ mod tests {
             bus.write_u8(AVR_IO_MIRROR_BASE + 0x30, 0x04).unwrap(); // PD2 high
             assert_eq!(cpu.data_read(0x30, &bus).unwrap() & 0x04, 0x04);
         }
+    }
+
+    /// ATmega128 uses the classic I/O file (PORTA 0x3B, read-only PINx, PORTE
+    /// 0x23) with extended I/O at 0x60..0xFF and SRAM from 0x0100.
+    #[test]
+    fn atmega128_classic_ports_a_and_e_mirror_and_read_only_pin() {
+        let mut bus = MockBus::new();
+        let mut cpu = Avr::new_model(AvrModel::Atmega128);
+        cpu.data_write(0x3A, 0x01, &mut bus).unwrap(); // DDRA
+        cpu.data_write(0x3B, 0x01, &mut bus).unwrap(); // PORTA, not PCIFR
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
+        assert_eq!(cpu.data_read(0x3B, &bus).unwrap(), 0x01);
+        assert_eq!(cpu.data_read(0x39, &bus).unwrap() & 1, 1);
+        cpu.data_write(0x39, 0x01, &mut bus).unwrap(); // PINA is read-only
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x3B).unwrap(), 0x01);
+        cpu.data_write(0x22, 0x80, &mut bus).unwrap(); // DDRE
+        cpu.data_write(0x23, 0x80, &mut bus).unwrap(); // PORTE
+        assert_eq!(bus.read_u8(AVR_IO_MIRROR_BASE + 0x23).unwrap(), 0x80);
+        assert_eq!(cpu.data_read(0x21, &bus).unwrap() & 0x80, 0x80);
+        cpu.data_write(0x62, 0xA5, &mut bus).unwrap(); // PORTF: stored byte
+        assert_eq!(cpu.data_read(0x62, &bus).unwrap(), 0xA5);
+        cpu.data_write(0x0100, 0x3C, &mut bus).unwrap(); // first SRAM byte
+        assert_eq!(cpu.data_read(0x0100, &bus).unwrap(), 0x3C);
     }
 
     /// ATmega8 ports B-D: PINB/DDRB/PORTB at 0x36/0x37/0x38 down to PIND

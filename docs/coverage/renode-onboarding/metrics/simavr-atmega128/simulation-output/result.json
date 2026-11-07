@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 185705,
+  "cycles": 170983,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -30,6 +30,32 @@
   "assertions": [
     {
       "assertion": {
+        "uart_contains": "M128 IO bits=7F"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 450,
+          "expected_value": 127,
+          "mask": null,
+          "size": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "porta:0",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -52,37 +78,52 @@
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
+      31,
       1,
-      0,
-      0,
-      0,
-      0,
-      0,
-      202,
-      55,
-      2,
+      34,
       1,
-      255,
+      1,
+      165,
+      58,
+      58,
+      0,
+      0,
+      48,
+      0,
+      195,
+      1,
+      249,
       16,
-      0,
-      0
+      34,
+      1
     ],
-    "pc": 192,
-    "sp": 4349,
+    "pc": 444,
+    "sp": 4345,
     "sreg": 0
   },
-  "firmware_hash": "139b3cbcda323e1608b488c256141790f95f8c71c263972620b2e1bee7d52e17",
+  "firmware_hash": "504124ceac54e471e398d8ffceed81d2ef938188f124b787d416a3bd2ee65fcb",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega128-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega128-io-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega128.yaml",
     "script": "examples/renode-onboarding/simavr-atmega128-smoke.yaml"
   },
   "inspect": {
-    "peripherals": [],
+    "peripherals": [
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 65593,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
     "devices": []
   },
   "fidelity": [
@@ -94,17 +135,426 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 170983,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "porta",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 1335,
+            "value": 1
+          },
+          {
+            "cycle": 6022,
+            "value": 0
+          },
+          {
+            "cycle": 9837,
+            "value": 1
+          },
+          {
+            "cycle": 13652,
+            "value": 0
+          },
+          {
+            "cycle": 17467,
+            "value": 1
+          },
+          {
+            "cycle": 21282,
+            "value": 0
+          },
+          {
+            "cycle": 25097,
+            "value": 1
+          },
+          {
+            "cycle": 28912,
+            "value": 0
+          },
+          {
+            "cycle": 32727,
+            "value": 1
+          },
+          {
+            "cycle": 36542,
+            "value": 0
+          },
+          {
+            "cycle": 40357,
+            "value": 1
+          },
+          {
+            "cycle": 44172,
+            "value": 0
+          },
+          {
+            "cycle": 47987,
+            "value": 1
+          },
+          {
+            "cycle": 51802,
+            "value": 0
+          },
+          {
+            "cycle": 55617,
+            "value": 1
+          },
+          {
+            "cycle": 59432,
+            "value": 0
+          },
+          {
+            "cycle": 63247,
+            "value": 1
+          },
+          {
+            "cycle": 67062,
+            "value": 0
+          },
+          {
+            "cycle": 70877,
+            "value": 1
+          },
+          {
+            "cycle": 74692,
+            "value": 0
+          },
+          {
+            "cycle": 78507,
+            "value": 1
+          },
+          {
+            "cycle": 82322,
+            "value": 0
+          },
+          {
+            "cycle": 86137,
+            "value": 1
+          },
+          {
+            "cycle": 89952,
+            "value": 0
+          },
+          {
+            "cycle": 93767,
+            "value": 1
+          },
+          {
+            "cycle": 97582,
+            "value": 0
+          },
+          {
+            "cycle": 101397,
+            "value": 1
+          },
+          {
+            "cycle": 105212,
+            "value": 0
+          },
+          {
+            "cycle": 109027,
+            "value": 1
+          },
+          {
+            "cycle": 112842,
+            "value": 0
+          },
+          {
+            "cycle": 116657,
+            "value": 1
+          },
+          {
+            "cycle": 120472,
+            "value": 0
+          },
+          {
+            "cycle": 124287,
+            "value": 1
+          },
+          {
+            "cycle": 128102,
+            "value": 0
+          },
+          {
+            "cycle": 131917,
+            "value": 1
+          },
+          {
+            "cycle": 135732,
+            "value": 0
+          },
+          {
+            "cycle": 139547,
+            "value": 1
+          },
+          {
+            "cycle": 143362,
+            "value": 0
+          },
+          {
+            "cycle": 147177,
+            "value": 1
+          },
+          {
+            "cycle": 150992,
+            "value": 0
+          },
+          {
+            "cycle": 154807,
+            "value": 1
+          },
+          {
+            "cycle": 158622,
+            "value": 0
+          },
+          {
+            "cycle": 162437,
+            "value": 1
+          },
+          {
+            "cycle": 166252,
+            "value": 0
+          },
+          {
+            "cycle": 170067,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 1331,
+            "state": "0"
+          },
+          {
+            "cycle": 1335,
+            "state": "1"
+          },
+          {
+            "cycle": 6022,
+            "state": "0"
+          },
+          {
+            "cycle": 9837,
+            "state": "1"
+          },
+          {
+            "cycle": 13652,
+            "state": "0"
+          },
+          {
+            "cycle": 17467,
+            "state": "1"
+          },
+          {
+            "cycle": 21282,
+            "state": "0"
+          },
+          {
+            "cycle": 25097,
+            "state": "1"
+          },
+          {
+            "cycle": 28912,
+            "state": "0"
+          },
+          {
+            "cycle": 32727,
+            "state": "1"
+          },
+          {
+            "cycle": 36542,
+            "state": "0"
+          },
+          {
+            "cycle": 40357,
+            "state": "1"
+          },
+          {
+            "cycle": 44172,
+            "state": "0"
+          },
+          {
+            "cycle": 47987,
+            "state": "1"
+          },
+          {
+            "cycle": 51802,
+            "state": "0"
+          },
+          {
+            "cycle": 55617,
+            "state": "1"
+          },
+          {
+            "cycle": 59432,
+            "state": "0"
+          },
+          {
+            "cycle": 63247,
+            "state": "1"
+          },
+          {
+            "cycle": 67062,
+            "state": "0"
+          },
+          {
+            "cycle": 70877,
+            "state": "1"
+          },
+          {
+            "cycle": 74692,
+            "state": "0"
+          },
+          {
+            "cycle": 78507,
+            "state": "1"
+          },
+          {
+            "cycle": 82322,
+            "state": "0"
+          },
+          {
+            "cycle": 86137,
+            "state": "1"
+          },
+          {
+            "cycle": 89952,
+            "state": "0"
+          },
+          {
+            "cycle": 93767,
+            "state": "1"
+          },
+          {
+            "cycle": 97582,
+            "state": "0"
+          },
+          {
+            "cycle": 101397,
+            "state": "1"
+          },
+          {
+            "cycle": 105212,
+            "state": "0"
+          },
+          {
+            "cycle": 109027,
+            "state": "1"
+          },
+          {
+            "cycle": 112842,
+            "state": "0"
+          },
+          {
+            "cycle": 116657,
+            "state": "1"
+          },
+          {
+            "cycle": 120472,
+            "state": "0"
+          },
+          {
+            "cycle": 124287,
+            "state": "1"
+          },
+          {
+            "cycle": 128102,
+            "state": "0"
+          },
+          {
+            "cycle": 131917,
+            "state": "1"
+          },
+          {
+            "cycle": 135732,
+            "state": "0"
+          },
+          {
+            "cycle": 139547,
+            "state": "1"
+          },
+          {
+            "cycle": 143362,
+            "state": "0"
+          },
+          {
+            "cycle": 147177,
+            "state": "1"
+          },
+          {
+            "cycle": 150992,
+            "state": "0"
+          },
+          {
+            "cycle": 154807,
+            "state": "1"
+          },
+          {
+            "cycle": 158622,
+            "state": "0"
+          },
+          {
+            "cycle": 162437,
+            "state": "1"
+          },
+          {
+            "cycle": 166252,
+            "state": "0"
+          },
+          {
+            "cycle": 170067,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 45
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "porta",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "M128 IO bits=7F",
+        "cycle_lo": 0,
+        "cycle": 15620,
+        "end_cycle": 15620
+      }
+    ],
+    "dropped_lines": 0
+  },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 214,
-    "data_bytes": 0,
-    "bss_bytes": 2,
-    "flash_used_bytes": 214,
-    "ram_static_bytes": 2,
+    "text_bytes": 482,
+    "data_bytes": 34,
+    "bss_bytes": 161,
+    "flash_used_bytes": 516,
+    "ram_static_bytes": 195,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 4096,
-    "flash_used_pct": 0.16,
-    "ram_static_pct": 0.05,
+    "flash_used_pct": 0.39,
+    "ram_static_pct": 4.76,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -116,41 +566,21 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 185705,
+    "cycles": 170983,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 0,
-    "memory_writes": 28570,
-    "peripheral_accesses": 0,
+    "memory_writes": 17780,
+    "peripheral_accesses": 104,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 188,
-        "count": 78
+        "pc": 444,
+        "count": 195
       },
       {
-        "pc": 192,
-        "count": 78
-      },
-      {
-        "pc": 202,
-        "count": 78
-      },
-      {
-        "pc": 196,
-        "count": 39
-      },
-      {
-        "pc": 198,
-        "count": 39
-      },
-      {
-        "pc": 206,
-        "count": 39
-      },
-      {
-        "pc": 208,
-        "count": 39
+        "pc": 454,
+        "count": 195
       }
     ]
   }

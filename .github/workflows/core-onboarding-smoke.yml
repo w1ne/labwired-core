@@ -190,8 +190,8 @@ on:
       - "tests/fixtures/avr/atmega1280-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1280-io-smoke.elf"
       - "scripts/build_atmega1280_cpu_smoke.sh"
-      - "tests/fixtures/avr/atmega128-cpu-smoke.c"
-      - "tests/fixtures/avr/atmega128-cpu-smoke.elf"
+      - "tests/fixtures/avr/atmega128-io-smoke.c"
+      - "tests/fixtures/avr/atmega128-io-smoke.elf"
       - "scripts/build_atmega128_cpu_smoke.sh"
       - "tests/fixtures/avr/atmega1281-cpu-smoke.c"
       - "tests/fixtures/avr/atmega1281-io-smoke.elf"
@@ -896,7 +896,7 @@ jobs:
           # ATmega128 is measured only for its imported AVR8 CPU and SRAM;
           # the profile makes no peripheral or board-I/O claims.
           - id: simavr-atmega128
-            prebuilt_firmware: tests/fixtures/avr/atmega128-cpu-smoke.elf
+            prebuilt_firmware: tests/fixtures/avr/atmega128-io-smoke.elf
             script: examples/renode-onboarding/simavr-atmega128-smoke.yaml
             system: configs/systems/onboarding/simavr-atmega128.yaml
           # ATmega1281 is measured for AVR8 execution, GPIOA and polled USART0

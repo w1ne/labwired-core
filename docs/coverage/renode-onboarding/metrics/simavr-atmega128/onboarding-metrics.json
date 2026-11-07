@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/simavr-atmega128-smoke.yaml",
   "system": "configs/systems/onboarding/simavr-atmega128.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T10:05:31Z",
-  "finished_at_utc": "2026-11-06T10:06:57Z",
-  "elapsed_seconds": 86,
-  "elapsed_ms": 85887,
+  "started_at_utc": "2026-11-07T14:35:48Z",
+  "finished_at_utc": "2026-11-07T14:39:55Z",
+  "elapsed_seconds": 248,
+  "elapsed_ms": 247064,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 85.512,
+    "build_cli": 246.803,
     "build_firmware": null,
-    "run_smoke": 0.364
+    "run_smoke": 0.251
   },
   "stages_ms": {
-    "build_cli": 85512,
+    "build_cli": 246803,
     "build_firmware": null,
-    "run_smoke": 364
+    "run_smoke": 251
   },
-  "prebuilt_firmware": "tests/fixtures/avr/atmega128-cpu-smoke.elf"
+  "prebuilt_firmware": "tests/fixtures/avr/atmega128-io-smoke.elf"
 }
