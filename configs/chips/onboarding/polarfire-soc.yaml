@@ -3,8 +3,9 @@
 # The original machine-imported profile was mislabeled ARM and exposed broad,
 # mostly zero-answering MSS windows. This profile follows the sourced MPFS MSS
 # map and claims only one RV64IMAC U54, the memory windows used by the firmware,
-# the model-backed MMUART0/1, and explicit startup stubs reached by Zephyr.
-# Those stubs do not model PLIC, GPIO, I2C, or SPI behavior. The E51, other U54
+# the model-backed MMUART0/1, the model-backed MSS GPIO_0..2 banks, and
+# explicit startup stubs reached by Zephyr. Those stubs do not model PLIC,
+# I2C, or SPI behavior. The E51, other U54
 # harts, F/D extensions, supervisor mode, DMA, storage, and remaining MSS
 # peripherals are outside this profile.
 # Sources: configs/chips/mpfs095t.yaml; Microchip PolarFire SoC MSS TRM;
@@ -39,18 +40,28 @@ peripherals:
     type: "stub"
     base_address: 0x0C000000
     size: "65536KB"
+  # MSS GPIO_0..2: CoreGPIO semantics on the mss_gpio.h register map
+  # (crates/core/src/peripherals/miv.rs). `ports` is the bank width
+  # (NB_OF_GPIO_GPIO0/1/2 = 14/24/32 in Microchip's mss_gpio.c). Their
+  # interrupt lines are not delivered: the RV64 core has no PLIC yet.
   - id: "mss_gpio0"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20120000
     size: "4KB"
+    config:
+      ports: 14
   - id: "mss_gpio1"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20121000
     size: "4KB"
+    config:
+      ports: 24
   - id: "mss_gpio2"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20122000
     size: "4KB"
+    config:
+      ports: 32
   - id: "i2c0"
     type: "stub"
     base_address: 0x2010A000

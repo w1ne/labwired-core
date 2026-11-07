@@ -154,16 +154,16 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml",
     },
     "mpfs-icicle-kit": {
-        "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
-        "script": "examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
+        "script": "examples/renode-onboarding/mpfs-icicle-kit-mss-gpio-smoke.yaml",
     },
     "beaglev-fire": {
-        "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
-        "script": "examples/renode-onboarding/beaglev-fire-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
+        "script": "examples/renode-onboarding/beaglev-fire-mss-gpio-smoke.yaml",
     },
     "polarfire-soc": {
-        "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf",
-        "script": "examples/renode-onboarding/polarfire-soc-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf",
+        "script": "examples/renode-onboarding/polarfire-soc-mss-gpio-smoke.yaml",
     },
     "nxp-frdm-imx8mplus": {
         "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",

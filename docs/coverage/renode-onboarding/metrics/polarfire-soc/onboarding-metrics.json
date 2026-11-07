@@ -6,33 +6,33 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 43938,
-    "stop_reason": "max_cycles"
+    "instructions": 100000,
+    "stop_reason": "max_steps"
   },
   "smoke_passed": true,
   "crate": null,
   "target_triple": null,
-  "script": "examples/renode-onboarding/polarfire-soc-smoke.yaml",
+  "script": "examples/renode-onboarding/polarfire-soc-mss-gpio-smoke.yaml",
   "system": "configs/systems/onboarding/polarfire-soc.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T22:58:09Z",
-  "finished_at_utc": "2026-11-05T22:59:36Z",
-  "elapsed_seconds": 88,
-  "elapsed_ms": 87319,
+  "started_at_utc": "2026-11-07T01:07:52Z",
+  "finished_at_utc": "2026-11-07T01:10:58Z",
+  "elapsed_seconds": 187,
+  "elapsed_ms": 186611,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 86.985,
+    "build_cli": 186.134,
     "build_firmware": null,
-    "run_smoke": 0.325
+    "run_smoke": 0.461
   },
   "stages_ms": {
-    "build_cli": 86985,
+    "build_cli": 186134,
     "build_firmware": null,
-    "run_smoke": 325
+    "run_smoke": 461
   },
-  "prebuilt_firmware": "tests/fixtures/mpfs-zephyr-hello.elf"
+  "prebuilt_firmware": "tests/fixtures/mpfs-gpio-smoke.elf"
 }

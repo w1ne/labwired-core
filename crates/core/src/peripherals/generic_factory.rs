@@ -399,6 +399,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
     "miv_coregpio",
     "miv_coretimer",
+    // PolarFire SoC MSS GPIO (CoreGPIO semantics, MSS register map).
+    "mpfs_gpio",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
@@ -1779,6 +1781,19 @@ pub fn try_build(
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
+        // PolarFire SoC MSS GPIO_0..2: `ports` is the bank width (14, 24
+        // or 32, `NB_OF_GPIO_GPIO*` in Microchip's mss_gpio.c).
+        "mpfs_gpio" => {
+            let ports = p_cfg
+                .config
+                .get("ports")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(32);
+            if !(1..=32).contains(&ports) {
+                anyhow::bail!("mpfs_gpio `ports` must be 1..=32, got {ports}");
+            }
+            Box::new(crate::peripherals::miv::MivCoreGpio::mpfs(ports as u32))
+        }
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         "cortex_m7_cache" => {

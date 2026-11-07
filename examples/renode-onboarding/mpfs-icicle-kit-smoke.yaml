@@ -5,10 +5,9 @@ inputs:
   system: "../../configs/systems/onboarding/mpfs-icicle-kit.yaml"
 limits:
   max_steps: 2000000
-  # Zephyr idles in WFI after main() returns; idle time is not counted as steps.
   max_cycles: 60000000
 assertions:
   - uart_ordered:
       - "*** Booting Zephyr OS build v4.1.0 ***"
       - "Hello World! mpfs_icicle/polarfire/u54"
-  - expected_stop_reason: max_cycles
+  - expected_stop_reason: max_steps

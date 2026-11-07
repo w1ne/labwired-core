@@ -1,0 +1,18 @@
+# Bare-metal MSS GPIO fixture (examples/renode-onboarding/mpfs-gpio-smoke.S)
+# against the imported mpfs-icicle-kit profile. It drives GPIO_0..2 through the
+# mss_gpio.h register map and prints each bank's readback on MMUART1. The
+# zero-answering stub this replaced prints 00000000 for all three.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mpfs-gpio-smoke.elf"
+  system: "../../configs/systems/onboarding/mpfs-icicle-kit.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "MPFS MSS GPIO SMOKE"
+  - uart_contains: "gpio2.out=0001a5a4 gpio0.in=00003fff gpio1.out=0000ff00"
+  - memory_value: {address: 0x20122088, expected_value: 0x0001A5A4}  # GPIO_2 GPIO_OUT
+  - memory_value: {address: 0x20120084, expected_value: 0x00003FFF}  # GPIO_0 GPIO_IN (14 ports)
+  - memory_value: {address: 0x20121094, expected_value: 0x00000000}  # GPIO_1 CFG_BYTE[1] is write-only
+  - memory_value: {address: 0x2012103C, expected_value: 0x00000005}  # GPIO_1 GPIO_CFG[15] from CFG_BYTE[1]
+  - expected_stop_reason: max_steps

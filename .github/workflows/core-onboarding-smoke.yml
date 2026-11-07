@@ -1568,25 +1568,23 @@ jobs:
             target: riscv32im-unknown-none-elf
             script: examples/renode-onboarding/ice40up5k-mdp-evn-smoke.yaml
             system: configs/systems/onboarding/ice40up5k-mdp-evn.yaml
-          # Run the committed stock Zephyr RV64 image against the imported
-          # MPFS Icicle Kit system; the exact imported profile exposes the U54
-          # memory, in-core CLINT, MMUART0/1, and explicit startup stubs for
-          # PLIC/GPIO/I2C/SPI. Zephyr prints on MMUART1 and probes MMUART0.
+          # Run the committed MSS GPIO firmware against the exact imported
+          # Icicle Kit system. It exercises GPIO_0..2 register readbacks and
+          # prints the observed values on MMUART1; PLIC/I2C/SPI remain stubs.
           - id: mpfs-icicle-kit
-            prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
-            script: examples/renode-onboarding/mpfs-icicle-kit-smoke.yaml
+            prebuilt_firmware: tests/fixtures/mpfs-gpio-smoke.elf
+            script: examples/renode-onboarding/mpfs-icicle-kit-mss-gpio-smoke.yaml
             system: configs/systems/onboarding/mpfs-icicle-kit.yaml
-          # BeagleV-Fire shares the PolarFire SoC; exercise the same stock U54
-          # Zephyr image against its exact imported, bounded system profile.
+          # BeagleV-Fire exercises the same MSS GPIO banks against its own
+          # imported system profile.
           - id: beaglev-fire
-            prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
-            script: examples/renode-onboarding/beaglev-fire-smoke.yaml
+            prebuilt_firmware: tests/fixtures/mpfs-gpio-smoke.elf
+            script: examples/renode-onboarding/beaglev-fire-mss-gpio-smoke.yaml
             system: configs/systems/onboarding/beaglev-fire.yaml
-          # Reuse the stock MPFS U54 Zephyr image against the corrected,
-          # bounded imported PolarFire SoC profile.
+          # Exercise GPIO_0..2 on the corrected imported PolarFire SoC profile.
           - id: polarfire-soc
-            prebuilt_firmware: tests/fixtures/mpfs-zephyr-hello.elf
-            script: examples/renode-onboarding/polarfire-soc-smoke.yaml
+            prebuilt_firmware: tests/fixtures/mpfs-gpio-smoke.elf
+            script: examples/renode-onboarding/polarfire-soc-mss-gpio-smoke.yaml
             system: configs/systems/onboarding/polarfire-soc.yaml
           # ARV-SOM is narrowed to the engine's RV64IMAC CPU subset and a
           # bounded DDR window; no board peripherals or Linux boot are claimed.
