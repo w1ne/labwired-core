@@ -197,6 +197,15 @@ pub enum AdcRegisterLayout {
     /// 0x01FF_FFFF; `GCOMP` @ 0x70 and `CALFACT2` @ 0xC8. The H7 map differs in
     /// all of those, so the alias is a separate layout rather than a flavour.
     Stm32U5,
+    /// STM32F0/L0 "v2" ADC (RM0091 §13, RM0367 §14). Shares the L4's ISR/IER/
+    /// CR offsets and its two-bit `RES[4:3]`, but it is a one-sequencer block
+    /// with no SQRx: the channels to convert are a BITMAP in `CHSELR` @ 0x28,
+    /// scanned upward (or downward with `CFGR1.SCANDIR`). `SMPR` is one
+    /// register @ 0x14, `TR` one register @ 0x20, `CALFACT` @ 0xB4 and `CCR`
+    /// @ 0x308. There is no `DEEPPWD`: `CR` resets to 0 and `ADEN` raises
+    /// `ADRDY`. On the L4 map `CHSELR` lands on an unmodelled offset, so the
+    /// channel firmware selected never reached the converter.
+    Stm32V2,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -218,8 +227,12 @@ impl FromStr for AdcRegisterLayout {
             "stm32h7" | "h7" => Ok(Self::Stm32H7),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
+            // `stm32g0` stays on the L4 map above: NUCLEO-G071RB's silicon
+            // capture was taken against it, and moving it is a capture, not
+            // an alias change.
+            "stm32f0" | "f0" | "stm32l0" | "l0" => Ok(Self::Stm32V2),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5, stm32f0, stm32l0",
                 value
             )),
         }
@@ -358,6 +371,47 @@ pub struct U5AdcRegs {
     common_ccr: u32,
 }
 
+/// STM32F0/L0 "v2" ADC control registers (RM0091 §13.12, RM0367 §14.12).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct V2AdcRegs {
+    isr: u32,     // 0x00
+    ier: u32,     // 0x04
+    cr: u32,      // 0x08  reset 0 (no DEEPPWD)
+    cfgr1: u32,   // 0x0C
+    cfgr2: u32,   // 0x10
+    smpr: u32,    // 0x14
+    tr: u32,      // 0x20  reset 0x0FFF_0000 (HT = 0xFFF)
+    chselr: u32,  // 0x28  channel bitmap, IN0..IN18
+    calfact: u32, // 0xB4
+    ccr: u32,     // 0x308
+}
+
+/// `ADC_ISR` / `ADC_CR` / `ADC_CFGR1` bits of the v2 ADC (RM0367 §14.12).
+const V2_ISR_ADRDY: u32 = 1 << 0;
+const V2_ISR_EOSMP: u32 = 1 << 1;
+const V2_ISR_EOC: u32 = 1 << 2;
+const V2_ISR_EOS: u32 = 1 << 3;
+/// End of calibration. L0 (and G0) only; reserved on the F0.
+const V2_ISR_EOCAL: u32 = 1 << 11;
+const V2_CR_ADEN: u32 = 1 << 0;
+const V2_CR_ADDIS: u32 = 1 << 1;
+const V2_CR_ADSTART: u32 = 1 << 2;
+const V2_CR_ADSTP: u32 = 1 << 4;
+const V2_CR_ADCAL: u32 = 1 << 31;
+const V2_CFGR1_SCANDIR: u32 = 1 << 2;
+const V2_CFGR1_ALIGN: u32 = 1 << 5;
+const V2_CFGR1_CONT: u32 = 1 << 13;
+/// `CHSELR` bits that name a channel: IN0..IN18.
+const V2_CHSELR_MASK: u32 = (1 << 19) - 1;
+/// V_REFINT is ADC_IN17 on both the F0 and the L0, connected by `CCR.VREFEN`
+/// (bit 22).
+const V2_VREFINT_CHANNEL: usize = 17;
+const V2_CCR_VREFEN: u32 = 1 << 22;
+/// V_REFINT typical, 1.224 V (DS10685 "Embedded internal reference voltage",
+/// min 1.202 / typ 1.224 / max 1.242 V). The F0 datasheets give 1.23 V typ,
+/// inside that spread.
+const V2_VREFINT_MV: f64 = 1224.0;
+
 /// Family-isolated ADC control registers.
 #[derive(Debug, serde::Serialize)]
 enum AdcRegs {
@@ -367,6 +421,7 @@ enum AdcRegs {
     Stm32L4(L4AdcRegs),
     Stm32H7(H7AdcRegs),
     Stm32U5(U5AdcRegs),
+    Stm32V2(V2AdcRegs),
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -469,6 +524,10 @@ impl Adc {
                 htr1: 0x01FF_FFFF,
                 htr2: 0x01FF_FFFF,
                 htr3: 0x01FF_FFFF,
+                ..Default::default()
+            }),
+            AdcRegisterLayout::Stm32V2 => AdcRegs::Stm32V2(V2AdcRegs {
+                tr: 0x0FFF_0000,
                 ..Default::default()
             }),
         };
@@ -642,9 +701,14 @@ impl Adc {
     ///   IN17/IN18 are the temperature sensor and V_BAT.
     /// * H7 — 0..=19, the `PCSEL` bitmap's width.
     /// * U5 — 0..=19, the `PCSEL` bitmap's width.
+    /// * V2 (F0/L0) — 0..=18, the `CHSELR` bitmap's width: IN0..IN15 on pads,
+    ///   then the internal channels.
     pub fn channel_count(&self) -> u8 {
         match &self.regs {
-            AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) | AdcRegs::Stm32L4(_) => 19,
+            AdcRegs::Stm32F1(_)
+            | AdcRegs::Stm32F4(_)
+            | AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32V2(_) => 19,
             AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 20,
         }
     }
@@ -676,8 +740,12 @@ impl Adc {
     fn f1_ctrl(&self) -> (u32, u32) {
         match &self.regs {
             AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.cr1, r.cr2),
-            // Neither the L4, the H7 nor the U5 runs the F1 countdown engine.
-            AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => (0, 0),
+            // Neither the L4, the H7, the U5 nor the V2 runs the F1 countdown
+            // engine.
+            AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => (0, 0),
         }
     }
 
@@ -686,7 +754,10 @@ impl Adc {
     fn f1_regular_channel(&self) -> usize {
         match &self.regs {
             AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
-            AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 0,
+            AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => 0,
         }
     }
 
@@ -721,12 +792,13 @@ impl Adc {
         let adstart = cr & (1 << 2) != 0;
         let (adrdy, cfgr) = match &self.regs {
             AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
-            // H7 and U5 have their own engines (`maybe_start_h7_conversion`,
-            // `maybe_start_u5_conversion`).
+            // H7, U5 and V2 have their own engines (`maybe_start_h7_conversion`,
+            // `maybe_start_u5_conversion`, `maybe_start_v2_conversion`).
             AdcRegs::Stm32F1(_)
             | AdcRegs::Stm32F4(_)
             | AdcRegs::Stm32H7(_)
-            | AdcRegs::Stm32U5(_) => return,
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => return,
         };
         if !(aden && adstart && adrdy) {
             return;
@@ -1043,6 +1115,125 @@ impl Adc {
         }
     }
 
+    fn read_reg_v2(r: &V2AdcRegs, dr: u32, reg: u64) -> u32 {
+        match reg {
+            0x00 => r.isr,
+            0x04 => r.ier,
+            0x08 => r.cr,
+            0x0C => r.cfgr1,
+            0x10 => r.cfgr2,
+            0x14 => r.smpr,
+            0x20 => r.tr,
+            0x28 => r.chselr,
+            0x40 => dr,
+            0xB4 => r.calfact,
+            0x308 => r.ccr,
+            _ => {
+                crate::census_reg!("adc:Adc", reg, "read");
+                0
+            }
+        }
+    }
+
+    /// V2 `CR`. `ADCAL` completes at once (no analog settling to model): it
+    /// self-clears and raises `ISR.EOCAL`. `ADEN` raises `ADRDY`; there is no
+    /// `DEEPPWD` to clear first, unlike the L4. `ADDIS` turns the converter
+    /// off, and `ADSTP` stops an ongoing (continuous) conversion.
+    fn v2_apply_cr(&mut self, value: u32) {
+        let AdcRegs::Stm32V2(r) = &mut self.regs else {
+            return;
+        };
+        r.cr = value & !(V2_CR_ADCAL | V2_CR_ADDIS | V2_CR_ADSTP);
+        if value & V2_CR_ADCAL != 0 {
+            r.isr |= V2_ISR_EOCAL;
+        }
+        if value & V2_CR_ADSTP != 0 {
+            r.cr &= !V2_CR_ADSTART;
+        }
+        if value & V2_CR_ADDIS != 0 {
+            r.cr &= !(V2_CR_ADEN | V2_CR_ADSTART);
+            r.isr &= !V2_ISR_ADRDY;
+        } else if r.cr & V2_CR_ADEN != 0 {
+            r.isr |= V2_ISR_ADRDY;
+        }
+    }
+
+    /// V2 conversion. `ADSTART` with the converter ready converts the FIRST
+    /// channel of the `CHSELR` scan — the lowest set bit, or the highest with
+    /// `CFGR1.SCANDIR` — into `DR` at `CFGR1.RES`, right- or left-aligned per
+    /// `CFGR1.ALIGN`, and raises `EOSMP | EOC | EOS`. A routed input converts
+    /// against the reference. IN17 is V_REFINT while `CCR.VREFEN` is set and
+    /// 0 V while it is clear; any other channel nothing drives converts the
+    /// fixed internal source, as the L4 map does. A multi-channel scan is not
+    /// stepped: `DR` reads have no side effects here, so there is no read to
+    /// advance it. An empty `CHSELR` converts nothing.
+    fn maybe_start_v2_conversion(&mut self) {
+        let AdcRegs::Stm32V2(r) = &self.regs else {
+            return;
+        };
+        let ready = r.cr & V2_CR_ADEN != 0 && r.isr & V2_ISR_ADRDY != 0;
+        let selected = r.chselr & V2_CHSELR_MASK;
+        if !ready || r.cr & V2_CR_ADSTART == 0 || selected == 0 {
+            return;
+        }
+        let (cfgr1, ccr) = (r.cfgr1, r.ccr);
+        let ch = if cfgr1 & V2_CFGR1_SCANDIR != 0 {
+            31 - selected.leading_zeros()
+        } else {
+            selected.trailing_zeros()
+        } as usize;
+        let bits = l4_resolution_bits(cfgr1);
+        let vrefint_mv = if ccr & V2_CCR_VREFEN != 0 {
+            V2_VREFINT_MV
+        } else {
+            0.0
+        };
+        let internal_mv = (ch == V2_VREFINT_CHANNEL).then_some(vrefint_mv);
+        let input_mv = self.channel_inputs_mv[ch].map(f64::from).or(internal_mv);
+        let code = match input_mv {
+            Some(mv) => scaled_input_code(Self::code_for_mv(mv, self.reference_millivolts), bits),
+            None => l4_adc_code(bits),
+        };
+        // Left alignment is half-word aligned, except at 6 bits, where it is
+        // byte aligned (RM0091 §13.6.1, RM0367 §14.6.1).
+        self.dr = match (cfgr1 & V2_CFGR1_ALIGN != 0, bits) {
+            (false, _) => code,
+            (true, 6) => code << 2,
+            (true, bits) => code << (16 - bits),
+        };
+        if let AdcRegs::Stm32V2(r) = &mut self.regs {
+            r.isr |= V2_ISR_EOSMP | V2_ISR_EOC | V2_ISR_EOS;
+            if cfgr1 & V2_CFGR1_CONT == 0 {
+                r.cr &= !V2_CR_ADSTART;
+            }
+        }
+    }
+
+    fn write_reg_v2(&mut self, reg: u64, value: u32) {
+        if reg == 0x08 {
+            self.v2_apply_cr(value);
+            self.maybe_start_v2_conversion();
+            return;
+        }
+        if let AdcRegs::Stm32V2(r) = &mut self.regs {
+            match reg {
+                0x00 => r.isr &= !value, // rc_w1
+                0x04 => r.ier = value,
+                0x0C => r.cfgr1 = value,
+                0x10 => r.cfgr2 = value,
+                0x14 => r.smpr = value,
+                0x20 => r.tr = value,
+                0x28 => r.chselr = value & V2_CHSELR_MASK,
+                0x40 => {} // DR read-only
+                0xB4 => r.calfact = value,
+                0x308 => r.ccr = value,
+                _ => {
+                    crate::census_reg!("adc:Adc", reg, "write");
+                }
+            }
+        }
+    }
+
     fn write_reg_l4(r: &mut L4AdcRegs, reg: u64, value: u32, calibration_completes: bool) {
         match reg {
             // ISR is rc_w1 — a write clears matched flags; firmware can't SET it.
@@ -1285,6 +1476,7 @@ impl Peripheral for Adc {
             AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, offset & !3),
             AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, offset & !3),
             AdcRegs::Stm32U5(r) => Self::read_reg_u5(r, self.dr, offset & !3),
+            AdcRegs::Stm32V2(r) => Self::read_reg_v2(r, self.dr, offset & !3),
         };
         let shift = (offset % 4) * 8;
         Ok(((val >> shift) & 0xFF) as u8)
@@ -1371,6 +1563,17 @@ impl Peripheral for Adc {
                     0
                 };
                 self.write_reg_u5(reg, full);
+            }
+            AdcRegs::Stm32V2(_) => {
+                // Same byte-merge discipline as the H7 arm.
+                let reg = offset & !3;
+                let dr = self.dr;
+                let full = if let AdcRegs::Stm32V2(r) = &self.regs {
+                    (Self::read_reg_v2(r, dr, reg) & !mask) | val_shifted
+                } else {
+                    0
+                };
+                self.write_reg_v2(reg, full);
             }
         }
         Ok(())
@@ -2122,6 +2325,45 @@ mod tests {
             !adc.converting,
             "F4 layout must not treat bit 22 as SWSTART"
         );
+    }
+
+    #[test]
+    fn v2_layout_selects_the_chselr_channel_at_each_width() {
+        for name in ["stm32f0", "f0", "stm32l0", "l0"] {
+            assert_eq!(
+                name.parse::<AdcRegisterLayout>().unwrap(),
+                AdcRegisterLayout::Stm32V2,
+                "{name}"
+            );
+        }
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32V2);
+        assert_eq!(adc.read_u32(0x20).unwrap(), 0x0FFF_0000, "TR reset");
+        adc.set_channel_input(3, 1650);
+        let count12 = adc.channel_input_count(3) as u32;
+        adc.write_u32(0x08, 1).unwrap(); // ADEN
+        adc.write_u32(0x28, 1 << 3).unwrap(); // CHSELR = IN3
+        for (cfgr1, expected) in [
+            (0, count12),
+            (2 << 3, count12 >> 4),                     // 8-bit
+            ((3 << 3) | (1 << 5), (count12 >> 6) << 2), // 6-bit left: byte aligned
+            ((2 << 3) | (1 << 5), (count12 >> 4) << 8), // 8-bit left: half-word
+        ] {
+            adc.write_u32(0x0C, cfgr1).unwrap();
+            adc.write_u32(0x08, 1 | (1 << 2)).unwrap(); // ADSTART
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "CFGR1 {cfgr1:#x}");
+        }
+        // An unselected neighbour converts nothing routed: IN4 is undriven.
+        adc.write_u32(0x0C, 0).unwrap();
+        adc.write_u32(0x28, 1 << 4).unwrap();
+        adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), l4_adc_code(12));
+        // IN17 is V_REFINT, connected only by CCR.VREFEN.
+        adc.write_u32(0x28, 1 << 17).unwrap();
+        adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 0, "VREFEN clear");
+        adc.write_u32(0x308, 1 << 22).unwrap();
+        adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 1224 * 4095 / 3300, "1.224 V");
     }
 }
 
