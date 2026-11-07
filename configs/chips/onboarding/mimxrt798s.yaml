@@ -6,6 +6,8 @@
 
 name: mimxrt798s
 arch: arm
+# i.MX RT700 CPU0 is a Cortex-M33 (no bit-band), as for imxrt500.
+core: cortex-m33
 flash:
   base: 134217728
   size: 134217728B
@@ -33,3 +35,72 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1074143388
+# GPIO0..GPIO7, the compute-domain RGPIO ports at 0x4010_0000 + 0x2000 * n
+# (non-secure alias; MIMXRT798S_cm33_core0_COMMON.h GPIOn_BASE_NS, Zephyr
+# nxp_rt7xx_cm33_cpu0.dtsi gpio@100000..10e000). Renode's RT700 map declares
+# no GPIO. The RGPIO block puts VERID/PARAM/LOCK/PCNS/ICNS/PCNP/ICNP at
+# 0x00..0x1C and the Kinetis data registers 0x40 higher: PDOR @0x40,
+# PSOR/PCOR/PTOR @0x44..0x4C, PDIR @0x50, PDDR @0x54 (RT700 PERI_GPIO.h
+# GPIO_Type; Zephyr drives it with gpio_mcux.c as `nxp,kinetis-gpio`). Each
+# window therefore starts at port base + 0x40 on `profile: kinetis`. Not
+# modelled: the 0x00..0x3C header (unmapped), PIDR @0x58 (input disable),
+# the PDR pin-data bytes @0x60, ICR/GICLR/GICHR/ISFR from 0x80, IOPCTL pad
+# config (IBENA, pulls) and the CLKCTL0 GPIO clock gates, so PDIR reads the
+# pad regardless. GPIO8..10 belong to the CPU1 sense domain and are not
+# declared.
+- id: gpio0
+  type: gpio
+  bus: sysbus
+  base_address: 0x40100040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio1
+  type: gpio
+  bus: sysbus
+  base_address: 0x40102040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio2
+  type: gpio
+  bus: sysbus
+  base_address: 0x40104040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio3
+  type: gpio
+  bus: sysbus
+  base_address: 0x40106040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio4
+  type: gpio
+  bus: sysbus
+  base_address: 0x40108040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio5
+  type: gpio
+  bus: sysbus
+  base_address: 0x4010A040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio6
+  type: gpio
+  bus: sysbus
+  base_address: 0x4010C040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio7
+  type: gpio
+  bus: sysbus
+  base_address: 0x4010E040
+  size: 64B
+  config:
+    profile: kinetis

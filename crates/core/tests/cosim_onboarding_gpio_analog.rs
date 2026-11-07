@@ -46,7 +46,13 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         "RM0008 §9.2.3 GPIOx_IDR; RM0298 GPIO_PxIN (em357 regs.h GPIO_PAIN)",
     ),
     ("gpio/stm32v2", 0x10, "RM0368 §8.4.5 GPIOx_IDR"),
-    ("gpio/kinetis", 0x10, "S32K1xx RM rev 14 §12.3 GPIOx_PDIR"),
+    // i.MX RT700 RGPIO ports are windowed at port base + 0x40, so PDIR @0x50
+    // lands at +0x10 of the window.
+    (
+        "gpio/kinetis",
+        0x10,
+        "S32K1xx RM rev 14 §12.3 GPIOx_PDIR; RT700 PERI_GPIO.h PDIR @0x50",
+    ),
     ("gpio/sam_port", 0x20, "SAM D5x/E5x DS60001507 §32.7 IN"),
     ("imxrt_gpio", 0x08, "IMXRT1060RM §12.5 GPIO_PSR"),
     (
@@ -135,14 +141,47 @@ const INPUT_REGISTER_UNREACHED: &[(&str, &str)] = &[
     ("nxp-mimx8ml", "GPIO1 window reads all ones"),
 ];
 
+/// Absolute input-register address of the covered port, from the vendor
+/// header. [`input_register`] derives the address from the descriptor's own
+/// base, so it cannot catch a base that is wrong for the silicon; these
+/// entries pin it. Each board listed must be covered.
+const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
+    (
+        "mimxrt798s",
+        "gpio0",
+        0x4010_0050,
+        "MIMXRT798S_cm33_core0_COMMON.h GPIO0_BASE_NS + PERI_GPIO.h PDIR",
+    ),
+    (
+        "mimxrt700_evk",
+        "gpio0",
+        0x4010_0050,
+        "MIMXRT798S_cm33_core0_COMMON.h GPIO0_BASE_NS + PERI_GPIO.h PDIR",
+    ),
+    (
+        "at91rm9200",
+        "pioA",
+        0xFFFF_F43C,
+        "AT91RM9200 DS 1768 Table 8-1 PIOA + PIO_PDSR",
+    ),
+    ("vybrid", "gpio0", 0x400F_F010, "vf610.dtsi gpio0 + PDIR"),
+    (
+        "colibri-vf61",
+        "gpio0",
+        0x400F_F010,
+        "vf610.dtsi gpio0 + PDIR",
+    ),
+    ("stm32w108", "gpioa", 0x4000_B008, "em357 regs.h GPIO_PAIN"),
+];
+
 /// Profiles covered here: a port takes the routed level.
-const COVERED: usize = 173;
+const COVERED: usize = 175;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 71;
+const SILICON_REGISTER: usize = 73;
 /// Profiles whose descriptor declares no GPIO input. Three of them
 /// (`stm32h7`, `stm32h747`, `stm32h747-disco`) are still covered through their
 /// ADCs in `cosim_onboarding_analog.rs`; nothing analog reaches the rest yet.
-const NO_ANALOG_ENDPOINT: usize = 72;
+const NO_ANALOG_ENDPOINT: usize = 70;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -348,6 +387,14 @@ fn assert_port_routes_generic_analog(
     );
 
     let (register, silicon_register, kind) = input_register(chip, &port, base);
+    if let Some((_, p, address, source)) = SILICON_INPUT_ADDRESS.iter().find(|(b, ..)| *b == board)
+    {
+        assert_eq!(
+            (port.as_str(), register),
+            (*p, *address),
+            "{tag}: input register is not at the silicon address ({source})"
+        );
+    }
     let (ntc_bit, diode_bit) = (input_bit(&kind, NTC_PIN), input_bit(&kind, DIODE_PIN));
     let unreached = INPUT_REGISTER_UNREACHED.iter().any(|(b, _)| *b == board);
     let io_v = chip.io_voltage_v.expect("io voltage set before the bus");
@@ -454,6 +501,12 @@ fn every_onboarding_profile_with_a_gpio_input_takes_routed_ntc_and_diode_levels(
             assert_port_routes_generic_analog(&board, &chip, &profile, port_index, &probe);
         silicon += usize::from(outcome.silicon_register);
         covered.push(board);
+    }
+    for (board, ..) in SILICON_INPUT_ADDRESS {
+        assert!(
+            covered.iter().any(|b| b == board),
+            "{board} has a pinned silicon address but is not covered"
+        );
     }
     for (board, _) in INPUT_REGISTER_UNREACHED {
         assert!(
