@@ -49,6 +49,7 @@
           "keys select=1 left=1 right=1 up=1 down=1",
           "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
           "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
+          "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
           "gpt0 to=3 nvic19=1 held=1",
           "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok",
           "hb=0 yellow=1 green=0 orange=0",
@@ -67,24 +68,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      75842,
+      75963,
       24,
+      32,
       101,
-      61,
       108,
       1073791000,
-      6,
+      101,
       536903632,
       111,
-      32,
+      61,
       536903652,
       61,
       1074638856,
       536903632,
-      2110557,
-      2112114
+      2112669,
+      2114218
     ],
-    "pc": 2112114,
+    "pc": 2114218,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -97,7 +98,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "4e6b67701b7ee3673fc5ca4f3394e6a97198516546717bc26cf088327e0b67ab",
+  "firmware_hash": "fb39ce6e58e8b556b85ea06b633a18f54a5a62f276a026b6d3c4d914bdd07e30",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",
@@ -330,9 +331,44 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "tmp102",
+        "device_type": "tmp102",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2cm",
+          "address": 72
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "tmp102",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 24736,
+                "TEMP": 6528,
+                "T_HIGH": 20480,
+                "T_LOW": 19200
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
   },
   "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
     {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
@@ -422,10 +458,16 @@
         "end_cycle": 10000
       },
       {
-        "text": "gpt0 to=3 nvic19=1 held=1",
+        "text": "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "gpt0 to=3 nvic19=1 held=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 20000
       },
       {
         "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16004",
@@ -480,14 +522,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 16828,
+    "text_bytes": 18936,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 16828,
+    "flash_used_bytes": 18936,
     "ram_static_bytes": 0,
     "flash_total_bytes": 524288,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 3.21,
+    "flash_used_pct": 3.61,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -513,35 +555,35 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 3693,
-    "memory_writes": 227,
-    "peripheral_accesses": 8133,
+    "memory_reads": 4061,
+    "memory_writes": 245,
+    "peripheral_accesses": 8244,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2112112,
+        "pc": 2114218,
         "count": 5196,
-        "symbol": "firmware_cc2538dk_smoke::spin"
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 2112114,
+        "pc": 2114222,
         "count": 5195,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 2112110,
+        "pc": 2114220,
         "count": 5156,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+        "symbol": "firmware_cc2538dk_smoke::spin"
       },
       {
-        "pc": 2108578,
+        "pc": 2110772,
         "count": 39,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 2108594,
+        "pc": 2115498,
         "count": 39,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_cc2538dk_smoke::put_dec32"
       }
     ]
   }

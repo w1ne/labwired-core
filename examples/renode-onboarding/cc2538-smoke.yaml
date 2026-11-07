@@ -23,6 +23,7 @@ assertions:
       - "keys select=1 left=1 right=1 up=1 down=1"
       - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
       - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
+      - "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0"
       - "gpt0 to=3 nvic19=1 held=1"
       - "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok"
       - "hb=0 yellow=1 green=0 orange=0"

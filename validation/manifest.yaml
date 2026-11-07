@@ -10354,11 +10354,11 @@ boards:
     # unmodified Contiki-NG v4.9 examples/rpl-udp, the topology of Renode's
     # cc2538_rpl-udp.robot: the RF core's RX FIFO, FIFOP IRQ 141 and the
     # µDMA (cc2538_udma: software basic/auto transfers, CHIS + IRQ 46).
-    # 2026-11-07: SSI0/1 master mode and GPTimer0-3's timeout/match path
-    # (cc2538_pl022_ssi, cc2538_gptimer): loopback/FIFO/IRQ checks and split
-    # one-shot/prescale/match checks in io-smoke.yaml. GPTimer RTC, capture,
-    # PWM, synchronization and ADC trigger remain outside the model. IOC, PKA,
-    # I2C, USB and SoC ADC remain declared stubs. SIM-DERIVED — no CC2538
+    # 2026-11-07: SSI0/1 master mode, GPTimer0-3's timeout/match path and the
+    # I2CM single-byte master (cc2538_pl022_ssi, cc2538_gptimer,
+    # cc2538_i2cm): loopback/FIFO/IRQ, timer and attached-TMP102 transfer
+    # checks. GPTimer RTC/capture/PWM/sync/ADC trigger and I2CS remain outside
+    # the model. IOC, PKA, USB and SoC ADC remain declared stubs. SIM-DERIVED — no CC2538
     # bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
@@ -10374,7 +10374,9 @@ boards:
       - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
       - "cc2538_rpl_udp (3 nodes, stock Contiki-NG rpl-udp: 3 round trips per client; event-scheduler)"
       - "cc2538::gptimer (9 tests: periodic down timeout, split up one-shot/prescale/match, A/B IRQ routes; legacy + event-scheduler)"
+      - "cc2538::i2cm (9 tests: reset, MFE gating, address/data NACK, held bus, repeated-start read, IRQ, reset release, byte lanes and snapshot)"
       - "cc2538dk io-smoke (GPTimer0 periodic timeout/hold and GPTimer1B split one-shot/prescale/match on IRQ 19/22)"
+      - "renode-onboarding cc2538 smoke (attached TMP102 fixture: register-pointer write, repeated-start 16-bit read, stop, IRQ 8 and RIS clear)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10386,6 +10388,7 @@ boards:
       - crates/core/src/peripherals/cc2538/udma.rs
       - crates/core/src/peripherals/cc2538/ssi.rs
       - crates/core/src/peripherals/cc2538/gptimer.rs
+      - crates/core/src/peripherals/cc2538/i2cm.rs
       - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs

@@ -4,7 +4,7 @@
 //
 //! CC2538DK (CC2538SF53, Cortex-M3) L1 smoke: UART0 console, a walk over the
 //! SmartRF06 LEDs with GPIO_DATA readback, the keys' pad levels, an SSI0
-//! loopback self-test, a GPTimer0/1 self-test and a heartbeat, in bare
+//! loopback self-test, an I2CM/TMP102 transfer, a GPTimer0/1 self-test and a heartbeat, in bare
 //! registers.
 //!
 //! Board facts (Contiki-NG `cc2538dk` dev/board.h; RIOT `cc2538dk`):
@@ -50,6 +50,7 @@ const RCGCUART_UART0: u32 = 1 << 0;
 const SYS_CTRL_RCGCSSI: u32 = SYS_CTRL + 0x18;
 /// RCGCSSI.SSI0 (bit 0).
 const RCGCSSI_SSI0: u32 = 1 << 0;
+const SYS_CTRL_RCGCI2C: u32 = SYS_CTRL + 0x20;
 
 // ── IOC (SWRU319C §9.1.1 / Table 9-7, base 0x400D_4000) ─────────────────────
 const IOC: u32 = 0x400D_4000;
@@ -125,6 +126,26 @@ const SSI_SR_RNE: u32 = 1 << 2;
 const SSI_ICR_RORIC: u32 = 1 << 0;
 /// The SSI FIFOs are eight frames deep (§19.2).
 const SSI_FIFO_DEPTH: u32 = 8;
+
+// ── I2C master (SWRU319C §21, base 0x4002_0000) ────────────────────────────
+const I2CM: u32 = 0x4002_0000;
+const I2CM_SA: u32 = I2CM;
+const I2CM_CTRL_STAT: u32 = I2CM + 0x004;
+const I2CM_DR: u32 = I2CM + 0x008;
+const I2CM_IMR: u32 = I2CM + 0x010;
+const I2CM_RIS: u32 = I2CM + 0x014;
+const I2CM_ICR: u32 = I2CM + 0x01C;
+const I2CM_CR: u32 = I2CM + 0x020;
+const I2CM_MFE: u32 = 1 << 4;
+const I2CM_RUN: u32 = 1 << 0;
+const I2CM_START: u32 = 1 << 1;
+const I2CM_STOP: u32 = 1 << 2;
+const I2CM_ACK: u32 = 1 << 3;
+const I2CM_STAT_ERROR: u32 = 1 << 1;
+const I2CM_STAT_ADRACK: u32 = 1 << 2;
+const I2CM_STAT_DATACK: u32 = 1 << 3;
+const I2CM_STAT_IDLE: u32 = 1 << 5;
+const IRQ_I2CM: u32 = 8;
 
 // ── GPTimer (SWRU319C §11; GPTIMER0/1 at 0x4003_0000/0x4003_1000) ──────────
 const SYS_CTRL_RCGCGPT: u32 = SYS_CTRL + 0x08;
@@ -290,6 +311,52 @@ fn ssi0_selftest() {
     put_hex8(rd(SSI_RIS));
     putc(b'\n');
     wr(SSI_CR1, 0);
+}
+
+/// Read the virtual TMP102's 16-bit temperature register using a register
+/// pointer write followed by a repeated-start read. The onboarding system
+/// attaches the TMP102 as an explicit test fixture; other CC2538 systems may
+/// leave the bus empty and report the expected address NACK.
+fn i2cm_selftest() {
+    wr(SYS_CTRL_RCGCI2C, rd(SYS_CTRL_RCGCI2C) | 1);
+    wr(NVIC_ICPR0, 1 << IRQ_I2CM);
+    wr(I2CM_CR, I2CM_MFE);
+    wr(I2CM_IMR, 1);
+    wr(I2CM_SA, 0x48 << 1);
+    wr(I2CM_DR, 0x00); // TMP102 temperature-register pointer.
+    wr(I2CM_CTRL_STAT, I2CM_START | I2CM_RUN);
+
+    wr(I2CM_SA, (0x48 << 1) | 1);
+    wr(I2CM_CTRL_STAT, I2CM_START | I2CM_RUN | I2CM_ACK);
+    let msb = rd(I2CM_DR) & 0xFF;
+    wr(I2CM_CTRL_STAT, I2CM_RUN | I2CM_STOP);
+    let lsb = rd(I2CM_DR) & 0xFF;
+    let status = rd(I2CM_CTRL_STAT);
+    let ris = rd(I2CM_RIS);
+    let irq8 = (rd(NVIC_ISPR0) >> IRQ_I2CM) & 1;
+    wr(I2CM_ICR, 1);
+    wr(NVIC_ICPR0, 1 << IRQ_I2CM);
+
+    if status & (I2CM_STAT_ERROR | I2CM_STAT_ADRACK | I2CM_STAT_DATACK) == 0
+        && status & I2CM_STAT_IDLE != 0
+    {
+        puts(b"i2cm read=");
+        put_hex8(msb);
+        put_hex8(lsb);
+        puts(b" stat=");
+        put_hex8(status);
+        puts(b" irq8=");
+        put_dec32(irq8);
+        puts(b" ris=");
+        put_dec32(ris);
+        puts(b" cleared=");
+        put_dec32(rd(I2CM_RIS));
+        putc(b'\n');
+    } else {
+        puts(b"i2cm nack stat=");
+        put_hex8(status);
+        putc(b'\n');
+    }
 }
 
 fn put_hex16(value: u32) {
@@ -503,6 +570,7 @@ fn main() -> ! {
     putc(b'\n');
 
     ssi0_selftest();
+    i2cm_selftest();
     gpt_selftest();
 
     // Leave yellow lit; the heartbeat reports the three driven pad levels.

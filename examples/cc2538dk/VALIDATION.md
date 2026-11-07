@@ -72,14 +72,31 @@ ELFs are not run. No wider Renode parity claim is made.
 | GPTimer0 A: 32-bit periodic down-count, three time-outs, ICR clears, NVIC pending IRQ 19, disabled-count hold | unit-tested; smoke-exercised | `cc2538::gptimer` (9 tests with legacy tick and event-scheduler); `io-smoke.yaml` UART line `gpt0 to=3 nvic19=1 held=1` |
 | GPTimer1 B: split 16-bit one-shot up-count, ÷16 prescale, match + timeout status, NVIC pending IRQ 22 | unit-tested; smoke-exercised | `cc2538::gptimer`; `io-smoke.yaml` UART line `gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16004` |
 | GPTimer RTC, capture/PWM edge handling, synchronization, ADC trigger, deferred reload, prescaler extension and CCP output | **not modelled** | `crates/core/src/peripherals/cc2538/gptimer.rs` |
-| PKA, I2C, USB, SoC ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| I2CM: address and data NACK, held bus, register-pointer write, repeated-start read, STOP, completion RIS/ICR and IRQ 8 | unit-tested; smoke-exercised | `cc2538::i2cm` (9 tests); imported-system onboarding smoke reads the injected TMP102 fixture at `0x48`, checks `1900`, IRQ 8 and RIS clear |
+| I2CM transfer timing, TPR clock division, clock stretching, multi-master arbitration, loopback; I2CS slave mode | **not modelled** | `crates/core/src/peripherals/cc2538/i2cm.rs`; I2CS remains a separate stub |
+| PKA, USB, SoC ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+
+On 2026-11-07, the imported-platform measurement
+`CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 scripts/run_renode_onboarding_inventory.py --only cc2538`
+passed after the I2CM change: 4,000,000 instructions, 3/3 smoke assertions,
+and UART `i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0`. The complete build,
+UART, JUnit, result and snapshot evidence is under
+`docs/coverage/renode-onboarding/metrics/cc2538/`. Its system injects a virtual
+TMP102 as a test fixture; this does not claim that the CC2538DK includes that
+sensor. The shared scoreboard remains at 245 descriptors, 224 booted and
+smoke-passing, 21 not run, and 0 measured failures; this CC2538 profile still
+loads eight unrelated stub windows.
 
 ## Commands and evidence (updated 2026-11-07)
 
 ```bash
 # from the repository root
 cargo build -p firmware-cc2538dk-smoke --release --target thumbv7m-none-eabi
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 \
+  scripts/run_renode_onboarding_inventory.py --only cc2538
 #   Finished `release` profile — no warnings
+#   245 descriptors; 224 booted; 224 booted and smoke-passing; 21 not run; 0 fail
+#   cc2538: 4,000,000 instructions; 3/3 assertions; I2CM TMP102 + IRQ 8
 
 ./examples/cc2538dk/ci/test.sh
 #   PASS  3/3 checks · io-smoke · 4000000 steps

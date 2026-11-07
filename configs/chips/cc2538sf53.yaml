@@ -42,6 +42,8 @@
 #   (crates/core/src/peripherals/cc2538/udma.rs).
 # - `cc2538_pl022_ssi`          — SSI0/1 master-mode SPI (IRQ 7/34)
 #   (crates/core/src/peripherals/cc2538/ssi.rs).
+# - `cc2538_i2cm`               — I2C master (§21.3): single-byte start,
+#   repeated-start and stop commands with attached I2cDevice slaves (IRQ 8).
 # - `cc2538_gptimer`            — GPTimer0-3 (§11): 32-bit and split 16-bit
 #   one-shot/periodic, up/down, prescaler, time-out + match interrupts
 #   (crates/core/src/peripherals/cc2538/gptimer.rs).
@@ -73,7 +75,9 @@
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
 # - GPTimer RTC, capture and PWM modes, the ADC trigger and timer sync.
-# - PKA, I2C, USB, SoC ADC/analog: declared stubs.
+# - PKA, I2CS slave, USB, SoC ADC/analog: declared stubs. I2CM is a
+#   synchronous byte-command master; it has no clock stretching, bus timing,
+#   arbitration or loopback.
 #
 # Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
 # (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
@@ -250,10 +254,13 @@ peripherals:
     base_address: 0x40009000
     size: "4KB"
     irq: 34
+  # I2CM master at 0x4002_0000, IRQ 8. The separate I2CS window remains a
+  # stub. Master commands are immediate; transfer timing is not modelled.
   - id: "i2cm"
-    type: "stub"
+    type: "cc2538_i2cm"
     base_address: 0x40020000
     size: "256B"
+    irq: 8
   - id: "i2cs"
     type: "stub"
     base_address: 0x40020800

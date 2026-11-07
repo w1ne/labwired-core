@@ -416,7 +416,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "armv8m_mpu",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
-    // cryptoprocessor, the µDMA, the SSI and the GPTimers. Deliberately not
+    // cryptoprocessor, the µDMA, the SSI, the GPTimers and the I2C master. Deliberately not
     // `cc2538_gpio`/`cc2538_ssi`: those spellings belong to the staged
     // onboarding/cc2538 descriptor, which keeps its placeholders.
     "cc2538_pl061_gpio",
@@ -428,6 +428,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_udma",
     "cc2538_pl022_ssi",
     "cc2538_gptimer",
+    "cc2538_i2cm",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -1900,6 +1901,9 @@ pub fn try_build(
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
         // SSI0/1: master-mode SPI; devices attach through `external_devices:`.
         "cc2538_pl022_ssi" => Box::new(crate::peripherals::cc2538::ssi::Cc2538Ssi::new()),
+        // I2CM master at 0x4002_0000; external devices attach through
+        // `external_devices:`. I2CS remains a separate stub window.
+        "cc2538_i2cm" => Box::new(crate::peripherals::cc2538::i2cm::Cc2538I2cm::new()),
         // GPTIMER0-3: timer A pends the entry's `irq:`, timer B `irq_b`.
         "cc2538_gptimer" => Box::new(crate::peripherals::cc2538::gptimer::Cc2538GpTimer::new(
             p_cfg

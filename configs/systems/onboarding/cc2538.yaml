@@ -10,4 +10,11 @@
 name: cc2538
 chip: ../../chips/cc2538sf53.yaml
 cpu_hz: 16_000_000
-external_devices: []
+# The imported CC2538DK does not include this sensor. It is an injected I2C
+# fixture for the master smoke, attached at the TMP102 default address.
+external_devices:
+  - id: tmp102
+    type: tmp102
+    connection: i2cm
+    config:
+      i2c_address: 0x48

@@ -286,6 +286,7 @@ macro_rules! snapshot_impl {
 pub mod aes;
 pub mod flash_ctrl;
 pub mod gptimer;
+pub mod i2cm;
 pub mod rfcore;
 pub mod sleep_timer;
 pub mod ssi;
