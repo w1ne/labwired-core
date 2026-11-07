@@ -61,6 +61,22 @@ The committed `tests/fixtures/ch32v003f4p6-uart-hello.elf` was built by
 `build.sh` with the same `riscv32-esp-elf-gcc` 14.2.0. Its sha256 is
 `b2cb6f34eb4c907054d4fc9bdfa1c13ec162579e7285343e182c628b0bea463a`.
 
+## SysTick delay (`systick_blink.c`)
+
+`systick_blink.c` toggles PC0 every millisecond with WCH's own `Delay_Ms` from
+EVT `Debug/debug.c`, copied unchanged. It clears `SR.CNTIF`, loads
+`CMP = n * p_ms`, zeroes `CNT`, sets `CTLR.STE` and polls `CNTIF`. The STK is
+the QingKe core timer at `0xE000F000`, register layout `SysTick_Type` from WCH
+`core_riscv.h`. At HCLK = 24 MHz it counts HCLK/8, so `p_ms` is 3000 and one
+`Delay_Ms(1)` takes 24,000 CPU cycles.
+
+`crates/core/tests/ch32v003_systick.rs` measures the PC0 edge spacing in CPU
+cycles. The STK interrupt is not delivered, because the PFIC is not modelled.
+
+The committed `tests/fixtures/ch32v003f4p6-systick-blink.elf` was built by
+`build.sh` with xPack `riscv-none-elf-gcc` 15.2.0-1. Its sha256 is
+`67e7c6108d6bb88f39b1b5736a9479e9f13fffc858fc3b8ef4ff5c6398591109`.
+
 These fixtures exercise the local simulator's RV32E/RV32EC, reset/flash
-loading, RCC, GPIO and USART1 paths. CH32V003 is not yet a hosted LabWired
+loading, RCC, GPIO, USART1 and STK paths. CH32V003 is not yet a hosted LabWired
 verifier target, so this is not a hosted `model_verified` result or hardware confirmation.
