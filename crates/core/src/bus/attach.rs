@@ -2409,7 +2409,10 @@ impl SystemBus {
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g0 => G0,
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
-                    (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {
+                    (
+                        I2cRegisterLayout::Stm32F1,
+                        GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch,
+                    ) => {
                         let pads = if ch32v003 { CH32V003 } else { F1 };
                         for &(i2c, p, pin, line, func) in pads {
                             if i2c == i2c_name && p == port {
@@ -2567,14 +2570,12 @@ impl SystemBus {
             (1, 'a', 9, LINE_TX, "USART1_TX"),
             (2, 'a', 2, LINE_TX, "USART2_TX"),
         ];
-
-        // WCH CH32V003 USART1 defaults to PD5 (WCH's official
-        // USART_IAP/USART1_CFG example configures GPIOD and USART1 and writes
-        // the GPIOD mode word that selects this TX pad). The CH32V003 has an
-        // F1-shaped GPIO register file but a different fixed USART pad map;
-        // it is selected explicitly by the descriptor, never inferred from
-        // the shared GPIO layout.
-        const CH32V003: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
+        // WCH CH32V003: USART1 default (no-remap) TX is PD5. Source: WCH
+        // `Debug/debug.c` `USART_Printf_Init`, `DEBUG_UART1_NoRemap` branch
+        // (GPIOD pin 5, GPIO_Mode_AF_PP). Same F1-style CFGLR, so no AF nibble.
+        // The remap pads need AFIO_PCFR1, which nothing decodes, so they are
+        // left unbound.
+        const WCH: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2631,8 +2632,15 @@ impl SystemBus {
                             }
                         }
                     }
-                    GpioRegisterLayout::Stm32F1 => {
-                        let table = if ch32v003_pad_map { CH32V003 } else { F1 };
+                    GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch => {
+                        // The lane's ch32fun profiles select the WCH table
+                        // through the UART's `ch32v003` pad map; main's
+                        // descriptor selects it through the `Wch` GPIO layout.
+                        let table = if gpio_layout == GpioRegisterLayout::Wch || ch32v003_pad_map {
+                            WCH
+                        } else {
+                            F1
+                        };
                         for &(inst, p, pin, line, func) in table {
                             if inst == instance && p == port {
                                 plan.push((port, pin, None, line, func));
@@ -2645,8 +2653,8 @@ impl SystemBus {
             if plan.is_empty() {
                 continue;
             }
-            // F1 rows carry no AF nibble (`None`). That is the only layout
-            // whose console sink follows the pad: V2 keeps the permissive
+            // F1 (and WCH) rows carry no AF nibble (`None`). That is the only
+            // layout whose console sink follows the pad: V2 keeps the permissive
             // byte sink the existing smokes transmit through.
             let console_gate = plan
                 .iter()

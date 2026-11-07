@@ -3,28 +3,43 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-# SOURCE OF TRUTH for R8 geometry and ordering data:
-#   ST DS5319 Rev 20, STM32F103x8/xB medium-density datasheet, Tables 2, 5,
-#   36 and the ordering information. The R8 is the 64 KiB / 20 KiB x8 device
-#   in LQFP64. The LQFP64 orderable suffixes represented here are T6/T6TR
-#   and T7/T7TR.
-#   https://www.st.com/resource/en/datasheet/stm32f103r8.pdf
-#   Live lifecycle and buyability: https://www.st.com/en/microcontrollers-microprocessors/stm32f103r8.html
+# SOURCE OF TRUTH for geometry, package and ordering data:
+#   ST DS5319 Rev 20 / DocID13587, "STM32F103x8 STM32F103xB" medium-density
+#   datasheet:
+#     - Table 2 (device features and peripheral counts)
+#     - Table 5 (pin definitions / package bond-out)
+#     - Table 58 (ordering information scheme)
+#   https://www.st.com/resource/en/datasheet/stm32f103c8.pdf
 #
-# Peripheral bases and register behavior reuse the STM32F103 medium-density
-# engine in configs/chips/stm32f103.yaml. This descriptor adds exact R8 memory,
-# LQFP64 package, pin-count and order-code metadata; it has no separate R8
-# silicon differential. USB device and backup-register windows remain explicit
-# stubs in the shared engine descriptor. The dedicated smoke profile declares
-# only RCC and GPIOC, the blocks it exercises.
+# SOURCE OF TRUTH for peripheral bases/IRQs:
+#   configs/chips/stm32f103.yaml (the public STM32F103 medium-density engine),
+#   itself bound to RM0008 and the CMSIS STM32F10x map. This R8 descriptor is
+#   the SAME medium-density x8 die as the C8 reference, so its peripheral
+#   instance set is byte-identical to the reference map (unlike the low-density
+#   x4/x6 descriptors, which reuse it as a documented approximation).
+#
+# EXACT ORDERABLE GEOMETRY for STM32F103R8 in the LQFP64 package
+# (STM32F103 medium-density x8).
+#
+#   Flash 64 KB at 0x0800_0000 - SRAM 20 KB at 0x2000_0000
+#   64-pin LQFP64 - 51 GPIOs - 16 regular ADC channels
+#
+# Ordering suffixes (LQFP64 + temperature 6/7 + optional internal code A + carrier):
+#   T6, T6TR, T6A, T6ATR, T7, T7TR, T7A, T7ATR
+#   Programmed-part options (xxx) are not enumerated.
+#
+# The TFBGA64 package of the same die is a separate descriptor, stm32f103r8h,
+# because its PC3 pad is VREF+ and it exposes only 15 ADC channels (DS5319
+# Table 2 note 1 and Table 5 note 7). Not modelled here.
+#
+# Live ordering status (2026-11-05): STM32F103R8T6 **Active**, in stock at
+# distributors (part status Active; 64 KB flash / 20 KB RAM / 64-LQFP).
 
-# Exact STM32F103R8 LQFP64 geometry: 64 KiB flash, 20 KiB SRAM, 51 GPIOs,
-# and 16 regular ADC channels.
 name: "stm32f103r8"
 arch: "arm"
 core: "cortex-m3"
 registers_count: 125
-# STM32F103 maximum core clock, 72 MHz (DS5319 Rev 20).
+# STM32F103 maximum core clock, 72 MHz (DS5319 section 5.3).
 cpu_hz: 72_000_000
 # DS5319 Rev 20, Table 36 "I/O static characteristics", all I/Os except BOOT0:
 # VIL max 0.35·VDD, VIH min 0.65·VDD.
@@ -40,7 +55,7 @@ pin_count: 64
 gpio_pin_count: 51
 adc_channels: 16
 variant: "x8"
-orderable_suffixes: ["T6", "T6TR", "T7", "T7TR"]
+orderable_suffixes: ["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"]
 
 flash:
   base: 0x08000000
@@ -382,8 +397,8 @@ peripherals:
 
 # Regular ADC inputs by pad on the LQFP64 package: ADC12_IN0..IN15.
 # The family allocation is PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on
-# this 64-pin package, PC0..PC5 = IN10..IN15 (DS5319 Rev 20, Tables 2/5).
-# The separate TFBGA64 R8 package is outside this descriptor.
+# this 64-pin package, PC0..PC5 = IN10..IN15 (DS5319 Table 2/5). The TFBGA64
+# variant stm32f103r8h omits PC3/IN13 because that pad is VREF+.
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
 analog_pins:
   PA0: { peripheral: "adc1", channel: 0 }

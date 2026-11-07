@@ -154,6 +154,18 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no WCH family bring-up in this harness; USART1 bytes on PA9 are \
          proven by weact-bluepill-plus-ch32v203-smoke",
     ),
+    // CH32V003: USART1 TX is pad-routed to PD5 behind the F1-style console AF
+    // gate. Even with PD5 set to AF push-pull (CFGLR 0x44B44444) and the F1
+    // drive, no TX edges reached the analyzer in this harness. The F1 rows here
+    // never exercised a pad-gated USART either: stm32f103 passes on USART3,
+    // which has no pad route. Bytes are proven by
+    // ch32v003_compiled_firmware::ch32v003_compiled_rv32ec_firmware_prints_on_usart1.
+    (
+        "ch32v003f4p6",
+        BusKind::Uart,
+        "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
+         harness yet; bytes are proven by ch32v003_compiled_firmware",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No

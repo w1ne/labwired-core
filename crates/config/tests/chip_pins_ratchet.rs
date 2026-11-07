@@ -114,6 +114,8 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
+    // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
+    "stm32g431rb",
     "stm32g474re",
     "stm32h563",
     "stm32h735",

@@ -1,0 +1,32 @@
+# LabWired — STM32G431RB TIER1 smoke test
+#
+# The CLI execution gate for the STM32G431RB descriptor. The chip had a
+# descriptor and a TIER1 raw-register fixture, but no `labwired test` cell in
+# any workflow ran it, so scripts/ci/chip_coverage.py saw a shipped chip that no
+# gate executes firmware on.
+#
+# `inputs.system` points at the bare-MCU manifest, whose `chip:` resolves to
+# configs/chips/stm32g431rb.yaml — that is how the coverage gate derives the
+# covered chip. This boots the committed fixture
+# (tests/fixtures/tier1/stm32g431rb.elf, sha256 in tests/fixtures/tier1/
+# MANIFEST.json) through the shared G4 peripheral map and asserts every class
+# the fixture reports. Committed blob, no toolchain, under a second.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/stm32g431rb.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 8000000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 timer PASS"
+  - uart_contains: "TIER1 pwm PASS"
+  - uart_contains: "TIER1 dma PASS"
+  - uart_contains: "TIER1 irq PASS"
+  - uart_contains: "TIER1 i2c PASS"
+  - uart_contains: "TIER1 spi PASS"
+  - uart_contains: "TIER1 adc PASS"
+  - uart_contains: "TIER1 wdt PASS"
+  - uart_contains: "TIER1 rtc PASS"
+  - uart_contains: "TIER1 done"

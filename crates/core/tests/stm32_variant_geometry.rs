@@ -63,8 +63,11 @@ const C4: &[&str] = &[
     "U7TR", "U7A", "U7ATR",
 ];
 const R4_LQFP: &[&str] = &["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"];
+// F103 medium-density x8 in LQFP64 (DS5319 Table 58): same LQFP64 suffix set
+// as the low-density LQFP64 parts, listed separately so the x8 row names its
+// own datasheet.
+const R8_LQFP: &[&str] = &["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"];
 const R4_TFBGA: &[&str] = &["H6", "H6TR", "H6A", "H6ATR", "H7", "H7TR", "H7A", "H7ATR"];
-const R8_LQFP: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const C48: &[&str] = &["U6", "U6TR", "U7", "U7TR", "Y6", "Y6TR", "Y7", "Y7TR"];
 const R64: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const V100: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
@@ -152,20 +155,6 @@ const VARIANTS: &[Variant] = &[
         variant: "x6",
         suffixes: R4_LQFP,
     },
-    // ── STM32F103 medium-density R8 (DS5319 Tables 2/5/36) ───────────────
-    Variant {
-        name: "stm32f103r8",
-        family: Family::F103,
-        flash: 64 * 1024,
-        ram: 20 * 1024,
-        package: "LQFP64",
-        pin_count: 64,
-        gpio_pin_count: 51,
-        adc_channels: 16,
-        modelled_analog: 16,
-        variant: "x8",
-        suffixes: R8_LQFP,
-    },
     Variant {
         name: "stm32f103r4h",
         family: Family::F103,
@@ -191,6 +180,19 @@ const VARIANTS: &[Variant] = &[
         modelled_analog: 15,
         variant: "x6",
         suffixes: R4_TFBGA,
+    },
+    Variant {
+        name: "stm32f103r8",
+        family: Family::F103,
+        flash: 64 * 1024,
+        ram: 20 * 1024,
+        package: "LQFP64",
+        pin_count: 64,
+        gpio_pin_count: 51,
+        adc_channels: 16,
+        modelled_analog: 16,
+        variant: "x8",
+        suffixes: R8_LQFP,
     },
     // ── STM32F401xB/xC (DS9716 Table 2 & ordering scheme) ───────────────────
     Variant {
