@@ -52,7 +52,15 @@
 //! 2.56 V reference, the MUX 0x11 1.1 V bandgap, MUX 0x0C VCC/4, MUX 0x12
 //! GND, that the 328P (0x0E) and mega (0x1E) bandgap codes have no input,
 //! and that ADCSRB bits 3 and 5 (MUX5 on the 2560 and 32U4) do not move the
-//! channel. Every result is read back with LDS ADCL/ADCH.
+//! channel. The ATmega169P runs on its own core (ports A..G at the 1281's
+//! addresses, ADC0..7 on PF0..PF7, MUX4:0 with gain-1 differential codes);
+//! there a second session routes the NTC divider to PF0 and the diode to
+//! PF1, and firmware converts MUX 0x10 (ADC0 - ADC1) at every temperature:
+//! the signed result is NTC minus diode, so it turns negative between 50 °C
+//! and 80 °C, and saturates at +511 against 1.1 V when cold. It also checks the internal 1.1 V reference (REFS =
+//! 11), the MUX 0x1E bandgap, MUX 0x1F GND, that 0x0E (the 328P's bandgap
+//! code) is N/A, and that ADCSRB bit 3 is no MUX5. Every result is read back
+//! with LDS ADCL/ADCH.
 //!
 //! For each covered part the generic Beta NTC divider and the unrelated
 //! Shockley diode route through the descriptor's `analog_pins`, to the lowest
@@ -96,6 +104,7 @@ const COVERED: &[(&str, AvrModel, &str, &str)] = &[
     ("simavr-atmega128rfr2", AvrModel::Atmega128Rf, "pf0", "pf7"),
     ("simavr-atmega16", AvrModel::Atmega16, "pa0", "pa7"),
     ("simavr-atmega164", AvrModel::Atmega164, "pa0", "pa7"),
+    ("simavr-atmega169p", AvrModel::Atmega169p, "pf0", "pf7"),
     ("simavr-atmega16m1", AvrModel::Atmega16m1, "pe2", "pc6"),
     ("simavr-atmega168", AvrModel::Atmega328p, "pc0", "pc5"),
     ("simavr-atmega2560", AvrModel::Atmega2560, "pf0", "pk7"),
@@ -153,13 +162,10 @@ const COMPARATOR_COVERED: &[(&str, AvrModel, u16, &str, &str)] = &[
 
 /// simavr profiles with no analog endpoint, and why (addresses per avr-libc
 /// 2.0.0). Covering one has to move it into [`COVERED`].
-const UNCOVERED: &[(&str, &str)] = &[
-    ("simavr-atmega169p", "LCD-controller part, no 169P core"),
-    (
-        "simavr-atmega328pb",
-        "no avr-libc header to check PE2/PE3 against",
-    ),
-];
+const UNCOVERED: &[(&str, &str)] = &[(
+    "simavr-atmega328pb",
+    "no avr-libc header to check PE2/PE3 against",
+)];
 
 const AVCC_MV: u32 = 5000;
 /// ATmega128RFA1/128RFR2 ADC supply: the internal AVDD regulator (REFS = 01).
@@ -761,6 +767,33 @@ fn assert_avr_converts_generic_analog(
             );
         }
     }
+    if core.is_m169p() {
+        assert_m169p_differential_measures_ntc_against_diode(board, chip, base_profile);
+        // REFS = 11 is the internal 1.1 V; ADCSRB bit 3 is not MUX5.
+        let mv = (expected_diode_v * 1000.0).round() as u32;
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0xC0, diode_channel),
+            (mv * 1024 / 1100).min(1023) as u16,
+            "{board}: the diode converts against the internal 1.1 V reference"
+        );
+        assert_eq!(
+            convert_raw(chip, &mut bus, 1 << 3, 0x40 | diode_channel),
+            expected_code(core, expected_diode_v),
+            "{board}: ADCSRB bit 3 is not MUX5 on the 169P"
+        );
+        assert_eq!(
+            convert_mux(chip, &mut bus, 0x40, 0x1E),
+            (1100 * 1024 / AVCC_MV) as u16,
+            "{board}: MUX 0x1E converts the 1.1 V bandgap"
+        );
+        for mux in [0x1F, 0x0E, 0x08] {
+            assert_eq!(
+                convert_mux(chip, &mut bus, 0x40, mux),
+                0,
+                "{board}: MUX {mux:#04x} has no modelled input"
+            );
+        }
+    }
     if core.is_classic() || core.is_mega128() {
         // REFS = 11 is the classic parts' internal 2.56 V, not the 328P's 1.1 V.
         let mv = (expected_diode_v * 1000.0).round() as u32;
@@ -784,6 +817,68 @@ fn assert_avr_converts_generic_analog(
             "{board}: MUX {code:#04x} converts the {bandgap_mv} mV bandgap"
         );
     }
+}
+
+/// ATmega169P gain-1 differential channels (datasheet 8018P §22.7, Table
+/// 22-4) measuring one device against the other: the NTC divider on PF0/ADC0
+/// and the diode on PF1/ADC1. MUX 0x10 (ADC0 - ADC1) must equal
+/// `(V_ntc - V_diode) * 512 / Vref` as a signed 10-bit result, so it is
+/// positive while the divider is above the diode's forward voltage and turns
+/// negative between 50 °C and 80 °C. MUX 0x19 (ADC1 - ADC2) puts the diode
+/// against the undriven ADC2, and at the 1.1 V reference ADC0 - ADC1
+/// saturates at +511 when cold.
+fn assert_m169p_differential_measures_ntc_against_diode(
+    board: &str,
+    chip: &ChipDescriptor,
+    base_profile: &SystemManifest,
+) {
+    let mut profile = base_profile.clone();
+    profile.cosim_models = generic_netlists("pf0", "pf1").cosim_models;
+    let mut bus = SystemBus::from_config(chip, &profile).expect("build simavr bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries both generic devices");
+    assert_eq!(session.binding_errors(), &[] as &[RoutingError]);
+    let signed = |delta_mv: i32, reference_mv: i32| {
+        ((delta_mv * 512 / reference_mv).clamp(-512, 511) & 0x3FF) as u16
+    };
+    let diode_mv = (diode_load_line_voltage() * 1000.0).round() as i32;
+    let mut cycles = 0;
+    for temperature_c in [-10.0_f64, 0.0, 25.0, 50.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route both netlists");
+        assert!(errors.is_empty(), "{board}: route errors: {errors:?}");
+        let r = ntc_resistance_ohms(temperature_c);
+        let ntc_mv = (3.3 * r / (10_000.0 + r) * 1000.0).round() as i32;
+        let code = convert_mux(chip, &mut bus, 0x40, 0x10);
+        assert_eq!(
+            code,
+            signed(ntc_mv - diode_mv, AVCC_MV as i32),
+            "{board}: ADC0 - ADC1 is NTC minus diode at {temperature_c} °C"
+        );
+        assert_eq!(
+            code & 0x200 != 0,
+            temperature_c >= 80.0,
+            "{board}: the divider drops below the diode between 50 and 80 °C"
+        );
+        if temperature_c < 0.0 {
+            assert_eq!(
+                convert_mux(chip, &mut bus, 0xC0, 0x10),
+                0x1FF,
+                "{board}: ADC0 - ADC1 saturates at +511 against 1.1 V"
+            );
+        }
+    }
+    assert_eq!(
+        convert_mux(chip, &mut bus, 0x40, 0x19),
+        signed(diode_mv - i32::from(AVR_ADC_UNDRIVEN_MV), AVCC_MV as i32),
+        "{board}: MUX 0x19 is ADC1 - ADC2, the diode against the undriven pad"
+    );
 }
 
 /// `ACSR` bits, the same on the ATtiny2313/4313 (avr-libc `iotn2313.h`) and

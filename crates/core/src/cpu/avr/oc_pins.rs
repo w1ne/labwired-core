@@ -133,14 +133,15 @@ impl Avr {
         // and the 128RFA1/RFR2's (PB4..PB7, PE3..5, PG5); their pads follow
         // `PORTx` (see `AvrModel`). So are the 32U4's (OC0A PB7, OC0B PD0,
         // OC1A..C PB5..PB7), the AT90USB162's (OC0A PB7, OC0B PD0, OC1A..C
-        // PB7, PB6, PC5) and the 16M1/64M1's (OC0A PD3, OC0B PE1, OC1A PD2,
-        // OC1B PC1).
+        // PB7, PB6, PC5), the 16M1/64M1's (OC0A PD3, OC0B PE1, OC1A PD2,
+        // OC1B PC1) and the 169P's (OC0A PB4, OC1A/B PB5/PB6, OC2A PB7).
         if self.model == super::AvrModel::Atmega2560
             || self.model.is_xx4()
             || self.model.is_rf()
             || self.model.is_u4()
             || self.model.is_usb162()
             || self.model.is_m1()
+            || self.model.is_m169p()
         {
             return;
         }

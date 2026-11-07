@@ -188,6 +188,19 @@ pub const SRAM_START: u16 = 0x0100;
 /// PC0) and PCINT0..3 are stored only, and so are the OC pads (OC0A PD3,
 /// OC0B PE1, OC1A PD2, OC1B PC1; they follow `PORTx`). The 328P's Timer2,
 /// USART0 and TWI are not gated off.
+///
+/// The ATmega169P/169PA (avr-libc `iom169p.h`/`iom169pa.h`) keep the
+/// ATmega328P's data map for Timer1, USART0, SPI, EEPROM, MCUCR.PUD (bit 4)
+/// and ADCL..ADMUX at 0x78..0x7C, with ports A..G at 0x20..0x34 (the
+/// ATmega1281's addresses; port G is PG0..PG5), SRAM 0x100..0x4FF and 16 KB
+/// flash. Their ADC is ADC0..7 on PF0..PF7 with MUX4:0, including the gain-1
+/// differential codes (see [`Avr::m169p_adc_code`]). Their vector table is
+/// [`m169p_vector`]. Not modelled: the LCD controller (0xE4..0xFE, stored),
+/// USI (0xB8..0xBA, where the 328P's TWI is not gated off), and Timer0/2,
+/// whose clock select is in TCCR0A/TCCR2A here, not in the 328P's TCCRnB
+/// (0x45/0xB1), so they do not count. INT0 (PD1) and PCINT0..15 (ports E
+/// and B) are stored only, and so are the OC pads (OC0A PB4, OC1A/B PB5/PB6,
+/// OC2A PB7; they follow `PORTx`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -217,6 +230,7 @@ pub enum AvrModel {
     At90usb162,
     Atmega16m1,
     Atmega64m1,
+    Atmega169p,
 }
 
 impl AvrModel {
@@ -240,7 +254,8 @@ impl AvrModel {
     /// the comparator-only AT90USB162 core (exact name: the AT90USB82 has
     /// less flash and SRAM). atmega16m1 and atmega64m1 select the M1 cores
     /// (exact name: the 32M1 has other memory sizes and the 16M1 is not the
-    /// classic ATmega16).
+    /// classic ATmega16). atmega169p/atmega169pa select the ATmega169P core
+    /// (exact name: the original ATmega169 is another revision).
     /// atmega128/atmega128a select the ATmega128
     /// core (exact name: atmega1280, atmega1281, atmega1284 and atmega128rfa1
     /// are other maps). Other names default to the ATmega328P.
@@ -277,6 +292,7 @@ impl AvrModel {
             "at90usb162" => return AvrModel::At90usb162,
             "atmega16m1" => return AvrModel::Atmega16m1,
             "atmega64m1" => return AvrModel::Atmega64m1,
+            "atmega169p" | "atmega169pa" => return AvrModel::Atmega169p,
             _ => {}
         }
         if n.contains("1280") || n.contains("1281") {
@@ -310,6 +326,7 @@ impl AvrModel {
             AvrModel::At90usb162 => 16 * 1024,
             AvrModel::Atmega16m1 => 16 * 1024,
             AvrModel::Atmega64m1 => 64 * 1024,
+            AvrModel::Atmega169p => 16 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
@@ -324,7 +341,8 @@ impl AvrModel {
             | AvrModel::Attiny1634
             | AvrModel::At90usb162
             | AvrModel::Atmega16m1
-            | AvrModel::Atmega64m1 => SRAM_START,
+            | AvrModel::Atmega64m1
+            | AvrModel::Atmega169p => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega128Rf => 0x0200,
             AvrModel::Atmega8
             | AvrModel::Atmega16
@@ -362,6 +380,7 @@ impl AvrModel {
             AvrModel::At90usb162 => 0x02FF,
             AvrModel::Atmega16m1 => 0x04FF,
             AvrModel::Atmega64m1 => 0x10FF,
+            AvrModel::Atmega169p => 0x04FF,
         }
     }
     /// The classic ATmega8/16/32 I/O-space map (see [`AvrModel`]).
@@ -404,6 +423,10 @@ impl AvrModel {
     /// The ATmega16M1/64M1 map (see [`AvrModel`]).
     pub fn is_m1(self) -> bool {
         matches!(self, AvrModel::Atmega16m1 | AvrModel::Atmega64m1)
+    }
+    /// The ATmega169P/169PA map (see [`AvrModel`]).
+    pub fn is_m169p(self) -> bool {
+        self == AvrModel::Atmega169p
     }
     /// Data address of ACSR on a part whose only analog input is the analog
     /// comparator: 0x28 on the ATtiny2313/4313, 0x50 on the AT90USB162.
@@ -475,7 +498,8 @@ impl AvrModel {
             | AvrModel::Atmega128
             | AvrModel::Atmega32u4
             | AvrModel::Atmega16m1
-            | AvrModel::Atmega64m1 => AVR_MEGA_ADC_INPUT_BASE,
+            | AvrModel::Atmega64m1
+            | AvrModel::Atmega169p => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Atmega8
             | AvrModel::Atmega16
             | AvrModel::Atmega32
@@ -585,6 +609,28 @@ pub fn m1_vector(vec328: u32) -> u32 {
         22 => 28,              // ADC
         23 => 30,              // EE READY
         26 => 31,              // SPM READY
+        v => v,
+    }
+}
+/// ATmega169P/169PA vector number (1-based, avr-libc `_VECTOR(n)` + 1) for a
+/// vector this core numbers the ATmega328P way. The part has one INT, two
+/// PCINT groups and one compare channel on Timer0/2, so PCINT0/1 are 3/4,
+/// Timer2 COMP/OVF 5/6, Timer1 7..10, Timer0 COMP/OVF 11/12, SPI 13, USART
+/// RX/UDRE/TX 14..16; after USI START/OVF come ANALOG COMP 19, ADC 20, EE
+/// READY 21 and SPM READY 22. INT1, PCINT2, WDT, the B compare channels of
+/// Timer0/2 and TWI do not exist; their 328P numbers pass through.
+pub fn m169p_vector(vec328: u32) -> u32 {
+    match vec328 {
+        4 | 5 => vec328 - 1,   // PCINT0, PCINT1 -> 3, 4
+        8 => 5,                // TIMER2 COMP
+        10 => 6,               // TIMER2 OVF
+        11..=14 => vec328 - 4, // TIMER1 CAPT/COMPA/COMPB/OVF -> 7..10
+        15 => 11,              // TIMER0 COMP
+        17..=21 => vec328 - 5, // TIMER0 OVF 12, SPI 13, USART RX/UDRE/TX 14..16
+        22 => 20,              // ADC
+        23 => 21,              // EE READY
+        24 => 19,              // ANALOG COMP
+        26 => 22,              // SPM READY
         v => v,
     }
 }
@@ -1046,6 +1092,7 @@ impl Avr {
             && !self.model.is_u4()
             && !self.model.is_usb162()
             && !self.model.is_m1()
+            && !self.model.is_m169p()
     }
 
     /// `PINx` of a port this model has.
@@ -1062,7 +1109,7 @@ impl Avr {
                 matches!(addr, AVR_PINA | AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
-            AvrModel::Atmega128Rf => MEGA2560_PIN_ADDRS[..7].contains(&addr),
+            AvrModel::Atmega128Rf | AvrModel::Atmega169p => MEGA2560_PIN_ADDRS[..7].contains(&addr),
             AvrModel::Atmega8 => CLASSIC_PIN_ADDRS[..3].contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => CLASSIC_PIN_ADDRS.contains(&addr),
             AvrModel::Atmega128 => MEGA128_PIN_ADDRS.contains(&addr),
@@ -1095,7 +1142,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
-            AvrModel::Atmega128Rf => (0x20..=0x34).contains(&addr),
+            AvrModel::Atmega128Rf | AvrModel::Atmega169p => (0x20..=0x34).contains(&addr),
             AvrModel::Atmega8 => (0x30..=0x38).contains(&addr),
             AvrModel::Atmega16 | AvrModel::Atmega32 => (0x30..=0x3B).contains(&addr),
             AvrModel::Atmega128 => {
@@ -2114,6 +2161,44 @@ impl Avr {
         Ok((input_mv, reference_mv))
     }
 
+    /// ATmega169P/169PA ADMUX: the 10-bit result register value (avr-libc
+    /// `iom169p.h`, datasheet 8018P §22.7 and §22.9.1, Tables 22-3/22-4).
+    ///
+    /// MUX4:0 0x00..0x07 are ADC0..7 (PF0..PF7), single-ended:
+    /// `Vin * 1024 / Vref`. 0x10..0x17 are ADC0..7 minus ADC1 and 0x18..0x1D
+    /// ADC0..5 minus ADC2, gain 1: `(Vpos - Vneg) * 512 / Vref` as a 10-bit
+    /// two's complement value, -512..511, truncated toward zero (the
+    /// datasheet's ADC3 - ADC2 example, 300 mV - 500 mV at 1.1 V, is -93 =
+    /// 0x3A3). 0x1E is the 1.1 V bandgap and 0x1F GND; 0x08..0x0F are N/A
+    /// and read 0. ADCSRB has no MUX5 (bit 6 is ACME, bits 2:0 ADTS). REFS =
+    /// 11 is the internal 1.1 V; 00 (AREF, not a modelled pin), 01 (AVcc)
+    /// and the reserved 10 are taken as 5 V AVcc.
+    fn m169p_adc_code(&self, bus: &dyn Bus) -> SimResult<u16> {
+        let pin_mv = |ch: u8| -> SimResult<i32> {
+            let base = self.model.adc_input_base() + u64::from(ch) * 2;
+            let lo = bus.read_u8(base)?;
+            let hi = bus.read_u8(base + 1)?;
+            Ok(i32::from(u16::from_le_bytes([lo, hi])))
+        };
+        let reference_mv = if self.admux >> 6 == 0b11 {
+            AVR_BANDGAP_MV
+        } else {
+            AVR_AVCC_MV
+        } as i32;
+        let single = |mv: i32| (mv * 1024 / reference_mv).clamp(0, 1023) as u16;
+        let differential = |pos: u8, neg: u8| -> SimResult<u16> {
+            let code = ((pin_mv(pos)? - pin_mv(neg)?) * 512 / reference_mv).clamp(-512, 511);
+            Ok((code & 0x3FF) as u16)
+        };
+        match self.admux & 0x1F {
+            ch @ 0x00..=0x07 => Ok(single(pin_mv(ch)?)),
+            m @ 0x10..=0x17 => differential(m - 0x10, 1),
+            m @ 0x18..=0x1D => differential(m - 0x18, 2),
+            0x1E => Ok(single(AVR_BANDGAP_MV as i32)),
+            _ => Ok(0),
+        }
+    }
+
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
@@ -2161,6 +2246,9 @@ impl Avr {
         if self.model.is_m1() {
             let (input_mv, reference_mv) = self.m1_adc_input(bus)?;
             return Ok((input_mv * 1024 / reference_mv).min(1023) as u16);
+        }
+        if self.model.is_m169p() {
+            return self.m169p_adc_code(bus);
         }
         let channel: Option<u8> = if self.is_mega() {
             let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 3) != 0;
@@ -2663,6 +2751,8 @@ impl Avr {
             usb162_vector(vec)
         } else if self.model.is_m1() {
             m1_vector(vec)
+        } else if self.model.is_m169p() {
+            m169p_vector(vec)
         } else {
             vec
         };
@@ -4919,13 +5009,15 @@ mod tests {
     #[test]
     fn oc_pads_follow_port_where_the_328p_pins_are_not_oc() {
         // COM0A = 10 in fast PWM drives OC0A, which is PD6 only on the 328P.
-        // The AT90USB162 (OC0A PB7) and the 16M1/64M1 (OC0A PD3) leave
+        // The AT90USB162 (OC0A PB7), the 16M1/64M1 (OC0A PD3) and the 169P
+        // (OC0A PB4) leave
         // their pads to PORTx rather than toggle the 328P's PD6.
         for (model, overlaid) in [
             (AvrModel::Atmega328p, [0, 1 << 6]),
             (AvrModel::At90usb162, [0, 0]),
             (AvrModel::Atmega16m1, [0, 0]),
             (AvrModel::Atmega64m1, [0, 0]),
+            (AvrModel::Atmega169p, [0, 0]),
         ] {
             let mut cpu = Avr::new_model(model);
             let mut bus = MockBus::new();
@@ -5046,6 +5138,140 @@ mod tests {
         ] {
             assert_eq!(m1_vector(vec328), slot, "328P vector {vec328}");
         }
+    }
+
+    // ---- ATmega169P/169PA (AvrModel::is_m169p) ----
+
+    #[test]
+    fn m169p_core_needs_the_exact_part_name_and_has_the_iom169p_map() {
+        for (name, model) in [
+            ("simavr-atmega169p", AvrModel::Atmega169p),
+            ("atmega169pa", AvrModel::Atmega169p),
+            // The original ATmega169 is another revision: not this core.
+            ("atmega169", AvrModel::Atmega328p),
+        ] {
+            assert_eq!(AvrModel::from_chip_name(name), model, "{name}");
+        }
+        let mut cpu = Avr::new_model(AvrModel::Atmega169p);
+        let mut bus = MockBus::new();
+        // RAMSTART 0x100, RAMEND 0x4FF, FLASHEND 0x3FFF.
+        assert_eq!(cpu.sp, 0x04FF);
+        assert_eq!(cpu.flash.len(), 16 * 1024);
+        cpu.data_write(0x0100, 0xA5, &mut bus).unwrap();
+        cpu.data_write(0x04FF, 0x5A, &mut bus).unwrap();
+        assert_eq!(cpu.sram[0], 0xA5);
+        assert!(cpu.data_read(0x0500, &bus).is_err());
+        // Ports A..G at 0x20..0x34; 0x35 is TIFR0, not a port.
+        assert!(cpu.is_pin_reg(0x20) && cpu.is_pin_reg(0x2F) && cpu.is_pin_reg(0x32));
+        assert!(cpu.is_port_reg(0x34) && !cpu.is_port_reg(0x35));
+        assert!(!cpu.is_pin_reg(0x100));
+        // PORTF/DDRF drive the mirror; PINF reads the bus-side pads.
+        cpu.data_write(0x30, 0x0F, &mut bus).unwrap();
+        cpu.data_write(0x31, 0x05, &mut bus).unwrap();
+        bus.mem.insert(AVR_IO_MIRROR_BASE + 0x2F, 0xF0);
+        assert_eq!(cpu.data_read(0x2F, &bus).unwrap(), 0xF5);
+        // INT0 is PD1 and PCINT0..15 are ports E and B: stored only.
+        assert!(!cpu.has_328p_ext_int());
+    }
+
+    #[test]
+    fn m169p_adc_has_single_ended_differential_bandgap_and_gnd_codes() {
+        let mut cpu = Avr::new_model(AvrModel::Atmega169p);
+        let mut bus = MockBus::new();
+        let drive = |bus: &mut MockBus, ch: u64, mv: u16| {
+            let base = AVR_MEGA_ADC_INPUT_BASE + ch * 2;
+            bus.mem.insert(base, (mv & 0xFF) as u8);
+            bus.mem.insert(base + 1, (mv >> 8) as u8);
+        };
+        let convert = |cpu: &mut Avr, bus: &mut MockBus, adcsrb: u8, admux: u8| {
+            cpu.data_write(0x7B, adcsrb, bus).unwrap();
+            cpu.data_write(0x7C, admux, bus).unwrap();
+            cpu.data_write(0x7A, 0xC0, bus).unwrap();
+            u32::from(cpu.adch) << 8 | u32::from(cpu.adcl)
+        };
+        // Datasheet 8018P §22.7: ADMUX = 0xFB is ADC3 - ADC2 at 1.1 V; with
+        // 300 mV and 500 mV, ADC = 512 * (300 - 500) / 1100 = -93 = 0x3A3,
+        // ADCL 0xA3 / ADCH 0x03 right-adjusted.
+        drive(&mut bus, 2, 500);
+        drive(&mut bus, 3, 300);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xDB), 0x3A3);
+        assert_eq!((cpu.adch, cpu.adcl), (0x03, 0xA3));
+        // ADLAR left-adjusts the same 10 bits.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xFB), 0x3A3 << 6);
+        // Swapped sign: ADC2 - ADC2 is 0, ADC3 - ADC1 positive.
+        drive(&mut bus, 1, 100);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xDA), 0);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xD3), 200 * 512 / 1100);
+        // Differential saturates at -512 (0x200) and +511 (0x1FF).
+        drive(&mut bus, 7, 5000);
+        drive(&mut bus, 0, 0);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xD7), 0x1FF);
+        // AVcc reference: ADC0 - ADC1 = -100 mV is -10.24, truncated to -10.
+        assert_eq!(
+            convert(&mut cpu, &mut bus, 0x00, 0x50),
+            (-10i32 & 0x3FF) as u32
+        );
+        drive(&mut bus, 1, 5000);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xD0), 0x200);
+        // Single-ended ADC0..7 against AVcc, and REFS = 11 the internal 1.1 V.
+        drive(&mut bus, 6, 900);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x46), 900 * 1024 / 5000);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0xC6), 900 * 1024 / 1100);
+        // REFS = 10 is reserved and 00 is AREF: both taken as AVcc.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x86), 900 * 1024 / 5000);
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x06), 900 * 1024 / 5000);
+        // No MUX5: ADCSRB bit 3 (the 2560's MUX5) leaves ADC6.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x08, 0x46), 900 * 1024 / 5000);
+        // 0x1E is the 1.1 V bandgap, 0x1F GND, 0x08..0x0F N/A; 0x0E (the
+        // 328P's bandgap code) has no input here.
+        assert_eq!(convert(&mut cpu, &mut bus, 0x00, 0x5E), 1100 * 1024 / 5000);
+        for mux in [0x08, 0x0B, 0x0E, 0x0F, 0x1F] {
+            assert_eq!(
+                convert(&mut cpu, &mut bus, 0x00, 0x40 | mux),
+                0,
+                "MUX {mux:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn m169p_vectors_follow_iom169p() {
+        // (328P vector, ATmega169P `_VECTOR(n)` + 1)
+        for (vec328, slot) in [
+            (2, 2),   // INT0
+            (4, 3),   // PCINT0
+            (5, 4),   // PCINT1
+            (8, 5),   // TIMER2 COMP
+            (10, 6),  // TIMER2 OVF
+            (11, 7),  // TIMER1 CAPT
+            (12, 8),  // TIMER1 COMPA
+            (13, 9),  // TIMER1 COMPB
+            (14, 10), // TIMER1 OVF
+            (15, 11), // TIMER0 COMP
+            (17, 12), // TIMER0 OVF
+            (18, 13), // SPI STC
+            (19, 14), // USART0 RX
+            (20, 15), // USART0 UDRE
+            (21, 16), // USART0 TX
+            (24, 19), // ANALOG COMP
+            (22, 20), // ADC
+            (23, 21), // EE READY
+            (26, 22), // SPM READY
+        ] {
+            assert_eq!(m169p_vector(vec328), slot, "328P vector {vec328}");
+        }
+    }
+
+    #[test]
+    fn m169p_core_enters_its_own_vector_slots() {
+        // A pending Timer0 overflow (328P 17) enters TIMER0_OVF_vect, which
+        // is slot 12 (word 11 * 2) on the 169P, not the 328P's 17.
+        let mut cpu = Avr::new_model(AvrModel::Atmega169p);
+        let mut bus = MockBus::new();
+        cpu.pending_irq = 1 << VEC_TIMER0_OVF;
+        cpu.sreg = 0x80;
+        step_n(&mut cpu, &mut bus, 1);
+        assert_eq!(cpu.pc, 11 * 4);
     }
 
     #[test]
