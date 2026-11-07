@@ -6,32 +6,33 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 4000000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
-  "crate": "firmware-s32k388-onboarding-smoke",
-  "target_triple": "thumbv7em-none-eabi",
+  "crate": null,
+  "target_triple": null,
   "script": "examples/renode-onboarding/nxp-s32k388evb-smoke.yaml",
   "system": "configs/systems/onboarding/nxp-s32k388evb.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T22:14:25Z",
-  "finished_at_utc": "2026-11-05T22:14:33Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7818,
+  "started_at_utc": "2026-11-07T08:34:59Z",
+  "finished_at_utc": "2026-11-07T08:36:52Z",
+  "elapsed_seconds": 114,
+  "elapsed_ms": 113978,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 7.35,
-    "build_firmware": 0.175,
-    "run_smoke": 0.282
+    "build_cli": 112.755,
+    "build_firmware": null,
+    "run_smoke": 1.212
   },
   "stages_ms": {
-    "build_cli": 7350,
-    "build_firmware": 175,
-    "run_smoke": 282
-  }
+    "build_cli": 112755,
+    "build_firmware": null,
+    "run_smoke": 1212
+  },
+  "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf"
 }

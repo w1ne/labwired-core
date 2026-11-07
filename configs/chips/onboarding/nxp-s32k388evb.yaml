@@ -2,12 +2,14 @@
 # Copyright (C) 2026 Andrii Shylenko
 # SPDX-License-Identifier: MIT
 #
-# Bounded profile for the imported S32K388EVB-Q172 descriptor.
+# Narrowed profile for the imported S32K388EVB descriptor.
 #
-# This execution profile claims the implemented Cortex-M7 core and memory
-# windows only. The imported peripheral list contained zero-answering stubs;
-# peripheral behavior is outside this smoke. Memory map and CM7_0 reset
-# handoff follow the S32K388 profile and RTD linker map.
+# The imported Renode peripheral list was mostly zero-answering windows. This
+# profile keeps the sourced CM7_0 core and memory map (configs/chips/s32k388.yaml)
+# and only the blocks the onboarding smoke exercises: the real SIUL2 GPIO and
+# LPUART2 models, SysTick, and two explicit stubs (SWT_0, MC_ME) that accept the
+# watchdog-disable and clock-gate writes. Those stubs never fire a watchdog
+# and gate nothing; this profile claims no other S32K388 peripheral.
 name: "nxp-s32k388evb"
 arch: "arm"
 core: "cortex-m7"
@@ -28,4 +30,34 @@ memory_regions:
     size: "64KB"
 flash_boot_alias: false
 reset_vector_offset: 0x1000
-peripherals: []
+pins:
+  PTA1: { gpio: "siul2", bit: 1 }
+  PTF17: { gpio: "siul2", bit: 177 }
+  PTF18: { gpio: "siul2", bit: 178 }
+  PTF19: { gpio: "siul2", bit: 179 }
+  PTF22: { gpio: "siul2", bit: 182 }
+  PTF23: { gpio: "siul2", bit: 183 }
+  PTF24: { gpio: "siul2", bit: 184 }
+peripherals:
+  - id: "swt0"
+    type: "stub"
+    base_address: 0x40270000
+    size: "16KB"
+  - id: "siul2"
+    type: "s32k3_siul2"
+    base_address: 0x40290000
+    size: "16KB"
+  - id: "mc_me"
+    type: "stub"
+    base_address: 0x402DC000
+    size: "16KB"
+  - id: "lpuart2"
+    type: "imxrt_lpuart"
+    base_address: 0x40330000
+    size: "16KB"
+    irq: 143
+    config: { clock_hz: 24000000 }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: 16

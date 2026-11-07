@@ -359,13 +359,11 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml",
     },
     "nxp-s32k388": {
-        "crate": "firmware-s32k388-onboarding-smoke",
-        "target": "thumbv7em-none-eabi",
+        "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf",
         "script": "examples/renode-onboarding/nxp-s32k388-smoke.yaml",
     },
     "nxp-s32k388evb": {
-        "crate": "firmware-s32k388-onboarding-smoke",
-        "target": "thumbv7em-none-eabi",
+        "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf",
         "script": "examples/renode-onboarding/nxp-s32k388evb-smoke.yaml",
     },
     "nxp-k6xf": {

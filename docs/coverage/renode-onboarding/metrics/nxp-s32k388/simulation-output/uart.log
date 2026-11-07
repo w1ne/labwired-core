@@ -1,0 +1,20 @@
+S32K388 EVB SMOKE
+cpu=cortex-m7 core=cm7_0 uart=lpuart2
+ivt marker=5aa55aa5 cm7_0=00401000 vtor=00401000
+clk aips_slow=24000000 osr=16 sbr=13 baud=115384
+leds=off pgpdo11=0000 pgpdi11=0000
+on ptf17 gpdi=1 pgpdo11=4000 pgpdi11=4000
+on ptf18 gpdi=1 pgpdo11=6000 pgpdi11=6000
+on ptf19 gpdi=1 pgpdo11=7000 pgpdi11=7000
+on ptf22 gpdi=1 pgpdo11=7200 pgpdi11=7200
+on ptf23 gpdi=1 pgpdo11=7300 pgpdi11=7300
+on ptf24 gpdi=1 pgpdo11=7380 pgpdi11=7380
+mpgpdo pgpdo11=0380 pgpdi11=0380
+pgpdo pgpdo11=0000 pgpdi11=0000
+pta1 pu=1 pd=0
+hb=0 ptf23=1
+hb=1 ptf23=0
+hb=2 ptf23=1
+hb=3 ptf23=0
+hb=4 ptf23=1
+hb=5 ptf23=

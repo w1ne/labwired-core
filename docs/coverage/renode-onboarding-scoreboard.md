@@ -8,12 +8,12 @@
 - not_run: `21`
 - pass: `224`
 - fail: `0`
-- pass_loading_zero_answering_windows: `2/224`
-- pass_observable_assertions: `177/224`
-- pass_stop_reason_only: `47/224`
+- pass_loading_zero_answering_windows: `4/224`
+- pass_observable_assertions: `179/224`
+- pass_stop_reason_only: `45/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1223`
-- median_elapsed_seconds: `1.223`
+- median_elapsed_ms: `1195`
+- median_elapsed_seconds: `1.195`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -147,8 +147,8 @@
 | `nxp-frdm-imx8mplus` | `pass` | `True` | `yes` | `yes` | `8747` | `8.747` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
 | `nxp-k6xf` | `pass` | `True` | `yes` | `yes` | `825` | `0.825` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `nxp-mimx8ml` | `pass` | `True` | `yes` | `yes` | `8193` | `8.193` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `nxp-s32k388` | `pass` | `True` | `yes` | `yes` | `1435` | `1.435` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `nxp-s32k388evb` | `pass` | `True` | `yes` | `yes` | `7818` | `7.818` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `nxp-s32k388` | `pass` | `True` | `yes` | `yes` | `1113` | `1.113` | `True` | `observable` | 2: `swt0:stub`, `mc_me:stub` | `n/a` | n/a | n/a |
+| `nxp-s32k388evb` | `pass` | `True` | `yes` | `yes` | `113978` | `113.978` | `True` | `observable` | 2: `swt0:stub`, `mc_me:stub` | `n/a` | n/a | n/a |
 | `opentitan-earlgrey` | `pass` | `True` | `yes` | `yes` | `841` | `0.841` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `opentitan-earlgrey-cw310` | `pass` | `True` | `yes` | `yes` | `1349` | `1.349` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `picosoc` | `pass` | `True` | `yes` | `yes` | `1288` | `1.288` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

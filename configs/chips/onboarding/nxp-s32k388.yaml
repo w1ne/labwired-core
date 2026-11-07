@@ -1,12 +1,14 @@
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
 #
-# The imported Renode descriptor advertised peripheral windows that are not
-# implemented by this engine and understated SRAM. Keep this onboarding
-# execution profile to the sourced S32K388 CM7_0 core and memory map. The
-# CPU-only smoke loads its vector table directly from flash; it does not model
-# the S32K3 boot ROM or exercise peripherals.
-# Memory sizes and TCM windows follow configs/chips/s32k388.yaml.
+# Narrowed profile for the imported S32K388 descriptor.
+#
+# The imported Renode peripheral list was mostly zero-answering windows. This
+# profile keeps the sourced CM7_0 core and memory map (configs/chips/s32k388.yaml)
+# and only the blocks the onboarding smoke exercises: the real SIUL2 GPIO and
+# LPUART2 models, SysTick, and two explicit stubs (SWT_0, MC_ME) that accept the
+# watchdog-disable and clock-gate writes. Those stubs never fire a watchdog
+# and gate nothing; this profile claims no other S32K388 peripheral.
 
 name: nxp-s32k388
 arch: arm
@@ -26,4 +28,35 @@ memory_regions:
     base: 0x20000000
     size: "64KB"
 flash_boot_alias: false
-peripherals: []
+reset_vector_offset: 0x1000
+pins:
+  PTA1: { gpio: "siul2", bit: 1 }
+  PTF17: { gpio: "siul2", bit: 177 }
+  PTF18: { gpio: "siul2", bit: 178 }
+  PTF19: { gpio: "siul2", bit: 179 }
+  PTF22: { gpio: "siul2", bit: 182 }
+  PTF23: { gpio: "siul2", bit: 183 }
+  PTF24: { gpio: "siul2", bit: 184 }
+peripherals:
+  - id: "swt0"
+    type: "stub"
+    base_address: 0x40270000
+    size: "16KB"
+  - id: "siul2"
+    type: "s32k3_siul2"
+    base_address: 0x40290000
+    size: "16KB"
+  - id: "mc_me"
+    type: "stub"
+    base_address: 0x402DC000
+    size: "16KB"
+  - id: "lpuart2"
+    type: "imxrt_lpuart"
+    base_address: 0x40330000
+    size: "16KB"
+    irq: 143
+    config: { clock_hz: 24000000 }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: 16
