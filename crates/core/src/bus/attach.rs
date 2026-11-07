@@ -2799,6 +2799,12 @@ impl SystemBus {
             Some((idx, bus.peripherals[idx].dev.timer_input_stage()?))
         };
         let mut wired = false;
+        if self.rcc_is_ch32v003() {
+            // The F1 table names pads this package does not have (PA8..PA11)
+            // and puts TIM2 on PA1/PA2, which are TIM1 pads here.
+            self.timer_capture_wired = self.wire_ch32v003_timer_capture_pads();
+            return;
+        }
         for port in ['a', 'b', 'c', 'd', 'e'] {
             let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
                 continue;
@@ -2831,6 +2837,46 @@ impl SystemBus {
             }
         }
         self.timer_capture_wired = wired;
+    }
+
+    /// CH32V003 input capture: each TIM1/TIM2 channel's pad feeds its TIy
+    /// while the pad is a digital input AND AFIO_PCFR1 selects the mapping
+    /// the row belongs to ([`CH32V003_TIMER_PADS`]). With no AFIO block only
+    /// the reset-mapping rows are bound.
+    fn wire_ch32v003_timer_capture_pads(&mut self) -> bool {
+        use crate::peripherals::pad_routing::RemapGate;
+        use crate::peripherals::timer::TimerInputStage;
+        let remap = self
+            .find_peripheral_index_by_name("afio")
+            .and_then(|i| self.peripherals[i].dev.remap_register());
+        let mut wired = false;
+        for &(tim, port, pin, ch, func, shift, value) in CH32V003_TIMER_PADS {
+            if ch > 3 || (remap.is_none() && value != 0) {
+                continue;
+            }
+            let Some(t_idx) = self
+                .find_peripheral_index_by_name(tim)
+                .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
+            else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::F1) {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
+                continue;
+            };
+            let gate = remap.as_ref().map(|register| RemapGate {
+                register: register.clone(),
+                shift,
+                mask: 0b11,
+                value,
+            });
+            wired |= self.peripherals[gpio_idx]
+                .dev
+                .bind_remapped_timer_capture_pad(pin, t_idx, ch as u8, func, gate);
+        }
+        wired
     }
 
     /// Whether the chip's RCC is the narrow WCH CH32V003 profile. Its I²C1
@@ -2883,62 +2929,6 @@ impl SystemBus {
             ("tim4", 'b', 8, 2, "TIM4_CH3"),
             ("tim4", 'b', 9, 3, "TIM4_CH4"),
         ];
-        // WCH CH32V003: the register block is the F1 timer; only the pads
-        // differ, and AFIO_PCFR1 moves them, so every row names the remap
-        // field value it is live under: (timer, port, pin, channel, func,
-        // PCFR1 shift, value). The complementary outputs are wire lines 4..6
-        // (`complementary_line`).
-        //
-        // TIM1_RM is PCFR1 [7:6]. Pads from ch32fun's ch32v003hw.h
-        // (AFIO_PCFR1_TIM1_REMAP_* comments) cross-checked against the
-        // remap table in examples/tim1_pwm_complementary_outputs; 00 and 10
-        // put the channels on the same pads (only ETR/BKIN differ):
-        //   00/10: CH1/CH1N PD2/PD0, CH2/CH2N PA1/PA2, CH3/CH3N PC3/PD1, CH4 PC4
-        //   01:    CH1/CH1N PC6/PC3, CH2/CH2N PC7/PC4, CH3/CH3N PC0/PD1, CH4 PD3
-        //   11:    CH1/CH1N PC4/PC3, CH2/CH2N PC7/PD2, CH3/CH3N PC5/PC6
-        // ⚠️ Full-remap CH4 is left out: the header puts it on PD4, the
-        // example's table on PD2 (already CH2N there). Two sources disagree,
-        // so that output stays dark rather than guessed.
-        //
-        // TIM2_RM is PCFR1 [9:8]; only its reset mapping 00 is bound, the
-        // pads ch32fun's examples/tim2_pwm drives: T2CH1ETR PD4, T2CH2 PD3,
-        // T2CH3 PC0, T2CH4 PD7. A remapped TIM2 is dark, not on the wrong pad.
-        type Ch32Row = (&'static str, char, u8, usize, &'static str, u32, u32);
-        const TIM1_RM: u32 = 6;
-        const TIM2_RM: u32 = 8;
-        const CH32V003: &[Ch32Row] = &[
-            ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b00),
-            ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b00),
-            ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b00),
-            ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b00),
-            ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b00),
-            ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b00),
-            ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b00),
-            ("tim1", 'c', 6, 0, "TIM1_CH1", TIM1_RM, 0b01),
-            ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b01),
-            ("tim1", 'c', 0, 2, "TIM1_CH3", TIM1_RM, 0b01),
-            ("tim1", 'd', 3, 3, "TIM1_CH4", TIM1_RM, 0b01),
-            ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b01),
-            ("tim1", 'c', 4, 5, "TIM1_CH2N", TIM1_RM, 0b01),
-            ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b01),
-            ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b10),
-            ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b10),
-            ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b10),
-            ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b10),
-            ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b10),
-            ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b10),
-            ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b10),
-            ("tim1", 'c', 4, 0, "TIM1_CH1", TIM1_RM, 0b11),
-            ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b11),
-            ("tim1", 'c', 5, 2, "TIM1_CH3", TIM1_RM, 0b11),
-            ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b11),
-            ("tim1", 'd', 2, 5, "TIM1_CH2N", TIM1_RM, 0b11),
-            ("tim1", 'c', 6, 6, "TIM1_CH3N", TIM1_RM, 0b11),
-            ("tim2", 'd', 4, 0, "TIM2_CH1", TIM2_RM, 0b00),
-            ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b00),
-            ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b00),
-            ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b00),
-        ];
         use crate::peripherals::pad_routing::RemapGate;
         let remap = if self.rcc_is_ch32v003() {
             // No AFIO block on the bus: nothing can move a pad, so the reset
@@ -2964,7 +2954,7 @@ impl SystemBus {
                 .iter()
                 .map(|&(t, port, pin, ch, func)| (t, port, pin, ch, func, None))
                 .collect(),
-            Some(cell) => CH32V003
+            Some(cell) => CH32V003_TIMER_PADS
                 .iter()
                 .filter(|row| cell.is_some() || row.6 == 0)
                 .map(|&(t, port, pin, ch, func, shift, value)| {
@@ -4119,3 +4109,64 @@ fn edge_sampling_unsupported(controller: &str, engine: &str) -> anyhow::Error {
          implements it (STM32 classic/FIFO SPI)."
     )
 }
+
+// WCH CH32V003 timer pads, shared by the output and input-capture
+// routers. The register block is the F1 timer; only the pads differ, and AFIO_PCFR1 moves them, so every row names the remap
+// field value it is live under: (timer, port, pin, channel, func,
+// PCFR1 shift, value). The complementary outputs are wire lines 4..6
+// (`complementary_line`).
+//
+// TIM1_RM is PCFR1 [7:6]. Pads from ch32fun's ch32v003hw.h
+// (AFIO_PCFR1_TIM1_REMAP_* comments) cross-checked against the
+// remap table in examples/tim1_pwm_complementary_outputs; 00 and 10
+// put the channels on the same pads (only ETR/BKIN differ):
+//   00/10: CH1/CH1N PD2/PD0, CH2/CH2N PA1/PA2, CH3/CH3N PC3/PD1, CH4 PC4
+//   01:    CH1/CH1N PC6/PC3, CH2/CH2N PC7/PC4, CH3/CH3N PC0/PD1, CH4 PD3
+//   11:    CH1/CH1N PC4/PC3, CH2/CH2N PC7/PD2, CH3/CH3N PC5/PC6
+// ⚠️ Full-remap CH4 is left out: the header puts it on PD4, the
+// example's table on PD2 (already CH2N there). Two sources disagree,
+// so that output stays dark rather than guessed.
+//
+// TIM2_RM is PCFR1 [9:8]; only its reset mapping 00 is bound, the
+// pads ch32fun's examples/tim2_pwm drives: T2CH1ETR PD4, T2CH2 PD3,
+// T2CH3 PC0, T2CH4 PD7. A remapped TIM2 is dark, not on the wrong pad.
+//
+// A TxCHy pad is also that channel's input TIy (CH32V003 RM, "TIMx_CHy"
+// is input capture or output compare), so the rows with channel 0..3 are
+// the capture inputs too; the CHxN rows (4..6) are output only.
+type Ch32Row = (&'static str, char, u8, usize, &'static str, u32, u32);
+const TIM1_RM: u32 = 6;
+const TIM2_RM: u32 = 8;
+const CH32V003_TIMER_PADS: &[Ch32Row] = &[
+    ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b00),
+    ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b00),
+    ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b00),
+    ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b00),
+    ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b00),
+    ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b00),
+    ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b00),
+    ("tim1", 'c', 6, 0, "TIM1_CH1", TIM1_RM, 0b01),
+    ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b01),
+    ("tim1", 'c', 0, 2, "TIM1_CH3", TIM1_RM, 0b01),
+    ("tim1", 'd', 3, 3, "TIM1_CH4", TIM1_RM, 0b01),
+    ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b01),
+    ("tim1", 'c', 4, 5, "TIM1_CH2N", TIM1_RM, 0b01),
+    ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b01),
+    ("tim1", 'd', 2, 0, "TIM1_CH1", TIM1_RM, 0b10),
+    ("tim1", 'a', 1, 1, "TIM1_CH2", TIM1_RM, 0b10),
+    ("tim1", 'c', 3, 2, "TIM1_CH3", TIM1_RM, 0b10),
+    ("tim1", 'c', 4, 3, "TIM1_CH4", TIM1_RM, 0b10),
+    ("tim1", 'd', 0, 4, "TIM1_CH1N", TIM1_RM, 0b10),
+    ("tim1", 'a', 2, 5, "TIM1_CH2N", TIM1_RM, 0b10),
+    ("tim1", 'd', 1, 6, "TIM1_CH3N", TIM1_RM, 0b10),
+    ("tim1", 'c', 4, 0, "TIM1_CH1", TIM1_RM, 0b11),
+    ("tim1", 'c', 7, 1, "TIM1_CH2", TIM1_RM, 0b11),
+    ("tim1", 'c', 5, 2, "TIM1_CH3", TIM1_RM, 0b11),
+    ("tim1", 'c', 3, 4, "TIM1_CH1N", TIM1_RM, 0b11),
+    ("tim1", 'd', 2, 5, "TIM1_CH2N", TIM1_RM, 0b11),
+    ("tim1", 'c', 6, 6, "TIM1_CH3N", TIM1_RM, 0b11),
+    ("tim2", 'd', 4, 0, "TIM2_CH1", TIM2_RM, 0b00),
+    ("tim2", 'd', 3, 1, "TIM2_CH2", TIM2_RM, 0b00),
+    ("tim2", 'c', 0, 2, "TIM2_CH3", TIM2_RM, 0b00),
+    ("tim2", 'd', 7, 3, "TIM2_CH4", TIM2_RM, 0b00),
+];

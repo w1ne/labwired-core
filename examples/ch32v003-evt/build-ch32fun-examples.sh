@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build thirteen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
+# Build fourteen unmodified ch32fun (cnlohr/ch32fun, MIT) CH32V003 examples into
 # examples/ch32v003-evt/ch32fun/:
 #
 #   blink.elf        examples/blink: PD0, PD4, PD6, PC0 toggled every
@@ -91,7 +91,8 @@ ld="${out_dir}/generated_ch32v003.ld"
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
 for example in blink uartdemo systick_irq adc_polled i2c_oled tim2_pwm exti_pin_change_isr \
-    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg; do
+    spi_max7219 uart_tx_dma ws2812bdemo tim1_pwm tim1_pwm_complementary_outputs iwdg \
+    input_capture; do
   "${prefix}gcc" -o "${out_dir}/${example}.elf" \
     "${src}/ch32fun/ch32fun.c" "${src}/examples/${example}/${example}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

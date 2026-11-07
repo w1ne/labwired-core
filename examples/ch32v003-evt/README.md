@@ -152,7 +152,7 @@ is not written.
 
 [ch32fun](https://github.com/cnlohr/ch32fun) (CNLohr, MIT) is the toolchain
 most hobbyist CH32V003 code is written against. The
-`ch32v003f4p6-ch32fun-smoke` profile runs thirteen of its examples unmodified,
+`ch32v003f4p6-ch32fun-smoke` profile runs fourteen of its examples unmodified,
 built by `build-ch32fun-examples.sh` with the flags `ch32fun.mk` uses for
 `TARGET_MCU=CH32V003` (pinned commit `b28d285`). ch32fun is MIT licensed, so
 the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
@@ -172,6 +172,7 @@ the ELFs are committed under [`ch32fun/`](ch32fun/) with its license.
 | `uart_tx_dma` | `Hello World!\r\n` three times on USART1 (PD5), every byte moved by DMA1 channel 4; the transfer-complete handler (PFIC 25) toggles PD6 | 5/5: 42 bytes, PD6 4 edges, CNTR4 = 0, INTFR nibble 4 = 0x5 |
 | `ws2812bdemo` | a 191-LED WS2812B strip on PC6, fed by SPI1 at 3 MHz from DMA1 channel 3 in circular mode with HT/TC refills (PFIC 24). The strip decodes PC6's pulse widths; [`check-ws2812.py`](check-ws2812.py) recomputes every LED from the demo's own colour tables and replays the driver's buffer protocol ([`check-ws2812.log`](evidence/ch32fun-ws2812-smoke/colour-check/check-ws2812.log)) | 3/3 and all 190 LEDs the driver sends match frame 9. The driver clocks out 190 of `NR_LEDS` 191: the HT refill that writes LED 190 is the one that clears CIRC, so that half is never sent. [CH32V003F4P6 status and sourcing](evidence/ch32fun-ws2812-smoke/component-status.md) |
 | `iwdg` | the independent watchdog: PD0/PD4/PC0 on 1.5 s, off 1 s, the IWDG started at /128 with RLDR 0xFFF, on 3 s, one feed, then 250 ms blinks with no further feed until the watchdog resets the chip. The smoke checks the edge counts and that PSCR is back at 0 after the reset (11.25 s, 540 M cycles). [`check-iwdg.py`](check-iwdg.py) decodes PD0 from a `--watch-gpio` run, committed as [`iwdg-capture.json.gz`](evidence/ch32fun-iwdg-smoke/iwdg-capture.json.gz) with its output in [`iwdg-check.log`](evidence/ch32fun-iwdg-smoke/iwdg-check.log) | feed at 5,500.003 ms, 17 blink edges at 250 ms, then the reset at feed + 4,095.002 ms (4095 counts of LSI/128 at 128 kHz) releases PD0, and the second boot's 1,500 ms on pulse starts 94 cycles later, as on power-up |
+| `input_capture` | TIM1 input capture at 1 us per count: a pulse source on PD2 (T1CH1) gives a 1000 us and a 2500 us pulse; CH1 latches the rising edge, CH2 (TI1, `CC2P`) the falling edge, and the TIM1_CC handler (PFIC 37) queues each capture for `main()` to print. The smoke checks the four printed captures and the TIM1 setup left behind (PSC, CHCTLR1, CCER, DMAINTENR, CEN); the whole terminal is in [`terminal.log`](evidence/ch32fun-input-capture-smoke/terminal.log) | 11/11; fall minus rise is exactly 1000 (24993 → 25993) and 2500 (21957 → 24457) counts, one handler entry per capture, no `badtrigger` |
 
 This profile adds these to the PFIC profile:
 
@@ -256,6 +257,20 @@ This profile adds these to the PFIC profile:
   [`crates/core/tests/ch32v003_tim1_pads.rs`](../../crates/core/tests/ch32v003_tim1_pads.rs)
   pins partial and full remap and the move back to reset. The smoke uses
   [`ch32v003evt-ch32fun-tim1-complementary-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-tim1-complementary-smoke.yaml).
+- **TIM1/TIM2 input capture.** The capture router uses the same CH32V003
+  pad table as the outputs: a channel pad that is a digital input feeds
+  that channel's TIy while `PCFR1` selects its mapping. Before this, the
+  router used the STM32F103 table, which puts TIM1 on PA8..PA11 (not on
+  this package) and TIM2 CH2/CH3 on PA1/PA2 (TIM1 pads here). TIM1 has
+  `irq: 37` (TIM1_CC): on a QingKe chip a level source's own line now
+  drives the PFIC request LEVEL, so the CH1CVR read that clears CC1IF also
+  withdraws the request. With a latched pend instead, ch32fun's
+  `input_capture` entered its handler a second time and printed
+  `badtrigger`.
+  [`crates/core/tests/ch32v003_tim1_capture.rs`](../../crates/core/tests/ch32v003_tim1_capture.rs)
+  pins the PD2 route, the level drop on the read, the remap, and TIM2's
+  CH32V003 pads. The smoke uses
+  [`ch32v003evt-ch32fun-input-capture-smoke.yaml`](../../configs/systems/ch32v003evt-ch32fun-input-capture-smoke.yaml).
 - **IWDG** (`0x40003000`): the STM32 independent watchdog block
   (CTLR/PSCR/RLDR/STATR at the KR/PR/RLR/SR offsets) with
   `config: { lsi_hz: 128000 }`, which turns on its counting mode. Key
@@ -341,7 +356,7 @@ Read these results correctly:
   `--watch-gpio` capture follows it only from the next GPIO register write;
   ch32fun and the WCH SDK both remap first. Not modeled: the break input (BKIN) and
   `BDTR.AOE`/`LOCK`, center-aligned and down counting, the repetition
-  counter as an update divider, input capture on TIM1 pads, DMA, the TIM1
+  counter as an update divider, DMA, the TIM1 break/update/trigger
   interrupts and the `RCC_APB2PRSTR` reset. `tim1_pwm` does not set
   `OCxPE`, so on silicon a compare write takes effect mid-period; the model
   applies every duty change at the next period boundary, which the waveform
@@ -351,7 +366,8 @@ Read these results correctly:
 - On TIM2: the AFIO `PCFR1` TIM2 remaps (stored only, so a remapped
   output stays on its reset pad), the `RCC_APB1PRSTR` reset, PD7's NRST
   option byte (the pad is treated as GPIO, as after `minichlink -d`),
-  encoder and slave modes, DMA and TIM2 interrupts are not modeled. The
+  encoder and slave modes, DMA and TIM2 interrupts are not modeled (TIM2
+  input captures land, but only polling sees them). The
   logic capture keeps the newest ~21,800 edges per pad, so the decoded
   window is `count` 121 to 134 of the 0 to 255 ramp (about 60 ms, including
   CH2's wrap through 0). Earlier steps only reach the edge-count checks.
@@ -534,7 +550,8 @@ cargo run -q -p labwired-cli -- test \
 
 # ch32fun ELFs are committed; this rebuilds them byte-identically.
 examples/ch32v003-evt/build-ch32fun-examples.sh
-for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm tim1-pwm tim1-complementary exti; do
+for t in blink uartdemo systick-irq adc-polled i2c-oled tim2-pwm tim1-pwm tim1-complementary exti \
+    input-capture; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v003-evt/ch32fun-$t-smoke.yaml \
     --output-dir /tmp/ch32v003-ch32fun-$t

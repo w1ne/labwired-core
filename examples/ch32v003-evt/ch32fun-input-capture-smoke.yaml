@@ -1,0 +1,50 @@
+# ch32fun examples/input_capture, unmodified (build-ch32fun-examples.sh).
+# TIM1 at 48 MHz / (PSC 47 + 1) = 1 us per count, ATRLR 0xFFFF. CH1 captures
+# TI1 (T1CH1 = PD2) on the rising edge, CH2 captures TI1 on the falling edge
+# (CHCTLR1 CC2S = 10, CCER CC2P). TIM1_CC_IRQHandler (PFIC 37) queues each
+# CHxCVR and main() prints "capture 1 <rise>" / "capture 0 <fall>".
+#
+# Two pulses are applied on PD2: 48,000 cycles (1000 us) from cycle
+# 6,000,000 and 120,000 cycles (2500 us) from cycle 9,000,000. The fall
+# minus rise captures must be exactly 1000 and 2500 counts. The absolute
+# values follow from TIM1 starting at cycle 4,800,336 (after Delay_Ms(100)):
+# 6,000,000 -> 24993, 9,000,000 -> 21957 (mod 65536). The handler must run
+# once per capture: a second entry after the CHxCVR read prints
+# "badtrigger", which the committed terminal log shows does not happen.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/input_capture.elf"
+  system: "../../configs/systems/ch32v003evt-ch32fun-input-capture-smoke.yaml"
+limits:
+  max_cycles: 14000000
+  max_steps: 30000000
+  wall_time_ms: 600000
+stimuli:
+  - target: { component: pulse_pd2, channel: pressed }
+    trigger: !after_cycles { cycles: 6000000 }
+    value: 1.0
+  - target: { component: pulse_pd2, channel: pressed }
+    trigger: !after_cycles { cycles: 6048000 }
+    value: 0.0
+  - target: { component: pulse_pd2, channel: pressed }
+    trigger: !after_cycles { cycles: 9000000 }
+    value: 1.0
+  - target: { component: pulse_pd2, channel: pressed }
+    trigger: !after_cycles { cycles: 9120000 }
+    value: 0.0
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "UP" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "capture 1 24993" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "capture 0 25993" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "capture 1 21957" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "capture 0 24457" }
+  # min_count is a floor; the exact count (four, and no "badtrigger") is in
+  # evidence/ch32fun-input-capture-smoke/terminal.log.
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "capture", min_count: 4 }
+  # TIM1 as the example leaves it: PSC 47, CHCTLR1 CC1S=01 | CC2S=10
+  # (0x0201), CCER CC1E|CC2E|CC2P (0x0031), DMAINTENR CC1IE|CC2IE, CEN.
+  - memory_value: { address: 0x40012C28, size: 16, expected_value: 47 }
+  - memory_value: { address: 0x40012C18, size: 16, expected_value: 0x0201 }
+  - memory_value: { address: 0x40012C20, size: 16, expected_value: 0x0031 }
+  - memory_value: { address: 0x40012C0C, size: 16, expected_value: 0x0006 }
+  - memory_value: { address: 0x40012C00, size: 16, mask: 0x0001, expected_value: 0x0001 }

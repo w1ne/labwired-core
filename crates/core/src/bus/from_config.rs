@@ -427,6 +427,7 @@ impl SystemBus {
             external_device_decls: Vec::new(),
             semihost: SemihostState::new(),
             nvic: None,
+            qingke_pfic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             // The board's clock beats the chip's rated one: the NUCLEO-L476RG

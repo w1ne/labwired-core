@@ -832,6 +832,20 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// GPIO capability: [`Self::bind_timer_capture_pad`] for an F1-shaped
+    /// port (no AF), additionally gated by a remap field when `gate` is set
+    /// (CH32V003 AFIO_PCFR1). A port that is not F1-shaped returns `false`.
+    fn bind_remapped_timer_capture_pad(
+        &mut self,
+        _pin: u8,
+        _timer: usize,
+        _ti: u8,
+        _func: &'static str,
+        _gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    ) -> bool {
+        false
+    }
+
     /// Timer capability: input `ti` (0 = TI1 … 3 = TI4) changed to `level`
     /// at absolute engine cycle `cycle`. A timer with capture channels latches
     /// CNT as of that cycle into CCRx per its CCMR/CCER configuration and

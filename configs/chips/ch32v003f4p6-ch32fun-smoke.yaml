@@ -53,10 +53,18 @@
 # the DTG dead time in tDTS (CK_INT x CTLR1.CKD) units; CCxP/CCxNP invert and
 # OSSR drives the disabled half of a pair at its inactive level. With MOE
 # clear, OSSI holds enabled outputs at CTLR2.OISx/OISxN. Not modeled on TIM1:
-# the AFIO PCFR1 TIM1 remaps (storage only), the break input (BKIN on PC2)
-# and BDTR.AOE/LOCK, center-aligned and down counting, the repetition counter
-# as an update divider, encoder/slave modes, input capture on TIM1 pads,
-# DMA, the TIM1 interrupts, and the RCC_APB2PRSTR reset (dropped).
+# the break input (BKIN on PC2) and BDTR.AOE/LOCK, center-aligned and down
+# counting, the repetition counter as an update divider, encoder/slave
+# modes, DMA, the BRK/UP/TRG_COM interrupts (34..36), and the RCC_APB2PRSTR
+# reset (dropped).
+#
+# Input capture on TIM1 and TIM2: a channel pad that is a digital input
+# feeds that channel's TIy while AFIO_PCFR1 selects the pad's mapping (the
+# same table as the outputs; TIM2 at TIM2_RM = 00 only), and CCxS/CCxP/
+# ICxPSC/ICxF pick the edge as on the F1 timer. TIM1's capture/compare
+# flags & DMAINTENR request PFIC 37 (TIM1_CC) as a level that a CHxCVR read
+# or an INTFR write drops. TIM2 has no PFIC line here, so its captures can
+# only be polled.
 #
 # EXTI keeps the F1 register file (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR)
 # over its ten lines. A rising or falling edge on a pad whose port
@@ -253,10 +261,14 @@ peripherals:
       profile: stm32f1
 
   # TIM1 at 0x40012C00; RCC_APB2PCENR.TIM1EN is bit 11 (ch32v003hw.h).
+  # irq 37 is TIM1_CC_IRQn (ch32fun ch32v003hw.h): the capture/compare flags
+  # & DMAINTENR raise it as a PFIC level. The BRK/UP/TRG_COM lines (34..36)
+  # are not routed.
   - id: tim1
     type: timer
     base_address: 0x40012C00
     size: 1KB
+    irq: 37
     clock: { reg: apb2enr, bit: 11 }
     config:
       advanced: true

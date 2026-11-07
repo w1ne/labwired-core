@@ -1578,6 +1578,8 @@ struct CaptureRoute {
     ti: u8,
     /// Signal name for `gpio_routing().func`, e.g. `"TIM2_CH1"`.
     func: &'static str,
+    /// Remap field the route is live under (CH32V003 AFIO_PCFR1), if any.
+    gate: Option<crate::peripherals::pad_routing::RemapGate>,
 }
 
 /// A level change on a pad routed to a timer input, drained by the bus
@@ -1998,6 +2000,7 @@ impl GpioPort {
             timer,
             ti,
             func,
+            gate: None,
         });
     }
 
@@ -2006,6 +2009,9 @@ impl GpioPort {
     /// (RM0008 §9.1.11: a timer channel input is an input-floating or pulled
     /// pad, not an AF output).
     fn capture_route_live(&self, route: &CaptureRoute) -> bool {
+        if route.gate.as_ref().is_some_and(|g| !g.open()) {
+            return false;
+        }
         match route.af {
             Some(af) => {
                 Self::selected_function(&self.family, self.pad_claims.as_ref(), route.pin)
@@ -2991,6 +2997,28 @@ impl crate::Peripheral for GpioPort {
             self.add_timer_capture_route(pin, af, timer, ti, func);
         }
         fits
+    }
+
+    fn bind_remapped_timer_capture_pad(
+        &mut self,
+        pin: u8,
+        timer: usize,
+        ti: u8,
+        func: &'static str,
+        gate: Option<crate::peripherals::pad_routing::RemapGate>,
+    ) -> bool {
+        if !matches!(self.family, GpioFamily::Stm32F1(_)) || pin >= 16 {
+            return false;
+        }
+        self.capture_routes.push(CaptureRoute {
+            pin,
+            af: None,
+            timer,
+            ti,
+            func,
+            gate,
+        });
+        true
     }
 
     /// F1 only: the timer channel outputs share their DEFAULT pads with

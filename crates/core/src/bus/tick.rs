@@ -85,6 +85,17 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// Reconcile a LEVEL source's own interrupt line: the NVIC level pend
+    /// ([`reconcile_nvic_level`]) and, on a QingKe chip, the PFIC request
+    /// level.
+    #[inline]
+    pub(crate) fn reconcile_line_level(&self, irq: u32, level: bool) {
+        reconcile_nvic_level(&self.nvic, irq, level);
+        if let Some(pfic) = &self.qingke_pfic {
+            pfic.set_level(irq, level);
+        }
+    }
+
     /// Reconcile every NVIC line peripheral `idx` reports through
     /// [`Peripheral::irq_line_levels`] (multi-line level sources: the STM32
     /// EXTI). One call per choke: the walk and the event path after they
@@ -151,7 +162,7 @@ impl SystemBus {
     pub(crate) fn reconcile_irq_levels_after_write(&self, idx: usize) {
         if let Some(irq_line) = self.peripherals[idx].irq {
             if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
-                reconcile_nvic_level(&self.nvic, irq_line, level);
+                self.reconcile_line_level(irq_line, level);
             }
         }
         self.reconcile_multi_irq_levels(idx, LevelSync::DropOnly);
@@ -604,7 +615,7 @@ impl SystemBus {
             // way the walk and the MMIO write path do.
             if let Some(irq_line) = self.peripherals[i].irq {
                 if let Some(level) = self.peripherals[i].dev.irq_line_level() {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(irq_line, level);
                 }
             }
             let still_needs_bus_tick = self.refresh_bus_tick_index(i);
@@ -852,8 +863,8 @@ impl SystemBus {
             // held). Everything else keeps pulse semantics unchanged.
             match (self.peripherals[peripheral_index].dev.irq_line_level(), irq) {
                 (Some(level), Some(irq)) => {
-                    reconcile_nvic_level(&self.nvic, irq, level);
-                    if res.irq && self.nvic.is_none() {
+                    self.reconcile_line_level(irq, level);
+                    if res.irq && self.nvic.is_none() && self.qingke_pfic.is_none() {
                         interrupts.push(irq);
                     }
                 }

@@ -128,6 +128,16 @@ impl SystemBus {
             {
                 self.collect_scheduled_events(edge.timer);
             }
+            // QingKe: the capture flag requests the PFIC on the edge's cycle,
+            // as the NVIC path's walk/event re-pend would.
+            if self.qingke_pfic.is_some() {
+                if let (Some(irq), Some(level)) = (
+                    self.peripherals[edge.timer].irq,
+                    self.peripherals[edge.timer].dev.irq_line_level(),
+                ) {
+                    self.reconcile_line_level(irq, level);
+                }
+            }
         }
     }
 
@@ -145,7 +155,7 @@ impl SystemBus {
         }
         if let Some(irq) = p.irq {
             if p.dev.irq_line_level() == Some(false) {
-                super::reconcile_nvic_level(&self.nvic, irq, false);
+                self.reconcile_line_level(irq, false);
             }
         }
         p.dev.irq_line_levels(&mut |irq, level| {

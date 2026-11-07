@@ -32,6 +32,7 @@ fn attach_qingke_pfic(bus: &mut SystemBus, cpu: &mut RiscV) {
         return;
     };
     cpu.attach_qingke_pfic(state.clone());
+    bus.qingke_pfic = Some(state.clone());
     for p in bus.peripherals.iter_mut() {
         p.dev.attach_qingke_pfic(state.clone());
     }
