@@ -222,6 +222,24 @@ boards:
     sketches_skip_reason:
       L8_can: "No FDCAN in chip yaml for matrix L8"
 
+  - id: stm32g071rb
+    chip: stm32g071
+    system: systems/stm32g071rb.yaml
+    pio: { platform: ststm32, board: nucleo_g071rb, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "NUCLEO-G071RB 64 MHz: L0~0.07M L2~0.20M; L3 Wire.begin i2c_computeTiming ~11M; L5 ~5.9M; L6 ~2.0M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    # L6 drives TIM2_CH1 on PA0, not LD4/PA5: PA5 is DAC1_OUT2 and the twin
+    # models DAC1, so analogWrite(LED_BUILTIN) took the DAC path (DAC_CR.EN2=1,
+    # TIM2 untouched) and passed without any PWM. On PA0, TIM2 reaches
+    # CEN/PWM1/CC1E with PA0 on AF2. No pwm_watch: no STM32 TIM OC->pad
+    # routing on main yet (PROBLEMS.md "L6 PWM edges"), PA0 shows 0 edges.
+    family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "STM32G071 has no CAN peripheral"
+
   - id: stm32h563
     chip: stm32h563
     system: systems/stm32h563.yaml

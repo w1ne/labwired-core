@@ -1786,6 +1786,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Whether this peripheral accepts a routed `VREF+`/`VDDA` voltage.
+    fn supports_adc_reference_voltage(&self) -> bool {
+        false
+    }
+
+    /// Set the ADC's positive full-scale reference voltage, in volts. Returns
+    /// false for a peripheral without a configurable analog reference.
+    fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {
+        false
+    }
+
     /// A live view of one of this peripheral's analog outputs (a DAC
     /// channel): the probe returns the pin level in millivolts, or `None`
     /// while the output is not driven. `None` for a peripheral or channel
