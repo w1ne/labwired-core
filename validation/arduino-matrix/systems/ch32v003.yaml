@@ -1,0 +1,6 @@
+# Arduino matrix system — CH32V003F4P6 bare chip. No kit devices: the chip
+# has no I2C/SPI model yet, so L3/L4 are skipped in boards.yaml.
+name: "arduino-matrix-ch32v003"
+chip: "../../../configs/chips/ch32v003f4p6.yaml"
+external_devices: []
+board_io: []

@@ -92,6 +92,44 @@ boards:
     sketches_skip_reason:
       L8_can: "No on-chip CAN model"
 
+  - id: ch32v003
+    chip: ch32v003f4p6
+    system: systems/ch32v003.yaml
+    # WCH's official core (openwch/arduino_core_ch32) via the community ch32v
+    # platform; the fixture in tests/fixtures/ch32v003f4p6-arduino-l0.md
+    # records the exact package revisions.
+    pio:
+      # Not in the PlatformIO registry; pinned to the fixture's revisions.
+      platform: https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7
+      board: genericCH32V003F4P6
+      framework: arduino
+      # platform.json names the framework by branch, so pin it here too.
+      platform_packages:
+        - "framework-arduino-openwch-ch32 @ https://github.com/Community-PIO-CH32V/arduino_core_ch32.git#3820604346d0a9f0ee9a72cab8b7583e488e6674"
+      # The CH32V003F4 variant leaves LED_BUILTIN as PNUM_NOT_DEFINED, and
+      # digitalWrite() on it compiles to a trap. PD0 is a pin choice (the
+      # ch32v003fun blink pin), not a board fact.
+      build_flags: ["-DLED_BUILTIN=PD0"]
+    max_steps: 3000000
+    budget_reason: "48 MHz RV32EC; L0 ~1M steps to LW_L0_OK in ch32v003_arduino.rs"
+    led_watch: "gpiod:0"
+    led_min_edges: 2
+    family: wch
+    notes: "QingKe V2A RV32EC: PFIC, STK, HPE, XW compressed insns"
+    sketches_skip: [L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can]
+    sketches_skip_reason:
+      L3_i2c_sensor: "No CH32V003 I2C1 model yet"
+      L4_spi_sensor: "No CH32V003 SPI1 model yet"
+      L5_adc: "No CH32V003 ADC1 model yet"
+      L6_pwm: "No CH32V003 TIM1/TIM2 model yet"
+      # Measured 2026-11-07: LW_L7_FAIL t0=1991 t1=3999 t2=3778 t3=4999.
+      L7_timer: >-
+        Upstream core bug, not a model gap: getCurrentMicros() (ch32/clock.c)
+        computes (CMP+1-CNT), which assumes a down-counter, but the V2 STK
+        counts up (WCH's own Delay_Ms polls CNTIF from CNT=0), so micros()
+        runs backwards inside each millisecond
+      L8_can: "No CAN on CH32V003"
+
   - id: stm32f103
     chip: stm32f103
     system: systems/stm32f103.yaml
