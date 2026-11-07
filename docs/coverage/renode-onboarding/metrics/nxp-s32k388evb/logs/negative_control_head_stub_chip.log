@@ -1,0 +1,13 @@
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-07T18:44:28.203361Z ERROR labwired_cli::execute: Memory assertion failed at 0x40270000 (size 32): expected 0xff00010a, got 0x0 (mask 0xffffffff)
+2026-11-07T18:44:28.203379Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1076297728, expected_value: 4278190346, mask: None, size: None, node: None } }) (captured len=597)
+2026-11-07T18:44:28.203394Z ERROR labwired_cli::execute: Memory assertion failed at 0x40270008 (size 32): expected 0x320, got 0x0 (mask 0xffffffff)
+2026-11-07T18:44:28.203397Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1076297736, expected_value: 800, mask: None, size: None, node: None } }) (captured len=597)
+2026-11-07T18:44:28.203400Z ERROR labwired_cli::execute: Memory assertion failed at 0x402dc308 (size 32): expected 0x1, got 0x0 (mask 0xffffffff)
+2026-11-07T18:44:28.203402Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1076740872, expected_value: 1, mask: None, size: None, node: None } }) (captured len=597)
+2026-11-07T18:44:28.203405Z ERROR labwired_cli::execute: Memory assertion failed at 0x402dc314 (size 32): expected 0x400, got 0x0 (mask 0xffffffff)
+2026-11-07T18:44:28.203407Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1076740884, expected_value: 1024, mask: None, size: None, node: None } }) (captured len=597)
+2026-11-07T18:44:28.203410Z ERROR labwired_cli::execute: Memory assertion failed at 0x402dc318 (size 32): expected 0x1000, got 0x0 (mask 0xffffffff)
+2026-11-07T18:44:28.203412Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1076740888, expected_value: 4096, mask: None, size: None, node: None } }) (captured len=597)
+FAIL  4/9 checks · nxp-s32k388evb-smoke · 4000000 steps · 0.34s

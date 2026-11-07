@@ -7,9 +7,12 @@
 # The imported Renode peripheral list was mostly zero-answering windows. This
 # profile keeps the sourced CM7_0 core and memory map (configs/chips/s32k388.yaml)
 # and only the blocks the onboarding smoke exercises: the real SIUL2 GPIO and
-# LPUART2 models, SysTick, and two explicit stubs (SWT_0, MC_ME) that accept the
-# watchdog-disable and clock-gate writes. Those stubs never fire a watchdog
-# and gate nothing; this profile claims no other S32K388 peripheral.
+# LPUART2 models, SysTick, the SWT_0 watchdog (s32k3_swt: key lock/unlock,
+# service sequences, a SIRC-clocked counter that resets the core on time-out)
+# and MC_ME (s32k3_mc_me: the PCONF/PUPD/CTL_KEY handshake that moves
+# COFB clock enables into the status registers RTD polls). MC_ME reports the
+# clock gates but does not enforce them (an ungated peripheral still answers).
+# This profile claims no other S32K388 peripheral.
 name: "nxp-s32k388evb"
 arch: "arm"
 core: "cortex-m7"
@@ -40,15 +43,16 @@ pins:
   PTF24: { gpio: "siul2", bit: 184 }
 peripherals:
   - id: "swt0"
-    type: "stub"
+    type: "s32k3_swt"
     base_address: 0x40270000
     size: "16KB"
+    irq: 42
   - id: "siul2"
     type: "s32k3_siul2"
     base_address: 0x40290000
     size: "16KB"
   - id: "mc_me"
-    type: "stub"
+    type: "s32k3_mc_me"
     base_address: 0x402DC000
     size: "16KB"
   - id: "lpuart2"

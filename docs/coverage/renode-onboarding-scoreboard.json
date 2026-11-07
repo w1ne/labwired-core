@@ -7,12 +7,12 @@
     "not_run": 21,
     "pass": 224,
     "fail": 0,
-    "pass_loading_zero_answering_windows": 4,
+    "pass_loading_zero_answering_windows": 2,
     "pass_observable_assertions": 217,
     "pass_stop_reason_only": 7,
     "pass_depth_unknown": 0,
-    "median_elapsed_ms": 1107,
-    "median_elapsed_seconds": 1.107,
+    "median_elapsed_ms": 1097,
+    "median_elapsed_seconds": 1.097,
     "threshold_seconds": 3600,
     "threshold_met": 224,
     "descriptors_present": 245,
@@ -5580,34 +5580,32 @@
       "script": "examples/renode-onboarding/nxp-s32k388-smoke.yaml",
       "system": "configs/systems/onboarding/nxp-s32k388.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-07T08:36:54Z",
-      "finished_at_utc": "2026-11-07T08:36:55Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1113,
+      "started_at_utc": "2026-11-07T18:42:44Z",
+      "finished_at_utc": "2026-11-07T18:43:59Z",
+      "elapsed_seconds": 75,
+      "elapsed_ms": 74781,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.321,
+        "build_cli": 73.428,
         "build_firmware": null,
-        "run_smoke": 0.783
+        "run_smoke": 1.336
       },
       "stages_ms": {
-        "build_cli": 321,
+        "build_cli": 73428,
         "build_firmware": null,
-        "run_smoke": 783
+        "run_smoke": 1336
       },
       "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf",
       "_artifact_path": "nxp-s32k388",
-      "zero_answering_windows": [
-        "swt0:stub",
-        "mc_me:stub"
-      ],
+      "zero_answering_windows": [],
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -5629,34 +5627,32 @@
       "script": "examples/renode-onboarding/nxp-s32k388evb-smoke.yaml",
       "system": "configs/systems/onboarding/nxp-s32k388evb.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-07T08:34:59Z",
-      "finished_at_utc": "2026-11-07T08:36:52Z",
-      "elapsed_seconds": 114,
-      "elapsed_ms": 113978,
+      "started_at_utc": "2026-11-07T18:44:03Z",
+      "finished_at_utc": "2026-11-07T18:44:04Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 953,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 112.755,
+        "build_cli": 0.286,
         "build_firmware": null,
-        "run_smoke": 1.212
+        "run_smoke": 0.655
       },
       "stages_ms": {
-        "build_cli": 112755,
+        "build_cli": 286,
         "build_firmware": null,
-        "run_smoke": 1212
+        "run_smoke": 655
       },
       "prebuilt_firmware": "tests/fixtures/s32k388-evb-smoke.elf",
       "_artifact_path": "nxp-s32k388evb",
-      "zero_answering_windows": [
-        "swt0:stub",
-        "mc_me:stub"
-      ],
+      "zero_answering_windows": [],
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

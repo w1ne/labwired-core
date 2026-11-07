@@ -1,8 +1,14 @@
 # S32K388 CM7_0, LPUART2 and SIUL2 smoke against the narrowed imported
 # nxp-s32k388evb profile. Runs the S32K388EVB smoke fixture (crates/firmware-s32k388-evb-smoke):
 # IVT handoff to 0x00401000, LPUART2 8N1 output, SIUL2 GPDO/PGPDO/MPGPDO writes
-# read back through GPDI/PGPDI, and PTA1 pull-up/pull-down input. SWT_0 and
-# MC_ME are write-accepting stubs; no watchdog or clock gating is claimed.
+# read back through GPDI/PGPDI, and PTA1 pull-up/pull-down input. SWT_0
+# (s32k3_swt) and MC_ME (s32k3_mc_me) are register models: the memory
+# assertions read back SWT_0 CR/TO after the unlock + WEN clear, and the
+# partition-1 status registers after the PCONF/PUPD/CTL_KEY handshake
+# (PRTN1_STAT.PCS, COFB1 REQ42 = SIUL2, COFB2 REQ76 = LPUART2, PUPD cleared).
+# A zero-answering stub reads 0 for all of them. MC_ME does not enforce the
+# gates; the watchdog time-out path is covered by the core unit tests, not
+# by this smoke (the firmware disables SWT_0).
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/s32k388-evb-smoke.elf"
@@ -27,4 +33,10 @@ assertions:
       - "pta1 pu=1 pd=0"
       - "hb=0 ptf23=1"
       - "hb=1 ptf23=0"
+  - memory_value: {address: 0x40270000, expected_value: 0xFF00010A}
+  - memory_value: {address: 0x40270008, expected_value: 0x00000320}
+  - memory_value: {address: 0x402DC304, expected_value: 0x00000000}
+  - memory_value: {address: 0x402DC308, expected_value: 0x00000001}
+  - memory_value: {address: 0x402DC314, expected_value: 0x00000400}
+  - memory_value: {address: 0x402DC318, expected_value: 0x00001000}
   - expected_stop_reason: max_steps

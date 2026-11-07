@@ -441,6 +441,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // belongs to the staged onboarding/nxp-s32k388 descriptors, which keep
     // their placeholder.
     "s32k3_siul2",
+    // NXP S32K3 SWT (key-locked watchdog with reset) and MC_ME (partition /
+    // COFB clock-enable handshake).
+    "s32k3_swt",
+    "s32k3_mc_me",
     // NXP i.MX RT500 (MIMXRT595S): the LPC-style FLEXCOMM USART and GPIO, and
     // the CLKCTL/RSTCTL (SET/CLR aliased) and IOPCTL (plain) register banks.
     // Not `lpc_usart`: the Renode-import profile heuristic maps that spelling
@@ -1930,6 +1934,17 @@ pub fn try_build(
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
+        // `clock_hz`: the CPU clock the bus cycles run at; `swt_clock_hz`:
+        // the counter clock (S32K3: SIRC, 32 kHz).
+        "s32k3_swt" => {
+            use crate::peripherals::s32k3 as s;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(s::S32k3Swt::new(
+                get("clock_hz").unwrap_or(s::DEFAULT_CLOCK_HZ),
+                get("swt_clock_hz").unwrap_or(s::DEFAULT_SWT_CLOCK_HZ),
+            ))
+        }
+        "s32k3_mc_me" => Box::new(crate::peripherals::s32k3::S32k3McMe::new()),
         "lpc_flexcomm_usart" => {
             // PSELID present bits: USART/SPI/I2C/I2S (0xF0) unless the yaml
             // narrows them for a FLEXCOMM without every function.

@@ -1,16 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.483357">
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.371087">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="0796b1b041a52a5517d07e4a04aafb8f81f6ad0e73adfd6e8ac6be6e97199234"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.483357">
+  <testcase classname="labwired" name="run" time="0.371087">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: S32K388 EVB SMOKE" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m7 core=cm7_0 uart=lpuart2&quot;, &quot;ivt marker=5aa55aa5 cm7_0=00401000 vtor=00401000&quot;, &quot;clk aips_s…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x40270000=0xff00010a" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x40270008=0x320" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x402dc304=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x402dc308=0x1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x402dc314=0x400" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x402dc318=0x1000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

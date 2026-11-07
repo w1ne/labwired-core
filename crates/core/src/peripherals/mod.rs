@@ -121,6 +121,7 @@ pub mod rtc_f1;
 pub mod rtc_v3;
 pub mod rx_cmt;
 pub mod rx_sysc;
+pub mod s32k3;
 pub mod s32k3_siul2;
 pub mod sai;
 pub mod sam;
