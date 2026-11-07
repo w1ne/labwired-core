@@ -33,6 +33,15 @@
 //! observes the source. Without this the us_ticker never fires, boot stalls in
 //! a critical section, and the RTOS aborts on the first mutex acquire.
 //!
+//! ## RP2350 layout (`config: { profile: rp2350 }`)
+//!
+//! The RP2350's TIMER0/TIMER1 keep this block's map up to `PAUSE` (0x30) but
+//! insert `LOCKED` (0x34) and `SOURCE` (0x38), so `INTR`/`INTE`/`INTF`/`INTS`
+//! sit at 0x3c/0x40/0x44/0x48 (pico-sdk `rp2350/hardware_regs/timer.h`).
+//! Read with the RP2040 map, pico-sdk's `INTE` enable lands on read-only
+//! `INTS` and no alarm ever interrupts. `LOCKED` and `SOURCE` are plain
+//! storage here: the lock is not enforced and the tick source is not switched.
+//!
 //! ## Walk-free (event-scheduler)
 //!
 //! With a bus-attached [`CycleClock`] the model reports `uses_scheduler` and
@@ -59,6 +68,21 @@ const INTE: u64 = 0x38; // interrupt enable
 const INTF: u64 = 0x3c; // interrupt force
 const INTS: u64 = 0x40; // masked status = (INTR | INTF) & INTE (read-only)
 
+// RP2350-only registers, and the RP2350 interrupt block (+8 from the RP2040).
+const RP2350_LOCKED: u64 = 0x34;
+const RP2350_SOURCE: u64 = 0x38;
+const RP2350_INT_BASE: u64 = 0x3c;
+
+/// Register map variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimerLayout {
+    /// RP2040 TIMER: `INTR` at 0x34.
+    #[default]
+    Rp2040,
+    /// RP2350 TIMER0/1: `LOCKED` 0x34, `SOURCE` 0x38, `INTR` at 0x3c.
+    Rp2350,
+}
+
 #[derive(Debug)]
 pub struct Rp2040Timer {
     /// Live 64-bit microsecond counter. `Cell` so `&self` reads can lazy-sync
@@ -83,6 +107,11 @@ pub struct Rp2040Timer {
     /// `INTF` — per-alarm interrupt force (pico-sdk sets this to fire an alarm
     /// whose target was already in the past).
     intf: u8,
+    /// Register map variant (RP2040 or RP2350 offsets).
+    layout: TimerLayout,
+    /// RP2350 `LOCKED` / `SOURCE` storage.
+    locked: u32,
+    source: u32,
     /// Bus-published cycle clock (event-scheduler builds). When present the
     /// model is walk-independent: counter advances lazily via `sync_to` and
     /// alarm matches ride scheduled events.
@@ -114,11 +143,35 @@ impl Rp2040Timer {
             intr: Cell::new(0),
             inte: 0,
             intf: 0,
+            layout: TimerLayout::Rp2040,
+            locked: 0,
+            source: 0,
             clock: None,
             anchor: Cell::new(0),
             arm_seq: 0,
             scheduled: false,
         }
+    }
+
+    pub fn with_layout(mut self, layout: TimerLayout) -> Self {
+        self.layout = layout;
+        self
+    }
+
+    /// Map an RP2350 offset onto the RP2040 constants used below. RP2350
+    /// `LOCKED`/`SOURCE` come back unchanged (handled by their own arms).
+    fn canonical(&self, offset: u64) -> u64 {
+        match self.layout {
+            TimerLayout::Rp2040 => offset,
+            TimerLayout::Rp2350 => match offset {
+                RP2350_INT_BASE..=0x48 => offset - RP2350_INT_BASE + INTR,
+                _ => offset,
+            },
+        }
+    }
+
+    fn is_rp2350(&self) -> bool {
+        self.layout == TimerLayout::Rp2350
     }
 
     /// Masked interrupt status: an alarm's IRQ line is asserted while its raw
@@ -232,7 +285,14 @@ impl Peripheral for Rp2040Timer {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         self.sync_from_clock();
         let counter = self.counter.get();
-        let val = match offset {
+        if self.is_rp2350() {
+            match offset {
+                RP2350_LOCKED => return Ok(self.locked),
+                RP2350_SOURCE => return Ok(self.source),
+                _ => {}
+            }
+        }
+        let val = match self.canonical(offset) {
             TIMERAWL | TIMELR => counter as u32,
             TIMERAWH | TIMEHR => (counter >> 32) as u32,
             ALARM0..=ALARM3 => self.alarm[((offset - ALARM0) / 4) as usize],
@@ -258,7 +318,21 @@ impl Peripheral for Rp2040Timer {
                 let _ = self.advance_to(clock.now());
             }
         }
-        match offset {
+        if self.is_rp2350() {
+            match offset {
+                // LOCKED is write-1-to-set; nothing below honours it.
+                RP2350_LOCKED => {
+                    self.locked |= value & 0x1;
+                    return Ok(());
+                }
+                RP2350_SOURCE => {
+                    self.source = value & 0x1;
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+        match self.canonical(offset) {
             PAUSE => self.paused = value & 0x1 != 0,
             TIMELW => self.pending_low = value,
             // Writing the high word commits the staged low word as the new
@@ -583,6 +657,42 @@ mod tests {
         assert_eq!(t.read_u32(INTR).unwrap(), 1, "raw interrupt latched");
         assert_eq!(t.read_u32(ARMED).unwrap(), 0, "alarm disarms on fire");
         assert_eq!(t.read_u32(INTS).unwrap(), 1, "masked status set");
+    }
+
+    /// RP2350 map (pico-sdk rp2350 timer.h): INTR 0x3c, INTE 0x40, INTF 0x44,
+    /// INTS 0x48. An alarm armed and enabled at those offsets interrupts.
+    #[test]
+    fn rp2350_layout_alarm_irq_at_shifted_offsets() {
+        let mut t = Rp2040Timer::new().with_layout(TimerLayout::Rp2350);
+        t.write_u32(0x40, 1).unwrap(); // INTE
+        t.write_u32(ALARM0, 2).unwrap();
+        assert!(t.tick().explicit_irqs.is_none());
+        assert_eq!(t.tick().explicit_irqs, Some(vec![0]), "fires at low==2");
+        assert_eq!(t.read_u32(0x3c).unwrap(), 1, "INTR latched");
+        assert_eq!(t.read_u32(0x40).unwrap(), 1, "INTE reads back");
+        assert_eq!(t.read_u32(0x48).unwrap(), 1, "INTS masked status");
+        t.write_u32(0x3c, 1).unwrap(); // INTR write-1-clear
+        assert!(t.tick().explicit_irqs.is_none(), "IRQ clears after ack");
+        // INTF forces at 0x44.
+        t.write_u32(0x44, 1).unwrap();
+        assert_eq!(t.tick().explicit_irqs, Some(vec![0]));
+        assert_eq!(t.read_u32(0x44).unwrap(), 1, "INTF reads back");
+    }
+
+    /// The RP2350's LOCKED/SOURCE are storage, and they must not alias the
+    /// interrupt block: an INTE-style write at 0x38 (RP2040 INTE) does not
+    /// enable alarms on the RP2350 map.
+    #[test]
+    fn rp2350_layout_locked_source_are_not_interrupt_registers() {
+        let mut t = Rp2040Timer::new().with_layout(TimerLayout::Rp2350);
+        t.write_u32(0x38, 1).unwrap(); // SOURCE
+        t.write_u32(0x34, 1).unwrap(); // LOCKED
+        assert_eq!(t.read_u32(0x38).unwrap(), 1);
+        assert_eq!(t.read_u32(0x34).unwrap(), 1);
+        t.write_u32(ALARM0, 1).unwrap();
+        assert!(t.tick().explicit_irqs.is_none(), "INTE still 0");
+        assert_eq!(t.read_u32(0x3c).unwrap(), 1, "raw INTR latches");
+        assert_eq!(t.read_u32(0x40).unwrap(), 0, "INTE untouched");
     }
 
     #[test]

@@ -1,0 +1,37 @@
+{
+  "schema": "labwired-type2v-stream-evidence-v1",
+  "verification": "fresh current-candidate verification, 2026-11-05",
+  "test_status": "passed",
+  "firmware_source_commit": "10e8196e2630c54474fbec16abbb301f515c7736",
+  "firmware_elf_sha256": "5177c4598fb2edd823a3f5cba4dbe3723d326c72a11346df7e2f509c1f57e817",
+  "firmware_compiler": "Zig/Clang/LLD diagnostic freestanding runtime",
+  "firmware_internal_timing_enforcement": true,
+  "runtime_model_commit": "06dfd2395224a66d7093aca674800b2850b751fe",
+  "feature": "event-scheduler",
+  "command": "IOLINKI_G0_ELF=/absolute/path/protocol-rig-64mhz-zig-diagnostic.elf cargo test -p labwired-core --features event-scheduler --test iolink_master_config real_type2v_elf_runs_the_same_one_action_uart_fixture -- --ignored --nocapture",
+  "executed_tests": 1,
+  "passed": 1,
+  "ignored": 0,
+  "simulated_cycles": 2630000,
+  "checks": [
+    "one Start action triggers logical WAKE and DPP validation",
+    "DeviceOperate startup",
+    "selector 7 and selector 9 select the current full 32-byte PD response",
+    "34-byte READ and 33-byte WRITE replies",
+    "evaluation_phase is operate and pd_valid is true at successful completion",
+    "evaluation_error remains absent"
+  ],
+  "scope": "Functional UART peer used by the interactive fixture. CQ waveform/tA is established by the separate timed-master evidence.",
+  "additional_checks": {
+    "default_core_tests_passed": 29,
+    "event_scheduler_tests_passed": 25,
+    "wasm_crate_host_cargo_check": "passed",
+    "wasm32_browser_target": "not locally compiled; wasm32 toolchain unavailable"
+  },
+  "source_sha256": {
+    "crates/core/src/peripherals/components/iolink_master.rs": "6cfe37d2929ed0efb61add7eb937ddcdd6cdc4325f6a32435a4a8e4c8a357912",
+    "crates/core/tests/iolink_master_config.rs": "9e54a0e89cb1132959ebfce67a04f3482d3a59730279833db76adb151d272f8f",
+    "crates/wasm/src/inspect.rs": "15483e45a245db97ad39f127ca99c2ad60d0796ccebf3191a30b68ea973f0b78",
+    "examples/iolink-g0b1re-tiol112/stream-system64.yaml": "7e1e7955f2bb32771accc5ee4d5fefe4487c2b6addf079ad0e3e0b845b3fa87f"
+  }
+}
