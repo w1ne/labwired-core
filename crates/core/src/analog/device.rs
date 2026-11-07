@@ -18,8 +18,9 @@
 //! first version — no diode junction or diffusion charge, no BJT `Cje`/`Cjc`,
 //! no MOSFET overlap or channel charge — and no temperature model: every
 //! parameter is taken at [`TEMPERATURE_K`] as written. A `.model` line may
-//! carry those parameters (real vendor models do) and they are accepted and
-//! ignored; see [`super::netlist`]. The consequence is concrete: a circuit
+//! carry those parameters (real vendor models do); the parser records them
+//! and the analog adapter rejects affected runs. See [`super::netlist`].
+//! The consequence is concrete: a circuit
 //! whose behaviour comes from stored device charge — reverse-recovery, a
 //! Miller-limited edge, a charge-pump — is not this engine's to solve, and
 //! `adapter: external_process` with ngspice is.
