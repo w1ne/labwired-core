@@ -16,8 +16,8 @@ workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
    Compiling labwired-config v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/config)
    Compiling labwired-core v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/core)
    Compiling labwired-loader v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/loader)
+   Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/labwired-fuzz)
    Compiling svd-ingestor v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/svd-ingestor)
    Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/gdbstub)
-   Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/labwired-fuzz)
    Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 7.62s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 48s

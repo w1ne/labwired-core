@@ -1,5 +1,5 @@
 name: cortex-a53-gicv3_smp
-description: 'Imported Cortex-A53 GICv3 SMP platform. Measured profile covers one Cortex-A53 PE and DDR only; SMP, GICv3, and peripheral behavior are not modeled.'
+description: 'Imported Cortex-A53 GICv3 SMP target. Measured profile covers one of the four Cortex-A53 PEs, DDR and the PL011 UART0 (polled TX); the other three PEs, the four generic timers, GICv3 and PL031 RTC are not modeled.'
 family: Generic
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
@@ -8,17 +8,15 @@ system: systems/onboarding/cortex-a53-gicv3_smp.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: renode-onboarding-focused-smoke
-  reason: aarch64-cpu-ddr-only; whole_platform_not_verified
+  method: renode-onboarding-aarch64-pl011-smoke
+  reason: bounded AArch64 + PL011 polled-TX smoke; whole platform and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    aarch64_integer_smoke: true
+    simulation: true
+    uart0_polled_tx: true
+    other_peripherals: false
     whole_platform: false
-    smp: false
-    gicv3: false
-    peripherals: false
-    reset_vector_boot: false
   timestamp_utc: '2026-11-06T02:08:49Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/cortex-a53-gicv3_smp.md

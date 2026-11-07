@@ -1,6 +1,9 @@
-# Bounded profile of the imported Cortex-A78 target. The engine exercises its
-# shared AArch64 integer subset against DDR; no Cortex-A78-specific features,
-# boot firmware, or imported peripherals are claimed here.
+# Imported Renode target `cortex-a78`, narrowed to one PE on the shared
+# AArch64 integer subset (no A78-specific features), the imported DDR window
+# at 0x40000000 and the PL011 UART0 at 0x09000000 (generic UART engine, PL011
+# layout: polled TX via UARTFR/UARTDR). The generic timer, interrupt
+# controller and PL031 RTC from the import are not modeled and are
+# intentionally omitted.
 name: cortex-a78
 arch: aarch64
 core: cortex-a78
@@ -9,4 +12,10 @@ ram:
   base: 0x40000000
   size: 2GiB
 flash_boot_alias: false
-peripherals: []
+peripherals:
+- id: uart0
+  type: uart
+  base_address: 0x09000000
+  size: 4096
+  config:
+    profile: "pl011"

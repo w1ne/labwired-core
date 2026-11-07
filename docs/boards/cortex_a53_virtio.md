@@ -1,16 +1,27 @@
-# Renode onboarding scope: `cortex_a53_virtio`
+# Cortex-A53 virtio imported profile
 
-The imported descriptor is narrowed to one Cortex-A53 processing element and
-128 MiB of DDR at `0x40000000`. It no longer advertises flash, a generic timer,
-PL011, or virtio entropy: this engine has not demonstrated those devices on
-this profile. The platform remains `verified: false`.
+## Measured profile
 
-The CPU-only direct-ELF smoke uses the shared AArch64 integer-loop fixture for
-100,000 instructions and checks the `max_steps` stop. It performs no MMIO, so
-this result does not cover reset-vector boot, Linux boot, peripherals, or the
-whole board. It is local LabWired CLI evidence, not a hosted `labwired_verify`
-verdict, Renode execution, or hardware confirmation.
+The imported target is narrowed to one Cortex-A53 processing element, the 128 MiB DDR window at
+`0x40000000`, and the PL011 UART0 at `0x09000000`, served by the generic UART
+engine with the PL011 register layout (polled TX through `UARTFR`/`UARTDR`).
+The generic timer and the virtio-mmio entropy device from the imported descriptor are omitted.
 
-Evidence is recorded under
-[`docs/coverage/renode-onboarding/metrics/cortex_a53_virtio/`](../coverage/renode-onboarding/metrics/cortex_a53_virtio/)
-and in the [generated scoreboard](../coverage/renode-onboarding-scoreboard.md).
+## Smoke evidence
+
+The exact imported system ran the committed AArch64 fixture
+(`tests/fixtures/virt-a53-pl011-smoke.elf`, built by
+[`scripts/build_virt_a53_pl011_smoke.sh`](../../scripts/build_virt_a53_pl011_smoke.sh)).
+It checks that `UARTFR` reads `TXFE|RXFE` after reset, enables the UART, writes
+`VIRT A53 PL011 SMOKE FR=OK` to `UARTDR` while polling `FR.TXFF`, then spins in
+an integer loop. The smoke asserts the banner in the captured UART output and
+the bounded `max_steps` stop after 100,000 instructions. A window answering
+zeros would print the `FR=BAD` banner instead; with UART0 removed from the
+descriptor the fixture faults on its first `UARTFR` read (0/2 checks).
+
+This does not test interrupts, RX, baud timing, the GIC, generic timer,
+multicore boot, boot firmware, Renode, or physical hardware.
+
+Evidence: `docs/coverage/renode-onboarding/metrics/cortex_a53_virtio/` contains the
+per-target metric, JUnit result, simulator result, UART log, snapshot, and run
+log.

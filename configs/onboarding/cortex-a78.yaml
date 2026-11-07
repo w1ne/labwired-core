@@ -1,5 +1,5 @@
 name: cortex-a78
-description: 'Imported Cortex-A78 target; bounded AArch64 integer execution and DDR profile only.'
+description: 'Imported Cortex-A78 target. Measured profile covers one PE on the shared AArch64 integer subset (no A78-specific features), DDR and the PL011 UART0 (polled TX); the generic timer, interrupt controller and PL031 RTC are not modeled.'
 family: Generic
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
@@ -8,12 +8,15 @@ system: systems/onboarding/cortex-a78.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: renode-onboarding-aarch64-cpu-smoke
-  reason: bounded AArch64 integer smoke; Cortex-A78 features and imported peripherals are unverified
+  method: renode-onboarding-aarch64-pl011-smoke
+  reason: bounded AArch64 + PL011 polled-TX smoke; whole platform and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
+    uart0_polled_tx: true
+    other_peripherals: false
+    whole_platform: false
   timestamp_utc: '2026-11-06T02:23:29+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/cortex-a78.md

@@ -2,20 +2,26 @@
 
 ## Measured profile
 
-The imported target is narrowed to one Cortex-A53 processing element and the
-2 GiB DDR window at `0x40000000`. The inherited `gicv3` name does not mean this
-profile models a GIC: the generic timer, GICv3, PL011 UART, and PL031 RTC from
-the imported descriptor are omitted.
+The imported target is narrowed to one Cortex-A53 processing element, the 2 GiB DDR window at
+`0x40000000`, and the PL011 UART0 at `0x09000000`, served by the generic UART
+engine with the PL011 register layout (polled TX through `UARTFR`/`UARTDR`).
+The inherited `gicv3` name does not mean this profile models a GIC: the generic timer, GICv3 and PL031 RTC from the imported descriptor are omitted.
 
 ## Smoke evidence
 
-The exact imported system runs the committed AArch64 integer-loop ELF from
-`0x40080000` for 100,000 instructions. The onboarding runner records the
-`max_steps` stop, passes its one smoke assertion, and observes zero peripheral
-accesses. The result records an ideal-rail assumption, so power-on and
-brown-out behavior are not tested. This establishes CPU execution on the
-bounded core-and-DDR profile; it does not test GICv3, timer, UART, RTC,
-multicore behavior, reset-vector boot, Renode, or physical hardware.
+The exact imported system ran the committed AArch64 fixture
+(`tests/fixtures/virt-a53-pl011-smoke.elf`, built by
+[`scripts/build_virt_a53_pl011_smoke.sh`](../../scripts/build_virt_a53_pl011_smoke.sh)).
+It checks that `UARTFR` reads `TXFE|RXFE` after reset, enables the UART, writes
+`VIRT A53 PL011 SMOKE FR=OK` to `UARTDR` while polling `FR.TXFF`, then spins in
+an integer loop. The smoke asserts the banner in the captured UART output and
+the bounded `max_steps` stop after 100,000 instructions. A window answering
+zeros would print the `FR=BAD` banner instead; with UART0 removed from the
+descriptor the fixture faults on its first `UARTFR` read (0/2 checks).
 
-Evidence: `docs/coverage/renode-onboarding/metrics/cortex-a53-gicv3/` contains
-the per-target metric, JUnit result, simulator result, snapshot, and run log.
+This does not test interrupts, RX, baud timing, the GIC, generic timer,
+multicore boot, boot firmware, Renode, or physical hardware.
+
+Evidence: `docs/coverage/renode-onboarding/metrics/cortex-a53-gicv3/` contains the
+per-target metric, JUnit result, simulator result, UART log, snapshot, and run
+log.

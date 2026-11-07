@@ -1,10 +1,18 @@
-# Imported Renode Cortex-A53 console target, narrowed to one AArch64 PE and
-# its 128 MiB DDR window. The timer, PL011, and virtio console are not modeled
-# by this profile and are intentionally omitted.
+# Imported Renode target `cortex_a53_console`, narrowed to one Cortex-A53 PE,
+# the imported DDR window at 0x40000000 and the PL011 UART0 at 0x09000000
+# (generic UART engine, PL011 layout: polled TX via UARTFR/UARTDR). The
+# generic timer and virtio-mmio console from the import are not modeled and
+# are intentionally omitted.
 name: cortex_a53_console
 arch: aarch64
 core: cortex-a53
 flash: { base: 0, size: 0 }
 ram: { base: 0x40000000, size: 128MiB }
 flash_boot_alias: false
-peripherals: []
+peripherals:
+- id: uart0
+  type: uart
+  base_address: 0x09000000
+  size: 4096
+  config:
+    profile: "pl011"

@@ -70,12 +70,12 @@ SMOKE_MAPPINGS = {
         "cli_profile": "native-system",
     },
     "cortex_a53_console": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
+        "script": "examples/renode-onboarding/cortex_a53_console-pl011-smoke.yaml",
     },
     "cortex_a53_virtio": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
+        "script": "examples/renode-onboarding/cortex_a53_virtio-pl011-smoke.yaml",
     },
     "cortex-r52": {
         "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf",
@@ -198,20 +198,20 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/zynqmp-zcu106-vcu-a53-uart-smoke.yaml",
     },
     "cortex-a53-gicv2": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-a53-gicv2-pl011-smoke.yaml",
     },
     "cortex-a53-gicv3": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex-a53-gicv3-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-a53-gicv3-pl011-smoke.yaml",
     },
     "cortex-a78": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex-a78-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-a78-pl011-smoke.yaml",
     },
     "cortex-a53-gicv3_smp": {
-        "prebuilt_firmware": "tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
-        "script": "examples/renode-onboarding/cortex-a53-gicv3_smp-cpu-smoke.yaml",
+        "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf",
+        "script": "examples/renode-onboarding/cortex-a53-gicv3_smp-pl011-smoke.yaml",
     },
     "colibri-vf61": {
         "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",

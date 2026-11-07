@@ -165,6 +165,10 @@ on:
       - "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
       - "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml"
       - "scripts/build_imx8mplus_a53_cpu_smoke.sh"
+      - "examples/renode-onboarding/virt-a53-pl011-smoke.S"
+      - "examples/renode-onboarding/virt-a53-pl011-smoke.ld"
+      - "scripts/build_virt_a53_pl011_smoke.sh"
+      - "tests/fixtures/virt-a53-pl011-smoke.elf"
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.S"
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.ld"
       - "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml"
@@ -1640,41 +1644,41 @@ jobs:
             prebuilt_firmware: tests/fixtures/zynqmp-a53-uart-smoke.elf
             script: examples/renode-onboarding/zynqmp-zcu106-vcu-a53-uart-smoke.yaml
             system: configs/systems/onboarding/zynqmp-zcu106-vcu.yaml
-          # One Cortex-A53 PE and imported DDR only. The CPU-only fixture does
-          # not exercise the named GICv2 or the omitted timer/UART/RTC blocks.
+          # One Cortex-A53 PE, DDR and PL011 UART0 (polled TX, FR reset check).
+          # The named GICv2, generic timer and PL031 RTC are omitted.
           - id: cortex-a53-gicv2
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/virt-a53-pl011-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv2-pl011-smoke.yaml
             system: configs/systems/onboarding/cortex-a53-gicv2.yaml
-          # One Cortex-A53 PE and DDR only. The CPU-only fixture does not
-          # exercise the named GICv3 or the omitted timer/UART/RTC blocks.
+          # One Cortex-A53 PE, DDR and PL011 UART0 (polled TX, FR reset check).
+          # The named GICv3, generic timer and PL031 RTC are omitted.
           - id: cortex-a53-gicv3
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/cortex-a53-gicv3-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/virt-a53-pl011-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv3-pl011-smoke.yaml
             system: configs/systems/onboarding/cortex-a53-gicv3.yaml
-          # The imported SMP descriptor is narrowed to one A53 PE and DDR;
-          # multicore, GICv3, timer, UART, and RTC behavior are omitted.
+          # The imported SMP descriptor is narrowed to one A53 PE, DDR and PL011
+          # UART0; multicore, GICv3, timers and RTC are omitted.
           - id: cortex-a53-gicv3_smp
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/cortex-a53-gicv3_smp-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/virt-a53-pl011-smoke.elf
+            script: examples/renode-onboarding/cortex-a53-gicv3_smp-pl011-smoke.yaml
             system: configs/systems/onboarding/cortex-a53-gicv3_smp.yaml
-          # A bounded AArch64 integer smoke against the Cortex-A78 import.
-          # A78-specific features, boot firmware, and peripherals are omitted.
+          # Shared AArch64 integer subset, DDR and PL011 UART0 on the A78 import.
+          # A78-specific features, timer, interrupt controller and RTC are omitted.
           - id: cortex-a78
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/cortex-a78-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/virt-a53-pl011-smoke.elf
+            script: examples/renode-onboarding/cortex-a78-pl011-smoke.yaml
             system: configs/systems/onboarding/cortex-a78.yaml
-          # One Cortex-A53 PE and DDR only. The imported timer, PL011, and
-          # virtio console are not exercised by this direct-ELF integer smoke.
+          # One Cortex-A53 PE, DDR and PL011 UART0 (polled TX). The imported
+          # timer and virtio console are omitted.
           - id: cortex_a53_console
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/cortex_a53_console-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/virt-a53-pl011-smoke.elf
+            script: examples/renode-onboarding/cortex_a53_console-pl011-smoke.yaml
             system: configs/systems/onboarding/cortex_a53_console.yaml
-          # One Cortex-A53 PE and DDR only. The CPU-only fixture does not
-          # exercise the imported timer, PL011, or virtio entropy device.
+          # One Cortex-A53 PE, DDR and PL011 UART0 (polled TX). The imported
+          # timer and virtio entropy device are omitted.
           - id: cortex_a53_virtio
-            prebuilt_firmware: tests/fixtures/imx8mplus-a53-cpu-smoke.elf
-            script: examples/renode-onboarding/cortex_a53_virtio-cpu-smoke.yaml
+            prebuilt_firmware: tests/fixtures/virt-a53-pl011-smoke.elf
+            script: examples/renode-onboarding/cortex_a53_virtio-pl011-smoke.yaml
             system: configs/systems/onboarding/cortex_a53_virtio.yaml
           # Cortex-M4 in the imported VF61 profile: polled UART0 TX/C2/S1 and
           # GPIO1 PSOR/PCOR/PTOR. A5, IRQ routing (MSCM) and reset boot are out.

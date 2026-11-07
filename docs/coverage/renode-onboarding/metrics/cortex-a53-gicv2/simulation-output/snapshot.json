@@ -6,12 +6,12 @@
       515,
       1,
       514,
+      150994944,
+      1074266236,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      144,
+      769,
+      144,
       0,
       0,
       0,
@@ -41,8 +41,8 @@
       0,
       0
     ],
-    "pc": 1074266128,
-    "nzcv": 0,
+    "pc": 1074266188,
+    "nzcv": 1610612736,
     "daif": 960,
     "el": 3,
     "spsel": true,
@@ -585,10 +585,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "35c0621ecf8c7e891e2835b57427601e5173a944ef1dd6db37c63e53f5706a9f",
+  "firmware_hash": "0d5c3c47a0248f05cc6f63f6ab831ea480213dd44100f49b7bc07ed88c0aed0e",
   "config": {
-    "firmware": "examples/renode-onboarding/../../tests/fixtures/imx8mplus-a53-cpu-smoke.elf",
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/virt-a53-pl011-smoke.elf",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cortex-a53-gicv2.yaml",
-    "script": "examples/renode-onboarding/cortex-a53-gicv2-cpu-smoke.yaml"
+    "script": "examples/renode-onboarding/cortex-a53-gicv2-pl011-smoke.yaml"
   }
 }

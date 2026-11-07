@@ -1,5 +1,5 @@
 name: cortex_a53_virtio
-description: 'Imported Cortex-A53 VirtIO target. Measured profile covers one AArch64 PE and DDR only; timer, PL011, and virtio behavior are not modeled.'
+description: 'Imported Cortex-A53 virtio target. Measured profile covers one Cortex-A53 PE, DDR and the PL011 UART0 (polled TX); the generic timer and virtio-mmio entropy device are not modeled.'
 family: Generic
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
@@ -9,15 +9,15 @@ system: systems/onboarding/cortex_a53_virtio.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: renode-onboarding-aarch64-cpu-smoke
-  reason: bounded AArch64 integer and DDR smoke; whole platform and imported peripherals are unverified
+  method: renode-onboarding-aarch64-pl011-smoke
+  reason: bounded AArch64 + PL011 polled-TX smoke; whole platform and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    aarch64_integer_smoke: true
+    simulation: true
+    uart0_polled_tx: true
+    other_peripherals: false
     whole_platform: false
-    peripherals: false
-    reset_vector_boot: false
   timestamp_utc: '2026-11-06T04:31:55Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/cortex_a53_virtio/

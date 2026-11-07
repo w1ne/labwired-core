@@ -9,11 +9,11 @@
 - pass: `224`
 - fail: `0`
 - pass_loading_zero_answering_windows: `4/224`
-- pass_observable_assertions: `202/224`
-- pass_stop_reason_only: `22/224`
+- pass_observable_assertions: `208/224`
+- pass_stop_reason_only: `16/224`
 - pass_depth_unknown: `0/224`
-- median_elapsed_ms: `1223`
-- median_elapsed_seconds: `1.223`
+- median_elapsed_ms: `1131`
+- median_elapsed_seconds: `1.131`
 - threshold_seconds: `3600`
 - threshold_met: `224/224`
 
@@ -48,15 +48,15 @@
 | `cc2538` | `pass` | `True` | `yes` | `yes` | `113644` | `113.644` | `True` | `observable` | 7: `ioc:stub`, `ana_regs:stub`, `soc_adc:stub`, `i2cs:stub`, `usb:stub`, `pka:stub`, `cctest:stub` | `n/a` | n/a | n/a |
 | `colibri-vf61` | `pass` | `True` | `yes` | `yes` | `10349` | `10.349` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `core-v-mcu` | `pass` | `True` | `yes` | `yes` | `764` | `0.764` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `12566` | `12.566` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `cortex-a53-gicv3` | `pass` | `True` | `yes` | `yes` | `10155` | `10.155` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `cortex-a53-gicv3_smp` | `pass` | `True` | `yes` | `yes` | `8231` | `8.231` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `cortex-a78` | `pass` | `True` | `yes` | `yes` | `7642` | `7.642` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `cortex-a53-gicv2` | `pass` | `True` | `yes` | `yes` | `572` | `0.572` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `cortex-a53-gicv3` | `pass` | `True` | `yes` | `yes` | `534` | `0.534` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `cortex-a53-gicv3_smp` | `pass` | `True` | `yes` | `yes` | `546` | `0.546` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `cortex-a78` | `pass` | `True` | `yes` | `yes` | `586` | `0.586` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-r52` | `pass` | `True` | `yes` | `yes` | `652` | `0.652` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-r52_smp` | `pass` | `True` | `yes` | `yes` | `632` | `0.632` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `cortex-r52_smp_4` | `pass` | `True` | `yes` | `yes` | `677` | `0.677` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
-| `cortex_a53_console` | `pass` | `True` | `yes` | `yes` | `7996` | `7.996` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
-| `cortex_a53_virtio` | `pass` | `True` | `yes` | `yes` | `7589` | `7.589` | `True` | `stop_reason_only` | 0 | `n/a` | n/a | n/a |
+| `cortex_a53_console` | `pass` | `True` | `yes` | `yes` | `108603` | `108.603` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
+| `cortex_a53_virtio` | `pass` | `True` | `yes` | `yes` | `517` | `0.517` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `crosslink-nx-evn` | `pass` | `True` | `yes` | `yes` | `8533` | `8.533` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `efm32g210` | `pass` | `True` | `yes` | `yes` | `1035` | `1.035` | `True` | `observable` | 0 | `n/a` | n/a | n/a |
 | `efm32g222` | `pass` | `True` | `yes` | `yes` | `1031` | `1.031` | `True` | `observable` | 0 | `n/a` | n/a | n/a |

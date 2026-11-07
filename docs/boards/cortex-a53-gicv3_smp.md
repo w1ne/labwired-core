@@ -1,21 +1,27 @@
 # Cortex-A53 GICv3 SMP imported profile
 
-## Measured scope
+## Measured profile
 
-The imported four-core profile is narrowed to one AArch64 Cortex-A53 processing
-element and the 2 GiB DDR window at `0x40000000`. The profile omits multicore
-execution, GICv3, generic timers, PL011 UART, and PL031 RTC. Its whole-platform
-descriptor remains unverified.
+The imported target is narrowed to one of the four imported Cortex-A53 processing elements, the 2 GiB DDR window at
+`0x40000000`, and the PL011 UART0 at `0x09000000`, served by the generic UART
+engine with the PL011 register layout (polled TX through `UARTFR`/`UARTDR`).
+The other three PEs, the four generic timers, GICv3 and the PL031 RTC from the imported descriptor are omitted; this is not an SMP profile.
 
 ## Smoke evidence
 
-The exact imported system ran the committed AArch64 integer-loop ELF for
-100,000 instructions and passed its `max_steps` assertion. It recorded zero
-peripheral accesses. This is local LabWired CLI evidence for the bounded
-single-PE CPU-and-DDR profile. It is not a hosted `labwired_verify` verdict,
-Renode execution, reset-vector boot, SMP/GIC/peripheral validation, or hardware
-confirmation.
+The exact imported system ran the committed AArch64 fixture
+(`tests/fixtures/virt-a53-pl011-smoke.elf`, built by
+[`scripts/build_virt_a53_pl011_smoke.sh`](../../scripts/build_virt_a53_pl011_smoke.sh)).
+It checks that `UARTFR` reads `TXFE|RXFE` after reset, enables the UART, writes
+`VIRT A53 PL011 SMOKE FR=OK` to `UARTDR` while polling `FR.TXFF`, then spins in
+an integer loop. The smoke asserts the banner in the captured UART output and
+the bounded `max_steps` stop after 100,000 instructions. A window answering
+zeros would print the `FR=BAD` banner instead; with UART0 removed from the
+descriptor the fixture faults on its first `UARTFR` read (0/2 checks).
 
-Evidence is under
-`docs/coverage/renode-onboarding/metrics/cortex-a53-gicv3_smp/`, including the
-metric, JUnit assertion, simulator result, snapshot, and run log.
+This does not test interrupts, RX, baud timing, the GIC, generic timer,
+multicore boot, boot firmware, Renode, or physical hardware.
+
+Evidence: `docs/coverage/renode-onboarding/metrics/cortex-a53-gicv3_smp/` contains the
+per-target metric, JUnit result, simulator result, UART log, snapshot, and run
+log.
